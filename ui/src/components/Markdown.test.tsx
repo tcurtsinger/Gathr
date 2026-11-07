@@ -2,13 +2,16 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { Markdown } from './Markdown';
 
-// Vale's three (review of #33), a footnote, and blocks whose meaning a later line changes.
+// Vale's inputs (reviews of #33), footnotes, and blocks whose meaning a later line changes.
 const inputs = {
   'a numbered list': '1. First\n\n1. Second\n\n1. Third',
   'a numbered list after text': 'Intro.\n\nMore.\n\n1. First\n\n1. Second\n\n1. Third',
   'a reference link': 'Read [the notes][notes].\n\n[notes]: https://example.com/notes',
   'a fence with trailing text': '```txt\none\n``` not a closing fence\n\ntwo\n```\n\nAfter.',
   'a footnote': 'Said once.[^1]\n\nMore.\n\n[^1]: Where it was said.',
+  'a reference defined in a quote':
+    'Read [the notes][notes].\n\n> [notes]: https://example.com/notes\n\nAfter.',
+  'a footnote defined in a list': 'Said once.[^1]\n\n- item\n\n  [^1]: Where it was said.\n\nAfter.',
   'a heading underlined': 'Intro.\n\nTitle\n-----\n\nBody.',
   'a list then its item': 'Para\n- one\n\n  still one\n- two\n\nDone.',
   'a table forming': 'Before.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nAfter.',
@@ -24,7 +27,13 @@ async function whole(text: string) {
   return out;
 }
 
-const { 'a footnote': _, ...together } = inputs;
+// Without the inputs that render whole, so the rest stream as blocks together.
+const {
+  'a footnote': _f,
+  'a reference defined in a quote': _q,
+  'a footnote defined in a list': _l,
+  ...together
+} = inputs;
 const cases = { ...inputs, 'all of them in one reply': Object.values(together).join('\n\n') };
 
 for (const [name, text] of Object.entries(cases)) {
