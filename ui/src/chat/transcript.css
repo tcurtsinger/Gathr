@@ -1,0 +1,45 @@
+.message {
+  margin: 0 0 34px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  /* A 500-message chat lays out only what is on screen. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+.message.user {
+  width: fit-content;
+  max-width: 85%;
+  margin-left: auto;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-radius: 18px;
+}
+.message.tools {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: normal;
+}
+.tools summary {
+  cursor: pointer;
+}
+.tools ul {
+  list-style: none;
+  padding: 8px 0 0 16px;
+  margin: 0;
+}
+.tools li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 70px;
+  gap: 12px;
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+.tools li span:first-child {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tools li span:last-child {
+  text-align: right;
+}

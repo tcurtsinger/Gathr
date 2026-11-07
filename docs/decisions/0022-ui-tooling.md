@@ -14,10 +14,11 @@ Status: proposed. Date: 2026-11-07. Follows [0012](0012-ui-shell.md), which leav
 
 Versions are the npm `latest` on the date above. The lockfile pins them.
 
+- **No component or state library** (0012 asks for this choice): React's own state and the design system's CSS in plain files beside each component are enough for the first slice, and each shared component exists once in `ui/src/components`. Revisit when a screen needs state shared across the app beyond one chat.
 - **Where:** the UI is its own npm package in `ui/`. Nothing in the repo root changes for people working only on the service.
 - **Vite** uses the settings in Tauri's [Vite guide](https://v2.tauri.app/start/frontend/vite/): `clearScreen: false`, a fixed dev port with `strictPort: true`, and `envPrefix: ['VITE_', 'TAURI_ENV_*']`. The build target stays Vite's default until the oldest supported macOS is decided (see "Checked, and not yet").
 - **Biome** lints and formats TypeScript, TSX and CSS with its recommended rules, which include the React hook rules. No ESLint, no Prettier.
-- **Tests** run in a real browser, driven by real input: Chromium on Windows (the WebView2 engine) and WebKit on macOS (the WKWebView engine). They sit at the "Shared UI components" seam in [testing.md](../testing.md). They click and type, then read the page back, never trusting that a click acted (ledger S31b). `retry` stays at its default of 0: a flaky test is fixed or deleted (testing.md).
+- **Tests** run in a real browser, driven by real input: Edge on Windows (WebView2 is Edge's engine, and Windows and its CI runners already have Edge, so nothing is downloaded) and WebKit on macOS (the WKWebView engine). They sit at the "Shared UI components" seam in [testing.md](../testing.md). They click and type, then read the page back, never trusting that a click acted (ledger S31b). `retry` stays at its default of 0: a flaky test is fixed or deleted (testing.md).
 - **Reporters** stay at Vitest's defaults, so CI keeps the `github-actions` reporter, which is added only when the list isn't overridden.
 
 ### CI
@@ -26,7 +27,7 @@ A `UI` job joins `.github/workflows/ci.yml`, on Windows and macOS like the Rust 
 
 1. `actions/setup-node@v7` with `node-version-file: ui/.node-version`, `cache: npm` and `cache-dependency-path: ui/package-lock.json` (it looks in the repo root otherwise, and `working-directory` only applies to `run` steps)
 2. `npm ci`
-3. `npx playwright install chromium` on Windows, `webkit` on macOS
+3. `npx playwright install webkit` on macOS only (Windows uses the installed Edge, Playwright's `msedge` channel)
 4. `npx biome ci`
 5. `npx tsc --noEmit`
 6. `npx vitest run`

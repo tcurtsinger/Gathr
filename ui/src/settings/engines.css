@@ -1,0 +1,53 @@
+.settingrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settingrow h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pathfield {
+  margin-top: 28px;
+}
+.pathfield label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.pathline {
+  display: flex;
+  gap: 8px;
+}
+.pathline input {
+  flex: 1;
+}
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+}
+.folder {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.folder summary {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+.folder summary::-webkit-details-marker {
+  display: none;
+}
+.folder code {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

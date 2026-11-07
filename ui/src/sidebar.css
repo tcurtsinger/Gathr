@@ -1,0 +1,67 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 12px 8px;
+  background: var(--surface);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  padding: 0 8px 18px;
+}
+.brand strong {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.logo {
+  display: inline-grid;
+  grid-template-columns: repeat(2, 4px);
+  gap: 3px;
+  margin-right: 10px;
+}
+.logo i {
+  width: 4px;
+  height: 12px;
+  background: var(--text);
+  border-radius: 3px;
+}
+.logo i:last-child {
+  transform: translateY(4px);
+}
+.navbutton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+}
+.chatlist {
+  flex: 1;
+  overflow: auto;
+  margin-top: 24px;
+}
+.chatrow {
+  display: flex;
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  text-align: left;
+}
+.chatrow span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chatrow[aria-current] {
+  background: var(--raised);
+}
+.sidebar-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding: 10px 4px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}

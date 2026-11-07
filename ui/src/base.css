@@ -1,0 +1,82 @@
+@import "../../designs/tokens.css";
+
+* {
+  box-sizing: border-box;
+  scrollbar-color: var(--control) transparent;
+  scrollbar-width: thin;
+  accent-color: var(--accent);
+}
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font:
+    15px / 1.65 "Segoe UI Variable",
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button,
+select {
+  cursor: pointer;
+}
+button {
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+}
+button:hover,
+select:hover {
+  background: var(--raised);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button.link {
+  min-height: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+button.link:hover {
+  background: transparent;
+}
+input,
+select {
+  min-width: 0;
+  padding: 7px 10px;
+  background: var(--canvas);
+  border: 1px solid var(--control);
+  border-radius: 7px;
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+::selection {
+  background: var(--accent);
+  color: var(--canvas);
+}
+.muted {
+  color: var(--muted);
+}
+@media (max-width: 767px) {
+  button,
+  select,
+  input {
+    min-height: 44px;
+  }
+}

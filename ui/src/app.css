@@ -1,0 +1,13 @@
+.app {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: 100dvh;
+}
+.app > .chat .empty {
+  margin: auto;
+}
+@media (max-width: 1150px) {
+  .app {
+    grid-template-columns: 205px minmax(0, 1fr);
+  }
+}

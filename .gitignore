@@ -41,3 +41,8 @@ auth.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# Vitest browser-mode failure screenshots
+.vitest/
+# Tauri's generated capability schemas
+crates/gathr-app/gen/

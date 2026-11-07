@@ -3,6 +3,7 @@
 
 mod dev;
 mod text;
+mod window;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -39,6 +40,9 @@ enum Command {
         /// Seed the data folder first.
         #[arg(long)]
         seed: bool,
+        /// Also start the UI on the port plus 10, and the desktop window.
+        #[arg(long)]
+        window: bool,
     },
 }
 
@@ -79,9 +83,9 @@ fn main() -> ExitCode {
     let (name, result) = match cli.command {
         Command::Diag(diag) => ("diag", run_diag(&data, diag)),
         Command::Seed => ("seed", run_seed(&data)),
-        Command::Dev { port, seed } => (
+        Command::Dev { port, seed, window } => (
             "dev",
-            dev::run(&data, port, seed, show).map(|()| Value::Null),
+            dev::run(&data, port, seed, window, show).map(|()| Value::Null),
         ),
     };
     match result {

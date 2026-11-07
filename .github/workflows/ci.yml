@@ -54,3 +54,33 @@ jobs:
             target/debug/gathrd
             target/debug/gathr
           retention-days: 7
+
+  ui:
+    name: UI (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ui/.node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+      # Windows tests run in the runner's own Edge (WebView2's engine), so only macOS downloads one.
+      - if: runner.os == 'macOS'
+        run: npx playwright install webkit
+      - run: npx biome ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npx vite build
