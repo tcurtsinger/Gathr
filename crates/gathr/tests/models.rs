@@ -3,7 +3,11 @@
 
 mod common;
 
+use std::path::Path;
+use std::time::{Duration, Instant};
+
 use common::{TempDir, TestService, gathr, replay_engine, sign_in};
+use gathr::http;
 use serde_json::{Value, json};
 
 fn models(service: &TestService) -> Value {
@@ -69,6 +73,77 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
         json!([]),
         "a model with no effort levels lists none"
     );
+}
+
+/// Starts the service with the replay engine in `mode` (`GATHR_REPLAY_INIT`), asks for the list
+/// on a thread, and stops the service once the engine has started.
+fn stop_while_asking(data: &Path, mode: &str) -> Duration {
+    let args = data.join("args.jsonl");
+    let mode = [
+        ("GATHR_REPLAY_ARGS", args.as_path()),
+        ("GATHR_REPLAY_INIT", Path::new(mode)),
+    ];
+    let service = TestService::start_with(data, &mode);
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    let (port, token) = (service.info.port, service.info.token.clone());
+    let asking =
+        std::thread::spawn(move || http::call(port, &token, "GET", "/api/accounts/main/models"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while runs(&args) == 0 {
+        assert!(Instant::now() < deadline, "the engine never started");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    let began = Instant::now();
+    service.stop();
+    let took = began.elapsed();
+    let _ = asking.join();
+    took
+}
+
+fn closes(data: &Path) -> Vec<Value> {
+    let sql = "SELECT status, error_type FROM event_log WHERE name = 'gathr.engine.models.close'";
+    let (ok, rows) = gathr(data, &["diag", "query", sql]);
+    assert!(ok, "{rows}");
+    rows["rows"].as_array().cloned().unwrap_or_default()
+}
+
+#[test]
+fn shutdown_ends_an_ask_the_engine_never_answers() {
+    let data = TempDir::new();
+    let took = stop_while_asking(&data.0, "silent");
+    assert!(
+        took < Duration::from_secs(5),
+        "the service took {took:?} to stop"
+    );
+    let closes = closes(&data.0);
+    assert_eq!(
+        closes.len(),
+        1,
+        "the engine's close wasn't recorded: {closes:?}"
+    );
+    assert_eq!(closes[0]["status"], "ok", "{closes:?}");
+}
+
+#[test]
+fn shutdown_waits_for_an_engine_closing_after_its_answer_then_ends_it() {
+    let data = TempDir::new();
+    let took = stop_while_asking(&data.0, "linger");
+    assert!(
+        took < Duration::from_secs(15),
+        "the service took {took:?} to stop"
+    );
+    let closes = closes(&data.0);
+    assert_eq!(
+        closes.len(),
+        1,
+        "the engine's close wasn't recorded: {closes:?}"
+    );
+    assert_eq!(closes[0]["error_type"], "killed", "{closes:?}");
 }
 
 #[test]

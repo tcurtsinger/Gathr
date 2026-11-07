@@ -118,15 +118,17 @@ async fn serve(
             _ = stop_state.stop.notified() => "requested over the API",
             _ = os_stop_signal() => "stop signal from the system",
         };
+        // Before the server waits on its requests, so a model ask doesn't hold it.
+        stop_state.models.stop();
         let _ = stopped_tx.send(reason);
     };
-    axum::serve(listener, api::router(state))
+    axum::serve(listener, api::router(state.clone()))
         .with_graceful_shutdown(stopping)
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
     sign_in.cancel().await;
-    chats.close_all().await;
+    tokio::join!(chats.close_all(), state.models.closed());
     writer
         .record_now(
             Event::point("gathr.service.stop")

@@ -11,15 +11,15 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use gathr::claude::command::{self, Session};
-use gathr::claude::engine::{Engine, Line};
+use gathr::claude::engine::{Closed, Engine, Line};
 use gathr::claude::frames;
 use gathr::claude::login::Login;
 use gathr::event::Event;
 use serde_json::{Value, json};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
+use tokio::task::JoinSet;
 
 use crate::api::{State, Trace};
-use crate::chats::Chats;
 use crate::routes::{Answer, fail};
 
 /// Claude Code 2.1.318 answered in 0.65 s signed in; past this it isn't coming.
@@ -32,9 +32,31 @@ pub fn routes() -> Router<Arc<State>> {
     Router::new().route("/api/accounts/{account}/models", get(models))
 }
 
-/// The last list, and the engine copy and sign-in state it came from.
 #[derive(Default)]
-pub struct Models(Mutex<Option<(PathBuf, Login, Value)>>);
+pub struct Models {
+    /// The last list, and the engine copy and sign-in state it came from.
+    last: Mutex<Option<(PathBuf, Login, Value)>>,
+    stopping: watch::Sender<bool>,
+    /// Engines still closing after their answer, which shutdown waits for.
+    closing: std::sync::Mutex<JoinSet<()>>,
+}
+
+impl Models {
+    /// Ends any ask under way, at shutdown; its engine still closes the gentle way.
+    pub fn stop(&self) {
+        self.stopping.send_replace(true);
+    }
+
+    /// Waits for every engine an ask started to have exited.
+    pub async fn closed(&self) {
+        let closing = std::mem::take(&mut *self.closing.lock().expect("never poisoned"));
+        closing.join_all().await;
+    }
+
+    async fn stopped(&self) {
+        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
+    }
+}
 
 async fn models(
     Extract(s): Extract<Arc<State>>,
@@ -50,7 +72,7 @@ async fn models(
         ));
     }
     // One ask at a time: a second request waits for the first's list instead of starting another.
-    let mut last = s.models.0.lock().await;
+    let mut last = s.models.last.lock().await;
     let setting = s.chats.path_setting().await;
     let program = command::find(setting.as_deref(), s.chats.copy());
     let login = s.chats.login_status().await.0;
@@ -62,7 +84,7 @@ async fn models(
     }
     let started = Instant::now();
     let asked = match program.clone() {
-        Ok(program) => ask(&s.chats, &program).await,
+        Ok(program) => ask(&s, &program).await,
         Err(why) => Err(why),
     };
     let mut event = Event::point("gathr.engine.models")
@@ -104,32 +126,49 @@ async fn models(
 }
 
 /// Starts the account's Claude Code as a chat does, asks `initialize`, and closes it gently.
-async fn ask(chats: &Chats, program: &std::path::Path) -> Result<Value, String> {
+async fn ask(s: &State, program: &std::path::Path) -> Result<Value, String> {
+    const STOPPING: &str = "the service is stopping";
+    let (chats, models) = (&s.chats, &s.models);
     let folder = chats.account_folder();
     let cwd = chats.data.path().join("chats");
     for dir in [&folder, &cwd] {
         std::fs::create_dir_all(dir).map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
     }
     // It runs on the account's login, so it takes the renewal gate like any start (0002).
-    let mut gate = chats.gate.pass().await;
+    let mut gate = tokio::select! {
+        gate = chats.gate.pass() => gate,
+        () = models.stopped() => return Err(STOPPING.into()),
+    };
     let args = command::args(Session::New(&gathr::ids::uuid()));
     let env = command::env(std::env::vars_os(), &folder);
     let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
     let answer = match engine.write(&frames::initialize(ASKED)).await {
-        Ok(()) => tokio::time::timeout(ANSWER_WAIT, answered(&mut lines))
-            .await
-            .unwrap_or_else(|_| {
-                Err(format!(
-                    "Claude Code didn't answer in {} s",
-                    ANSWER_WAIT.as_secs()
-                ))
-            }),
+        Ok(()) => tokio::select! {
+            answer = tokio::time::timeout(ANSWER_WAIT, answered(&mut lines)) => answer
+                .unwrap_or_else(|_| Err(format!("Claude Code didn't answer in {} s", ANSWER_WAIT.as_secs()))),
+            () = models.stopped() => Err(STOPPING.into()),
+        },
         Err(e) => Err(format!("Claude Code didn't take the request: {e}")),
     };
     gate.release();
-    // Its exit takes another 0.6 s, which the list needn't wait for.
-    tokio::spawn(engine.close(CLOSE_GRACE));
+    // Its exit takes another 0.6 s, which the list needn't wait for, but shutdown does.
+    let (writer, pid) = (s.writer.clone(), engine.pid);
+    let close = async move {
+        let event = match engine.close(CLOSE_GRACE).await {
+            Closed::Exited(code) => Event::point("gathr.engine.models.close")
+                .ok()
+                .attr("process.exit.code", code),
+            Closed::Killed => Event::point("gathr.engine.models.close")
+                .error("killed")
+                .attr(
+                    "killed_because",
+                    "it hadn't exited 10 s after its input closed",
+                ),
+        };
+        writer.record_now(event.attr("process.pid", pid)).await;
+    };
+    models.closing.lock().expect("never poisoned").spawn(close);
     answer
 }
 

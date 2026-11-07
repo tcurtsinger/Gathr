@@ -18,6 +18,7 @@
 //!
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
+//! `GATHR_REPLAY_INIT=silent` never answers it; `linger` stays a minute after its input closes.
 
 use std::io::{BufRead, Write};
 
@@ -90,8 +91,11 @@ fn main() {
     for line in stdin {
         match line {
             Ok(line) => _ = answered_initialize(&line, &mut stdout),
-            Err(_) => return,
+            Err(_) => break,
         }
+    }
+    if std::env::var("GATHR_REPLAY_INIT").as_deref() == Ok("linger") {
+        std::thread::sleep(std::time::Duration::from_secs(60));
     }
 }
 
@@ -101,6 +105,9 @@ fn answered_initialize(line: &str, stdout: &mut impl Write) -> bool {
     let frame: serde_json::Value = serde_json::from_str(line).unwrap_or_default();
     if frame["request"]["subtype"] != "initialize" {
         return false;
+    }
+    if std::env::var("GATHR_REPLAY_INIT").as_deref() == Ok("silent") {
+        return true;
     }
     let recorded: serde_json::Value =
         serde_json::from_str(include_str!("../tests/frames/initialize.json")).unwrap();
