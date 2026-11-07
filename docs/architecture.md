@@ -21,8 +21,8 @@ Status: draft. Each choice below has its decision file in [`decisions/`](decisio
  +--------------------------------------------------------------------+
         |                         |
   Claude Code                    Codex
-  one `claude -p` per            one `codex app-server`
-  conversation                   per agent
+  one `claude -p` per agent,     one `codex app-server`
+  resumed per conversation       per agent
   (agent's own login folder)     (agent's own login folder)
 ```
 
@@ -31,7 +31,7 @@ Status: draft. Each choice below has its decision file in [`decisions/`](decisio
 One Rust process owns the data, the engines, scheduling and the API. The window and the browser are clients of it.
 
 - **Process.** `gathrd`, one daemon per user, serving HTTP and a WebSocket (axum) on 127.0.0.1. Every request carries a token; a wrong Host or Origin gets 403. The window starts it as a plain child, so closing the window doesn't kill engines mid-turn. Engines run at below-normal priority; nothing uses the GPU. [0004](decisions/0004-service-process.md).
-- **Engines.** One Rust `Engine` interface, a driver per provider, each driving the provider's own harness: Claude Code as a long-lived `claude -p` stream-json process per conversation, Codex as a long-lived `codex app-server` per agent. ACP isn't used for these two; the interface follows its concepts so an ACP driver can come later. Claude Code first. [0001](decisions/0001-engine-interface.md).
+- **Engines.** One Rust `Engine` interface, a driver per provider, each driving the provider's own harness: Claude Code as a long-lived `claude -p` stream-json process, Codex as a long-lived `codex app-server` per agent. An agent runs one turn at a time; switching to another conversation closes Claude's process gently and resumes the other session ([0010](decisions/0010-coordination-as-state.md#sessions)). ACP isn't used for these two; the interface follows its concepts so an ACP driver can come later. Claude Code first. [0001](decisions/0001-engine-interface.md).
 - **Logins.** Each agent gets its own `CLAUDE_CONFIG_DIR` or `CODEX_HOME` under Gathr's data folder, one process per folder. Login files are never copied; the person's own `~/.claude` and `~/.codex` are never touched; API-key variables are removed from the engine's environment. [0002](decisions/0002-login-folders.md).
 - **Storage.** SQLite through rusqlite, bundled, one writer thread, WAL, numbered SQL migrations. [0003](decisions/0003-storage.md).
 - **MCP.** One streamable-HTTP MCP server at `/mcp` on the same port, a token per agent so the service knows who is calling. [0005](decisions/0005-mcp-server.md).

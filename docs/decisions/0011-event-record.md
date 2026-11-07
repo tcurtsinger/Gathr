@@ -39,7 +39,7 @@ The GenAI conventions now live in their own repository, [open-telemetry/semantic
 
 | Gathr thing | Span | Source |
 |---|---|---|
-| A turn (one run of an agent's engine) | `invoke_agent {gen_ai.agent.name}`, `gen_ai.operation.name = invoke_agent`. Span kind `INTERNAL`: the engine runs on this machine | [gen-ai-agent-spans.md, invoke agent internal span](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md) |
+| A turn (one run of an agent's engine) | `invoke_agent {gen_ai.agent.name}`, `gen_ai.operation.name = invoke_agent`. Span kind `CLIENT`: the engine is a separate process, and the conventions keep `INTERNAL` for an agent running inside the instrumented process. The service's own scheduling around a turn (the gate, holds) is `gathr.*` below, not a second agent span | [gen-ai-agent-spans.md, invoke agent client span](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md) |
 | One model call inside a turn, when the engine reports it | `{gen_ai.operation.name} {gen_ai.request.model}`, usually `chat` | [client-inference.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md) |
 | A tool call | `execute_tool {gen_ai.tool.name}`, kind `INTERNAL` | [execute-tool.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/execute-tool.md) |
 | A call to Gathr's own MCP server | `{mcp.method.name} {target}`, e.g. `tools/call task` | [mcp.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md) |
@@ -75,11 +75,18 @@ Usage counts (screens, commands, engines, settings changes) are read through the
 - Secrets of any kind: tokens, API keys, login files or their contents, cookies, environment variable values.
 - Command lines are recorded with environment-style values (`KEY=value`, `--token value`) masked.
 - Login folders are recorded by kind ("claude login folder"), never their paths' contents.
-- Conversation text and tool arguments, as above, unless the person turns on content capture for OTLP export, separately.
+- Conversation text and tool arguments in `events`, as above. They're exported over OTLP only if the person turns on content capture, separately.
 
-## Raw engine messages
+## Raw engine frames
 
-Each engine adapter keeps the engine's own messages, as received, in an `engine_raw` table linked to the turn's span, so an adapter bug can be traced to what the engine actually sent. Same never-recorded rules apply.
+One policy for every driver; [0001](0001-engine-interface.md) follows it.
+
+- **What it's for:** tracing a driver bug to what the engine actually sent or was sent. It's local only and never exported, even with content capture on.
+- **What's kept:** every frame in both directions, in an `engine_raw` table linked to the turn's span: direction, time, the frame's type, its size, and its body. Bodies may hold conversation text and tool arguments: the same content Gathr already keeps in its message tables on this machine, so keeping it here adds no new exposure. They never hold secrets.
+- **Order:** read the frame, redact it, write it, then interpret it. Nothing reaches the database before redaction, so a crash between write and interpret leaves only redacted rows.
+- **Redaction:** the driver removes secrets by field (authorization headers, tokens, keys, cookies, environment values in any frame that carries them) and then by pattern over the whole body (`sk-…`, `Bearer …`, JWT shapes, `KEY=value`). Each removal leaves `[redacted:<kind>]`.
+- **Malformed frames:** a frame that isn't valid JSON is pattern-redacted as text, cut to 64 KB, and written with `malformed = 1`; the driver then reports a parse failure event. It's never written whole and unredacted.
+- **Off switch:** Settings, Diagnostics, "Keep raw engine frames", on by default with a 7-day retention. Off writes only the metadata columns.
 
 ## Retention
 
