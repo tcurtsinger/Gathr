@@ -1,0 +1,73 @@
+[
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "message": {
+      "body": "Write 2,000 words on rivers.",
+      "id": "01M6VR7P2AKBQSXAAHB158NEQC",
+      "kind": "text",
+      "role": "user",
+      "time": "2026-11-07T19:37:13.546Z",
+      "turn": "01M6VR7P29FMY5V0MBQWHR9064"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "ref": "5236079d",
+    "status": "running",
+    "turn": "01M6VR7P29FMY5V0MBQWHR9064",
+    "type": "turn",
+    "why": null
+  },
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "message": {
+      "body": {
+        "status": "running",
+        "tool": "Read"
+      },
+      "id": "01M6VR7P2Y2QRQN16KB8JH23SC",
+      "kind": "tool",
+      "role": "assistant",
+      "time": "2026-11-07T19:37:13.566Z",
+      "turn": "01M6VR7P29FMY5V0MBQWHR9064"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "text": "Already visible answer",
+    "turn": "01M6VR7P29FMY5V0MBQWHR9064",
+    "type": "delta"
+  },
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "message": {
+      "body": "Already visible answer",
+      "id": "01M6VR7P2ZY489V9KVVBJ4R92F",
+      "kind": "text",
+      "role": "assistant",
+      "time": "2026-11-07T19:37:13.567Z",
+      "turn": "01M6VR7P29FMY5V0MBQWHR9064"
+    },
+    "type": "message"
+  },
+  {
+    "body": {
+      "duration_ms": 0,
+      "status": "stopped",
+      "tool": "Read"
+    },
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "message": "01M6VR7P2Y2QRQN16KB8JH23SC",
+    "type": "tool"
+  },
+  {
+    "chat": "01M6VR7P24KWZGAD0JJ7FBVP6N",
+    "ref": "5236079d",
+    "status": "failed",
+    "turn": "01M6VR7P29FMY5V0MBQWHR9064",
+    "type": "turn",
+    "why": "Claude Code exited during the turn (exit code 1): engine crashed"
+  }
+]

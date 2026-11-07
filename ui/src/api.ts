@@ -1,0 +1,109 @@
+// The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
+// by the Vite proxy in dev, which adds the token.
+
+export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
+
+export interface ToolBody {
+  tool: string;
+  status: 'running' | 'ok' | 'error' | 'stopped';
+  duration_ms?: number;
+}
+
+export interface Message {
+  id: string;
+  turn: string | null;
+  time: string;
+  role: 'user' | 'assistant';
+  kind: string;
+  body: string | ToolBody;
+}
+
+export interface Turn {
+  id: string;
+  status: TurnStatus;
+  why: string | null;
+  ref: string;
+}
+
+export interface Chat {
+  id: string;
+  title: string;
+}
+
+export interface History {
+  chat: string;
+  messages: Message[];
+  turns: Turn[];
+  /** Questions the engine asked that nobody has answered yet. */
+  approvals: { turn: string; request_id: string; tool: string }[];
+}
+
+export interface Engine {
+  path: string | null;
+  found: string | null;
+  why_not_found: string | null;
+  account: { folder: string; login: string; expires: string | null };
+}
+
+/** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
+export class Failure extends Error {
+  constructor(
+    readonly error: string,
+    readonly why: string | null,
+    readonly ref: string | null,
+  ) {
+    super(why ? `${error}: ${why}` : error);
+  }
+}
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method,
+      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  } catch {
+    throw new Failure('Connection failed', 'the service did not answer', null);
+  }
+  const answer = await response.json().catch(() => null);
+  if (!response.ok || answer === null) {
+    const why =
+      answer?.why ?? (answer === null ? `the answer to ${path} wasn't JSON (${response.status})` : null);
+    throw new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
+  }
+  return answer as T;
+}
+
+export const api = {
+  chats: () => call<Chat[]>('GET', '/api/chats'),
+  createChat: () => call<Chat>('POST', '/api/chats', {}),
+  history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
+  send: (chat: string, text: string) =>
+    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text }),
+  stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),
+  approve: (chat: string, request: string, allow: boolean) =>
+    call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
+  turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
+  engine: () => call<Engine>('GET', '/api/engines/claude'),
+  setEnginePath: (path: string | null) => call<unknown>('PUT', '/api/engines/claude', { path }),
+};
+
+export interface TurnEvent {
+  at_ms: number;
+  name: string;
+  phase: 'start' | 'end' | 'point';
+  status: 'ok' | 'error' | null;
+  error: string | null;
+  duration_ms: number | null;
+  attrs: Record<string, unknown> | null;
+}
+
+export interface TurnTimeline extends Turn {
+  n: number;
+  asked: string | null;
+  created: string;
+  ended: string | null;
+  events: TurnEvent[];
+}

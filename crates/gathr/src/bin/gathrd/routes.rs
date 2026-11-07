@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use gathr::claude::command;
+use gathr::event::Event;
 use gathr::store;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -24,6 +25,8 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/messages", post(send))
         .route("/api/chats/{chat}/stop", post(stop))
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
+        .route("/api/chats/{chat}/turns", get(turns))
+        .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine).put(set_engine))
         .route("/api/live", get(live))
 }
@@ -57,7 +60,7 @@ async fn create(
     Extension(t): Extension<Trace>,
     Json(body): Json<NewChat>,
 ) -> Answer {
-    let title = body.title.unwrap_or_else(|| "New chat".into());
+    let title = body.title.unwrap_or_else(|| store::UNTITLED.into());
     db(&s, &t, "New chat failed", move |conn| {
         store::create_chat(conn, &title)
     })
@@ -70,10 +73,14 @@ async fn history(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    db(&s, &t, "Chat failed", move |conn| {
+    let (reply, open) = oneshot::channel();
+    let _ = s.chats.task(&chat).send(Cmd::Approvals { reply });
+    let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
         store::history(conn, &chat)
     })
-    .await
+    .await?;
+    history["approvals"] = open.await.unwrap_or_else(|_| json!([]));
+    Ok(Json(history))
 }
 
 #[derive(Deserialize)]
@@ -165,6 +172,49 @@ async fn approve(
             &t.0,
         )),
     }
+}
+
+/// The chat's turns with their events, for Diagnostics.
+async fn turns(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(chat): Path<String>,
+) -> Answer {
+    known(&s, &t, &chat).await?;
+    db(&s, &t, "Diagnostics failed", move |conn| {
+        gathr::timeline::turns(conn, &chat)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+struct UiEvent {
+    name: String,
+    duration_ms: Option<f64>,
+    error: Option<String>,
+    #[serde(default)]
+    attrs: serde_json::Map<String, Value>,
+}
+
+/// The window's own errors and timings, into the event record beside the service's (0019).
+async fn ui_event(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Json(body): Json<UiEvent>,
+) -> Answer {
+    if !body.name.starts_with("gathr.ui.") {
+        let why = "a window event's name starts with gathr.ui.";
+        return Err(fail(StatusCode::BAD_REQUEST, "Report failed", why, &t.0));
+    }
+    let mut event = Event::point(&body.name).trace(&t.0);
+    event = match &body.error {
+        Some(error) => event.error(error),
+        None => event.ok(),
+    };
+    event.duration_us = body.duration_ms.map(|ms| (ms * 1000.0).round() as i64);
+    event.attrs = body.attrs;
+    s.writer.record_now(event).await;
+    Ok(Json(json!({ "recorded": true })))
 }
 
 /// Claude Code's path (set, and where it was found) and the account's sign-in state.

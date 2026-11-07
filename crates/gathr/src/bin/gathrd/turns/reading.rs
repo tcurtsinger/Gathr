@@ -125,7 +125,8 @@ impl Task {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
-                turn.approvals.insert(request_id.clone(), input.clone());
+                turn.approvals
+                    .insert(request_id.clone(), (tool.clone(), input.clone()));
                 let id = turn.turn.clone();
                 self.publish(json!({ "type": "approval", "chat": chat, "turn": id,
                     "request_id": request_id, "tool": tool, "input": input }));

@@ -14,6 +14,7 @@ pub mod platform;
 pub mod redact;
 pub mod seed;
 pub mod store;
+pub mod timeline;
 pub mod writer;
 
 pub use error::Error;

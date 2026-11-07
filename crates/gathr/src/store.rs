@@ -94,6 +94,19 @@ pub fn message_json(
     json!({ "id": id, "turn": turn, "time": crate::ids::utc(ts), "role": role, "kind": kind, "body": body })
 }
 
+/// A new chat's name until its first message names it.
+pub const UNTITLED: &str = "New chat";
+
+/// A chat's name from its first message: the first line with text, up to 60 characters.
+fn title_from(text: &str) -> Option<String> {
+    let line = text.lines().map(str::trim).find(|l| !l.is_empty())?;
+    if line.chars().count() <= 60 {
+        return Some(line.to_string());
+    }
+    let cut: String = line.chars().take(59).collect();
+    Some(format!("{}…", cut.trim_end()))
+}
+
 pub fn add_message(
     conn: &Connection,
     chat: &str,
@@ -108,6 +121,10 @@ pub fn add_message(
         "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
     )?
     .execute(params![id, chat, turn, ts, role, kind, body])?;
+    if let Some(title) = title_from(body).filter(|_| role == "user") {
+        conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
+            .execute(params![chat, title, UNTITLED])?;
+    }
     Ok(message_json(
         id,
         Some(turn.into()),
