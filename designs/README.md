@@ -27,3 +27,9 @@ using `settings-overlay.css` and `settings-overlay.js`. Earlier options stay int
 
 These supersede the unselected Phase 1 proposals above. All three share the same
 Settings shell and retain the current chat underneath. No service is connected.
+
+Settings regression check (requires an already installed `playwright-core` and browser):
+set `NODE_PATH` to the installed module directory if needed and `BROWSER_PATH` to the
+browser executable, then run `node designs/check-settings.cjs`. It checks contextual
+references after a Stopped filter, clearing Find, and focus return after category
+changes with Close and Escape at 1440 and 1024 px in both themes. No downloads.

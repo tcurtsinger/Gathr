@@ -23,7 +23,7 @@ settingsPanel.querySelector('.settings-scroll').append(enginesPage, diagnosticsP
 surface.append(settingsPanel);
 let settingsReturn;
 function openSettings(category, reference, opener) {
-  settingsReturn = opener || document.activeElement;
+  if (!settingsPanel.open) settingsReturn = opener || document.activeElement;
   enginesPage.hidden = category !== 'engines';
   diagnosticsPage.hidden = category !== 'diagnostics';
   settingsPanel.querySelectorAll('[data-category]').forEach(button => {
@@ -31,6 +31,7 @@ function openSettings(category, reference, opener) {
     else button.removeAttribute('aria-current');
   });
   if (category === 'diagnostics' && reference) {
+    diagnosticsPage.querySelector('#filter').value = 'All';
     const find = diagnosticsPage.querySelector('#find');
     find.value = reference;
     find.dispatchEvent(new Event('input'));

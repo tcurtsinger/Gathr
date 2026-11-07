@@ -70,7 +70,13 @@ stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtu
 Below 768 px the turn list sits above the timeline. The chat header opens Diagnostics;
 a failure reference and Diagnostics action open it filtered to the affected turn.
 Clearing Find restores all turns. Switching categories preserves the filtered view.
+Opening a failure reference resets the status filter so the affected turn is visible.
 References in the timeline simulate Copy, without using the system clipboard.
+
+## Rich cards and scrolling
+Design, image and file cards show a still preview until opened. Nothing off screen
+keeps animating. Chats must scroll smoothly with 500 messages and dozens of cards;
+the app window PR includes scroll timings as proof.
 
 ## Reply notices
 The shared notice occupies the reply width below the related user message. Stopped
