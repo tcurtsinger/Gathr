@@ -157,9 +157,117 @@ pub fn find(setting: Option<&str>) -> Result<PathBuf, String> {
     })
 }
 
+/// The oldest Claude Code all the switches above were proven on (0024). Its changelog has
+/// older ones lacking `--forward-subagent-text` (2.1.211), `AGENTS.md` (2.1.277), or keeping user
+/// settings out under `--setting-sources` (2.1.314).
+const MIN_VERSION: [u32; 3] = [2, 1, 318];
+
+/// How long `--version` may take: Claude Code answers in tens of milliseconds, and a launcher
+/// that hangs would otherwise hold the chat's Send and Stop with it.
+const VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Claude Code's version from `<program> --version`, and why Gathr can't run it if it can't
+/// (with the version, when one was read). Blocks until it exits or `VERSION_WAIT` passes; the
+/// service calls it off its async threads.
+pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
+    let mut command = std::process::Command::new(program);
+    command
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    crate::platform::no_window(&mut command);
+    let unread = |e: String| {
+        let why = format!(
+            "Claude Code's version wasn't read from {}: {e}",
+            program.display()
+        );
+        (None, Err(why))
+    };
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return unread(e.to_string()),
+    };
+    let mut stdout = child.stdout.take().expect("stdout is piped");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut answer = String::new();
+        let _ = std::io::Read::read_to_string(&mut stdout, &mut answer);
+        let _ = tx.send(answer);
+    });
+    // The deadline is on its exit, not its output: a launcher can close its output and hang.
+    let deadline = std::time::Instant::now() + VERSION_WAIT;
+    let timed_out = || unread(format!("it didn't answer in {} s", VERSION_WAIT.as_secs()));
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            // Safe to kill: `--version` only prints, it never renews a login.
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return timed_out();
+            }
+        }
+    }
+    let left = deadline.saturating_duration_since(std::time::Instant::now());
+    match rx.recv_timeout(left) {
+        Ok(answer) => usable(&answer),
+        Err(_) => timed_out(),
+    }
+}
+
+/// `2.1.318 (Claude Code)` is fine; an older one, or one that can't be read, isn't.
+fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
+    let version = answer.split_whitespace().next().unwrap_or_default();
+    let parts: Option<Vec<u32>> = version.split('.').map(|p| p.parse().ok()).collect();
+    let min = MIN_VERSION.map(|n| n.to_string()).join(".");
+    match parts {
+        Some(parts) if parts.len() == 3 => {
+            let fine = parts[..] >= MIN_VERSION[..];
+            let why = format!("Claude Code {version} is too old: Gathr needs {min} or later");
+            (
+                Some(version.to_string()),
+                if fine { Ok(()) } else { Err(why) },
+            )
+        }
+        _ => (
+            None,
+            Err(format!(
+                "Claude Code's version wasn't readable from {:?}",
+                answer.trim()
+            )),
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_version_is_usable_from_the_oldest_proven_one_on_compared_by_number() {
+        assert_eq!(
+            usable("2.1.318 (Claude Code)\n"),
+            (Some("2.1.318".into()), Ok(()))
+        );
+        assert_eq!(usable("2.10.0 (Claude Code)").1, Ok(()));
+        let old = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+        assert_eq!(
+            usable("2.1.183 (Claude Code)"),
+            (Some("2.1.183".into()), Err(old.into()))
+        );
+        assert!(
+            usable("2.1.99 (Claude Code)").1.is_err(),
+            "2.1.99 compared as text"
+        );
+        for unreadable in ["", "2.1 beta"] {
+            let (version, why) = usable(unreadable);
+            assert!(version.is_none() && why.unwrap_err().contains("wasn't readable"));
+        }
+    }
 
     #[test]
     fn the_engine_gets_none_of_the_credentials_or_sessions_it_could_inherit() {

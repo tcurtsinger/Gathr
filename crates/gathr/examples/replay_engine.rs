@@ -7,11 +7,22 @@
 //!
 //! `auth status` answers as Claude Code does where its login is a file: exit 0 when
 //! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
+//!
+//! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
+//! `stall` there answers only after a minute, as a launcher that hangs.
 
 use std::io::{BufRead, Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--version"] {
+        let version = std::env::var("GATHR_REPLAY_VERSION");
+        if version.as_deref() == Ok("stall") {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+        println!("{}", version.as_deref().unwrap_or("2.1.318 (Claude Code)"));
+        return;
+    }
     if args.iter().map(String::as_str).eq(["auth", "status"]) {
         // `GATHR_REPLAY_AUTH=0` answers signed in with no file, as the macOS Keychain does.
         if let Ok(code) = std::env::var("GATHR_REPLAY_AUTH") {
