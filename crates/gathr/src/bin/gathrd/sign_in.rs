@@ -31,9 +31,19 @@ enum Ask {
 
 #[derive(Default)]
 pub struct SignIn {
-    /// What Settings shows: null, `waiting` with the page, or `failed` with why and a reference.
+    /// What Settings shows: null, `waiting` (with the page once there is one), or `failed` with
+    /// why and a reference.
     shown: Mutex<Value>,
-    running: Mutex<Option<mpsc::UnboundedSender<Ask>>>,
+    running: Mutex<Running>,
+    /// One start at a time, so a double click never leaves a process nobody can cancel.
+    starting: tokio::sync::Mutex<()>,
+}
+
+#[derive(Default)]
+struct Running {
+    /// Counts Cancels, so a start queued behind another sees one that came while it waited.
+    cancels: u64,
+    asks: Option<mpsc::UnboundedSender<Ask>>,
 }
 
 impl SignIn {
@@ -46,13 +56,35 @@ impl SignIn {
         chats.publish(json!({ "type": "engine" }));
     }
 
-    /// Ends a sign-in still waiting. Killing it there leaves no login behind (task 893).
+    /// Ends a sign-in still waiting, and any start queued. Killing it there leaves no login behind
+    /// (task 893).
     pub async fn cancel(&self) {
-        let running = self.running.lock().expect("never poisoned").take();
-        let (done, ended) = oneshot::channel();
-        if running.is_some_and(|tx| tx.send(Ask::Cancel(done)).is_ok()) {
-            let _ = ended.await;
+        let running = {
+            let mut running = self.running.lock().expect("never poisoned");
+            running.cancels += 1;
+            running.asks.take()
+        };
+        stop(running).await;
+    }
+
+    /// Takes `mine` out of `running`, unless a newer sign-in has replaced it.
+    fn release(&self, mine: &mpsc::UnboundedSender<Ask>) -> bool {
+        let mut running = self.running.lock().expect("never poisoned");
+        let ours = running
+            .asks
+            .as_ref()
+            .is_some_and(|tx| tx.same_channel(mine));
+        if ours {
+            running.asks.take();
         }
+        ours
+    }
+}
+
+async fn stop(running: Option<mpsc::UnboundedSender<Ask>>) {
+    let (done, ended) = oneshot::channel();
+    if running.is_some_and(|tx| tx.send(Ask::Cancel(done)).is_ok()) {
+        let _ = ended.await;
     }
 }
 
@@ -66,42 +98,97 @@ fn failed(status: StatusCode, why: &str, trace: &str) -> Fail {
     fail(status, "Sign in failed", why, trace)
 }
 
+/// A newer start replaces one still waiting. Registered before the process starts, so Cancel
+/// reaches it while Claude Code is still getting its page.
 async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    s.sign_in.cancel().await;
+    let cancels = s.sign_in.running.lock().expect("never poisoned").cancels;
+    let _one = s.sign_in.starting.lock().await;
     let fail = |why: String| failed(StatusCode::INTERNAL_SERVER_ERROR, &why, &t.0);
     let program = command::find(s.chats.path_setting().await.as_deref()).map_err(fail)?;
     let folder = s.chats.account_folder();
     std::fs::create_dir_all(&folder).map_err(|e| fail(e.to_string()))?;
+
+    let (mine, mut asks) = mpsc::unbounded_channel();
+    let previous = {
+        let mut running = s.sign_in.running.lock().expect("never poisoned");
+        if running.cancels != cancels {
+            return Ok(Json(json!({ "cancelled": true })));
+        }
+        running.asks.replace(mine.clone())
+    };
+    stop(previous).await;
+    s.sign_in.show(&s.chats, json!({ "state": "waiting" }));
+
     let env = command::env(std::env::vars_os(), &folder);
     let args = ["auth".to_string(), "login".to_string()];
-    let (engine, mut lines) =
-        Engine::start(&program, &args, env, &folder).map_err(|e| fail(e.to_string()))?;
     let started = Instant::now();
-    let mut said = Vec::new();
-    let url = tokio::time::timeout(PAGE_WAIT, page(&mut lines, &mut said)).await;
-    let Ok(Some(url)) = url else {
-        let code = match engine.close(Duration::ZERO).await {
-            Closed::Exited(code) => format!("exit {code:?}"),
-            Closed::Killed => "no sign-in page within 30 s".into(),
-        };
-        let why = format!(
-            "Claude Code gave no sign-in page ({code}): {}",
-            said.join(" ")
-        );
-        record(&s, &t.0, Some(&why), started).await;
-        return Err(fail(why));
+    let (engine, mut lines) = match Engine::start(&program, &args, env, &folder) {
+        Ok(engine) => engine,
+        Err(e) => {
+            s.sign_in.release(&mine);
+            s.sign_in.show(&s.chats, Value::Null);
+            return Err(fail(e.to_string()));
+        }
     };
-    let (tx, asks) = mpsc::unbounded_channel();
-    *s.sign_in.running.lock().expect("never poisoned") = Some(tx.clone());
+    let mut said = Vec::new();
+    let waited = tokio::time::timeout(PAGE_WAIT, async {
+        tokio::select! {
+            url = page(&mut lines, &mut said) => Ok(url),
+            done = cancelled(&mut asks) => Err(done),
+        }
+    })
+    .await;
+    let url = match waited {
+        Ok(Ok(Some(url))) => url,
+        Ok(Err(done)) => {
+            end_cancelled(&s, engine, &t.0, done).await;
+            return Ok(Json(json!({ "cancelled": true })));
+        }
+        Ok(Ok(None)) | Err(_) => {
+            let code = match engine.close(Duration::ZERO).await {
+                Closed::Exited(code) => format!("exit {code:?}"),
+                Closed::Killed => "no sign-in page within 30 s".into(),
+            };
+            let why = format!(
+                "Claude Code gave no sign-in page ({code}): {}",
+                said.join(" ")
+            );
+            record(&s, &t.0, Some(&why), started).await;
+            if s.sign_in.release(&mine) {
+                s.sign_in.show(&s.chats, Value::Null);
+            }
+            return Err(fail(why));
+        }
+    };
     s.sign_in
         .show(&s.chats, json!({ "state": "waiting", "url": url }));
     let job = Job {
         trace: t.0.clone(),
         started,
-        mine: tx,
+        mine,
     };
     tokio::spawn(watch(s.clone(), engine, lines, asks, job));
     Ok(Json(json!({ "url": url })))
+}
+
+/// Waits for a Cancel; a code before the page has nowhere to go yet.
+async fn cancelled(asks: &mut mpsc::UnboundedReceiver<Ask>) -> Option<oneshot::Sender<()>> {
+    while let Some(ask) = asks.recv().await {
+        if let Ask::Cancel(done) = ask {
+            return Some(done);
+        }
+    }
+    None
+}
+
+async fn end_cancelled(s: &State, engine: Engine, trace: &str, done: Option<oneshot::Sender<()>>) {
+    engine.close(Duration::ZERO).await;
+    let ended = Event::point("gathr.engine.sign_in").trace(trace);
+    s.writer.record(ended.attr("ended", "cancelled"));
+    s.sign_in.show(&s.chats, Value::Null);
+    if let Some(done) = done {
+        let _ = done.send(());
+    }
 }
 
 /// The page Claude Code prints for when its browser didn't open.
@@ -154,24 +241,11 @@ async fn watch(
                         last_error = Some(format!("the code didn't reach Claude Code: {e}"));
                     }
                 }
-                Ask::Cancel(done) => {
-                    engine.close(Duration::ZERO).await;
-                    s.writer.record(Event::point("gathr.engine.sign_in").trace(&trace).attr("ended", "cancelled"));
-                    s.sign_in.show(&s.chats, Value::Null);
-                    let _ = done.send(());
-                    return;
-                }
+                Ask::Cancel(done) => return end_cancelled(&s, engine, &trace, Some(done)).await,
             },
         }
     }
-    let ours = {
-        let mut running = s.sign_in.running.lock().expect("never poisoned");
-        let ours = running.as_ref().is_some_and(|tx| tx.same_channel(&mine));
-        if ours {
-            running.take();
-        }
-        ours
-    };
+    let ours = s.sign_in.release(&mine);
     // Its output has ended, so it's exiting: the grace is for it to finish saving the login.
     let code = match engine.close(Duration::from_secs(10)).await {
         Closed::Exited(code) => code,
@@ -212,7 +286,13 @@ async fn code(
     Json(body): Json<Code>,
 ) -> Answer {
     let code = body.code.trim().to_string();
-    let running = s.sign_in.running.lock().expect("never poisoned").clone();
+    let running = s
+        .sign_in
+        .running
+        .lock()
+        .expect("never poisoned")
+        .asks
+        .clone();
     match running {
         Some(tx) if tx.send(Ask::Code(code)).is_ok() => Ok(Json(json!({ "sent": true }))),
         _ => Err(failed(StatusCode::CONFLICT, "no sign-in is waiting", &t.0)),

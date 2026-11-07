@@ -4,8 +4,8 @@ import './notice.css';
 interface Props {
   title: string;
   danger?: boolean;
-  /** An error's reference: opens its turn in Diagnostics. */
-  reference?: { ref: string; open: () => void };
+  /** An error's reference: opens it in Diagnostics. */
+  reference?: { ref: string; open: (ref: string) => void };
   /** Links shown after the title and reference. */
   links?: ReactNode;
   /** The action at the right. */
@@ -21,7 +21,7 @@ export function Notice({ title, danger, reference, links, action }: Props) {
         <button
           type="button"
           className="ref"
-          onClick={reference.open}
+          onClick={() => reference.open(reference.ref)}
           aria-label={`Reference ${reference.ref}`}
         >
           {reference.ref}

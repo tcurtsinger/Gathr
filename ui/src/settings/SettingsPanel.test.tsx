@@ -14,6 +14,7 @@ function Screen() {
       <SettingsPanel
         target={target}
         onPage={(page) => setTarget((t) => t && { ...t, page })}
+        onReference={() => {}}
         onClose={() => setTarget(null)}
       />
     </>

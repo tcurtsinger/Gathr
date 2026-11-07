@@ -36,6 +36,14 @@ export function App() {
   const chat = chats.find((c) => c.id === selected);
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
+  const openReference = (reference: string) =>
+    setSettings((s) => ({
+      page: 'diagnostics',
+      chat: chat?.id,
+      title: chat?.title,
+      reference,
+      opener: s?.opener ?? (document.activeElement as HTMLElement),
+    }));
 
   return (
     <div className="app">
@@ -70,7 +78,7 @@ export function App() {
               <Notice
                 danger
                 title={failure.error}
-                reference={failure.ref ? { ref: failure.ref, open: () => {} } : undefined}
+                reference={failure.ref ? { ref: failure.ref, open: openReference } : undefined}
               />
             </div>
           ) : (
@@ -80,7 +88,8 @@ export function App() {
       )}
       <SettingsPanel
         target={settings}
-        onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined })}
+        onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}
+        onReference={openReference}
         onClose={() => setSettings(null)}
       />
     </div>

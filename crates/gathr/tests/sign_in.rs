@@ -3,6 +3,7 @@
 
 mod common;
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use common::{TempDir, TestService, gathr, replay_engine};
@@ -81,6 +82,12 @@ fn a_refused_code_fails_with_a_reference_that_finds_why() {
         trace.to_string().contains("wasn't accepted"),
         "the reference doesn't find why: {trace}"
     );
+    let shown = service.call("GET", &format!("/api/trace/{reference}"));
+    assert!(
+        shown.body.contains("wasn't accepted"),
+        "Diagnostics doesn't find why: {}",
+        shown.body
+    );
 }
 
 #[test]
@@ -95,6 +102,55 @@ fn cancel_ends_the_wait_and_sign_in_starts_again() {
 
     let again = service.call("POST", "/api/engines/claude/sign-in");
     assert_eq!(again.status, 200, "{}", again.body);
+}
+
+/// A double click on Sign in, then Cancel, all before a slow launcher prints its page (Vale, 905).
+#[test]
+fn cancel_before_the_page_stops_both_of_two_starts() {
+    let data = TempDir::new();
+    let slow = [("GATHR_REPLAY_PAGE_MS", Path::new("3000"))];
+    let service = TestService::start_with(&data.0, &slow);
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+
+    let started = Instant::now();
+    let answers = std::thread::scope(|scope| {
+        let start = || service.call("POST", "/api/engines/claude/sign-in");
+        let starts = [scope.spawn(start), scope.spawn(start)];
+        std::thread::sleep(Duration::from_millis(1000));
+        let engine = service.call("GET", "/api/engines/claude").json();
+        assert_eq!(
+            engine["sign_in"]["state"], "waiting",
+            "Cancel isn't shown yet: {engine}"
+        );
+        let cancelled = service.call("DELETE", "/api/engines/claude/sign-in");
+        assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+        starts.map(|s| s.join().expect("the start answers"))
+    });
+    for answer in &answers {
+        assert_eq!(
+            answer.json(),
+            json!({ "cancelled": true }),
+            "a start went on"
+        );
+    }
+    assert!(
+        started.elapsed() < Duration::from_millis(2500),
+        "the starts waited for the page: {:?}",
+        started.elapsed()
+    );
+    let engine = service.call("GET", "/api/engines/claude").json();
+    assert!(engine["sign_in"].is_null(), "still signing in: {engine}");
+    let code = json!({ "code": "made-up-code#made-up-state" });
+    let sent = service.send("POST", "/api/engines/claude/sign-in/code", code);
+    assert_eq!(
+        sent.status, 409,
+        "a sign-in is still waiting: {}",
+        sent.body
+    );
 }
 
 #[test]

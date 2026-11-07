@@ -12,7 +12,7 @@ const said: Record<string, string> = {
 };
 
 /** Settings > Engines: Claude Code's sign-in and path (engines/v4). */
-export function Engines() {
+export function Engines({ onReference }: { onReference: (ref: string) => void }) {
   const [engine, setEngine] = useState<Engine | null>(null);
   const [path, setPath] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -50,7 +50,6 @@ export function Engines() {
 
   const signingIn = engine?.sign_in?.state === 'waiting' ? engine.sign_in : null;
   const signInFailed = engine?.sign_in?.state === 'failed' ? engine.sign_in : null;
-
   return (
     <section aria-labelledby="engines-title">
       <h3 id="engines-title">Engines</h3>
@@ -58,7 +57,7 @@ export function Engines() {
         <Notice
           danger
           title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: () => {} } : undefined}
+          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
           links={failure.why && <span className="muted">{failure.why}</span>}
         />
       )}
@@ -66,7 +65,7 @@ export function Engines() {
         <Notice
           danger
           title="Sign in failed"
-          reference={{ ref: signInFailed.ref, open: () => {} }}
+          reference={{ ref: signInFailed.ref, open: onReference }}
           links={<span className="muted">{signInFailed.why}</span>}
         />
       )}
@@ -91,7 +90,7 @@ export function Engines() {
               )}
             </span>
           </div>
-          {signingIn && <SignInCode url={signingIn.url} onFailure={setFailure} />}
+          {signingIn?.url && <SignInCode url={signingIn.url} onFailure={setFailure} />}
           <div className="pathfield">
             <label htmlFor="claude-path">Claude Code path</label>
             <div className="pathline">

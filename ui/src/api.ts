@@ -43,8 +43,8 @@ export interface Engine {
   found: string | null;
   why_not_found: string | null;
   account: { folder: string; login: string; expires: string | null };
-  /** A sign-in from Settings: waiting with its page, or failed with why and a reference. */
-  sign_in: { state: 'waiting'; url: string } | { state: 'failed'; why: string; ref: string } | null;
+  /** A sign-in from Settings: waiting (with its page once there is one), or failed with why and a reference. */
+  sign_in: { state: 'waiting'; url?: string } | { state: 'failed'; why: string; ref: string } | null;
 }
 
 /** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
@@ -93,7 +93,32 @@ export const api = {
   signIn: () => call<{ url: string }>('POST', '/api/engines/claude/sign-in'),
   signInCode: (code: string) => call<unknown>('POST', '/api/engines/claude/sign-in/code', { code }),
   cancelSignIn: () => call<unknown>('DELETE', '/api/engines/claude/sign-in'),
+  /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
+  trace: (ref: string) =>
+    call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>
+      events.map(
+        (e): TurnEvent => ({
+          at_ms: e.offset_ms,
+          name: e.name,
+          phase: e.phase,
+          status: e.status,
+          error: e.error_type,
+          duration_ms: e.duration_us === null ? null : e.duration_us / 1000,
+          attrs: e.attrs,
+        }),
+      ),
+    ),
 };
+
+interface TraceRow {
+  offset_ms: number;
+  name: string;
+  phase: TurnEvent['phase'];
+  status: TurnEvent['status'];
+  error_type: string | null;
+  duration_us: number | null;
+  attrs: Record<string, unknown> | null;
+}
 
 export interface TurnEvent {
   at_ms: number;

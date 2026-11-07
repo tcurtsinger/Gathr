@@ -26,6 +26,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/stop", post(stop))
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
         .route("/api/chats/{chat}/turns", get(turns))
+        .route("/api/trace/{reference}", get(trace))
         .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine).put(set_engine))
         .route("/api/live", get(live))
@@ -183,6 +184,18 @@ async fn turns(
     known(&s, &t, &chat).await?;
     db(&s, &t, "Diagnostics failed", move |conn| {
         gathr::timeline::turns(conn, &chat)
+    })
+    .await
+}
+
+/// What `gathr diag trace` shows, for a reference with no turn behind it (a sign-in, a request).
+async fn trace(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(reference): Path<String>,
+) -> Answer {
+    db(&s, &t, "Diagnostics failed", move |conn| {
+        gathr::diag::trace(conn, &reference)
     })
     .await
 }
