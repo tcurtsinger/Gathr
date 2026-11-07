@@ -13,6 +13,10 @@ use std::io::{BufRead, Write};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().map(String::as_str).eq(["auth", "status"]) {
+        // `GATHR_REPLAY_AUTH=0` answers signed in with no file, as the macOS Keychain does.
+        if let Ok(code) = std::env::var("GATHR_REPLAY_AUTH") {
+            std::process::exit(code.parse().unwrap_or(1));
+        }
         let folder = std::env::var_os("CLAUDE_CONFIG_DIR").unwrap_or_default();
         let signed_in = std::path::Path::new(&folder)
             .join(".credentials.json")
