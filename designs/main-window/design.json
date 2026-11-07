@@ -1,8 +1,0 @@
-{
-  "title": "Gathr overview",
-  "for": "Phase 0 directions: v1 Ledger, v2 Workbench, v3 Dispatch. Use Dark to compare themes.",
-  "knobs": [
-    "--accent",
-    "--radius"
-  ]
-}

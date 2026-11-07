@@ -107,10 +107,4 @@ At the end of your answer, as "Friction: <what, where>": anything in SerenityOS 
 
 ## Design preview checks
 
-Phase 0 prototypes are under `designs/`. From the repo root, run `node designs/check.cjs` to check page scripts, unique element IDs, local-only content, history fixtures and contrast roles. Open each candidate in the design viewer at 1440 and 1024 px in both themes. These previews do not require the Rust service or provider logins.
-
-Round 2 previews (v4 to v6) also require `node designs/check-round2.cjs`. Use `designs/ROUND2.md` for the candidate-specific controls and fixtures.
-
-## Design prototypes
-
-Round 3 is local HTML in `designs/`. See `designs/ROUND3.md` for pages and controls; run `node designs/check-round3.cjs` from the repo root. Open a page locally, use the theme control or `#light`, and check at 1440 and 1024 px. Engine and terminal behaviour is simulated. `DESIGN.md` records the fixed shell provisionally until the coordination layout is selected.
+The selected desktop prototypes are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root. Open the four latest pages at 1440 and 1024 px in dark and light (`#light`), exercise New, Search, composer, panel tabs and agent roles. `DESIGN.md`, `designs/tokens.css`, `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes. No engine, real terminal or Settings service is connected. Browser interaction and keyboard checks complement the static command.

@@ -1,9 +1,9 @@
 {
   "title": "Gathr new chat",
-  "for": "Round 3 fixed desktop shell",
+  "for": "Shared desktop chat shell",
   "knobs": [
     "--radius",
     "--space"
   ],
-  "picked": "v8.html"
+  "picked": "v10.html"
 }
