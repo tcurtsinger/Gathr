@@ -48,7 +48,7 @@ Use + New and Search with matching 16 px outline icons, no shortcut hint. Icons 
 
 Tools use native details disclosures. Panel tabs share one content region. Message actions, reactions, queue removal, send, pause and context summarisation provide local feedback. Role selection allows one to five agents; two or more require a Supervisor; Reviewer is optional and distinct. Disabled Create reflects invalid membership. Every setting must ultimately have a Settings control. The Phase 1 previews open the centered Settings panel.
 
-Focus uses a 2 px accent outline with 2 px offset. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
+Focus uses a 2 px accent outline with 2 px offset; in the composer it goes around the rounded box, not the text area inside. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
 
 ## Token ownership
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
@@ -67,8 +67,8 @@ phase1-selected.js. Preview selectors and simulated completion never ship.
 Engines holds the selected single-engine form. Diagnostics is another category,
 with a 210 px independently scrolling turn list beside a scrolling timeline. Filters
 stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
-Below 768 px the turn list sits above the timeline. The chat header opens Diagnostics;
-a failure reference and Diagnostics action open it filtered to the affected turn.
+Below 768 px the turn list sits above the timeline. A chat has no Diagnostics link of
+its own: a failure reference and Diagnostics action open it filtered to the affected turn.
 Clearing Find restores all turns. Switching categories preserves the filtered view.
 Opening a failure reference resets the status filter so the affected turn is visible.
 References in the timeline simulate Copy, without using the system clipboard.

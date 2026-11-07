@@ -5,7 +5,7 @@ import { Notice } from '../components/Notice';
 import { report } from '../report';
 import { rows, type SendFailure } from './rows';
 import { running } from './state';
-import { DiagnosticsLink, type NoticeActions, Transcript } from './Transcript';
+import { type NoticeActions, Transcript } from './Transcript';
 import { type Unsent, useChat } from './useChat';
 import './chat.css';
 
@@ -80,7 +80,6 @@ export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings,
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
         <h1>{chat.title}</h1>
-        <DiagnosticsLink open={() => openSettings('diagnostics')} />
       </header>
       <div
         className="scroller"

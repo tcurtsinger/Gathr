@@ -4,6 +4,11 @@
   border-radius: 22px;
   padding: 14px 14px 9px;
 }
+/* The rounded box shows where typing goes, not the bare text area inside it. */
+.composer:has(textarea:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 .composer textarea {
   display: block;
   width: 100%;
@@ -12,8 +17,10 @@
   background: transparent;
   border: 0;
   padding: 0 4px;
-  outline-offset: 4px;
   font-size: 15px;
+}
+.composer textarea:focus-visible {
+  outline: none;
 }
 .composer textarea::placeholder {
   color: var(--muted);
