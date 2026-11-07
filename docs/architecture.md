@@ -64,7 +64,7 @@ Each turn carries a small, stable briefing, the ask, the standing rules that sti
 
 ## No prompting needed
 
-What a careful prompt would have said is built in: the project's rules in every briefing, plan mode as a setting, roles that carry their way of working, a Supervisor that plans, assigns and asks only what's the person's, tools that explain and refuse misuse, and nudges from state. Unused tools and restated asks are measured. [0021](decisions/0021-no-prompting-needed.md).
+What a careful prompt would have said is built in: the project's rules loaded with every chat in it, plan mode as a setting, roles that carry their way of working, a Supervisor that plans, assigns and asks only what's the person's, tools that explain and refuse misuse, and nudges from state. Unused tools and restated asks are measured. [0021](decisions/0021-no-prompting-needed.md).
 
 ## Decisions
 
