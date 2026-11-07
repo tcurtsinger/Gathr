@@ -75,6 +75,45 @@ fn a_send_with_no_engine_at_the_set_path_fails_with_a_reference_that_traces() {
     );
 }
 
+/// 0019: why the engine stopped is on the failed turn itself, and its reference finds it.
+#[test]
+fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
+    let data = TempDir::new();
+    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &recording("engine_exits"))]);
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    sign_in(&data.0);
+
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Say hi" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let history = service.wait_for(&chat, 10, "the turn to fail", |h| {
+        turn_status(h) == Some("failed")
+    });
+    let turn = history["turns"].as_array().unwrap().last().unwrap().clone();
+    let line = "error: unknown option '--forward-subagent-text'";
+    let why = turn["why"].as_str().unwrap_or_default();
+    assert_eq!(
+        why,
+        format!("Claude Code exited during the turn (exit code 1): {line}"),
+        "{turn}"
+    );
+
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", turn["ref"].as_str().unwrap()]);
+    assert!(ok, "{trace}");
+    assert!(
+        trace.to_string().contains("unknown option"),
+        "the reference doesn't find the error line: {trace}"
+    );
+}
+
 #[test]
 fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retrying() {
     let data = TempDir::new();

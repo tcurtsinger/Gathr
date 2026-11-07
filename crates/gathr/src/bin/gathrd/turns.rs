@@ -11,6 +11,7 @@ use gathr::claude::frames::{self, Frame, TurnEnd};
 use gathr::claude::login::{self, Login};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id, ulid};
+use gathr::redact::redact;
 use gathr::store::{self, RawFrame};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -49,6 +50,8 @@ struct Task {
     chat: String,
     engine: Option<Engine>,
     lines: Option<mpsc::UnboundedReceiver<Line>>,
+    /// The engine's last stderr line: when it exits mid-turn, that's usually why (0019).
+    last_stderr: Option<String>,
     turn: Option<Running>,
     queue: VecDeque<Queued>,
     /// The login file as it was when the engine refused it, and when: held as signed out
@@ -65,6 +68,7 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
         chat,
         engine: None,
         lines: None,
+        last_stderr: None,
         turn: None,
         queue: VecDeque::new(),
         refused: None,
@@ -340,6 +344,7 @@ impl Task {
                 );
                 self.engine = Some(engine);
                 self.lines = Some(lines);
+                self.last_stderr = None;
                 Ok(())
             }
             Err(e) => {
@@ -418,6 +423,9 @@ impl Task {
                     .chat(&self.chat)
                     .attr("line", text.clone()),
             );
+            if !text.trim().is_empty() {
+                self.last_stderr = Some(text.clone());
+            }
             return;
         };
         match serde_json::from_str::<Value>(&text) {
@@ -683,16 +691,28 @@ impl Task {
             },
             None => None,
         };
-        self.record(
-            Event::point("gathr.engine.exit")
-                .chat(&self.chat)
-                .attr("process.exit.code", code),
-        );
-        if let Some(turn) = self.turn.take() {
-            let why = format!("Claude Code exited during the turn (exit code {code:?})");
-            self.set_turn(&turn.turn, &turn.trace, "failed", Some(&why))
-                .await;
+        let event = Event::point("gathr.engine.exit")
+            .chat(&self.chat)
+            .attr("process.exit.code", code);
+        let last_stderr = self.last_stderr.take();
+        let Some(turn) = self.turn.take() else {
+            self.record(event);
+            return self.try_next().await;
+        };
+        let code = code.map_or("none".into(), |c| c.to_string());
+        let mut why = format!("Claude Code exited during the turn (exit code {code})");
+        if let Some(line) = last_stderr {
+            why = format!("{why}: {}", redact(line.trim()));
         }
+        // On the turn's trace, so its reference finds why (0019).
+        self.record(
+            event
+                .trace(&turn.trace)
+                .error("exited")
+                .attr("why", why.clone()),
+        );
+        self.set_turn(&turn.turn, &turn.trace, "failed", Some(&why))
+            .await;
         self.try_next().await;
     }
 

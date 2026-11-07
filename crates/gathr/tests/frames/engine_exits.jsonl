@@ -1,0 +1,4 @@
+{"dir":"note","line":"Claude Code 2.1.318's own words for a flag it doesn't know, then its exit code. Real Claude Code exits before reading stdin; this waits for the message so the turn is under way."}
+{"dir":"in","line":"{\"type\":\"user\",\"message\":{\"role\":\"user\",\"content\":\"Say hi\"},\"parent_tool_use_id\":null,\"session_id\":\"default\"}"}
+{"dir":"err","line":"error: unknown option '--forward-subagent-text'"}
+{"dir":"exit","line":"1"}

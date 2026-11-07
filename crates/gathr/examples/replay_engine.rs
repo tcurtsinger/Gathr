@@ -1,6 +1,6 @@
 //! Stands in for Claude Code in tests: plays back a recorded session (`tests/frames/*.jsonl`).
 //! Each recorded `in` line waits for a line on stdin; each `out` or `err` line is written as it
-//! was recorded. So the service's driver meets the engine's real frames, in their real order.
+//! was recorded; an `exit` line ends it with that code. So the service's driver meets the engine's real frames, in their real order.
 //!
 //! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line.
@@ -34,6 +34,7 @@ fn main() {
                 stdout.flush().unwrap();
             }
             Some("err") => writeln!(stderr, "{line}").unwrap(),
+            Some("exit") => std::process::exit(line.parse().unwrap_or(1)),
             _ => {}
         }
     }
