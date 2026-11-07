@@ -72,6 +72,8 @@ pub fn args(session: Session<'_>) -> Vec<String> {
         "--verbose",
         "--include-partial-messages",
         "--replay-user-messages",
+        // Without it a foreground sub-agent's text is dropped, so what it said can't be shown.
+        "--forward-subagent-text",
         "--permission-prompt-tool",
         "stdio",
         "--strict-mcp-config",

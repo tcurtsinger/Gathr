@@ -43,6 +43,12 @@ pub enum Frame {
         message: String,
     },
     TurnEnd(TurnEnd),
+    /// A sub-agent's frame, under the Agent or Skill call that started it (`parent_tool_use_id`).
+    /// Never the agent's own words or tools.
+    Sub {
+        parent: String,
+        frame: Box<Frame>,
+    },
     /// Anything else, by its type: recorded raw, not acted on.
     Other(String),
 }
@@ -89,6 +95,22 @@ pub fn kind(value: &Value) -> String {
 
 /// Reads one parsed output line.
 pub fn read(value: &Value) -> Vec<Frame> {
+    let frames = read_own(value);
+    // Null for the main conversation; a sub-agent's frames carry the id of the call that
+    // started it. Stream events are documented as main-session only, but are checked the same way.
+    match value.get("parent_tool_use_id").and_then(Value::as_str) {
+        Some(parent) => frames
+            .into_iter()
+            .map(|frame| Frame::Sub {
+                parent: parent.to_string(),
+                frame: Box::new(frame),
+            })
+            .collect(),
+        None => frames,
+    }
+}
+
+fn read_own(value: &Value) -> Vec<Frame> {
     let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_string();
     match value.get("type").and_then(Value::as_str).unwrap_or("") {
         "system" if text(value, "subtype") == "init" => vec![Frame::Init {
@@ -262,6 +284,64 @@ mod tests {
         assert!(
             frames.contains(&Frame::Read("Say hi".into())),
             "the echo of the message read is missing"
+        );
+    }
+
+    /// A sub-agent's words and tools are its own, tied to the Agent call, never the agent's.
+    #[test]
+    fn a_sub_agents_frames_are_kept_apart_under_its_agent_call() {
+        let frames = replayed("subagent");
+        let Some(agent_call) = frames.iter().find_map(|f| match f {
+            Frame::ToolStart { id, name } if name == "Agent" => Some(id.clone()),
+            _ => None,
+        }) else {
+            panic!("no Agent call of the agent's own: {frames:?}");
+        };
+        let (sub, own): (Vec<_>, Vec<_>) =
+            frames.iter().partition(|f| matches!(f, Frame::Sub { .. }));
+        let sub_text: Vec<&str> = sub
+            .iter()
+            .filter_map(|f| match f {
+                Frame::Sub { parent, frame } => {
+                    assert_eq!(
+                        parent, &agent_call,
+                        "a sub-agent frame under another call: {f:?}"
+                    );
+                    match frame.as_ref() {
+                        Frame::Text(t) => Some(t.as_str()),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(
+            !sub_text.is_empty(),
+            "the sub-agent's text is missing: {sub:?}"
+        );
+        let own_text: Vec<&str> = own
+            .iter()
+            .filter_map(|f| match f {
+                Frame::Text(t) | Frame::TextDelta(t) => Some(t.as_str()),
+                _ => None,
+            })
+            .collect();
+        for text in &sub_text {
+            assert!(
+                !own_text.contains(text),
+                "the sub-agent's {text:?} reads as the agent's own"
+            );
+        }
+        assert!(
+            own.contains(&&Frame::ToolEnd {
+                id: agent_call.clone(),
+                ok: true
+            }),
+            "the Agent call's own end is missing"
+        );
+        assert!(
+            !own.iter().any(|f| matches!(f, Frame::ToolStart { id, .. } | Frame::ToolEnd { id, .. } if *id != agent_call)),
+            "a sub-agent's tool reads as the agent's own: {own:?}"
         );
     }
 
