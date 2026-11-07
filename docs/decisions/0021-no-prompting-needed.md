@@ -12,12 +12,12 @@ The starter prompt the owner had to write to get Gathr's own first room working 
 
 | The prompt had to say | Gathr does it by |
 |---|---|
-| Read the rulebook first | A project chat's agents work with the project's `AGENTS.md`: the engines load it from the project folder themselves, and the briefing points to it ([0020](0020-context-per-turn.md)). A new project gets one written from a few questions (what it is, the stack if known, public or private), starting from Gathr's template of working rules; the person edits it. |
+| Read the rulebook first | A project chat's agents work with the project's `AGENTS.md`: Codex loads it from the project folder, Claude Code through a one-line `CLAUDE.md` (`@AGENTS.md`), and the briefing points to it ([0020](0020-context-per-turn.md)). A new project gets both written from a few questions (what it is, the stack if known, public or private), starting from Gathr's template of working rules; the person edits `AGENTS.md`. |
 | Plan first, nothing built until approved | Plan mode is a setting on the chat and a button, and the Supervisor's briefing says to plan before building ([0010](0010-coordination-as-state.md)). |
 | Break the work into parts, in parallel, each with an owner | The Supervisor's briefing: turn an ask into ordered parts, each with an owner by role, a done and a check, parallel where they can be. |
 | Which member does which part | Each role (Supervisor, Reviewer, designer, engineer and so on) comes with a default "how it works" the person can edit. The Supervisor assigns by role and seniority. |
 | Decisions are the person's, as tasks, with a pick | Built into tasks: only the Supervisor gives the person tasks, as a decision with choices and its pick first ([0010](0010-coordination-as-state.md)). |
-| Where the lessons are | The project's notes are part of the standing rules ([0020](0020-context-per-turn.md)). The friction ledger is fetched, not pushed: a plan names the entries it covers, and those entries ride with its tasks. |
+| Where the lessons are | A lesson the person keeps becomes a project note, and project notes are standing rules ([0020](0020-context-per-turn.md)). Anything longer, such as a lessons file in the project, is fetched with a tool when a plan touches it, never put in every turn. |
 
 And for what the person doesn't say at all:
 - **A vague ask** gets one question from the Supervisor, with options and its pick, only when the answer changes the work. Otherwise it picks a sensible default, says so, and goes ahead.
