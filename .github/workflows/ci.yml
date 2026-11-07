@@ -44,3 +44,13 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test
         run: cargo test --workspace --locked
+      # The Mac checks run CI's build, so nothing gets built on the Mac.
+      - name: keep the macOS build
+        if: matrix.name == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gathr-macos
+          path: |
+            target/debug/gathrd
+            target/debug/gathr
+          retention-days: 7

@@ -75,6 +75,49 @@ fn a_send_with_no_engine_at_the_set_path_fails_with_a_reference_that_traces() {
     );
 }
 
+/// An engine too old for the switches Gathr passes fails the send by its version, before any
+/// turn runs, rather than with whatever it prints about an unknown switch.
+#[test]
+fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_reference() {
+    let data = TempDir::new();
+    let runs = data.0.join("runs.jsonl");
+    let service = TestService::start_with(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_ARGS", &runs),
+            ("GATHR_REPLAY_VERSION", Path::new("2.1.183 (Claude Code)")),
+        ],
+    );
+    let chat = service.new_chat();
+    let engine = json!({ "path": replay_engine() });
+    service.send("PUT", "/api/engines/claude", engine);
+    sign_in(&data.0);
+
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Say hi" }),
+    );
+    assert_eq!(sent.status, 500, "{}", sent.body);
+    let answer = sent.json();
+    assert_eq!(answer["error"], "Send failed");
+    let why = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+    assert_eq!(answer["why"], why, "{answer}");
+    assert!(engine_runs(&runs).is_empty(), "an engine too old still ran");
+
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);
+    assert!(ok, "{trace}");
+    let start = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "gathr.engine.start")
+        .unwrap_or_else(|| panic!("no engine start in the trace: {trace}"));
+    assert_eq!(start["status"], "error", "{start}");
+    assert_eq!(start["attrs"]["version"], "2.1.183", "{start}");
+}
+
 /// 0019: why the engine stopped is on the failed turn itself, and its reference finds it.
 #[test]
 fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {

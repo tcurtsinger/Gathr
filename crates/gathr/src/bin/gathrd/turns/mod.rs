@@ -329,13 +329,34 @@ impl Task {
     /// Claude Code's path, from Settings at every start so a change applies at once (S26).
     async fn find_engine(&self, trace: &str) -> Result<std::path::PathBuf, String> {
         let setting = self.chats.path_setting().await;
-        command::find(setting.as_deref()).inspect_err(|why| {
+        let program = command::find(setting.as_deref()).inspect_err(|why| {
             self.record(
                 Event::point("gathr.engine.start")
                     .trace(trace)
                     .error("engine_not_found")
                     .attr("why", why.clone())
                     .attr("path_setting", setting.clone()),
+            );
+        })?;
+        // An engine too old for the switches it's given fails here by its version, not later
+        // with whatever it prints about an unknown switch.
+        let path = program.clone();
+        let (version, usable) = tokio::task::spawn_blocking(move || command::version(&path))
+            .await
+            .unwrap_or_else(|e| {
+                (
+                    None,
+                    Err(format!("Claude Code's version check stopped: {e}")),
+                )
+            });
+        usable.map(|()| program.clone()).inspect_err(|why| {
+            self.record(
+                Event::point("gathr.engine.start")
+                    .trace(trace)
+                    .error("engine_version")
+                    .attr("why", why.clone())
+                    .attr("version", version)
+                    .attr("path", program.display().to_string()),
             );
         })
     }
