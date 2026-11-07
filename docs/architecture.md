@@ -54,7 +54,7 @@ React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2
 
 ## The agents' browser
 
-The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with its own profile folder in Gathr's data, driven over a CDP pipe with no port. The UI shows it as a live stream with the person's input sent back, the same in the window, a browser tab and another computer; **Open window** gives a visible browser for passkeys and file pickers. [0017](decisions/0017-agent-browser.md).
+The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with its own profile folder in Gathr's data, driven over a CDP pipe with no port. The UI shows it as a live stream with the person's input sent back, the same in the window, a browser tab and another computer; **Open window** gives a visible browser for passkeys and file pickers. [0018](decisions/0018-agent-browser.md).
 
 ## Decisions
 

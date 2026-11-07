@@ -1,6 +1,6 @@
-# 0017. The agents' browser: a browser the service runs, shown as a live stream
+# 0018. The agents' browser: a browser the service runs, shown as a live stream
 
-Status: proposed. Date: 2026-11-07.
+Status: accepted. Date: 2026-11-07. The live stream is the owner's pick, over a browser view inside the window.
 
 Agents need a real browser: open a page, read it, click and type, and keep their own sign-ins. The person needs to watch it and take over (to sign in, or to help). Gathr's UI is a web page shown in a Tauri window, and also in a browser tab (0012) and from another computer (0016), so where the agents' browser lives decides where it can be seen.
 
@@ -60,4 +60,4 @@ Agents need a real browser: open a page, read it, click and type, and keep their
 - That a profile used headless opens in **Open window** with its sign-ins intact, and back.
 - Whether sites that block automated browsers (Google sign-in, for one) accept the headless browser, or need **Open window** to sign in.
 - Typing in languages that use an input method (Japanese, Chinese) through the stream.
-- Stream latency over Tailscale between two computers.
+- Stream latency over Tailscale between two computers (0017).
