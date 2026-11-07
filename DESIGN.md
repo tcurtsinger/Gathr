@@ -91,3 +91,30 @@ Failures alone use danger, danger-surface and danger-border. Dark values are in 
 YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surface,
 text and control tokens. This is a semantic error role, separate from the blue action
 accent. Normal replies remain unboxed. No service integration is claimed.
+
+
+## Agent selection and editing
+The composer selects an agent. It has no model or effort control. Each agent owns
+its engine, account, model and effort. Selecting another recipient never changes
+those assignments. Selected shell previews: chat/v14, single-chat/v12,
+new-chat/v12 and start-chat/v13. Approval and context controls keep their own jobs.
+
+Three editing proposals await the owner's choice: Settings > Agents (agents/v1),
+inline Team editor (agents/v2), or a compact editor from the chat's agent menu
+(agents/v3). All use the same labelled fields and shared form implementation.
+Every option retains Settings > Agents; contextual entry points select that same
+agent. Recommendation: Settings as the canonical editor with contextual links,
+so changing a reusable agent has one consistent location in single and team chats.
+
+Proposal scope: Save updates the reusable agent for future turns in every chat;
+running turns retain their assignment. This scope and the editing location are
+proposals, not an approved implementation plan. Roles remain chat-specific.
+Engine changes refresh the account, model and effort choices and reset dependent
+selections to the engine default. Models are searchable and independently scroll;
+the chosen model stays visible above the list. No free-text model identifier.
+Production choices must come from the installed engine, including supported
+effort values and unavailable-model states, pending Cass's capability research.
+These previews use explicitly named sample models, with no capability claim.
+Cancel and Escape discard form changes and restore focus. Save gives local feedback.
+Preview changes last only while the page remains open. The form and native dialog
+reuse Gathr's tokens, focus, button and Settings shell patterns. No new palette.

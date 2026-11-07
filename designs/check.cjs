@@ -4,7 +4,7 @@ const fs = require('fs'),
   assert = require('assert/strict');
 const styles = ['shell', 'conversation', 'panels', 'responsive']
   .map(name => fs.readFileSync(path.join(__dirname, name + '.css'), 'utf8')).join('\n');
-const pages = [['chat', 13], ['single-chat', 11], ['new-chat', 11], ['start-chat', 12]];
+const pages = [['chat', 14], ['single-chat', 12], ['new-chat', 12], ['start-chat', 13]];
 for (const [d, v] of pages) {
   const file = path.join(__dirname, d, 'v' + v + '.html'),
     h = fs.readFileSync(file, 'utf8');
@@ -40,3 +40,9 @@ for (const [d, v] of pages) {
 }
 
 new vm.Script(fs.readFileSync(path.join(__dirname, 'phase1-selected.js'), 'utf8'));
+
+for (const [folder, version] of pages) {
+  const html = fs.readFileSync(path.join(__dirname, folder, `v${version}.html`), 'utf8');
+  assert(!html.includes('aria-label="Model and effort"'), 'composer selects an agent only');
+}
+new vm.Script(fs.readFileSync(path.join(__dirname, 'agent-editor.js'), 'utf8'));
