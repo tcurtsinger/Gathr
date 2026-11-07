@@ -22,3 +22,7 @@ engine and account, find model 24, select it, choose effort and Save. Open Setti
 to inspect the saved values. Choose Rowan in the chat picker, then Edit agent:
 Settings opens at Rowan. Change the engine to check resets.
 Cancel or Escape discards edits. Reload clears every preview change.
+
+Account revision: `../settings-entry/v4.html` now demonstrates the selected
+Account, Model and Effort form. Account implies engine. Earlier options above
+retain historical engine/source controls. The new layout awaits approval.
