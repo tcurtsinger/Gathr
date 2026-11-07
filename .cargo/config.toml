@@ -1,0 +1,3 @@
+[alias]
+# cargo dev --port <yours> --data <your data folder> [--seed]
+dev = "run --quiet --bin gathr -- dev"
