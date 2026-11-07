@@ -72,6 +72,18 @@ What ACP would give: one driver for both engines and the long tail of other agen
 - **One Codex process per turn** (the previous app): it costs a start per turn and needs a kill to stop.
 - **A model loop over provider APIs.** Ruled out by the owner: each provider's own harness, never a homemade loop.
 
+## Checked in the first slice
+
+Live, with Claude Code 2.1.318 on Windows in a Gathr account folder (2026-11-07):
+- **The stream-json frames** the driver reads, recorded into `crates/gathr/tests/frames` and replayed through the service in its tests.
+- **`--permission-prompt-tool stdio`:** a `can_use_tool` request for Write, answered `allow` with `updatedInput` over stdin; the tool ran.
+- **Stop:** the `interrupt` control request is acknowledged and the turn ends (`result` subtype `error_during_execution`) within 11 ms; what was written before it is kept.
+- **The gentle close:** Claude Code exits on its own 150 to 180 ms after its stdin closes, also at service shutdown.
+- **A message sent mid-turn:** with no step to stop at, Claude Code finishes the turn, then reads the message (`--replay-user-messages` echoes it) and answers it in a turn of its own, with its own `result`. The driver gives that turn its own row.
+- **Synced claude.ai items reach a fresh folder:** once signed in, the folder holds the account's synced plugins (15 for the owner), which add their skills, tools and `SessionStart` hooks to every session; one hook added 13,676 characters. Whether they stay is an open question for the owner.
+
 ## Not verified
 
-No live turn was run (Phase 0 rule). The stream-json frames, `--permission-prompt-tool stdio` and `turn/interrupt` are taken from docs, SDK sources and the generated schema; the first slice proves them against a signed-in engine. Also for the first slice: that Claude Code exits on its own when its stdin closes (the gentle close depends on it), and the exact Task tool input and result shapes, which the docs show only by example. Also whether skills synced from claude.ai reach a fresh signed-in folder; if they do, Gathr's skills design decides whether they stay.
+- The exact Task tool input and result shapes, which the docs show only by example.
+- Codex's `turn/interrupt` and approvals: the Codex driver comes in the next slice.
+- macOS: nothing above was run on a Mac.

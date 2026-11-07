@@ -51,9 +51,15 @@ Status: proposed. Date: 2026-11-06, revised 2026-11-07 (one folder per account, 
 - **Gathr's own folders, not the person's (2026-11-07).** The owner asked whether agents could work with no sign-in, as in Open Design. Open Design shares the person's own login folders (see Turned down), which breaks several accounts, so Gathr keeps its own folders, "the way SerenityOS does it".
 - **One folder per account (2026-11-07).** Asked to choose between one sign-in per agent and one per account as in SerenityOS, the owner chose one per account.
 
+## Checked in the first slice
+
+- `CLAUDE_CONFIG_DIR` moves `.claude.json` too: a fresh folder gets its own (Claude Code 2.1.318, Windows).
+- A message sent while signed out waits, `gathr diag health` shows it held on the account, and it went out by itself once the folder was signed in.
+- A refused login (Claude Code's `authentication_failed`) holds the account's work until the login file changes, rather than starting an engine every poll.
+
 ## Not verified
 
-- Whether `CLAUDE_CONFIG_DIR` also moves `~/.claude.json`, and where keyless Console sign-ins are stored (the docs say outside the folder). The first slice checks both with a test login folder before any real sign-in.
+- Where keyless Console sign-ins are stored (the docs say outside the folder).
 - How often agents sharing a Claude account collide on renewal. The first slice runs two agents on one test account across an access-token expiry and reads the renewal and sign-out events.
 - Claude Code's own refresh timing isn't documented; the 5-minute figure is Codex's, and the previous app's observation for Claude.
 - Whether `claude auth status` reports an expired-but-refreshable login as signed in, and whether it renews it. The probe is never killed either way.

@@ -16,7 +16,17 @@ const CRASH_LINES: usize = 20;
 /// The service now, the database, the last start-up health check and the crash log's last lines.
 /// Answers even when the service is down or the database won't open.
 pub fn health(data: &DataDir) -> Value {
-    let database = match db::open_read_only(&data.db()) {
+    let opened = db::open_read_only(&data.db());
+    let held = match &opened {
+        Ok((conn, _)) => held(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
+        Err(_) => Value::Null,
+    };
+    let path_setting = opened.as_ref().ok().and_then(|(conn, _)| {
+        crate::store::setting(conn, crate::claude::command::PATH_SETTING)
+            .ok()
+            .flatten()
+    });
+    let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
             "path": data.db(),
@@ -26,9 +36,19 @@ pub fn health(data: &DataDir) -> Value {
         }),
         Err(e) => json!({ "opened": false, "path": data.db(), "why": e.to_string() }),
     };
+    let folder = data.claude_folder();
+    let now_ms = crate::ids::now_us() / 1000;
+    let (login, expires) = crate::claude::login::status(&folder, path_setting.as_deref(), now_ms);
     let crash_log = CrashLog::new(data.crash_log());
     json!({
         "service": service_now(data),
+        "accounts": [{
+            "engine": "claude",
+            "folder": folder,
+            "login": login,
+            "expires": expires.map(|ms| crate::ids::utc(ms * 1000)),
+            "held": held,
+        }],
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
     })
@@ -47,6 +67,17 @@ fn service_now(data: &DataDir) -> Value {
             json!({ "running": false, "why": format!("nothing answers on port {}: {e}", info.port) })
         }
     }
+}
+
+/// Messages waiting to be sent: for a sign-in, or behind a turn under way.
+fn held(conn: &Connection) -> Result<Value, Error> {
+    let rows = query(
+        conn,
+        "SELECT id AS turn, chat_id AS chat, status, substr(trace_id, 1, 8) AS ref,
+                strftime('%Y-%m-%dT%H:%M:%fZ', created_ts / 1000000.0, 'unixepoch') AS since
+         FROM turns WHERE status IN ('queued', 'waiting_sign_in') ORDER BY created_ts",
+    )?;
+    Ok(rows["rows"].clone())
 }
 
 fn last_start_health(conn: &Connection) -> Result<Value, Error> {
@@ -108,6 +139,87 @@ pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
         group["references"] = references.into();
     }
     Ok(json!({ "since": crate::ids::utc(since_us), "groups": groups }))
+}
+
+/// The turns behind a reference, with how each ended and its events; with `raw`, every engine
+/// frame in and out of each turn, as recorded (redacted).
+pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Error> {
+    let mut answer = trace(conn, reference)?;
+    let reference = answer["reference"].as_str().unwrap_or_default().to_string();
+    let mut stmt = conn.prepare(
+        "SELECT id, status, why FROM turns WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY created_ts",
+    )?;
+    let mut turns = rows_as_json(&mut stmt, [&reference])?;
+    if raw {
+        let mut frames = conn.prepare(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ts / 1000000.0, 'unixepoch') AS time, pid, direction,
+                    frame_type, size, malformed, body
+             FROM engine_raw WHERE turn_id = ?1 ORDER BY id LIMIT ?2",
+        )?;
+        for turn in &mut turns {
+            let id = turn["id"].as_str().unwrap_or_default().to_string();
+            let mut rows = rows_as_json(&mut frames, rusqlite::params![id, QUERY_CAP as i64 + 1])?;
+            turn["frames_truncated"] = (rows.len() > QUERY_CAP).into();
+            rows.truncate(QUERY_CAP);
+            for row in &mut rows {
+                // A JSON frame reads as JSON, not as a string of JSON.
+                if let Some(body) = row["body"]
+                    .as_str()
+                    .and_then(|b| serde_json::from_str::<Value>(b).ok())
+                {
+                    row["body"] = body;
+                }
+            }
+            turn["frames"] = rows.into();
+        }
+    }
+    answer["turns"] = turns.into();
+    Ok(answer)
+}
+
+/// What someone helping needs, in one file in `<data>/bundles`: health, the last day's
+/// failures, the last 2,000 events and the last day's engine frames without their bodies,
+/// which may hold conversation text.
+pub fn bundle(data: &DataDir) -> Result<Value, Error> {
+    let (conn, _) = db::open_read_only(&data.db())?;
+    let day_ago = crate::ids::now_us() - 86_400_000_000;
+    let events = "SELECT * FROM (SELECT time, name, phase, status, error_type, duration_us, ref, conversation_id, attrs
+                  FROM event_log ORDER BY ts DESC LIMIT 2000) ORDER BY time";
+    let frames = format!(
+        "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ts / 1000000.0, 'unixepoch') AS time, chat_id, turn_id, pid,
+                direction, frame_type, size, malformed
+         FROM engine_raw WHERE ts >= {day_ago} ORDER BY id DESC LIMIT 2000"
+    );
+    let all = |sql: &str| -> Result<Vec<Value>, Error> {
+        let mut stmt = conn.prepare(sql)?;
+        let names: Vec<String> = stmt.column_names().map(String::from).collect();
+        let mut rows = stmt.query([])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            let object: Map<String, Value> = names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| Ok((n.clone(), cell(row.get_ref(i)?, n))))
+                .collect::<Result<_, rusqlite::Error>>()?;
+            out.push(Value::Object(object));
+        }
+        Ok(out)
+    };
+    let bundle = json!({
+        "made": crate::ids::utc(crate::ids::now_us()),
+        "version": crate::VERSION,
+        "health": health(data),
+        "failures": failures(&conn, day_ago)?,
+        "events": all(events)?,
+        "engine_frames": all(&frames)?,
+    });
+    let folder = data.path().join("bundles");
+    std::fs::create_dir_all(&folder)?;
+    let stamp = crate::ids::utc(crate::ids::now_us()).replace([':', '.'], "-");
+    let path = folder.join(format!("gathr-bundle-{stamp}.json"));
+    let bytes = serde_json::to_vec_pretty(&bundle)?;
+    std::fs::write(&path, &bytes)?;
+    Ok(json!({ "written": path, "bytes": bytes.len() }))
 }
 
 /// Read-only SQL, capped at `QUERY_CAP` rows. The connection is read-only, so writes fail.

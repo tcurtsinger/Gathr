@@ -2,7 +2,10 @@
 #![windows_subsystem = "windows"]
 
 mod api;
+mod chats;
 mod logs;
+mod routes;
+mod turns;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::ExitCode;
@@ -79,7 +82,9 @@ async fn serve(
         pid: std::process::id(),
     }
     .write(data)?;
+    let chats = chats::Chats::new(writer.clone(), data.clone());
     let state = Arc::new(api::State {
+        chats: chats.clone(),
         writer: writer.clone(),
         token,
         port,
@@ -95,6 +100,7 @@ async fn serve(
             .attr("pid", std::process::id()),
     );
     writer.record(health_event(data, port, early_lines));
+    chats.take_over().await;
 
     let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();
     let stop_state = state.clone();
@@ -109,6 +115,7 @@ async fn serve(
         .with_graceful_shutdown(stopping)
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
+    chats.close_all().await;
     writer
         .record_now(
             Event::point("gathr.service.stop")

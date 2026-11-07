@@ -25,11 +25,38 @@ pub fn request(
     path: &str,
     headers: &[(&str, &str)],
 ) -> io::Result<Response> {
+    exchange(port, method, path, headers, "")
+}
+
+/// `call` with a JSON body.
+pub fn send(
+    port: u16,
+    token: &str,
+    method: &str,
+    path: &str,
+    body: &serde_json::Value,
+) -> io::Result<Response> {
+    let auth = format!("Bearer {token}");
+    let headers = [
+        ("Authorization", auth.as_str()),
+        ("Content-Type", "application/json"),
+    ];
+    exchange(port, method, path, &headers, &body.to_string())
+}
+
+fn exchange(
+    port: u16,
+    method: &str,
+    path: &str,
+    headers: &[(&str, &str)],
+    body: &str,
+) -> io::Result<Response> {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500))?;
     stream.set_read_timeout(Some(Duration::from_secs(30)))?;
+    let length = body.len();
     let mut head =
-        format!("{method} {path} HTTP/1.1\r\nConnection: close\r\nContent-Length: 0\r\n");
+        format!("{method} {path} HTTP/1.1\r\nConnection: close\r\nContent-Length: {length}\r\n");
     if !headers
         .iter()
         .any(|(name, _)| name.eq_ignore_ascii_case("host"))
@@ -40,6 +67,7 @@ pub fn request(
         head.push_str(&format!("{name}: {value}\r\n"));
     }
     head.push_str("\r\n");
+    head.push_str(body);
     stream.write_all(head.as_bytes())?;
     let mut raw = String::new();
     stream.read_to_string(&mut raw)?;

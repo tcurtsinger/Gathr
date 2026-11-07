@@ -44,6 +44,18 @@ impl Event {
         self
     }
 
+    pub fn chat(mut self, chat: &str) -> Self {
+        self.conversation_id = Some(chat.to_string());
+        self
+    }
+
+    /// The start or end of a span: `phase` is `start` or `end`.
+    pub fn span(mut self, phase: &'static str, span_id: &str) -> Self {
+        self.phase = phase;
+        self.span_id = Some(span_id.to_string());
+        self
+    }
+
     pub fn ok(mut self) -> Self {
         self.status = Some("ok");
         self

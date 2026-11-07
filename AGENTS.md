@@ -39,7 +39,15 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `diag trace <ref>`: everything behind an error's reference, in order.
   - `diag failures --since 24h`: failures grouped by cause, with references.
   - `diag query "<sql>"`: read-only SQL, up to 1,000 rows. Use the `event_log` view: it shows `attrs` as JSON, a readable `time` and each row's `ref`.
+  - `diag turn <ref> --raw`: the turns behind a reference, with every engine frame in and out of each, redacted.
+  - `diag bundle`: health, a day's failures, recent events and engine frames (no bodies) in one file under `<data>/bundles`.
+  - `diag health` also shows the Claude account's sign-in state and the messages held on it.
 - **The API** is on `127.0.0.1:<port>`. Every request needs `Authorization: Bearer <token>`, with the token from `<data>/service.json`. Errors answer `{"error": "… failed", "why", "ref"}`, and each is recorded before the answer goes out, so its `ref` traces at once.
+  - Chats: `GET`/`POST /api/chats`, `GET /api/chats/<id>` (messages and turns), `POST /api/chats/<id>/messages {"text"}`, `POST /api/chats/<id>/stop`, `POST /api/chats/<id>/approvals/<request_id> {"allow"}`.
+  - Claude Code: `GET /api/engines/claude` (path, sign-in), `PUT /api/engines/claude {"path"}` (`null` for the PATH). Used at the next start, no restart.
+  - Live: a WebSocket at `/api/live?token=<token>` sends every delta, message, tool, turn, approval and read, as JSON.
+- **A signed-in test account:** Claude Code's login for `--data <folder>` lives in `<folder>/accounts/main/claude`. Sign it in once from a terminal of your own: `$env:CLAUDE_CONFIG_DIR = '<folder>\accounts\main\claude'; claude auth login`. Never point it at `~/.claude`.
+- **Engine recordings:** the tests replay real Claude Code frames from `crates/gathr/tests/frames` through `examples/replay_engine.rs`, which `cargo test` builds. To record one, run the turn on a dev service, export its frames with the query in `scripts/scrub-frames.mjs`, run that script, and read the result for anything personal before committing it.
 - **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one.
 
 ## Done means used, with proof

@@ -7,7 +7,10 @@ use rusqlite::{Connection, OpenFlags, TransactionBehavior};
 
 use crate::Error;
 
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_init.sql"),
+    include_str!("../migrations/0002_turns.sql"),
+];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -81,7 +84,7 @@ mod tests {
         let path = temp_db("empty");
         drop(open(&path).unwrap());
         let conn = open(&path).unwrap();
-        assert_eq!(schema_version(&conn).unwrap(), 1);
+        assert_eq!(schema_version(&conn).unwrap(), SCHEMA_VERSION);
         let tables: i64 = conn
             .query_row(
                 "SELECT count(*) FROM sqlite_schema WHERE name IN ('events', 'chats', 'messages')",
@@ -102,7 +105,7 @@ mod tests {
         match open(&path) {
             Err(Error::NewerDatabase {
                 found: 99,
-                known: 1,
+                known: SCHEMA_VERSION,
             }) => {}
             other => panic!("expected a refusal of schema 99, got {other:?}"),
         }

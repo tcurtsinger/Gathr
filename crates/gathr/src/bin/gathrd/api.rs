@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use axum::extract::{Request, State as Extract};
-use axum::http::{HeaderMap, StatusCode, header};
+use axum::http::{HeaderMap, StatusCode, Uri, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -23,12 +23,18 @@ pub struct State {
     pub started_us: i64,
     pub data: DataDir,
     pub stop: tokio::sync::Notify,
+    pub chats: Arc<crate::chats::Chats>,
 }
+
+/// The request's trace id, for handlers: a failure's reference and its events share it.
+#[derive(Clone)]
+pub struct Trace(pub String);
 
 pub fn router(state: Arc<State>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/shutdown", post(shutdown))
+        .merge(crate::routes::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }
@@ -54,11 +60,12 @@ async fn shutdown(Extract(s): Extract<Arc<State>>) -> impl IntoResponse {
 
 /// Checks Host, Origin and the token on every request, and records every failed request
 /// before answering, so its reference can be traced as soon as it's shown.
-async fn guard(Extract(s): Extract<Arc<State>>, req: Request, next: Next) -> Response {
+async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) -> Response {
     let started = Instant::now();
     let trace = traceparent(req.headers()).unwrap_or_else(ids::trace_id);
     let (method, path) = (req.method().to_string(), req.uri().path().to_string());
-    let refused = refusal(&s, req.headers());
+    let refused = refusal(&s, req.headers(), req.uri());
+    req.extensions_mut().insert(Trace(trace.clone()));
     let mut response = match refused {
         Some((status, why)) => failure(status, "Request failed", Some(why), &trace),
         None => next.run(req).await,
@@ -84,7 +91,7 @@ async fn guard(Extract(s): Extract<Arc<State>>, req: Request, next: Next) -> Res
 }
 
 /// Why a request is refused, if it is: a foreign Host or Origin (403), or no valid token (401).
-fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)> {
+fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'static str)> {
     let port = s.port;
     let host = headers
         .get(header::HOST)
@@ -107,7 +114,8 @@ fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)>
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .or_else(|| live_token(uri));
     match token {
         None => Some((StatusCode::UNAUTHORIZED, "token missing")),
         Some(t) if !same(t.as_bytes(), s.token.as_bytes()) => {
@@ -115,6 +123,16 @@ fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)>
         }
         Some(_) => None,
     }
+}
+
+/// A browser can't set headers on a WebSocket, so the live socket may carry the token in its query.
+fn live_token(uri: &Uri) -> Option<&str> {
+    if uri.path() != "/api/live" {
+        return None;
+    }
+    uri.query()?
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("token="))
 }
 
 /// Compares in time that doesn't depend on where the bytes differ.
@@ -137,7 +155,7 @@ fn traceparent(headers: &HeaderMap) -> Option<String> {
 }
 
 /// An error answer: "… failed", why, and the reference the person can trace.
-fn failure(status: StatusCode, error: &str, why: Option<&str>, trace: &str) -> Response {
+pub fn failure(status: StatusCode, error: &str, why: Option<&str>, trace: &str) -> Response {
     let body = json!({ "error": error, "why": why, "ref": ids::reference(trace) });
     (status, Json(body)).into_response()
 }
