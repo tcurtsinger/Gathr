@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api, type Failure, type TurnTimeline } from '../api';
+import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
 import { Notice } from '../components/Notice';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
@@ -12,10 +12,44 @@ interface Props {
   title?: string;
   /** Opens at this turn. */
   turn?: string;
+  /** Shows this reference's events instead, for one with no turn behind it (a sign-in). */
+  reference?: string;
 }
 
 /** Settings > Diagnostics: a chat's turns beside the chosen turn's timeline (diagnostics/v3). */
-export function Diagnostics({ chat, title, turn }: Props) {
+export function Diagnostics({ reference, ...turns }: Props) {
+  return reference ? <Reference reference={reference} /> : <Turns {...turns} />;
+}
+
+function Reference({ reference }: { reference: string }) {
+  const [events, setEvents] = useState<TurnEvent[] | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  useEffect(() => {
+    setEvents(null);
+    setFailure(null);
+    api.trace(reference).then(setEvents, setFailure);
+  }, [reference]);
+  const why = events?.findLast((e) => e.status === 'error' && typeof e.attrs?.why === 'string')?.attrs?.why;
+
+  return (
+    <section className="diagnostics" aria-labelledby="diagnostics-title">
+      <div className="diagnostics-head">
+        <h3 id="diagnostics-title">Reference {reference}</h3>
+      </div>
+      {failure && (
+        <Notice danger title={failure.error} links={<span className="muted">{failure.why}</span>} />
+      )}
+      {events && (
+        <div className="trace">
+          {typeof why === 'string' && <p>{why}</p>}
+          <Steps events={events} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
   const [list, setList] = useState<TurnTimeline[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [filter, setFilter] = useState<Filter>('All');
@@ -123,31 +157,37 @@ function Timeline({ turn }: { turn: TurnTimeline }) {
           {turn.why && <p>{turn.why}</p>}
         </>
       )}
-      <ol className="events">
-        {steps(turn.events).map((step) =>
-          step.kind === 'tools' ? (
-            <li key={step.key}>
-              <details>
-                <summary>{step.events.length} tool calls</summary>
-                <ol className="events">
-                  {step.events.map((e) => (
-                    <Event key={e.key} label={e.label} at={e.at} duration={e.duration} failed={e.failed} />
-                  ))}
-                </ol>
-              </details>
-            </li>
-          ) : (
-            <Event
-              key={step.key}
-              label={step.label}
-              at={step.at}
-              duration={step.duration}
-              failed={step.failed}
-            />
-          ),
-        )}
-      </ol>
+      <Steps events={turn.events} />
     </div>
+  );
+}
+
+function Steps({ events }: { events: TurnEvent[] }) {
+  return (
+    <ol className="events">
+      {steps(events).map((step) =>
+        step.kind === 'tools' ? (
+          <li key={step.key}>
+            <details>
+              <summary>{step.events.length} tool calls</summary>
+              <ol className="events">
+                {step.events.map((e) => (
+                  <Event key={e.key} label={e.label} at={e.at} duration={e.duration} failed={e.failed} />
+                ))}
+              </ol>
+            </details>
+          </li>
+        ) : (
+          <Event
+            key={step.key}
+            label={step.label}
+            at={step.at}
+            duration={step.duration}
+            failed={step.failed}
+          />
+        ),
+      )}
+    </ol>
   );
 }
 

@@ -39,6 +39,13 @@ button:hover,
 select:hover {
   background: var(--raised);
 }
+button.primary {
+  background: var(--text);
+  color: var(--canvas);
+}
+button.primary:hover {
+  background: var(--muted);
+}
 button:disabled {
   opacity: 0.5;
   cursor: default;

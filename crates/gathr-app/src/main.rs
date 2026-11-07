@@ -2,6 +2,7 @@
 //! Engines live in `gathrd`, so closing or reloading the window never touches a turn (0004).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use tauri::webview::NewWindowResponse;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 fn main() {
@@ -18,11 +19,27 @@ fn main() {
                 .title("Gathr")
                 .inner_size(1440.0, 900.0)
                 .min_inner_size(480.0, 480.0)
+                // With no handler, the webview drops a link's new window: nothing opens.
+                .on_new_window(|url, _| {
+                    open_in_browser(&url);
+                    NewWindowResponse::Deny
+                })
                 .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| exit(&format!("Start failed: {e}")));
+}
+
+/// A link that opens a new window goes to the person's own browser; the window shows only Gathr.
+fn open_in_browser(url: &tauri::Url) {
+    if !matches!(url.scheme(), "http" | "https") {
+        return;
+    }
+    let program = if cfg!(windows) { "explorer" } else { "open" };
+    let _ = std::process::Command::new(program)
+        .arg(url.as_str())
+        .spawn();
 }
 
 fn exit(message: &str) -> ! {

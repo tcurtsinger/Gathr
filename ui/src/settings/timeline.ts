@@ -85,6 +85,7 @@ const known: Record<string, [string, string]> = {
   'gathr.turn.first_token': ['First text', 'First text'],
   'gathr.turn.steer': ['Message sent into the turn', 'Message into the turn'],
   'gathr.api.request': ['Request', 'Request'],
+  'gathr.engine.sign_in': ['Signed in', 'Sign in'],
 };
 
 function label(e: TurnEvent): string {
@@ -96,5 +97,6 @@ function label(e: TurnEvent): string {
     return `Turn ended${typeof status === 'string' ? `: ${said(status as TurnStatus)}` : ''}`;
   }
   const [ok, subject] = known[e.name] ?? [e.name, e.name];
+  if (typeof e.attrs?.ended === 'string') return `${subject} ${e.attrs.ended}`;
   return failed ? `${subject}${failed}` : ok;
 }

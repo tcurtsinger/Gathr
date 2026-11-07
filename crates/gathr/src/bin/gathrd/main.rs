@@ -5,6 +5,7 @@ mod api;
 mod chats;
 mod logs;
 mod routes;
+mod sign_in;
 mod turns;
 mod updates;
 
@@ -85,9 +86,11 @@ async fn serve(
     .write(data)?;
     let chats = chats::Chats::new(writer.clone(), data.clone());
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
+    let sign_in = Arc::new(sign_in::SignIn::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
         updates: updates.clone(),
+        sign_in: sign_in.clone(),
         writer: writer.clone(),
         token,
         port,
@@ -120,6 +123,7 @@ async fn serve(
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
+    sign_in.cancel().await;
     chats.close_all().await;
     writer
         .record_now(

@@ -255,8 +255,16 @@ fn a_failed_repair_keeps_the_copy_that_was_already_there() {
     feed.publish("2.1.400", &engine_bytes(), Some(&"0".repeat(64)));
     check_now(&service);
     let update = events(&data.0, "gathr.engine.update");
-    assert_eq!(update.last().unwrap()["error_type"], "checksum", "{update:?}");
-    let binary = if cfg!(windows) { "claude.exe" } else { "claude" };
+    assert_eq!(
+        update.last().unwrap()["error_type"],
+        "checksum",
+        "{update:?}"
+    );
+    let binary = if cfg!(windows) {
+        "claude.exe"
+    } else {
+        "claude"
+    };
     assert!(
         root.join("2.1.400").join(binary).is_file(),
         "the refused download deleted the copy that was there"
@@ -269,7 +277,10 @@ fn shutdown_ends_a_check_waiting_on_the_feed() {
     let service = service_on(&data.0, &feed);
     let deadline = Instant::now() + Duration::from_secs(10);
     while feed.asked.lock().unwrap().is_empty() {
-        assert!(Instant::now() < deadline, "the service never asked the feed");
+        assert!(
+            Instant::now() < deadline,
+            "the service never asked the feed"
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
     let began = Instant::now();

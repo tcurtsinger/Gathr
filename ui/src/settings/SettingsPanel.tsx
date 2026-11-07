@@ -11,6 +11,8 @@ export interface SettingsTarget {
   chat?: string;
   title?: string;
   turn?: string;
+  /** Diagnostics shows this reference's events, for a failure with no turn. */
+  reference?: string;
   /** Gets focus back when Settings closes. */
   opener: HTMLElement | null;
 }
@@ -18,6 +20,8 @@ export interface SettingsTarget {
 interface Props {
   target: SettingsTarget | null;
   onPage: (page: Page) => void;
+  /** Opens a failure's reference in Diagnostics. */
+  onReference: (ref: string) => void;
   onClose: () => void;
 }
 
@@ -27,7 +31,7 @@ const pages: [Page, string][] = [
 ];
 
 /** Settings, centred over the current screen (0023). The screen under it keeps its state. */
-export function SettingsPanel({ target, onPage, onClose }: Props) {
+export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const open = target !== null;
   const opener = useRef<HTMLElement | null>(null);
@@ -76,9 +80,14 @@ export function SettingsPanel({ target, onPage, onClose }: Props) {
             </nav>
             <div className="settings-page">
               {target.page === 'engines' ? (
-                <Engines />
+                <Engines onReference={onReference} />
               ) : (
-                <Diagnostics chat={target.chat} title={target.title} turn={target.turn} />
+                <Diagnostics
+                  chat={target.chat}
+                  title={target.title}
+                  turn={target.turn}
+                  reference={target.reference}
+                />
               )}
             </div>
           </div>
