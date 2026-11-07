@@ -1,0 +1,53 @@
+# 0002. One login folder per agent, owned by one process, never copied, never killed mid-renewal
+
+Status: proposed. Date: 2026-11-06.
+
+## Choice
+
+- Each agent gets its own engine folder under Gathr's data folder: `<data>/agents/<agent-id>/claude` passed as `CLAUDE_CONFIG_DIR`, or `<data>/agents/<agent-id>/codex` passed as `CODEX_HOME`. The person signs that agent in once, through the engine's own login flow, inside that folder.
+- At most one engine process runs on a folder at a time. The service enforces it: the folder is the lock, held by whoever runs in it (an engine process, a status probe, a sign-in). Since an agent runs one turn at a time across all its conversations ([0010, Sessions](0010-coordination-as-state.md#sessions)), its next turn reuses the running process, or waits for it to close the gentle way when the turn is in another session ([0001](0001-engine-interface.md)).
+- Gathr never reads a login's secret, never copies a login file, and never touches `~/.claude` or `~/.codex`.
+- Settings may be copied in when an agent is created (Claude: `settings.json`, `CLAUDE.md`, skills, agents, commands, output styles; Codex: `config.toml`), each at the person's choice. Login files are never copied: Claude's `.credentials.json` and `.claude.json`, Codex's `auth.json` and `.sandbox-secrets`.
+- Login state is read without starting a turn: for Claude, `claude auth status` (exits 0 signed in, 1 signed out, prints JSON) on macOS, and the presence and expiry fields of the login file elsewhere, never its tokens; for Codex, `account/read` on the agent's own app-server. It has three values, not two:
+  - **signed in:** a login is there and its access token is current;
+  - **stale:** the access token has expired but a refresh token is there. The engine renews it on its next request, so queued work is not held. The service runs a probe (`claude auth status`, or `account/read`) under the folder lock: only when no engine process holds the folder, and never killed. If a process holds it, its next turn's result decides instead;
+  - **signed out:** only when the login is gone or blank, a probe says signed out, or a turn fails with the engine's login-expired error (Claude: `Login expired · Please run /login`). Then queued work waits for a sign-in.
+- The engine's environment is built, not inherited as is. Every variable that selects a credential or a provider is removed, and only the agent's own choice is put back (a key or provider the person set for that agent in Gathr):
+  - Claude, following its [authentication precedence](https://code.claude.com/docs/en/authentication#authentication-precedence), where each of these outranks the folder's `/login`: the provider selectors `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_MANTLE`, `CLAUDE_CODE_USE_ANTHROPIC_AWS` and `AWS_BEARER_TOKEN_BEDROCK`; `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_PROFILE`, `ANTHROPIC_FEDERATION_RULE_ID`; and `ANTHROPIC_BASE_URL`, which reroutes requests to a gateway. As a backstop, any other inherited `CLAUDE_CODE_USE_*` or `ANTHROPIC_*` variable is removed too, so a selector added in a later Claude Code release doesn't slip through.
+  - Settings copied into the folder drop `apiKeyHelper` and any of the variables above from their `env` block, since settings can set them as well.
+  - Codex: `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` ([Codex environment variables](https://learn.chatgpt.com/codex/config-file/environment-variables)). The driver also starts app-server with `cli_auth_credentials_store="file"`, so the login stays in `auth.json` in the agent's folder rather than the OS keyring ([Codex auth](https://learn.chatgpt.com/codex/auth)).
+
+## Why
+
+- **Refresh tokens are single-use.** Codex refreshes a token 5 minutes before it expires and a reused refresh token fails with `refresh_token_reused`, forcing a new sign-in (`codex-rs/login/src/auth/manager.rs` in [openai/codex](https://github.com/openai/codex); [Codex auth docs](https://learn.chatgpt.com/docs/auth): tokens live in `auth.json` under `CODEX_HOME` and refresh automatically). The previous app hit the same with Claude Code: two processes renewing at once, or one killed between renewing and saving, leave a spent token, and the next renewal blanks the login. One process per folder removes the race instead of managing it.
+- **The folder variables move the login.** `CLAUDE_CONFIG_DIR` moves settings, history and `.credentials.json` ([env vars](https://code.claude.com/docs/en/env-vars)); `CODEX_HOME` holds `auth.json` and `config.toml` ([Codex auth](https://learn.chatgpt.com/docs/auth)), and app-server reports the folder it uses as `codexHome` in its `initialize` response (generated schema, codex-cli 0.166.0).
+- **Codex can sign in from inside Gathr.** app-server has `account/login/start` with `chatgpt` (returns an `authUrl`), `chatgptDeviceCode` and `apiKey`, and announces `account/login/completed` ([app-server docs](https://learn.chatgpt.com/docs/app-server)). Claude Code is signed in by running its own `claude /login` in that folder.
+- **The environment outranks the folder.** Cloud provider selectors, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `apiKeyHelper` and `CLAUDE_CODE_OAUTH_TOKEN` all rank above a `/login` subscription, and in `-p` mode the API key "is always used when present" ([authentication precedence](https://code.claude.com/docs/en/authentication#authentication-precedence)). A person who starts Gathr from a shell set up for a gateway or a cloud provider would otherwise send an agent's requests on that credential while Gathr shows its own login.
+- **Expiry isn't sign-out.** Claude Code's docs: "authentication keeps working until the login actually expires", and requests fail with `Login expired` only "once the stored login expires and can't be refreshed" ([renew an expiring login](https://code.claude.com/docs/en/authentication)). Holding work on an expired access token would stop an idle agent that would have renewed on its first request.
+- **Ported from the previous app (the owner's code):** the folder layout, settings copied in and logins never (`drivers/claude-folder.ts`, `drivers/codex-folder.ts`), reading login state from the file instead of starting Claude Code (`drivers/claude-login.ts`), and watching the folder, not the file, since Claude Code replaces the file when it saves, with a once-a-minute re-read because Windows can drop a change event (`login-watch.ts`). That watcher exists because a cleared login was once noticed 29 hours late.
+
+## Rules that follow
+
+- **Never force-kill an engine that may be renewing.** Stop and close go through the engine's interrupt (0001). A kill after the grace period is written to the event record with the agent, the process and why, so a lost login can be traced to it. This replaces the previous app's `engine-trail.ts`, which kept 10 minutes of starts and kills in memory for the same purpose.
+- **Login changes are events.** Each move between signed in, stale and signed out is recorded with what ran just before. When the watcher sees a login disappear, the agent shows as signed out and its queued work waits; when it sees one expire, the agent shows as stale and a probe follows (above).
+- **Status checks are never killed.** `claude auth status` may itself renew; the service waits for it to exit on its own (the previous app waited up to 30 s, then trusted the file).
+- **Several agents can share one account,** each with its own sign-in in its own folder. Each sign-in is its own grant, so none can spend another's token.
+- **Folders are deleted only with the agent,** and only after its process has exited.
+
+## Turned down
+
+- **One folder per account, shared by all of that account's agents, with a renewal gate** (the previous app: one renewer at a time, others wait up to 30 s). It saves signing in per agent, but the gate covers only process starts; a long-lived process renews mid-turn on its own, and the race remains. AGENTS.md: "Never share one between processes".
+- **The person's own `~/.claude` or `~/.codex`.** Their terminal sessions would race Gathr's engines for the same token.
+- **A long-lived token** (`claude setup-token`, one year, via `CLAUDE_CODE_OAUTH_TOKEN` ([authentication](https://code.claude.com/docs/en/authentication))). It avoids renewal entirely but is a copyable secret Gathr would have to store; kept as an opt-in for a later decision, not the default.
+- **Gathr running the OAuth flow itself.** That would mean Gathr holding tokens; the engines' own flows keep the secret inside the engine's folder.
+
+## Open, for the owner
+
+Anthropic's Agent SDK page says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK" ([overview](https://code.claude.com/docs/en/agent-sdk/overview)). Gathr doesn't offer a login: the person signs in to their own Claude Code, which Gathr runs on their machine. Whether that counts is the owner's call, as a decision task.
+
+## Not verified
+
+- Whether `CLAUDE_CONFIG_DIR` also moves `~/.claude.json`, and where keyless Console sign-ins are stored (the docs say outside the folder). The first slice checks both with a test login folder before any real sign-in.
+- Claude Code's own refresh timing isn't documented; the 5-minute figure is Codex's, and the previous app's observation for Claude.
+- Whether `claude auth status` reports an expired-but-refreshable login as signed in, and whether it renews it. The probe is never killed either way.
+- Which variables Codex app-server itself reads for credentials: the docs list `CODEX_API_KEY` for non-interactive runs and `CODEX_ACCESS_TOKEN` for automation, and give no precedence over `auth.json`. Removing them is safe either way.
