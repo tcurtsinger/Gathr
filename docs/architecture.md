@@ -48,6 +48,10 @@ One append-only event table, written with each state change, named after OpenTel
 
 React and TypeScript, served by the service, shown in a Tauri 2 window over WebView2 and usable from a browser on this machine. The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
 
+## Decisions
+
+Fast yes/no answers from a small paid model, for checks an engine turn would be too slow or costly for: watching long work, memory saves, skill suggestions, the agents' Decide tool. Optional from day one, off by default, with a daily cap; no answer always means "behave as if it were off". [0014](decisions/0014-decisions-provider.md).
+
 ## Rules that hold everywhere
 
 - Each provider's own agent harness, never a homemade loop over raw model APIs.
