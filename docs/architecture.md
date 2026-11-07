@@ -62,6 +62,10 @@ The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with 
 
 Each turn carries a small, stable briefing, the ask, the standing rules that still apply (the approved plan, the person's binding decisions, the project's notes), its state and, for a fresh session, a digest of what changed plus the agent's own recent work. Everything else is pulled through Gathr's tools. Every turn records the provider's token totals and the size of each part Gathr adds, and context is never cut on tokens alone: changes are judged on output quality too. [0020](decisions/0020-context-per-turn.md).
 
+## No prompting needed
+
+What a careful prompt would have said is built in: the project's rules loaded with every chat in it, plan mode as a setting, roles that carry their way of working, a Supervisor that plans, assigns and asks only what's the person's, tools that explain and refuse misuse, and nudges from state. Unused tools and restated asks are measured. [0021](decisions/0021-no-prompting-needed.md).
+
 ## Decisions
 
 Fast yes/no answers from a small paid model, for checks an engine turn would be too slow or costly for: watching long work, memory saves, skill suggestions, the agents' Decide tool. Optional from day one, off by default, with a daily cap; no answer always means "behave as if it were off". [0014](decisions/0014-decisions-provider.md).
