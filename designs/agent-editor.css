@@ -35,3 +35,5 @@
   .agent-field input, .agent-field select { font-size: 16px; min-height: 44px; }
   .agent-actions button, .model-results button { min-height: 44px; }
 }
+
+.agent-workspace[hidden] { display: none; }

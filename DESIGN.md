@@ -114,7 +114,11 @@ selections to the engine default. Models are searchable and independently scroll
 the chosen model stays visible above the list. No free-text model identifier.
 Production choices must come from the installed engine, including supported
 effort values and unavailable-model states, pending Cass's capability research.
-These previews use explicitly named sample models, with no capability claim.
+Family Latest follows new releases in that family without editing each agent; a
+numbered version stays pinned. Engine default follows the engine's own default,
+which may differ from the selected family. Latest is the proposed default for new
+agents when supported. The sample Opus Latest and Opus 4.6 choices illustrate
+these assignments only; actual discovery and resolution await Cass's research.
 Cancel and Escape discard form changes and restore focus. Save gives local feedback.
 Preview changes last only while the page remains open. The form and native dialog
 reuse Gathr's tokens, focus, button and Settings shell patterns. No new palette.

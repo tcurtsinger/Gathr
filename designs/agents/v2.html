@@ -839,7 +839,8 @@ const sc = document.querySelector('.transcript');
 if (sc) requestAnimationFrame(() => sc.scrollTop = sc.scrollHeight);
 if (mode === 'setup') roles();
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
+  if (e.key === 'Escape' && !document.querySelector(
+    '.settings-panel[open], .agent-menu[open], .agent-inline .agent-workspace:not([hidden])')) {
     document.querySelector('dialog').close();
     document.querySelector('.panel')?.setAttribute('hidden', '');
   }

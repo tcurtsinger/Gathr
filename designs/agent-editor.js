@@ -22,7 +22,7 @@ menu.className = 'agent-menu';
 menu.setAttribute('aria-label', 'Edit agent');
 document.body.append(menu);
 function openAgentSettings() {
-  editorOpener = document.activeElement;
+  editorOpener = document.activeElement === document.body ? settingsLink : document.activeElement;
   renderEditor(settings.querySelector('#settings-editor'));
   settings.showModal();
 }
@@ -64,7 +64,8 @@ function renderEditor(host, inline = false) {
     const results = host.querySelector('.model-results');
     results.replaceChildren();
     const prefix = form.elements.engine.value === 'Codex' ? 'Codex' : 'Claude';
-    const names = ['Engine default', ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
+    const family = prefix === 'Claude' ? ['Sample Opus Latest', 'Sample Opus 4.6'] : [];
+    const names = ['Engine default', ...family, ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
     const filtered = names.filter(name => name.toLowerCase().includes(form.elements.modelSearch.value.toLowerCase()));
     for (const name of filtered) {
       const button = document.createElement('button');
@@ -116,9 +117,10 @@ if (option === 'team') {
     renderEditor(editor.querySelector('.agent-workspace'), true);
   };
   editor.prepend(button);
+  editorOpener = button;
   renderEditor(editor.querySelector('.agent-workspace'), true);
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !settings.open) {
+    if (event.key === 'Escape' && !settings.open && !menu.open && !editor.querySelector('.agent-workspace').hidden) {
       editor.querySelector('.agent-workspace').hidden = true;
       button.focus();
     }
