@@ -21,6 +21,7 @@ The starter prompt the owner had to write to get Gathr's own first room working 
 
 And for what the person doesn't say at all:
 - **A vague ask** gets one question from the Supervisor, with options and its pick, only when the answer changes the work. Otherwise it picks a sensible default, says so, and goes ahead.
+- **No assumptions, without being told.** Every role's default way of working says to check a fact in the code, current docs or by running it before stating or building on it, and to mark what couldn't be checked as not verified. The person never has to add "look it up" to a prompt.
 - **Tools explain themselves.** Each tool's description says when to use it and when not to. Misuse is refused with what to do instead ("Only the Supervisor gives the person tasks: ask your Supervisor").
 - **The service nudges the agent, not the person,** from state: a turn that ended with work still open and no wait set, a PR with no proof, a plan with no checks.
 

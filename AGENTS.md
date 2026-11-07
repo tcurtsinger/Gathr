@@ -110,6 +110,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 - Decisions for the owner are tasks for the owner, with options, your pick first and why. Never inside a plan.
 - Design questions get options or mockups first. While the owner is still deciding, end with the question, not an action, and never ask "should I start building?": they say when.
 - A check the owner does by hand says how to make every test file, what to type and where to click.
+- **No assumptions.** A fact you state or build on (how a tool, API, engine or library behaves, what a file says, what a number is) is checked first: in the code, the current docs, the source, or by running it. What you remember from training can be out of date: Claude Code reading `AGENTS.md` changed a month before we assumed it didn't. What can't be checked is said plainly as not verified, never written as fact.
 - Ask before you guess: when you're about to build on something you haven't checked and can't check in a few minutes, or the same thing failed twice, ask the teammate who knows that area.
 - Reviews: every PR goes to Vale. The lead merges as above. The owner doesn't need to install anything until there's an app to run.
 
