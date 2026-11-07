@@ -15,3 +15,4 @@ mod tests {
         assert_eq!(version(), "0.0.0");
     }
 }
+pub fn   badly_formatted( ) {}
