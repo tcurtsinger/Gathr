@@ -2,12 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
+import type { SendFailure } from './rows';
 import { answered, apply, type ChatState, empty, fromHistory } from './state';
-
-export interface SendFailure {
-  text: string;
-  failure: Failure;
-}
 
 /** One chat: its history, kept current from the live socket, and what the person can do in it. */
 export function useChat(chat: string) {
@@ -56,10 +52,8 @@ export function useChat(chat: string) {
       setSendFailure(null);
       try {
         await api.send(chat, text);
-        return true;
       } catch (e) {
         setSendFailure({ text, failure: e as Failure });
-        return false;
       }
     },
     [chat],

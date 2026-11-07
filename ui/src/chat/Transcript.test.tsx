@@ -2,14 +2,22 @@
 // transcript as the socket delivers them (the UI's side of the engine-replay tests).
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
+import { Failure } from '../api';
 import type { LiveEvent } from '../live';
 import approval from './recorded/approval.json';
 import exitsMidReply from './recorded/exits-mid-reply.json';
+import sendFailed from './recorded/send-failed.json';
 import { rows } from './rows';
 import { apply, empty } from './state';
 import { type NoticeActions, Transcript } from './Transcript';
 
-const none: NoticeActions = { diagnostics: () => {}, signIn: () => {}, retry: () => {}, carryOn: () => {} };
+const none: NoticeActions = {
+  diagnostics: () => {},
+  signIn: () => {},
+  retry: () => {},
+  resend: () => {},
+  carryOn: () => {},
+};
 
 function Replay({ events }: { events: LiveEvent[] }) {
   return <Transcript rows={rows(events.reduce(apply, empty))} actions={none} />;
@@ -34,4 +42,17 @@ test('an engine that exits mid-reply keeps the text shown and fails with its ref
   await expect.element(screen.getByText('Already visible answer')).toBeVisible();
   await expect.element(screen.getByRole('alert').getByText('Reply failed', { exact: true })).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Reference 5236079d' })).toBeVisible();
+});
+
+test('a send that fails says so once, with its reference', async () => {
+  const state = (sendFailed as LiveEvent[]).reduce(apply, empty);
+  const answer = new Failure('Send failed', "Claude Code's path isn't a file", 'a0c5a2a6');
+  const screen = await render(
+    <Transcript
+      rows={rows(state, { text: 'Summarise the release notes.', failure: answer })}
+      actions={none}
+    />,
+  );
+  await expect.element(screen.getByRole('button', { name: 'Reference a0c5a2a6' })).toBeVisible();
+  expect(screen.getByRole('alert').elements()).toHaveLength(1);
 });

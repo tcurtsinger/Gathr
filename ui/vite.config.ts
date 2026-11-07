@@ -42,6 +42,8 @@ export default defineConfig({
     strictPort: true,
     proxy: service(),
   },
+  // Bundled before the tests start: discovering them mid-run reloads a test (seen in CI).
+  optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime', 'vitest-browser-react'] },
   test: {
     browser: {
       enabled: true,

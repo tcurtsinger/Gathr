@@ -7,6 +7,8 @@ export interface NoticeActions {
   diagnostics: (turn?: string) => void;
   signIn: () => void;
   retry: (turn: string) => void;
+  /** Sends this text again, after a send that failed before any turn began. */
+  resend: (text: string) => void;
   carryOn: () => void;
 }
 
@@ -25,6 +27,8 @@ function key(row: Row) {
       return `s-${row.turn}`;
     case 'notice':
       return `n-${row.turn.id}`;
+    case 'failure':
+      return 'failure';
   }
 }
 
@@ -38,6 +42,24 @@ function RowView({ row, actions }: { row: Row; actions: NoticeActions }) {
       return <Tools tools={row.tools} />;
     case 'notice':
       return <TurnNotice row={row} actions={actions} />;
+    case 'failure':
+      return (
+        <Notice
+          danger
+          title={row.failure.error}
+          reference={
+            row.failure.ref ? { ref: row.failure.ref, open: () => actions.diagnostics() } : undefined
+          }
+          links={<DiagnosticsLink open={() => actions.diagnostics()} />}
+          action={
+            row.text && (
+              <button type="button" onClick={() => actions.resend(row.text)}>
+                Retry
+              </button>
+            )
+          }
+        />
+      );
   }
 }
 

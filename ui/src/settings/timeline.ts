@@ -78,11 +78,13 @@ export function steps(events: TurnEvent[]): Line[] {
   return out;
 }
 
-const known: Record<string, string> = {
-  'gathr.chat.send': 'Sent',
-  'gathr.engine.start': 'Engine started',
-  'gathr.turn.first_token': 'First text',
-  'gathr.turn.steer': 'Message sent into the turn',
+// Each event's line when it went well, and its subject when it failed ("Engine start failed").
+const known: Record<string, [string, string]> = {
+  'gathr.chat.send': ['Sent', 'Send'],
+  'gathr.engine.start': ['Engine started', 'Engine start'],
+  'gathr.turn.first_token': ['First text', 'First text'],
+  'gathr.turn.steer': ['Message sent into the turn', 'Message into the turn'],
+  'gathr.api.request': ['Request', 'Request'],
 };
 
 function label(e: TurnEvent): string {
@@ -93,5 +95,6 @@ function label(e: TurnEvent): string {
     const status = e.attrs?.['gathr.turn.status'];
     return `Turn ended${typeof status === 'string' ? `: ${said(status as TurnStatus)}` : ''}`;
   }
-  return `${known[e.name] ?? e.name}${failed}`;
+  const [ok, subject] = known[e.name] ?? [e.name, e.name];
+  return failed ? `${subject}${failed}` : ok;
 }

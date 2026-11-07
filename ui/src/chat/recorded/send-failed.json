@@ -1,0 +1,22 @@
+[
+  {
+    "chat": "01M6VRPH4KW5KRR0FPFFSBBW5N",
+    "message": {
+      "body": "Summarise the release notes.",
+      "id": "01M6VRPH4RHNZD9V42JFXV8ST5",
+      "kind": "text",
+      "role": "user",
+      "time": "2026-11-07T19:45:20.024Z",
+      "turn": "01M6VRPH4RWB56QGE3PBZFRS5H"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VRPH4KW5KRR0FPFFSBBW5N",
+    "ref": "a0c5a2a6",
+    "status": "failed",
+    "turn": "01M6VRPH4RWB56QGE3PBZFRS5H",
+    "type": "turn",
+    "why": "Claude Code's path C:\\Tools\\Claude\\missing-claude.exe isn't a file"
+  }
+]

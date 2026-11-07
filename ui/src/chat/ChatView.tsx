@@ -19,7 +19,7 @@ interface Props {
 
 export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
   const { state, loaded, loadFailure, sendFailure, send, stop, approve, reload } = useChat(chat.id);
-  const list = useMemo(() => rows(state), [state]);
+  const list = useMemo(() => rows(state, sendFailure), [state, sendFailure]);
   const turn = running(state);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -42,9 +42,14 @@ export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
     return () => follow.disconnect();
   }, []);
 
-  const submit = async (text: string) => {
+  const submit = (text: string) => {
     pinned.current = true;
-    if (await send(text)) onDraft('');
+    send(text);
+  };
+  // A failed send is kept for Retry, so the composer is free for the next message at once.
+  const sendDraft = () => {
+    onDraft('');
+    submit(draft);
   };
 
   const actions: NoticeActions = {
@@ -54,6 +59,7 @@ export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       if (asked) submit(asked.body as string);
     },
+    resend: submit,
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();
@@ -108,32 +114,13 @@ export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
               }
             />
           ))}
-          {sendFailure && (
-            <Notice
-              danger
-              title={sendFailure.failure.error}
-              reference={
-                sendFailure.failure.ref
-                  ? { ref: sendFailure.failure.ref, open: () => actions.diagnostics() }
-                  : undefined
-              }
-              links={<DiagnosticsLink open={() => actions.diagnostics()} />}
-              action={
-                sendFailure.text && (
-                  <button type="button" onClick={() => submit(sendFailure.text)}>
-                    Retry
-                  </button>
-                )
-              }
-            />
-          )}
         </div>
       </div>
       <div className="composer-area">
         <Composer
           draft={draft}
           onDraft={onDraft}
-          onSend={() => submit(draft)}
+          onSend={sendDraft}
           onStop={turn ? stop : undefined}
           inputRef={input}
         />
