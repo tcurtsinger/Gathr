@@ -48,6 +48,8 @@ Tasks, turns, waits, pause, plans and plan checks, hand-offs, side jobs and usag
 
 One append-only event table, written with each state change, named after OpenTelemetry's GenAI conventions (`invoke_agent`, `chat`, `execute_tool`, `gen_ai.*`) plus `gathr.*` for coordination. Optional OTLP export, off by default. A Diagnostics page answers what happened, where work stalled, what waited on whom, and what fails. [0011](decisions/0011-event-record.md).
 
+The service's own logs, panics, engines' stderr, UI errors and start-up health land in the same record. Every error in the app shows a reference, and agents query the record directly with `gathr diag` and the MCP server's diagnostics tools. [0019](decisions/0019-troubleshooting.md).
+
 ## The UI
 
 React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0016](decisions/0016-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0017](decisions/0017-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
