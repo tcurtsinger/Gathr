@@ -12,7 +12,7 @@ The starter prompt the owner had to write to get Gathr's own first room working 
 
 | The prompt had to say | Gathr does it by |
 |---|---|
-| Read the rulebook first | A project chat's agents work with the project's `AGENTS.md`: Codex loads it from the project folder, Claude Code through a one-line `CLAUDE.md` (`@AGENTS.md`), and the briefing points to it ([0020](0020-context-per-turn.md)). A new project gets both written from a few questions (what it is, the stack if known, public or private), starting from Gathr's template of working rules; the person edits `AGENTS.md`. |
+| Read the rulebook first | A project chat's agents work with the project's `AGENTS.md`: both engines load it from the project folder themselves (Claude Code from v2.1.277, [memory](https://code.claude.com/docs/en/memory)), and the briefing points to it ([0020](0020-context-per-turn.md)). Gathr writes no `CLAUDE.md`: when one exists, Claude Code reads it instead of `AGENTS.md`. A new project gets its `AGENTS.md` written from a few questions (what it is, the stack if known, public or private), starting from Gathr's template of working rules; the person edits it. |
 | Plan first, nothing built until approved | Plan mode is a setting on the chat and a button, and the Supervisor's briefing says to plan before building ([0010](0010-coordination-as-state.md)). |
 | Break the work into parts, in parallel, each with an owner | The Supervisor's briefing: turn an ask into ordered parts, each with an owner by role, a done and a check, parallel where they can be. |
 | Which member does which part | Each role (Supervisor, Reviewer, designer, engineer and so on) comes with a default "how it works" the person can edit. The Supervisor assigns by role and seniority. |
