@@ -28,7 +28,7 @@ Nothing here ever holds a secret; the redaction rules of 0011 apply to every row
 ### Agents can query it
 
 Read-only diagnostics, the same in two places:
-- **`gathr diag`**, a command-line tool that talks to the running service (or opens the database read-only when the service is down), for agents building Gathr and for the person;
+- **`gathr diag`**, a command-line tool for agents building Gathr and for the person. It reads from the running service; when the service is down, from the database opened read-only; and when the database won't open either (a failed migration, a corrupt or locked file), from the plain crash log directly, already redacted when written. In that last case `health` reports why the database didn't open and the crash log's last lines, and `bundle` includes them, so a service that can't start is still diagnosed with one command;
 - **diagnostics tools in Gathr's MCP server** ([0005](0005-mcp-server.md)), for agents working in Gathr, each allowed by the person per agent in Settings.
 
 | Command | Answers |

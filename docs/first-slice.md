@@ -38,6 +38,7 @@ To be filled in with exact commands when it's built; the shape:
 6. Quit Gathr completely, start it again, open the chat, and ask once more. Same session, history intact.
 7. Open Diagnostics from the chat. Each turn shows its timeline, tokens and how it ended; the stopped one says stopped.
 8. Sign the engine out in its folder and send a message. The chat shows "Send failed" with a reference. In a terminal, `gathr diag trace <reference>` shows the message, the turn, the engine's error and the login state.
+9. Quit Gathr, make a copy of the test data folder, and replace its `gathr.db` with a few bytes of text. Start Gathr on the copy: it fails to start. `gathr diag health` on the copy says the database didn't open, why, and shows the crash log's last lines, with nothing read by hand.
 
 ## Proof in the PR
 
