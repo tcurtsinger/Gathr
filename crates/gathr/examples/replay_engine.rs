@@ -4,13 +4,23 @@
 //!
 //! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line.
+//!
+//! `auth status` answers as Claude Code does where its login is a file: exit 0 when
+//! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
 
 use std::io::{BufRead, Write};
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().map(String::as_str).eq(["auth", "status"]) {
+        let folder = std::env::var_os("CLAUDE_CONFIG_DIR").unwrap_or_default();
+        let signed_in = std::path::Path::new(&folder)
+            .join(".credentials.json")
+            .is_file();
+        std::process::exit(if signed_in { 0 } else { 1 });
+    }
     let recording = std::env::var("GATHR_REPLAY").expect("GATHR_REPLAY names a recording");
     if let Ok(file) = std::env::var("GATHR_REPLAY_ARGS") {
-        let args: Vec<String> = std::env::args().skip(1).collect();
         let mut out = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
