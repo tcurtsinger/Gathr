@@ -442,6 +442,9 @@ impl Task {
     /// The engine's output ended: it has exited.
     async fn on_exit(&mut self) {
         self.lines = None;
+        if let Some(turn) = self.turn.as_mut() {
+            turn.gate.release();
+        }
         let code = match self.engine.take() {
             Some(engine) => match engine.close(CLOSE_GRACE).await {
                 Closed::Exited(code) => code,

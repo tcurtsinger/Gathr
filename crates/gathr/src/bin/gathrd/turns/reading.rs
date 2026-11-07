@@ -237,9 +237,11 @@ impl Task {
 
     pub(super) async fn turn_ended(&mut self, end: TurnEnd) {
         self.keep_what_was_shown().await;
-        let Some(turn) = self.turn.take() else {
+        let Some(mut turn) = self.turn.take() else {
             return;
         };
+        // Ended, so the login needs no guarding: the next start mustn't wait on this one.
+        turn.gate.release();
         let status = match () {
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
