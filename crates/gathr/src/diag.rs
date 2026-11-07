@@ -1,8 +1,6 @@
 //! `gathr diag`: read-only answers from the event record (docs/decisions/0019-troubleshooting.md).
 //! Every answer is JSON; the command line can print it as text.
 
-use std::collections::BTreeMap;
-
 use rusqlite::Connection;
 use rusqlite::types::ValueRef;
 use serde_json::{Map, Value, json};
@@ -85,43 +83,30 @@ pub fn trace(conn: &Connection, reference: &str) -> Result<Value, Error> {
     Ok(json!({ "reference": reference, "events": rows }))
 }
 
-/// Failures since `since_us`, grouped by cause (event name and error type), newest group first.
+/// Failures since `since_us`, grouped by cause (event name and error type), newest group first,
+/// each with its five newest references. Grouped in SQL, so no cap hides a count or a cause.
 pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
     let mut stmt = conn.prepare(
-        "SELECT name, coalesce(error_type, '') AS error_type, ref, time FROM event_log
-         WHERE status = 'error' AND ts >= ?1 ORDER BY ts DESC LIMIT ?2",
+        "SELECT name, coalesce(error_type, '') AS error_type, count(*) AS count, max(time) AS latest
+         FROM event_log WHERE status = 'error' AND ts >= ?1
+         GROUP BY name, coalesce(error_type, '') ORDER BY max(ts) DESC",
     )?;
-    let rows = rows_as_json(&mut stmt, rusqlite::params![since_us, QUERY_CAP as i64])?;
-    let mut groups: BTreeMap<(String, String), Map<String, Value>> = BTreeMap::new();
-    let mut order = Vec::new();
-    for row in rows {
-        let key = (
-            row["name"].as_str().unwrap_or("").to_string(),
-            row["error_type"].as_str().unwrap_or("").to_string(),
-        );
-        let group = groups.entry(key.clone()).or_insert_with(|| {
-            order.push(key.clone());
-            let mut g = Map::new();
-            g.insert("name".into(), key.0.clone().into());
-            g.insert("error_type".into(), key.1.clone().into());
-            g.insert("count".into(), 0.into());
-            g.insert("latest".into(), row["time"].clone());
-            g.insert("references".into(), json!([]));
-            g
-        });
-        group["count"] = (group["count"].as_u64().unwrap_or(0) + 1).into();
-        let refs = group["references"]
-            .as_array_mut()
-            .expect("references is an array");
-        if refs.len() < 5 && !refs.contains(&row["ref"]) {
-            refs.push(row["ref"].clone());
-        }
+    let mut groups = rows_as_json(&mut stmt, [since_us])?;
+    let mut refs = conn.prepare(
+        "SELECT ref FROM event_log
+         WHERE status = 'error' AND ts >= ?1 AND name = ?2 AND coalesce(error_type, '') = ?3 AND ref IS NOT NULL
+         GROUP BY ref ORDER BY max(ts) DESC LIMIT 5",
+    )?;
+    for group in &mut groups {
+        let (name, error_type) = (group["name"].as_str(), group["error_type"].as_str());
+        let references: Vec<Value> = refs
+            .query_map(rusqlite::params![since_us, name, error_type], |r| {
+                r.get::<_, String>(0)
+            })?
+            .map(|r| r.map(Value::from))
+            .collect::<Result<_, _>>()?;
+        group["references"] = references.into();
     }
-    let groups: Vec<Value> = order
-        .iter()
-        .filter_map(|k| groups.remove(k))
-        .map(Value::Object)
-        .collect();
     Ok(json!({ "since": crate::ids::utc(since_us), "groups": groups }))
 }
 

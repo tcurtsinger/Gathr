@@ -123,13 +123,15 @@ fn parse_since(since: &str) -> Result<i64, Error> {
             "--since {since:?}: use minutes, hours or days, like 30m, 24h or 7d"
         ))
     };
-    let (number, unit) = since.split_at(since.len().saturating_sub(1));
-    let number: i64 = number.parse().map_err(|_| bad())?;
-    let unit_us = match unit {
-        "m" => 60_000_000,
-        "h" => 3_600_000_000,
-        "d" => 86_400_000_000,
-        _ => return Err(bad()),
+    let (number, unit_us) = if let Some(n) = since.strip_suffix('m') {
+        (n, 60_000_000)
+    } else if let Some(n) = since.strip_suffix('h') {
+        (n, 3_600_000_000)
+    } else if let Some(n) = since.strip_suffix('d') {
+        (n, 86_400_000_000)
+    } else {
+        return Err(bad());
     };
-    Ok(number * unit_us)
+    let number: i64 = number.parse().map_err(|_| bad())?;
+    number.checked_mul(unit_us).ok_or_else(bad)
 }
