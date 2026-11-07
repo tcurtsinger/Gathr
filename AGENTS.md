@@ -11,7 +11,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **Every change has its check:** a test, or a command anyone can run that fails if the change breaks.
 - **Tests:** CI is the gate. The author runs the tests the change touches once before pushing; the reviewer reads and doesn't rerun suites.
 - **Review once, when it's ready.** The code reviewer reviews every PR. The author answers each note; a second look only for a fix that changes behaviour. Minor notes are fixed in passing or dropped, never a round of their own. A docs-only PR merges without review rounds unless something in it is wrong.
-- **The lead merges** once the notes are answered and CI is green, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <head commit>`. Nobody turns on auto-merge. Check `main` is green before opening the next PR.
+- **The lead merges** once the notes are answered and CI is green, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <full head commit SHA>`. Nobody turns on auto-merge. Check `main` is green before opening the next PR.
 - **Clean up after yourself:** once your PR is merged or closed, remove your worktree and branch.
 - **Keep this file current:** when a step here changes, or you learn one, change this file in the same PR.
 
