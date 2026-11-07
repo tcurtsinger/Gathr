@@ -10,6 +10,7 @@ Status: draft. The first thing Gathr builds, once the architecture is approved. 
 4. **Stop.** Stop interrupts the turn through the engine's own interrupt, never a process kill. The chat shows the turn as stopped, with what it had produced.
 5. **Resume after restart.** Quit Gathr (window and service) and start it again: the chat is there with every message, and the next message continues the same engine session.
 6. **Diagnostics.** A Diagnostics page for the chat shows each turn's timeline: model calls, tool calls with durations, tokens, how it ended, and any failure with its cause.
+7. **Troubleshooting for agents** ([0019](decisions/0019-troubleshooting.md)): the service's logs, panics, engine stderr, UI errors and the start-up health check all land in the event record; every error in the UI shows a reference; `gathr diag` answers `trace`, `failures`, `turn --raw`, `health`, `query` and `bundle`; a turn's raw frames replay through the driver as a test. The diagnostics tools in the MCP server come with the MCP server.
 
 Engine-specific parts follow [0001](decisions/0001-engine-interface.md) (the stream-json driver, resume, tool approvals over the same pipe, Stop by interrupt) and [0002](decisions/0002-login-folders.md). The slice also proves each item on those files' "Not verified" lists.
 
@@ -36,10 +37,13 @@ To be filled in with exact commands when it's built; the shape:
 5. Ask "what were you writing?" It should know: same session.
 6. Quit Gathr completely, start it again, open the chat, and ask once more. Same session, history intact.
 7. Open Diagnostics from the chat. Each turn shows its timeline, tokens and how it ended; the stopped one says stopped.
+8. In Settings, Engines, set Claude Code's path ([0016](decisions/0016-macos.md)) to a file that doesn't exist, and send a message. The chat shows "Send failed" with a reference. In a terminal, `gathr diag trace <reference>` shows the message, the engine start that failed and why. Put the path back.
+9. Sign the engine out in its folder and send a message. Per [0002](decisions/0002-login-folders.md) it doesn't run: the message waits, and the chat says it's waiting for sign-in. `gathr diag health` shows the account as signed out and the message held on it; signing back in sends it.
+10. Quit Gathr, make a copy of the test data folder, and replace its `gathr.db` with a few bytes of text. Start Gathr on the copy: it fails to start. `gathr diag health` on the copy says the database didn't open, why, and shows the crash log's last lines, with nothing read by hand.
 
 ## Proof in the PR
 
-Screenshots of the chat, a streaming answer, the stopped turn and Diagnostics, at desktop size, light and dark, next to the picked design. The timings above from the event record. What couldn't be run, said plainly.
+Screenshots of the chat, a streaming answer, the stopped turn and Diagnostics, at desktop size, light and dark, next to the picked design. The timings above from the event record. One forced failure found from its reference with `gathr diag`, with the output. What couldn't be run, said plainly.
 
 ## Left out
 

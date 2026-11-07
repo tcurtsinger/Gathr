@@ -47,6 +47,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 
 - **Guard only against real risks.** No kill switches, disabled features or disclaimers for their own sake. When a safety question comes up, check how Claude's and Codex's own apps handle it, and match that.
 - **Diagnostics from the first attempt.** Anything that runs where nobody watches it (background work, installs, long jobs) writes what it did and where it stopped from day one.
+- **Every feature is diagnosable** ([0019](docs/decisions/0019-troubleshooting.md)). Its events show in Diagnostics and `gathr diag`, every error it can show carries a reference, and its PR proves one forced failure found from that reference. Troubleshoot with `gathr diag` before reading files by hand.
 - **No paid services required.** Gathr runs the providers' own agents on the user's own logins. Anything that costs money is an opt-in, off by default, and never required.
 - **Logins are single-use secrets.** Each account's login lives in its own Gathr folder, never the person's own `~/.claude` or `~/.codex`. Agents on one account share its folder only through the renewal gate (`docs/decisions/0002-login-folders.md`). Never copy a login file, or force-kill an engine while it might be renewing its login.
 
