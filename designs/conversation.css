@@ -1,0 +1,209 @@
+.conversation {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.transcript {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 36px 32px 16px;
+  scroll-behavior: auto;
+}
+.reading {
+  max-width: 760px;
+  margin: auto;
+}
+.message {
+  margin: 0 0 34px;
+  overflow-wrap: anywhere;
+}
+.who {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.who small {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.monogram {
+  font-size: 11px;
+  border: 1px solid var(--control);
+  width: 25px;
+  height: 25px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.message p {
+  margin: 8px 0 14px;
+}
+.message ul {
+  padding-left: 22px;
+}
+.user {
+  background: var(--surface);
+  padding: 14px 20px;
+  border-radius: 18px;
+  max-width: 85%;
+  margin-left: auto;
+}
+.user .who {
+  display: none;
+}
+.user {
+  width: fit-content;
+  padding: 10px 16px;
+}
+.user .content>p:first-child {
+  margin-top: 0;
+}
+.user .content>p:last-child {
+  margin-bottom: 0;
+}
+.user .actions {
+  position: absolute;
+  inset: auto 0 -32px auto;
+}
+.user {
+  position: relative;
+}
+.icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.profile {
+  justify-content: flex-end;
+}
+.actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.message:hover .actions,.message:focus-within .actions {
+  opacity: 1;
+}
+.actions button {
+  font-size: 12px;
+  color: var(--muted);
+}
+.reaction {
+  font-size: 12px;
+  border: 1px solid var(--control);
+  padding: 2px 9px;
+  min-height: 27px;
+}
+.reaction[aria-pressed=true] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+details.tools {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 18px 0;
+}
+.tools summary {
+  cursor: pointer;
+}
+.tools pre {
+  padding: 12px;
+  background: var(--surface);
+  overflow: auto;
+  font: 12px/1.8 Consolas,monospace;
+}
+.sidejob {
+  margin: 18px 0 0 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  font-size: 13px;
+}
+.sidejob small {
+  display: block;
+  color: var(--muted);
+}
+.composerarea {
+  padding: 8px 32px 18px;
+}
+.composerwrap {
+  max-width: 800px;
+  margin: auto;
+}
+.composer {
+  background: var(--raised);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 14px 14px 9px;
+}
+.composer textarea {
+  width: 100%;
+  resize: none;
+  background: transparent;
+  border: 0;
+  height: 53px;
+  padding: 0 4px;
+  outline-offset: 4px;
+  font-size: 15px;
+}
+.composer textarea::placeholder {
+  color: var(--muted);
+}
+.composerbottom {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.composerbottom button,.composerbottom select {
+  font-size: 12px;
+  min-height: 30px;
+}
+.composerbottom select {
+  max-width: 160px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 5px;
+}
+.context {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.meter {
+  width: 13px;
+  height: 13px;
+  border: 2px solid var(--control);
+  border-right-color: var(--accent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+}
+.send {
+  background: var(--text);
+  color: var(--canvas);
+  border-radius: 50%;
+  width: 32px;
+  padding: 0;
+}
+.send:hover {
+  background: var(--muted);
+}
+.queue {
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}

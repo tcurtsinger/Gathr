@@ -1,0 +1,189 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--text);
+  font: 15px/1.65 'Segoe UI Variable','Segoe UI',sans-serif;
+}
+button,input,select,textarea {
+  font: inherit;
+  color: inherit;
+}
+button,select {
+  cursor: pointer;
+}
+button {
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  padding: 6px 10px;
+  min-height: 32px;
+}
+button:hover,select:hover {
+  background: var(--raised);
+}
+button:active {
+  transform: translateY(1px);
+}
+button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-visible,a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+::selection {
+  background: var(--accent);
+  color: var(--canvas);
+}
+* {
+  scrollbar-color: var(--control) transparent;
+  scrollbar-width: thin;
+  accent-color: var(--accent);
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+.app {
+  display: grid;
+  grid-template-columns: 248px minmax(0,1fr);
+  height: 100dvh;
+}
+.sidebar {
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px 12px 8px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 18px;
+}
+.brand strong {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -.4px;
+}
+.logo {
+  display: inline-grid;
+  grid-template-columns: repeat(2,4px);
+  gap: 3px;
+  margin-right: 10px;
+}
+.logo i {
+  width: 4px;
+  height: 12px;
+  background: var(--text);
+  border-radius: 3px;
+}
+.logo i:last-child {
+  transform: translateY(4px);
+}
+.navbutton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  margin-bottom: 4px;
+}
+.navbutton kbd {
+  margin-left: auto;
+  color: var(--muted);
+  font: 12px inherit;
+}
+.navscroll {
+  overflow: auto;
+  flex: 1;
+  margin-top: 24px;
+}
+.label {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 18px 10px 8px;
+}
+.project {
+  margin-bottom: 8px;
+}
+.project summary {
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.chatrow {
+  width: 100%;
+  text-align: left;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px 7px 24px;
+  line-height: 1.6;
+}
+.chatrow span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chatrow.selected {
+  background: var(--raised);
+}
+.stack {
+  font-size: 10px;
+  letter-spacing: -3px;
+  white-space: nowrap;
+  margin-left: auto;
+}
+.dot {
+  font-size: 18px;
+  line-height: 1;
+}
+.profile {
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 4px 0;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.workspace {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.topbar {
+  height: 54px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--border);
+}
+h1 {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.topbar .path {
+  color: var(--muted);
+  font-size: 12px;
+}
+.bodygrid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}

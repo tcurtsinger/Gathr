@@ -1,0 +1,259 @@
+.panel {
+  width: 330px;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--canvas);
+  overflow: auto;
+}
+.panel[hidden] {
+  display: none;
+}
+.tabs {
+  display: flex;
+  padding: 10px 10px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 4px;
+}
+.tabs button {
+  font-size: 12px;
+  border-radius: 0;
+  padding: 8px;
+}
+.tabs button.active {
+  border-bottom: 2px solid var(--text);
+}
+.panelcontent {
+  padding: 22px 20px;
+}
+.panelcontent h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 18px;
+}
+.agentrow {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.agentrow .who {
+  margin: 0 0 5px;
+}
+.agentrow p {
+  margin: 0 0 0 35px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.taskrow {
+  font-size: 13px;
+  padding: 10px 0;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.taskrow small {
+  margin-left: auto;
+  color: var(--muted);
+}
+.plan {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.plan button {
+  margin-left: auto;
+  border: 1px solid var(--control);
+}
+.live {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid var(--border);
+  padding: 9px 0;
+  margin-top: 4px;
+}
+.live button {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 5px 8px;
+  border-radius: 4px;
+}
+.live strong {
+  font-size: 12px;
+  font-weight: 500;
+  display: block;
+}
+.live small {
+  font-size: 11px;
+  color: var(--muted);
+  display: block;
+  line-height: 1.5;
+}
+.pinned {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+.pinned .who {
+  font-size: 12px;
+  margin: 0;
+}
+.pinned p {
+  font-size: 13px;
+  margin: 6px 0;
+  color: var(--muted);
+}
+.pinned details {
+  font-size: 12px;
+  color: var(--muted);
+}
+.empty {
+  max-width: 800px;
+  width: 100%;
+  margin: auto;
+  padding: 32px;
+}
+.empty h2 {
+  font-weight: 500;
+  font-size: 28px;
+  letter-spacing: -.6px;
+  text-align: center;
+  margin-bottom: 34px;
+}
+.emptycontrols {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.emptycontrols button {
+  font-size: 13px;
+  color: var(--muted);
+}
+.empty .composer {
+  padding-top: 20px;
+}
+.setup {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 32px;
+  overflow: auto;
+  width: 100%;
+}
+.setup h2 {
+  font-size: 24px;
+  font-weight: 500;
+  margin: 0 0 30px;
+}
+.field {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+.field select,.field input {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: 8px;
+}
+.choose {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 12px;
+}
+.choose .name {
+  flex: 1;
+  font-size: 14px;
+}
+.choose small {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+}
+.roles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 28px;
+}
+.primary {
+  background: var(--text);
+  color: var(--canvas);
+  padding: 8px 20px;
+}
+.setupfooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+.diff {
+  font: 12px/2 Consolas,monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface);
+  padding: 16px;
+  border-radius: 6px;
+}
+.diff .add {
+  color: var(--accent);
+}
+.subtle {
+  font-size: 12px;
+  color: var(--muted);
+}
+dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--control);
+  border-radius: 16px;
+  max-width: 480px;
+  padding: 24px;
+}
+dialog::backdrop,.sidebar::backdrop {
+  background: var(--backdrop);
+}
+.dialogactions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.toast {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border: 1px solid var(--control);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  z-index: 8;
+}
+.toast:empty {
+  display: none;
+}
+.search {
+  width: 100%;
+  background: var(--canvas);
+  border: 1px solid var(--control);
+  border-radius: 6px;
+  padding: 6px;
+}
+.skip {
+  position: fixed;
+  top: -80px;
+  background: var(--surface);
+  padding: 12px;
+  z-index: 10;
+}
+.skip:focus {
+  top: 0;
+}
