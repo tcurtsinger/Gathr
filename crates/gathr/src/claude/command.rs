@@ -167,7 +167,7 @@ const MIN_VERSION: [u32; 3] = [2, 1, 318];
 const VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Claude Code's version from `<program> --version`, and why Gathr can't run it if it can't
-/// (with the version, when one was read). Blocks until it answers or `VERSION_WAIT` passes; the
+/// (with the version, when one was read). Blocks until it exits or `VERSION_WAIT` passes; the
 /// service calls it off its async threads.
 pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
     let mut command = std::process::Command::new(program);
@@ -195,17 +195,27 @@ pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
         let _ = std::io::Read::read_to_string(&mut stdout, &mut answer);
         let _ = tx.send(answer);
     });
-    match rx.recv_timeout(VERSION_WAIT) {
-        Ok(answer) => {
-            let _ = child.wait();
-            usable(&answer)
+    // The deadline is on its exit, not its output: a launcher can close its output and hang.
+    let deadline = std::time::Instant::now() + VERSION_WAIT;
+    let timed_out = || unread(format!("it didn't answer in {} s", VERSION_WAIT.as_secs()));
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            // Safe to kill: `--version` only prints, it never renews a login.
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return timed_out();
+            }
         }
-        // Safe to kill: `--version` only prints, it never renews a login.
-        Err(_) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            unread(format!("it didn't answer in {} s", VERSION_WAIT.as_secs()))
-        }
+    }
+    let left = deadline.saturating_duration_since(std::time::Instant::now());
+    match rx.recv_timeout(left) {
+        Ok(answer) => usable(&answer),
+        Err(_) => timed_out(),
     }
 }
 
