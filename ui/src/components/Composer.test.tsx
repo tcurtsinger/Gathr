@@ -3,6 +3,8 @@ import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer } from './Composer';
+// The app's own focus rule, which outlined the text area.
+import '../base.css';
 
 /** The composer as a chat holds it: sending clears the draft and lists what was sent. */
 function Chat({ running = false }: { running?: boolean }) {
@@ -32,6 +34,15 @@ test('Enter sends the draft and Shift+Enter starts a new line', async () => {
   await userEvent.keyboard('first{Shift>}{Enter}{/Shift}second{Enter}');
   await expect.element(screen.getByText('first/second', { exact: true })).toBeVisible();
   await expect.element(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('');
+});
+
+test('focus outlines the rounded message box, not the text area inside it', async () => {
+  const screen = await render(<Chat />);
+  const input = screen.getByRole('textbox', { name: 'Message' });
+  await input.click();
+  const box = input.element().closest('.composer') as HTMLElement;
+  expect(getComputedStyle(box).outlineStyle).toBe('solid');
+  expect(getComputedStyle(input.element()).outlineStyle).toBe('none');
 });
 
 test('while a turn runs the button stops it, and typing turns it back into Send', async () => {
