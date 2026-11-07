@@ -104,3 +104,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 ### Friction
 
 At the end of your answer, as "Friction: <what, where>": anything in SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\code\gathr-work\FRICTION.md` and passes workshop bugs to Nova. Each one is also a requirement: write down what Gathr must do instead.
+
+## Design preview checks
+
+Phase 0 prototypes are under `designs/`. From the repo root, run `node designs/check.cjs` to check page scripts, unique element IDs, local-only content, history fixtures and contrast roles. Open each candidate in the design viewer at 1440 and 1024 px in both themes. These previews do not require the Rust service or provider logins.
