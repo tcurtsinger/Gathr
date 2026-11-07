@@ -1,12 +1,10 @@
-import { Fragment, memo, useMemo } from 'react';
+import { Fragment, memo, useMemo, useRef } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkParse from 'remark-parse';
-import { unified } from 'unified';
+import { blocks, type Parsed, parse } from './blocks';
 import './markdown.css';
 
 const plugins = [remarkGfm];
-const parser = unified().use(remarkParse).use(remarkGfm);
 
 // Links leave the window for the person's browser (the desktop window sends new tabs there).
 const components: Components = {
@@ -18,7 +16,12 @@ const components: Components = {
  * While it streams, only the top-level blocks that changed render again.
  */
 export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const parts = useMemo(() => (streaming ? blocks(text) : null), [text, streaming]);
+  const last = useRef<Parsed | null>(null);
+  const parts = useMemo(() => {
+    if (!streaming) return null;
+    last.current = parse(text, last.current);
+    return blocks(last.current);
+  }, [text, streaming]);
   return (
     <div className="markdown">
       {parts === null ? (
@@ -45,19 +48,3 @@ const Block = memo(function Block({ text }: { text: string }) {
     </ReactMarkdown>
   );
 });
-
-/**
- * The text's top-level blocks, as the whole text parses, each with the document's link
- * definitions so its references resolve alone. Null when footnotes need the whole text.
- */
-function blocks(text: string): string[] | null {
-  const nodes = parser.parse(text).children;
-  if (nodes.some((n) => n.type === 'footnoteDefinition')) return null;
-  const source = (n: (typeof nodes)[number]) => {
-    const { start, end } = n.position ?? { start: { offset: 0, column: 1 }, end: { offset: 0 } };
-    // From the start of its line, so an indented block keeps its indent.
-    return text.slice((start.offset ?? 0) - (start.column - 1), end.offset);
-  };
-  const definitions = nodes.filter((n) => n.type === 'definition').map(source);
-  return nodes.filter((n) => n.type !== 'definition').map((n) => [source(n), ...definitions].join('\n\n'));
-}
