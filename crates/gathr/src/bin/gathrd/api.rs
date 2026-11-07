@@ -24,6 +24,7 @@ pub struct State {
     pub data: DataDir,
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
+    pub updates: Arc<crate::updates::Updates>,
 }
 
 /// The request's trace id, for handlers: a failure's reference and its events share it.

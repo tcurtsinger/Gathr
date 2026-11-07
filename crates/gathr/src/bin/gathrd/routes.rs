@@ -28,6 +28,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/turns", get(turns))
         .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine).put(set_engine))
+        .route("/api/engines/claude/update", post(update_engine))
         .route("/api/live", get(live))
 }
 
@@ -220,7 +221,7 @@ async fn ui_event(
 /// Claude Code's path (set, and where it was found) and the account's sign-in state.
 async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
     let setting = s.chats.path_setting().await;
-    let found = command::find(setting.as_deref());
+    let found = command::find(setting.as_deref(), s.chats.copy());
     let folder = s.chats.account_folder();
     let (state, expires) = s.chats.login_status().await;
     Json(json!({
@@ -228,7 +229,17 @@ async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
         "found": found.as_ref().ok().map(|p| p.display().to_string()),
         "why_not_found": found.err(),
         "account": { "folder": folder, "login": state, "expires": expires.map(|ms| gathr::ids::utc(ms * 1000)) },
+        "copy": s.updates.view(),
     }))
+}
+
+/// Checks the release feed now (0025); `GET /api/engines/claude` shows how it went.
+async fn update_engine(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
+    if !s.updates.check_now() {
+        let why = "this dev build has no release feed: set GATHR_CLAUDE_RELEASES";
+        return Err(fail(StatusCode::CONFLICT, "Update failed", why, &t.0));
+    }
+    Ok(Json(json!({ "checking": true })))
 }
 
 #[derive(Deserialize)]

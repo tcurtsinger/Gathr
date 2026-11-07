@@ -6,6 +6,7 @@ mod chats;
 mod logs;
 mod routes;
 mod turns;
+mod updates;
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::ExitCode;
@@ -83,8 +84,10 @@ async fn serve(
     }
     .write(data)?;
     let chats = chats::Chats::new(writer.clone(), data.clone());
+    let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
     let state = Arc::new(api::State {
         chats: chats.clone(),
+        updates: updates.clone(),
         writer: writer.clone(),
         token,
         port,
@@ -101,6 +104,7 @@ async fn serve(
     );
     writer.record(health_event(data, port, early_lines));
     chats.take_over().await;
+    tokio::spawn(updates::run(updates.clone()));
 
     let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();
     let stop_state = state.clone();
@@ -115,6 +119,7 @@ async fn serve(
         .with_graceful_shutdown(stopping)
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
+    updates.stop();
     chats.close_all().await;
     writer
         .record_now(

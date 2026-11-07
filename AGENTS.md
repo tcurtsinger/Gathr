@@ -49,7 +49,8 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `diag health` also shows the Claude account's sign-in state and the messages held on it.
 - **The API** is on `127.0.0.1:<port>`. Every request needs `Authorization: Bearer <token>`, with the token from `<data>/service.json`. Errors answer `{"error": "… failed", "why", "ref"}`, and each is recorded before the answer goes out, so its `ref` traces at once.
   - Chats: `GET`/`POST /api/chats`, `GET /api/chats/<id>` (messages and turns), `POST /api/chats/<id>/messages {"text"}`, `POST /api/chats/<id>/stop`, `POST /api/chats/<id>/approvals/<request_id> {"allow"}`.
-  - Claude Code: `GET /api/engines/claude` (path, sign-in), `PUT /api/engines/claude {"path"}` (`null` for the PATH). Used at the next start, no restart.
+  - Claude Code: `GET /api/engines/claude` (path, sign-in, Gathr's copy), `PUT /api/engines/claude {"path"}` (`null` for Gathr's copy, else the PATH). Used at the next start, no restart. `POST /api/engines/claude/update` checks the release feed now.
+- **Gathr's own Claude Code** ([0025](docs/decisions/0025-engine-copies.md)) lives in `<data>/engines/claude/<version>`, named by `current.json`. A debug build (dev, tests) downloads nothing unless `GATHR_CLAUDE_RELEASES` names a feed: `https://downloads.claude.ai/claude-code-releases` for the real one, which is 345 MB on Windows, so ask first. Each check is a `gathr.engine.update` event.
   - Live: a WebSocket at `/api/live?token=<token>` sends every delta, message, tool, turn, approval and read, as JSON.
   - Diagnostics: `GET /api/chats/<id>/turns`, each turn with what was asked and its events in order.
   - The window's own events: `POST /api/ui/events {"name": "gathr.ui.…", "duration_ms", "error", "attrs"}`, recorded like the service's (UI errors, open and switch timings, first text shown).
