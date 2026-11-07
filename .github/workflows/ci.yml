@@ -33,6 +33,9 @@ jobs:
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+      - name: file size
+        shell: bash
+        run: bash scripts/check-file-size.sh
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy

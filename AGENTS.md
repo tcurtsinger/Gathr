@@ -8,10 +8,11 @@ Status: early. Product, design and architecture come first; see `docs/`.
 
 - **Plans before code.** Nothing is built until its plan is approved. Each decision gets a file in `docs/decisions/`: the choice, why, and what was turned down.
 - **One feature, one PR,** its engine and its screens together, opened when the feature is done. From your own branch and your own git worktree (never the main checkout), base `main`, marked ready. Don't stack a PR on another PR's branch: merging that branch closes it.
-- **Every change has its check:** a test, or a command anyone can run that fails if the change breaks.
+- **Every change that can break has its check:** a test, or a command anyone can run that fails if the change breaks.
+- **Tests where they earn it, not one per function.** Test behaviour that can go wrong: logic with branches, parsers and protocols (an engine driver against replayed raw frames), coordination state and its transitions, logins, security and data that could be lost, and every bug fixed (its test first). Don't test what can't really break: plain glue, getters, constants, what the type system already guarantees, or a layout a screenshot proves. One test per behaviour, through the real code where it's cheap, not mocks of our own code. A test that can't fail is deleted.
 - **Tests:** CI is the gate. The author runs the tests the change touches once before pushing; the reviewer reads and doesn't rerun suites.
 - **Review once, when it's ready.** The code reviewer reviews every PR. The author answers each note; a second look only for a fix that changes behaviour. Minor notes are fixed in passing or dropped, never a round of their own. A docs-only PR merges without review rounds unless something in it is wrong.
-- **The lead merges** once the notes are answered and CI is green, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <head commit>`. Nobody turns on auto-merge. Check `main` is green before opening the next PR.
+- **The lead merges** once the notes are answered and CI is green, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <full head commit SHA>`. Nobody turns on auto-merge. Check `main` is green before opening the next PR.
 - **Clean up after yourself:** once your PR is merged or closed, remove your worktree and branch.
 - **Keep this file current:** when a step here changes, or you learn one, change this file in the same PR.
 
@@ -22,6 +23,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
+  - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
@@ -34,6 +36,15 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - **Timings** for anything that should feel fast: opening a screen, switching, a reply starting to stream.
   - **What you couldn't run,** said plainly.
 - Passing tests and a clean build are needed, but they aren't done.
+
+## How the code is written
+
+- **YAGNI.** The smallest code that gives the expected result. Before writing, climb the ladder and stop at the first rung that holds: does it need to exist; is it already in this codebase; does the standard library do it; does the platform (CSS, SQLite, the OS) do it; does a dependency we already have do it; only then, the minimum new code. No abstraction with one user, no config for a value that never changes, nothing "for later".
+- **Shared components, one of each.** One button, one scroll bar, one input, one menu, one dialog, one message, one empty state: each lives once in the shared UI code and the design system, and every screen uses it. A second version of something that exists is a bug in review, even if it looks the same. Same in the service: one way to do a thing (one error type per crate, one HTTP client, one way to spawn a process).
+- **Small files, readable lines.** Keep a file to what one part of the code does: usually a few hundred lines. CI fails a source file over 1,000 lines or any line over 200 characters (`scripts/check-file-size.sh`), so nothing grows into a monolith and nothing packed or minified is committed. Split a file where it has a seam, by what each part does. Small functions with one job.
+- **Comments only where they earn it:** why something is done, a non-obvious constraint, a lesson ("never kill here: the engine may be renewing its login"). Never what the next line plainly does, never a comment on every function or field. Names carry the meaning.
+- **Best practices of each language:** `rustfmt` and `clippy -D warnings` for Rust; for the UI, the linter and formatter that land with it. Errors handled where something can recover, passed up everywhere else. No dead code, no commented-out code.
+- **Reviewers check all of this**, not only behaviour: a duplicate component, a file near the limit, a comment that restates the code, an abstraction nobody needs.
 
 ## How Gathr looks and reads
 
@@ -105,6 +116,11 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 ### Friction
 
 At the end of your answer, as "Friction: <what, where>": anything in SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\code\gathr-work\FRICTION.md` and passes workshop bugs to Nova. Each one is also a requirement: write down what Gathr must do instead.
+
+Friction is how Gathr learns what not to repeat, so it's read all the time, not only logged:
+- Two sources: ours, and SerenityOS's own (`X:\code\serenityos\planning\FRICTION.md`), which the agents maintaining SerenityOS keep adding to.
+- `X:\code\gathr-work\plans\friction-ledger.md` holds every "Gathr must" from both, each with where it's covered (a decision, AGENTS.md, a feature on the backlog) or "open". The lead brings it up to date from both files at least daily.
+- Every feature plan starts by reading the ledger for entries that touch it; the plan names the ones it covers, and its PR proves them.
 
 ## Design preview checks
 
