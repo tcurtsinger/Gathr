@@ -52,7 +52,7 @@ The service's own logs, panics, engines' stderr, UI errors and start-up health l
 
 ## The UI
 
-React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0016](decisions/0016-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0017](decisions/0017-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
+React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0016](decisions/0016-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0017](decisions/0017-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md). Built with Vite, checked with Biome and `tsc`, tested with Vitest in a real browser. [0022](decisions/0022-ui-tooling.md).
 
 ## The agents' browser
 
