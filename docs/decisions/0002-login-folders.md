@@ -37,13 +37,14 @@ Status: proposed. Date: 2026-11-06.
 ## Turned down
 
 - **One folder per account, shared by all of that account's agents, with a renewal gate** (the previous app: one renewer at a time, others wait up to 30 s). It saves signing in per agent, but the gate covers only process starts; a long-lived process renews mid-turn on its own, and the race remains. AGENTS.md: "Never share one between processes".
-- **The person's own `~/.claude` or `~/.codex`.** Their terminal sessions would race Gathr's engines for the same token.
+- **The person's own `~/.claude` or `~/.codex`, so agents work with no sign-in.** This is how Open Design does it (read in its installed build, 2026-11-07): it starts Claude Code with no `CLAUDE_CONFIG_DIR` unless one is set in its Settings, so Claude Code uses `~/.claude`, and it sets `CODEX_HOME` to `~/.codex`. Every agent then shares one login with the person's terminal sessions and with each other, so they race for the same token; Open Design has its own `refresh_token_reused` error for when that happens. It also allows only one account per engine. Turned down by the owner on 2026-11-07, because it breaks using several accounts.
 - **A long-lived token** (`claude setup-token`, one year, via `CLAUDE_CODE_OAUTH_TOKEN` ([authentication](https://code.claude.com/docs/en/authentication))). It avoids renewal entirely but is a copyable secret Gathr would have to store; kept as an opt-in for a later decision, not the default.
 - **Gathr running the OAuth flow itself.** That would mean Gathr holding tokens; the engines' own flows keep the secret inside the engine's folder.
 
-## Open, for the owner
+## The owner's calls
 
-Anthropic's Agent SDK page says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK" ([overview](https://code.claude.com/docs/en/agent-sdk/overview)). Gathr doesn't offer a login: the person signs in to their own Claude Code, which Gathr runs on their machine. Whether that counts is the owner's call, as a decision task.
+- **Subscription logins (2026-11-07).** Anthropic's Agent SDK page says: "Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or rate limits for their products, including agents built on the Claude Agent SDK" ([overview](https://code.claude.com/docs/en/agent-sdk/overview)). Gathr doesn't offer a login: it runs the person's own Claude Code, signed in by them in its own folder. The owner's call: Gathr runs on the person's existing subscriptions, as other apps do, and no approval is sought. Turned down: asking Anthropic for approval before a public release.
+- **One sign-in per agent folder stays (2026-11-07).** The owner asked whether agents could work with no sign-in, as in Open Design. Open Design shares the person's own login folders (see Turned down), which breaks several accounts, so the per-agent folders above stay.
 
 ## Not verified
 
