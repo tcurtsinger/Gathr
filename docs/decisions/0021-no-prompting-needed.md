@@ -35,6 +35,11 @@ The analytics page shows how often each tool is used, by agent, and lists tools 
 - The previous app needed a long starter prompt, written with another AI's help, before this room worked the way it should.
 - In the previous app, 36 of 54 agent commands were never run in the six days counted; tools that need to be asked for by name go unused.
 
+## Checked, and not yet
+
+- **Checked:** Claude Code started the way SerenityOS starts it (`claude -p` with stream-json and its own `CLAUDE_CONFIG_DIR`, v2.1.318) loaded this repo's `AGENTS.md` with no `CLAUDE.md` in the folder: the first session of the room that wrote this shows it as the project instructions.
+- **Not verified:** that Claude Code reads the `claude-md-and-agents-md` setting from `settings.json` in a `CLAUDE_CONFIG_DIR` folder. The docs name only `~/.claude/settings.json`, a `--settings` file and managed settings. The first slice proves it, or passes the setting with `--settings` instead.
+
 ## Turned down
 
 - **Prompt templates the person fills in.** Still prompting, with extra steps.
