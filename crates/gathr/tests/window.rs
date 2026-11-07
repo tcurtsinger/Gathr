@@ -150,6 +150,56 @@ fn the_windows_own_events_are_recorded_and_other_names_refused() {
     assert_eq!(found["rows"][0]["attrs"]["messages"], 500, "{found}");
 }
 
+/// A window that closes its live connection gets the close answered and the connection dropped,
+/// rather than held until the next update fails to send (found on the Mac).
+#[test]
+fn the_live_socket_answers_a_close_and_drops_the_connection() {
+    use std::io::{Read, Write};
+    let data = TempDir::new();
+    let service = TestService::start(&data.0);
+    let mut socket = std::net::TcpStream::connect(("127.0.0.1", service.info.port)).unwrap();
+    socket
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let handshake = format!(
+        "GET /api/live?token={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
+         Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+         Sec-WebSocket-Version: 13\r\n\r\n",
+        service.info.token, service.info.port
+    );
+    socket.write_all(handshake.as_bytes()).unwrap();
+    let mut head = Vec::new();
+    let mut byte = [0u8];
+    while !head.ends_with(b"\r\n\r\n") {
+        socket.read_exact(&mut byte).unwrap();
+        head.push(byte[0]);
+    }
+    let head = String::from_utf8_lossy(&head);
+    assert!(head.starts_with("HTTP/1.1 101"), "{head}");
+
+    // Close, code 1000, masked as a client must, with a zero mask so the payload reads as is.
+    let started = std::time::Instant::now();
+    socket
+        .write_all(&[0x88, 0x82, 0, 0, 0, 0, 0x03, 0xE8])
+        .unwrap();
+    let mut reply = Vec::new();
+    let read = socket.read_to_end(&mut reply);
+    assert!(
+        read.is_ok(),
+        "the service didn't drop the connection within 3 s ({read:?}), sent {reply:x?}"
+    );
+    assert_eq!(
+        reply.first(),
+        Some(&0x88),
+        "expected a Close frame back, got {reply:x?}"
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "{:?}",
+        started.elapsed()
+    );
+}
+
 fn allow_the_first_approval(service: &TestService, chat: &str) {
     let deadline = std::time::Instant::now() + Duration::from_secs(10);
     loop {
