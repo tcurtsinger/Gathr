@@ -1,4 +1,4 @@
-# 0016. Using one computer's chats from another, over Tailscale
+# 0017. Using one computer's chats from another, over Tailscale
 
 Status: proposed. Date: 2026-11-07. Tailscale is the owner's pick.
 

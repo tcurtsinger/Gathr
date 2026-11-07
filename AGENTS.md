@@ -64,7 +64,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - Each provider's own agent harness behind one interface.
 - One MCP tool server inside the service.
 - A Tauri desktop app over a web UI that a browser could also use.
-- Windows and macOS, both checked in CI; what differs lives in one `platform` module of the service (`docs/decisions/0015-macos.md`).
+- Windows and macOS, both checked in CI; what differs lives in one `platform` module of the service (`docs/decisions/0016-macos.md`).
 
 ## The owner's room
 

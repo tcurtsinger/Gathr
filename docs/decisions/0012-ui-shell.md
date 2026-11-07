@@ -6,7 +6,7 @@ Status: proposed. Date: 2026-11-06. The framework is the owner's choice (React +
 
 - The UI is a React and TypeScript web app. It talks to the service only over the service's HTTP and WebSocket API, the same API any client uses.
 - The service serves the built UI on localhost, so a browser on this machine can use Gathr.
-- The desktop app is a Tauri 2 window that shows that UI and adds what a browser can't: a tray icon (the menu bar on macOS), notifications, opening at login, and the window itself. It runs on Windows and macOS ([0015](0015-macos.md)).
+- The desktop app is a Tauri 2 window that shows that UI and adds what a browser can't: a tray icon (the menu bar on macOS), notifications, opening at login, and the window itself. It runs on Windows and macOS ([0016](0016-macos.md)).
 - The window holds no state and owns no engines. Closing or reloading it never touches a running turn.
 
 ## Why

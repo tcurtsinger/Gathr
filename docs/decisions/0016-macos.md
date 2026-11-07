@@ -1,4 +1,4 @@
-# 0015. Gathr runs on macOS as well as Windows
+# 0016. Gathr runs on macOS as well as Windows
 
 Status: proposed. Date: 2026-11-07. The owner works from a Windows PC and a Mac and wants Gathr on both.
 
@@ -16,7 +16,7 @@ What changes for the Mac, decision by decision:
   - The login watcher watches the same item's modification date.
 - **Codex's login (0002).** No change: the driver already starts app-server with `cli_auth_credentials_store="file"`, so the login stays in `auth.json` in the account's folder on both systems ([Codex auth](https://learn.chatgpt.com/docs/auth)).
 - **The service and the window (0004, 0012).** `gathrd` and the lock work as on Windows. `service.json` is created with mode `0600`. Data lives in `~/Library/Application Support/Gathr` (Windows: `%APPDATA%\Gathr`). The window renders with the system's WKWebView instead of WebView2, and its origin (`tauri://localhost` on macOS, `http://tauri.localhost` on Windows) is the one the service accepts. The tray icon is a menu bar icon; "start with Windows" becomes "open at login" on both.
-- **Sleep.** While any turn is running, the service asks the system not to idle-sleep (macOS: a power assertion, as `caffeinate -i` takes; Windows: `SetThreadExecutionState(ES_SYSTEM_REQUIRED)`), and lets go when the last turn ends. The screen may still turn off. This matters most for remote use (0016): a chat driven from the other computer stops if its host sleeps.
+- **Sleep.** While any turn is running, the service asks the system not to idle-sleep (macOS: a power assertion, as `caffeinate -i` takes; Windows: `SetThreadExecutionState(ES_SYSTEM_REQUIRED)`), and lets go when the last turn ends. The screen may still turn off. This matters most for remote use (0017): a chat driven from the other computer stops if its host sleeps.
 - **CI.** The CI workflow runs the same three checks on `macos-latest` next to `windows-latest`. Standard GitHub-hosted runners are free for public repositories ([Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions)).
 
 ## Why

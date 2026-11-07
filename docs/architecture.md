@@ -5,7 +5,7 @@ Status: draft. Each choice below has its decision file in [`decisions/`](decisio
 ## The picture
 
 ```
- Tauri window (tray, notifications)      a browser, or another of your computers (0016)
+ Tauri window (tray, notifications)      a browser, or another of your computers (0017)
             \                                   /
              React + TypeScript UI, served by the service
                               |
@@ -50,7 +50,7 @@ One append-only event table, written with each state change, named after OpenTel
 
 ## The UI
 
-React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0015](decisions/0015-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0016](decisions/0016-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
+React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0016](decisions/0016-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0017](decisions/0017-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
 
 ## Decisions
 
