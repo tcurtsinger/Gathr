@@ -4,7 +4,7 @@ Status: draft. The first thing Gathr builds, once the architecture is approved. 
 
 ## What it does
 
-1. **Sign in.** The person signs the engine in, in Gathr's own login folder for that agent, through the engine's own login flow. Gathr never reads or copies the login. Claude Code goes first ([0001](decisions/0001-engine-interface.md)); the folder layout is [0002](decisions/0002-login-folders.md).
+1. **Sign in.** The person signs the engine in, in Gathr's own login folder for that account, through the engine's own login flow. Gathr never reads or copies the login. Claude Code goes first ([0001](decisions/0001-engine-interface.md)); the folder layout is [0002](decisions/0002-login-folders.md).
 2. **Send.** The person types a message in a chat and sends it.
 3. **Stream.** The answer streams in as the engine produces it: text, and each tool call as a line with its name, status and duration.
 4. **Stop.** Stop interrupts the turn through the engine's own interrupt, never a process kill. The chat shows the turn as stopped, with what it had produced.

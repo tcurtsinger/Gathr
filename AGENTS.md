@@ -49,7 +49,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **Diagnostics from the first attempt.** Anything that runs where nobody watches it (background work, installs, long jobs) writes what it did and where it stopped from day one.
 - **No paid services required.** Gathr runs the providers' own agents on the user's own logins. Anything that costs money is an opt-in, off by default, and never required.
 - **It shares the machine.** People game and take calls on the same computer: background work runs on the CPU at low priority, never the GPU.
-- **Logins are single-use secrets.** Each engine keeps its login in its own folder. Never share one between processes, copy a login file, or force-kill an engine while it might be renewing its login.
+- **Logins are single-use secrets.** Each account's login lives in its own Gathr folder, never the person's own `~/.claude` or `~/.codex`. Agents on one account share its folder only through the renewal gate (`docs/decisions/0002-login-folders.md`). Never copy a login file, or force-kill an engine while it might be renewing its login.
 
 ## Rules for a public repo
 

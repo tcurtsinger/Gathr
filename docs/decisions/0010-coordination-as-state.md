@@ -152,7 +152,7 @@ When an engine's account is out of usage until a time it gives, the turn isn't f
 
 ## Sessions
 
-An agent runs one turn at a time, across all its conversations, the way a member of the previous app got its next turn only when free. This keeps [0002](0002-login-folders.md)'s rule of one engine process per login folder.
+An agent runs one turn at a time, across all its conversations, the way a member of the previous app got its next turn only when free. This also keeps each agent to one engine process on its account's shared login folder ([0002](0002-login-folders.md)), so fewer processes can renew one login at once.
 
 - A task gets a fresh engine session when its owner already has another task in progress; the earlier session is set aside, whole, and resumed by a wait it set or a task it holds. At most three are set aside per agent per chat. The previous app's members carried 200K tokens a request when every task shared one session.
 - Switching sessions: when the agent's next turn is in another session than its open engine process, the driver closes that process the gentle way (end of input, then the engine's own exit, per [0001](0001-engine-interface.md)) and starts the next with that session's resume id. It never kills a process to switch. A process that hasn't exited after 30 seconds holds the switch, shows as a hold on the agent, and is recorded; it's never forced while it might be renewing its login.
