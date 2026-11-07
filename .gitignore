@@ -27,6 +27,7 @@ auth.json
 .codex/
 
 # Local data
+/dev-data/
 *.db
 *.db-journal
 *.db-wal

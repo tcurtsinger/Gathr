@@ -27,6 +27,20 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
+- **Flaky is broken.** A test that fails at random is fixed or deleted the day it's seen, never rerun until green. A failing test says which test it is, what it expected and what it got ([docs/testing.md](docs/testing.md)).
+
+## Run, use and check it
+
+- **The crate:** `crates/gathr` holds the shared library and two binaries: `gathrd`, the service, and `gathr`, the command line. Service code is in `src/bin/gathrd/`, command-line code in `src/bin/gathr/`, and what both use in `src/`.
+- **Start it with test data:** `cargo dev --port <port> --data <folder> --seed` builds both, adds the made-up chats (500 messages, 50 tool calls in a turn, a 20,000-word answer) and starts the service. Ctrl+C stops it and everything it started. Always pass `--data`: without it, the service uses the real app data folder.
+- **Test data alone:** `gathr seed --data <folder>`, with the service stopped. Each run adds another set, so repeated runs make a large folder for timings.
+- **Diagnose with `gathr diag`** (`target/debug/gathr` once built, or `cargo run -q --bin gathr --`), always with `--data <folder>`. JSON by default, `--text` to read:
+  - `diag health`: the service now, the database, the last start-up check and the crash log. It answers even when the service or the database won't start.
+  - `diag trace <ref>`: everything behind an error's reference, in order.
+  - `diag failures --since 24h`: failures grouped by cause, with references.
+  - `diag query "<sql>"`: read-only SQL, up to 1,000 rows. Use the `event_log` view: it shows `attrs` as JSON, a readable `time` and each row's `ref`.
+- **The API** is on `127.0.0.1:<port>`. Every request needs `Authorization: Bearer <token>`, with the token from `<data>/service.json`. Errors answer `{"error": "… failed", "why", "ref"}`, and each is recorded before the answer goes out, so its `ref` traces at once.
+- **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one.
 
 ## Done means used, with proof
 
@@ -93,7 +107,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 - The repo is public. Plans that mention the owner, reviews, evidence, screenshots of real use, and friction go in `X:\code\gathr-work` (`plans\`, `reviews\`, `FRICTION.md`), never in the repo. Screenshots the owner should see are sent to them.
 - Each member works in its own worktree: `git fetch`, then `git worktree add X:\code\gathr-work\trees\<your name>-<topic> -b room/<topic> origin/main`.
-- Dev ports and data folders: the lead assigns them when the first runnable piece lands. Never use another member's.
+- Dev ports and data folders: each member's dev service runs on its own port and data folder: Orin 47100, Cass 47101, Pia 47102, Juno 47103, Vale 47104, each with `X:\code\gathr-work\data\<name>`. Never use another member's, and never run without `--data`.
 - After a merge, bring `X:\code\gathr` up to date: `git fetch`, then `git merge --ff-only origin/main`. Check `git status` first and never discard the owner's changes: if something would be overwritten, stop and ask.
 
 ### Learning from SerenityOS

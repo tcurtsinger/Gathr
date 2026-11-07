@@ -4,7 +4,7 @@ Gathr is an open-source desktop app for running a team of AI agents from differe
 
 ## Status
 
-Early. Product, design and architecture come first; those plans go in `docs/`. There is no app to run yet.
+Early. The plans are in `docs/`. The service and its command line run; there is no window yet.
 
 ## Build and check
 
@@ -14,9 +14,10 @@ Needs [Rust](https://rustup.rs) (the version is pinned in `rust-toolchain.toml`)
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo dev --port 47100 --data ./dev-data --seed   # the service with made-up test data; Ctrl+C stops it
 ```
 
-CI runs the same three on Windows for every pull request.
+CI runs the checks on Windows and macOS for every pull request. [`AGENTS.md`](AGENTS.md) says how to use and diagnose a running service.
 
 ## Contributing
 
