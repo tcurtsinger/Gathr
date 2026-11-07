@@ -24,6 +24,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
   - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
+  - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
