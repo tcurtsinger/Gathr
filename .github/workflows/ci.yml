@@ -18,8 +18,16 @@ env:
 
 jobs:
   rust:
-    name: Rust (Windows)
-    runs-on: windows-latest
+    name: Rust (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: macOS
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - name: Install the pinned toolchain

@@ -20,7 +20,7 @@ Measured on this PC, with the event record's own timings (0011):
 - A chat with **500 messages** (tool runs and long answers among them) opens within **200 ms**.
 - Switching between two such chats within **200 ms**.
 - Stop: the chat shows "stopped" within **200 ms** of the click; the engine's turn has ended within 5 s.
-- The service idles under 1% CPU with nothing running, and its background work runs at low CPU priority.
+- The service idles under 1% CPU with nothing running.
 
 ## Test data
 
