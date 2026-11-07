@@ -28,11 +28,9 @@ function openAgentSettings() {
 }
 settings.querySelector('#agent-close').onclick = () => settings.close();
 for (const dialog of [settings, menu]) dialog.addEventListener('close', () => editorOpener?.focus());
-const settingsLink = document.createElement('button');
-settingsLink.textContent = 'Agents';
+const settingsLink = [...document.querySelectorAll('.sidebar button')].find(button => button.textContent.trim() === 'Settings');
 settingsLink.dataset.id = 'open-agent-settings';
 settingsLink.onclick = openAgentSettings;
-document.querySelector('.brand').after(settingsLink);
 function renderEditor(host, inline = false) {
   const agent = fixtureAgents[selectedAgent];
   host.innerHTML = `<nav class="agent-list" aria-label="Agents"></nav><form class="agent-form">
