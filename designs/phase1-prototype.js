@@ -157,12 +157,21 @@ function chat() {
       : value === 'Waiting for sign-in'
         ? '<span>Waiting for sign-in</span><a href="../engines/v1.html">Sign in</a>'
         : `<span>Send failed</span><button class="ref">${sendRef}</button><a href="../diagnostics/v1.html?ref=${sendRef}">Diagnostics</a>`;
-    const box = `<div class="notice" data-id="chat-notice" role="status">${notice}</div>`;
+    const revised = document.body.dataset.revised;
+    const noticeClass = revised ? `reply-notice ${value === 'Error' ? 'is-error' : ''}` : '';
+    const retryButton = revised && value === 'Error' ? '<button id="retry">Retry</button>' : '';
+    const box = `<div class="notice ${noticeClass}" data-id="chat-notice" role="status">${notice}${retryButton}</div>`;
     messages.innerHTML = leadin + (value === 'Stopped' ? `<article class="message"><div class="who">Assistant</div>
       <details><summary>12 tool calls</summary><p>Read reconnect tests, search handlers, inspect draft storage.</p></details>
       <p>The draft is saved before reconnect starts. I found a second path that clears it when the socket closes.</p></article>` : '');
     document.querySelector('#composer-notice').innerHTML = option === 2 ? box : '';
     if (option === 1) messages.insertAdjacentHTML('beforeend', box);
+    if (revised) {
+      const retry = document.querySelector('#retry');
+      if (retry) retry.onclick = () => {
+        retry.disabled = true; retry.textContent = 'Retrying'; notify('Retrying, preview only');
+      };
+    }
     const continuing = document.querySelector('#continue');
     if (continuing) continuing.onclick = () => {
       document.querySelector('textarea').value = 'Continue'; document.querySelector('textarea').focus();

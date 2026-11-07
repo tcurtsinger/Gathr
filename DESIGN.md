@@ -12,6 +12,9 @@ colors:
   accent: "#a6c4df"
   focus: "#a6c4df"
   control: "#777774"
+  danger: "#ffb4b4"
+  danger-surface: "#382525"
+  danger-border: "#885454"
   backdrop: "#00000088"
 typography:
   body: { fontFamily: "Segoe UI Variable", fontSize: "15px", fontWeight: 400 }
@@ -43,7 +46,7 @@ Run node designs/check.cjs. Open each HTML locally; #light selects light mode. A
 ## Patterns and states
 Use + New and Search with matching 16 px outline icons, no shortcut hint. Icons use currentColor and a 1.5 px stroke. Keep the product name in the sidebar only. User messages size to their text; message actions appear below on hover or keyboard focus. Never reserve action-row height inside the message bubble.
 
-Tools use native details disclosures. Panel tabs share one content region. Message actions, reactions, queue removal, send, pause and context summarisation provide local feedback. Role selection allows one to five agents; two or more require a Supervisor; Reviewer is optional and distinct. Disabled Create reflects invalid membership. Every setting must ultimately have a Settings control. The Settings action here is only a prototype notice.
+Tools use native details disclosures. Panel tabs share one content region. Message actions, reactions, queue removal, send, pause and context summarisation provide local feedback. Role selection allows one to five agents; two or more require a Supervisor; Reviewer is optional and distinct. Disabled Create reflects invalid membership. Every setting must ultimately have a Settings control. The Phase 1 previews open the centered Settings panel.
 
 Focus uses a 2 px accent outline with 2 px offset. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
 
@@ -51,3 +54,34 @@ Focus uses a 2 px accent outline with 2 px offset. Native buttons, selects, chec
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
 
 Shared styles enter through `designs/components.css`, which imports shell, conversation, panels and responsive rules in cascade order.
+
+## Settings and Diagnostics
+Selected previews: engines/v4.html, diagnostics/v3.html and chat-states/v3.html.
+Settings opens over the current screen as a native modal dialog, at most 1024 by 760 px,
+with 32 px horizontal and 48 px vertical clearance. The header stays fixed; categories
+sit in a 200 px left rail. Close and Escape restore focus to the opener and preserve
+chat position, draft and form fields. Below 768 px categories move above content.
+Shared rules: settings-overlay.css and phase1-selected.css; shared interactions:
+phase1-selected.js. Preview selectors and simulated completion never ship.
+
+Engines holds the selected single-engine form. Diagnostics is another category,
+with a 210 px independently scrolling turn list beside a scrolling timeline. Filters
+stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
+Below 768 px the turn list sits above the timeline. The chat header opens Diagnostics;
+a failure reference and Diagnostics action open it filtered to the affected turn.
+Clearing Find restores all turns. Switching categories preserves the filtered view.
+References in the timeline simulate Copy, without using the system clipboard.
+
+## Reply notices
+The shared notice occupies the reply width below the related user message. Stopped
+sits after any retained partial reply; Continue fills the composer. Waiting for sign-in
+uses the same neutral surface, with Sign in opening Engines. A failed send uses
+Send failed, its reference, Diagnostics and Retry at the right. Retrying disables
+Retry and changes its label to Retrying in this simulation. A new preview selection
+resets it. Production completion replaces the notice with the reply or a new failure.
+The draft remains intact when opening Settings or retrying.
+
+Failures alone use danger, danger-surface and danger-border. Dark values are in the
+YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surface,
+text and control tokens. This is a semantic error role, separate from the blue action
+accent. Normal replies remain unboxed. No service integration is claimed.

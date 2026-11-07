@@ -43,7 +43,8 @@ nav {
   flex-wrap: wrap;
 }
 </style>
-</head>
+<link rel="stylesheet" href="phase1-prototype.css"><link rel="stylesheet" href="settings-overlay.css">
+<link rel="stylesheet" href="phase1-selected.css"></head>
 <body>
 <h1 data-id="title">Gathr</h1><button data-id="theme" onclick="document.documentElement.classList.toggle('light')">Switch theme</button>
 <nav data-id="screens">
@@ -156,6 +157,16 @@ Review patch<small>Sol</small>
 </div>
 </div>
 </section>
+<section data-id="reply-notices"><h2>Reply notices</h2>
+<div class="notice reply-notice is-error" data-id="system-failure"><span>Send failed</span>
+<button class="ref">82b940ef</button><a href="diagnostics/v3.html?ref=82b940ef">Diagnostics</a><button id="retry">Retry</button></div>
+<div class="notice reply-notice" data-id="system-stopped"><span>Stopped</span><button>Continue</button></div>
+<div class="notice reply-notice" data-id="system-waiting"><span>Waiting for sign-in</span><a href="engines/v4.html">Sign in</a></div>
+</section><section data-id="settings-pattern"><h2>Settings</h2>
+<a href="engines/v4.html">Engines</a> <a href="diagnostics/v3.html">Diagnostics</a>
+</section><section data-id="danger-tokens"><h2>Error tokens</h2><div class="swatches">
+<div class="swatch" style="color:var(--danger);background:var(--danger-surface);border-color:var(--danger-border)">
+<code>danger</code><br><code>danger-surface</code><br><code>danger-border</code></div></div></section>
 <script>
 if (location.hash === '#light') document.documentElement.classList.add('light');
 function notify(t) {

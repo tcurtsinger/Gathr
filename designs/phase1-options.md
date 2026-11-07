@@ -36,3 +36,9 @@ Settings state controls and the chat state selector are preview controls, remove
 ## Checks
 
 `node designs/check.cjs` checks the existing selected pages plus the six proposals. Browser proof and interaction results are kept outside the public repo in the room's evidence folder. These pages do not replace DESIGN.md or system.html; those change after a direction is chosen.
+
+## Selected revisions
+The selections now live in engines/v4.html (centered Settings), diagnostics/v3.html
+(the Diagnostics category) and chat-states/v3.html (reply-width notices).
+See DESIGN.md and system.html for the selected patterns. Earlier versions remain
+comparison options. These are working prototypes, with no service integration.

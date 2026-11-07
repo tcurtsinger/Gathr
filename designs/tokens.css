@@ -10,10 +10,16 @@
   --accent: #a6c4df;
   --focus: #a6c4df;
   --control: #777774;
+  --danger: #ffb4b4;
+  --danger-surface: #382525;
+  --danger-border: #885454;
   --radius: 16px;
   --space: 16px;
 }
 html.light {
+  --danger: #a62626;
+  --danger-surface: #fff3f2;
+  --danger-border: #d49a98;
   color-scheme: light;
   --backdrop: #00000088;
   --canvas: #faf9f6;

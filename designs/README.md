@@ -19,3 +19,11 @@ live in `phase1-prototype.css` and `phase1-prototype.js`.
 
 `engines/v3.html` revises the single form into a centered Settings dialog over the chat,
 using `settings-overlay.css` and `settings-overlay.js`. Earlier options stay intact.
+
+## Selected Phase 1 patterns
+- `engines/v4.html`: centered Settings, single engine form.
+- `diagnostics/v3.html`: Settings category, turn list and timeline.
+- `chat-states/v3.html`: full-width reply notices, contextual Settings links.
+
+These supersede the unselected Phase 1 proposals above. All three share the same
+Settings shell and retain the current chat underneath. No service is connected.
