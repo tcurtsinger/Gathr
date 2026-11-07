@@ -32,10 +32,18 @@
   font-size: 13px;
 }
 .folder {
-  display: block;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
 }
 .folder summary {
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
   cursor: pointer;
+  list-style: none;
+}
+.folder summary::-webkit-details-marker {
+  display: none;
 }
 .folder code {
   display: block;

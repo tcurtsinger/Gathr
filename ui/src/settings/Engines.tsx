@@ -16,6 +16,7 @@ export function Engines() {
   const [path, setPath] = useState('');
   const [failure, setFailure] = useState<Failure | null>(null);
   const [saved, setSaved] = useState(false);
+  const [folderShown, setFolderShown] = useState(false);
 
   const load = useCallback(
     () =>
@@ -72,8 +73,10 @@ export function Engines() {
             </div>
             {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
           </div>
-          <details className="settingrow folder">
-            <summary>Login folder</summary>
+          <details className="folder" onToggle={(e) => setFolderShown(e.currentTarget.open)}>
+            <summary>
+              Login folder<span>{folderShown ? 'Hide' : 'Show'}</span>
+            </summary>
             <code>{engine.account.folder}</code>
           </details>
         </>
