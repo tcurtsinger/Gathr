@@ -259,7 +259,20 @@ async fn live(Extract(s): Extract<Arc<State>>, upgrade: WebSocketUpgrade) -> Res
 async fn forward(mut socket: WebSocket, mut events: tokio::sync::broadcast::Receiver<Value>) {
     use tokio::sync::broadcast::error::RecvError;
     loop {
-        let event = match events.recv().await {
+        let next = tokio::select! {
+            next = events.recv() => next,
+            // Reading is what answers the window's Close (and its pings); it sends nothing else.
+            frame = socket.recv() => match frame {
+                // The reply to a Close is only queued; the next read sends it and ends the socket.
+                Some(Ok(Message::Close(_))) => {
+                    let _ = socket.recv().await;
+                    return;
+                }
+                Some(Err(_)) | None => return,
+                Some(Ok(_)) => continue,
+            },
+        };
+        let event = match next {
             Ok(event) => event,
             // A client that fell behind is told, and reloads the chat it shows.
             Err(RecvError::Lagged(missed)) => json!({ "type": "lagged", "missed": missed }),
