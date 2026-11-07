@@ -31,3 +31,7 @@ No before screen exists. No production latency is claimed. No packages, fonts or
 ## Round 2 candidates
 
 See ROUND2.md for v4 Signal, v5 Folio and v6 Relay. These revise visual language, conversation density, state treatments and agent identities. Run node designs/check-round2.cjs as well as the original check.
+
+## Round 3
+
+See ROUND3.md for the fixed shell and v7-v9 multi-agent options. Open local HTML, use #light for light theme, and run node designs/check-round3.cjs.

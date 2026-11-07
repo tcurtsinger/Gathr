@@ -1,8 +1,1 @@
-{
-  "title": "Gathr chat",
-  "for": "Phase 0 directions: v1 Ledger, v2 Workbench, v3 Dispatch. Use Dark to compare themes.",
-  "knobs": [
-    "--accent",
-    "--radius"
-  ]
-}
+{"title":"Gathr multi-agent chat","for":"Round 3: live strip, Team panel or pinned working turns","knobs":["--radius","--space"]}
