@@ -16,6 +16,22 @@ pub const DENIED_TOOLS: &[(&str, &str)] = &[
         "ScheduleWakeup",
         "a wake-up lives only as long as the process; coming back later is Gathr's job (0010)",
     ),
+    // Offered only once the folder is signed in to a claude.ai account: they come with the
+    // account and act outside Gathr. Agents get only what Gathr gives them (0024).
+    ("PublishPlugin", "comes with the claude.ai account (0024)"),
+    (
+        "PushNotification",
+        "comes with the claude.ai account (0024)",
+    ),
+    ("SendToProject", "comes with the claude.ai account (0024)"),
+    (
+        "SendToProjectContext",
+        "comes with the claude.ai account (0024)",
+    ),
+    (
+        "ShareOnboardingGuide",
+        "comes with the claude.ai account (0024)",
+    ),
 ];
 
 /// Every tool Claude Code 2.1.318 offered in `system/init` with the flags below, looked at.
@@ -35,6 +51,7 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "ListAgents",
     "Monitor",
     "NotebookEdit",
+    "PowerShell",
     "Read",
     "ReportFindings",
     "SendMessage",
@@ -51,9 +68,11 @@ pub const KNOWN_TOOLS: &[&str] = &[
     "Write",
 ];
 
-/// Reads `AGENTS.md` next to any `CLAUDE.md`, in every project (0021). Passed as `--settings`,
-/// so nothing is written into the account's folder.
-const SETTINGS: &str = r#"{"pluginConfigs":{"cc-plugin-agents-md@builtin":{"options":{"instructionFiles":"claude-md-and-agents-md"}}}}"#;
+/// Reads `AGENTS.md` next to any `CLAUDE.md`, in every project (0021). No auto-memory, which
+/// would load Claude Code's own notes for the folder, and no claude.ai connectors: the account
+/// brings them with the login, and `--strict-mcp-config` isn't documented to cover them (0024).
+/// Passed as `--settings`, so nothing is written into the account's folder.
+const SETTINGS: &str = r#"{"autoMemoryEnabled":false,"disableClaudeAiConnectors":true,"pluginConfigs":{"cc-plugin-agents-md@builtin":{"options":{"instructionFiles":"claude-md-and-agents-md"}}}}"#;
 
 /// A new session gets the id Gathr chose; a known one is resumed.
 pub enum Session<'a> {
@@ -76,7 +95,13 @@ pub fn args(session: Session<'_>) -> Vec<String> {
         "--forward-subagent-text",
         "--permission-prompt-tool",
         "stdio",
+        // Agents get only what Gathr gives them (0024), as SerenityOS starts Claude Code: no
+        // skills or commands, no MCP servers but Gathr's, and no user settings, which is where
+        // plugins (synced from claude.ai too), their hooks and the person's sub-agents come from.
+        "--disable-slash-commands",
         "--strict-mcp-config",
+        "--setting-sources",
+        "project,local",
         "--settings",
         SETTINGS,
         "--disallowedTools",

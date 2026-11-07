@@ -24,6 +24,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
   - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
+  - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
   - in `ui/`: `npx biome ci`, `npx tsc --noEmit`, `npx vitest run`, `npx vite build`. The tests run in a real browser: Edge on Windows (already installed), WebKit on macOS (`npx playwright install webkit` once). A failing test leaves its screenshot in `ui/.vitest/`.
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
@@ -125,6 +126,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 ### Learning from SerenityOS
 
+- **Check SerenityOS first.** Before researching how to do something, look at how SerenityOS already does it: it has usually met the problem. Then verify it still holds (docs, a live run) before building on it.
 - Read it freely: the code at `X:\code\serenityos\desktop` (its comments hold weeks of lessons: engine quirks, login safety, Windows processes), the running app, `X:\code\serenityos\PRODUCT.md`, `planning\LATER.md` and `FRICTION.md`, and `X:\code\gathr-work\from-serenityos.md` once Nova writes it.
 - Most of it is the owner's own work: everything written after the Bloks import (commit `5f6947a3`, 2026-10-04). Reference it, adapt it and port it to Rust freely.
 - The rest came with Bloks and is under its licence (FSL): read it to understand, then write your own. Copying or translating it would put Gathr under that licence too.

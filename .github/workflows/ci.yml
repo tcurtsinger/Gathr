@@ -36,6 +36,8 @@ jobs:
       - name: file size
         shell: bash
         run: bash scripts/check-file-size.sh
+      - name: recording scrub
+        run: node scripts/scrub-frames.check.mjs
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy
