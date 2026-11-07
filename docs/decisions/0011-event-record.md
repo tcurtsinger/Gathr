@@ -93,7 +93,7 @@ One policy for every driver; [0001](0001-engine-interface.md) follows it.
 - `events`: 90 days by default; a setting in Settings, Diagnostics.
 - `engine_raw`: 7 days by default; same place.
 - Daily rollups per agent, chat and engine (turns, tokens, tool calls, failures, time waiting) are kept until deleted, so trends outlive the detail.
-- Pruning runs in the background at low priority, in small batches.
+- Pruning runs in the background in small batches.
 
 ## OTLP export
 

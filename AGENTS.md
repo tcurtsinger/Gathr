@@ -22,7 +22,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
-- **CI** is `.github/workflows/ci.yml`, on Windows, for every PR and every push to `main`. `main` only takes PRs with CI green.
+- **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
 
@@ -48,7 +48,6 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **Guard only against real risks.** No kill switches, disabled features or disclaimers for their own sake. When a safety question comes up, check how Claude's and Codex's own apps handle it, and match that.
 - **Diagnostics from the first attempt.** Anything that runs where nobody watches it (background work, installs, long jobs) writes what it did and where it stopped from day one.
 - **No paid services required.** Gathr runs the providers' own agents on the user's own logins. Anything that costs money is an opt-in, off by default, and never required.
-- **It shares the machine.** People game and take calls on the same computer: background work runs on the CPU at low priority, never the GPU.
 - **Logins are single-use secrets.** Each account's login lives in its own Gathr folder, never the person's own `~/.claude` or `~/.codex`. Agents on one account share its folder only through the renewal gate (`docs/decisions/0002-login-folders.md`). Never copy a login file, or force-kill an engine while it might be renewing its login.
 
 ## Rules for a public repo
@@ -65,6 +64,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - Each provider's own agent harness behind one interface.
 - One MCP tool server inside the service.
 - A Tauri desktop app over a web UI that a browser could also use.
+- Windows and macOS, both checked in CI; what differs lives in one `platform` module of the service (`docs/decisions/0015-macos.md`).
 
 ## The owner's room
 
