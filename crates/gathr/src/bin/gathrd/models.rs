@@ -1,0 +1,218 @@
+//! An account's models and effort levels, as its Claude Code lists them in `initialize` (0025).
+//! Signed out it lists the aliases only; signed in, what the account may use. So the list is
+//! kept per engine copy and sign-in state, and asked again when either changes.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use axum::extract::{Extension, Path, State as Extract};
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum::{Json, Router};
+use gathr::claude::command::{self, Session};
+use gathr::claude::engine::{Closed, Engine, Line};
+use gathr::claude::frames;
+use gathr::claude::login::Login;
+use gathr::event::Event;
+use serde_json::{Value, json};
+use tokio::sync::{Mutex, watch};
+use tokio::task::JoinSet;
+
+use crate::api::{State, Trace};
+use crate::routes::{Answer, fail};
+
+/// Claude Code 2.1.318 answered in 0.65 s signed in; past this it isn't coming.
+const ANSWER_WAIT: Duration = Duration::from_secs(30);
+/// It exits about 0.6 s after its input closes; it may be renewing the login, so no kill sooner.
+const CLOSE_GRACE: Duration = Duration::from_secs(10);
+const ASKED: &str = "gathr-models";
+
+pub fn routes() -> Router<Arc<State>> {
+    Router::new().route("/api/accounts/{account}/models", get(models))
+}
+
+#[derive(Default)]
+pub struct Models {
+    /// The last list, and the engine copy and sign-in state it came from.
+    last: Mutex<Option<(PathBuf, Login, Value)>>,
+    stopping: watch::Sender<bool>,
+    /// Engines still closing after their answer, which shutdown waits for.
+    closing: std::sync::Mutex<JoinSet<()>>,
+}
+
+impl Models {
+    /// Ends any ask under way, at shutdown; its engine still closes the gentle way.
+    pub fn stop(&self) {
+        self.stopping.send_replace(true);
+    }
+
+    /// Waits for every engine an ask started to have exited.
+    pub async fn closed(&self) {
+        let closing = std::mem::take(&mut *self.closing.lock().expect("never poisoned"));
+        closing.join_all().await;
+    }
+
+    async fn stopped(&self) {
+        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
+    }
+}
+
+async fn models(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
+) -> Answer {
+    if account != "main" {
+        return Err(fail(
+            StatusCode::NOT_FOUND,
+            "Models failed",
+            "no such account",
+            &t.0,
+        ));
+    }
+    // One ask at a time: a second request waits for the first's list instead of starting another.
+    let mut last = s.models.last.lock().await;
+    let setting = s.chats.path_setting().await;
+    let program = command::find(setting.as_deref(), s.chats.copy());
+    let login = s.chats.login_status().await.0;
+    if let (Ok(program), Some((was, was_login, list))) = (&program, last.as_ref())
+        && program == was
+        && login == *was_login
+    {
+        return Ok(Json(list.clone()));
+    }
+    let started = Instant::now();
+    let asked = match program.clone() {
+        Ok(program) => ask(&s, &program).await,
+        Err(why) => Err(why),
+    };
+    let mut event = Event::point("gathr.engine.models")
+        .trace(&t.0)
+        .attr("login", json!(login))
+        .attr(
+            "path",
+            program.as_ref().map(|p| p.display().to_string()).ok(),
+        );
+    event.duration_us = Some(started.elapsed().as_micros() as i64);
+    match asked {
+        Ok(list) => {
+            let count = list["models"].as_array().map_or(0, Vec::len);
+            s.writer.record(
+                event
+                    .ok()
+                    .attr("models", count)
+                    .attr("version", list["version"].clone()),
+            );
+            *last = Some((
+                program.expect("asked only with a program"),
+                login,
+                list.clone(),
+            ));
+            Ok(Json(list))
+        }
+        Err(why) => {
+            s.writer
+                .record_now(event.error("engine_models").attr("why", why.clone()))
+                .await;
+            Err(fail(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Models failed",
+                &why,
+                &t.0,
+            ))
+        }
+    }
+}
+
+/// Starts the account's Claude Code as a chat does, asks `initialize`, and closes it gently.
+async fn ask(s: &State, program: &std::path::Path) -> Result<Value, String> {
+    const STOPPING: &str = "the service is stopping";
+    let (chats, models) = (&s.chats, &s.models);
+    let folder = chats.account_folder();
+    let cwd = chats.data.path().join("chats");
+    for dir in [&folder, &cwd] {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
+    }
+    // It runs on the account's login, so it takes the renewal gate like any start (0002).
+    let mut gate = tokio::select! {
+        gate = chats.gate.pass() => gate,
+        () = models.stopped() => return Err(STOPPING.into()),
+    };
+    let args = command::args(Session::New(&gathr::ids::uuid()));
+    let env = command::env(std::env::vars_os(), &folder);
+    let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
+        .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
+    let answer = match engine.write(&frames::initialize(ASKED)).await {
+        Ok(()) => tokio::select! {
+            answer = tokio::time::timeout(ANSWER_WAIT, answered(&mut lines)) => answer
+                .unwrap_or_else(|_| Err(format!("Claude Code didn't answer in {} s", ANSWER_WAIT.as_secs()))),
+            () = models.stopped() => Err(STOPPING.into()),
+        },
+        Err(e) => Err(format!("Claude Code didn't take the request: {e}")),
+    };
+    gate.release();
+    // Its exit takes another 0.6 s, which the list needn't wait for, but shutdown does.
+    let (writer, pid) = (s.writer.clone(), engine.pid);
+    let close = async move {
+        let event = match engine.close(CLOSE_GRACE).await {
+            Closed::Exited(code) => Event::point("gathr.engine.models.close")
+                .ok()
+                .attr("process.exit.code", code),
+            Closed::Killed => Event::point("gathr.engine.models.close")
+                .error("killed")
+                .attr(
+                    "killed_because",
+                    "it hadn't exited 10 s after its input closed",
+                ),
+        };
+        writer.record_now(event.attr("process.pid", pid)).await;
+    };
+    models.closing.lock().expect("never poisoned").spawn(close);
+    answer
+}
+
+async fn answered(lines: &mut tokio::sync::mpsc::UnboundedReceiver<Line>) -> Result<Value, String> {
+    let mut last_err = None;
+    while let Some(line) = lines.recv().await {
+        let line = match line {
+            Line::Out(line) => line,
+            Line::Err(line) => {
+                last_err = Some(line);
+                continue;
+            }
+        };
+        let frame: Value = serde_json::from_str(&line).unwrap_or_default();
+        let response = &frame["response"];
+        if frame["type"] != "control_response" || response["request_id"] != ASKED {
+            continue;
+        }
+        return match response["subtype"].as_str() {
+            Some("success") => Ok(listed(&response["response"])),
+            _ => Err(format!("initialize failed: {}", response["error"])),
+        };
+    }
+    Err(
+        last_err.map_or("Claude Code exited without answering".into(), |e| {
+            format!("Claude Code exited without answering: {e}")
+        }),
+    )
+}
+
+/// What a picker needs from each model: its id, name, line and effort levels, in the engine's order.
+fn listed(init: &Value) -> Value {
+    let models: Vec<Value> = init["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| {
+            json!({
+                "id": m["value"],
+                "name": m["displayName"],
+                "description": m["description"],
+                "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+    json!({ "version": init["claude_code_version"], "models": models })
+}

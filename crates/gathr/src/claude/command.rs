@@ -125,6 +125,8 @@ pub fn env(
     let mut env: Vec<(OsString, OsString)> = inherited.filter(|(name, _)| keep(name)).collect();
     env.push(("CLAUDE_CONFIG_DIR".into(), folder.into()));
     env.push(("CLAUDE_CODE_ENABLE_TODO_TOOLS".into(), "1".into()));
+    // Gathr's copy changes only through its own checks (0025); `claude update` still works.
+    env.push(("DISABLE_AUTOUPDATER".into(), "1".into()));
     env
 }
 
@@ -137,11 +139,12 @@ fn keep(name: &OsString) -> bool {
         || name == "AWS_BEARER_TOKEN_BEDROCK")
 }
 
-/// The setting that holds Claude Code's path; none means `claude` on the PATH (0016).
+/// The setting that holds Claude Code's path; none means Gathr's copy, else `claude` on the PATH.
 pub const PATH_SETTING: &str = "engines.claude.path";
 
-/// The engine's path: the one set in Settings, else `claude` on the PATH.
-pub fn find(setting: Option<&str>) -> Result<PathBuf, String> {
+/// The engine's path: the one set in Settings, else Gathr's own copy (0025), else `claude` on the
+/// PATH.
+pub fn find(setting: Option<&str>, copy: Option<PathBuf>) -> Result<PathBuf, String> {
     if let Some(path) = setting.filter(|p| !p.trim().is_empty()) {
         let path = PathBuf::from(path.trim());
         return match path.is_file() {
@@ -151,6 +154,9 @@ pub fn find(setting: Option<&str>) -> Result<PathBuf, String> {
                 path.display()
             )),
         };
+    }
+    if let Some(copy) = copy {
+        return Ok(copy);
     }
     crate::platform::find_on_path("claude").ok_or_else(|| {
         "claude wasn't found on the PATH: set its path in Settings, Engines".to_string()
@@ -297,7 +303,8 @@ mod tests {
                 "PATH",
                 "USERPROFILE",
                 "CLAUDE_CONFIG_DIR",
-                "CLAUDE_CODE_ENABLE_TODO_TOOLS"
+                "CLAUDE_CODE_ENABLE_TODO_TOOLS",
+                "DISABLE_AUTOUPDATER"
             ]
         );
         assert_eq!(env[2].1, folder.as_os_str());

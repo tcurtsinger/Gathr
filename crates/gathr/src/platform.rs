@@ -55,6 +55,39 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
+/// This computer in Claude Code's release feed, such as `win32-x64`; none where it ships nothing.
+pub fn release_target() -> Option<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => Some("win32-x64"),
+        ("windows", "aarch64") => Some("win32-arm64"),
+        ("macos", "aarch64") => Some("darwin-arm64"),
+        ("macos", "x86_64") => Some("darwin-x64"),
+        _ => None,
+    }
+}
+
+/// The system's own curl, by its full path so the PATH can't swap it: Windows 10 and later and
+/// macOS both ship it (0025).
+pub fn curl() -> PathBuf {
+    if cfg!(windows) {
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        return PathBuf::from(root).join(r"System32\curl.exe");
+    }
+    PathBuf::from("/usr/bin/curl")
+}
+
+/// Lets a downloaded program run: mode 0755 on Unix. Windows needs nothing.
+pub fn make_executable(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 /// Writes a file only this user may read: mode 0600 on Unix. On Windows the data folder's
 /// own permissions apply (`%APPDATA%` is the user's).
 pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {

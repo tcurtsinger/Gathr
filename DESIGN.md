@@ -48,7 +48,7 @@ Use + New and Search with matching 16 px outline icons, no shortcut hint. Icons 
 
 Tools use native details disclosures. Panel tabs share one content region. Message actions, reactions, queue removal, send, pause and context summarisation provide local feedback. Role selection allows one to five agents; two or more require a Supervisor; Reviewer is optional and distinct. Disabled Create reflects invalid membership. Every setting must ultimately have a Settings control. The Phase 1 previews open the centered Settings panel.
 
-Focus uses a 2 px accent outline with 2 px offset. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
+Focus uses a 2 px accent outline with 2 px offset; in the composer it goes around the rounded box, not the text area inside. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
 
 ## Token ownership
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
@@ -77,6 +77,7 @@ with a 210 px independently scrolling turn list beside a scrolling timeline. Fil
 stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
 Below 768 px the turn list sits above the timeline. Only an error link in the
 chat and Settings > Diagnostics open Diagnostics; no header or chat menu entry.
+An error link opens Diagnostics filtered to the affected turn.
 Clearing Find restores all turns. Switching categories preserves the filtered view.
 Opening a failure reference resets the status filter so the affected turn is visible.
 References in the timeline simulate Copy, without using the system clipboard.
@@ -100,6 +101,13 @@ YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surf
 text and control tokens. This is a semantic error role, separate from the blue action
 accent. Normal replies remain unboxed. No service integration is claimed.
 
+## Reply formatting
+An agent's Markdown is formatted (0027) with the shared `Markdown` component: body
+type for paragraphs and lists, 20, 17 and 15 px semibold headings, accent links that
+open in the person's browser. Code, code blocks and tables sit on surface with
+border lines; code is 13 px monospace, 12 px inside blocks. Quotes take a 3 px border
+and muted text. Wide code blocks and tables scroll sideways inside the reply width.
+Raw HTML shows as text. User messages stay plain text.
 
 ## Agent selection and editing
 The composer selects an agent. It has no model or effort control. Each agent owns
