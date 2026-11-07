@@ -36,6 +36,10 @@ One Rust process owns the data, the engines, scheduling and the API. The window 
 - **Storage.** SQLite through rusqlite, bundled, one writer thread, WAL, numbered SQL migrations. [0003](decisions/0003-storage.md).
 - **MCP.** One streamable-HTTP MCP server at `/mcp` on the same port, a token per agent so the service knows who is calling. [0005](decisions/0005-mcp-server.md).
 
+## Chats
+
+One place to talk to agents: a chat with 1 to 5 agents, optionally tied to a project folder. With two or more, a Supervisor is required and a Reviewer is optional. No separate rooms or Quick ask. [0013](decisions/0013-one-chat-model.md).
+
 ## Coordination
 
 Tasks, turns, waits, pause, plans and plan checks, hand-offs, side jobs and usage holds are records with named states and fixed transitions in the service. Agents change them only through tools; the service checks who may. Nothing is read from what an agent says. [0010](decisions/0010-coordination-as-state.md).

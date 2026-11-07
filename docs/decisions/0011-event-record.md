@@ -24,7 +24,7 @@ A Diagnostics page in the app reads the record.
 | `ts` | UTC, microseconds |
 | `name` | the span or event name, below |
 | `phase` | `start`, `end` or `point` |
-| `trace_id`, `span_id`, `parent_span_id` | OpenTelemetry ids; one trace per ask (the message or task that started the work), so a room's whole chain is one trace |
+| `trace_id`, `span_id`, `parent_span_id` | OpenTelemetry ids; one trace per ask (the message or task that started the work), so a chat's whole chain is one trace |
 | `room_id`, `conversation_id`, `agent_id`, `task_id` | nullable; indexed for the Diagnostics page |
 | `duration_us` | on `end` rows |
 | `status` | `ok` or `error` |
@@ -92,7 +92,7 @@ One policy for every driver; [0001](0001-engine-interface.md) follows it.
 
 - `events`: 90 days by default; a setting in Settings, Diagnostics.
 - `engine_raw`: 7 days by default; same place.
-- Daily rollups per agent, room and engine (turns, tokens, tool calls, failures, time waiting) are kept until deleted, so trends outlive the detail.
+- Daily rollups per agent, chat and engine (turns, tokens, tool calls, failures, time waiting) are kept until deleted, so trends outlive the detail.
 - Pruning runs in the background at low priority, in small batches.
 
 ## OTLP export
@@ -101,9 +101,9 @@ Off by default. A setting turns it on with an endpoint (usually a collector on t
 
 ## The Diagnostics page
 
-Opens from any turn, task, room or chat, and from Settings. It answers:
+Opens from any turn, task or chat, and from Settings. It answers:
 - **What happened in this turn?** A timeline: the turn's start, each model call and tool call with its duration, side jobs, waits it left, and how it ended, with the error and its cause when it failed.
-- **Where did the room stall?** Stretches where work was queued and nothing ran, each with its reason from the gate: paused, usage hold, waiting on an `after` task, a plan check, a wait.
+- **Where did the chat stall?** Stretches where work was queued and nothing ran, each with its reason from the gate: paused, usage hold, waiting on an `after` task, a plan check, a wait.
 - **What waited on whom, and for how long?** Waits and held tasks as a chain, each with its duration.
 - **What fails, and how often?** Engine exits, tool errors, login problems and check errors, by agent, engine and day.
 - **Where can the workflow improve?** Tasks that went `left` or `blocked`, plan-check objections per plan, asks and how many were passed or used, review notes per PR, time from a task given to done, tokens per task.

@@ -43,4 +43,4 @@ Screenshots of the chat, a streaming answer, the stopped turn and Diagnostics, a
 
 ## Left out
 
-Rooms, tasks, waits, pause and plans (0010 comes next), a second engine, agents' tools beyond the engine's own, the MCP server, skills, memory, routines, voice, and every setting beyond signing in and the Diagnostics retention.
+Chats with several agents, tasks, waits, pause and plans (0010 and 0013 come next), a second engine, agents' tools beyond the engine's own, the MCP server, skills, memory, routines, voice, and every setting beyond signing in and the Diagnostics retention.
