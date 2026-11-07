@@ -2,6 +2,14 @@
 
 Working proposals, not changes to the selected design. Open each page locally; `#light` selects light mode. All data is made up. No engines, Settings service or clipboard are connected.
 
+## Centered Settings revision
+
+`engines/v3.html` keeps the v1 engine form in a centered Settings dialog over the current chat.
+It adds a Settings header, Engines category and Close control. Escape closes the panel,
+returns focus to Settings and retains the underlying draft. Engine fields remain when reopened.
+The panel is 1024 px wide at most, with content scrolling inside it. Narrow windows stack
+the category above the form. Gathr's existing tokens, controls and engine preview states apply.
+
 Operate mode: variance 2, motion 1, density 6 for Diagnostics and 4 elsewhere. Existing tokens, type, shell and shared control styles apply. Content aligns left. No new palette or decoration.
 
 ```

@@ -16,3 +16,6 @@ Phase 1 proposals: `diagnostics/v1.html` and `v2.html`, `engines/v1.html` and `v
 `chat-states/v1.html` and `v2.html`. These are unselected options. See `phase1-options.md`
 for comparisons, recommendations and prototype limits. Their shared styles and fixtures
 live in `phase1-prototype.css` and `phase1-prototype.js`.
+
+`engines/v3.html` revises the single form into a centered Settings dialog over the chat,
+using `settings-overlay.css` and `settings-overlay.js`. Earlier options stay intact.
