@@ -33,7 +33,7 @@ The engines report totals per turn, not parts: input, cached reads and writes, o
 - the size of each part Gathr adds (briefing, catch-up, state, the ask) in characters, with a local token estimate labelled as an estimate;
 - tool results by kind and full size ([0011](0011-event-record.md)).
 
-The engine's own share is the remainder of the total after Gathr's parts: an inference, shown as one. The analytics page shows all of it per agent, chat and engine, with the turns that compacted and what each cost.
+The rest of the total (the conversation so far, the engine's own instructions and tools, what compaction left) is shown as one unattributed figure, never split into parts Gathr can't see. The analytics page shows all of it per agent, chat and engine, with the turns that compacted and what each cost.
 
 ### Quality is the other half
 

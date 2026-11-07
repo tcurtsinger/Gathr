@@ -60,7 +60,7 @@ The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with 
 
 ## Context per turn
 
-Each turn carries a small, stable briefing, the ask, the standing rules that still apply (the approved plan, the person's binding decisions, the project's notes), its state and, for a fresh session, a digest of what changed plus the agent's own recent work. Everything else is pulled through Gathr's tools. Every turn's input is measured by part, and context is never cut on tokens alone: changes are judged on output quality too. [0020](decisions/0020-context-per-turn.md).
+Each turn carries a small, stable briefing, the ask, the standing rules that still apply (the approved plan, the person's binding decisions, the project's notes), its state and, for a fresh session, a digest of what changed plus the agent's own recent work. Everything else is pulled through Gathr's tools. Every turn records the provider's token totals and the size of each part Gathr adds, and context is never cut on tokens alone: changes are judged on output quality too. [0020](decisions/0020-context-per-turn.md).
 
 ## Decisions
 
