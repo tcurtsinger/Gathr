@@ -12,6 +12,7 @@ Each turn gives an agent what it needs to do excellent work and nothing it can f
 |---|---|---|
 | Briefing | Who the agent is, its role in this chat, who else is here and what each knows, the project's `AGENTS.md` by reference, how to ask, wait and hand off | Stable, the same every turn of a session, so the provider's prompt cache keeps it |
 | The ask | The message or task, its files, its `after` results | Whole |
+| Standing rules | What still applies however old it is: the approved plan the task belongs to (its part, with the plan's id), the person's decisions that bind this chat or project, and the project's kept notes | Short, each with its source id; never dropped from a fresh session because it's old |
 | Catch-up | For a fresh session: what changed in the chat since the agent last worked here, and the agent's own recent work in this chat (what it did, decided and left open) | A digest, with ids to fetch the rest |
 | State | Its open tasks, waits and side jobs, as one short block | Whole |
 
@@ -52,4 +53,4 @@ Context is never cut on token counts alone. A change to what Gathr puts in a tur
 
 ## Not verified
 
-The sizes Gathr's parts end up at, and which outcome signals move when they change, come from the first months of the record. The first slice records, for each turn on one chat, the provider's totals and the characters of the briefing and a fresh session's catch-up, so the split above is checked on real turns.
+The sizes Gathr's parts end up at, and which outcome signals move when they change, come from the first months of the record. The first slice records, for each turn on one chat, the provider's totals and the characters of the briefing and a fresh session's catch-up, so the split above is checked on real turns. It also checks that a fresh session's turn carries the project's kept notes. When plans and tasks land (0010), a test at the service API checks that a fresh session for a task carries its approved plan and a binding decision made long before the digest's window.
