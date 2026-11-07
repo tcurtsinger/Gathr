@@ -38,7 +38,7 @@ The analytics page shows how often each tool is used, by agent, and lists tools 
 ## Checked, and not yet
 
 - **Checked:** Claude Code started the way SerenityOS starts it (`claude -p` with stream-json and its own `CLAUDE_CONFIG_DIR`, v2.1.318) loaded this repo's `AGENTS.md` with no `CLAUDE.md` in the folder: the first session of the room that wrote this shows it as the project instructions.
-- **Not verified:** that Claude Code reads the `claude-md-and-agents-md` setting from `settings.json` in a `CLAUDE_CONFIG_DIR` folder. The docs name only `~/.claude/settings.json`, a `--settings` file and managed settings. The first slice proves it, or passes the setting with `--settings` instead.
+- **Checked (2.1.318):** the setting is `pluginConfigs."cc-plugin-agents-md@builtin".options.instructionFiles = "claude-md-and-agents-md"` ([memory](https://code.claude.com/docs/en/memory)). With a `CLAUDE.md` and an `AGENTS.md` in the working folder, `/context all` lists both when the setting is in the `CLAUDE_CONFIG_DIR` folder's `settings.json`, and both when it's passed with `--settings`; without it, only `CLAUDE.md`. The driver passes it with `--settings`, so nothing is written into the account's folder.
 
 ## Turned down
 

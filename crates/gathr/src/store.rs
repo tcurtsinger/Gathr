@@ -124,6 +124,13 @@ pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), E
     Ok(())
 }
 
+/// Moves a message to another turn: one sent into a turn that the engine answered after it.
+pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<(), Error> {
+    conn.prepare_cached("UPDATE messages SET turn_id = ?2 WHERE id = ?1")?
+        .execute(params![id, turn])?;
+    Ok(())
+}
+
 pub fn add_turn(conn: &Connection, chat: &str, id: &str, trace: &str) -> Result<(), Error> {
     conn.prepare_cached(
         "INSERT INTO turns (id, chat_id, trace_id, status, created_ts) VALUES (?1, ?2, ?3, 'queued', ?4)",

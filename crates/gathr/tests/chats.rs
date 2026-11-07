@@ -169,3 +169,122 @@ fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retry
         Some("waiting_sign_in")
     );
 }
+
+/// G13, as Claude Code 2.1.318 does it with no step to stop at: it ends the turn, then reads
+/// the message sent into it and answers in a turn of its own. Recorded live.
+#[test]
+fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
+    let data = TempDir::new();
+    sign_in(&data.0);
+    let service = TestService::start_with(
+        &data.0,
+        &[("GATHR_REPLAY", &recording("steered_after_turn"))],
+    );
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    let path = format!("/api/chats/{chat}/messages");
+    let first = service.send(
+        "POST",
+        &path,
+        json!({ "text": "Count slowly from 1 to 200, one number per line. Use no tools." }),
+    );
+    assert_eq!(first.json()["status"], "running", "{}", first.body);
+    let steer = "Change of plan: stop counting now and reply with only the word STEERED.";
+    let second = service.send("POST", &path, json!({ "text": steer }));
+    assert_eq!(second.json()["steered"], true, "{}", second.body);
+
+    let history = service.wait_for(&chat, 10, "two turns, both done", |h| {
+        let turns = h["turns"].as_array().map_or(0, |t| t.len());
+        turns == 2
+            && h["turns"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|t| t["status"] == "done")
+    });
+    let second_turn = history["turns"][1]["id"].clone();
+    let in_second: Vec<&Value> = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["turn"] == second_turn)
+        .collect();
+    assert_eq!(
+        in_second.len(),
+        2,
+        "the second turn should hold the message and its answer: {in_second:?}"
+    );
+    assert_eq!(in_second[0]["body"], steer);
+    assert!(
+        in_second[1]["body"].as_str().unwrap().contains("STEERED"),
+        "{:?}",
+        in_second[1]
+    );
+}
+
+/// A tool approval asked over `--permission-prompt-tool stdio` and answered through the API.
+/// Recorded live: Claude Code 2.1.318 asked to run Write, was allowed, and ran it.
+#[test]
+fn an_approval_answered_through_the_api_lets_the_tool_run() {
+    let data = TempDir::new();
+    sign_in(&data.0);
+    let fixture = recording("approval");
+    let request = std::fs::read_to_string(&fixture)
+        .unwrap()
+        .lines()
+        .map(|row| serde_json::from_str::<Value>(row).unwrap())
+        .filter_map(|row| serde_json::from_str::<Value>(row["line"].as_str().unwrap()).ok())
+        .find(|f| f["request"]["subtype"] == "can_use_tool")
+        .map(|f| f["request_id"].as_str().unwrap().to_string())
+        .expect("the recording asks for an approval");
+    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
+    service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": text }),
+    );
+
+    let approve = format!("/api/chats/{chat}/approvals/{request}");
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    let answered = loop {
+        let answer = service.send("POST", &approve, json!({ "allow": true }));
+        if answer.status == 200 || std::time::Instant::now() > deadline {
+            break answer;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert_eq!(
+        answered.status, 200,
+        "the approval was never open: {}",
+        answered.body
+    );
+    let history = service.wait_for(&chat, 10, "the turn to end", |h| {
+        turn_status(h) == Some("done")
+    });
+    let tool = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["kind"] == "tool")
+        .expect("no tool message");
+    assert_eq!(tool["body"]["tool"], "Write");
+    assert_eq!(tool["body"]["status"], "ok");
+    assert_eq!(
+        service
+            .send("POST", &approve, json!({ "allow": true }))
+            .status,
+        404,
+        "an answered approval stays open"
+    );
+}
