@@ -12,7 +12,6 @@ Agents need a real browser: open a page, read it, click and type, and keep their
 - **Every client sees it as a live stream.** The service relays CDP's screencast (JPEG frames) to the UI over the WebSocket it already has (0004), and sends the person's mouse, wheel and keys back as CDP input events. The panel is one React component, the same in the window, in a browser tab and on the other computer.
 - **A real window when the stream isn't enough.** **Open window** restarts the agent's browser with a visible window on the same profile, for the things a stream can't carry: passkeys and security keys, file pickers, OS dialogs. Closing it returns to headless. This only works on the computer that runs the agent.
 - **Agents use it through Gathr's MCP server (0005):** open, read, click, type, screenshot, tabs. The tools take an agent's own browser only; a tool call never reaches another agent's profile.
-- **It shares the machine.** The browser runs with `--disable-gpu`, inside a Windows Job Object whose priority class limit holds every process at below normal (no kill-on-close, per 0004). On macOS it runs under `nice` like engines.
 - **Diagnostics from the first attempt.** Starts, stops, crashes, each tool call and its timing go to the event record (0011).
 
 ## Why
@@ -38,7 +37,6 @@ Agents need a real browser: open a page, read it, click and type, and keep their
   | Processes per browser | 17, about 870 MB working set (summed, so shared memory counts more than once) |
 
   These are CDP times inside one computer. The relay through the service to the UI, and over Tailscale to another computer, adds to them; measured when built.
-- **Low priority has to be enforced, not inherited.** With the parent at the lowest priority, Edge still raised its own renderer processes to Normal and its GPU process to Above normal (8 of 17 processes). A Job Object's priority class limit overrides what a process sets for itself; inheritance alone doesn't hold for Chromium.
 
 ## Turned down
 
@@ -62,5 +60,4 @@ Agents need a real browser: open a page, read it, click and type, and keep their
 - That a profile used headless opens in **Open window** with its sign-ins intact, and back.
 - Whether sites that block automated browsers (Google sign-in, for one) accept the headless browser, or need **Open window** to sign in.
 - Typing in languages that use an input method (Japanese, Chinese) through the stream.
-- The Job Object priority limit holding Edge's renderers and GPU process at below normal; measured in the first browser slice.
 - Stream latency over Tailscale between two computers.
