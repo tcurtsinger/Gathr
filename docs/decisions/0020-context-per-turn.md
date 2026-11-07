@@ -37,7 +37,15 @@ The rest of the total (the conversation so far, the engine's own instructions an
 
 ### Quality is the other half
 
-Context is never cut on token counts alone. A change to what Gathr puts in a turn (a smaller catch-up, a shorter briefing) is compared before and after on the outcome signals the record already has: turns that failed or were redone, review findings per PR, tasks reopened or blocked, side jobs asked because something was missing, and the person correcting an agent. A change that saves tokens and costs quality is undone.
+Too little context costs as much as too much: three turns fixing what one turn got wrong for want of a fact spend more than the fact would have. So the measure of a turn is the tokens it took to get the work right, counting the turns that redid it, not the tokens of one turn.
+
+Context is never cut on token counts alone. A change to what Gathr puts in a turn (a smaller catch-up, a shorter briefing) is compared before and after on the outcome signals the record already has: turns that failed or were redone, review findings per PR, tasks reopened or blocked, side jobs asked because something was missing, and the person correcting an agent. A change that saves tokens and costs quality is undone, and so is one that adds tokens and doesn't improve it.
+
+### Lean tools and lean ways of working
+
+The same balance applies to everything an agent reads, not only what Gathr puts in a turn:
+- **Each of Gathr's tools returns what the question needs:** the answer first, sized for a context, with an id for the rest. Its output size is part of its review, like its behaviour.
+- **The way the agents work is measured too:** review rounds per PR, hand-offs per task, and tokens per finished task are on the analytics page, so a habit that burns context (a review loop on a docs change, a re-read of the same file every turn) shows up and gets changed.
 
 ## Why
 
