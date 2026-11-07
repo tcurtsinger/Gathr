@@ -1,0 +1,27 @@
+.settings-page[hidden] { display: none; }
+.settings-page { height: 100%; min-width: 0; }
+.settings-scroll { min-width: 0; }
+.settings-categories button { background: transparent; margin-bottom: 4px; }
+.settings-categories button[aria-current] { background: var(--raised); }
+.diagnostics-page { display: flex; flex-direction: column; }
+.diagnostics-page .pagehead { padding: 20px; }
+.diagnostics-page .pagehead h2 { font-size: 18px; margin-bottom: 12px; }
+.diagnostics-page #diagnostic-content { flex: 1; min-height: 0; }
+.diagnostics-page .split { height: 100%; grid-template-columns: 210px minmax(0, 1fr); }
+.diagnostics-page .trace { padding: 16px 20px; }
+.settings-panel input,.settings-panel select {
+  background: var(--canvas); border: 1px solid var(--control); border-radius: 7px; padding: 7px 10px; min-width: 0;
+}
+.reply-notice { width: 100%; padding: 20px; min-height: 80px; margin-top: 24px; }
+.reply-notice.is-error { color: var(--danger); background: var(--danger-surface); border-color: var(--danger-border); }
+.reply-notice .ref { color: inherit; }
+.reply-notice #retry,.reply-notice #continue,.reply-notice > a:last-child { margin-inline-start: auto; }
+.reply-notice #retry { background: var(--canvas); color: var(--text); border: 1px solid var(--control); border-radius: 20px; }
+.reply-notice button:disabled { opacity: .65; cursor: default; }
+@media (max-width: 767px) {
+  .diagnostics-page .split { grid-template-columns: 1fr; grid-template-rows: 160px minmax(0, 1fr); }
+  .diagnostics-page .toolbar input { width: 130px; }
+  .settings-categories { display: flex; gap: 8px; }
+  .settings-categories button { min-height: 44px; }
+  .reply-notice { padding: 16px; }
+}

@@ -21,8 +21,22 @@ assert(styles.includes('.choose .agentcheck:checked'), 'picker styling');
 console.log('Four selected pages: IDs, scripts, links, shared styles, fixtures and polish passed.');
 assert(/\.chatrow\[hidden\]\s*\{\s*display:\s*none/.test(styles), 'search hides flex rows');
 new vm.Script(fs.readFileSync(path.join(__dirname, 'navigation.js'), 'utf8'));
+new vm.Script(fs.readFileSync(path.join(__dirname, 'phase1-prototype.js'), 'utf8'));
+new vm.Script(fs.readFileSync(path.join(__dirname, 'settings-overlay.js'), 'utf8'));
+for (const folder of ['diagnostics', 'engines', 'chat-states']) {
+  for (const version of folder === 'engines' ? [1, 2, 3, 4] : [1, 2, 3]) {
+    const html = fs.readFileSync(path.join(__dirname, folder, `v${version}.html`), 'utf8');
+    const ids = [...html.matchAll(/data-id="([^"]+)"/g)].map(match => match[1]);
+    assert.equal(new Set(ids).size, ids.length, folder + ': unique IDs');
+    assert.equal((html.match(/<h1/g) || []).length, 1);
+    assert(html.includes('../tokens.css') && html.includes('../components.css'), 'shared styles');
+  }
+}
+console.log('Seven Phase 1 options: shared styles, IDs and script syntax passed.');
 assert(/background:\s*var\(--backdrop\)/.test(styles), 'shared backdrop');
 for (const [d, v] of pages) {
   const h = fs.readFileSync(path.join(__dirname, d, 'v' + v + '.html'), 'utf8');
   assert(h.includes('src="../navigation.js"') && h.includes('data-id="sidebar-reveal"'), 'shared navigation reveal');
 }
+
+new vm.Script(fs.readFileSync(path.join(__dirname, 'phase1-selected.js'), 'utf8'));
