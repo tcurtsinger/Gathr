@@ -12,6 +12,7 @@ colors:
   accent: "#a6c4df"
   focus: "#a6c4df"
   control: "#777774"
+  backdrop: "#00000088"
 typography:
   body: { fontFamily: "Segoe UI Variable", fontSize: "15px", fontWeight: 400 }
 rounded: { sm: "7px", md: "16px", composer: "22px" }
@@ -23,10 +24,11 @@ components:
 Operate mode for local desktop agent work. Variance 2, motion 1, density 4. The selected Team panel keeps activity beside a single conversation. No production UI exists yet.
 ## Colors
 Neutral charcoal canvas, surface for sidebar and user messages, raised composer. Off-white text, secondary muted text. Borders separate regions; control is the stronger outline for small controls. Blue accent only for focus, links and selected reactions. Light theme: canvas #faf9f6, surface #f0efeb, raised #e6e5e0, text #292927, muted #63635e, border #dbdad4, accent/focus #365b7b, control #85857f.
+The backdrop token is #00000088 (black at 53.3% opacity) in both themes. Dialogs and the narrow navigation drawer share it; content and controls remain opaque.
 ## Typography
 Segoe UI Variable then Segoe UI. Prose 15/24.75, sidebar 13, controls and metadata 12, empty title 28. Weight 400 to 600.
 ## Layout
-248 px project sidebar, conversation max 760 px, optional 330 px side panel. At 1024 the sidebar is 205 and panel 285. At small widths the sidebar folds away and panel overlays. Desktop is the target; small-width reflow keeps controls reachable.
+248 px project sidebar, conversation max 760 px, optional 330 px side panel. At 1024 the sidebar is 205 and panel 285. Below 768 px the sidebar folds into a native popover drawer opened by the topbar sidebar icon. Its matching Close control, Escape or outside click dismisses it and returns focus to the opener. The panel overlays. Desktop is the target; small-width reflow keeps controls reachable.
 ## Elevation
 No shadows in the shell. Dialog is the sole blocking layer.
 ## Shapes

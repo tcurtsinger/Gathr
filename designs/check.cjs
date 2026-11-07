@@ -4,3 +4,7 @@ for(const[d,v]of pages){const file=path.join(__dirname,d,'v'+v+'.html'),h=fs.rea
 assert(fs.readFileSync(path.join(__dirname,'components.css'),'utf8').includes('.choose .agentcheck:checked'),'picker styling');console.log('Four selected pages: IDs, scripts, links, shared styles, fixtures and polish passed.');
 
 assert(fs.readFileSync(path.join(__dirname,'components.css'),'utf8').includes('.chatrow[hidden]{display:none}'),'search hides flex rows');
+
+new vm.Script(fs.readFileSync(path.join(__dirname,'navigation.js'),'utf8')));
+assert(fs.readFileSync(path.join(__dirname,'components.css'),'utf8').includes('background:var(--backdrop)'),'shared backdrop');
+for(const[d,v]of pages){const h=fs.readFileSync(path.join(__dirname,d,'v'+v+'.html'),'utf8');assert(h.includes('src="../navigation.js"')&&h.includes('data-id="sidebar-reveal"'),'shared navigation reveal');}
