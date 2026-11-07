@@ -1,14 +1,14 @@
 import type { Message, ToolBody } from '../api';
 import { Notice } from '../components/Notice';
-import type { Row } from './rows';
+import type { Row, SendFailure } from './rows';
 import './transcript.css';
 
 export interface NoticeActions {
   diagnostics: (turn?: string) => void;
   signIn: () => void;
   retry: (turn: string) => void;
-  /** Sends this text again, after a send that failed before any turn began. */
-  resend: (text: string) => void;
+  /** Sends a message again that failed before any turn began. */
+  resend: (failed: SendFailure) => void;
   carryOn: () => void;
 }
 
@@ -28,7 +28,7 @@ function key(row: Row) {
     case 'notice':
       return `n-${row.turn.id}`;
     case 'failure':
-      return 'failure';
+      return row.id;
   }
 }
 
@@ -44,21 +44,24 @@ function RowView({ row, actions }: { row: Row; actions: NoticeActions }) {
       return <TurnNotice row={row} actions={actions} />;
     case 'failure':
       return (
-        <Notice
-          danger
-          title={row.failure.error}
-          reference={
-            row.failure.ref ? { ref: row.failure.ref, open: () => actions.diagnostics() } : undefined
-          }
-          links={<DiagnosticsLink open={() => actions.diagnostics()} />}
-          action={
-            row.text && (
-              <button type="button" onClick={() => actions.resend(row.text)}>
-                Retry
-              </button>
-            )
-          }
-        />
+        <>
+          {row.text && <div className="message user">{row.text}</div>}
+          <Notice
+            danger
+            title={row.failure.error}
+            reference={
+              row.failure.ref ? { ref: row.failure.ref, open: () => actions.diagnostics() } : undefined
+            }
+            links={<DiagnosticsLink open={() => actions.diagnostics()} />}
+            action={
+              row.text && (
+                <button type="button" onClick={() => actions.resend(row)}>
+                  Retry
+                </button>
+              )
+            }
+          />
+        </>
       );
   }
 }

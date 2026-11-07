@@ -73,10 +73,14 @@ async fn history(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    db(&s, &t, "Chat failed", move |conn| {
+    let (reply, open) = oneshot::channel();
+    let _ = s.chats.task(&chat).send(Cmd::Approvals { reply });
+    let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
         store::history(conn, &chat)
     })
-    .await
+    .await?;
+    history["approvals"] = open.await.unwrap_or_else(|_| json!([]));
+    Ok(Json(history))
 }
 
 #[derive(Deserialize)]

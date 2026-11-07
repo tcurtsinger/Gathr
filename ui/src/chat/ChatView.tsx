@@ -3,10 +3,10 @@ import type { Chat } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
-import { rows } from './rows';
+import { rows, type SendFailure } from './rows';
 import { running } from './state';
 import { DiagnosticsLink, type NoticeActions, Transcript } from './Transcript';
-import { useChat } from './useChat';
+import { type Unsent, useChat } from './useChat';
 import './chat.css';
 
 interface Props {
@@ -15,13 +15,20 @@ interface Props {
   onDraft: (text: string) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
+  /** Messages that never reached the service, kept by the app while other chats are open. */
+  unsent: SendFailure[];
+  onUnsent: Unsent;
   /** The first message names the chat (the service does it), so the list shows the name. */
   onNamed: () => void;
 }
 
-export function ChatView({ chat, draft, onDraft, openSettings, onNamed }: Props) {
-  const { state, loaded, loadFailure, sendFailure, send, stop, approve, reload } = useChat(chat.id);
-  const list = useMemo(() => rows(state, sendFailure), [state, sendFailure]);
+export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings, onNamed }: Props) {
+  const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
+    chat.id,
+    unsent,
+    onUnsent,
+  );
+  const list = useMemo(() => rows(state, failed), [state, failed]);
   const turn = running(state);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
@@ -44,9 +51,9 @@ export function ChatView({ chat, draft, onDraft, openSettings, onNamed }: Props)
     return () => follow.disconnect();
   }, []);
 
-  const submit = (text: string) => {
+  const submit = (text: string, retrying?: SendFailure) => {
     pinned.current = true;
-    return send(text);
+    return send(text, retrying);
   };
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
@@ -62,7 +69,7 @@ export function ChatView({ chat, draft, onDraft, openSettings, onNamed }: Props)
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       if (asked) submit(asked.body as string);
     },
-    resend: submit,
+    resend: (f) => submit(f.text, f),
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();

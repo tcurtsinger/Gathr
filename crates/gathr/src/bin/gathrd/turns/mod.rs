@@ -42,7 +42,8 @@ struct Running {
     streamed: bool,
     /// Tool calls under way: their message, name and start.
     tools: HashMap<String, (String, String, i64)>,
-    approvals: HashMap<String, Value>,
+    /// Questions Claude Code asked and nobody has answered: each tool and its input.
+    approvals: HashMap<String, (String, Value)>,
     stopping: bool,
     signed_out: bool,
     /// The account's renewal gate, held until the provider first answers (0016).
@@ -80,6 +81,10 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
         refused: None,
         unread: Vec::new(),
     };
+    // An interval, not a sleep in the select: a sleep restarts on every command, so a window
+    // asking for the chat more often than this would hold a waiting message forever.
+    let mut sign_in_poll = tokio::time::interval(SIGN_IN_POLL);
+    sign_in_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         let waiting = task.turn.is_none() && !task.queue.is_empty();
         tokio::select! {
@@ -99,7 +104,7 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
                 Some(line) => task.on_line(line).await,
                 None => task.on_exit().await,
             },
-            _ = tokio::time::sleep(SIGN_IN_POLL), if waiting => task.try_next().await,
+            _ = sign_in_poll.tick(), if waiting => task.try_next().await,
         }
     }
 }
@@ -131,6 +136,9 @@ impl Task {
                 reply,
             } => {
                 let _ = reply.send(self.approve(&request_id, allow).await);
+            }
+            Cmd::Approvals { reply } => {
+                let _ = reply.send(self.open_approvals());
             }
             Cmd::Resume(w) => {
                 self.queue.push_back(Queued {
@@ -431,12 +439,24 @@ impl Task {
             .turn
             .as_mut()
             .and_then(|t| t.approvals.remove(request_id))
+            .map(|(_, input)| input)
         else {
             return false;
         };
         let turn = self.turn.as_ref().map(|t| t.turn.clone());
         let answer = frames::approval(request_id, allow, &input);
         self.write(&answer, turn.as_deref()).await.is_ok()
+    }
+
+    /// The questions still open, as the live socket sent them, for a window that opens the chat later.
+    fn open_approvals(&self) -> Value {
+        let Some(turn) = self.turn.as_ref() else {
+            return json!([]);
+        };
+        let open = turn.approvals.iter().map(|(request_id, (tool, input))| {
+            json!({ "turn": turn.turn, "request_id": request_id, "tool": tool, "input": input })
+        });
+        Value::Array(open.collect())
     }
 
     /// The engine's output ended: it has exited.

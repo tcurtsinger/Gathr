@@ -49,7 +49,7 @@ test('a send that fails says so once, with its reference', async () => {
   const answer = new Failure('Send failed', "Claude Code's path isn't a file", 'a0c5a2a6');
   const screen = await render(
     <Transcript
-      rows={rows(state, { text: 'Summarise the release notes.', failure: answer })}
+      rows={rows(state, [{ id: '1', text: 'Summarise the release notes.', failure: answer }])}
       actions={none}
     />,
   );

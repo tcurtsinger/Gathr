@@ -8,17 +8,18 @@ export type Row =
   | { kind: 'tools'; id: string; tools: ToolBody[] }
   | { kind: 'streaming'; turn: string; text: string }
   | { kind: 'notice'; turn: Turn; replied: boolean }
-  | { kind: 'failure'; failure: Failure; text: string };
+  | ({ kind: 'failure' } & SendFailure);
 
-/** A request that failed: what was sent, for Retry, and why. */
+/** A request that failed: what was sent (none for Stop or an approval), for Retry, and why. */
 export interface SendFailure {
+  id: string;
   text: string;
   failure: Failure;
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
 
-export function rows(state: ChatState, failed?: SendFailure | null): Row[] {
+export function rows(state: ChatState, failed: SendFailure[] = []): Row[] {
   const last = new Map<string, number>();
   state.messages.forEach((m, i) => {
     if (m.turn) last.set(m.turn, i);
@@ -38,8 +39,8 @@ export function rows(state: ChatState, failed?: SendFailure | null): Row[] {
     if (m.turn && last.get(m.turn) === i) endOfTurn(state, m.turn, replied.has(m.turn), out);
   });
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
-  const told = Object.values(state.turns).some((t) => t.ref === failed?.failure.ref);
-  if (failed && !told) out.push({ kind: 'failure', ...failed });
+  const told = new Set(Object.values(state.turns).map((t) => t.ref));
+  for (const f of failed) if (!f.failure.ref || !told.has(f.failure.ref)) out.push({ kind: 'failure', ...f });
   return out;
 }
 

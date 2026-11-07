@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Chat, type Failure } from './api';
 import { ChatView } from './chat/ChatView';
+import type { SendFailure } from './chat/rows';
 import { Notice } from './components/Notice';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
@@ -13,6 +14,7 @@ export function App() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
   const drafts = useRef(new Map<string, string>());
+  const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export function App() {
             drafts.current.set(chat.id, text);
             redraw((n) => n + 1);
           }}
+          unsent={unsent[chat.id] ?? []}
+          onUnsent={(update) => setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) }))}
           openSettings={openSettings}
           onNamed={() => api.chats().then(setChats, setFailure)}
         />

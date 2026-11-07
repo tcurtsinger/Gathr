@@ -34,6 +34,8 @@ export interface History {
   chat: string;
   messages: Message[];
   turns: Turn[];
+  /** Questions the engine asked that nobody has answered yet. */
+  approvals: { turn: string; request_id: string; tool: string }[];
 }
 
 export interface Engine {

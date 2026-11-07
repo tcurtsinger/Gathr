@@ -32,6 +32,10 @@ pub enum Cmd {
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
+    /// The approvals still waiting for an answer.
+    Approvals {
+        reply: oneshot::Sender<Value>,
+    },
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
     Close {

@@ -5,12 +5,16 @@ import { report, timeToPaint } from '../report';
 import type { SendFailure } from './rows';
 import { answered, apply, type ChatState, empty, fromHistory } from './state';
 
+/** Changes the chat's messages that never reached the service; the app keeps them across switches. */
+export type Unsent = (update: (list: SendFailure[]) => SendFailure[]) => void;
+
 /** One chat: its history, kept current from the live socket, and what the person can do in it. */
-export function useChat(chat: string) {
+export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const [state, setState] = useState<ChatState>(empty);
   const [loaded, setLoaded] = useState(false);
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
-  const [sendFailure, setSendFailure] = useState<SendFailure | null>(null);
+  // A Stop or an answer that failed: nothing to resend, so it lives only while the chat is open.
+  const [actionFailure, setActionFailure] = useState<SendFailure | null>(null);
   const pending = useRef<LiveEvent[] | null>(null);
   const openedAt = useRef(0);
 
@@ -37,7 +41,7 @@ export function useChat(chat: string) {
   useEffect(() => {
     setState(empty);
     setLoaded(false);
-    setSendFailure(null);
+    setActionFailure(null);
     load();
     return listen((event) => {
       if (event.type === 'lagged') return load();
@@ -48,29 +52,35 @@ export function useChat(chat: string) {
   }, [chat, load]);
 
   const send = useCallback(
-    async (text: string) => {
-      setSendFailure(null);
+    async (text: string, retrying?: SendFailure) => {
       try {
         await api.send(chat, text);
+        if (retrying) onUnsent((list) => list.filter((f) => f.id !== retrying.id));
       } catch (e) {
-        setSendFailure({ text, failure: e as Failure });
+        const failed = { id: retrying?.id ?? crypto.randomUUID(), text, failure: e as Failure };
+        onUnsent((list) =>
+          retrying ? list.map((f) => (f.id === failed.id ? failed : f)) : [...list, failed],
+        );
       }
     },
-    [chat],
+    [chat, onUnsent],
   );
 
   const stop = useCallback(
-    () => api.stop(chat).catch((e: Failure) => setSendFailure({ text: '', failure: e })),
+    () => api.stop(chat).catch((e: Failure) => setActionFailure({ id: 'stop', text: '', failure: e })),
     [chat],
   );
 
   const approve = useCallback(
     (request: string, allow: boolean) => {
       setState((s) => answered(s, request));
-      api.approve(chat, request, allow).catch((e: Failure) => setSendFailure({ text: '', failure: e }));
+      api
+        .approve(chat, request, allow)
+        .catch((e: Failure) => setActionFailure({ id: 'answer', text: '', failure: e }));
     },
     [chat],
   );
 
-  return { state, loaded, loadFailure, sendFailure, send, stop, approve, reload: load };
+  const failed = actionFailure ? [...unsent, actionFailure] : unsent;
+  return { state, loaded, loadFailure, failed, send, stop, approve, reload: load };
 }

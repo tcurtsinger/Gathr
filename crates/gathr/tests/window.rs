@@ -49,6 +49,39 @@ and list the fixes",
     assert!(cut.chars().count() <= 60 && cut.ends_with('…'), "{cut:?}");
 }
 
+/// A window that opens the chat after Claude Code asked (a switch back, a reload) still gets to answer.
+#[test]
+fn a_chats_history_holds_its_open_approvals_until_they_are_answered() {
+    let data = TempDir::new();
+    sign_in(&data.0);
+    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
+    service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": text }),
+    );
+
+    let asked = service.wait_for(&chat, 10, "the approval", |h| {
+        h["approvals"][0]["tool"] == "Write"
+    });
+    let request = asked["approvals"][0]["request_id"].as_str().unwrap();
+    let answer = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/approvals/{request}"),
+        json!({ "allow": true }),
+    );
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let after = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(after["approvals"], json!([]), "{after}");
+}
+
 /// Recorded live: Claude Code asked to run Write, was allowed, and answered (153 output tokens).
 #[test]
 fn a_chats_turns_carry_their_ask_tools_and_token_totals() {

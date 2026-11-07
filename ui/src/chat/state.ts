@@ -19,7 +19,8 @@ export const empty: ChatState = { messages: [], turns: {}, partial: {}, approval
 
 export function fromHistory(history: History): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
-  return { ...empty, messages: history.messages, turns };
+  const approvals = history.approvals.map((a) => ({ turn: a.turn, request: a.request_id, tool: a.tool }));
+  return { ...empty, messages: history.messages, turns, approvals };
 }
 
 /** Applies one live event for this chat. Events for other chats never reach here. */
