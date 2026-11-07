@@ -58,6 +58,10 @@ React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2
 
 The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with its own profile folder in Gathr's data, driven over a CDP pipe with no port. The UI shows it as a live stream with the person's input sent back, the same in the window, a browser tab and another computer; **Open window** gives a visible browser for passkeys and file pickers. [0018](decisions/0018-agent-browser.md).
 
+## Context per turn
+
+Each turn carries a small, stable briefing, the ask, its state and, for a fresh session, a digest of what changed plus the agent's own recent work. Everything else is pulled through Gathr's tools. Every turn's input is measured by part, and context is never cut on tokens alone: changes are judged on output quality too. [0020](decisions/0020-context-per-turn.md).
+
 ## Decisions
 
 Fast yes/no answers from a small paid model, for checks an engine turn would be too slow or costly for: watching long work, memory saves, skill suggestions, the agents' Decide tool. Optional from day one, off by default, with a daily cap; no answer always means "behave as if it were off". [0014](decisions/0014-decisions-provider.md).
