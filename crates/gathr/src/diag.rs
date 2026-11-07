@@ -37,8 +37,10 @@ pub fn health(data: &DataDir) -> Value {
         Err(e) => json!({ "opened": false, "path": data.db(), "why": e.to_string() }),
     };
     let folder = data.claude_folder();
+    let copy = crate::claude::copies::Copies::new(data).program();
     let now_ms = crate::ids::now_us() / 1000;
-    let (login, expires) = crate::claude::login::status(&folder, path_setting.as_deref(), now_ms);
+    let (login, expires) =
+        crate::claude::login::status(&folder, path_setting.as_deref(), copy, now_ms);
     let crash_log = CrashLog::new(data.crash_log());
     json!({
         "service": service_now(data),

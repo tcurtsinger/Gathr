@@ -240,6 +240,11 @@ pub fn interrupt(request_id: &str) -> Value {
     json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "interrupt" } })
 }
 
+/// The handshake that lists the engine's models and checks its switches, without a turn (0025).
+pub fn initialize(request_id: &str) -> Value {
+    json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "initialize" } })
+}
+
 /// The person's answer to `ApprovalAsked`.
 pub fn approval(request_id: &str, allow: bool, input: &Value) -> Value {
     let decision = match allow {

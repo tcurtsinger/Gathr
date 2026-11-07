@@ -104,7 +104,8 @@ async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) 
     let cancels = s.sign_in.running.lock().expect("never poisoned").cancels;
     let _one = s.sign_in.starting.lock().await;
     let fail = |why: String| failed(StatusCode::INTERNAL_SERVER_ERROR, &why, &t.0);
-    let program = command::find(s.chats.path_setting().await.as_deref()).map_err(fail)?;
+    let setting = s.chats.path_setting().await;
+    let program = command::find(setting.as_deref(), s.chats.copy()).map_err(fail)?;
     let folder = s.chats.account_folder();
     std::fs::create_dir_all(&folder).map_err(|e| fail(e.to_string()))?;
 

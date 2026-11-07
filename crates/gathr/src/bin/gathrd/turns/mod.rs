@@ -54,6 +54,8 @@ struct Task {
     chats: Arc<Chats>,
     chat: String,
     engine: Option<Engine>,
+    /// The file the engine runs, so a chat on Gathr's copy moves when it updates (0025).
+    program: Option<std::path::PathBuf>,
     lines: Option<mpsc::UnboundedReceiver<Line>>,
     /// The engine's last stderr line: when it exits mid-turn, that's usually why (0019).
     last_stderr: Option<String>,
@@ -74,6 +76,7 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
         chats,
         chat,
         engine: None,
+        program: None,
         lines: None,
         last_stderr: None,
         turn: None,
@@ -238,6 +241,10 @@ impl Task {
     /// Sends a turn to the engine, starting it first if needed: `running`, or
     /// `waiting_sign_in` (it stays first in the queue), or why it couldn't.
     async fn start(&mut self, next: &Queued) -> Result<&'static str, String> {
+        if let Some(version) = self.copy_moved() {
+            let why = format!("Gathr's copy of Claude Code is now {version}");
+            self.close(&why).await;
+        }
         // A wrong path fails the send at once, signed in or not (hand check 8).
         let program = match self.engine {
             Some(_) => None,
@@ -337,7 +344,7 @@ impl Task {
     /// Claude Code's path, from Settings at every start so a change applies at once (S26).
     async fn find_engine(&self, trace: &str) -> Result<std::path::PathBuf, String> {
         let setting = self.chats.path_setting().await;
-        let program = command::find(setting.as_deref()).inspect_err(|why| {
+        let program = command::find(setting.as_deref(), self.chats.copy()).inspect_err(|why| {
             self.record(
                 Event::point("gathr.engine.start")
                     .trace(trace)
@@ -403,6 +410,7 @@ impl Task {
                         .attr("resumed", session.is_some()),
                 );
                 self.engine = Some(engine);
+                self.program = Some(program.to_path_buf());
                 self.lines = Some(lines);
                 self.last_stderr = None;
                 Ok(())
@@ -520,6 +528,19 @@ impl Task {
     }
 
     /// The gentle close (0001): interrupt a turn under way, close stdin, wait for the exit.
+    /// The version Gathr's copy moved to, when the engine runs an older copy: called between
+    /// turns only, so a turn is never cut short and a renewal, which happens inside one, never is.
+    fn copy_moved(&self) -> Option<String> {
+        let running = self.program.as_ref().filter(|_| self.engine.is_some())?;
+        let copies = self.chats.data.path().join("engines");
+        let current = self
+            .chats
+            .copy()
+            .filter(|c| running.starts_with(&copies) && c != running)?;
+        let version = current.parent()?.file_name()?;
+        Some(version.to_string_lossy().into_owned())
+    }
+
     async fn close(&mut self, why: &str) {
         let Some(mut engine) = self.engine.take() else {
             return;
