@@ -91,3 +91,34 @@ Failures alone use danger, danger-surface and danger-border. Dark values are in 
 YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surface,
 text and control tokens. This is a semantic error role, separate from the blue action
 accent. Normal replies remain unboxed. No service integration is claimed.
+
+
+## Agent selection and editing
+The composer selects an agent. It has no model or effort control. Each agent owns
+its engine, account, model and effort. Selecting another recipient never changes
+those assignments. Selected shell previews: chat/v14, single-chat/v12,
+new-chat/v12 and start-chat/v13. Approval and context controls keep their own jobs.
+
+Selected: Settings > Agents (agents/v1), in the centred Settings panel with its
+category list at the left. Edit agent in the chat's agent picker opens this same
+editor at the selected agent. It is unavailable while Everyone is selected.
+The inline Team editor (agents/v2) and separate chat menu editor (agents/v3)
+were not chosen. There is one editor for single and team chats.
+
+Save updates the reusable agent everywhere it is used. There is no per-save Scope
+control. Future turns use the new assignment; running turns retain theirs.
+Roles remain chat-specific. Decision 0026 records the selected design; engine
+integration still needs its approved implementation plan.
+Engine changes refresh the account, model and effort choices and reset dependent
+selections to the engine default. Models are searchable and independently scroll;
+the chosen model stays visible above the list. No free-text model identifier.
+Production choices must come from the installed engine, including supported
+effort values and unavailable-model states, pending Cass's capability research.
+Family Latest follows new releases in that family without editing each agent; a
+numbered version stays pinned. Engine default follows the engine's own default,
+which may differ from the selected family. Latest is the default for new
+agents when supported. The sample Opus Latest and Opus 4.6 choices illustrate
+these assignments only; actual discovery and resolution await Cass's research.
+Cancel and Escape discard form changes and restore focus. Save gives local feedback.
+Preview changes last only while the page remains open. The form and native dialog
+reuse Gathr's tokens, focus, button and Settings shell patterns. No new palette.

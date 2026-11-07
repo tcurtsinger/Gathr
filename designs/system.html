@@ -48,7 +48,11 @@ nav {
 <body>
 <h1 data-id="title">Gathr</h1><button data-id="theme" onclick="document.documentElement.classList.toggle('light')">Switch theme</button>
 <nav data-id="screens">
-<a href="chat/v13.html">chat</a><a href="single-chat/v11.html">single-chat</a><a href="new-chat/v11.html">new-chat</a><a href="start-chat/v12.html">start-chat</a>
+<a href="chat/v14.html">chat</a><a href="single-chat/v12.html">single-chat</a><a href="new-chat/v12.html">new-chat</a><a href="start-chat/v13.html">start-chat</a>
+
+<a href="agents/v1.html">Agents in Settings</a>
+<a href="agents/v2.html">Agents in Team</a>
+<a href="agents/v3.html">Agent menu</a>
 </nav>
 <section data-id="colors">
 <h2>Colours</h2>
@@ -143,8 +147,8 @@ Review patch<small>Sol</small>
 <div class="composerbottom">
 <button onclick="document.querySelector('#attach').click()" aria-label="Attach files"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
   stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="attach" type="file" hidden
-  onchange="notify(this.files.length+' file attached')"><select aria-label="Recipient"><option>Everyone</option><option>Mira</option><option>Rowan</option><option>Kit</option><option
->Sol</option><option>Lane</option></select><select aria-label="Model and effort"><option>GPT-6 / High</option><option>Claude / High</option></select><select aria-label="Approvals"><option
+  onchange="notify(this.files.length+' file attached')"><select aria-label="Agent"><option>Everyone</option><option>Mira</option><option>Rowan</option><option>Kit</option><option
+>Sol</option><option>Lane</option></select><select aria-label="Approvals"><option
 >Ask to edit</option><option>Auto edit</option></select>
 <div class="context">
 <span class="meter" aria-hidden="true"></span><span id="usage">62%</span><button onclick="document.querySelector('#usage').textContent='18%';notify('Context summarised locally')">Summarise</button
@@ -164,6 +168,8 @@ Review patch<small>Sol</small>
 <div class="notice reply-notice" data-id="system-waiting"><span>Waiting for sign-in</span><a href="engines/v4.html">Sign in</a></div>
 </section><section data-id="settings-pattern"><h2>Settings</h2>
 <a href="engines/v4.html">Engines</a> <a href="diagnostics/v3.html">Diagnostics</a>
+<a href="agents/v1.html">Agents</a>
+<p>Edit agent in the chat picker opens Settings at that agent. Save applies everywhere.</p>
 </section><section data-id="danger-tokens"><h2>Error tokens</h2><div class="swatches">
 <div class="swatch" style="color:var(--danger);background:var(--danger-surface);border-color:var(--danger-border)">
 <code>danger</code><br><code>danger-surface</code><br><code>danger-border</code></div></div></section>

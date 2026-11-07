@@ -2,10 +2,10 @@
 
 Selected direction: one centred conversation, Team in the side panel for multi-agent chats.
 
-- `chat/v13.html`: multi-agent chat
-- `single-chat/v11.html`: one-agent chat
-- `new-chat/v11.html`: new chat
-- `start-chat/v12.html`: choose agents
+- `chat/v14.html`: multi-agent chat
+- `single-chat/v12.html`: one-agent chat
+- `new-chat/v12.html`: new chat
+- `start-chat/v13.html`: choose agents
 - `system.html`: tokens and components
 
 The picked direction continues in the polished versions listed above. Earlier versions and directions are in git history. All names and messages are invented fixtures. Open files locally, append `#light` for light mode, or use Switch theme. Run `node designs/check.cjs`. Actions are local simulations; no providers, terminal or persistence.
@@ -33,3 +33,11 @@ set `NODE_PATH` to the installed module directory if needed and `BROWSER_PATH` t
 browser executable, then run `node designs/check-settings.cjs`. It checks contextual
 references after a Stopped filter, clearing Find, and focus return after category
 changes with Close and Escape at 1440 and 1024 px in both themes. No downloads.
+
+
+Selected agent editor: `agents/v1.html`, Settings > Agents, also opened by Edit
+agent in the chat picker. Save applies everywhere. Not chosen: `agents/v2.html`
+Team panel and `agents/v3.html` separate chat menu editor. Shared form: agent-editor.css and
+agent-editor.js. Five invented agents, two engines, two accounts and 24 sample
+models per engine. Model names and effort values are layout fixtures, not a
+provider capability claim. No engine, login, service or durable storage connects.
