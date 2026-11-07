@@ -369,22 +369,65 @@ mod tests {
     /// 0001: fails when a denied tool is still offered, or the engine offers one nobody looked at.
     #[test]
     fn the_engine_offers_no_denied_tool_and_none_unlooked_at() {
-        let Some(Frame::Init { tools, .. }) = replayed("signed_out").into_iter().next() else {
-            panic!("the recording doesn't start with init");
-        };
-        for tool in &tools {
+        // Signed out and signed in: a claude.ai account adds tools of its own.
+        for recording in ["signed_out", "signed_in"] {
+            let Some(Frame::Init { tools, .. }) = replayed(recording).into_iter().next() else {
+                panic!("{recording} doesn't start with init");
+            };
+            for tool in &tools {
+                assert!(
+                    !DENIED_TOOLS.iter().any(|(d, _)| d == tool),
+                    "{recording}: {tool} is denied but offered"
+                );
+                assert!(
+                    KNOWN_TOOLS.contains(&tool.as_str()),
+                    "{recording}: {tool} is new: look at it, then add it to KNOWN_TOOLS"
+                );
+            }
             assert!(
-                !DENIED_TOOLS.iter().any(|(d, _)| d == tool),
-                "{tool} is denied but offered"
-            );
-            assert!(
-                KNOWN_TOOLS.contains(&tool.as_str()),
-                "{tool} is new: look at it, then add it to KNOWN_TOOLS"
+                tools.iter().any(|t| t == "TaskCreate"),
+                "{recording}: the task tools are off: {tools:?}"
             );
         }
-        assert!(
-            tools.iter().any(|t| t == "TaskCreate"),
-            "the task tools are off: {tools:?}"
+    }
+
+    /// 0024: signed in to a claude.ai account with plugins of its own, the session loads only
+    /// Claude Code's built-in plugins, no skills or commands, and runs no hook.
+    #[test]
+    fn a_signed_in_session_gets_nothing_from_the_account() {
+        let path = format!(
+            "{}/tests/frames/signed_in.jsonl",
+            env!("CARGO_MANIFEST_DIR")
         );
+        let frames: Vec<Value> = std::fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .map(|row| serde_json::from_str::<Value>(row).unwrap())
+            .filter(|row| row["dir"] == "out")
+            .map(|row| serde_json::from_str(row["line"].as_str().unwrap()).unwrap())
+            .collect();
+        let init = frames
+            .iter()
+            .find(|f| f["subtype"] == "init")
+            .expect("no init in the recording");
+        for plugin in init["plugins"].as_array().unwrap() {
+            let source = plugin["source"].as_str().unwrap_or_default();
+            assert!(
+                source.ends_with("@builtin"),
+                "a plugin from outside Gathr loaded: {plugin}"
+            );
+        }
+        for list in ["skills", "slash_commands"] {
+            assert_eq!(init[list], json!([]), "{list} from outside Gathr loaded");
+        }
+        let hooks = frames
+            .iter()
+            .filter(|f| {
+                f["subtype"]
+                    .as_str()
+                    .is_some_and(|s| s.starts_with("hook_"))
+            })
+            .count();
+        assert_eq!(hooks, 0, "a hook ran");
     }
 }
