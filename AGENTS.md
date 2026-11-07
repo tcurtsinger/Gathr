@@ -15,6 +15,17 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **Clean up after yourself:** once your PR is merged or closed, remove your worktree and branch.
 - **Keep this file current:** when a step here changes, or you learn one, change this file in the same PR.
 
+## Build and check
+
+- **Toolchain:** Rust through [rustup](https://rustup.rs); `rust-toolchain.toml` pins the version, so `cargo` picks it up by itself.
+- **The checks CI runs**, from the repo root (run them once before pushing):
+  - `cargo fmt --all --check`
+  - `cargo clippy --workspace --all-targets --locked -- -D warnings`
+  - `cargo test --workspace --locked`
+- **CI** is `.github/workflows/ci.yml`, on Windows, for every PR and every push to `main`. `main` only takes PRs with CI green.
+- **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
+- **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
+
 ## Done means used, with proof
 
 - Run it and use what changed the way a person will, with real-size data: hundreds of messages, a dozen agents, long conversations.

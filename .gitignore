@@ -1,0 +1,42 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+npm-debug.log*
+
+# Tauri
+/src-tauri/target/
+/src-tauri/gen/
+**/src-tauri/target/
+**/src-tauri/gen/
+
+# Secrets and logins: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.credentials.json
+credentials.json
+auth.json
+.claude/
+.codex/
+
+# Local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
