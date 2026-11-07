@@ -77,8 +77,9 @@ function renderEditor(host, inline = false) {
     const results = host.querySelector('.model-results');
     results.replaceChildren();
     const prefix = form.elements.engine.value === 'Codex' ? 'Codex' : 'Claude';
-    const family = prefix === 'Claude' ? ['Sample Opus Latest', 'Sample Opus 4.6'] : [];
-    const names = ['Engine default', ...family, ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
+    const family = prefix === 'Claude' ? ['Sample Opus Latest', 'Sample Sonnet Latest'] : [];
+    const pinned = prefix === 'Claude' ? ['Sample Opus 4.6'] : [];
+    const names = [...family, 'Engine default', ...pinned, ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
     const filtered = names.filter(name => name.toLowerCase().includes(form.elements.modelSearch.value.toLowerCase()));
     for (const name of filtered) {
       const button = document.createElement('button');

@@ -64,7 +64,7 @@ chat position, draft and form fields. Below 768 px categories move above content
 Shared rules: settings-overlay.css and phase1-selected.css; shared interactions:
 phase1-selected.js. Preview selectors and simulated completion never ship.
 
-Settings entry: gear plus Settings at the bottom left, one click (settings-entry/v4).
+Settings entry: gear plus Settings at the bottom left, one click (settings-entry/v5).
 Engines lists named accounts. Each row shows name, engine, sign-in state, Rename
 and Sign in or Sign out. Add asks for engine and name, then starts sign-in.
 Gathr owns one program per engine; version and updates appear once per engine

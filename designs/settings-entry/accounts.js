@@ -74,6 +74,7 @@ function showAccountForm(account) {
   $('#account-engine').disabled = !!account;
   $('#account-engine').value = account?.engine || 'Claude Code';
   $('#account-name').value = account?.name || '';
+  $('#account-name').setCustomValidity('');
   $('#save-account').textContent = account ? 'Save' : 'Sign in';
   $('#account-form').hidden = false;
   $('#account-name').focus();

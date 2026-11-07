@@ -1,6 +1,6 @@
 # Settings and named accounts
 
-Current revision: v4.html. Gear plus Settings at bottom left is selected.
+Current revision: v5.html. Gear plus Settings at bottom left is selected.
 Named accounts follow the selected account model; this layout awaits approval.
 The earlier v1-v3 pages are historical alternatives, including paths now rejected.
 
@@ -8,7 +8,7 @@ Refinement, Operate, variance 2, motion 1, density 4. Shared charcoal and warm l
 tokens, Segoe UI Variable, centred Settings shell. Accounts lead, engine program
 state appears once below. No new tokens, assets, services or downloads.
 
-Open v4.html, or #light. Add chooses engine and name and simulates browser login.
+Open v5.html, or #light. Add chooses engine and name and simulates browser login.
 Use Simulate success to complete, Cancel to stop. Rename preserves the engine.
 Sign out affects only its row. Agents uses the shared editor, with Account setting
 the engine. Model and effort choices are samples. Save applies to the reusable

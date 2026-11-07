@@ -12,13 +12,21 @@ const {chromium} = require(process.env.GATHR_PLAYWRIGHT || path.resolve(__dirnam
       const page = await browser.newPage({viewport:{width, height:900}});
       const errors = [];
       page.on('pageerror', error => errors.push(error.message));
-      await page.goto(pathToFileURL(path.join(__dirname, 'v4.html')).href + theme);
+      await page.goto(pathToFileURL(path.join(__dirname, 'v5.html')).href + theme);
       assert.equal(await page.locator('.account-row').count(), 2);
       assert.equal(await page.locator('#custom-path').count(), 0);
       if (evidence) await page.screenshot({path:path.join(evidence, `accounts-${width}-${theme?'light':'dark'}.png`)});
       await page.keyboard.press('Escape');
       await page.locator('#draft').fill('Keep this draft');
       await page.locator('.entry').click();
+      await page.locator('#add-account').click();
+      await page.locator('#account-name').fill('   ');
+      await page.locator('#save-account').click();
+      await page.locator('#cancel-account').click();
+      await page.locator('[data-id="account-row-1"]').getByRole('button', {name:'Rename'}).click();
+      await page.locator('#save-account').click();
+      assert.equal(await page.locator('#account-form').isVisible(), false,
+        'Rename with a valid prefilled name saves after cancelling an invalid Add');
       await page.locator('#add-account').click();
       await page.locator('#account-engine').selectOption('Codex');
       await page.locator('#account-name').fill('Research');
@@ -47,6 +55,8 @@ const {chromium} = require(process.env.GATHR_PLAYWRIGHT || path.resolve(__dirnam
       assert.equal(await page.evaluate(() => document.querySelector('.settings-page').scrollWidth <= document.querySelector('.settings-page').clientWidth), true);
       await page.locator('[data-page="agents"]').click();
       assert.equal(await page.locator('select[name="engine"]').isVisible(), false);
+      assert.deepEqual(await page.locator('.model-results button').allTextContents().then(names => names.slice(0, 2)),
+        ['Sample Opus Latest', 'Sample Sonnet Latest'], 'Claude models lead with Latest options');
       await page.locator('select[name="account"]').selectOption('3');
       assert.equal(await page.locator('select[name="engine"]').inputValue(), 'Codex');
       await page.locator('input[name="modelSearch"]').fill('model 04');
