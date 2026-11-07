@@ -4,14 +4,14 @@ Status: draft. The first thing Gathr builds, once the architecture is approved. 
 
 ## What it does
 
-1. **Sign in.** The person signs the engine in, in Gathr's own login folder for that agent, through the engine's own login flow. Gathr never reads or copies the login. Which engine goes first: per 0001-0009 (Cass).
+1. **Sign in.** The person signs the engine in, in Gathr's own login folder for that agent, through the engine's own login flow. Gathr never reads or copies the login. Claude Code goes first ([0001](decisions/0001-engine-interface.md)); the folder layout is [0002](decisions/0002-login-folders.md).
 2. **Send.** The person types a message in a chat and sends it.
 3. **Stream.** The answer streams in as the engine produces it: text, and each tool call as a line with its name, status and duration.
 4. **Stop.** Stop interrupts the turn through the engine's own interrupt, never a process kill. The chat shows the turn as stopped, with what it had produced.
 5. **Resume after restart.** Quit Gathr (window and service) and start it again: the chat is there with every message, and the next message continues the same engine session.
 6. **Diagnostics.** A Diagnostics page for the chat shows each turn's timeline: model calls, tool calls with durations, tokens, how it ended, and any failure with its cause.
 
-Engine-specific parts (which adapter, how sessions resume, how tool approvals are answered, which login folder layout): per 0001-0009 (Cass).
+Engine-specific parts follow [0001](decisions/0001-engine-interface.md) (the stream-json driver, resume, tool approvals over the same pipe, Stop by interrupt) and [0002](decisions/0002-login-folders.md). The slice also proves each item on those files' "Not verified" lists.
 
 ## What it must meet
 

@@ -84,7 +84,7 @@ A turn is one run of an agent's engine on one conversation's session.
 
 States: `starting`, `streaming`, `ended`, with an outcome: `ok`, `failed`, `stopped` (the person's Stop or Stop now), `interrupted` (the app or engine went away mid-turn).
 
-- Stop always uses the engine's own interrupt, never a process kill: a kill can land while the engine is renewing its login, which spends the login (lesson from the previous app). The adapter for each engine (0001-0009) provides the interrupt.
+- Stop always uses the engine's own interrupt, never a process kill: a kill can land while the engine is renewing its login, which spends the login (lesson from the previous app). Each engine's driver provides the interrupt ([0001](0001-engine-interface.md)).
 - A turn records the background processes it started, by process id, so "still running" and Stop now can name them.
 
 ## Waits
