@@ -22,9 +22,11 @@ async function check() {
       if (await page.locator('.settings-panel').evaluate(dialog => dialog.open)) await page.locator('#close-settings').click();
       await page.locator('#chat-preview').selectOption('Error');
       const context = `${file} ${width} ${theme}`;
+      assert.equal(await page.locator('.topbar a', { hasText: 'Diagnostics' }).count(), 0, `${context}: no chat header Diagnostics link`);
       const diagnostics = page.locator('.chat-stage .notice a', { hasText: 'Diagnostics' });
       if (process.argv[2] !== 'focus') {
-        await page.locator('.topbar a', { hasText: 'Diagnostics' }).click();
+        await page.locator('.profile button').click();
+        await page.locator('[data-category="diagnostics"]').click();
         await page.locator('#filter').selectOption('Stopped');
         await page.locator('#close-settings').click();
         for (const opener of [diagnostics, page.locator('.chat-stage .notice .ref')]) {

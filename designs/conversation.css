@@ -143,6 +143,10 @@ details.tools {
   border-radius: 22px;
   padding: 14px 14px 9px;
 }
+.composer:has(textarea:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
 .composer textarea {
   width: 100%;
   resize: none;
@@ -150,8 +154,10 @@ details.tools {
   border: 0;
   height: 53px;
   padding: 0 4px;
-  outline-offset: 4px;
   font-size: 15px;
+}
+.composer textarea:focus-visible {
+  outline: none;
 }
 .composer textarea::placeholder {
   color: var(--muted);
