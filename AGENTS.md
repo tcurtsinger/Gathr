@@ -108,3 +108,5 @@ At the end of your answer, as "Friction: <what, where>": anything in SerenityOS 
 ## Design preview checks
 
 Phase 0 prototypes are under `designs/`. From the repo root, run `node designs/check.cjs` to check page scripts, unique element IDs, local-only content, history fixtures and contrast roles. Open each candidate in the design viewer at 1440 and 1024 px in both themes. These previews do not require the Rust service or provider logins.
+
+Round 2 previews (v4 to v6) also require `node designs/check-round2.cjs`. Use `designs/ROUND2.md` for the candidate-specific controls and fixtures.

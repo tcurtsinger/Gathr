@@ -27,3 +27,7 @@ Check from the repository root:
 This checks scripts, IDs, local-only content, history size, and declared theme-role contrast. Use the app's design check and screenshot commands for every page as well. That check cannot validate canonical colors until a direction is picked. DESIGN.md and designs/system.html are intentionally deferred to the pick, per the approved plan.
 
 No before screen exists. No production latency is claimed. No packages, fonts or other assets need downloading.
+
+## Round 2 candidates
+
+See ROUND2.md for v4 Signal, v5 Folio and v6 Relay. These revise visual language, conversation density, state treatments and agent identities. Run node designs/check-round2.cjs as well as the original check.
