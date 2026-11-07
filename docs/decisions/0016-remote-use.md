@@ -1,6 +1,6 @@
 # 0016. Using one computer's chats from another, over Tailscale
 
-Status: proposed, waiting on the owner's pick. Date: 2026-11-07.
+Status: proposed. Date: 2026-11-07. Tailscale is the owner's pick.
 
 The owner works from a Windows PC and a Mac, and wants to use the chats on one from the other, both ways.
 
@@ -39,7 +39,7 @@ All three use a relay their company runs, signed in with the company's account. 
 
 ## The owner's calls
 
-Waiting: Tailscale (this decision's pick), SSH only, or a relay later.
+- **Tailscale (2026-11-07).** Asked to choose between Tailscale, SSH only, or a relay later, the owner chose Tailscale. Turned down: SSH as the main way (kept as documented, with no code), and a relay.
 
 ## Not verified
 
