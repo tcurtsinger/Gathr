@@ -115,6 +115,42 @@ fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
 }
 
 #[test]
+fn an_engine_that_exits_mid_reply_keeps_the_text_already_shown_and_stops_its_tools() {
+    let data = TempDir::new();
+    let fixture = recording("exits_mid_reply");
+    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    sign_in(&data.0);
+    service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Say hi" }),
+    );
+
+    let history = service.wait_for(&chat, 10, "the turn to fail", |h| {
+        turn_status(h) == Some("failed")
+    });
+    let messages = history["messages"].as_array().unwrap();
+    assert!(
+        messages
+            .iter()
+            .any(|m| m["role"] == "assistant" && m["body"] == "Already visible answer"),
+        "the streamed text is missing from the history: {messages:?}"
+    );
+    let tool = messages.iter().find(|m| m["kind"] == "tool");
+    assert_eq!(
+        tool.map(|t| t["body"]["status"].clone()),
+        Some(json!("stopped")),
+        "the open tool call should show stopped: {messages:?}"
+    );
+}
+
+#[test]
 fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retrying() {
     let data = TempDir::new();
     let args = data.0.join("engine-args.jsonl");

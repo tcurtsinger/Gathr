@@ -217,23 +217,29 @@ impl Task {
         });
     }
 
-    pub(super) async fn turn_ended(&mut self, end: TurnEnd) {
-        let Some(mut turn) = self.turn.take() else {
+    /// However the turn ends, what the person already saw stays: text streamed so far is
+    /// saved, and tool calls still open show as stopped.
+    pub(super) async fn keep_what_was_shown(&mut self) {
+        let Some(turn) = self.turn.as_mut() else {
             return;
         };
-        if !turn.partial.is_empty() {
-            let text = std::mem::take(&mut turn.partial);
-            let message = self
-                .db_message(&turn.turn, "assistant", "text", &text)
-                .await;
+        let text = std::mem::take(&mut turn.partial);
+        let id = turn.turn.clone();
+        let open: Vec<String> = turn.tools.keys().cloned().collect();
+        if !text.is_empty() {
+            let message = self.db_message(&id, "assistant", "text", &text).await;
             self.publish(json!({ "type": "message", "message": message }));
         }
-        let open: Vec<String> = turn.tools.keys().cloned().collect();
-        self.turn = Some(turn);
         for id in open {
             self.tool_ended(&id, "stopped").await;
         }
-        let turn = self.turn.take().expect("put back above");
+    }
+
+    pub(super) async fn turn_ended(&mut self, end: TurnEnd) {
+        self.keep_what_was_shown().await;
+        let Some(turn) = self.turn.take() else {
+            return;
+        };
         let status = match () {
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",

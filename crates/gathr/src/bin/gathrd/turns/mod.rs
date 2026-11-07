@@ -453,6 +453,7 @@ impl Task {
             .chat(&self.chat)
             .attr("process.exit.code", code);
         let last_stderr = self.last_stderr.take();
+        self.keep_what_was_shown().await;
         let Some(turn) = self.turn.take() else {
             self.record(event);
             return self.try_next().await;
@@ -484,6 +485,7 @@ impl Task {
             let _ = engine.write(&frames::interrupt("close")).await;
         }
         let pid = engine.pid;
+        self.keep_what_was_shown().await;
         let event = match engine.close(CLOSE_GRACE).await {
             Closed::Exited(code) => Event::point("gathr.engine.close")
                 .ok()
