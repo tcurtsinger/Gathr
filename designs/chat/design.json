@@ -1,1 +1,9 @@
-{"title":"Gathr multi-agent chat","for":"Round 3: live strip, Team panel or pinned working turns","knobs":["--radius","--space"]}
+{
+  "title": "Gathr multi-agent chat",
+  "for": "Round 3: live strip, Team panel or pinned working turns",
+  "knobs": [
+    "--radius",
+    "--space"
+  ],
+  "picked": "v10.html"
+}

@@ -1,1 +1,9 @@
-{"title":"Gathr one-agent chat","for":"Round 3 fixed desktop shell","knobs":["--radius","--space"]}
+{
+  "title": "Gathr one-agent chat",
+  "for": "Round 3 fixed desktop shell",
+  "knobs": [
+    "--radius",
+    "--space"
+  ],
+  "picked": "v8.html"
+}
