@@ -9,14 +9,16 @@ const fixtureAgents = [
 ];
 let selectedAgent = 0;
 let editorOpener;
-const settings = document.createElement('dialog');
-settings.className = 'settings-panel';
-settings.setAttribute('aria-label', 'Settings');
-settings.dataset.id = 'agent-settings';
-settings.innerHTML = `<header class="settings-header"><h2>Settings</h2><button id="agent-close">Close</button></header>
-<div class="settings-body"><nav class="settings-categories" aria-label="Settings categories">
-<button aria-current="page">Agents</button></nav><div class="agent-workspace" id="settings-editor"></div></div>`;
-document.body.append(settings);
+const settings = option === 'accounts' ? document.querySelector('#settings') : document.createElement('dialog');
+if (option !== 'accounts') {
+  settings.className = 'settings-panel';
+  settings.setAttribute('aria-label', 'Settings');
+  settings.dataset.id = 'agent-settings';
+  settings.innerHTML = `<header class="settings-header"><h2>Settings</h2><button id="agent-close">Close</button></header>
+  <div class="settings-body"><nav class="settings-categories" aria-label="Settings categories">
+  <button aria-current="page">Agents</button></nav><div class="agent-workspace" id="settings-editor"></div></div>`;
+  document.body.append(settings);
+}
 const menu = document.createElement('dialog');
 menu.className = 'agent-menu';
 menu.setAttribute('aria-label', 'Edit agent');
@@ -26,13 +28,14 @@ function openAgentSettings() {
   renderEditor(settings.querySelector('#settings-editor'));
   settings.showModal();
 }
-settings.querySelector('#agent-close').onclick = () => settings.close();
+if (option !== 'accounts') settings.querySelector('#agent-close').onclick = () => settings.close();
 for (const dialog of [settings, menu]) dialog.addEventListener('close', () => editorOpener?.focus());
 const settingsLink = [...document.querySelectorAll('.sidebar button')].find(button => button.textContent.trim() === 'Settings');
-settingsLink.dataset.id = 'open-agent-settings';
-settingsLink.onclick = openAgentSettings;
+if (option !== 'accounts') settingsLink.dataset.id = 'open-agent-settings';
+if (option !== 'accounts') settingsLink.onclick = openAgentSettings;
 function renderEditor(host, inline = false) {
   const agent = fixtureAgents[selectedAgent];
+  const accounts = option === 'accounts' ? accountFixtures : null;
   host.innerHTML = `<nav class="agent-list" aria-label="Agents"></nav><form class="agent-form">
 <h3>${agent.name}</h3>
 <label class="agent-field">Engine<select name="engine"><option>Claude Code</option><option>Codex</option></select></label>
@@ -55,14 +58,28 @@ function renderEditor(host, inline = false) {
   });
   const form = host.querySelector('form');
   for (const field of ['engine', 'account', 'effort']) form.elements[field].value = agent[field];
+  if (accounts) {
+    form.elements.engine.closest('label').hidden = true;
+    const picker = form.elements.account;
+    picker.replaceChildren();
+    for (const account of accounts) {
+      const item = document.createElement('option');
+      item.value = String(account.id);
+      item.textContent = account.name + ' / ' + account.engine + (account.signedIn ? '' : ' / Signed out');
+      picker.append(item);
+    }
+    picker.value = String(agent.accountId || accounts[0]?.id || '');
+    form.elements.engine.value = accounts.find(a => String(a.id) === picker.value)?.engine || 'Claude Code';
+  }
   let chosenModel = agent.model;
   function models() {
     host.querySelector('#chosen-model').textContent = chosenModel;
     const results = host.querySelector('.model-results');
     results.replaceChildren();
     const prefix = form.elements.engine.value === 'Codex' ? 'Codex' : 'Claude';
-    const family = prefix === 'Claude' ? ['Sample Opus Latest', 'Sample Opus 4.6'] : [];
-    const names = ['Engine default', ...family, ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
+    const family = prefix === 'Claude' ? ['Sample Opus Latest', 'Sample Sonnet Latest'] : [];
+    const pinned = prefix === 'Claude' ? ['Sample Opus 4.6'] : [];
+    const names = [...family, 'Engine default', ...pinned, ...Array.from({ length: 24 }, (_, i) => `Sample ${prefix} model ${String(i + 1).padStart(2, '0')}`)];
     const filtered = names.filter(name => name.toLowerCase().includes(form.elements.modelSearch.value.toLowerCase()));
     for (const name of filtered) {
       const button = document.createElement('button');
@@ -81,6 +98,13 @@ function renderEditor(host, inline = false) {
     chosenModel = 'Engine default';
     models();
   };
+  if (accounts) form.elements.account.onchange = () => {
+    form.elements.engine.value = accounts.find(a => String(a.id) === form.elements.account.value)?.engine || 'Claude Code';
+    form.elements.effort.value = 'Engine default';
+    form.elements.modelSearch.value = '';
+    chosenModel = 'Engine default';
+    models();
+  };
   form.elements.modelSearch.oninput = models;
   function closeEditor() {
     if (settings.open) settings.close();
@@ -92,6 +116,7 @@ function renderEditor(host, inline = false) {
     event.preventDefault();
     Object.assign(agent, { engine: form.elements.engine.value, account: form.elements.account.value,
       model: chosenModel, effort: form.elements.effort.value });
+    if (accounts) agent.accountId = Number(form.elements.account.value);
     closeEditor();
     notify(agent.name + ' saved');
   };

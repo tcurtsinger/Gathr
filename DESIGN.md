@@ -64,11 +64,20 @@ chat position, draft and form fields. Below 768 px categories move above content
 Shared rules: settings-overlay.css and phase1-selected.css; shared interactions:
 phase1-selected.js. Preview selectors and simulated completion never ship.
 
-Engines holds the selected single-engine form. Diagnostics is another category,
+Settings entry: gear plus Settings at the bottom left, one click (settings-entry/v5).
+Engines lists named accounts. Each row shows name, engine, sign-in state, Rename
+and Sign in or Sign out. Add asks for engine and name, then starts sign-in.
+Gathr owns one program per engine; version and updates appear once per engine
+below the accounts. There is no custom path or engine source control.
+Each account keeps its own login folder, per 0002. Updating a program leaves
+account assignments and logins intact. The preview simulates login completion.
+The accounts layout awaits approval; the entry and account model are selected.
+Diagnostics is another category,
 with a 210 px independently scrolling turn list beside a scrolling timeline. Filters
 stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
-Below 768 px the turn list sits above the timeline. A chat has no Diagnostics link of
-its own: a failure reference and Diagnostics action open it filtered to the affected turn.
+Below 768 px the turn list sits above the timeline. Only an error link in the
+chat and Settings > Diagnostics open Diagnostics; no header or chat menu entry.
+An error link opens Diagnostics filtered to the affected turn.
 Clearing Find restores all turns. Switching categories preserves the filtered view.
 Opening a failure reference resets the status filter so the affected turn is visible.
 References in the timeline simulate Copy, without using the system clipboard.
@@ -116,8 +125,11 @@ Save updates the reusable agent everywhere it is used. There is no per-save Scop
 control. Future turns use the new assignment; running turns retain theirs.
 Roles remain chat-specific. Decision 0026 records the selected design; engine
 integration still needs its approved implementation plan.
-Engine changes refresh the account, model and effort choices and reset dependent
-selections to the engine default. Models are searchable and independently scroll;
+The editor has one Account picker, then Model and Effort. The account implies
+the engine; there is no separate Engine picker. Account changes refresh models
+and effort and reset dependent selections to the engine default. Signed-out
+accounts stay labelled and selectable; sending asks for sign-in.
+Models are searchable and independently scroll;
 the chosen model stays visible above the list. No free-text model identifier.
 Production choices must come from the installed engine, including supported
 effort values and unavailable-model states, pending Cass's capability research.

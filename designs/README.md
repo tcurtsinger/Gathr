@@ -41,3 +41,7 @@ Team panel and `agents/v3.html` separate chat menu editor. Shared form: agent-ed
 agent-editor.js. Five invented agents, two engines, two accounts and 24 sample
 models per engine. Model names and effort values are layout fixtures, not a
 provider capability claim. No engine, login, service or durable storage connects.
+
+Named accounts revision: `settings-entry/v5.html`, layout pending approval.
+Settings entry option 1 is selected. Earlier engine and agent pages are historical
+for account/source controls; v5 shows the account-only assignment form.
