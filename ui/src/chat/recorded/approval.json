@@ -1,0 +1,108 @@
+[
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "message": {
+      "body": "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.",
+      "id": "01M6VR4WHM6AXMJ49RZRBZ3SB0",
+      "kind": "text",
+      "role": "user",
+      "time": "2026-11-07T19:35:41.876Z",
+      "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "ref": "cae53990",
+    "status": "running",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "turn",
+    "why": null
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "text": "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "read"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "message": {
+      "body": {
+        "status": "running",
+        "tool": "Write"
+      },
+      "id": "01M6VR4WJAF8A18HM3048EARCD",
+      "kind": "tool",
+      "role": "assistant",
+      "time": "2026-11-07T19:35:41.898Z",
+      "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "input": {
+      "content": "hi",
+      "file_path": "gathr-test-data\\chats\\01M6VP8XTYX9PQ6YJPQMFQ6SHQ\\note.txt"
+    },
+    "request_id": "d1c7c6f6-d57a-4a85-9015-d5f1d03accbb",
+    "tool": "Write",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "approval"
+  },
+  {
+    "body": {
+      "duration_ms": 3,
+      "status": "ok",
+      "tool": "Write"
+    },
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "message": "01M6VR4WJAF8A18HM3048EARCD",
+    "type": "tool"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "text": "I created `note.txt`",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "delta"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "text": " in the current folder with the",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "delta"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "text": " Write tool. It cont",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "delta"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "text": "ains the word `hi`.",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "delta"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "message": {
+      "body": "I created `note.txt` in the current folder with the Write tool. It contains the word `hi`.",
+      "id": "01M6VR4WJGWP4BDQWX2PV6VZTH",
+      "kind": "text",
+      "role": "assistant",
+      "time": "2026-11-07T19:35:41.904Z",
+      "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73"
+    },
+    "type": "message"
+  },
+  {
+    "chat": "01M6VR4WHETEAHDG879TK37HM4",
+    "ref": "cae53990",
+    "status": "done",
+    "turn": "01M6VR4WHM9T0CN2EN9Q0YXN73",
+    "type": "turn",
+    "why": null
+  }
+]

@@ -18,12 +18,13 @@ Status: early. Product, design and architecture come first; see `docs/`.
 
 ## Build and check
 
-- **Toolchain:** Rust through [rustup](https://rustup.rs); `rust-toolchain.toml` pins the version, so `cargo` picks it up by itself.
+- **Toolchain:** Rust through [rustup](https://rustup.rs); `rust-toolchain.toml` pins the version, so `cargo` picks it up by itself. The UI in `ui/` uses Node 24 (`ui/.node-version`) and npm: run `npm ci` in `ui/` once, and again when `package-lock.json` changes.
 - **The checks CI runs**, from the repo root (run them once before pushing):
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
   - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
+  - in `ui/`: `npx biome ci`, `npx tsc --noEmit`, `npx vitest run`, `npx vite build`. The tests run in a real browser: Edge on Windows (already installed), WebKit on macOS (`npx playwright install webkit` once). A failing test leaves its screenshot in `ui/.vitest/`.
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
@@ -33,6 +34,8 @@ Status: early. Product, design and architecture come first; see `docs/`.
 
 - **The crate:** `crates/gathr` holds the shared library and two binaries: `gathrd`, the service, and `gathr`, the command line. Service code is in `src/bin/gathrd/`, command-line code in `src/bin/gathr/`, and what both use in `src/`.
 - **Start it with test data:** `cargo dev --port <port> --data <folder> --seed` builds both, adds the made-up chats (500 messages, 50 tool calls in a turn, a 20,000-word answer) and starts the service. Ctrl+C stops it and everything it started. Always pass `--data`: without it, the service uses the real app data folder.
+- **With the window:** add `--window` to `cargo dev`: it also starts the UI's dev server on the port plus 10 and the desktop window on it, and Ctrl+C stops them too. A browser can open the same address (`http://127.0.0.1:<port + 10>/`). The dev server adds the service's token to every `/api` request, so the page never holds it.
+- **Without a login:** `examples/replay_engine.rs` stands in for Claude Code. Build it (`cargo build --example replay_engine`), start `cargo dev` with `GATHR_REPLAY` set to a recording in `crates/gathr/tests/frames`, set the Claude Code path in Settings > Engines to `target/debug/examples/replay_engine(.exe)`, and put a made-up `.credentials.json` with an `accessToken` and `refreshToken` in `<data>/accounts/main/claude`. Every send then plays that recording.
 - **Test data alone:** `gathr seed --data <folder>`, with the service stopped. Each run adds another set, so repeated runs make a large folder for timings.
 - **Diagnose with `gathr diag`** (`target/debug/gathr` once built, or `cargo run -q --bin gathr --`), always with `--data <folder>`. JSON by default, `--text` to read:
   - `diag health`: the service now, the database, the last start-up check and the crash log. It answers even when the service or the database won't start.
@@ -46,6 +49,8 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - Chats: `GET`/`POST /api/chats`, `GET /api/chats/<id>` (messages and turns), `POST /api/chats/<id>/messages {"text"}`, `POST /api/chats/<id>/stop`, `POST /api/chats/<id>/approvals/<request_id> {"allow"}`.
   - Claude Code: `GET /api/engines/claude` (path, sign-in), `PUT /api/engines/claude {"path"}` (`null` for the PATH). Used at the next start, no restart.
   - Live: a WebSocket at `/api/live?token=<token>` sends every delta, message, tool, turn, approval and read, as JSON.
+  - Diagnostics: `GET /api/chats/<id>/turns`, each turn with what was asked and its events in order.
+  - The window's own events: `POST /api/ui/events {"name": "gathr.ui.…", "duration_ms", "error", "attrs"}`, recorded like the service's (UI errors, open and switch timings, first text shown).
 - **A signed-in test account:** Claude Code's login for `--data <folder>` lives in `<folder>/accounts/main/claude`. Sign it in once from a terminal of your own: `$env:CLAUDE_CONFIG_DIR = '<folder>\accounts\main\claude'; claude auth login`. Never point it at `~/.claude`.
 - **Engine recordings:** the tests replay real Claude Code frames from `crates/gathr/tests/frames` through `examples/replay_engine.rs`, which `cargo test` builds. To record one, run the turn on a dev service, export its frames with the query in `scripts/scrub-frames.mjs`, run that script, and read the result for anything personal before committing it.
 - **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one.
@@ -115,7 +120,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 - The repo is public. Plans that mention the owner, reviews, evidence, screenshots of real use, and friction go in `X:\code\gathr-work` (`plans\`, `reviews\`, `FRICTION.md`), never in the repo. Screenshots the owner should see are sent to them.
 - Each member works in its own worktree: `git fetch`, then `git worktree add X:\code\gathr-work\trees\<your name>-<topic> -b room/<topic> origin/main`.
-- Dev ports and data folders: each member's dev service runs on its own port and data folder: Orin 47100, Cass 47101, Pia 47102, Juno 47103, Vale 47104, each with `X:\code\gathr-work\data\<name>`. Never use another member's, and never run without `--data`.
+- Dev ports and data folders: each member's dev service runs on its own port and data folder: Orin 47100, Cass 47101, Pia 47102, Juno 47103, Vale 47104, each with `X:\code\gathr-work\data\<name>`; with `--window` the UI takes the port plus 10 (47110 to 47114). Never use another member's, and never run without `--data`.
 - After a merge, bring `X:\code\gathr` up to date: `git fetch`, then `git merge --ff-only origin/main`. Check `git status` first and never discard the owner's changes: if something would be overwritten, stop and ask.
 
 ### Learning from SerenityOS

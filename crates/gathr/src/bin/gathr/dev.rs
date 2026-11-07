@@ -12,43 +12,41 @@ pub fn run(
     data: &DataDir,
     port: u16,
     seed: bool,
+    window: bool,
     show: impl Fn(&serde_json::Value) -> String,
 ) -> Result<(), Error> {
-    build_service()?;
+    build(&["--bin", "gathrd"])?;
+    if window {
+        build(&["-p", "gathr-app"])?;
+    }
     if seed {
         println!("{}", show(&super::run_seed(data)?));
     }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(supervise(data, port))
+    runtime.block_on(supervise(data, port, window))
 }
 
-/// Under `cargo run`, Cargo builds only `gathr`; build `gathrd` beside it, in the same profile.
-fn build_service() -> Result<(), Error> {
+/// Under `cargo run`, Cargo builds only `gathr`; build the rest beside it, in the same profile.
+fn build(what: &[&str]) -> Result<(), Error> {
     let Some(cargo) = std::env::var_os("CARGO") else {
         return Ok(());
     };
     let manifest = concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml");
     let mut build = std::process::Command::new(cargo);
-    build.args([
-        "build",
-        "--quiet",
-        "--bin",
-        "gathrd",
-        "--manifest-path",
-        manifest,
-    ]);
+    build.args(["build", "--quiet", "--manifest-path", manifest]);
+    build.args(what);
     if !cfg!(debug_assertions) {
         build.arg("--release");
     }
     match build.status()? {
         status if status.success() => Ok(()),
-        status => Err(Error::Other(format!("building gathrd failed ({status})"))),
+        status => Err(Error::Other(format!("building {what:?} failed ({status})"))),
     }
 }
 
-async fn supervise(data: &DataDir, port: u16) -> Result<(), Error> {
+async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error> {
     let exe =
         std::env::current_exe()?.with_file_name(format!("gathrd{}", std::env::consts::EXE_SUFFIX));
     let mut child = tokio::process::Command::new(&exe)
@@ -67,9 +65,16 @@ async fn supervise(data: &DataDir, port: u16) -> Result<(), Error> {
         info.port,
         data.path().display()
     );
+    let window = match window {
+        true => Some(crate::window::start(data, info.port).await?),
+        false => None,
+    };
     tokio::select! {
         status = child.wait() => return Err(exited(data, status?)),
         () = stop_signal() => {}
+    }
+    if let Some(window) = window {
+        window.stop().await;
     }
     println!("Stopping gathrd pid {pid}…");
     // The service may have had the Ctrl+C itself (macOS sends it to the whole group) and be gone already.
