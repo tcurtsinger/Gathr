@@ -118,6 +118,52 @@ fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_re
     assert_eq!(start["attrs"]["version"], "2.1.183", "{start}");
 }
 
+/// A launcher that never answers `--version` fails the send with a reference, rather than
+/// leaving the chat unable to answer Send or Stop.
+#[test]
+fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
+    let data = TempDir::new();
+    let service = TestService::start_with(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_VERSION", Path::new("stall")),
+        ],
+    );
+    let chat = service.new_chat();
+    service.send(
+        "PUT",
+        "/api/engines/claude",
+        json!({ "path": replay_engine() }),
+    );
+    sign_in(&data.0);
+
+    let (port, token) = (service.info.port, service.info.token.clone());
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let body = json!({ "text": "Say hi" });
+        let path = format!("/api/chats/{chat}/messages");
+        let _ = tx.send(gathr::http::send(port, &token, "POST", &path, &body).unwrap());
+    });
+    let sent = rx
+        .recv_timeout(Duration::from_secs(20))
+        .expect("Send unanswered after 20 s with a stalled --version");
+    assert_eq!(sent.status, 500, "{}", sent.body);
+    let answer = sent.json();
+    assert!(
+        answer["why"].as_str().unwrap().contains("didn't answer"),
+        "{answer}"
+    );
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);
+    assert!(ok, "{trace}");
+    let failed = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|e| e["name"] == "gathr.engine.start" && e["error_type"] == "engine_version");
+    assert!(failed, "no engine_version failure in the trace: {trace}");
+}
+
 /// 0019: why the engine stopped is on the failed turn itself, and its reference finds it.
 #[test]
 fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {

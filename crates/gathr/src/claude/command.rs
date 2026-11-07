@@ -162,22 +162,50 @@ pub fn find(setting: Option<&str>) -> Result<PathBuf, String> {
 /// settings out under `--setting-sources` (2.1.314).
 const MIN_VERSION: [u32; 3] = [2, 1, 318];
 
+/// How long `--version` may take: Claude Code answers in tens of milliseconds, and a launcher
+/// that hangs would otherwise hold the chat's Send and Stop with it.
+const VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 /// Claude Code's version from `<program> --version`, and why Gathr can't run it if it can't
-/// (with the version, when one was read). Blocks for the few milliseconds it takes; the service
-/// calls it off its async threads.
+/// (with the version, when one was read). Blocks until it answers or `VERSION_WAIT` passes; the
+/// service calls it off its async threads.
 pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
     let mut command = std::process::Command::new(program);
-    command.arg("--version").stdin(std::process::Stdio::null());
+    command
+        .arg("--version")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
     crate::platform::no_window(&mut command);
-    match command.output() {
-        Ok(output) => usable(&String::from_utf8_lossy(&output.stdout)),
-        Err(e) => (
-            None,
-            Err(format!(
-                "Claude Code's version wasn't read from {}: {e}",
-                program.display()
-            )),
-        ),
+    let unread = |e: String| {
+        let why = format!(
+            "Claude Code's version wasn't read from {}: {e}",
+            program.display()
+        );
+        (None, Err(why))
+    };
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(e) => return unread(e.to_string()),
+    };
+    let mut stdout = child.stdout.take().expect("stdout is piped");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut answer = String::new();
+        let _ = std::io::Read::read_to_string(&mut stdout, &mut answer);
+        let _ = tx.send(answer);
+    });
+    match rx.recv_timeout(VERSION_WAIT) {
+        Ok(answer) => {
+            let _ = child.wait();
+            usable(&answer)
+        }
+        // Safe to kill: `--version` only prints, it never renews a login.
+        Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            unread(format!("it didn't answer in {} s", VERSION_WAIT.as_secs()))
+        }
     }
 }
 
