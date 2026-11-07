@@ -10,7 +10,7 @@ fn health_answers_with_the_token() {
     let service = TestService::start(&dir.0);
     let response = service.call("GET", "/health");
     assert_eq!(response.status, 200, "{}", response.body);
-    assert_eq!(response.json()["schema_version"], 1);
+    assert_eq!(response.json()["schema_version"], gathr::db::SCHEMA_VERSION);
 }
 
 #[test]

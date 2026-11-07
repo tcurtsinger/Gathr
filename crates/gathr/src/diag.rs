@@ -110,6 +110,87 @@ pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
     Ok(json!({ "since": crate::ids::utc(since_us), "groups": groups }))
 }
 
+/// The turns behind a reference, with how each ended and its events; with `raw`, every engine
+/// frame in and out of each turn, as recorded (redacted).
+pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Error> {
+    let mut answer = trace(conn, reference)?;
+    let reference = answer["reference"].as_str().unwrap_or_default().to_string();
+    let mut stmt = conn.prepare(
+        "SELECT id, status, why FROM turns WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY created_ts",
+    )?;
+    let mut turns = rows_as_json(&mut stmt, [&reference])?;
+    if raw {
+        let mut frames = conn.prepare(
+            "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ts / 1000000.0, 'unixepoch') AS time, pid, direction,
+                    frame_type, size, malformed, body
+             FROM engine_raw WHERE turn_id = ?1 ORDER BY id LIMIT ?2",
+        )?;
+        for turn in &mut turns {
+            let id = turn["id"].as_str().unwrap_or_default().to_string();
+            let mut rows = rows_as_json(&mut frames, rusqlite::params![id, QUERY_CAP as i64 + 1])?;
+            turn["frames_truncated"] = (rows.len() > QUERY_CAP).into();
+            rows.truncate(QUERY_CAP);
+            for row in &mut rows {
+                // A JSON frame reads as JSON, not as a string of JSON.
+                if let Some(body) = row["body"]
+                    .as_str()
+                    .and_then(|b| serde_json::from_str::<Value>(b).ok())
+                {
+                    row["body"] = body;
+                }
+            }
+            turn["frames"] = rows.into();
+        }
+    }
+    answer["turns"] = turns.into();
+    Ok(answer)
+}
+
+/// What someone helping needs, in one file in `<data>/bundles`: health, the last day's
+/// failures, the last 2,000 events and the last day's engine frames without their bodies,
+/// which may hold conversation text.
+pub fn bundle(data: &DataDir) -> Result<Value, Error> {
+    let (conn, _) = db::open_read_only(&data.db())?;
+    let day_ago = crate::ids::now_us() - 86_400_000_000;
+    let events = "SELECT * FROM (SELECT time, name, phase, status, error_type, duration_us, ref, conversation_id, attrs
+                  FROM event_log ORDER BY ts DESC LIMIT 2000) ORDER BY time";
+    let frames = format!(
+        "SELECT strftime('%Y-%m-%dT%H:%M:%fZ', ts / 1000000.0, 'unixepoch') AS time, chat_id, turn_id, pid,
+                direction, frame_type, size, malformed
+         FROM engine_raw WHERE ts >= {day_ago} ORDER BY id DESC LIMIT 2000"
+    );
+    let all = |sql: &str| -> Result<Vec<Value>, Error> {
+        let mut stmt = conn.prepare(sql)?;
+        let names: Vec<String> = stmt.column_names().map(String::from).collect();
+        let mut rows = stmt.query([])?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next()? {
+            let object: Map<String, Value> = names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| Ok((n.clone(), cell(row.get_ref(i)?, n))))
+                .collect::<Result<_, rusqlite::Error>>()?;
+            out.push(Value::Object(object));
+        }
+        Ok(out)
+    };
+    let bundle = json!({
+        "made": crate::ids::utc(crate::ids::now_us()),
+        "version": crate::VERSION,
+        "health": health(data),
+        "failures": failures(&conn, day_ago)?,
+        "events": all(events)?,
+        "engine_frames": all(&frames)?,
+    });
+    let folder = data.path().join("bundles");
+    std::fs::create_dir_all(&folder)?;
+    let stamp = crate::ids::utc(crate::ids::now_us()).replace([':', '.'], "-");
+    let path = folder.join(format!("gathr-bundle-{stamp}.json"));
+    let bytes = serde_json::to_vec_pretty(&bundle)?;
+    std::fs::write(&path, &bytes)?;
+    Ok(json!({ "written": path, "bytes": bytes.len() }))
+}
+
 /// Read-only SQL, capped at `QUERY_CAP` rows. The connection is read-only, so writes fail.
 pub fn query(conn: &Connection, sql: &str) -> Result<Value, Error> {
     let mut stmt = conn.prepare(sql)?;

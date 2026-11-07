@@ -27,6 +27,22 @@ pub fn token() -> String {
     hex(&random::<32>())
 }
 
+/// A random (version 4) UUID, the form Claude Code takes for `--session-id`.
+pub fn uuid() -> String {
+    let mut b = random::<16>();
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h = hex(&b);
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..]
+    )
+}
+
 /// What the person sees next to an error: the first 8 characters of its trace id (0019).
 pub fn reference(trace_id: &str) -> &str {
     &trace_id[..8.min(trace_id.len())]

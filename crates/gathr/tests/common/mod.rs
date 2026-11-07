@@ -1,4 +1,6 @@
 //! A real `gathrd` on a temp data folder and a free port, and the `gathr` command against it.
+// Each test file uses part of this module.
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
@@ -32,7 +34,16 @@ pub struct TestService {
 
 impl TestService {
     pub fn start(data: &Path) -> TestService {
-        let mut child = gathrd(data).spawn().unwrap();
+        Self::start_with(data, &[])
+    }
+
+    /// Starts it with extra environment variables, such as the replay engine's.
+    pub fn start_with(data: &Path, env: &[(&str, &Path)]) -> TestService {
+        let mut command = gathrd(data);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        let mut child = command.spawn().unwrap();
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             if let Ok(info) = ServiceInfo::read(&DataDir::new(data))
@@ -57,6 +68,39 @@ impl TestService {
         http::call(self.info.port, &self.info.token, method, path).unwrap()
     }
 
+    pub fn send(&self, method: &str, path: &str, body: Value) -> Response {
+        http::send(self.info.port, &self.info.token, method, path, &body).unwrap()
+    }
+
+    /// A new chat's id.
+    pub fn new_chat(&self) -> String {
+        let chat = self.send("POST", "/api/chats", serde_json::json!({}));
+        assert_eq!(chat.status, 200, "{}", chat.body);
+        chat.json()["id"].as_str().unwrap().to_string()
+    }
+
+    /// Polls the chat until `done` holds for its history, or fails after `secs`.
+    pub fn wait_for(
+        &self,
+        chat: &str,
+        secs: u64,
+        what: &str,
+        done: impl Fn(&Value) -> bool,
+    ) -> Value {
+        let deadline = Instant::now() + Duration::from_secs(secs);
+        loop {
+            let history = self.call("GET", &format!("/api/chats/{chat}")).json();
+            if done(&history) {
+                return history;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "waited {secs} s for {what}; the chat: {history}"
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+
     /// Asks the service to stop and waits for it to exit.
     pub fn stop(mut self) -> std::process::ExitStatus {
         let _ = self.call("POST", "/api/shutdown");
@@ -77,6 +121,36 @@ pub fn gathrd(data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_gathrd"));
     command.arg("--data").arg(data).arg("--port").arg("0");
     command
+}
+
+/// The replay engine (`examples/replay_engine.rs`), which `cargo test` builds next to the tests.
+pub fn replay_engine() -> PathBuf {
+    let deps = std::env::current_exe().unwrap();
+    let examples = deps.parent().unwrap().parent().unwrap().join("examples");
+    let path = examples.join(format!("replay_engine{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        path.is_file(),
+        "{} isn't built: run the tests with cargo test",
+        path.display()
+    );
+    path
+}
+
+/// A recorded engine session in `tests/frames`.
+pub fn recording(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/frames")
+        .join(format!("{name}.jsonl"))
+}
+
+/// A made-up login in the test account's folder, current for an hour, so a turn may start.
+pub fn sign_in(data: &Path) {
+    let folder = data.join("accounts/main/claude");
+    std::fs::create_dir_all(&folder).unwrap();
+    let expires = gathr::ids::now_us() / 1000 + 3_600_000;
+    let login = serde_json::json!({ "claudeAiOauth": {
+        "accessToken": "made-up", "refreshToken": "made-up", "expiresAt": expires } });
+    std::fs::write(folder.join(".credentials.json"), login.to_string()).unwrap();
 }
 
 /// Runs `gathr --data <data> <args>`; returns its JSON answer (stdout, or stderr on failure).

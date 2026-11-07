@@ -56,6 +56,15 @@ enum Diag {
     },
     /// Read-only SQL over the database, up to 1,000 rows. The `event_log` view shows events readably.
     Query { sql: String },
+    /// The turns behind a reference: how each ended and its events.
+    Turn {
+        reference: String,
+        /// Also every engine frame in and out of each turn, as recorded.
+        #[arg(long)]
+        raw: bool,
+    },
+    /// Writes health, recent failures, events and engine frames (no bodies) to one file to share.
+    Bundle,
 }
 
 fn main() -> ExitCode {
@@ -90,12 +99,15 @@ fn main() -> ExitCode {
 }
 
 fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
-    if let Diag::Health = diag {
-        return Ok(diag::health(data));
+    match diag {
+        Diag::Health => return Ok(diag::health(data)),
+        Diag::Bundle => return diag::bundle(data),
+        _ => {}
     }
     let (conn, _) = db::open_read_only(&data.db())?;
     match diag {
-        Diag::Health => unreachable!("answered above"),
+        Diag::Health | Diag::Bundle => unreachable!("answered above"),
+        Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw),
         Diag::Trace { reference } => diag::trace(&conn, &reference),
         Diag::Failures { since } => diag::failures(&conn, ids::now_us() - parse_since(&since)?),
         Diag::Query { sql } => diag::query(&conn, &sql),
