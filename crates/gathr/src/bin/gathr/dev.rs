@@ -58,7 +58,7 @@ async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error>
     let pid = child.id().unwrap_or(0);
     let info = tokio::select! {
         info = ready(data, pid) => info?,
-        status = child.wait() => return Err(exited(data, status?)),
+        status = child.wait() => return ended(data, pid, status?),
     };
     println!(
         "Gathr service on http://127.0.0.1:{}, pid {pid}, data {}. Ctrl+C stops it.",
@@ -69,12 +69,15 @@ async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error>
         true => Some(crate::window::start(data, info.port).await?),
         false => None,
     };
-    tokio::select! {
-        status = child.wait() => return Err(exited(data, status?)),
-        () = stop_signal() => {}
-    }
+    let stopped = tokio::select! {
+        status = child.wait() => Some(status?),
+        () = stop_signal() => None,
+    };
     if let Some(window) = window {
         window.stop().await;
+    }
+    if let Some(status) = stopped {
+        return ended(data, pid, status);
     }
     println!("Stopping gathrd pid {pid}…");
     // The service may have had the Ctrl+C itself (macOS sends it to the whole group) and be gone already.
@@ -107,9 +110,16 @@ async fn ready(data: &DataDir, pid: u32) -> Result<ServiceInfo, Error> {
     )))
 }
 
-fn exited(data: &DataDir, status: ExitStatus) -> Error {
+/// The service ended by itself. `/api/shutdown` ends it with 0: a stop someone asked for.
+fn ended(data: &DataDir, pid: u32, status: ExitStatus) -> Result<(), Error> {
+    if status.success() {
+        println!("Stopped: gathrd pid {pid} exited ({status}).");
+        return Ok(());
+    }
     let lines = CrashLog::new(data.crash_log()).last_lines(5).join("\n  ");
-    Error::Other(format!("gathrd exited ({status}). Crash log:\n  {lines}"))
+    Err(Error::Other(format!(
+        "gathrd exited ({status}). Crash log:\n  {lines}"
+    )))
 }
 
 /// Ctrl+C, closing the console window on Windows, or SIGTERM on Unix.

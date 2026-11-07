@@ -2,7 +2,11 @@
 
 mod common;
 
+use std::time::{Duration, Instant};
+
 use common::{TempDir, TestService, gathr, gathrd};
+use gathr::data::{DataDir, ServiceInfo};
+use gathr::http;
 
 #[test]
 fn health_answers_with_the_token() {
@@ -102,5 +106,37 @@ fn stopping_records_why() {
     assert_eq!(
         answer["rows"][0]["reason"], "requested over the API",
         "{answer}"
+    );
+}
+
+/// `gathr dev` stopped through `/api/shutdown` is a stop someone asked for, not a failure.
+#[test]
+fn dev_stopped_over_the_api_ends_cleanly() {
+    let dir = TempDir::new();
+    let dev = std::process::Command::new(env!("CARGO_BIN_EXE_gathr"))
+        .args(["--data", dir.0.to_str().unwrap(), "dev", "--port", "0"])
+        .env_remove("CARGO") // Not under `cargo run`, so it builds nothing.
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let info = loop {
+        if let Ok(info) = ServiceInfo::read(&DataDir::new(&dir.0)) {
+            break info;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "gathr dev wrote no service.json in 20 s"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    http::call(info.port, &info.token, "POST", "/api/shutdown").unwrap();
+    let out = dev.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "gathr dev exited {}: {}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
     );
 }
