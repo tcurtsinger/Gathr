@@ -1,2 +1,172 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gathr design system</title><link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css"><style>body{max-width:1000px;margin:auto;padding:32px}section{margin:32px 0}h1{font-size:28px}h2{font-size:20px}code{font:13px Consolas,monospace}.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}.swatch{border:1px solid var(--control);padding:16px}.chip{height:40px;margin-bottom:8px;border:1px solid var(--control)}.example{max-width:760px}nav{display:flex;gap:12px;flex-wrap:wrap}</style></head><body><h1 data-id="title">Gathr</h1><button data-id="theme" onclick="document.documentElement.classList.toggle('light')">Switch theme</button><nav data-id="screens"><a href="chat/v13.html">chat</a><a href="single-chat/v11.html">single-chat</a><a href="new-chat/v11.html">new-chat</a><a href="start-chat/v12.html">start-chat</a></nav><section data-id="colors"><h2>Colours</h2><div class="swatches"><div class="swatch"><div class="chip" style="background:var(--canvas)"></div><code>--canvas</code></div><div class="swatch"><div class="chip" style="background:var(--surface)"></div><code>--surface</code></div><div class="swatch"><div class="chip" style="background:var(--raised)"></div><code>--raised</code></div><div class="swatch"><div class="chip" style="background:var(--text)"></div><code>--text</code></div><div class="swatch"><div class="chip" style="background:var(--muted)"></div><code>--muted</code></div><div class="swatch"><div class="chip" style="background:var(--border)"></div><code>--border</code></div><div class="swatch"><div class="chip" style="background:var(--accent)"></div><code>--accent</code></div><div class="swatch"><div class="chip" style="background:var(--focus)"></div><code>--focus</code></div><div class="swatch"><div class="chip" style="background:var(--control)"></div><code>--control</code></div><div class="swatch"><div class="chip" style="background:var(--backdrop)"></div><code>--backdrop</code></div></div></section><section data-id="type"><h2>Typography</h2><p style="font-size:28px">New chat</p><p>15 px conversation, Segoe UI Variable</p><p style="font-size:13px">13 px sidebar and author</p><p style="font-size:12px">12 px controls and metadata</p></section><section data-id="spacing"><h2>Spacing and shape</h2><p>4, 8, 12, 16, 24, 32 px</p><p>Controls 7 px, message 18 px, composer 22 px</p></section><section class="example" data-id="messages"><h2>Messages</h2><article class="message user"><div class="content"><p>Check cancellation too.</p></div></article><article class="message"><div class="who"><span class="monogram">RW</span>Rowan<small>Engineer</small></div><p>The stream resumes from the last complete event.</p><details class="tools"><summary>Read 3 files</summary><pre>stream.ts
-reconnect.test.ts</pre></details></article></section><section data-id="controls"><h2>Controls</h2><button class="primary">Create</button><button disabled>Create</button><button>Cancel</button><label class="choose"><input class="agentcheck" type="checkbox"> Rowan</label><label class="field">Supervisor<select aria-label="Supervisor"><option>Choose</option><option>Rowan</option></select></label></section><section data-id="team"><h2>Team</h2><div class="agentrow"><div class="who"><span class="monogram">SL</span>Sol<small>Reviewer</small></div><p>Waiting for Rowan, since 10:42</p></div><div class="taskrow">Review patch<small>Sol</small></div></section><section data-id="composer-example"><h2>Composer</h2><div class="composer" data-id="composer"><textarea id="draft" aria-label="Message" placeholder="Message the team"></textarea><div class="composerbottom"><button onclick="document.querySelector('#attach').click()" aria-label="Attach files"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="attach" type="file" hidden onchange="notify(this.files.length+' file attached')"><select aria-label="Recipient"><option>Everyone</option><option>Mira</option><option>Rowan</option><option>Kit</option><option>Sol</option><option>Lane</option></select><select aria-label="Model and effort"><option>GPT-6 / High</option><option>Claude / High</option></select><select aria-label="Approvals"><option>Ask to edit</option><option>Auto edit</option></select><div class="context"><span class="meter" aria-hidden="true"></span><span id="usage">62%</span><button onclick="document.querySelector('#usage').textContent='18%';notify('Context summarised locally')">Summarise</button></div><button class="send" aria-label="Send" onclick="send()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div></div></div></div></section><script>if(location.hash==='#light')document.documentElement.classList.add('light');function notify(t){document.querySelector('#status').textContent=t}function send(){notify('Queued locally')}document.querySelectorAll('[onclick]').forEach(b=>{if(!b.closest('[data-id="theme"]'))b.onclick=()=>notify('Preview')});</script><p id="status" role="status"></p></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gathr design system</title><link rel="stylesheet" href="tokens.css"><link
+  rel="stylesheet" href="components.css"><style>
+body {
+  max-width: 1000px;
+  margin: auto;
+  padding: 32px;
+}
+section {
+  margin: 32px 0;
+}
+h1 {
+  font-size: 28px;
+}
+h2 {
+  font-size: 20px;
+}
+code {
+  font: 13px Consolas,monospace;
+}
+.swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(140px,1fr));
+  gap: 12px;
+}
+.swatch {
+  border: 1px solid var(--control);
+  padding: 16px;
+}
+.chip {
+  height: 40px;
+  margin-bottom: 8px;
+  border: 1px solid var(--control);
+}
+.example {
+  max-width: 760px;
+}
+nav {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+</style>
+</head>
+<body>
+<h1 data-id="title">Gathr</h1><button data-id="theme" onclick="document.documentElement.classList.toggle('light')">Switch theme</button>
+<nav data-id="screens">
+<a href="chat/v13.html">chat</a><a href="single-chat/v11.html">single-chat</a><a href="new-chat/v11.html">new-chat</a><a href="start-chat/v12.html">start-chat</a>
+</nav>
+<section data-id="colors">
+<h2>Colours</h2>
+<div class="swatches">
+<div class="swatch">
+<div class="chip" style="background:var(--canvas)"></div>
+<code>--canvas</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--surface)"></div>
+<code>--surface</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--raised)"></div>
+<code>--raised</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--text)"></div>
+<code>--text</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--muted)"></div>
+<code>--muted</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--border)"></div>
+<code>--border</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--accent)"></div>
+<code>--accent</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--focus)"></div>
+<code>--focus</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--control)"></div>
+<code>--control</code>
+</div>
+<div class="swatch">
+<div class="chip" style="background:var(--backdrop)"></div>
+<code>--backdrop</code>
+</div>
+</div>
+</section>
+<section data-id="type">
+<h2>Typography</h2><p style="font-size:28px">New chat</p><p>15 px conversation, Segoe UI Variable</p><p style="font-size:13px">13 px sidebar and author</p><p
+  style="font-size:12px">12 px controls and metadata</p>
+</section>
+<section data-id="spacing">
+<h2>Spacing and shape</h2><p>4, 8, 12, 16, 24, 32 px</p><p>Controls 7 px, message 18 px, composer 22 px</p>
+</section>
+<section class="example" data-id="messages">
+<h2>Messages</h2>
+<article class="message user">
+<div class="content">
+<p>Check cancellation too.</p>
+</div>
+</article>
+<article class="message">
+<div class="who">
+<span class="monogram">RW</span>Rowan<small>Engineer</small>
+</div>
+<p>The stream resumes from the last complete event.</p>
+<details class="tools">
+<summary>Read 3 files</summary><pre>stream.ts
+reconnect.test.ts</pre>
+</details>
+</article>
+</section>
+<section data-id="controls">
+<h2>Controls</h2><button class="primary">Create</button><button disabled>Create</button><button>Cancel</button><label class="choose"><input class="agentcheck" type="checkbox"> Rowan</label
+><label class="field">Supervisor<select aria-label="Supervisor"><option>Choose</option><option>Rowan</option></select></label>
+</section>
+<section data-id="team">
+<h2>Team</h2>
+<div class="agentrow">
+<div class="who">
+<span class="monogram">SL</span>Sol<small>Reviewer</small>
+</div>
+<p>Waiting for Rowan, since 10:42</p>
+</div>
+<div class="taskrow">
+Review patch<small>Sol</small>
+</div>
+</section>
+<section data-id="composer-example">
+<h2>Composer</h2>
+<div class="composer" data-id="composer">
+<textarea id="draft" aria-label="Message" placeholder="Message the team"></textarea>
+<div class="composerbottom">
+<button onclick="document.querySelector('#attach').click()" aria-label="Attach files"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="attach" type="file" hidden
+  onchange="notify(this.files.length+' file attached')"><select aria-label="Recipient"><option>Everyone</option><option>Mira</option><option>Rowan</option><option>Kit</option><option
+>Sol</option><option>Lane</option></select><select aria-label="Model and effort"><option>GPT-6 / High</option><option>Claude / High</option></select><select aria-label="Approvals"><option
+>Ask to edit</option><option>Auto edit</option></select>
+<div class="context">
+<span class="meter" aria-hidden="true"></span><span id="usage">62%</span><button onclick="document.querySelector('#usage').textContent='18%';notify('Context summarised locally')">Summarise</button
+>
+</div>
+<button class="send" aria-label="Send" onclick="send()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<script>
+if (location.hash === '#light') document.documentElement.classList.add('light');
+function notify(t) {
+  document.querySelector('#status').textContent = t;
+}
+function send() {
+  notify('Queued locally');
+}
+document.querySelectorAll('[onclick]').forEach(b => {
+  if (!b.closest('[data-id="theme"]')) b.onclick = () => notify('Preview');
+});
+</script><p id="status" role="status"></p>
+</body>
+</html>

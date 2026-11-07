@@ -1,1 +1,28 @@
-:root{color-scheme:dark;--backdrop:#00000088;--canvas:#191919;--surface:#222222;--raised:#303030;--text:#e8e8e6;--muted:#b0b0ad;--border:#383838;--accent:#a6c4df;--focus:#a6c4df;--control:#777774;--radius:16px;--space:16px}html.light{color-scheme:light;--backdrop:#00000088;--canvas:#faf9f6;--surface:#f0efeb;--raised:#e6e5e0;--text:#292927;--muted:#63635e;--border:#dbdad4;--accent:#365b7b;--focus:#365b7b;--control:#85857f}
+:root {
+  color-scheme: dark;
+  --backdrop: #00000088;
+  --canvas: #191919;
+  --surface: #222222;
+  --raised: #303030;
+  --text: #e8e8e6;
+  --muted: #b0b0ad;
+  --border: #383838;
+  --accent: #a6c4df;
+  --focus: #a6c4df;
+  --control: #777774;
+  --radius: 16px;
+  --space: 16px;
+}
+html.light {
+  color-scheme: light;
+  --backdrop: #00000088;
+  --canvas: #faf9f6;
+  --surface: #f0efeb;
+  --raised: #e6e5e0;
+  --text: #292927;
+  --muted: #63635e;
+  --border: #dbdad4;
+  --accent: #365b7b;
+  --focus: #365b7b;
+  --control: #85857f;
+}

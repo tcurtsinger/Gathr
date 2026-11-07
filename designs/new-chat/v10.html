@@ -1,1 +1,257 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gathr | empty</title><link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../components.css"></head><body data-mode="empty"><a class="skip" href="#main">Skip to conversation</a><div class="app"><aside class="sidebar" data-id="sidebar"><div class="brand"><strong><span class="logo" aria-hidden="true"><i></i><i></i></span>Gathr</strong><button onclick="theme()" aria-label="Switch theme" title="Switch theme">◐</button></div><button class="navbutton" data-id="nav-new" onclick="location.href='../new-chat/v10.html'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg><span>New</span></button><button class="navbutton" data-id="nav-search" onclick="document.querySelector('.search').hidden=!document.querySelector('.search').hidden"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="flex-shrink:0"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search</span></button><input class="search" hidden aria-label="Search chats" oninput="search(this.value)"><nav class="navscroll" aria-label="Projects and conversations"><div class="label">Projects</div><details class="project" open><summary>Gathr</summary><button data-id="chat-0-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Reconnect streaming</span><b class="stack" aria-label="Multiple agents">◯◯</b><b class="dot" aria-label="Working">·</b></button><button data-id="chat-0-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Keyboard navigation</span></button><button data-id="chat-0-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Release checklist</span></button></details><details class="project" open><summary>Fieldnotes</summary><button data-id="chat-1-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Capture quick notes</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-1-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search archived entries</span></button><button data-id="chat-1-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export a notebook</span></button></details><details class="project" open><summary>Maple editor</summary><button data-id="chat-2-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Preserve cursor on undo</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-2-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Split editor panes</span></button><button data-id="chat-2-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Open large files</span></button></details><details class="project" ><summary>Harbor CLI</summary><button data-id="chat-3-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Shell completion</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-3-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Retry interrupted uploads</span></button><button data-id="chat-3-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Format command output</span></button></details><details class="project" ><summary>Juniper docs</summary><button data-id="chat-4-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Versioned API examples</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-4-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Repair broken anchors</span></button><button data-id="chat-4-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search the handbook</span></button></details><details class="project" ><summary>Papertrail</summary><button data-id="chat-5-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Group audit events</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-5-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export activity history</span></button><button data-id="chat-5-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Filter by actor</span></button></details><details class="project" ><summary>Loom tests</summary><button data-id="chat-6-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Parallel test workers</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-6-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Quarantine flaky specs</span></button><button data-id="chat-6-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Record failed assertions</span></button></details><details class="project" ><summary>Arcade kit</summary><button data-id="chat-7-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Remap controller buttons</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-7-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Save game progress</span></button><button data-id="chat-7-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Scale the HUD</span></button></details><details class="project" ><summary>Northwind</summary><button data-id="chat-8-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Reconcile stock counts</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-8-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Schedule supplier imports</span></button><button data-id="chat-8-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Find overdue orders</span></button></details><details class="project" ><summary>Canvas lab</summary><button data-id="chat-9-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Snap shapes to grid</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-9-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export transparent PNGs</span></button><button data-id="chat-9-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Restore canvas zoom</span></button></details><details class="project" ><summary>Pebble</summary><button data-id="chat-10-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Track recurring expenses</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-10-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Sort transactions</span></button><button data-id="chat-10-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Import bank CSVs</span></button></details><details class="project" ><summary>Pocket atlas</summary><button data-id="chat-11-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Cache maps offline</span><b class="stack" aria-label="Multiple agents">◯◯</b></button><button data-id="chat-11-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search saved places</span></button><button data-id="chat-11-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Plan a walking route</span></button></details><div class="label">Recent</div><button class="chatrow" data-id="recent-0" onclick="notify('Opened Compare local models')"><span>Compare local models</span></button><button class="chatrow" data-id="recent-1" onclick="notify('Opened Draft release notes')"><span>Draft release notes</span></button><button class="chatrow" data-id="recent-2" onclick="notify('Opened Plan a weekend hike')"><span>Plan a weekend hike</span></button><button class="chatrow" data-id="recent-3" onclick="notify('Opened Explain SQLite WAL')"><span>Explain SQLite WAL</span></button><button class="chatrow" data-id="recent-4" onclick="notify('Opened Review a query')"><span>Review a query</span></button><button class="chatrow" data-id="recent-5" onclick="notify('Opened Name the new library')"><span>Name the new library</span></button></nav><div class="profile"><button onclick="notify('Settings are outside this layout study')">Settings</button></div></aside><main class="workspace" id="main"><header class="topbar"><h1>Gathr</h1></header><div class="bodygrid"><section class="empty" data-id="empty-chat"><h2>What are we working on?</h2><div class="emptycontrols"><button onclick="show('Project','Choose a folder for this chat.','Choose')">Project: None</button><button onclick="location.href='../start-chat/v11.html'">Agents: Rowan</button></div><div class="composer" data-id="composer"><textarea id="draft" aria-label="Message" placeholder="Message Rowan"></textarea><div class="composerbottom"><button onclick="document.querySelector('#attach').click()" aria-label="Attach files"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="attach" type="file" hidden onchange="notify(this.files.length+' file attached')"><select aria-label="Recipient"><option>Rowan</option><option>Mira</option><option>Rowan</option><option>Kit</option><option>Sol</option><option>Lane</option></select><select aria-label="Model and effort"><option>GPT-6 / High</option><option>Claude / High</option></select><select aria-label="Approvals"><option>Ask to edit</option><option>Auto edit</option></select><div class="context"><span class="meter" aria-hidden="true"></span><span id="usage">62%</span><button onclick="document.querySelector('#usage').textContent='18%';notify('Context summarised locally')">Summarise</button></div><button class="send" aria-label="Send" onclick="send()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button></div></div></section></div></main></div><dialog><h2></h2><p></p><div class="dialogactions"><button onclick="this.closest('dialog').close()">Cancel</button><button id="confirm" class="primary" onclick="this.closest('dialog').close();notify('Updated locally')">Review</button></div></dialog><div class="toast" role="status"></div><script>const mode=document.body.dataset.mode;const diffHTML="<h2>stream.ts</h2><p class=\"subtle\">main / working tree</p><pre class=\"diff\">  81  const event = parse(chunk);\n  82\n<span class=\"add\">+ 83  if (seen.has(event.id)) {\n+ 84    continue;\n+ 85  }\n+ 86  seen.add(event.id);</span>\n  87  append(event.text);\n<span class=\"add\">+ 88  cursor = event.id;</span></pre><details class=\"tools\"><summary>tests/reconnect.test.ts +14 −2</summary><pre>it('ignores duplicate events')\nit('resumes a split tool result')</pre></details>";const teamHTML="<h2>Agents</h2><section class=\"agentrow\" data-id=\"agent-0\"><div class=\"who\"><span class=\"monogram\">MR</span>Mira<small>Supervisor</small></div><p>Coordinating</p><p>Waiting for Rowan, since 10:42</p></section><section class=\"agentrow\" data-id=\"agent-1\"><div class=\"who\"><span class=\"monogram\">RW</span>Rowan<small>Engineer</small></div><p>Editing the reconnect path</p><p>Working, since 10:40</p></section><section class=\"agentrow\" data-id=\"agent-2\"><div class=\"who\"><span class=\"monogram\">KT</span>Kit<small>Engineer</small></div><p>Adding stream fixtures</p><p>Working, since 10:41</p></section><section class=\"agentrow\" data-id=\"agent-3\"><div class=\"who\"><span class=\"monogram\">SL</span>Sol<small>Reviewer</small></div><p>Review the reconnect patch</p><p>Waiting for Rowan, since 10:42</p></section><section class=\"agentrow\" data-id=\"agent-4\"><div class=\"who\"><span class=\"monogram\">LN</span>Lane<small>Research</small></div><p>Check retry behaviour</p><p>Side job for Mira, since 10:43</p></section><h2 style=\"margin-top:28px\">Tasks</h2><div class=\"taskrow\" data-id=\"task-0\"><span>◌</span>Reconnect stream<small>Rowan</small></div><div class=\"taskrow\" data-id=\"task-1\"><span>◌</span>Cover interrupted tools<small>Kit</small></div><div class=\"taskrow\" data-id=\"task-2\"><span>○</span>Review patch<small>Sol</small></div>";function notify(t){document.querySelector('.toast').textContent=t}function theme(){document.documentElement.classList.toggle('light')}function search(s){document.querySelectorAll('.chatrow').forEach(e=>e.hidden=!e.textContent.toLowerCase().includes(s.toLowerCase()))}function show(title,body,action){document.querySelector('dialog h2').textContent=title;document.querySelector('dialog p').textContent=body;document.querySelector('#confirm').textContent=action;document.querySelector('dialog').showModal()}function review(i){show('Review message',document.querySelector('#m'+i+' .content').innerText,'Review')}function like(b){b.setAttribute('aria-pressed',b.getAttribute('aria-pressed')!=='true');notify('Reaction updated')}function reply(i){document.querySelector('#draft').value='Reply to '+document.querySelector('#m'+i+' .who').innerText.trim()+': ';document.querySelector('#draft').focus()}function edit(i){const e=document.querySelector('#m'+i+' .content');e.contentEditable=true;e.focus();notify('Editing message locally')}function removeMessage(i){show('Delete message?','','Delete');document.querySelector('#confirm').onclick=()=>{document.querySelector('#m'+i).remove();document.querySelector('dialog').close()}}function send(){let d=document.querySelector('#draft');if(!d.value.trim())return;const p=document.querySelector('.reading');if(!p){location.href='../chat/v12.html';return}const a=document.createElement('article');a.className='message user';a.textContent=d.value;p.append(a);d.value='';document.querySelector('.transcript').scrollTop=1e9;notify('Queued locally')}function openTeam(){document.querySelector('.panel').hidden=false;tab('Team')}function tab(t,b){document.querySelector(".panelcontent").innerHTML=t==="Team"?teamHTML:t==="Diff"?diffHTML:t==="Terminal"?"<h2>Terminal</h2><pre class=\"diff\">$ npm test -- reconnect\n12 tests passed\n\n$ <input aria-label=\"Terminal command\" style=\"width:90%;background:transparent;border:0\" onkeydown=\"if(event.key==='Enter'){notify('Command entered locally');this.value=''}\"></pre>":"<h2>Files</h2><details open><summary>src</summary><button onclick=\"tab('Diff')\">stream.ts</button></details><details open><summary>tests</summary><button onclick=\"notify('Selected reconnect.test.ts')\">reconnect.test.ts</button></details>";document.querySelectorAll(".tabs button").forEach(e=>e.classList.toggle("active",e.textContent===t))}function roles(){const checked=[...document.querySelectorAll('.agentcheck:checked')];document.querySelectorAll('.agentcheck').forEach(e=>e.disabled=!e.checked&&checked.length>=5);for(const id of ['supervisor','reviewer']){const s=document.querySelector('#'+id),old=s.value;s.innerHTML=(id==='reviewer'?'<option value="">None</option>':'<option value="">Choose</option>')+checked.map(e=>'<option>'+e.value+'</option>').join('');s.value=old}validate()}function validate(){const n=document.querySelectorAll('.agentcheck:checked').length,s=document.querySelector('#supervisor').value,r=document.querySelector('#reviewer').value;const invalid=n===0||(n>1&&!s)||(r&&r===s);document.querySelector('#create').disabled=!!invalid;document.querySelector('#validation').textContent=r&&r===s?'Choose a different Reviewer':n>1&&!s?'Choose a Supervisor':''}if(location.hash==='#light')document.documentElement.classList.add('light');const sc=document.querySelector('.transcript');if(sc)requestAnimationFrame(()=>sc.scrollTop=sc.scrollHeight);if(mode==='setup')roles();document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelector('dialog').close();document.querySelector('.panel')?.setAttribute('hidden','')}if(e.ctrlKey&&e.key==='n'){e.preventDefault();location.href='../new-chat/v10.html'}});</script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gathr | empty</title><link rel="stylesheet" href="../tokens.css"><link
+  rel="stylesheet" href="../components.css">
+</head>
+<body data-mode="empty">
+<a class="skip" href="#main">Skip to conversation</a>
+<div class="app">
+<aside class="sidebar" data-id="sidebar">
+<div class="brand">
+<strong><span class="logo" aria-hidden="true"><i></i><i></i></span>Gathr</strong><button onclick="theme()" aria-label="Switch theme" title="Switch theme">◐</button>
+</div>
+<button class="navbutton" data-id="nav-new" onclick="location.href='../new-chat/v10.html'"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false" style="flex-shrink:0"><path d="M12 5v14M5 12h14"/></svg><span>New</span></button
+><button class="navbutton" data-id="nav-search" onclick="document.querySelector('.search').hidden=!document.querySelector('.search').hidden"><svg width="18" height="18"
+  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"
+  style="flex-shrink:0"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span>Search</span></button><input class="search" hidden aria-label="Search chats"
+  oninput="search(this.value)">
+<nav class="navscroll" aria-label="Projects and conversations">
+<div class="label">
+Projects
+</div>
+<details class="project" open>
+<summary>Gathr</summary><button data-id="chat-0-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Reconnect streaming</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b><b class="dot" aria-label="Working">·</b></button><button data-id="chat-0-1" class="chatrow "
+  onclick="notify('Opened '+this.innerText.trim())"><span>Keyboard navigation</span></button><button data-id="chat-0-2" class="chatrow "
+  onclick="notify('Opened '+this.innerText.trim())"><span>Release checklist</span></button>
+</details>
+<details class="project" open>
+<summary>Fieldnotes</summary><button data-id="chat-1-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Capture quick notes</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-1-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search archived entries</span></button
+><button data-id="chat-1-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export a notebook</span></button>
+</details>
+<details class="project" open>
+<summary>Maple editor</summary><button data-id="chat-2-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Preserve cursor on undo</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-2-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Split editor panes</span></button><button
+  data-id="chat-2-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Open large files</span></button>
+</details>
+<details class="project" >
+<summary>Harbor CLI</summary><button data-id="chat-3-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Shell completion</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-3-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Retry interrupted uploads</span></button
+><button data-id="chat-3-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Format command output</span></button>
+</details>
+<details class="project" >
+<summary>Juniper docs</summary><button data-id="chat-4-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Versioned API examples</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-4-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Repair broken anchors</span></button
+><button data-id="chat-4-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search the handbook</span></button>
+</details>
+<details class="project" >
+<summary>Papertrail</summary><button data-id="chat-5-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Group audit events</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-5-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export activity history</span></button
+><button data-id="chat-5-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Filter by actor</span></button>
+</details>
+<details class="project" >
+<summary>Loom tests</summary><button data-id="chat-6-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Parallel test workers</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-6-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Quarantine flaky specs</span></button
+><button data-id="chat-6-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Record failed assertions</span></button>
+</details>
+<details class="project" >
+<summary>Arcade kit</summary><button data-id="chat-7-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Remap controller buttons</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-7-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Save game progress</span></button><button
+  data-id="chat-7-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Scale the HUD</span></button>
+</details>
+<details class="project" >
+<summary>Northwind</summary><button data-id="chat-8-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Reconcile stock counts</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-8-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Schedule supplier imports</span></button
+><button data-id="chat-8-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Find overdue orders</span></button>
+</details>
+<details class="project" >
+<summary>Canvas lab</summary><button data-id="chat-9-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Snap shapes to grid</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-9-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Export transparent PNGs</span></button
+><button data-id="chat-9-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Restore canvas zoom</span></button>
+</details>
+<details class="project" >
+<summary>Pebble</summary><button data-id="chat-10-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Track recurring expenses</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-10-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Sort transactions</span></button><button
+  data-id="chat-10-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Import bank CSVs</span></button>
+</details>
+<details class="project" >
+<summary>Pocket atlas</summary><button data-id="chat-11-0" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Cache maps offline</span><b class="stack"
+  aria-label="Multiple agents">◯◯</b></button><button data-id="chat-11-1" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Search saved places</span></button
+><button data-id="chat-11-2" class="chatrow " onclick="notify('Opened '+this.innerText.trim())"><span>Plan a walking route</span></button>
+</details>
+<div class="label">
+Recent
+</div>
+<button class="chatrow" data-id="recent-0" onclick="notify('Opened Compare local models')"><span>Compare local models</span></button><button class="chatrow" data-id="recent-1"
+  onclick="notify('Opened Draft release notes')"><span>Draft release notes</span></button><button class="chatrow" data-id="recent-2" onclick="notify('Opened Plan a weekend hike')"><span
+>Plan a weekend hike</span></button><button class="chatrow" data-id="recent-3" onclick="notify('Opened Explain SQLite WAL')"><span>Explain SQLite WAL</span></button><button
+  class="chatrow" data-id="recent-4" onclick="notify('Opened Review a query')"><span>Review a query</span></button><button class="chatrow" data-id="recent-5"
+  onclick="notify('Opened Name the new library')"><span>Name the new library</span></button>
+</nav>
+<div class="profile">
+<button onclick="notify('Settings are outside this layout study')">Settings</button>
+</div>
+</aside>
+<main class="workspace" id="main">
+<header class="topbar">
+<h1>Gathr</h1>
+</header>
+<div class="bodygrid">
+<section class="empty" data-id="empty-chat">
+<h2>What are we working on?</h2>
+<div class="emptycontrols">
+<button onclick="show('Project','Choose a folder for this chat.','Choose')">Project: None</button><button onclick="location.href='../start-chat/v11.html'">Agents: Rowan</button>
+</div>
+<div class="composer" data-id="composer">
+<textarea id="draft" aria-label="Message" placeholder="Message Rowan"></textarea>
+<div class="composerbottom">
+<button onclick="document.querySelector('#attach').click()" aria-label="Attach files"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><input id="attach" type="file" hidden
+  onchange="notify(this.files.length+' file attached')"><select aria-label="Recipient"><option>Rowan</option><option>Mira</option><option>Rowan</option><option>Kit</option><option>Sol</option
+><option>Lane</option></select><select aria-label="Model and effort"><option>GPT-6 / High</option><option>Claude / High</option></select><select aria-label="Approvals"><option>Ask to edit</option
+><option>Auto edit</option></select>
+<div class="context">
+<span class="meter" aria-hidden="true"></span><span id="usage">62%</span><button onclick="document.querySelector('#usage').textContent='18%';notify('Context summarised locally')">Summarise</button
+>
+</div>
+<button class="send" aria-label="Send" onclick="send()"><svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+</div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<dialog>
+<h2></h2><p></p>
+<div class="dialogactions">
+<button onclick="this.closest('dialog').close()">Cancel</button><button id="confirm" class="primary" onclick="this.closest('dialog').close();notify('Updated locally')">Review</button
+>
+</div>
+</dialog>
+<div class="toast" role="status"></div>
+<script>
+const mode = document.body.dataset.mode;
+const diffHTML = "<h2>stream.ts</h2><p class=\"subtle\">main / working tree</p><pre class=\"diff\">  81  const event = par" +
+    "se(chunk);\n  82\n<span class=\"add\">+ 83  if (seen.has(event.id)) {\n+ 84    continue;\n+ 85  }\n+ 86  se" +
+    "en.add(event.id);</span>\n  87  append(event.text);\n<span class=\"add\">+ 88  cursor = event.id;</span>" +
+    "</pre><details class=\"tools\"><summary>tests/reconnect.test.ts +14 −2</summary><pre>it('ignores dupli" + "cate events')\nit('resumes a split tool result')</pre></details>";
+const teamHTML = "<h2>Agents</h2><section class=\"agentrow\" data-id=\"agent-0\"><div class=\"who\"><span class=\"monogram\">M" +
+    "R</span>Mira<small>Supervisor</small></div><p>Coordinating</p><p>Waiting for Rowan, since 10:42</p><" +
+    "/section><section class=\"agentrow\" data-id=\"agent-1\"><div class=\"who\"><span class=\"monogram\">RW</spa" +
+    "n>Rowan<small>Engineer</small></div><p>Editing the reconnect path</p><p>Working, since 10:40</p></se" +
+    "ction><section class=\"agentrow\" data-id=\"agent-2\"><div class=\"who\"><span class=\"monogram\">KT</span>K" +
+    "it<small>Engineer</small></div><p>Adding stream fixtures</p><p>Working, since 10:41</p></section><se" +
+    "ction class=\"agentrow\" data-id=\"agent-3\"><div class=\"who\"><span class=\"monogram\">SL</span>Sol<small>" +
+    "Reviewer</small></div><p>Review the reconnect patch</p><p>Waiting for Rowan, since 10:42</p></sectio" +
+    "n><section class=\"agentrow\" data-id=\"agent-4\"><div class=\"who\"><span class=\"monogram\">LN</span>Lane<" +
+    "small>Research</small></div><p>Check retry behaviour</p><p>Side job for Mira, since 10:43</p></secti" +
+    "on><h2 style=\"margin-top:28px\">Tasks</h2><div class=\"taskrow\" data-id=\"task-0\"><span>◌</span>Reconne" +
+    "ct stream<small>Rowan</small></div><div class=\"taskrow\" data-id=\"task-1\"><span>◌</span>Cover interru" +
+    "pted tools<small>Kit</small></div><div class=\"taskrow\" data-id=\"task-2\"><span>○</span>Review patch<s" + "mall>Sol</small></div>";
+function notify(t) {
+  document.querySelector('.toast').textContent = t;
+}
+function theme() {
+  document.documentElement.classList.toggle('light');
+}
+function search(s) {
+  document.querySelectorAll('.chatrow').forEach(e => e.hidden = !e.textContent.toLowerCase().includes(s.toLowerCase()));
+}
+function show(title, body, action) {
+  document.querySelector('dialog h2').textContent = title;
+  document.querySelector('dialog p').textContent = body;
+  document.querySelector('#confirm').textContent = action;
+  document.querySelector('dialog').showModal();
+}
+function review(i) {
+  show('Review message', document.querySelector('#m' + i + ' .content').innerText, 'Review');
+}
+function like(b) {
+  b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') !== 'true');
+  notify('Reaction updated');
+}
+function reply(i) {
+  document.querySelector('#draft').value = 'Reply to ' + document.querySelector('#m' + i + ' .who').innerText.trim() + ': ';
+  document.querySelector('#draft').focus();
+}
+function edit(i) {
+  const e = document.querySelector('#m' + i + ' .content');
+  e.contentEditable = true;
+  e.focus();
+  notify('Editing message locally');
+}
+function removeMessage(i) {
+  show('Delete message?', '', 'Delete');
+  document.querySelector('#confirm').onclick = () => {
+    document.querySelector('#m' + i).remove();
+    document.querySelector('dialog').close();
+  };
+}
+function send() {
+  let d = document.querySelector('#draft');
+  if (!d.value.trim()) return;
+  const p = document.querySelector('.reading');
+  if (!p) {
+    location.href = '../chat/v12.html';
+    return;
+  }
+  const a = document.createElement('article');
+  a.className = 'message user';
+  a.textContent = d.value;
+  p.append(a);
+  d.value = '';
+  document.querySelector('.transcript').scrollTop = 1e9;
+  notify('Queued locally');
+}
+function openTeam() {
+  document.querySelector('.panel').hidden = false;
+  tab('Team');
+}
+function tab(t, b) {
+  document.querySelector(".panelcontent").innerHTML = t === "Team" ? teamHTML : t === "Diff" ? diffHTML : t === "Terminal" ?
+    "<h2>Terminal</h2><pre class=\"diff\">$ npm test -- reconnect\n12 tests passed\n\n$ <input aria-label=\"Ter" +
+    "minal command\" style=\"width:90%;background:transparent;border:0\" onkeydown=\"if(event.key==='Enter'){" + "notify('Command entered locally');this.value=''}\"></pre>" :
+    "<h2>Files</h2><details open><summary>src</summary><button onclick=\"tab('Diff')\">stream.ts</button></" +
+    "details><details open><summary>tests</summary><button onclick=\"notify('Selected reconnect.test.ts')\"" + ">reconnect.test.ts</button></details>";
+  document.querySelectorAll(".tabs button").forEach(e => e.classList.toggle("active", e.textContent === t));
+}
+function roles() {
+  const checked = [...document.querySelectorAll('.agentcheck:checked')];
+  document.querySelectorAll('.agentcheck').forEach(e => e.disabled = !e.checked && checked.length >= 5);
+  for (const id of ['supervisor', 'reviewer']) {
+    const s = document.querySelector('#' + id),
+      old = s.value;
+    s.innerHTML = (id === 'reviewer' ? '<option value="">None</option>' : '<option value="">Choose</option>') + checked.map(e => '<option>' + e.value + '</option>').join('');
+    s.value = old;
+  }
+  validate();
+}
+function validate() {
+  const n = document.querySelectorAll('.agentcheck:checked').length,
+    s = document.querySelector('#supervisor').value,
+    r = document.querySelector('#reviewer').value;
+  const invalid = n === 0 || n > 1 && !s || r && r === s;
+  document.querySelector('#create').disabled = !!invalid;
+  document.querySelector('#validation').textContent = r && r === s ? 'Choose a different Reviewer' : n > 1 && !s ? 'Choose a Supervisor' : '';
+}
+if (location.hash === '#light') document.documentElement.classList.add('light');
+const sc = document.querySelector('.transcript');
+if (sc) requestAnimationFrame(() => sc.scrollTop = sc.scrollHeight);
+if (mode === 'setup') roles();
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    document.querySelector('dialog').close();
+    document.querySelector('.panel')?.setAttribute('hidden', '');
+  }
+  if (e.ctrlKey && e.key === 'n') {
+    e.preventDefault();
+    location.href = '../new-chat/v10.html';
+  }
+});
+</script>
+</body>
+</html>

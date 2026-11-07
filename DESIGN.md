@@ -49,3 +49,5 @@ Focus uses a 2 px accent outline with 2 px offset. Native buttons, selects, chec
 
 ## Token ownership
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
+
+Shared styles enter through `designs/components.css`, which imports shell, conversation, panels and responsive rules in cascade order.
