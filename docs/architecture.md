@@ -52,6 +52,10 @@ One append-only event table, written with each state change, named after OpenTel
 
 React and TypeScript, served by the service, shown in a Tauri 2 window (WebView2 on Windows, WKWebView on macOS, [0016](decisions/0016-macos.md)) and usable from a browser on this machine, or from the person's other computers over their own Tailscale network ([0017](decisions/0017-remote-use.md)). The window holds no state and owns no engines. [0012](decisions/0012-ui-shell.md).
 
+## The agents' browser
+
+The service runs a headless Edge (Chrome or Edge on macOS) per agent, each with its own profile folder in Gathr's data, driven over a CDP pipe with no port. The UI shows it as a live stream with the person's input sent back, the same in the window, a browser tab and another computer; **Open window** gives a visible browser for passkeys and file pickers. [0018](decisions/0018-agent-browser.md).
+
 ## Decisions
 
 Fast yes/no answers from a small paid model, for checks an engine turn would be too slow or costly for: watching long work, memory saves, skill suggestions, the agents' Decide tool. Optional from day one, off by default, with a daily cap; no answer always means "behave as if it were off". [0014](decisions/0014-decisions-provider.md).
