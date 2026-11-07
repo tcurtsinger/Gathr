@@ -23,18 +23,38 @@ function Replay({ events }: { events: LiveEvent[] }) {
   return <Transcript rows={rows(events.reduce(apply, empty))} actions={none} />;
 }
 
-const reply = 'I created `note.txt` in the current folder with the Write tool. It contains the word `hi`.';
+const reply = 'I created note.txt in the current folder with the Write tool. It contains the word hi.';
 
 test('a reply shows while it streams, and once when it is saved', async () => {
   const events = approval as LiveEvent[];
   const saved = events.findLastIndex((e) => e.type === 'message');
   const screen = await render(<Replay events={events.slice(0, saved)} />);
-  await expect.element(screen.getByText(/^I created `note.txt` in the current folder/)).toBeVisible();
+  await expect.element(screen.getByText(/^I created note.txt in the current folder/)).toBeVisible();
 
   await screen.rerender(<Replay events={events} />);
   await expect.element(screen.getByText(reply, { exact: true })).toBeVisible();
   expect(screen.getByText(reply, { exact: true }).elements()).toHaveLength(1);
   await expect.element(screen.getByText('1 tool call')).toBeVisible();
+});
+
+test('a reply is formatted, and the HTML or script links in it do nothing', async () => {
+  const text = [
+    '## Plan',
+    '- **Keep** `main` green, see [the notes](https://example.com/notes)',
+    '<img src=x onerror="window.ran=1"> [run](javascript:window.ran=1)',
+    '| Step | Time |\n|---|---|\n| Build | 2 s |',
+  ].join('\n\n');
+  const message = { id: 'm', turn: 't', time: '', role: 'assistant' as const, kind: 'text', body: text };
+  const screen = await render(<Transcript rows={[{ kind: 'message', message }]} actions={none} />);
+
+  await expect.element(screen.getByRole('heading', { name: 'Plan' })).toBeVisible();
+  await expect.element(screen.getByRole('table')).toBeVisible();
+  const notes = screen.getByRole('link', { name: 'the notes' });
+  await expect.element(notes).toHaveAttribute('target', '_blank');
+  await expect.element(screen.getByText(/^<img src=x onerror="window.ran=1">/)).toBeVisible();
+  const run = screen.getByText('run', { exact: true }).element();
+  expect(run.getAttribute('href') ?? '').not.toContain('javascript');
+  expect((window as { ran?: number }).ran).toBeUndefined();
 });
 
 test('an engine that exits mid-reply keeps the text shown and fails with its reference', async () => {

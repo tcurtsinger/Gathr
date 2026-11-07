@@ -1,4 +1,5 @@
 import type { Message, ToolBody } from '../api';
+import { Markdown } from '../components/Markdown';
 import { Notice } from '../components/Notice';
 import type { Row, SendFailure } from './rows';
 import './transcript.css';
@@ -73,7 +74,11 @@ function Text({ message }: { message: Message }) {
 }
 
 function Reply({ text }: { text: string }) {
-  return <div className="message reply">{text}</div>;
+  return (
+    <div className="message reply">
+      <Markdown text={text} />
+    </div>
+  );
 }
 
 const ran = (n: number) => (n === 1 ? '1 tool call' : `${n} tool calls`);
