@@ -43,6 +43,8 @@ export interface Engine {
   found: string | null;
   why_not_found: string | null;
   account: { folder: string; login: string; expires: string | null };
+  /** A sign-in from Settings: waiting with its page, or failed with why and a reference. */
+  sign_in: { state: 'waiting'; url: string } | { state: 'failed'; why: string; ref: string } | null;
 }
 
 /** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
@@ -88,6 +90,9 @@ export const api = {
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
   engine: () => call<Engine>('GET', '/api/engines/claude'),
   setEnginePath: (path: string | null) => call<unknown>('PUT', '/api/engines/claude', { path }),
+  signIn: () => call<{ url: string }>('POST', '/api/engines/claude/sign-in'),
+  signInCode: (code: string) => call<unknown>('POST', '/api/engines/claude/sign-in/code', { code }),
+  cancelSignIn: () => call<unknown>('DELETE', '/api/engines/claude/sign-in'),
 };
 
 export interface TurnEvent {

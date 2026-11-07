@@ -5,6 +5,7 @@ mod api;
 mod chats;
 mod logs;
 mod routes;
+mod sign_in;
 mod turns;
 
 use std::net::{Ipv4Addr, SocketAddr};
@@ -83,8 +84,10 @@ async fn serve(
     }
     .write(data)?;
     let chats = chats::Chats::new(writer.clone(), data.clone());
+    let sign_in = Arc::new(sign_in::SignIn::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
+        sign_in: sign_in.clone(),
         writer: writer.clone(),
         token,
         port,
@@ -115,6 +118,7 @@ async fn serve(
         .with_graceful_shutdown(stopping)
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
+    sign_in.cancel().await;
     chats.close_all().await;
     writer
         .record_now(

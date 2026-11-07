@@ -31,10 +31,10 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/live", get(live))
 }
 
-type Answer = Result<Json<Value>, Fail>;
+pub type Answer = Result<Json<Value>, Fail>;
 
 /// A failed answer, kept small; it becomes the API's error JSON with its reference.
-struct Fail(StatusCode, &'static str, String, String);
+pub struct Fail(StatusCode, &'static str, String, String);
 
 impl IntoResponse for Fail {
     fn into_response(self) -> Response {
@@ -42,7 +42,7 @@ impl IntoResponse for Fail {
     }
 }
 
-fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> Fail {
+pub fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> Fail {
     Fail(status, error, why.to_string(), trace.to_string())
 }
 
@@ -228,6 +228,7 @@ async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
         "found": found.as_ref().ok().map(|p| p.display().to_string()),
         "why_not_found": found.err(),
         "account": { "folder": folder, "login": state, "expires": expires.map(|ms| gathr::ids::utc(ms * 1000)) },
+        "sign_in": s.sign_in.shown(),
     }))
 }
 

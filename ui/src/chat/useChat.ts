@@ -45,7 +45,7 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
     load();
     return listen((event) => {
       if (event.type === 'lagged') return load();
-      if (event.chat !== chat) return;
+      if (!('chat' in event) || event.chat !== chat) return;
       if (pending.current) pending.current.push(event);
       else setState((s) => apply(s, event));
     });

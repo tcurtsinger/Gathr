@@ -49,6 +49,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **The API** is on `127.0.0.1:<port>`. Every request needs `Authorization: Bearer <token>`, with the token from `<data>/service.json`. Errors answer `{"error": "… failed", "why", "ref"}`, and each is recorded before the answer goes out, so its `ref` traces at once.
   - Chats: `GET`/`POST /api/chats`, `GET /api/chats/<id>` (messages and turns), `POST /api/chats/<id>/messages {"text"}`, `POST /api/chats/<id>/stop`, `POST /api/chats/<id>/approvals/<request_id> {"allow"}`.
   - Claude Code: `GET /api/engines/claude` (path, sign-in), `PUT /api/engines/claude {"path"}` (`null` for the PATH). Used at the next start, no restart.
+  - Sign in: `POST /api/engines/claude/sign-in` runs `claude auth login` in the account's folder and answers its page's `url`; `POST …/sign-in/code {"code"}` passes a pasted code; `DELETE …/sign-in` cancels. The replay engine answers `auth login` too: `made-up-code#…` signs in, any other code fails. To keep a real run from opening your browser, set `BROWSER` to a script that only logs its argument.
   - Live: a WebSocket at `/api/live?token=<token>` sends every delta, message, tool, turn, approval and read, as JSON.
   - Diagnostics: `GET /api/chats/<id>/turns`, each turn with what was asked and its events in order.
   - The window's own events: `POST /api/ui/events {"name": "gathr.ui.…", "duration_ms", "error", "attrs"}`, recorded like the service's (UI errors, open and switch timings, first text shown).

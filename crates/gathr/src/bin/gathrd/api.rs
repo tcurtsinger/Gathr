@@ -24,6 +24,7 @@ pub struct State {
     pub data: DataDir,
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
+    pub sign_in: Arc<crate::sign_in::SignIn>,
 }
 
 /// The request's trace id, for handlers: a failure's reference and its events share it.
@@ -35,6 +36,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/health", get(health))
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
+        .merge(crate::sign_in::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }

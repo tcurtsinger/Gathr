@@ -64,13 +64,15 @@ impl Engine {
 
     /// Writes one frame as a line.
     pub async fn write(&mut self, frame: &Value) -> std::io::Result<()> {
+        self.write_line(&frame.to_string()).await
+    }
+
+    pub async fn write_line(&mut self, text: &str) -> std::io::Result<()> {
         let stdin = self
             .stdin
             .as_mut()
             .ok_or_else(|| std::io::Error::other("stdin is closed"))?;
-        let mut line = frame.to_string();
-        line.push('\n');
-        stdin.write_all(line.as_bytes()).await?;
+        stdin.write_all(format!("{text}\n").as_bytes()).await?;
         stdin.flush().await
     }
 
