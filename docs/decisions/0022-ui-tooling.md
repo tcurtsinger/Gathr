@@ -24,7 +24,7 @@ Versions are the npm `latest` on the date above. The lockfile pins them.
 
 A `UI` job joins `.github/workflows/ci.yml`, on Windows and macOS like the Rust job, run in `ui/`:
 
-1. `actions/setup-node@v7` with `node-version-file: ui/.node-version` and `cache: npm`
+1. `actions/setup-node@v7` with `node-version-file: ui/.node-version`, `cache: npm` and `cache-dependency-path: ui/package-lock.json` (it looks in the repo root otherwise, and `working-directory` only applies to `run` steps)
 2. `npm ci`
 3. `npx playwright install chromium` on Windows, `webkit` on macOS
 4. `npx biome ci`
