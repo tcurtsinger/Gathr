@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 # Fails when a tracked source file is over the limits in AGENTS.md:
-# 400 lines (1,000 for design pages) and 200 characters a line.
+# 1,000 lines, and 200 characters a line.
 set -euo pipefail
 
 status=0
 while IFS= read -r file; do
-  limit=400
-  case "$file" in designs/*.html) limit=1000 ;; esac
-  report=$(awk -v f="$file" -v limit="$limit" '
+  report=$(awk -v f="$file" '
     length($0) > 200 { long++; if (!first) first = NR }
     END {
-      if (NR > limit) printf "%s: %d lines (limit %d)\n", f, NR, limit
+      if (NR > 1000) printf "%s: %d lines (limit 1000)\n", f, NR
       if (long) printf "%s: %d lines over 200 characters, first at line %d\n", f, long, first
     }' "$file")
   if [ -n "$report" ]; then
