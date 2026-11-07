@@ -8,6 +8,10 @@
 //! `auth status` answers as Claude Code does where its login is a file: exit 0 when
 //! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
 //!
+//! `auth login` prints what Claude Code 2.1.318 prints with no terminal (task 893), waits for a
+//! pasted `code#state` on stdin, and signs the folder in when the code is `made-up-code`.
+//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher.
+//!
 //! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
 //! `stall` there answers only after a minute, as a launcher that hangs.
 
@@ -15,6 +19,9 @@ use std::io::{BufRead, Write};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().map(String::as_str).eq(["auth", "login"]) {
+        auth_login();
+    }
     if args == ["--version"] {
         let version = std::env::var("GATHR_REPLAY_VERSION");
         if version.as_deref() == Ok("stall") {
@@ -69,4 +76,35 @@ fn main() {
             return;
         }
     }
+}
+
+fn auth_login() -> ! {
+    if let Some(ms) = std::env::var("GATHR_REPLAY_PAGE_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+    {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+    let mut stdout = std::io::stdout().lock();
+    writeln!(stdout, "Opening browser to sign in…").unwrap();
+    let page = "https://claude.example/oauth/authorize?code=true&state=made-up-state";
+    writeln!(stdout, "If the browser didn't open, visit: {page}").unwrap();
+    write!(stdout, "Paste code here if prompted > ").unwrap();
+    stdout.flush().unwrap();
+    let mut code = String::new();
+    std::io::stdin().lock().read_line(&mut code).unwrap();
+    if !code.starts_with("made-up-code#") {
+        eprintln!("Login failed: That code wasn't accepted. Try signing in again.");
+        std::process::exit(1);
+    }
+    let folder = std::path::PathBuf::from(std::env::var_os("CLAUDE_CONFIG_DIR").unwrap());
+    let expires = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis()
+        + 3_600_000;
+    let login = serde_json::json!({ "claudeAiOauth": {
+        "accessToken": "made-up", "refreshToken": "made-up", "expiresAt": expires as u64 } });
+    std::fs::write(folder.join(".credentials.json"), login.to_string()).unwrap();
+    std::process::exit(0);
 }

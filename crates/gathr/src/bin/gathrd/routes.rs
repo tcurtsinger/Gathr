@@ -26,15 +26,16 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/stop", post(stop))
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
         .route("/api/chats/{chat}/turns", get(turns))
+        .route("/api/trace/{reference}", get(trace))
         .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine).put(set_engine))
         .route("/api/live", get(live))
 }
 
-type Answer = Result<Json<Value>, Fail>;
+pub type Answer = Result<Json<Value>, Fail>;
 
 /// A failed answer, kept small; it becomes the API's error JSON with its reference.
-struct Fail(StatusCode, &'static str, String, String);
+pub struct Fail(StatusCode, &'static str, String, String);
 
 impl IntoResponse for Fail {
     fn into_response(self) -> Response {
@@ -42,7 +43,7 @@ impl IntoResponse for Fail {
     }
 }
 
-fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> Fail {
+pub fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> Fail {
     Fail(status, error, why.to_string(), trace.to_string())
 }
 
@@ -187,6 +188,18 @@ async fn turns(
     .await
 }
 
+/// What `gathr diag trace` shows, for a reference with no turn behind it (a sign-in, a request).
+async fn trace(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(reference): Path<String>,
+) -> Answer {
+    db(&s, &t, "Diagnostics failed", move |conn| {
+        gathr::diag::trace(conn, &reference)
+    })
+    .await
+}
+
 #[derive(Deserialize)]
 struct UiEvent {
     name: String,
@@ -228,6 +241,7 @@ async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
         "found": found.as_ref().ok().map(|p| p.display().to_string()),
         "why_not_found": found.err(),
         "account": { "folder": folder, "login": state, "expires": expires.map(|ms| gathr::ids::utc(ms * 1000)) },
+        "sign_in": s.sign_in.shown(),
     }))
 }
 
