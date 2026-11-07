@@ -40,7 +40,7 @@ The previous app listed more than a dozen start paths that each needed their own
 
 A task is work owed by one agent, or by the person.
 
-Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent, kind (`work`, `decision`, `review`, `plan_check`), and for decisions the choices with the giver's pick.
+Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent, kind (`work`, `decision`, `review`, `plan_check`, `person_request`), and for decisions the choices with the giver's pick.
 
 States:
 
@@ -75,7 +75,8 @@ Rules:
 - `left` twice in a row by turns that changed nothing and left nothing running is `blocked`, not a loop.
 - `left` with an open wait stays `held` on the wait; the task isn't handed straight back.
 - The giver hears back once all the tasks it gave under one ask are settled.
-- A decision for the person is a task of kind `decision` with its choices, the giver's pick first, and why. The answer goes back to the giver's session. A design is picked on its card, not as a task.
+- **Only the Supervisor gives the person tasks** ([0013](0013-one-chat-model.md)); in a one-agent chat, that agent. A member who needs the person's input asks the Supervisor: a `person_request` task to the Supervisor with the question, the options, the member's pick and why. The Supervisor checks it (is it really the person's to decide, is it already answered, is the pick sound), then files it for the person, folds it into one it's already asking, or answers it itself. The person's answer goes to the Supervisor, who passes it back to the member. The service refuses a task for the person from anyone else.
+- A decision for the person is a task of kind `decision` with its choices, the Supervisor's pick first, and why. A design is picked on its card, not as a task.
 - A plan card that's built, sent back or replaced stops counting as waiting on the person.
 
 ## Turns
