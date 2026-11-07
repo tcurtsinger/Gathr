@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use gathr::claude::copies::Copies;
 use gathr::claude::login::{self, Gate, Login};
 use gathr::data::DataDir;
 use gathr::event::Event;
@@ -139,10 +140,17 @@ impl Chats {
     /// `claude auth status` (0016).
     pub async fn login_status(&self) -> (Login, Option<i64>) {
         let (folder, setting) = (self.account_folder(), self.path_setting().await);
-        let now_ms = gathr::ids::now_us() / 1000;
-        tokio::task::spawn_blocking(move || login::status(&folder, setting.as_deref(), now_ms))
-            .await
-            .unwrap_or((Login::Unknown, None))
+        let (copy, now_ms) = (self.copy(), gathr::ids::now_us() / 1000);
+        tokio::task::spawn_blocking(move || {
+            login::status(&folder, setting.as_deref(), copy, now_ms)
+        })
+        .await
+        .unwrap_or((Login::Unknown, None))
+    }
+
+    /// Gathr's own copy of Claude Code, the one a chat starts when no path is set (0025).
+    pub fn copy(&self) -> Option<PathBuf> {
+        Copies::new(&self.data).program()
     }
 
     pub fn publish(&self, event: Value) {

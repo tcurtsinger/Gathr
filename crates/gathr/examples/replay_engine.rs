@@ -14,7 +14,11 @@
 //! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher.
 //!
 //! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
-//! `stall` there answers only after a minute, as a launcher that hangs.
+//! `stall` there answers only after a minute, as a launcher that hangs; `folder` answers the name
+//! of the folder it runs from, as Gathr lays out its copies (0025).
+//!
+//! An `initialize` request is answered `success`, as Claude Code does, and isn't one of the
+//! recording's `in` lines.
 
 use std::io::{BufRead, Write};
 
@@ -27,6 +31,12 @@ fn main() {
         let version = std::env::var("GATHR_REPLAY_VERSION");
         if version.as_deref() == Ok("stall") {
             std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+        if version.as_deref() == Ok("folder") {
+            let exe = std::env::current_exe().unwrap();
+            let folder = exe.parent().and_then(|p| p.file_name()).unwrap_or_default();
+            println!("{} (Claude Code)", folder.to_string_lossy());
+            return;
         }
         println!("{}", version.as_deref().unwrap_or("2.1.318 (Claude Code)"));
         return;
@@ -58,9 +68,12 @@ fn main() {
         let row: serde_json::Value = serde_json::from_str(row).expect("a recording row is JSON");
         let line = row["line"].as_str().unwrap_or_default();
         match row["dir"].as_str() {
-            Some("in") => match stdin.next() {
-                Some(Ok(_)) => {}
-                _ => return,
+            Some("in") => loop {
+                match stdin.next() {
+                    Some(Ok(line)) if answered_initialize(&line, &mut stdout) => {}
+                    Some(Ok(_)) => break,
+                    _ => return,
+                }
             },
             Some("out") => {
                 writeln!(stdout, "{line}").unwrap();
@@ -76,10 +89,25 @@ fn main() {
     }
     // Like Claude Code: done when its input closes.
     for line in stdin {
-        if line.is_err() {
-            return;
+        match line {
+            Ok(line) => _ = answered_initialize(&line, &mut stdout),
+            Err(_) => return,
         }
     }
+}
+
+/// Answers an `initialize` request with an empty `success`; false for any other line.
+fn answered_initialize(line: &str, stdout: &mut impl Write) -> bool {
+    let frame: serde_json::Value = serde_json::from_str(line).unwrap_or_default();
+    if frame["request"]["subtype"] != "initialize" {
+        return false;
+    }
+    let id = &frame["request_id"];
+    let answer = serde_json::json!({ "type": "control_response",
+        "response": { "subtype": "success", "request_id": id, "response": {} } });
+    writeln!(stdout, "{answer}").unwrap();
+    stdout.flush().unwrap();
+    true
 }
 
 fn auth_login() -> ! {
