@@ -104,3 +104,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 ### Friction
 
 At the end of your answer, as "Friction: <what, where>": anything in SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\code\gathr-work\FRICTION.md` and passes workshop bugs to Nova. Each one is also a requirement: write down what Gathr must do instead.
+
+## Design preview checks
+
+The selected desktop prototypes are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root. Open the four latest pages at 1440 and 1024 px in dark and light (`#light`), exercise New, Search, composer, panel tabs and agent roles. `DESIGN.md`, `designs/tokens.css`, `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes. No engine, real terminal or Settings service is connected. Browser interaction and keyboard checks complement the static command.

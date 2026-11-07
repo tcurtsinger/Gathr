@@ -1,0 +1,9 @@
+{
+  "title": "Gathr choose agents",
+  "for": "Shared desktop chat shell",
+  "knobs": [
+    "--radius",
+    "--space"
+  ],
+  "picked": "v11.html"
+}

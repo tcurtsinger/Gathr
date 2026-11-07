@@ -1,0 +1,9 @@
+{
+  "title": "Gathr multi-agent chat",
+  "for": "Conversation with Team panel",
+  "knobs": [
+    "--radius",
+    "--space"
+  ],
+  "picked": "v12.html"
+}
