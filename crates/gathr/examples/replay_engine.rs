@@ -10,6 +10,10 @@
 //!
 //! `auth login` prints what Claude Code 2.1.318 prints with no terminal (task 893), waits for a
 //! pasted `code#state` on stdin, and signs the folder in when the code is `made-up-code`.
+//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher.
+//!
+//! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
+//! `stall` there answers only after a minute, as a launcher that hangs.
 
 use std::io::{BufRead, Write};
 
@@ -17,6 +21,14 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().map(String::as_str).eq(["auth", "login"]) {
         auth_login();
+    }
+    if args == ["--version"] {
+        let version = std::env::var("GATHR_REPLAY_VERSION");
+        if version.as_deref() == Ok("stall") {
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+        println!("{}", version.as_deref().unwrap_or("2.1.318 (Claude Code)"));
+        return;
     }
     if args.iter().map(String::as_str).eq(["auth", "status"]) {
         // `GATHR_REPLAY_AUTH=0` answers signed in with no file, as the macOS Keychain does.
@@ -67,6 +79,12 @@ fn main() {
 }
 
 fn auth_login() -> ! {
+    if let Some(ms) = std::env::var("GATHR_REPLAY_PAGE_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+    {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
     let mut stdout = std::io::stdout().lock();
     writeln!(stdout, "Opening browser to sign in…").unwrap();
     let page = "https://claude.example/oauth/authorize?code=true&state=made-up-state";

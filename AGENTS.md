@@ -27,6 +27,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
   - in `ui/`: `npx biome ci`, `npx tsc --noEmit`, `npx vitest run`, `npx vite build`. The tests run in a real browser: Edge on Windows (already installed), WebKit on macOS (`npx playwright install webkit` once). A failing test leaves its screenshot in `ui/.vitest/`.
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
+- **On a Mac without Rust:** each macOS run keeps its build for 7 days as the artifact `gathr-macos` (`gh run download <run> -n gathr-macos`). Start `gathrd` in the Mac's login session, not an SSH shell: over SSH the Keychain is locked, so every account reads as signed out. From SSH, run it as a launchd job in that session (`launchctl bootstrap gui/$(id -u) <plist>`, with `RunAtLoad`), and `launchctl bootout` it after.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
 - **Flaky is broken.** A test that fails at random is fixed or deleted the day it's seen, never rerun until green. A failing test says which test it is, what it expected and what it got ([docs/testing.md](docs/testing.md)).

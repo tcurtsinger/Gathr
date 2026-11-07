@@ -22,6 +22,8 @@ How, for Claude Code (2.1.318), ported from the previous app's `CLEAN` (`desktop
 
 For Codex, when its driver lands, the previous app's `codexClean` (`desktop/server/drivers/codex.ts`) is the starting point: `features.plugins=false`, `features.apps=false`, `features.hooks=false`, `skills.include_instructions=false`, `skills.bundled.enabled=false`, `notify=[]`, and every server of the person's `config.toml` switched off except Gathr's. It's proved live the same way before it's relied on.
 
+**Oldest Claude Code:** 2.1.318, the version all of this was proven on. Gathr reads `claude --version` each time it starts an engine and fails an older one by its version, with a reference ("Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later"). Claude Code's changelog shows why older ones can't simply be allowed: `--forward-subagent-text` came in 2.1.211, `AGENTS.md` in 2.1.277, and `--setting-sources` stopped letting an excluded file supply some settings in 2.1.314. Turned down: 2.1.314, the oldest the changelog allows, because the `cc-plugin-agents-md` option that loads both instruction files isn't in the changelog, so nothing older than 2.1.318 is known to load them.
+
 ## Why
 
 - **The owner's call (task 856):** "The only things you get from Gathr should be what's in Gathr. Nothing from outside."
