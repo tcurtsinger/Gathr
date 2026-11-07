@@ -22,6 +22,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`
+  - `bash scripts/check-file-size.sh` (no source file over 400 lines)
 - **CI** is `.github/workflows/ci.yml`, on Windows and macOS, for every PR and every push to `main`. `main` only takes PRs with CI green.
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
@@ -34,6 +35,15 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - **Timings** for anything that should feel fast: opening a screen, switching, a reply starting to stream.
   - **What you couldn't run,** said plainly.
 - Passing tests and a clean build are needed, but they aren't done.
+
+## How the code is written
+
+- **YAGNI.** The smallest code that gives the expected result. Before writing, climb the ladder and stop at the first rung that holds: does it need to exist; is it already in this codebase; does the standard library do it; does the platform (CSS, SQLite, the OS) do it; does a dependency we already have do it; only then, the minimum new code. No abstraction with one user, no config for a value that never changes, nothing "for later".
+- **Shared components, one of each.** One button, one scroll bar, one input, one menu, one dialog, one message, one empty state: each lives once in the shared UI code and the design system, and every screen uses it. A second version of something that exists is a bug in review, even if it looks the same. Same in the service: one way to do a thing (one error type per crate, one HTTP client, one way to spawn a process).
+- **Small files.** A source file over 400 lines fails CI (`scripts/check-file-size.sh`); split it where it has a seam, by what each part does. Small functions with one job.
+- **Comments only where they earn it:** why something is done, a non-obvious constraint, a lesson ("never kill here: the engine may be renewing its login"). Never what the next line plainly does, never a comment on every function or field. Names carry the meaning.
+- **Best practices of each language:** `rustfmt` and `clippy -D warnings` for Rust; for the UI, the linter and formatter that land with it. Errors handled where something can recover, passed up everywhere else. No dead code, no commented-out code.
+- **Reviewers check all of this**, not only behaviour: a duplicate component, a file near the limit, a comment that restates the code, an abstraction nobody needs.
 
 ## How Gathr looks and reads
 
