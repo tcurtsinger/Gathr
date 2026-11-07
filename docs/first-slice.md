@@ -21,6 +21,7 @@ Measured on this PC, with the event record's own timings (0011):
 - A chat with **500 messages** (tool runs and long answers among them) opens within **200 ms**.
 - Switching between two such chats within **200 ms**.
 - Stop: the chat shows "stopped" within **200 ms** of the click; the engine's turn has ended within 5 s.
+- Every turn records the provider's token totals as reported and the characters of each part Gathr added (briefing, catch-up, the ask), with any token estimate labelled as one ([0020](decisions/0020-context-per-turn.md)).
 - The service idles under 1% CPU with nothing running.
 
 ## Test data
