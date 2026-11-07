@@ -27,7 +27,13 @@ const clean = (v) => {
 };
 const scrub = (f) => {
   if (f?.subtype === 'init') {
-    for (const k of ['plugins', 'skills', 'slash_commands', 'agents', 'terminal_slash_commands']) if (k in f) f[k] = [];
+    // Named entries become placeholders, so a test still sees how many got through.
+    let n = 0;
+    const hide = (x) => (typeof x === 'string' ? `removed-${++n}` : { name: `removed-${++n}` });
+    const builtin = (x) => typeof x === 'object' && String(x.source ?? '').endsWith('@builtin');
+    for (const k of ['plugins', 'skills', 'slash_commands', 'terminal_slash_commands']) {
+      if (Array.isArray(f[k])) f[k] = f[k].map((x) => (builtin(x) ? x : hide(x)));
+    }
   }
   if (f?.subtype?.startsWith?.('hook_')) for (const k of ['output', 'stdout', 'stderr']) if (k in f) f[k] = '';
   if (f?.type === 'rate_limit_event') f.rate_limit_info = { status: 'allowed', rateLimitType: 'five_hour' };
