@@ -92,6 +92,13 @@ YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surf
 text and control tokens. This is a semantic error role, separate from the blue action
 accent. Normal replies remain unboxed. No service integration is claimed.
 
+## Reply formatting
+An agent's Markdown is formatted (0027) with the shared `Markdown` component: body
+type for paragraphs and lists, 20, 17 and 15 px semibold headings, accent links that
+open in the person's browser. Code, code blocks and tables sit on surface with
+border lines; code is 13 px monospace, 12 px inside blocks. Quotes take a 3 px border
+and muted text. Wide code blocks and tables scroll sideways inside the reply width.
+Raw HTML shows as text. User messages stay plain text.
 
 ## Agent selection and editing
 The composer selects an agent. It has no model or effort control. Each agent owns

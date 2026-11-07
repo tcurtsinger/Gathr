@@ -1,4 +1,5 @@
 import type { Message, ToolBody } from '../api';
+import { Markdown } from '../components/Markdown';
 import { Notice } from '../components/Notice';
 import type { Row, SendFailure } from './rows';
 import './transcript.css';
@@ -37,7 +38,7 @@ function RowView({ row, actions }: { row: Row; actions: NoticeActions }) {
     case 'message':
       return <Text message={row.message} />;
     case 'streaming':
-      return <Reply text={row.text} />;
+      return <Reply text={row.text} streaming />;
     case 'tools':
       return <Tools tools={row.tools} />;
     case 'notice':
@@ -72,8 +73,12 @@ function Text({ message }: { message: Message }) {
   return <Reply text={text} />;
 }
 
-function Reply({ text }: { text: string }) {
-  return <div className="message reply">{text}</div>;
+function Reply({ text, streaming = false }: { text: string; streaming?: boolean }) {
+  return (
+    <div className="message reply">
+      <Markdown text={text} streaming={streaming} />
+    </div>
+  );
 }
 
 const ran = (n: number) => (n === 1 ? '1 tool call' : `${n} tool calls`);
