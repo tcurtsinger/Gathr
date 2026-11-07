@@ -26,7 +26,7 @@ When the state lives in one place with explicit transitions, each of these becom
 ## The scheduler gate
 
 Every turn that starts without the person typing passes one function in the service, `may_start(agent, scope, reason)`. It answers start or hold, with the reason it held:
-- the scope (app, room, agent) is paused;
+- the scope (app, chat, agent) is paused;
 - the agent's account is out of usage until a reset (usage hold);
 - the agent already has a turn running anywhere (one turn per agent at a time, see Sessions);
 - the task's `after` tasks aren't all done;
@@ -40,7 +40,7 @@ The previous app listed more than a dozen start paths that each needed their own
 
 A task is work owed by one agent, or by the person.
 
-Fields: number (one sequence for agents' and the person's tasks), giver, owner, room or chat, `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent, kind (`work`, `decision`, `review`, `plan_check`), and for decisions the choices with the giver's pick.
+Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent, kind (`work`, `decision`, `review`, `plan_check`), and for decisions the choices with the giver's pick.
 
 States:
 
@@ -59,7 +59,7 @@ Transitions and who makes them:
 
 | From | To | By |
 |---|---|---|
-| (new) | `waiting` or `ready` | the giver (`task --for`), the lead for a plan's hand-out |
+| (new) | `waiting` or `ready` | the giver (`task --for`), the Supervisor for a plan's hand-out |
 | `waiting` | `ready` | the service, when every `after` task is `done` |
 | `waiting` | `blocked` | the service, when an `after` task fails, stops or is cancelled; the giver is told |
 | `ready` | `working` | the service, through the gate |
@@ -106,7 +106,7 @@ Rules:
 
 ## Pause
 
-Scopes: the whole app, one room, one agent. Each pause is a durable record: scope, since, by (person or lead), and whether "nothing is running" has been said.
+Scopes: the whole app, one chat, one agent ([0013](0013-one-chat-model.md)). Each pause is a durable record: scope, since, by (person or Supervisor), and whether "nothing is running" has been said.
 
 States per scope: `running`, `pausing` (paused, but turns or commands still run), `paused` (paused and quiet), back to `running` on resume.
 
@@ -115,34 +115,34 @@ States per scope: `running`, `pausing` (paused, but turns or commands still run)
 - `pausing` becomes `paused` when the service's own state shows no turn, check, side job or tracked background command in the scope. The service then says once: "Everything is paused. Nothing is running." Agents never say it.
 - While `pausing`, the service lists what still runs and whose.
 - Stop now (the person's alone): interrupts every turn in the scope, ends the background commands those turns started by process id (never by name), and holds a carry-on per agent naming what was ended.
-- Who may pause: the whole app, the person only; a room, the person or its lead; an agent, the person. The lead may resume only its own pause, or the person's once the person has written in the room since.
+- Who may pause: the whole app, the person only; a chat, the person or its Supervisor; an agent, the person. The Supervisor may resume only its own pause, or the person's once the person has written in the chat since.
 - Notifications and sounds are held during an app-wide pause, except sign-in and security problems; resume shows one summary.
 
 ## Plans and plan checks
 
 A plan is a record with its own file and versions. States: `drafting`, `checking`, `revising`, `waiting_on_person`, then `built`, `sent_back`, `replaced` or `dropped`.
 
-- When the lead finishes a plan in a room, members check it before the person sees it. Checkers: the room's reviewer if one is set, else every free member. They read it against the code: wrong files, a missed caller, a missing step, a part given to the wrong member, a check that proves nothing. An agree is one line; an objection is a few lines with evidence.
-- The lead answers objections with a new version or a reason it stands. Only those who objected re-check a later version, and only their points.
+- When the Supervisor finishes a plan in a chat with other agents, they check it before the person sees it. Checkers: the chat's Reviewer if one is set, else every free member. They read it against the code: wrong files, a missed caller, a missing step, a part given to the wrong member, a check that proves nothing. An agree is one line; an objection is a few lines with evidence.
+- The Supervisor answers objections with a new version or a reason it stands. Only those who objected re-check a later version, and only their points.
 - If the check stalls (a checker's turn fails, or 10 minutes pass), the plan reaches the person anyway, saying who didn't finish.
 - On the person's card: who checked it and what changed because of it.
-- Outside plan mode, a lead's turn that gives two or more tasks, or names a plan file, is a plan: its tasks wait in `waiting` until the check is done.
+- Outside plan mode, a Supervisor's turn that gives two or more tasks, or names a plan file, is a plan: its tasks wait in `waiting` until the check is done.
 - Each plan keeps its own record and file until it's built or dropped. A second plan never replaces the first.
-- In plan mode the lead may start read-only side jobs and write its own notes; changes to the project wait for Build.
+- In plan mode the Supervisor may start read-only side jobs and write its own notes; changes to the project wait for Build.
 - A member who finds the plan wrong for its part says so (`blocked`, with evidence) before building on it.
 
 ## Hand-offs
 
 Naming a member (@Name) passes the turn and owes nothing; giving work is a task. Both are transitions made by tool calls at the end of a turn, never parsed from mid-turn words.
 
-- Each hand-off records its chain: who passed to whom, under which ask. A chain longer than the room's hand-off limit pauses the room (a `pause` record by the service) instead of running on.
+- Each hand-off records its chain: who passed to whom, under which ask. A chain longer than the chat's hand-off limit pauses the chat (a `pause` record by the service) instead of running on.
 - A member answering a task it owes settles it; naming the giver doesn't.
 
 ## Side jobs and asking before guessing
 
 A side job (`ask`) is a record: asker, helper, question, the asker's turn it came from, state `asked`, `working`, `answered`, `passed` (the helper can't help) or `failed`.
 
-- It shows inside the asker's turn card, where it happened: the question, the helper's work, the answer. A room's side panel lists them. The helper's session never appears in the chat lists; "Open as chat" is there when the person wants to step in.
+- It shows inside the asker's turn card, where it happened: the question, the helper's work, the answer. The chat's side panel lists them. The helper's session never appears in the chat lists; "Open as chat" is there when the person wants to step in.
 - Every agent's briefing names its teammates with role and seniority, and the rule: ask the teammate who knows that area when about to build on something unchecked that can't be checked in a few minutes, or when the same thing failed twice. Not for what one read of the code answers.
 - Asks, passes and whether the answer was used are events, so diagnostics can show whether asking helps.
 
@@ -154,7 +154,7 @@ When an engine's account is out of usage until a time it gives, the turn isn't f
 
 An agent runs one turn at a time, across all its conversations, the way a member of the previous app got its next turn only when free. This keeps [0002](0002-login-folders.md)'s rule of one engine process per login folder.
 
-- A task gets a fresh engine session when its owner already has another task in progress; the earlier session is set aside, whole, and resumed by a wait it set or a task it holds. At most three are set aside per agent per room. The previous app's members carried 200K tokens a request when every task shared one session.
+- A task gets a fresh engine session when its owner already has another task in progress; the earlier session is set aside, whole, and resumed by a wait it set or a task it holds. At most three are set aside per agent per chat. The previous app's members carried 200K tokens a request when every task shared one session.
 - Switching sessions: when the agent's next turn is in another session than its open engine process, the driver closes that process the gentle way (end of input, then the engine's own exit, per [0001](0001-engine-interface.md)) and starts the next with that session's resume id. It never kills a process to switch. A process that hasn't exited after 30 seconds holds the switch, shows as a hold on the agent, and is recorded; it's never forced while it might be renewing its login.
 - An idle process (no turn for 10 minutes) is closed the same way, so a held process doesn't keep the folder.
 - Codex's app-server runs several threads in one process; the one-turn-at-a-time rule applies to it too, so both engines behave alike.
@@ -162,7 +162,7 @@ An agent runs one turn at a time, across all its conversations, the way a member
 ## Turned down
 
 - **Reading coordination from agents' words.** It's how the previous app started, and most of its room bugs came from it.
-- **A file per room on disk.** The previous app kept tasks and waits in JSON files. In SQLite, the state change and its event commit together, and diagnostics can query across rooms.
+- **A file per room on disk.** The previous app kept tasks and waits in JSON files. In SQLite, the state change and its event commit together, and diagnostics can query across chats.
 - **A workflow engine (Temporal and the like).** It needs its own server and adds a dependency for what a handful of tables and one gate do.
 - **Agents polling in loops for waits.** A loop looks like work, dies with the app, and hides what it waits on.
 - **Closing a task to hold it.** Closing loses the task and its number; pause is the hold.

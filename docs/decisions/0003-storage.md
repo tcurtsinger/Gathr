@@ -4,7 +4,7 @@ Status: proposed. Date: 2026-11-06.
 
 ## Choice
 
-- One SQLite database file, `<data>/gathr.db`, on a local disk, holding everything the service owns: agents, chats, rooms, messages, tasks and the event record (0011).
+- One SQLite database file, `<data>/gathr.db`, on a local disk, holding everything the service owns: agents, chats, messages, tasks and the event record (0011).
 - Crate: [`rusqlite`](https://crates.io/crates/rusqlite) 0.41 with the `bundled` feature, so the SQLite version is the one we build with, not whatever the OS has.
 - One writer: a dedicated thread owns the only write connection and takes work over a channel. Reads use a small pool of read-only connections on blocking threads (`tokio::task::spawn_blocking`).
 - Pragmas on every connection: `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`. Writes start with `BEGIN IMMEDIATE`.
