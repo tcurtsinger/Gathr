@@ -304,6 +304,8 @@ flex-wrap:wrap}
 </span>Gathr</b>
 </div>
 <button class="navbutton" id="new">+ New</button>
+<button class="navbutton" id="search-toggle" aria-expanded="false" aria-controls="chat-search">Search</button>
+<input id="chat-search" aria-label="Search chats" hidden>
 <div class="chatlist">
 <button class="chatrow" aria-current="page">Release checklist</button>
 <button class="chatrow">Keyboard navigation</button>
@@ -411,6 +413,7 @@ flex-wrap:wrap}
 </div>
 </div>
 </dialog>
+<script src="search.js"></script>
 <script>
 
 const $ = s => document.querySelector(s);

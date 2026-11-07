@@ -310,6 +310,8 @@ flex-wrap:wrap}
 </button>
 </div>
 <button class="navbutton" id="new">+ New</button>
+<button class="navbutton" id="search-toggle" aria-expanded="false" aria-controls="chat-search">Search</button>
+<input id="chat-search" aria-label="Search chats" hidden>
 <div class="chatlist">
 <button class="chatrow" aria-current="page">Release checklist</button>
 <button class="chatrow">Keyboard navigation</button>
@@ -420,6 +422,7 @@ flex-wrap:wrap}
 </div>
 </div>
 </dialog>
+<script src="search.js"></script>
 <script>
 
 const $ = s => document.querySelector(s);
@@ -479,17 +482,24 @@ $('#signin').onclick=()=>{$('#signin').textContent=$('#signin').textContent==='S
 $('#login-status').textContent=$('#signin').textContent==='Cancel'?'Signing in':'Signed out';
 };
 
+function setSource(custom) {
+ $('.engine-heading span').textContent=custom?'Custom engine':'Managed by Gathr';
+ $('#update').disabled=custom;
+ $('#update').textContent='Check';
+ $('#engine-status').textContent=custom?'Updates managed externally':'Up to date';
+ $('#engine-failure').hidden=true;
+ $('#engine-state').value='current';
+}
+
 $('#save-path')?.addEventListener('click',()=>{
  $('#save-path').textContent='Saved';
 $('#custom-path').value=$('#custom-path').value.trim();
 
  const custom=!!$('#custom-path').value;
 
- if($('.engine-heading span'))$('.engine-heading span').textContent=custom?'Custom engine':'Managed by Gathr';
-
- if($('#update')){$('#update').disabled=custom;
-$('#engine-status').textContent=custom?'Updates managed externally':'Up to date';
-}
+ setSource(custom);
+ $('#managed-choice').checked=!custom;
+ $('#custom-choice').checked=custom;
 });
 
 $('#new').onclick=()=>{$('.user').textContent='New chat';
@@ -501,9 +511,15 @@ $('#send').onclick=()=>{if($('#draft').value.trim()){$('.user').textContent=$('#
 $('.reply').hidden=false;
 $('#draft').value=''}};
 
-$('#custom-choice')?.addEventListener('change',e=>{$('#custom-fields').hidden=!e.target.checked});
+$('#custom-choice')?.addEventListener('change',()=>{
+ $('#custom-fields').hidden=false;
+ setSource(!!$('#custom-path').value.trim());
+});
 
-$('#managed-choice')?.addEventListener('change',()=>{$('#custom-fields').hidden=true});
+$('#managed-choice')?.addEventListener('change',()=>{
+ $('#custom-fields').hidden=true;
+ setSource(false);
+});
 
 $('#custom-open')?.addEventListener('click',()=>{$('#custom-fields').hidden=!$('#custom-fields').hidden;
 $('#custom-path').focus()});

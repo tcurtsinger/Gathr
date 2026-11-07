@@ -304,6 +304,8 @@ flex-wrap:wrap}
 </span>Gathr</b>
 </div>
 <button class="navbutton" id="new">+ New</button>
+<button class="navbutton" id="search-toggle" aria-expanded="false" aria-controls="chat-search">Search</button>
+<input id="chat-search" aria-label="Search chats" hidden>
 <div class="chatlist">
 <button class="chatrow" aria-current="page">Release checklist</button>
 <button class="chatrow">Keyboard navigation</button>
@@ -383,7 +385,7 @@ flex-wrap:wrap}
 </div>
 <div class="setting-row">
 <h4>Engine source</h4>
-<span class="rowend">Gathr <button id="custom-open">Change</button>
+<span class="rowend"><span id="source-label">Gathr</span> <button id="custom-open">Change</button>
 </span>
 </div>
 <div id="custom-fields" hidden>
@@ -413,6 +415,7 @@ flex-wrap:wrap}
 </div>
 </div>
 </dialog>
+<script src="search.js"></script>
 <script>
 
 const $ = s => document.querySelector(s);
@@ -477,6 +480,7 @@ $('#save-path')?.addEventListener('click',()=>{
 $('#custom-path').value=$('#custom-path').value.trim();
 
  const custom=!!$('#custom-path').value;
+ $('#source-label').textContent=custom?'Custom':'Gathr';
 
  if($('.engine-heading span'))$('.engine-heading span').textContent=custom?'Custom engine':'Managed by Gathr';
 

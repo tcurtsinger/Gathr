@@ -59,4 +59,9 @@ Try each custom path disclosure, Save, and clearing the path. Use the preview
 controls to show failed/stopped replies and update states; open their references.
 These are prototype checks, not proof of engine integration or chat performance.
 
+After installing the UI dependencies, run `node designs/settings-entry/source.check.cjs`
+on Windows (uses the installed Edge). It checks source switching through the real
+page controls, Search at desktop sizes, and Settings/Escape at all three sizes in
+both themes. `GATHR_EVIDENCE` optionally names a screenshot output folder.
+
 Keep DESIGN.md and the shared system unchanged until a direction is selected.
