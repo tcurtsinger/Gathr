@@ -48,11 +48,11 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
 
 /// Starts a child with no console window on Windows, never detached (0001); on Unix in its
 /// own process group (0016).
-pub fn no_window(command: &mut tokio::process::Command) {
+pub fn no_window(command: &mut std::process::Command) {
     #[cfg(windows)]
-    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    std::os::windows::process::CommandExt::creation_flags(command, 0x0800_0000); // CREATE_NO_WINDOW
     #[cfg(not(windows))]
-    command.process_group(0);
+    std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
 /// Writes a file only this user may read: mode 0600 on Unix. On Windows the data folder's

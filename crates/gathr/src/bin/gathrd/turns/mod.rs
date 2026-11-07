@@ -45,6 +45,8 @@ struct Running {
     approvals: HashMap<String, Value>,
     stopping: bool,
     signed_out: bool,
+    /// The account's renewal gate, held until the provider first answers (0016).
+    gate: login::Hold,
 }
 
 struct Task {
@@ -233,7 +235,7 @@ impl Task {
             Some(_) => None,
             None => Some(self.find_engine(&next.trace).await?),
         };
-        if self.login(program.as_deref()).await == Login::SignedOut {
+        if self.login().await == Login::SignedOut {
             if self.queue.front().map(|q| &q.turn) != Some(&next.turn) {
                 self.queue.push_front(next.clone());
             }
@@ -241,11 +243,11 @@ impl Task {
                 .await;
             return Ok("waiting_sign_in");
         }
-        self.chats.gate.pass().await;
+        let gate = self.chats.gate.pass().await;
         if let Some(program) = program {
             self.spawn(&program, &next.trace).await?;
         }
-        self.open_turn(&next.turn, &next.trace);
+        self.open_turn(&next.turn, &next.trace, gate);
         if let Err(e) = self
             .write(&frames::user(&next.text), Some(&next.turn))
             .await
@@ -259,7 +261,7 @@ impl Task {
     }
 
     /// The turn under way from now: its span starts here.
-    fn open_turn(&mut self, turn: &str, trace: &str) {
+    fn open_turn(&mut self, turn: &str, trace: &str, gate: login::Hold) {
         let span = span_id();
         self.record(
             Event::point("invoke_agent claude")
@@ -279,6 +281,7 @@ impl Task {
             approvals: HashMap::new(),
             stopping: false,
             signed_out: false,
+            gate,
         });
     }
 
@@ -305,11 +308,11 @@ impl Task {
                 .error("sqlite");
             self.record(event.attr("why", e.to_string()));
         }
-        self.open_turn(&turn, &trace);
+        self.open_turn(&turn, &trace, login::Hold::default());
         self.set_turn(&turn, &trace, "running", None).await;
     }
 
-    async fn login(&mut self, program: Option<&std::path::Path>) -> Login {
+    async fn login(&mut self) -> Login {
         let folder = self.chats.account_folder();
         let file = login::credentials(&folder);
         if let Some((stamp, when)) = self.refused {
@@ -320,18 +323,7 @@ impl Task {
             }
             self.refused = None;
         }
-        let (state, _) = login::read(&file, now_us() / 1000);
-        if cfg!(target_os = "macos") && state == Login::SignedOut {
-            let program = match program {
-                Some(program) => program.to_path_buf(),
-                None => match command::find(self.chats.path_setting().await.as_deref()) {
-                    Ok(program) => program,
-                    Err(_) => return state,
-                },
-            };
-            return login::probe(&program, command::env(std::env::vars_os(), &folder)).await;
-        }
-        state
+        self.chats.login_status().await.0
     }
 
     /// Claude Code's path, from Settings at every start so a change applies at once (S26).

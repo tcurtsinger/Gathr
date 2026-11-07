@@ -112,6 +112,9 @@ fn keep(name: &OsString) -> bool {
         || name == "AWS_BEARER_TOKEN_BEDROCK")
 }
 
+/// The setting that holds Claude Code's path; none means `claude` on the PATH (0016).
+pub const PATH_SETTING: &str = "engines.claude.path";
+
 /// The engine's path: the one set in Settings, else `claude` on the PATH.
 pub fn find(setting: Option<&str>) -> Result<PathBuf, String> {
     if let Some(path) = setting.filter(|p| !p.trim().is_empty()) {

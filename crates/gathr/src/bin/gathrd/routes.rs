@@ -8,7 +8,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::claude::{command, login};
+use gathr::claude::command;
 use gathr::store;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -172,7 +172,7 @@ async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
     let setting = s.chats.path_setting().await;
     let found = command::find(setting.as_deref());
     let folder = s.chats.account_folder();
-    let (state, expires) = login::read(&login::credentials(&folder), gathr::ids::now_us() / 1000);
+    let (state, expires) = s.chats.login_status().await;
     Json(json!({
         "path": setting,
         "found": found.as_ref().ok().map(|p| p.display().to_string()),

@@ -78,19 +78,33 @@ pub fn read(file: &Path, now_ms: i64) -> (Login, Option<i64>) {
     (state, oauth.expires_at)
 }
 
-/// `claude auth status` in the account's folder: exits 0 signed in, 1 signed out. Used where
-/// the login isn't in a file (the macOS Keychain, 0016). Never killed: it may be renewing.
-pub async fn probe(program: &Path, env: Vec<(std::ffi::OsString, std::ffi::OsString)>) -> Login {
-    let mut command = tokio::process::Command::new(program);
+/// The account's state, for sends, Settings and `gathr diag` alike: the login file, or on
+/// macOS, where the login is in the Keychain (0016), `claude auth status`. Blocks while the
+/// probe runs; the service calls it off its async threads.
+pub fn status(folder: &Path, path_setting: Option<&str>, now_ms: i64) -> (Login, Option<i64>) {
+    let from_file = read(&credentials(folder), now_ms);
+    if !cfg!(target_os = "macos") || from_file.0 != Login::SignedOut {
+        return from_file;
+    }
+    match super::command::find(path_setting) {
+        Ok(program) => (probe(&program, folder), None),
+        Err(_) => (Login::Unknown, None),
+    }
+}
+
+/// `claude auth status` in the account's folder: exits 0 signed in, 1 signed out. Never
+/// killed: it may be renewing.
+fn probe(program: &Path, folder: &Path) -> Login {
+    let mut command = std::process::Command::new(program);
     command
         .args(["auth", "status"])
         .env_clear()
-        .envs(env)
+        .envs(super::command::env(std::env::vars_os(), folder))
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
     crate::platform::no_window(&mut command);
-    match command.status().await.map(|s| s.code()) {
+    match command.status().map(|s| s.code()) {
         Ok(Some(0)) => Login::SignedIn,
         Ok(Some(1)) => Login::SignedOut,
         _ => Login::Unknown,
@@ -105,12 +119,26 @@ fn needs_renewal(file: &Path) -> bool {
     }
 }
 
-/// One per account. While its login needs renewing, one start or turn goes ahead and renews
-/// it; the rest wait until the file holds a fresh expiry, or 30 s pass and the next one goes.
+/// One per account. With a login file, while it needs renewing, one start or turn goes ahead
+/// and renews it; the rest wait until the file holds a fresh expiry, or 30 s pass. With none
+/// (the macOS Keychain, 0016), the expiry can't be seen, so every start goes one at a time:
+/// the next waits until the one ahead gets its first reply from the provider, fails, or 30 s pass.
 #[derive(Clone)]
 pub struct Gate {
     file: PathBuf,
     held: Arc<tokio::sync::Mutex<()>>,
+}
+
+/// Holds the gate for the start that passed, until it's released or dropped (the turn failed,
+/// or the engine exited). Holds nothing when the login is in a file.
+#[derive(Debug, Default)]
+pub struct Hold(Option<tokio::sync::oneshot::Sender<()>>);
+
+impl Hold {
+    /// The provider answered: the login works, so the next start may go.
+    pub fn release(&mut self) {
+        self.0.take();
+    }
 }
 
 impl Gate {
@@ -121,11 +149,19 @@ impl Gate {
         }
     }
 
-    /// Waits for this start's turn. Returns at once when the login doesn't need renewing.
-    pub async fn pass(&self) {
+    /// Waits for this start's turn.
+    pub async fn pass(&self) -> Hold {
         let guard = self.held.clone().lock_owned().await;
+        if !self.file.exists() {
+            let (hold, released) = tokio::sync::oneshot::channel();
+            tokio::spawn(async move {
+                let _ = tokio::time::timeout(RENEW_WAIT, released).await;
+                drop(guard);
+            });
+            return Hold(Some(hold));
+        }
         if !needs_renewal(&self.file) {
-            return;
+            return Hold::default();
         }
         let file = self.file.clone();
         tokio::spawn(async move {
@@ -135,6 +171,7 @@ impl Gate {
             }
             drop(guard);
         });
+        Hold::default()
     }
 }
 
@@ -203,6 +240,38 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(2), second)
             .await
             .expect("the second start still waits after the renewal landed")
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn with_no_login_file_each_start_waits_for_the_first_reply_ahead() {
+        let gate = Gate::new(&folder("keychain"));
+        let next = |gate: &Gate| {
+            let gate = gate.clone();
+            tokio::spawn(async move { gate.pass().await })
+        };
+        let mut first = gate.pass().await;
+        let second = next(&gate);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            !second.is_finished(),
+            "a second start went ahead before the first got a reply"
+        );
+        first.release();
+        let held = tokio::time::timeout(Duration::from_secs(2), second)
+            .await
+            .expect("the second start still waits after the first reply")
+            .unwrap();
+        let third = next(&gate);
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        assert!(
+            !third.is_finished(),
+            "a third start didn't wait for the second"
+        );
+        drop(held);
+        tokio::time::timeout(Duration::from_secs(2), third)
+            .await
+            .expect("a start that failed or exited didn't let the next one go")
             .unwrap();
     }
 

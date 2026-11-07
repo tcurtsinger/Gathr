@@ -21,6 +21,11 @@ pub fn health(data: &DataDir) -> Value {
         Ok((conn, _)) => held(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
         Err(_) => Value::Null,
     };
+    let path_setting = opened.as_ref().ok().and_then(|(conn, _)| {
+        crate::store::setting(conn, crate::claude::command::PATH_SETTING)
+            .ok()
+            .flatten()
+    });
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -33,8 +38,7 @@ pub fn health(data: &DataDir) -> Value {
     };
     let folder = data.claude_folder();
     let now_ms = crate::ids::now_us() / 1000;
-    let (login, expires) =
-        crate::claude::login::read(&crate::claude::login::credentials(&folder), now_ms);
+    let (login, expires) = crate::claude::login::status(&folder, path_setting.as_deref(), now_ms);
     let crash_log = CrashLog::new(data.crash_log());
     json!({
         "service": service_now(data),

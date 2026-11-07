@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use gathr::claude::login::Gate;
+use gathr::claude::login::{self, Gate, Login};
 use gathr::data::DataDir;
 use gathr::event::Event;
 use gathr::store;
@@ -15,8 +15,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::turns;
 
-/// The setting that holds Claude Code's path; none means `claude` on the PATH (0016).
-pub const PATH_SETTING: &str = "engines.claude.path";
+pub use gathr::claude::command::PATH_SETTING;
 
 pub enum Cmd {
     Send {
@@ -130,6 +129,16 @@ impl Chats {
             .await
             .and_then(Result::ok)
             .flatten()
+    }
+
+    /// The account's sign-in state and expiry, off the async threads: on macOS it may run
+    /// `claude auth status` (0016).
+    pub async fn login_status(&self) -> (Login, Option<i64>) {
+        let (folder, setting) = (self.account_folder(), self.path_setting().await);
+        let now_ms = gathr::ids::now_us() / 1000;
+        tokio::task::spawn_blocking(move || login::status(&folder, setting.as_deref(), now_ms))
+            .await
+            .unwrap_or((Login::Unknown, None))
     }
 
     pub fn publish(&self, event: Value) {

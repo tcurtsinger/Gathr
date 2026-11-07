@@ -47,7 +47,7 @@ impl Engine {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        crate::platform::no_window(&mut command);
+        crate::platform::no_window(command.as_std_mut());
         let mut child = command.spawn()?;
         let (tx, rx) = mpsc::unbounded_channel();
         let stdout = child.stdout.take().expect("stdout is piped");

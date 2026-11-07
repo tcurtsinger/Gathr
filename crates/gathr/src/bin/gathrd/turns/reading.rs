@@ -49,7 +49,15 @@ impl Task {
 
     pub(super) async fn on_frame(&mut self, frame: Frame) {
         let chat = self.chat.clone();
+        if matches!(
+            frame,
+            Frame::Replied | Frame::Text(_) | Frame::ToolStart { .. }
+        ) && let Some(turn) = self.turn.as_mut()
+        {
+            turn.gate.release();
+        }
         match frame {
+            Frame::Replied => {}
             Frame::Init {
                 session_id, tools, ..
             } => {

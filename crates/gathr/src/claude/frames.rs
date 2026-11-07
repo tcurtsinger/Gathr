@@ -12,6 +12,8 @@ pub enum Frame {
         model: String,
         tools: Vec<String>,
     },
+    /// The provider has begun a reply (`message_start`): the login worked (0016's gate).
+    Replied,
     /// Text as it's written (`--include-partial-messages`).
     TextDelta(String),
     /// A whole text block of a finished model call.
@@ -154,6 +156,9 @@ fn read_own(value: &Value) -> Vec<Frame> {
 fn delta(value: &Value) -> Option<Frame> {
     let event = &value["event"];
     let delta = &event["delta"];
+    if event["type"] == "message_start" {
+        return Some(Frame::Replied);
+    }
     (event["type"] == "content_block_delta" && delta["type"] == "text_delta")
         .then(|| Frame::TextDelta(delta["text"].as_str().unwrap_or("").to_string()))
 }
@@ -285,6 +290,22 @@ mod tests {
             frames.contains(&Frame::Read("Say hi".into())),
             "the echo of the message read is missing"
         );
+    }
+
+    /// The macOS gate lets the next start go on this, so it must come before the reply's words,
+    /// and a signed-out run, which never reached the provider, must have none (0016).
+    #[test]
+    fn the_providers_first_reply_reads_before_its_text() {
+        let frames = replayed("approval");
+        let replied = frames.iter().position(|f| *f == Frame::Replied);
+        let text = frames
+            .iter()
+            .position(|f| matches!(f, Frame::TextDelta(_) | Frame::Text(_)));
+        assert!(
+            replied.is_some() && replied < text,
+            "message_start at {replied:?}, first text at {text:?}"
+        );
+        assert!(!replayed("signed_out").contains(&Frame::Replied));
     }
 
     /// A sub-agent's words and tools are its own, tied to the Agent call, never the agent's.
