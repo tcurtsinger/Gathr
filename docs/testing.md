@@ -93,12 +93,12 @@ fn pause_sets_the_flag_in_the_scheduler() {
 2. Write one test there.
 3. Run it: it fails, for the reason you expect (red).
 4. Write the least code that passes it.
-5. Run it and every earlier test: all pass (green).
+5. Run that test again: it passes (green). Only this one; earlier tests wait for the run before pushing.
 6. Next behaviour: back to 2.
 
 Rules:
 - **Red before green.** Watch it fail first; a test you've never seen fail may not test anything.
 - **One slice at a time.** One behaviour, one test, one minimal change. Nothing speculative.
-- **Refactor once green,** as its own pass: structure only, tests rerun after each change.
+- **Refactor once the behaviours are green,** as one pass at the end: structure only, then one run of the tests it touched.
 - **A bug starts with its test.** Reproduce it at a seam (for an engine bug, `gathr diag turn <id> --raw` saves the frames as a fixture), watch it fail, then fix it.
-- **Run what the change touches** once before pushing. CI runs everything.
+- **Run the tests the change touches once before pushing,** not the whole suite and not after every step. CI runs everything.
