@@ -27,7 +27,12 @@ Everything else is pulled, not pushed: Gathr's MCP tools read the chat's history
 
 ### How it's measured
 
-Every turn records its input tokens by part: Gathr's briefing, catch-up, state, the ask, the engine's own share, tool results by kind ([0011](0011-event-record.md)), and how much was cached. The analytics page shows them per agent, chat and engine, with the turns that compacted and what each cost.
+The engines report totals per turn, not parts: input, cached reads and writes, output ([0001](0001-engine-interface.md), [0011](0011-event-record.md)). Counting tokens per part would need a provider API key, which [0002](0002-login-folders.md) rules out. So every turn records:
+- the provider's totals, exactly as reported;
+- the size of each part Gathr adds (briefing, catch-up, state, the ask) in characters, with a local token estimate labelled as an estimate;
+- tool results by kind and full size ([0011](0011-event-record.md)).
+
+The engine's own share is the remainder of the total after Gathr's parts: an inference, shown as one. The analytics page shows all of it per agent, chat and engine, with the turns that compacted and what each cost.
 
 ### Quality is the other half
 
@@ -47,4 +52,4 @@ Context is never cut on token counts alone. A change to what Gathr puts in a tur
 
 ## Not verified
 
-The sizes Gathr's parts end up at, and which outcome signals move when they change, come from the first months of the record. The first slice measures the briefing and a fresh session's catch-up on one chat.
+The sizes Gathr's parts end up at, and which outcome signals move when they change, come from the first months of the record. The first slice records, for each turn on one chat, the provider's totals and the characters of the briefing and a fresh session's catch-up, so the split above is checked on real turns.
