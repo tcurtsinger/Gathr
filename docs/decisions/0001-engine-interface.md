@@ -5,7 +5,7 @@ Status: proposed. Date: 2026-11-06.
 ## Choice
 
 - The service defines one Rust `Engine` interface. Every provider sits behind it as a driver that runs that provider's own agent harness as a child process and speaks its own machine protocol. Gathr never runs a model loop of its own over raw APIs.
-- **Claude Code driver:** one long-lived `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages` process per agent conversation, with stdin kept open across turns. Tool approvals come back over the same pipe with `--permission-prompt-tool stdio`. Stop is the `interrupt` control request.
+- **Claude Code driver:** at most one long-lived `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages` process per agent, on one session at a time, with stdin kept open across that session's turns. An agent runs one turn at a time across all its conversations ([0010, Sessions](0010-coordination-as-state.md#sessions)); when its next turn is in another session, the driver closes the process the gentle way (below) and starts a new one with `--resume <id>`. Tool approvals come back over the same pipe with `--permission-prompt-tool stdio`. Stop is the `interrupt` control request.
 - **Codex driver:** one long-lived `codex app-server` process per agent, JSON-RPC over stdio: `initialize`, then `thread/start` or `thread/resume`, `turn/start`, `turn/steer`, and `turn/interrupt` for Stop. Approvals arrive as server requests (`item/commandExecution/requestApproval`, `item/fileChange/requestApproval`).
 - **ACP** is not the path to Claude Code or Codex. The interface is shaped after ACP's concepts (session new, load and resume; prompt; cancel; permission request; plan; usage), so an ACP driver can be added later for agents that speak ACP natively (Gemini CLI, Copilot, Goose and others).
 - **First slice engine:** Claude Code.
@@ -18,11 +18,11 @@ The interface, in outline:
 | send | `{"type":"user",...}` line on stdin | `turn/start`, or `turn/steer` mid-turn |
 | stop | `control_request` `interrupt` | `turn/interrupt {threadId, turnId}` |
 | approval asked | `can_use_tool` control request | `item/*/requestApproval` server request |
-| plan | TodoWrite tool calls | `turn/plan/updated` |
+| plan | `TaskCreate` / `TaskUpdate` tool calls (legacy `TodoWrite` also read) | `turn/plan/updated` |
 | usage | `result.usage`, `modelUsage`, `total_cost_usd` | `thread/tokenUsage/updated` (`last`, `total`) |
 | turn ended | `result` message | `turn/completed` |
 
-Every frame in and out is written to the event record (0011) before the driver interprets it, so a misread frame can be diagnosed from the record.
+Every frame in and out follows [0011's raw-frame policy](0011-event-record.md#raw-engine-frames): read it, redact secrets, write it to `engine_raw`, then interpret it. Nothing reaches the database unredacted, malformed frames included (pattern-redacted, cut to 64 KB, `malformed = 1`). With "Keep raw engine frames" off, only the metadata columns are written. So a misread frame can be diagnosed from the record without the record holding a secret.
 
 ## Why
 
@@ -53,10 +53,10 @@ What ACP would give: one driver for both engines and the long tail of other agen
 
 - A driver reports what its engine supports (resume, steer, plan, per-turn tokens, cost). The UI shows a feature only when the engine has it, never a stand-in.
 - Usage is normalised per turn in the driver: Claude reports per message and a running session cost, Codex reports running totals with a `last` figure. The previous app once logged 781,768 input tokens for one line by adding them naively.
-- Stop: the engine's interrupt, then wait. Closing a process: interrupt, close stdin, wait. A kill is the last resort after a grace period, written to the event record with why.
+- Stop: the engine's interrupt, then wait. Closing a process (to switch sessions, or after 10 idle minutes): close stdin and wait for the engine's own exit. Switching never kills: a process that hasn't exited after 30 seconds holds the switch, shows as a hold on the agent and is recorded ([0010, Sessions](0010-coordination-as-state.md#sessions)). A kill happens only on the person's explicit action or at service shutdown after the grace period, written to the event record with why.
 - Child processes on Windows: start `.exe` directly; resolve npm `.cmd` shims through PATHEXT and run their script under `node` rather than `cmd.exe` (cmd.exe mangles JSON arguments); `CREATE_NO_WINDOW` on every spawn; never `DETACHED_PROCESS`. On this PC `claude` is a native `claude.exe` and `codex` is an npm shim.
 - `--bare` is not used for Claude Code: it never reads a subscription login ([headless: bare mode](https://code.claude.com/docs/en/headless#start-faster-with-bare-mode)). The driver passes `--strict-mcp-config` and its own settings sources instead.
-- Claude Code's TodoWrite plan tool is off by default on newer models; the driver sets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` ([todo tracking](https://code.claude.com/docs/en/agent-sdk/todo-tracking)).
+- **Plan from Claude Code's task tools.** Newer models get no task-tracking tools by default; the driver sets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` to turn them on. That only makes them available: which tools appear is chosen by `CLAUDE_CODE_ENABLE_TASKS`, which defaults to `TaskCreate`, `TaskUpdate`, `TaskGet` and `TaskList`, and gives the legacy `TodoWrite` only when set to `0` ([env vars](https://code.claude.com/docs/en/env-vars), [todo tracking](https://code.claude.com/docs/en/agent-sdk/todo-tracking)). The driver uses the default and builds the plan from the Task tools: `TaskCreate` adds a step (`subject`, its id from the tool result's `task.id`), `TaskUpdate` changes one by `taskId` (also sent as `id` or `task_id`) to `pending`, `in_progress` or `completed`, and `deleted` removes it. It also reads `TodoWrite` (a whole-list replace), because a person's own settings can set `CLAUDE_CODE_ENABLE_TASKS=0`.
 - `--permission-prompt-tool stdio` appears in the SDK source, not the CLI docs ([subprocess_cli.py](https://github.com/anthropics/claude-agent-sdk-python/blob/main/src/claude_agent_sdk/_internal/transport/subprocess_cli.py)). The first slice's tests cover it so a CLI update that breaks it fails CI, not a user's turn.
 
 ## Turned down
@@ -69,4 +69,4 @@ What ACP would give: one driver for both engines and the long tail of other agen
 
 ## Not verified
 
-No live turn was run (Phase 0 rule). The stream-json frames, `--permission-prompt-tool stdio` and `turn/interrupt` are taken from docs, SDK sources and the generated schema; the first slice proves them against a signed-in engine.
+No live turn was run (Phase 0 rule). The stream-json frames, `--permission-prompt-tool stdio` and `turn/interrupt` are taken from docs, SDK sources and the generated schema; the first slice proves them against a signed-in engine. Also for the first slice: that Claude Code exits on its own when its stdin closes (the gentle close depends on it), and the exact Task tool input and result shapes, which the docs show only by example.
