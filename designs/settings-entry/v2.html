@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gathr | Workspace menu</title>
+<link rel="stylesheet" href="../../ui/src/base.css">
+<link rel="stylesheet" href="../../ui/src/settings/settings.css">
+<style>
+[hidden] {display:none!important}
+
+.previewbar {display:flex;
+align-items:center;
+gap:16px;
+padding:8px 16px;
+border-bottom:1px solid var(--border);
+font-size:12px;
+flex-wrap:wrap}
+
+.previewbar span {margin-right:auto;
+color:var(--muted)}
+
+.app {display:grid;
+grid-template-columns:248px minmax(0,1fr);
+height:calc(100dvh - 55px);
+min-height:520px}
+
+.sidebar {padding:16px 12px;
+display:flex;
+flex-direction:column;
+background:var(--surface);
+min-width:0}
+
+.brand {display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 8px 20px;
+font-size:18px}
+
+.brand b {display:flex;
+align-items:center;
+gap:10px;
+font-weight:600}
+
+.mark {display:flex;
+gap:3px}
+.mark i {width:4px;
+height:12px;
+background:var(--text);
+border-radius:3px}
+.mark i:last-child{transform:translateY(4px)}
+
+.navbutton,.chatrow {text-align:left;
+width:100%;
+display:flex;
+align-items:center;
+gap:10px}
+
+.chatlist {flex:1;
+overflow:auto;
+margin-top:24px}
+.chatrow {font-size:13px;
+white-space:nowrap;
+overflow:hidden;
+text-overflow:ellipsis}
+
+.chatrow[aria-current] {background:var(--raised)}
+
+.foot {border-top:1px solid var(--border);
+padding-top:12px;
+position:relative}
+
+.entry {width:100%;
+display:flex;
+gap:12px;
+align-items:center;
+text-align:left;
+min-height:44px}
+
+.avatar {width:28px;
+height:28px;
+border-radius:50%;
+background:var(--raised);
+display:grid;
+place-items:center;
+font-size:12px}
+
+.entry .chevron {margin-left:auto}
+.old-entry {justify-content:flex-end}
+
+.entry {font-size:13px;
+white-space:nowrap}
+
+.account-menu {position:absolute;
+bottom:60px;
+left:0;
+right:0;
+background:var(--surface);
+border:1px solid var(--control);
+border-radius:10px;
+padding:6px;
+z-index:2}
+
+.account-menu button {text-align:left;
+width:100%}
+
+.chat {min-width:0;
+display:flex;
+flex-direction:column}
+.topbar {padding:16px 24px;
+display:flex;
+justify-content:space-between;
+align-items:center}
+
+.topbar h1 {font-size:15px;
+font-weight:500;
+margin:0}
+
+.transcript {overflow:auto;
+flex:1;
+padding:32px 24px}
+.reading {max-width:760px;
+margin:auto}
+
+.user {background:var(--surface);
+border-radius:18px;
+padding:10px 16px;
+margin:0 0 32px auto;
+width:fit-content;
+max-width:85%}
+
+.reply {max-width:68ch;
+line-height:1.65}
+.reply p {margin:0 0 16px}
+
+.notice {margin-top:24px;
+padding:12px 16px;
+border:1px solid var(--control);
+border-radius:7px;
+display:flex;
+align-items:center;
+gap:16px}
+
+.notice.failed {color:var(--danger);
+background:var(--danger-surface);
+border-color:var(--danger-border)}
+
+.reference {text-decoration:underline;
+color:var(--accent)}
+
+.composer-area {padding:24px;
+max-width:808px;
+width:100%;
+margin:auto}
+
+.composer {border-radius:22px;
+background:var(--raised);
+padding:16px}
+.composer:focus-within {outline:2px solid var(--focus);
+outline-offset:2px}
+
+.composer textarea {width:100%;
+resize:none;
+background:transparent;
+border:0;
+outline:0;
+min-height:55px;
+font-size:15px}
+
+.composer-bottom {display:flex;
+justify-content:space-between;
+align-items:center;
+font-size:12px;
+color:var(--muted)}
+
+.settings-page section {max-width:740px}
+.engine-heading {display:flex;
+justify-content:space-between;
+align-items:center;
+margin:0 0 32px}
+
+.engine-heading h4 {font-size:16px;
+margin:0}
+.engine-heading span {font-size:13px;
+color:var(--muted)}
+
+.setting-row {display:flex;
+justify-content:space-between;
+gap:20px;
+align-items:center;
+padding:18px 0;
+border-bottom:1px solid var(--border)}
+
+.setting-row label {display:flex;
+align-items:center;
+gap:8px}
+.rowend {display:flex;
+align-items:center;
+gap:16px;
+color:var(--muted);
+font-size:13px}
+
+.setting-row button {border:1px solid var(--control);
+min-width:82px}
+.setting-row h4 {margin:0;
+font-size:15px;
+font-weight:500}
+
+.advanced {margin-top:32px}
+.advanced summary {cursor:pointer;
+padding:8px 0}
+.path {margin:16px 0;
+display:grid;
+gap:8px}
+.pathline {display:flex;
+gap:8px}
+
+.pathline input {width:100%;
+min-width:0}
+.pathline button {border:1px solid var(--control)}
+
+.help {font-size:12px;
+color:var(--muted)}
+.settings-page h3 {margin-bottom:24px}
+
+.status {font-size:13px;
+color:var(--muted)}
+.sample-note {font-size:12px;
+color:var(--muted);
+margin-top:40px}
+
+.engine-failure {margin-top:20px;
+padding:12px;
+border:1px solid var(--danger-border);
+background:var(--danger-surface);
+border-radius:7px;
+color:var(--danger)}
+
+.diagnostic-row {border-bottom:1px solid var(--border);
+padding:16px 0}
+.diagnostic-row code {display:block;
+color:var(--muted);
+font-size:13px}
+
+@media(max-width:1100px){.app{grid-template-columns:205px minmax(0,1fr)}
+}
+
+@media(max-width:767px){.app{grid-template-columns:1fr}
+.sidebar{padding:8px 16px;
+flex-direction:row;
+align-items:center;
+gap:12px}
+.brand{padding:0;
+margin-right:auto}
+.sidebar>.navbutton,.chatlist{display:none}
+.foot{border:0;
+padding:0}
+.entry{width:auto}
+.entry .avatar,.entry .chevron{display:none}
+.account-menu{bottom:auto;
+top:48px;
+left:auto;
+width:180px}
+.app{grid-template-rows:auto minmax(0,1fr)}
+.previewbar{gap:8px}
+.previewbar span{width:100%}
+.composer-area{padding:16px}
+.transcript{padding:24px 16px}
+.setting-row{align-items:flex-start;
+flex-wrap:wrap}
+.rowend{margin-left:auto}
+.settings-panel{height:calc(100dvh - 24px)}
+}
+
+</style>
+</head>
+<body>
+<div class="previewbar" data-id="preview-controls">
+<span>Option 2: Workspace menu. Local preview, sample data.</span>
+<button id="theme">Switch theme</button>
+<label>Reply <select id="reply-state">
+<option value="complete">Complete</option>
+<option value="failed">Failed</option>
+<option value="stopped">Stopped</option>
+</select>
+</label>
+<label>Engine <select id="engine-state">
+<option value="current">Current</option>
+<option value="available">Update available</option>
+<option value="updating">Updating</option>
+<option value="failed">Failed</option>
+</select>
+</label>
+</div>
+<div class="app">
+<nav class="sidebar" aria-label="Chats">
+<div class="brand">
+<b>
+<span class="mark" aria-hidden="true">
+<i>
+</i>
+<i>
+</i>
+</span>Gathr</b>
+</div>
+<button class="navbutton" id="new">+ New</button>
+<div class="chatlist">
+<button class="chatrow" aria-current="page">Release checklist</button>
+<button class="chatrow">Keyboard navigation</button>
+<button class="chatrow">Reconnect streaming</button>
+</div>
+<div class="foot">
+<button class="entry" id="account-entry" data-id="settings-entry" aria-label="Local workspace menu">
+<span class="avatar">L</span>Local workspace<span class="chevron">⌃</span>
+</button>
+<div class="account-menu" id="account-menu" hidden>
+<button data-open="engines">Settings</button>
+</div>
+</div>
+</nav>
+<main class="chat">
+<header class="topbar">
+<h1 data-id="chat-title">Release checklist</h1>
+</header>
+<div class="transcript">
+<div class="reading">
+<div class="user">What should we check before release?</div>
+<article class="reply">
+<p>Check the main flows on Windows and macOS:</p>
+<ul>
+<li>Open a chat and send a message.</li>
+<li>Stop a reply while it is streaming.</li>
+<li>Close and reopen the app. Check that the conversation is still there.</li>
+</ul>
+<p>Try a failed send too, then open its reference to see what happened.</p>
+</article>
+<div class="notice" id="notice" hidden>
+<span id="notice-label">Stopped</span>
+<button class="reference" data-id="reply-reference" data-open="diagnostics">ref-demo-01</button>
+</div>
+</div>
+</div>
+<div class="composer-area">
+<div class="composer" data-id="composer">
+<textarea id="draft" aria-label="Message" placeholder="Message">
+</textarea>
+<div class="composer-bottom">
+<span>Assistant</span>
+<button class="primary" id="send">Send</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+<dialog class="settings-panel" id="settings" aria-labelledby="settings-title">
+<header class="settings-header">
+<h2 id="settings-title">Settings</h2>
+<button id="close">Close</button>
+</header>
+<div class="settings-body">
+<nav class="settings-categories" aria-label="Settings categories">
+<button data-page="engines" aria-current="page">Engines</button>
+<button data-page="diagnostics">Diagnostics</button>
+</nav>
+<div class="settings-page">
+<section id="engines">
+<h3 data-id="engines-title">Engines</h3>
+<div class="engine-heading">
+<h4>Claude Code</h4>
+<span>Managed by Gathr</span>
+</div>
+<div class="setting-row" data-id="engine-version">
+<h4>Version</h4>
+<span class="rowend">2.1.319</span>
+</div>
+<div class="setting-row" data-id="engine-update">
+<h4 id="engine-status" role="status">Up to date</h4>
+<button id="update">Check</button>
+</div>
+<div class="setting-row" data-id="engine-signin">
+<h4 id="login-status" role="status">Signed out</h4>
+<button id="signin">Sign in</button>
+</div>
+<div class="setting-row">
+<h4>Engine source</h4>
+<span class="rowend">Gathr <button id="custom-open">Change</button>
+</span>
+</div>
+<div id="custom-fields" hidden>
+<div class="path">
+<label for="custom-path">Claude Code path</label>
+<div class="pathline">
+<input id="custom-path" placeholder="Use Gathr’s copy">
+<button id="save-path">Save</button>
+</div>
+<details class="help">
+<summary>About custom paths</summary>
+<p>A custom engine is updated outside Gathr. Clear the path to use Gathr’s copy.</p>
+</details>
+</div>
+</div>
+<div class="engine-failure" id="engine-failure" hidden>Update failed <button class="reference" data-open="diagnostics">ref-demo-02</button>
+</div>
+<p class="sample-note">Preview only. Version, login and update states are sample data.</p>
+</section>
+<section id="diagnostics" hidden>
+<h3 data-id="diagnostics-title">Diagnostics</h3>
+<div class="diagnostic-row">Release checklist<code>ref-demo-01</code>
+</div>
+<div class="diagnostic-row">Send failed<code>Sample event. No engine is connected.</code>
+</div>
+</section>
+</div>
+</div>
+</dialog>
+<script>
+
+const $ = s => document.querySelector(s);
+
+const dialog = $('#settings');
+ let opener;
+
+function openSettings(page='engines') {
+ opener=document.activeElement;
+
+ $('#account-menu').hidden=true;
+
+ $('#engines').hidden=page!=='engines';
+$('#diagnostics').hidden=page!=='diagnostics';
+
+ document.querySelectorAll('[data-page]').forEach(b=>{if(b.dataset.page===page)b.setAttribute('aria-current','page');
+else b.removeAttribute('aria-current')});
+
+ if(!dialog.open)dialog.showModal();
+
+}
+document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openSettings(b.dataset.open));
+
+document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>openSettings(b.dataset.page));
+
+$('#close').onclick=()=>dialog.close();
+dialog.addEventListener('close',()=>opener?.focus());
+
+$('#theme').onclick=()=>{document.documentElement.classList.toggle('light');
+history.replaceState(null,'',document.documentElement.classList.contains('light')?'#light':location.pathname)};
+
+if(location.hash==='#light')document.documentElement.classList.add('light');
+
+$('#account-entry')?.addEventListener('click',()=>{$('#account-menu').hidden=!$('#account-menu').hidden});
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#account-menu').hidden=true});
+
+$('#reply-state').onchange=e=>{const state=e.target.value;
+$('#notice').hidden=state==='complete';
+$('#notice').classList.toggle('failed',state==='failed');
+$('#notice-label').textContent=state==='failed'?'Send failed':'Stopped';
+};
+
+$('#engine-state').onchange=e=>{const state=e.target.value;
+$('#engine-status').textContent={current:'Up to date',available:'Update available',updating:'Updating',failed:'Update failed'}[state];
+$('#update').textContent=state==='available'?'Update':'Check';
+$('#update').disabled=state==='updating';
+$('#engine-failure').hidden=state!=='failed';
+};
+
+$('#update').onclick=()=>{$('#engine-status').textContent='Up to date';
+$('#engine-failure').hidden=true;
+$('#update').textContent='Check';
+};
+
+$('#signin').onclick=()=>{$('#signin').textContent=$('#signin').textContent==='Sign in'?'Cancel':'Sign in';
+$('#login-status').textContent=$('#signin').textContent==='Cancel'?'Signing in':'Signed out';
+};
+
+$('#save-path')?.addEventListener('click',()=>{
+ $('#save-path').textContent='Saved';
+$('#custom-path').value=$('#custom-path').value.trim();
+
+ const custom=!!$('#custom-path').value;
+
+ if($('.engine-heading span'))$('.engine-heading span').textContent=custom?'Custom engine':'Managed by Gathr';
+
+ if($('#update')){$('#update').disabled=custom;
+$('#engine-status').textContent=custom?'Updates managed externally':'Up to date';
+}
+});
+
+$('#new').onclick=()=>{$('.user').textContent='New chat';
+$('.reply').hidden=true;
+$('#draft').value='';
+$('#draft').focus()};
+
+$('#send').onclick=()=>{if($('#draft').value.trim()){$('.user').textContent=$('#draft').value;
+$('.reply').hidden=false;
+$('#draft').value=''}};
+
+$('#custom-choice')?.addEventListener('change',e=>{$('#custom-fields').hidden=!e.target.checked});
+
+$('#managed-choice')?.addEventListener('change',()=>{$('#custom-fields').hidden=true});
+
+$('#custom-open')?.addEventListener('click',()=>{$('#custom-fields').hidden=!$('#custom-fields').hidden;
+$('#custom-path').focus()});
+
+
+</script>
+</body>
+</html>
