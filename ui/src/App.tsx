@@ -57,6 +57,7 @@ export function App() {
             redraw((n) => n + 1);
           }}
           openSettings={openSettings}
+          onNamed={() => api.chats().then(setChats, setFailure)}
         />
       ) : (
         <main className="chat">

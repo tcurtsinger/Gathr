@@ -1,5 +1,5 @@
-//! What the window reads and writes beyond chats: a chat's turn timelines for Diagnostics,
-//! and its own errors and timings into the event record (docs/first-slice.md, 0012, 0019).
+//! What the window reads and writes beyond chats: chat names, a chat's turn timelines for
+//! Diagnostics, and its own errors and timings into the event record (0012, 0019).
 
 mod common;
 
@@ -7,6 +7,47 @@ use std::time::Duration;
 
 use common::{TempDir, TestService, gathr, recording, replay_engine, sign_in};
 use serde_json::{Value, json};
+
+/// The sidebar lists chats by name: a new chat takes its first message's first line.
+#[test]
+fn a_chat_is_named_after_its_first_message_and_keeps_that_name() {
+    let data = TempDir::new();
+    let service = TestService::start(&data.0);
+    // No engine at this path: the send fails, but the message is kept, which is all this needs.
+    let missing = data.0.join("no-such-claude.exe");
+    service.send("PUT", "/api/engines/claude", json!({ "path": missing }));
+    let say = |chat: &str, text: &str| {
+        service.send(
+            "POST",
+            &format!("/api/chats/{chat}/messages"),
+            json!({ "text": text }),
+        );
+    };
+    let short = service.new_chat();
+    say(
+        &short,
+        "
+  Summarise the release notes for 2.4  
+and list the fixes",
+    );
+    say(&short, "Now shorten it");
+    let long = service.new_chat();
+    say(&long, &"river ".repeat(30));
+
+    let chats = service.call("GET", "/api/chats").json();
+    let title = |id: &str| {
+        let chat = chats
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|c| c["id"] == id)
+            .unwrap();
+        chat["title"].as_str().unwrap().to_string()
+    };
+    assert_eq!(title(&short), "Summarise the release notes for 2.4");
+    let cut = title(&long);
+    assert!(cut.chars().count() <= 60 && cut.ends_with('…'), "{cut:?}");
+}
 
 /// Recorded live: Claude Code asked to run Write, was allowed, and answered (153 output tokens).
 #[test]

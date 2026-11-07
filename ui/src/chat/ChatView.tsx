@@ -15,9 +15,11 @@ interface Props {
   onDraft: (text: string) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
+  /** The first message names the chat (the service does it), so the list shows the name. */
+  onNamed: () => void;
 }
 
-export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
+export function ChatView({ chat, draft, onDraft, openSettings, onNamed }: Props) {
   const { state, loaded, loadFailure, sendFailure, send, stop, approve, reload } = useChat(chat.id);
   const list = useMemo(() => rows(state, sendFailure), [state, sendFailure]);
   const turn = running(state);
@@ -44,12 +46,13 @@ export function ChatView({ chat, draft, onDraft, openSettings }: Props) {
 
   const submit = (text: string) => {
     pinned.current = true;
-    send(text);
+    return send(text);
   };
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
+    const first = state.messages.length === 0;
     onDraft('');
-    submit(draft);
+    submit(draft).then(() => first && onNamed());
   };
 
   const actions: NoticeActions = {

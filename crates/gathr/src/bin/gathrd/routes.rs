@@ -60,7 +60,7 @@ async fn create(
     Extension(t): Extension<Trace>,
     Json(body): Json<NewChat>,
 ) -> Answer {
-    let title = body.title.unwrap_or_else(|| "New chat".into());
+    let title = body.title.unwrap_or_else(|| store::UNTITLED.into());
     db(&s, &t, "New chat failed", move |conn| {
         store::create_chat(conn, &title)
     })
