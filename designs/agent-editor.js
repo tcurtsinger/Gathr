@@ -42,7 +42,6 @@ function renderEditor(host, inline = false) {
 <div class="model-results" aria-label="Models"></div>
 <label class="agent-field">Effort<select name="effort"><option>Engine default</option><option>Sample low</option>
 <option>Sample medium</option><option>Sample high</option><option>Sample maximum</option></select></label>
-<details><summary>Scope</summary><p>All chats, from the next turn.</p></details>
 <p class="agent-preview-note">Sample agents, accounts and engine choices. Local preview.</p>
 <div class="agent-actions"><button type="button" id="agent-cancel">Cancel</button><button type="submit">Save</button></div>
 </form>`;
@@ -98,7 +97,26 @@ function renderEditor(host, inline = false) {
   };
   models();
 }
-if (option === 'settings') openAgentSettings();
+if (option === 'settings') {
+  const picker = document.querySelector('[aria-label="Agent"]');
+  const edit = document.createElement('option');
+  edit.value = 'edit-agent';
+  edit.textContent = 'Edit agent';
+  picker.append(edit);
+  let recipient = picker.value;
+  edit.disabled = recipient === 'Everyone';
+  picker.addEventListener('change', () => {
+    if (picker.value !== 'edit-agent') {
+      recipient = picker.value;
+      edit.disabled = recipient === 'Everyone';
+      return;
+    }
+    picker.value = recipient;
+    selectedAgent = Math.max(0, fixtureAgents.findIndex(agent => agent.name === recipient));
+    openAgentSettings();
+  });
+  openAgentSettings();
+}
 if (option === 'team') {
   const panel = document.querySelector('.panel');
   panel.hidden = false;

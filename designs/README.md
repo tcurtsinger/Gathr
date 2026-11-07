@@ -35,8 +35,9 @@ references after a Stopped filter, clearing Find, and focus return after categor
 changes with Close and Escape at 1440 and 1024 px in both themes. No downloads.
 
 
-Agent editing proposals (unselected): `agents/v1.html` Settings, `agents/v2.html`
-Team panel, `agents/v3.html` chat agent menu. Shared form: agent-editor.css and
+Selected agent editor: `agents/v1.html`, Settings > Agents, also opened by Edit
+agent in the chat picker. Save applies everywhere. Not chosen: `agents/v2.html`
+Team panel and `agents/v3.html` separate chat menu editor. Shared form: agent-editor.css and
 agent-editor.js. Five invented agents, two engines, two accounts and 24 sample
 models per engine. Model names and effort values are layout fixtures, not a
 provider capability claim. No engine, login, service or durable storage connects.
