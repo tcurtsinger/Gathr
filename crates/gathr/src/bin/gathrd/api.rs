@@ -26,6 +26,7 @@ pub struct State {
     pub chats: Arc<crate::chats::Chats>,
     pub updates: Arc<crate::updates::Updates>,
     pub sign_in: Arc<crate::sign_in::SignIn>,
+    pub models: crate::models::Models,
 }
 
 /// The request's trace id, for handlers: a failure's reference and its events share it.
@@ -38,6 +39,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
         .merge(crate::sign_in::routes())
+        .merge(crate::models::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }

@@ -4,6 +4,7 @@
 mod api;
 mod chats;
 mod logs;
+mod models;
 mod routes;
 mod sign_in;
 mod turns;
@@ -91,6 +92,7 @@ async fn serve(
         chats: chats.clone(),
         updates: updates.clone(),
         sign_in: sign_in.clone(),
+        models: Default::default(),
         writer: writer.clone(),
         token,
         port,

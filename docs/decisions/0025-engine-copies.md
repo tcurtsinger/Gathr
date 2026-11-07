@@ -56,7 +56,11 @@ They come from the engine, never a list in Gathr: Claude Code's `initialize` ans
 with `supportedEffortLevels`, and family names (`opus`, `sonnet`) that always mean the newest, which
 gives "Opus latest". Codex's `model/list` answers its models with `supportedReasoningEfforts`. The
 list depends on the account (13 models signed in, 5 signed out on 2.1.318), so it's read per
-account in the composer's model picker, its own PR.
+account: `GET /api/accounts/<account>/models` starts the account's engine through its renewal gate,
+asks `initialize`, and keeps the list until the engine copy or the sign-in state changes. Measured on
+Windows with 2.1.318 signed in: 0.9 s the first time, 2 to 6 ms after. Turned down: asking on every
+open (0.9 s each time a picker opens) and reading it from a chat's own start (no list until a chat
+has run, and a chat's engine never sends `initialize` today).
 
 ## Turned down
 

@@ -1,0 +1,179 @@
+//! An account's models and effort levels, as its Claude Code lists them in `initialize` (0025).
+//! Signed out it lists the aliases only; signed in, what the account may use. So the list is
+//! kept per engine copy and sign-in state, and asked again when either changes.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+use axum::extract::{Extension, Path, State as Extract};
+use axum::http::StatusCode;
+use axum::routing::get;
+use axum::{Json, Router};
+use gathr::claude::command::{self, Session};
+use gathr::claude::engine::{Engine, Line};
+use gathr::claude::frames;
+use gathr::claude::login::Login;
+use gathr::event::Event;
+use serde_json::{Value, json};
+use tokio::sync::Mutex;
+
+use crate::api::{State, Trace};
+use crate::chats::Chats;
+use crate::routes::{Answer, fail};
+
+/// Claude Code 2.1.318 answered in 0.65 s signed in; past this it isn't coming.
+const ANSWER_WAIT: Duration = Duration::from_secs(30);
+/// It exits about 0.6 s after its input closes; it may be renewing the login, so no kill sooner.
+const CLOSE_GRACE: Duration = Duration::from_secs(10);
+const ASKED: &str = "gathr-models";
+
+pub fn routes() -> Router<Arc<State>> {
+    Router::new().route("/api/accounts/{account}/models", get(models))
+}
+
+/// The last list, and the engine copy and sign-in state it came from.
+#[derive(Default)]
+pub struct Models(Mutex<Option<(PathBuf, Login, Value)>>);
+
+async fn models(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
+) -> Answer {
+    if account != "main" {
+        return Err(fail(
+            StatusCode::NOT_FOUND,
+            "Models failed",
+            "no such account",
+            &t.0,
+        ));
+    }
+    // One ask at a time: a second request waits for the first's list instead of starting another.
+    let mut last = s.models.0.lock().await;
+    let setting = s.chats.path_setting().await;
+    let program = command::find(setting.as_deref(), s.chats.copy());
+    let login = s.chats.login_status().await.0;
+    if let (Ok(program), Some((was, was_login, list))) = (&program, last.as_ref())
+        && program == was
+        && login == *was_login
+    {
+        return Ok(Json(list.clone()));
+    }
+    let started = Instant::now();
+    let asked = match program.clone() {
+        Ok(program) => ask(&s.chats, &program).await,
+        Err(why) => Err(why),
+    };
+    let mut event = Event::point("gathr.engine.models")
+        .trace(&t.0)
+        .attr("login", json!(login))
+        .attr(
+            "path",
+            program.as_ref().map(|p| p.display().to_string()).ok(),
+        );
+    event.duration_us = Some(started.elapsed().as_micros() as i64);
+    match asked {
+        Ok(list) => {
+            let count = list["models"].as_array().map_or(0, Vec::len);
+            s.writer.record(
+                event
+                    .ok()
+                    .attr("models", count)
+                    .attr("version", list["version"].clone()),
+            );
+            *last = Some((
+                program.expect("asked only with a program"),
+                login,
+                list.clone(),
+            ));
+            Ok(Json(list))
+        }
+        Err(why) => {
+            s.writer
+                .record_now(event.error("engine_models").attr("why", why.clone()))
+                .await;
+            Err(fail(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Models failed",
+                &why,
+                &t.0,
+            ))
+        }
+    }
+}
+
+/// Starts the account's Claude Code as a chat does, asks `initialize`, and closes it gently.
+async fn ask(chats: &Chats, program: &std::path::Path) -> Result<Value, String> {
+    let folder = chats.account_folder();
+    let cwd = chats.data.path().join("chats");
+    for dir in [&folder, &cwd] {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
+    }
+    // It runs on the account's login, so it takes the renewal gate like any start (0002).
+    let mut gate = chats.gate.pass().await;
+    let args = command::args(Session::New(&gathr::ids::uuid()));
+    let env = command::env(std::env::vars_os(), &folder);
+    let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
+        .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
+    let answer = match engine.write(&frames::initialize(ASKED)).await {
+        Ok(()) => tokio::time::timeout(ANSWER_WAIT, answered(&mut lines))
+            .await
+            .unwrap_or_else(|_| {
+                Err(format!(
+                    "Claude Code didn't answer in {} s",
+                    ANSWER_WAIT.as_secs()
+                ))
+            }),
+        Err(e) => Err(format!("Claude Code didn't take the request: {e}")),
+    };
+    gate.release();
+    // Its exit takes another 0.6 s, which the list needn't wait for.
+    tokio::spawn(engine.close(CLOSE_GRACE));
+    answer
+}
+
+async fn answered(lines: &mut tokio::sync::mpsc::UnboundedReceiver<Line>) -> Result<Value, String> {
+    let mut last_err = None;
+    while let Some(line) = lines.recv().await {
+        let line = match line {
+            Line::Out(line) => line,
+            Line::Err(line) => {
+                last_err = Some(line);
+                continue;
+            }
+        };
+        let frame: Value = serde_json::from_str(&line).unwrap_or_default();
+        let response = &frame["response"];
+        if frame["type"] != "control_response" || response["request_id"] != ASKED {
+            continue;
+        }
+        return match response["subtype"].as_str() {
+            Some("success") => Ok(listed(&response["response"])),
+            _ => Err(format!("initialize failed: {}", response["error"])),
+        };
+    }
+    Err(
+        last_err.map_or("Claude Code exited without answering".into(), |e| {
+            format!("Claude Code exited without answering: {e}")
+        }),
+    )
+}
+
+/// What a picker needs from each model: its id, name, line and effort levels, in the engine's order.
+fn listed(init: &Value) -> Value {
+    let models: Vec<Value> = init["models"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|m| {
+            json!({
+                "id": m["value"],
+                "name": m["displayName"],
+                "description": m["description"],
+                "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),
+            })
+        })
+        .collect();
+    json!({ "version": init["claude_code_version"], "models": models })
+}
