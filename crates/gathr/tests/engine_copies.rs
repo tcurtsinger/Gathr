@@ -23,13 +23,28 @@ struct Feed {
 
 impl Feed {
     fn start() -> Feed {
+        Self::serve(false)
+    }
+
+    /// A feed that takes each request and never answers it.
+    fn silent() -> Feed {
+        Self::serve(true)
+    }
+
+    fn serve(silent: bool) -> Feed {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         let files: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::default();
         let asked: Arc<Mutex<Vec<String>>> = Arc::default();
         let (f, a) = (files.clone(), asked.clone());
         std::thread::spawn(move || {
+            let mut held = Vec::new();
             for stream in listener.incoming().flatten() {
+                if silent {
+                    a.lock().unwrap().push(String::new());
+                    held.push(stream);
+                    continue;
+                }
                 let mut line = String::new();
                 let mut reader = BufReader::new(&stream);
                 let _ = reader.read_line(&mut line);
@@ -223,6 +238,46 @@ fn a_release_that_fails_its_check_leaves_chats_on_the_copy_before() {
     assert!(
         !data.0.join("engines/claude/2.1.401").exists(),
         "the failed release was kept"
+    );
+}
+
+#[test]
+fn a_failed_repair_keeps_the_copy_that_was_already_there() {
+    let (data, feed) = (TempDir::new(), Feed::start());
+    feed.publish("2.1.400", &engine_bytes(), None);
+    let service = service_on(&data.0, &feed);
+    checked(&service);
+    feed.publish("2.1.401", &engine_bytes(), None);
+    assert_eq!(check_now(&service)["previous"], "2.1.400");
+
+    let root = data.0.join("engines/claude");
+    std::fs::remove_dir_all(root.join("2.1.401")).unwrap();
+    feed.publish("2.1.400", &engine_bytes(), Some(&"0".repeat(64)));
+    check_now(&service);
+    let update = events(&data.0, "gathr.engine.update");
+    assert_eq!(update.last().unwrap()["error_type"], "checksum", "{update:?}");
+    let binary = if cfg!(windows) { "claude.exe" } else { "claude" };
+    assert!(
+        root.join("2.1.400").join(binary).is_file(),
+        "the refused download deleted the copy that was there"
+    );
+}
+
+#[test]
+fn shutdown_ends_a_check_waiting_on_the_feed() {
+    let (data, feed) = (TempDir::new(), Feed::silent());
+    let service = service_on(&data.0, &feed);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while feed.asked.lock().unwrap().is_empty() {
+        assert!(Instant::now() < deadline, "the service never asked the feed");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let began = Instant::now();
+    service.stop();
+    let took = began.elapsed();
+    assert!(
+        took < Duration::from_secs(5),
+        "the service took {took:?} to stop"
     );
 }
 

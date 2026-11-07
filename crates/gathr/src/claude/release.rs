@@ -33,8 +33,8 @@ pub struct Release {
 }
 
 /// The feed's latest version, `x.y.z`.
-pub fn latest(feed: &str) -> Result<String, String> {
-    let text = fetch(&format!("{feed}/latest"))?;
+pub fn latest(feed: &str, stop: &AtomicBool) -> Result<String, String> {
+    let text = fetch(&format!("{feed}/latest"), stop)?;
     let version = text.trim();
     match parse_version(version) {
         Some(_) => Ok(version.to_string()),
@@ -43,8 +43,14 @@ pub fn latest(feed: &str) -> Result<String, String> {
 }
 
 /// The release's file for `target` (such as `win32-x64`), named `binary`.
-pub fn release(feed: &str, version: &str, target: &str, binary: &str) -> Result<Release, String> {
-    let text = fetch(&format!("{feed}/{version}/manifest.json"))?;
+pub fn release(
+    feed: &str,
+    version: &str,
+    target: &str,
+    binary: &str,
+    stop: &AtomicBool,
+) -> Result<Release, String> {
+    let text = fetch(&format!("{feed}/{version}/manifest.json"), stop)?;
     let manifest: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("its manifest isn't JSON: {e}"))?;
     from_manifest(&manifest, feed, version, target, binary)
@@ -153,11 +159,11 @@ pub fn parse_version(version: &str) -> Option<[u32; 3]> {
     parts.try_into().ok()
 }
 
-/// A small text file from the feed, within 30 s.
-fn fetch(url: &str) -> Result<String, String> {
+/// A small text file from the feed, within 30 s or until `stop` is set.
+fn fetch(url: &str, stop: &AtomicBool) -> Result<String, String> {
     let mut command = curl(&["--max-time", "30", "--max-filesize", "1048576"]);
     command.arg(url);
-    run(command)
+    run_until(command, stop)
 }
 
 /// curl, failing on any HTTP error and never following a redirect away from the feed.
@@ -177,13 +183,25 @@ fn curl(limits: &[&str]) -> Command {
     command
 }
 
-/// curl to its end, or killed once `stop` is set; its error line if it fails.
-fn run_until(mut command: Command, stop: &AtomicBool) -> Result<(), String> {
+/// curl's output to its end, or curl killed once `stop` is set; its error line if it fails.
+fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, String> {
     let mut child = command
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("curl didn't start: {e}"))?;
+    // Read on threads so a full pipe never holds curl up while this loop waits for it.
+    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut text = String::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_string(&mut text);
+            }
+            text
+        })
+    };
+    let stdout = read(child.stdout.take().map(|p| Box::new(p) as _));
+    let stderr = read(child.stderr.take().map(|p| Box::new(p) as _));
     let status = loop {
         if stop.load(Ordering::Relaxed) {
             let _ = child.kill();
@@ -196,26 +214,11 @@ fn run_until(mut command: Command, stop: &AtomicBool) -> Result<(), String> {
             Err(e) => return Err(format!("curl wasn't waited for: {e}")),
         }
     };
+    let (out, error) = (stdout.join(), stderr.join());
     if status.success() {
-        return Ok(());
+        return Ok(out.unwrap_or_default());
     }
-    let mut error = String::new();
-    if let Some(mut stderr) = child.stderr.take() {
-        let _ = std::io::Read::read_to_string(&mut stderr, &mut error);
-    }
-    Err(format!("{} ({status})", error.trim()))
-}
-
-/// curl's output, or its error line.
-fn run(mut command: Command) -> Result<String, String> {
-    let output = command
-        .output()
-        .map_err(|e| format!("curl didn't start: {e}"))?;
-    if output.status.success() {
-        return Ok(String::from_utf8_lossy(&output.stdout).into_owned());
-    }
-    let error = String::from_utf8_lossy(&output.stderr);
-    Err(format!("{} ({})", error.trim(), output.status))
+    Err(format!("{} ({status})", error.unwrap_or_default().trim()))
 }
 
 #[cfg(test)]

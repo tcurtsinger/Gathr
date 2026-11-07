@@ -4,7 +4,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,8 @@ use crate::data::DataDir;
 
 /// How long a new copy has to answer `initialize`: Claude Code 2.1.318 took 0.3 s.
 const PROBE_WAIT: Duration = Duration::from_secs(30);
+/// How often a wait looks at `stop`.
+const TICK: Duration = Duration::from_millis(100);
 
 /// What `current.json` says: the copy chats start, and the one before it, the known good.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +96,7 @@ impl Copies {
         let target = crate::platform::release_target().ok_or_else(|| {
             failed("platform")("Claude Code ships no build for this computer".into())
         })?;
-        let latest = release::latest(feed).map_err(failed("feed"))?;
+        let latest = release::latest(feed, stop).map_err(failed("feed"))?;
         let current = self.current().filter(|c| self.path(&c.version).is_file());
         if let Some(c) = &current
             && release::parse_version(&c.version) >= release::parse_version(&latest)
@@ -101,8 +104,8 @@ impl Copies {
             self.prune(c);
             return Ok(Updated::UpToDate(c.version.clone()));
         }
-        let found =
-            release::release(feed, &latest, target, Self::binary()).map_err(failed("manifest"))?;
+        let found = release::release(feed, &latest, target, Self::binary(), stop)
+            .map_err(failed("manifest"))?;
         self.install(&found, current.as_ref().map(|c| c.version.clone()), stop)
     }
 
@@ -115,31 +118,39 @@ impl Copies {
         stop: &AtomicBool,
     ) -> Result<Updated, Failure> {
         let disk = |e: std::io::Error| failed("disk")(e.to_string());
-        let staging = self
-            .root
-            .join(format!(".download-{}", crate::ids::span_id()));
+        let id = crate::ids::span_id();
+        let staging = self.root.join(format!(".download-{id}"));
+        let aside = self.root.join(format!(".kept-{id}"));
         std::fs::create_dir_all(&staging).map_err(disk)?;
         let folder = self.root.join(&found.version);
         let file = staging.join(Self::binary());
+        let mut placed = false;
         let checked = release::download(found, &file, stop)
             .map_err(|(kind, why)| Failure { kind, why })
             .and_then(|()| crate::platform::make_executable(&file).map_err(disk))
             .and_then(|()| {
-                // Newer than the copy in use, so a folder already there is one a check left behind.
+                // A folder already there may be the known good (a repair after the current copy
+                // went missing): it's moved aside, and back if this copy fails.
                 if folder.exists() {
-                    std::fs::remove_dir_all(&folder).map_err(disk)?;
+                    std::fs::rename(&folder, &aside).map_err(disk)?;
                 }
-                std::fs::rename(&staging, &folder).map_err(disk)
+                std::fs::rename(&staging, &folder).map_err(disk)?;
+                placed = true;
+                Ok(())
             })
             .and_then(|()| {
-                probe(&self.path(&found.version), &found.version, &self.root)
+                probe(&self.path(&found.version), &found.version, &self.root, stop)
                     .map_err(failed("probe"))
             })
             .and_then(|()| self.switch(found, from.clone()));
         let _ = std::fs::remove_dir_all(&staging);
-        if checked.is_err() {
+        if checked.is_err() && placed {
             let _ = std::fs::remove_dir_all(&folder);
         }
+        if checked.is_err() && aside.exists() {
+            let _ = std::fs::rename(&aside, &folder);
+        }
+        let _ = std::fs::remove_dir_all(&aside);
         checked?;
         Ok(Updated::Installed {
             version: found.version.clone(),
@@ -187,7 +198,8 @@ impl Copies {
 /// A new copy must start the way chats start it and accept Gathr's switches: `--version` names
 /// the release and passes Gathr's minimum, and `initialize` answers `success`. It runs in an
 /// empty folder under `root`, with no login.
-fn probe(program: &Path, version: &str, root: &Path) -> Result<(), String> {
+fn probe(program: &Path, version: &str, root: &Path, stop: &AtomicBool) -> Result<(), String> {
+    // `--version` holds itself to 5 s (command::version), so only `initialize` watches `stop`.
     let (said, usable) = command::version(program);
     usable?;
     if said.as_deref() != Some(version) {
@@ -195,12 +207,12 @@ fn probe(program: &Path, version: &str, root: &Path) -> Result<(), String> {
     }
     let scratch = root.join(format!(".probe-{}", crate::ids::span_id()));
     std::fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
-    let answered = initialize(program, &scratch);
+    let answered = initialize(program, &scratch, stop);
     let _ = std::fs::remove_dir_all(&scratch);
     answered
 }
 
-fn initialize(program: &Path, scratch: &Path) -> Result<(), String> {
+fn initialize(program: &Path, scratch: &Path, stop: &AtomicBool) -> Result<(), String> {
     let mut command = Command::new(program);
     command
         .args(command::args(command::Session::New(&crate::ids::uuid())))
@@ -228,9 +240,15 @@ fn initialize(program: &Path, scratch: &Path) -> Result<(), String> {
         "it didn't answer initialize in {} s",
         PROBE_WAIT.as_secs()
     ));
-    while asked.is_ok() {
-        let Ok(line) = rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) else {
+    while asked.is_ok() && Instant::now() < deadline {
+        if stop.load(Ordering::Relaxed) {
+            answer = Err("the service stopped".into());
             break;
+        }
+        let line = match rx.recv_timeout(TICK) {
+            Ok(line) => line,
+            Err(RecvTimeoutError::Timeout) => continue,
+            Err(RecvTimeoutError::Disconnected) => break,
         };
         let frame: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
         if frame["type"] == "control_response" && frame["response"]["request_id"] == "gathr-probe" {
@@ -244,7 +262,10 @@ fn initialize(program: &Path, scratch: &Path) -> Result<(), String> {
     drop(stdin);
     // Its folder has no login, so there's nothing to renew and a kill is safe.
     let closing = Instant::now() + Duration::from_secs(10);
-    while matches!(child.try_wait(), Ok(None)) && Instant::now() < closing {
+    while matches!(child.try_wait(), Ok(None))
+        && Instant::now() < closing
+        && !stop.load(Ordering::Relaxed)
+    {
         std::thread::sleep(Duration::from_millis(20));
     }
     let _ = child.kill();
