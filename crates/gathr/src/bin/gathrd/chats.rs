@@ -15,8 +15,6 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::turns;
 
-/// The one Claude account of the first slice (0002: `<data>/accounts/<account-id>/claude`).
-const ACCOUNT: &str = "main";
 /// The setting that holds Claude Code's path; none means `claude` on the PATH (0016).
 pub const PATH_SETTING: &str = "engines.claude.path";
 
@@ -59,7 +57,7 @@ pub struct Chats {
 
 impl Chats {
     pub fn new(writer: Writer, data: DataDir) -> Arc<Chats> {
-        let gate = Gate::new(&account_folder(&data));
+        let gate = Gate::new(&data.claude_folder());
         Arc::new(Chats {
             writer,
             data,
@@ -70,7 +68,7 @@ impl Chats {
     }
 
     pub fn account_folder(&self) -> PathBuf {
-        account_folder(&self.data)
+        self.data.claude_folder()
     }
 
     /// The chat's task, started if it isn't running.
@@ -137,8 +135,4 @@ impl Chats {
     pub fn publish(&self, event: Value) {
         let _ = self.live.send(event);
     }
-}
-
-fn account_folder(data: &DataDir) -> PathBuf {
-    data.path().join("accounts").join(ACCOUNT).join("claude")
 }

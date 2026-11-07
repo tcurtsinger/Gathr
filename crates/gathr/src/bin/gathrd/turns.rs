@@ -164,7 +164,14 @@ impl Task {
             .db_message(&queued.turn, "user", "text", &queued.text)
             .await;
         self.publish(json!({ "type": "message", "message": message }));
-        self.record(Event::point("gathr.chat.send").trace(&queued.trace).ok());
+        self.record(
+            Event::point("gathr.chat.send")
+                .trace(&queued.trace)
+                .ok()
+                .attr("gathr.message.id", message["id"].clone())
+                .attr("gathr.turn.id", queued.turn.clone())
+                .attr("gathr.message.chars", queued.text.chars().count()),
+        );
         let reference = gathr::ids::reference(&queued.trace).to_string();
         let answer =
             |status: &str| json!({ "turn": queued.turn, "status": status, "ref": reference });
@@ -210,7 +217,12 @@ impl Task {
     /// Sends a turn to the engine, starting it first if needed: `running`, or
     /// `waiting_sign_in` (it stays first in the queue), or why it couldn't.
     async fn start(&mut self, next: &Queued) -> Result<&'static str, String> {
-        if self.login().await == Login::SignedOut {
+        // A wrong path fails the send at once, signed in or not (hand check 8).
+        let program = match self.engine {
+            Some(_) => None,
+            None => Some(self.find_engine(&next.trace).await?),
+        };
+        if self.login(program.as_deref()).await == Login::SignedOut {
             if self.queue.front().map(|q| &q.turn) != Some(&next.turn) {
                 self.queue.push_front(next.clone());
             }
@@ -219,8 +231,8 @@ impl Task {
             return Ok("waiting_sign_in");
         }
         self.chats.gate.pass().await;
-        if self.engine.is_none() {
-            self.spawn(&next.trace).await?;
+        if let Some(program) = program {
+            self.spawn(&program, &next.trace).await?;
         }
         let span = span_id();
         self.turn = Some(Running {
@@ -254,7 +266,7 @@ impl Task {
         Ok("running")
     }
 
-    async fn login(&mut self) -> Login {
+    async fn login(&mut self, program: Option<&std::path::Path>) -> Login {
         let folder = self.chats.account_folder();
         let file = login::credentials(&folder);
         if let Some((stamp, when)) = self.refused {
@@ -267,32 +279,33 @@ impl Task {
         }
         let (state, _) = login::read(&file, now_us() / 1000);
         if cfg!(target_os = "macos") && state == Login::SignedOut {
-            let Ok(program) = command::find(self.chats.path_setting().await.as_deref()) else {
-                return state;
+            let program = match program {
+                Some(program) => program.to_path_buf(),
+                None => match command::find(self.chats.path_setting().await.as_deref()) {
+                    Ok(program) => program,
+                    Err(_) => return state,
+                },
             };
             return login::probe(&program, command::env(std::env::vars_os(), &folder)).await;
         }
         state
     }
 
-    async fn spawn(&mut self, trace: &str) -> Result<(), String> {
+    /// Claude Code's path, from Settings at every start so a change applies at once (S26).
+    async fn find_engine(&self, trace: &str) -> Result<std::path::PathBuf, String> {
         let setting = self.chats.path_setting().await;
-        let fail = |why: String, path: Option<&std::path::Path>| {
-            Event::point("gathr.engine.start")
-                .trace(trace)
-                .error("engine_start")
-                .attr("why", why)
-                .attr("path_setting", setting.clone())
-                .attr("path", path.map(|p| p.display().to_string()))
-        };
-        let program = match command::find(setting.as_deref()) {
-            Ok(program) => program,
-            Err(why) => {
-                self.record_now(fail(why.clone(), None).chat(&self.chat))
-                    .await;
-                return Err(why);
-            }
-        };
+        command::find(setting.as_deref()).inspect_err(|why| {
+            self.record(
+                Event::point("gathr.engine.start")
+                    .trace(trace)
+                    .error("engine_not_found")
+                    .attr("why", why.clone())
+                    .attr("path_setting", setting.clone()),
+            );
+        })
+    }
+
+    async fn spawn(&mut self, program: &std::path::Path, trace: &str) -> Result<(), String> {
         let chat = self.chat.clone();
         let session = self
             .chats
@@ -313,7 +326,7 @@ impl Task {
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
         let env = command::env(std::env::vars_os(), &folder);
-        match Engine::start(&program, &args, env, &cwd) {
+        match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
                 self.record(
                     Event::point("gathr.engine.start")
@@ -331,8 +344,13 @@ impl Task {
             }
             Err(e) => {
                 let why = format!("Claude Code didn't start from {}: {e}", program.display());
-                self.record_now(fail(why.clone(), Some(&program)).chat(&self.chat))
-                    .await;
+                let event = Event::point("gathr.engine.start")
+                    .trace(trace)
+                    .chat(&self.chat)
+                    .error("engine_start")
+                    .attr("why", why.clone())
+                    .attr("path", program.display().to_string());
+                self.record(event);
                 Err(why)
             }
         }

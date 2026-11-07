@@ -23,8 +23,8 @@ fn engine_runs(args_file: &Path) -> Vec<Value> {
 
 #[test]
 fn a_send_with_no_engine_at_the_set_path_fails_with_a_reference_that_traces() {
+    // Signed out too: a wrong path fails the send rather than holding it for a sign-in.
     let data = TempDir::new();
-    sign_in(&data.0);
     let service = TestService::start(&data.0);
     let chat = service.new_chat();
     let missing = data.0.join("no-such-claude.exe");

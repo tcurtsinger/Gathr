@@ -16,7 +16,12 @@ const CRASH_LINES: usize = 20;
 /// The service now, the database, the last start-up health check and the crash log's last lines.
 /// Answers even when the service is down or the database won't open.
 pub fn health(data: &DataDir) -> Value {
-    let database = match db::open_read_only(&data.db()) {
+    let opened = db::open_read_only(&data.db());
+    let held = match &opened {
+        Ok((conn, _)) => held(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
+        Err(_) => Value::Null,
+    };
+    let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
             "path": data.db(),
@@ -26,9 +31,20 @@ pub fn health(data: &DataDir) -> Value {
         }),
         Err(e) => json!({ "opened": false, "path": data.db(), "why": e.to_string() }),
     };
+    let folder = data.claude_folder();
+    let now_ms = crate::ids::now_us() / 1000;
+    let (login, expires) =
+        crate::claude::login::read(&crate::claude::login::credentials(&folder), now_ms);
     let crash_log = CrashLog::new(data.crash_log());
     json!({
         "service": service_now(data),
+        "accounts": [{
+            "engine": "claude",
+            "folder": folder,
+            "login": login,
+            "expires": expires.map(|ms| crate::ids::utc(ms * 1000)),
+            "held": held,
+        }],
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
     })
@@ -47,6 +63,17 @@ fn service_now(data: &DataDir) -> Value {
             json!({ "running": false, "why": format!("nothing answers on port {}: {e}", info.port) })
         }
     }
+}
+
+/// Messages waiting to be sent: for a sign-in, or behind a turn under way.
+fn held(conn: &Connection) -> Result<Value, Error> {
+    let rows = query(
+        conn,
+        "SELECT id AS turn, chat_id AS chat, status, substr(trace_id, 1, 8) AS ref,
+                strftime('%Y-%m-%dT%H:%M:%fZ', created_ts / 1000000.0, 'unixepoch') AS since
+         FROM turns WHERE status IN ('queued', 'waiting_sign_in') ORDER BY created_ts",
+    )?;
+    Ok(rows["rows"].clone())
 }
 
 fn last_start_health(conn: &Connection) -> Result<Value, Error> {
