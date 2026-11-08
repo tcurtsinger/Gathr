@@ -31,16 +31,17 @@
 <div class="ds-swatch" data-id="color-foreground"><i style="background:var(--foreground)"></i><code>--foreground</code></div>
 <div class="ds-swatch" data-id="color-muted"><i style="background:var(--muted-foreground)"></i><code>--muted-foreground</code></div>
 </div>
-<p class="ds-note">Neutral surfaces. Foreground actions. Blue for attention and focus.</p>
+<p class="ds-note">Neutral surfaces. Foreground actions. Blue for attention.</p>
 </section>
 <section class="ds-section" id="controls" data-id="controls">
 <h2>Controls</h2>
+<p class="ds-note">No focus rings. Keyboard focus uses the hover highlight.</p>
 <div class="ds-row" data-source="components/ui/button.tsx">
 <button class="ds-button" data-variant="primary" data-id="primary" id="preview-save">Save</button>
 <button class="ds-button" data-variant="outline" data-id="outline" id="preview-cancel">Cancel</button>
 <button class="ds-button" data-id="summary-open" id="summary-open" popovertarget="summary">Summary</button>
 <button class="ds-button" disabled data-id="disabled">Send</button>
-<button class="help-button" type="button" popovertarget="help" aria-label="About approvals" data-id="help-open"><span>?</span></button>
+<button class="help-button" type="button" popovertarget="help" aria-label="About approvals" aria-expanded="false" data-id="help-open"><span>?</span></button>
 <label for="sample-field" class="ds-mono">Name</label><input class="ds-field" id="sample-field" value="Replay repair" data-id="input">
 </div>
 </section>

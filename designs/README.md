@@ -4,6 +4,9 @@ Current visual reference: the assistant-ui React prototype, adapted to Gathr's
 accepted decisions. See [system.html](system.html), [DESIGN.md](../DESIGN.md) and
 [prototype-reference.md](prototype-reference.md). Open system.html locally; append
 `#light` for light mode or use Switch theme. Run `node designs/check.cjs`.
+After `npm ci` in `ui/`, run `node designs/check-help.cjs` for Help placement,
+Escape and focus return in both themes at 1440 and 1024px (Edge on Windows,
+WebKit on macOS).
 
 Settings retains the centred Gathr layout. The team-message layout is pending an
 owner choice. The recipient picker defaults to the Supervisor by name and has no

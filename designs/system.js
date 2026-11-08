@@ -10,6 +10,17 @@ one("#theme").onclick = () => {
 };
 one("#preview-save").onclick = () => notify("Saved locally");
 one("#preview-cancel").onclick = () => notify("Cancelled");
+const help = one("#help");
+const helpButton = one('[popovertarget="help"]');
+help.addEventListener("toggle", (event) => {
+	const shown = event.newState === "open";
+	helpButton.setAttribute("aria-expanded", String(shown));
+	if (!shown) return;
+	const at = helpButton.getBoundingClientRect();
+	const below = at.bottom + 6 + help.offsetHeight + 20 <= innerHeight;
+	help.style.left = `${Math.max(20, Math.min(at.left, innerWidth - help.offsetWidth - 20))}px`;
+	help.style.top = `${Math.max(20, below ? at.bottom + 6 : at.top - help.offsetHeight - 6)}px`;
+});
 const dialog = one("#settings");
 function showCategory(name) {
 	all("[data-section]").forEach((button) => {

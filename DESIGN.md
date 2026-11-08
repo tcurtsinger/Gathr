@@ -16,7 +16,7 @@ colors:
   destructive: "lab(63.7053% 60.745 31.3109)"
   border: "oklch(.985 .002 106 / 10%)"
   input: "oklch(.985 .002 106 / 15%)"
-  ring: "oklch(.556 .004 106)"
+  ring: "transparent"
   attention: "#60a5fa"
 typography:
   body: { fontFamily: "Public Sans Variable", fontSize: "14px", fontWeight: 400 }
@@ -45,8 +45,8 @@ Dark canvas is #181818; sidebar, workspace, composer and floating surfaces are
 #202020. Light uses the prototype's warm near-white background and neutral muted
 surface. `tokens.css` records both themes. Foreground carries text and primary
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
-`border` separates regions; `input` bounds inputs; `ring` is the upstream ring.
-Blue is attention, links, active work and keyboard focus, not an agent palette.
+`border` separates regions; `input` bounds inputs; `ring` is transparent.
+Blue is attention, links and active work, not an agent palette.
 Errors combine destructive text, a tinted surface, an icon and a reference.
 
 The prototype calls its neutral surface tokens `muted` and `accent`. Existing
@@ -211,11 +211,10 @@ per 0023. Preserve partial text and drafts. Neutral for stopped/waiting; destruc
 for failure, with the reference, Diagnostics and Retry. Errors end in failed.
 Sign in opens Engines in the same Settings panel.
 
-Keep visible keyboard focus and native keyboard behavior. The prototype's subtle
-registry focus treatments are a reference, not a reason to weaken Gathr's visible
-focus. The portable page uses a 2px attention outline with 2px offset. Icon buttons
-have accessible names. Dialogs trap focus, Escape closes the top layer and returns
-focus. Reduced motion removes movement. Keep registry hover/press feedback and
+No focus rings anywhere, including the composer. Keyboard focus uses the same
+quiet highlight as hover, so the current item stays visible. Keep native keyboard
+behavior. Icon buttons have accessible names. Dialogs trap focus; Escape closes
+the top layer and returns focus. Reduced motion removes movement. Keep registry hover/press feedback and
 purposeful transitions, never animate a simulated service result into truth.
 
 ## Do's and Don'ts
