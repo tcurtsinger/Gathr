@@ -22,3 +22,8 @@ ALTER TABLE turns ADD COLUMN agent_id TEXT;
 -- The account the chat's engine session lives in: a session can only resume in its own login
 -- folder, so a turn on another account starts a new one.
 ALTER TABLE chats ADD COLUMN engine_account TEXT;
+
+-- Until now every chat ran on the oldest account, and a new oldest one cleared every session, so
+-- a session left from before lives in the oldest account's folder.
+UPDATE chats SET engine_account = (SELECT id FROM accounts ORDER BY created_ts, id LIMIT 1)
+WHERE engine_session IS NOT NULL;

@@ -97,6 +97,30 @@ mod tests {
         assert_eq!(tables, 3);
     }
 
+    /// Before 0004 every chat ran on the oldest account, and a new oldest one cleared the sessions,
+    /// so a session left then lives in the oldest account's folder and must still resume there.
+    #[test]
+    fn a_chat_session_from_before_agents_resumes_on_the_oldest_account() {
+        let path = temp_db("sessions");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..3] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 3;
+             INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES
+                 ('newer', 'claude', 'Newer', 'newer', 2), ('oldest', 'claude', 'Oldest', 'oldest', 1);
+             INSERT INTO chats (id, title, created_ts, engine_session) VALUES
+                 ('talked', 'Talked', 1, 'session-1'), ('quiet', 'Quiet', 1, NULL);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let session = |chat| crate::store::engine_session(&conn, chat, "oldest").unwrap();
+        assert_eq!(session("talked").as_deref(), Some("session-1"));
+        assert_eq!(session("quiet"), None);
+    }
+
     #[test]
     fn a_database_from_a_newer_build_is_refused() {
         let path = temp_db("newer");
