@@ -59,7 +59,7 @@ $data = "$env:USERPROFILE\gathr-check"
     ```
     Gathr fails to start. `cargo run -q --bin gathr -- diag health --data "$data-broken" --text` says the database didn't open, why (`file is not a database`), and shows the crash log's last lines, with nothing read by hand.
 
-To clean up: sign out of each account in Settings, quit, and delete `$data` and `$data-broken`.
+To clean up: in Settings, click **Remove** on each account, then **Remove** again to confirm: the row goes, and its login with it. Quit, and delete `$data` and `$data-broken`.
 
 ## Proof in the PR
 
