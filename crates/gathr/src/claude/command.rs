@@ -80,7 +80,14 @@ pub enum Session<'a> {
     Resume(&'a str),
 }
 
-pub fn args(session: Session<'_>) -> Vec<String> {
+/// The agent's model and effort (0026); `None` leaves each to Claude Code's own default.
+#[derive(Clone, Copy, Default)]
+pub struct Assigned<'a> {
+    pub model: Option<&'a str>,
+    pub effort: Option<&'a str>,
+}
+
+pub fn args(session: Session<'_>, assigned: Assigned<'_>) -> Vec<String> {
     let denied: Vec<&str> = DENIED_TOOLS.iter().map(|(name, _)| *name).collect();
     let mut args: Vec<String> = [
         "-p",
@@ -112,6 +119,13 @@ pub fn args(session: Session<'_>) -> Vec<String> {
     match session {
         Session::New(id) => args.extend(["--session-id".into(), id.into()]),
         Session::Resume(id) => args.extend(["--resume".into(), id.into()]),
+    }
+    // Each value in the same argument as its switch, so one starting with `-` is never a switch.
+    if let Some(model) = assigned.model {
+        args.push(format!("--model={model}"));
+    }
+    if let Some(effort) = assigned.effort {
+        args.push(format!("--effort={effort}"));
     }
     args
 }

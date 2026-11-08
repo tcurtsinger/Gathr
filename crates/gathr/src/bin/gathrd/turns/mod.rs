@@ -5,6 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 
+use gathr::agents;
 use gathr::claude::command::{self, Session};
 use gathr::claude::engine::{Closed, Engine, Line};
 use gathr::claude::frames;
@@ -30,11 +31,24 @@ struct Queued {
     turn: String,
     trace: String,
     text: String,
+    agent: Option<String>,
+}
+
+/// Who the engine runs as: the agent, its account's folder, model and effort (0026), read when
+/// a turn starts, so a saved change applies from the agent's next turn.
+#[derive(Clone, PartialEq)]
+struct Assignment {
+    agent: Option<String>,
+    account: String,
+    folder: std::path::PathBuf,
+    model: Option<String>,
+    effort: Option<String>,
 }
 
 struct Running {
     turn: String,
     trace: String,
+    agent: Option<String>,
     span: String,
     sent_us: i64,
     /// Text streamed since the last whole block: what a stopped turn keeps.
@@ -56,16 +70,20 @@ struct Task {
     engine: Option<Engine>,
     /// The file the engine runs, so a chat on Gathr's copy moves when it updates (0025).
     program: Option<std::path::PathBuf>,
-    /// The account folder the engine runs in.
-    folder: Option<std::path::PathBuf>,
+    /// What the engine runs as, while it runs.
+    assigned: Option<Assignment>,
     lines: Option<mpsc::UnboundedReceiver<Line>>,
     /// The engine's last stderr line: when it exits mid-turn, that's usually why (0019).
     last_stderr: Option<String>,
     turn: Option<Running>,
     queue: VecDeque<Queued>,
-    /// The login file as it was when the engine refused it, and when: held as signed out
-    /// until the file changes, so a refused login doesn't start an engine every poll.
-    refused: Option<(Option<std::time::SystemTime>, std::time::Instant)>,
+    /// The account folder whose login the engine refused, its login file then, and when: held
+    /// as signed out until the file changes, so a refused login doesn't start an engine every poll.
+    refused: Option<(
+        std::path::PathBuf,
+        Option<std::time::SystemTime>,
+        std::time::Instant,
+    )>,
     /// Messages sent into a turn under way that the engine hasn't read yet: their id and text.
     unread: Vec<(String, String)>,
 }
@@ -79,7 +97,7 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
         chat,
         engine: None,
         program: None,
-        folder: None,
+        assigned: None,
         lines: None,
         last_stderr: None,
         turn: None,
@@ -130,8 +148,13 @@ async fn next(lines: &mut Option<mpsc::UnboundedReceiver<Line>>) -> Option<Line>
 impl Task {
     async fn handle(&mut self, command: Cmd) {
         match command {
-            Cmd::Send { text, trace, reply } => {
-                let _ = reply.send(self.send(text, trace).await);
+            Cmd::Send {
+                text,
+                agent,
+                trace,
+                reply,
+            } => {
+                let _ = reply.send(self.send(text, agent, trace).await);
             }
             Cmd::Stop { reply } => {
                 let _ = reply.send(self.stop().await);
@@ -151,6 +174,7 @@ impl Task {
                     turn: w.turn,
                     trace: w.trace,
                     text: w.text,
+                    agent: w.agent,
                 });
                 self.try_next().await;
             }
@@ -162,8 +186,18 @@ impl Task {
         }
     }
 
-    async fn send(&mut self, text: String, trace: String) -> Result<Value, Failed> {
-        if let Some(running) = self.turn.as_ref().filter(|t| !t.stopping) {
+    async fn send(
+        &mut self,
+        text: String,
+        agent: Option<String>,
+        trace: String,
+    ) -> Result<Value, Failed> {
+        // Only into the same agent's turn: a message to another agent waits for its own.
+        let steered = self
+            .turn
+            .as_ref()
+            .filter(|t| !t.stopping && t.agent == agent);
+        if let Some(running) = steered {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
             let (turn, trace) = (running.turn.clone(), running.trace.clone());
@@ -181,12 +215,14 @@ impl Task {
             turn: ulid(now_us()),
             trace,
             text,
+            agent,
         };
         let (chat, turn, trace) = (self.chat.clone(), queued.turn.clone(), queued.trace.clone());
+        let agent = queued.agent.clone();
         let added = self
             .chats
             .writer
-            .call(move |conn| store::add_turn(conn, &chat, &turn, &trace))
+            .call(move |conn| store::add_turn(conn, &chat, &turn, &trace, agent.as_deref()))
             .await;
         if let Some(Err(e)) = added {
             return Err(self.fail_send(&queued.trace, e.to_string()));
@@ -252,9 +288,18 @@ impl Task {
             let why = format!("Gathr's copy of Claude Code is now {version}");
             self.close(&why).await;
         }
-        let folder = self.chats.account_folder();
-        if self.engine.is_some() && self.folder != folder {
-            self.close("the chats moved to another account").await;
+        let assigned = self.assignment(next).await?;
+        if self.engine.is_some() && self.assigned != assigned {
+            let why = match (&self.assigned, &assigned) {
+                (Some(was), Some(now)) if was.agent != now.agent => {
+                    "the next turn runs as another agent"
+                }
+                (Some(was), Some(now)) if was.account != now.account => {
+                    "the next turn runs on another account"
+                }
+                _ => "the next turn runs with another model or effort",
+            };
+            self.close(why).await;
         }
         // A wrong path fails the send at once, signed in or not (hand check 8).
         let program = match self.engine {
@@ -262,17 +307,17 @@ impl Task {
             None => Some(self.find_engine(&next.trace).await?),
         };
         // No account yet waits like a signed-out one: adding one and signing it in sends it.
-        let Some(folder) = folder else {
+        let Some(assigned) = assigned else {
             return Ok(self.wait_for_sign_in(next).await);
         };
-        if self.login(&folder).await == Login::SignedOut {
+        if self.login(&assigned.folder).await == Login::SignedOut {
             return Ok(self.wait_for_sign_in(next).await);
         }
-        let gate = self.chats.gate(&folder).pass().await;
+        let gate = self.chats.gate(&assigned.folder).pass().await;
         if let Some(program) = program {
-            self.spawn(&program, &folder, &next.trace).await?;
+            self.spawn(&program, assigned, &next.trace).await?;
         }
-        self.open_turn(&next.turn, &next.trace, gate);
+        self.open_turn(&next.turn, &next.trace, next.agent.clone(), gate);
         if let Err(e) = self
             .write(&frames::user(&next.text), Some(&next.turn))
             .await
@@ -283,6 +328,32 @@ impl Task {
         self.set_turn(&next.turn, &next.trace, "running", None)
             .await;
         Ok("running")
+    }
+
+    /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,
+    /// the chats' account and the engine's defaults. `None` while there's no account.
+    async fn assignment(&self, next: &Queued) -> Result<Option<Assignment>, String> {
+        let on = |account: String, agent, model, effort| Assignment {
+            folder: gathr::accounts::folder(&self.chats.data, &account, "claude"),
+            account,
+            agent,
+            model,
+            effort,
+        };
+        let Some(id) = next.agent.clone() else {
+            return Ok(self.chats.account().map(|a| on(a, None, None, None)));
+        };
+        match self
+            .chats
+            .writer
+            .call(move |conn| agents::get(conn, &id))
+            .await
+        {
+            Some(Ok(Some(a))) => Ok(Some(on(a.account, Some(a.id), a.model, a.effort))),
+            Some(Ok(None)) => Err("its agent was deleted".into()),
+            Some(Err(e)) => Err(format!("its agent wasn't read: {e}")),
+            None => Err("its agent wasn't read: the database didn't answer".into()),
+        }
     }
 
     async fn wait_for_sign_in(&mut self, next: &Queued) -> &'static str {
@@ -296,7 +367,8 @@ impl Task {
 
     /// Lets go of an account being removed: its engine closes and a turn under way stops.
     async fn leave(&mut self, folder: &std::path::Path) {
-        if self.engine.is_none() || self.folder.as_deref() != Some(folder) {
+        let here = self.assigned.as_ref().map(|a| a.folder.as_path());
+        if self.engine.is_none() || here != Some(folder) {
             return;
         }
         self.close("its account is being removed").await;
@@ -307,18 +379,27 @@ impl Task {
     }
 
     /// The turn under way from now: its span starts here.
-    fn open_turn(&mut self, turn: &str, trace: &str, gate: login::Hold) {
+    fn open_turn(&mut self, turn: &str, trace: &str, agent: Option<String>, gate: login::Hold) {
         let span = span_id();
+        let assigned = self.assigned.as_ref();
         self.record(
             Event::point("invoke_agent claude")
                 .trace(trace)
                 .span("start", &span)
                 .attr("gen_ai.operation.name", "invoke_agent")
+                .attr("gen_ai.agent.id", agent.clone())
+                .attr(
+                    "gen_ai.request.model",
+                    assigned.and_then(|a| a.model.clone()),
+                )
+                .attr("gathr.effort", assigned.and_then(|a| a.effort.clone()))
+                .attr("gathr.account", assigned.map(|a| a.account.clone()))
                 .attr("gathr.turn.id", turn),
         );
         self.turn = Some(Running {
             turn: turn.to_string(),
             trace: trace.to_string(),
+            agent,
             span,
             sent_us: now_us(),
             partial: String::new(),
@@ -334,17 +415,20 @@ impl Task {
     /// A turn the engine began itself, to answer a message sent into the last one.
     async fn begin_read_turn(&mut self, message: &str) {
         let (turn, trace) = (ulid(now_us()), gathr::ids::trace_id());
-        let (chat, id, t, tr) = (
+        // The engine answers as the agent it runs as.
+        let agent = self.assigned.as_ref().and_then(|a| a.agent.clone());
+        let (chat, id, t, tr, ag) = (
             self.chat.clone(),
             message.to_string(),
             turn.clone(),
             trace.clone(),
+            agent.clone(),
         );
         let saved = self
             .chats
             .writer
             .call(move |conn| {
-                store::add_turn(conn, &chat, &t, &tr)?;
+                store::add_turn(conn, &chat, &t, &tr, ag.as_deref())?;
                 store::move_message(conn, &id, &t)
             })
             .await;
@@ -354,13 +438,14 @@ impl Task {
                 .error("sqlite");
             self.record(event.attr("why", e.to_string()));
         }
-        self.open_turn(&turn, &trace, login::Hold::default());
+        self.open_turn(&turn, &trace, agent, login::Hold::default());
         self.set_turn(&turn, &trace, "running", None).await;
     }
 
     async fn login(&mut self, folder: &std::path::Path) -> Login {
         let file = login::credentials(folder);
-        if let Some((stamp, when)) = self.refused {
+        if let Some((_, stamp, when)) = self.refused.as_ref().filter(|r| r.0 == folder) {
+            let (stamp, when) = (*stamp, *when);
             let unchanged = login_stamp(&file) == stamp;
             let file_based = stamp.is_some() || !cfg!(target_os = "macos");
             if unchanged && (file_based || when.elapsed() < REFUSED_RETRY) {
@@ -407,22 +492,27 @@ impl Task {
     async fn spawn(
         &mut self,
         program: &std::path::Path,
-        folder: &std::path::Path,
+        assigned: Assignment,
         trace: &str,
     ) -> Result<(), String> {
-        let chat = self.chat.clone();
+        let (chat, account) = (self.chat.clone(), assigned.account.clone());
         let session = self
             .chats
             .writer
-            .call(move |conn| store::engine_session(conn, &chat))
+            .call(move |conn| store::engine_session(conn, &chat, &account))
             .await
             .and_then(Result::ok)
             .flatten();
         let new_id = gathr::ids::uuid();
-        let args = match &session {
-            Some(id) => command::args(Session::Resume(id)),
-            None => command::args(Session::New(&new_id)),
+        let given = command::Assigned {
+            model: assigned.model.as_deref(),
+            effort: assigned.effort.as_deref(),
         };
+        let args = match &session {
+            Some(id) => command::args(Session::Resume(id), given),
+            None => command::args(Session::New(&new_id), given),
+        };
+        let folder = assigned.folder.as_path();
         let cwd = self.chats.data.path().join("chats").join(&self.chat);
         for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
@@ -439,11 +529,15 @@ impl Task {
                         .attr("process.pid", engine.pid)
                         .attr("path", program.display().to_string())
                         .attr("session", session.clone().unwrap_or(new_id))
-                        .attr("resumed", session.is_some()),
+                        .attr("resumed", session.is_some())
+                        .attr("gen_ai.agent.id", assigned.agent.clone())
+                        .attr("gathr.account", assigned.account.clone())
+                        .attr("gen_ai.request.model", assigned.model.clone())
+                        .attr("gathr.effort", assigned.effort.clone()),
                 );
                 self.engine = Some(engine);
                 self.program = Some(program.to_path_buf());
-                self.folder = Some(folder.to_path_buf());
+                self.assigned = Some(assigned);
                 self.lines = Some(lines);
                 self.last_stderr = None;
                 Ok(())

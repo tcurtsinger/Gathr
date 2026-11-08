@@ -62,10 +62,12 @@ impl Task {
                 session_id, tools, ..
             } => {
                 self.check_tools(&tools);
+                let account = self.assigned.as_ref().map(|a| a.account.clone());
+                let account = account.unwrap_or_default();
                 let saved = self
                     .chats
                     .writer
-                    .call(move |conn| store::set_engine_session(conn, &chat, &session_id))
+                    .call(move |conn| store::set_engine_session(conn, &chat, &session_id, &account))
                     .await;
                 if let Some(Err(e)) = saved {
                     self.record(
@@ -285,11 +287,13 @@ impl Task {
                 turn: turn.turn.clone(),
                 trace: turn.trace.clone(),
                 text: self.text_of(&turn.turn).await,
+                agent: turn.agent.clone(),
             });
             self.close("the login was refused").await;
-            let stamp = self.folder.as_deref().map(login::credentials);
-            let stamp = stamp.and_then(|file| login_stamp(&file));
-            self.refused = Some((stamp, std::time::Instant::now()));
+            if let Some(folder) = self.assigned.as_ref().map(|a| a.folder.clone()) {
+                let stamp = login_stamp(&login::credentials(&folder));
+                self.refused = Some((folder, stamp, std::time::Instant::now()));
+            }
         }
         self.set_turn(&turn.turn, &turn.trace, status, why.as_deref())
             .await;

@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use gathr::accounts::{self, Account, Refused};
+use gathr::agents;
 use gathr::claude::{command, login};
 use gathr::event::Event;
 use serde::Deserialize;
@@ -142,8 +143,31 @@ async fn remove(
 ) -> Answer {
     const ERROR: &str = "Remove failed";
     let account = find(&s, &t, &id, ERROR).await?;
-    s.sign_ins.get(&account.id).cancel().await;
+    // Marked first: an agent saved from here on is refused, so none is missed below.
     s.chats.removing(&account.id, true).await;
+    let looked = account.id.clone();
+    let using = match s
+        .writer
+        .call(move |conn| agents::on_account(conn, &looked))
+        .await
+    {
+        Some(Ok(names)) => names,
+        Some(Err(e)) => vec![format!("(agents weren't listed: {e})")],
+        None => vec!["(agents weren't listed: the database didn't answer)".into()],
+    };
+    if !using.is_empty() {
+        s.chats.removing(&account.id, false).await;
+        let why = format!("agents use it: {}", using.join(", "));
+        let event = Event::point("gathr.account.change")
+            .trace(&t.0)
+            .error("in_use")
+            .attr("account", account.id.clone())
+            .attr("change", "remove")
+            .attr("why", why.clone());
+        s.writer.record(event);
+        return Err(fail(StatusCode::CONFLICT, ERROR, &why, &t.0));
+    }
+    s.sign_ins.get(&account.id).cancel().await;
     let done = let_go(&s, &t.0, &account).await;
     match &done {
         Ok(()) => s.chats.removed(&account.id),

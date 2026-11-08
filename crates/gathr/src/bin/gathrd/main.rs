@@ -2,6 +2,7 @@
 #![windows_subsystem = "windows"]
 
 mod accounts;
+mod agents;
 mod api;
 mod chats;
 mod logs;

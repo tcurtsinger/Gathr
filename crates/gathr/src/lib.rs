@@ -2,6 +2,7 @@
 //! the database, the event record, error references and the diagnostics queries.
 
 pub mod accounts;
+pub mod agents;
 pub mod claude;
 pub mod crash_log;
 pub mod data;
