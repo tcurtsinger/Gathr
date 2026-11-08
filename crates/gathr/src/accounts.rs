@@ -126,7 +126,7 @@ pub fn remove(conn: &Connection, id: &str) -> Result<bool, Error> {
     Ok(conn.execute("DELETE FROM accounts WHERE id = ?1", [id])? > 0)
 }
 
-fn checked(name: &str) -> Result<&str, Refused> {
+pub(crate) fn checked(name: &str) -> Result<&str, Refused> {
     let name = name.trim();
     match name.chars().count() {
         0 => Err(Refused::Blank),
@@ -137,11 +137,11 @@ fn checked(name: &str) -> Result<&str, Refused> {
 
 /// Names are unique, ignoring case in any script (Équipe is équipe), so a picker never shows two
 /// the same.
-fn key(name: &str) -> String {
+pub(crate) fn key(name: &str) -> String {
     name.to_lowercase()
 }
 
-fn taken_or<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
+pub(crate) fn taken_or<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
     match done {
         Ok(value) => Ok(Ok(value)),
         Err(rusqlite::Error::SqliteFailure(e, _)) if e.code == ErrorCode::ConstraintViolation => {

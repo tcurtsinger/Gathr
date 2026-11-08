@@ -19,6 +19,8 @@ use crate::turns;
 pub enum Cmd {
     Send {
         text: String,
+        /// The agent it's sent to; none runs on the chats' account with the engine's defaults.
+        agent: Option<String>,
         /// The request's trace: the turn's too, so one reference finds both.
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
@@ -82,10 +84,9 @@ impl Chats {
         })
     }
 
-    /// The chats' account's Claude folder, if there's an account.
-    pub fn account_folder(&self) -> Option<PathBuf> {
-        let account = self.account.lock().expect("never poisoned").clone()?;
-        Some(gathr::accounts::folder(&self.data, &account, "claude"))
+    /// The account a turn sent to no agent runs on, if there's one.
+    pub fn account(&self) -> Option<String> {
+        self.account.lock().expect("never poisoned").clone()
     }
 
     /// Marks an account as being removed, or kept after all; either way the chats pick again.
@@ -100,13 +101,17 @@ impl Chats {
         self.pick_account().await;
     }
 
+    /// The accounts being removed now.
+    pub fn being_removed(&self) -> HashSet<String> {
+        self.removing.lock().expect("never poisoned").clone()
+    }
+
     /// An account removed: its row is gone, so it needs no mark any more.
     pub fn removed(&self, id: &str) {
         self.removing.lock().expect("never poisoned").remove(id);
     }
 
     /// Picks the chats' account again: the oldest not being removed.
-    /// A new account has none of the old one's Claude Code sessions, so chats start new ones.
     pub async fn pick_account(&self) {
         // One pick at a time: one that listed before a removal began must not land after it.
         let _one = self.picking.lock().await;
@@ -120,15 +125,7 @@ impl Chats {
             })
             .await;
         let Some(Ok(next)) = picked else { return };
-        let before = std::mem::replace(
-            &mut *self.account.lock().expect("never poisoned"),
-            next.clone(),
-        );
-        if before.is_some() && before != next {
-            self.writer
-                .call(|conn| store::forget_engine_sessions(conn))
-                .await;
-        }
+        *self.account.lock().expect("never poisoned") = next;
     }
 
     /// Closes every chat engine running in `folder` the gentle way; the chats carry on.

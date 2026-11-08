@@ -48,6 +48,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
         .merge(crate::accounts::routes())
+        .merge(crate::agents::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))
