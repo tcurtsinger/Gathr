@@ -20,10 +20,5 @@ tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "s
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", default-features = false, features = ["registry", "std"] }
 
-[target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSURL"] }
-objc2-service-management = { version = "0.3.2", default-features = false, features = ["std", "SMAppService", "objc2-foundation"] }
-
 [lints]
 workspace = true

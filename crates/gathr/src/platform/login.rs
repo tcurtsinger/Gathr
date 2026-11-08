@@ -114,7 +114,7 @@ pub fn is_on(item: &Item) -> Result<bool, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
         Err(e) => return Err(format!("{} wasn't read: {e}", file.display())),
     };
-    Ok(listed && !turned_off_in_system_settings(&file))
+    Ok(listed && !turned_off_in_system_settings(&file)?)
 }
 
 /// Writes or removes the item's LaunchAgent. It takes effect at the next login.
@@ -132,27 +132,33 @@ pub fn set(item: &Item, on: bool) -> Result<(), String> {
         }),
     };
     done.map_err(|e| format!("{} wasn't changed: {e}", file.display()))?;
-    if on && turned_off_in_system_settings(&file) {
+    if on && turned_off_in_system_settings(&file)? {
         // macOS keeps the person's "off" even for a file written anew, and only they can undo it.
-        unsafe { objc2_service_management::SMAppService::openSystemSettingsLoginItems() };
+        service_management(&["open"])?;
         return Err("Turned off in System Settings > Login Items".into());
     }
     Ok(())
 }
 
-/// Whether the person turned the LaunchAgent off in System Settings > Login Items (macOS 13 on).
-/// macOS keeps that in its own record of background items, not in launchd's disabled list.
+/// Whether the person turned the LaunchAgent off in System Settings > Login Items. macOS keeps
+/// that in its own record of background items, not in launchd's disabled list.
 #[cfg(target_os = "macos")]
-fn turned_off_in_system_settings(file: &Path) -> bool {
-    use objc2_service_management::{SMAppService, SMAppServiceStatus};
-    if !objc2::available!(macos = 13.0) {
-        return false;
-    }
-    let Some(url) = objc2_foundation::NSURL::from_file_path(file) else {
-        return false;
-    };
-    let status = unsafe { SMAppService::statusForLegacyURL(&url) };
-    status == SMAppServiceStatus::RequiresApproval
+fn turned_off_in_system_settings(file: &Path) -> Result<bool, String> {
+    let status = service_management(&["status", &file.to_string_lossy()])?;
+    Ok(String::from_utf8_lossy(&status).trim() == "2")
+}
+
+/// Apple's ServiceManagement through `osascript`'s bridge, with no library or unsafe code. `status
+/// <file>` prints SMAppService's status for a LaunchAgent (2 is the person's "off"; 0 before macOS
+/// 13, which has no such switch); `open` opens System Settings > Login Items.
+#[cfg(target_os = "macos")]
+fn service_management(args: &[&str]) -> Result<Vec<u8>, String> {
+    const SCRIPT: &str = "ObjC.import('ServiceManagement'); function run(a) { const s = $.SMAppService; if (!s) return 0; \
+        if (a[0] === 'open') { s.openSystemSettingsLoginItems; return 0 } \
+        return s.statusForLegacyURL($.NSURL.fileURLWithPath(a[1])) }";
+    let mut command = std::process::Command::new("/usr/bin/osascript");
+    command.args(["-l", "JavaScript", "-e", SCRIPT]).args(args);
+    super::env::run(command, std::time::Duration::from_secs(5))
 }
 
 #[cfg(target_os = "macos")]
@@ -243,7 +249,7 @@ mod tests {
     #[test]
     fn a_launch_agent_macos_has_never_seen_isnt_turned_off() {
         let file = std::env::temp_dir().join(format!("gathr-{}.plist", crate::ids::span_id()));
-        assert!(!turned_off_in_system_settings(&file));
+        assert_eq!(turned_off_in_system_settings(&file), Ok(false));
     }
 
     #[test]

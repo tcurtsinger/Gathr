@@ -111,7 +111,7 @@ pub(super) fn reg() -> Command {
 
 /// Runs a short command with no input: its output, or why not, killed past `limit`. Only for
 /// commands that change nothing (a shell printing its PATH, `reg export`) or Gathr's own entry at
-/// login (`reg import`, `launchctl enable`).
+/// login (`reg import`, opening System Settings).
 pub(super) fn run(mut command: Command, limit: Duration) -> Result<Vec<u8>, String> {
     command
         .stdin(Stdio::null())
