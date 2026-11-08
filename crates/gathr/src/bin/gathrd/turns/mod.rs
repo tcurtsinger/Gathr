@@ -567,10 +567,15 @@ impl Task {
             return json!({ "stopped": stopped });
         };
         running.stopping = true;
-        let (turn, trace) = (running.turn.clone(), running.trace.clone());
+        let (turn, trace, agent) = (
+            running.turn.clone(),
+            running.trace.clone(),
+            running.agent.clone(),
+        );
         // Shown at once; the turn's row and end event follow when the engine says it ended.
         self.publish(
-            json!({ "type": "turn", "chat": self.chat, "turn": turn, "status": "stopped" }),
+            json!({ "type": "turn", "chat": self.chat, "turn": turn, "status": "stopped",
+            "agent": agent }),
         );
         self.record(
             Event::point("gathr.turn.stop")
@@ -767,18 +772,23 @@ impl Task {
             .writer
             .call(move |conn| store::set_turn(conn, &id, &status_owned, why_owned.as_deref()))
             .await;
-        if let Some(Err(e)) = saved {
-            self.record(
-                Event::point("gathr.turn.status")
-                    .trace(trace)
-                    .error("sqlite")
-                    .attr("why", e.to_string()),
-            );
-        }
+        let agent = match saved {
+            Some(Ok(agent)) => agent,
+            Some(Err(e)) => {
+                self.record(
+                    Event::point("gathr.turn.status")
+                        .trace(trace)
+                        .error("sqlite")
+                        .attr("why", e.to_string()),
+                );
+                None
+            }
+            None => None,
+        };
         let reference = gathr::ids::reference(trace);
         self.publish(
             json!({ "type": "turn", "chat": self.chat, "turn": turn, "status": status,
-            "why": why, "ref": reference }),
+            "agent": agent, "why": why, "ref": reference }),
         );
     }
 

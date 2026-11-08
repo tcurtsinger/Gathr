@@ -99,6 +99,70 @@ fn a_turn_runs_on_its_agents_account_model_and_effort_and_a_change_applies_from_
     );
 }
 
+/// The next JSON sent on the live socket (the service's frames are unmasked and unfragmented).
+fn next_live(socket: &mut std::net::TcpStream) -> Value {
+    use std::io::Read;
+    loop {
+        let mut head = [0u8; 2];
+        socket
+            .read_exact(&mut head)
+            .expect("the live socket went quiet");
+        let len = match head[1] & 0x7F {
+            126 => {
+                let mut n = [0u8; 2];
+                socket.read_exact(&mut n).unwrap();
+                u16::from_be_bytes(n) as usize
+            }
+            127 => {
+                let mut n = [0u8; 8];
+                socket.read_exact(&mut n).unwrap();
+                u64::from_be_bytes(n) as usize
+            }
+            n => n as usize,
+        };
+        let mut body = vec![0u8; len];
+        socket.read_exact(&mut body).unwrap();
+        if head[0] & 0x0F == 1 {
+            return serde_json::from_slice(&body).unwrap();
+        }
+    }
+}
+
+/// A window that didn't send a turn still learns whose it is, so its Retry goes to that agent.
+#[test]
+fn live_turn_updates_say_which_agent_the_turn_was_sent_to() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
+    let work = service.add_account("Work");
+    sign_in_account(&data.0, &work);
+    let orin = service.send(
+        "POST",
+        "/api/agents",
+        json!({ "name": "Orin", "account": work }),
+    );
+    let orin = orin.json()["id"].as_str().unwrap().to_string();
+    let chat = service.new_chat();
+    let mut live = service.live();
+
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi", "agent": orin }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let mut statuses = Vec::new();
+    while statuses.last().map(String::as_str) != Some("done") {
+        let update = next_live(&mut live);
+        if update["type"] != "turn" {
+            continue;
+        }
+        assert_eq!(
+            update["agent"],
+            orin.as_str(),
+            "a turn update without its agent: {update}"
+        );
+        statuses.push(update["status"].as_str().unwrap_or_default().to_string());
+    }
+    assert!(statuses.contains(&"running".to_string()), "{statuses:?}");
+}
+
 #[test]
 fn saves_are_checked_against_the_engine_and_an_account_in_use_stays() {
     let data = TempDir::new();
