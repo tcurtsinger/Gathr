@@ -88,3 +88,11 @@ jobs:
       - run: npx tsc --noEmit
       - run: npx vitest run
       - run: npx vite build
+      # The built UI, which gathrd serves from a `ui` folder beside it (AGENTS.md "Run it installed").
+      - name: keep the built UI
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gathr-ui
+          path: ui/dist
+          retention-days: 7

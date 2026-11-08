@@ -12,9 +12,11 @@ mod sign_in;
 mod team;
 mod tools;
 mod turns;
+mod ui;
 mod updates;
 
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -32,17 +34,21 @@ use tokio::net::TcpListener;
 struct Args {
     /// The data folder. Default: the system's app data folder.
     #[arg(long)]
-    data: Option<std::path::PathBuf>,
+    data: Option<PathBuf>,
     /// The port on 127.0.0.1. 0 picks a free one. Default: the port of the last start.
     #[arg(long)]
     port: Option<u16>,
+    /// The built UI (`ui/dist`). Default: the `ui` folder beside this program.
+    #[arg(long)]
+    ui: Option<PathBuf>,
 }
 
 fn main() -> ExitCode {
     let args = Args::parse();
     let data = DataDir::new(args.data.unwrap_or_else(platform::default_data_dir));
     let crash_log = CrashLog::new(data.crash_log());
-    match start(&data, &crash_log, args.port) {
+    let ui = args.ui.unwrap_or_else(|| beside_me("ui"));
+    match start(&data, &crash_log, args.port, ui) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             crash_log.append(&format!(
@@ -56,8 +62,18 @@ fn main() -> ExitCode {
     }
 }
 
+fn beside_me(name: &str) -> PathBuf {
+    let me = std::env::current_exe().unwrap_or_default();
+    me.with_file_name(name)
+}
+
 /// Everything up to serving: the lock, the database, the writer and the port.
-fn start(data: &DataDir, crash_log: &CrashLog, port: Option<u16>) -> Result<(), Error> {
+fn start(
+    data: &DataDir,
+    crash_log: &CrashLog,
+    port: Option<u16>,
+    ui: PathBuf,
+) -> Result<(), Error> {
     std::fs::create_dir_all(data.path())?;
     let _lock = data.take_lock()?;
     let conn =
@@ -71,13 +87,14 @@ fn start(data: &DataDir, crash_log: &CrashLog, port: Option<u16>) -> Result<(), 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(serve(data, writer, port, early_lines.len()))
+    runtime.block_on(serve(data, writer, port, ui, early_lines.len()))
 }
 
 async fn serve(
     data: &DataDir,
     writer: Writer,
     port: Option<u16>,
+    ui: PathBuf,
     early_lines: usize,
 ) -> Result<(), Error> {
     let listener = bind(data, port).await?;
@@ -107,6 +124,9 @@ async fn serve(
         started_us: ids::now_us(),
         data: data.clone(),
         stop: tokio::sync::Notify::new(),
+        ui,
+        session: ids::token(),
+        once_codes: Default::default(),
     });
     writer.record(
         Event::point("gathr.service.start")
@@ -158,6 +178,10 @@ async fn serve(
     Ok(())
 }
 
+/// The room's dev services and their UIs (AGENTS.md): a service with no port asked never keeps one
+/// of these, so the installed Gathr can't take a member's.
+const DEV_PORTS: std::ops::RangeInclusive<u16> = 47100..=47114;
+
 /// Binds the asked port; with none asked, the last start's port if it's still free, else any free one.
 async fn bind(data: &DataDir, port: Option<u16>) -> Result<TcpListener, Error> {
     let at = |port| SocketAddr::from((Ipv4Addr::LOCALHOST, port));
@@ -165,6 +189,7 @@ async fn bind(data: &DataDir, port: Option<u16>) -> Result<TcpListener, Error> {
         return Ok(TcpListener::bind(at(port)).await?);
     }
     if let Ok(last) = ServiceInfo::read(data)
+        && !DEV_PORTS.contains(&last.port)
         && let Ok(listener) = TcpListener::bind(at(last.port)).await
     {
         return Ok(listener);
