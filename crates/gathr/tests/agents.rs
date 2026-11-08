@@ -131,6 +131,17 @@ fn next_live(socket: &mut std::net::TcpStream) -> Value {
 /// A window that didn't send a turn still learns whose it is, so its Retry goes to that agent.
 #[test]
 fn live_turn_updates_say_which_agent_the_turn_was_sent_to() {
+    turn_updates_name_their_agent(false);
+}
+
+/// The agent comes from the turn the service runs, so a failed status write can't send a Retry
+/// to no agent (the window would run it as another agent, on the default account).
+#[test]
+fn live_turn_updates_name_their_agent_even_when_the_status_write_fails() {
+    turn_updates_name_their_agent(true);
+}
+
+fn turn_updates_name_their_agent(break_status_writes: bool) {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
     let work = service.add_account("Work");
@@ -142,6 +153,12 @@ fn live_turn_updates_say_which_agent_the_turn_was_sent_to() {
     );
     let orin = orin.json()["id"].as_str().unwrap().to_string();
     let chat = service.new_chat();
+    if break_status_writes {
+        let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+        let trigger = "CREATE TRIGGER no_status BEFORE UPDATE OF status ON turns \
+                       BEGIN SELECT RAISE(ABORT, 'forced'); END";
+        db.execute(trigger, []).unwrap();
+    }
     let mut live = service.live();
 
     let path = format!("/api/chats/{chat}/messages");
@@ -161,6 +178,15 @@ fn live_turn_updates_say_which_agent_the_turn_was_sent_to() {
         statuses.push(update["status"].as_str().unwrap_or_default().to_string());
     }
     assert!(statuses.contains(&"running".to_string()), "{statuses:?}");
+    if break_status_writes {
+        let sql =
+            "SELECT ref FROM event_log WHERE name = 'gathr.turn.status' AND error_type = 'sqlite'";
+        let (_, rows) = gathr(&data.0, &["diag", "query", sql]);
+        assert!(
+            rows["rows"][0]["ref"].is_string(),
+            "the failed write wasn't recorded: {rows}"
+        );
+    }
 }
 
 #[test]

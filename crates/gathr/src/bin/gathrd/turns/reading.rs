@@ -295,8 +295,14 @@ impl Task {
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }
-        self.set_turn(&turn.turn, &turn.trace, status, why.as_deref())
-            .await;
+        self.set_turn(
+            &turn.turn,
+            &turn.trace,
+            turn.agent.as_deref(),
+            status,
+            why.as_deref(),
+        )
+        .await;
         self.try_next().await;
     }
 

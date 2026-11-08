@@ -244,15 +244,27 @@ impl Task {
             |status: &str| json!({ "turn": queued.turn, "status": status, "ref": reference });
         if self.turn.is_some() || !self.queue.is_empty() {
             self.queue.push_back(queued.clone());
-            self.set_turn(&queued.turn, &queued.trace, "queued", None)
-                .await;
+            self.set_turn(
+                &queued.turn,
+                &queued.trace,
+                queued.agent.as_deref(),
+                "queued",
+                None,
+            )
+            .await;
             return Ok(answer("queued"));
         }
         match self.start(&queued).await {
             Ok(status) => Ok(answer(status)),
             Err(why) => {
-                self.set_turn(&queued.turn, &queued.trace, "failed", Some(&why))
-                    .await;
+                self.set_turn(
+                    &queued.turn,
+                    &queued.trace,
+                    queued.agent.as_deref(),
+                    "failed",
+                    Some(&why),
+                )
+                .await;
                 Err(Failed {
                     why,
                     trace: queued.trace,
@@ -274,8 +286,14 @@ impl Task {
                 Ok(_) => return,
                 Err(why) => {
                     self.queue.pop_front();
-                    self.set_turn(&next.turn, &next.trace, "failed", Some(&why))
-                        .await;
+                    self.set_turn(
+                        &next.turn,
+                        &next.trace,
+                        next.agent.as_deref(),
+                        "failed",
+                        Some(&why),
+                    )
+                    .await;
                 }
             }
         }
@@ -325,8 +343,14 @@ impl Task {
             self.turn = None;
             return Err(format!("Claude Code didn't take the message: {e}"));
         }
-        self.set_turn(&next.turn, &next.trace, "running", None)
-            .await;
+        self.set_turn(
+            &next.turn,
+            &next.trace,
+            next.agent.as_deref(),
+            "running",
+            None,
+        )
+        .await;
         Ok("running")
     }
 
@@ -360,8 +384,14 @@ impl Task {
         if self.queue.front().map(|q| &q.turn) != Some(&next.turn) {
             self.queue.push_front(next.clone());
         }
-        self.set_turn(&next.turn, &next.trace, "waiting_sign_in", None)
-            .await;
+        self.set_turn(
+            &next.turn,
+            &next.trace,
+            next.agent.as_deref(),
+            "waiting_sign_in",
+            None,
+        )
+        .await;
         "waiting_sign_in"
     }
 
@@ -373,8 +403,14 @@ impl Task {
         }
         self.close("its account is being removed").await;
         if let Some(running) = self.turn.take() {
-            self.set_turn(&running.turn, &running.trace, "stopped", None)
-                .await;
+            self.set_turn(
+                &running.turn,
+                &running.trace,
+                running.agent.as_deref(),
+                "stopped",
+                None,
+            )
+            .await;
         }
     }
 
@@ -438,8 +474,9 @@ impl Task {
                 .error("sqlite");
             self.record(event.attr("why", e.to_string()));
         }
-        self.open_turn(&turn, &trace, agent, login::Hold::default());
-        self.set_turn(&turn, &trace, "running", None).await;
+        self.open_turn(&turn, &trace, agent.clone(), login::Hold::default());
+        self.set_turn(&turn, &trace, agent.as_deref(), "running", None)
+            .await;
     }
 
     async fn login(&mut self, folder: &std::path::Path) -> Login {
@@ -559,8 +596,14 @@ impl Task {
     async fn stop(&mut self) -> Value {
         let mut stopped = Vec::new();
         for queued in std::mem::take(&mut self.queue) {
-            self.set_turn(&queued.turn, &queued.trace, "stopped", None)
-                .await;
+            self.set_turn(
+                &queued.turn,
+                &queued.trace,
+                queued.agent.as_deref(),
+                "stopped",
+                None,
+            )
+            .await;
             stopped.push(queued.turn);
         }
         let Some(running) = self.turn.as_mut().filter(|t| !t.stopping) else {
@@ -654,8 +697,14 @@ impl Task {
                 .error("exited")
                 .attr("why", why.clone()),
         );
-        self.set_turn(&turn.turn, &turn.trace, "failed", Some(&why))
-            .await;
+        self.set_turn(
+            &turn.turn,
+            &turn.trace,
+            turn.agent.as_deref(),
+            "failed",
+            Some(&why),
+        )
+        .await;
         self.try_next().await;
     }
 
@@ -764,7 +813,16 @@ impl Task {
         }
     }
 
-    async fn set_turn(&self, turn: &str, trace: &str, status: &str, why: Option<&str>) {
+    /// Saves the turn's status and sends it live. The update is built from what this actor holds,
+    /// not from the write: a failed write still names the turn's agent, so Retry goes to it.
+    async fn set_turn(
+        &self,
+        turn: &str,
+        trace: &str,
+        agent: Option<&str>,
+        status: &str,
+        why: Option<&str>,
+    ) {
         let (id, status_owned, why_owned) =
             (turn.to_string(), status.to_string(), why.map(String::from));
         let saved = self
@@ -772,19 +830,14 @@ impl Task {
             .writer
             .call(move |conn| store::set_turn(conn, &id, &status_owned, why_owned.as_deref()))
             .await;
-        let agent = match saved {
-            Some(Ok(agent)) => agent,
-            Some(Err(e)) => {
-                self.record(
-                    Event::point("gathr.turn.status")
-                        .trace(trace)
-                        .error("sqlite")
-                        .attr("why", e.to_string()),
-                );
-                None
-            }
-            None => None,
-        };
+        if let Some(Err(e)) = saved {
+            self.record(
+                Event::point("gathr.turn.status")
+                    .trace(trace)
+                    .error("sqlite")
+                    .attr("why", e.to_string()),
+            );
+        }
         let reference = gathr::ids::reference(trace);
         self.publish(
             json!({ "type": "turn", "chat": self.chat, "turn": turn, "status": status,

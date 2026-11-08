@@ -169,21 +169,12 @@ pub fn add_turn(
     Ok(())
 }
 
-/// Moves a turn on; an ending status also stamps when it ended. Answers the turn's agent.
-pub fn set_turn(
-    conn: &Connection,
-    id: &str,
-    status: &str,
-    why: Option<&str>,
-) -> Result<Option<String>, Error> {
+/// Moves a turn on; an ending status also stamps when it ended.
+pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) -> Result<(), Error> {
     let ended = matches!(status, "done" | "stopped" | "failed").then(now_us);
-    let sql =
-        "UPDATE turns SET status = ?2, why = ?3, ended_ts = ?4 WHERE id = ?1 RETURNING agent_id";
-    let agent = conn
-        .prepare_cached(sql)?
-        .query_row(params![id, status, why, ended], |r| r.get(0))
-        .optional()?;
-    Ok(agent.flatten())
+    conn.prepare_cached("UPDATE turns SET status = ?2, why = ?3, ended_ts = ?4 WHERE id = ?1")?
+        .execute(params![id, status, why, ended])?;
+    Ok(())
 }
 
 /// A turn left waiting from before: id, chat, trace, status and the person's message.
