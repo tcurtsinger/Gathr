@@ -107,6 +107,7 @@ export const api = {
   addAccount: (engine: string, name: string) => call<Account>('POST', '/api/accounts', { engine, name }),
   renameAccount: (account: string, name: string) =>
     call<Account>('PATCH', `/api/accounts/${account}`, { name }),
+  removeAccount: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}`),
   signOut: (account: string) => call<unknown>('POST', `/api/accounts/${account}/sign-out`),
   signIn: (account: string) => call<{ url: string }>('POST', `/api/accounts/${account}/sign-in`),
   signInCode: (account: string, code: string) =>

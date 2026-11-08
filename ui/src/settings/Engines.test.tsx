@@ -1,5 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Engine } from '../api';
 import { Engines } from './Engines';
@@ -14,9 +15,10 @@ const account = (id: string, name: string): Account => ({
 });
 
 /** Answers GET /api/accounts and /api/engines/claude; each engine answer is the next in `copies`. */
-function service(copies: Engine['copy'][]) {
+function service(copies: Engine['copy'][], removed: string[] = []) {
   const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
-  vi.stubGlobal('fetch', async (path: string) => {
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'DELETE') removed.push(path);
     if (path === '/api/accounts')
       return answer({ accounts: [account('a', 'Made-up one'), account('b', 'Made-up two')] });
     if (path === '/api/engines/claude') {
@@ -43,6 +45,32 @@ test('Rename on another account opens its own name, not the last draft', async (
   await screen.getByRole('textbox', { name: 'Name' }).fill('Replacement');
   await rows.filter({ hasText: 'Made-up two' }).getByRole('button', { name: 'Rename' }).click();
   await expect.element(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('Made-up two');
+});
+
+test('Remove asks first: Escape keeps the account and Settings open, Remove deletes only that one', async () => {
+  const removed: string[] = [];
+  service([copy('idle')], removed);
+  const screen = await render(
+    <dialog ref={(d) => d?.showModal()}>
+      <Engines onReference={() => {}} />
+    </dialog>,
+  );
+  const row = screen.getByRole('listitem').filter({ hasText: 'Made-up two' });
+  const remove = row.getByRole('button', { name: 'Remove' });
+
+  await remove.click();
+  const question = row.getByRole('group', { name: 'Remove Made-up two?' });
+  await expect.element(question.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  await userEvent.keyboard('{Escape}');
+  await expect.element(question).not.toBeInTheDocument();
+  await expect.element(remove).toHaveFocus();
+  expect(screen.container.querySelector('dialog')?.open).toBe(true);
+  expect(removed).toEqual([]);
+
+  await remove.click();
+  await question.getByRole('button', { name: 'Remove' }).click();
+  await expect.poll(() => removed).toEqual(['/api/accounts/b']);
+  await expect.element(screen.getByRole('button', { name: 'Add' })).toHaveFocus();
 });
 
 test('a check that takes several looks ends as failed, with Check back and no Up to date', async () => {
