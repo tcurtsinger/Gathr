@@ -56,6 +56,8 @@ struct Task {
     engine: Option<Engine>,
     /// The file the engine runs, so a chat on Gathr's copy moves when it updates (0025).
     program: Option<std::path::PathBuf>,
+    /// The account folder the engine runs in.
+    folder: Option<std::path::PathBuf>,
     lines: Option<mpsc::UnboundedReceiver<Line>>,
     /// The engine's last stderr line: when it exits mid-turn, that's usually why (0019).
     last_stderr: Option<String>,
@@ -77,6 +79,7 @@ pub async fn run(chats: Arc<Chats>, chat: String, mut commands: mpsc::UnboundedR
         chat,
         engine: None,
         program: None,
+        folder: None,
         lines: None,
         last_stderr: None,
         turn: None,
@@ -150,6 +153,10 @@ impl Task {
                     text: w.text,
                 });
                 self.try_next().await;
+            }
+            Cmd::Leave { folder, done } => {
+                self.leave(&folder).await;
+                let _ = done.send(());
             }
             Cmd::Close { .. } => unreachable!("handled in run"),
         }
@@ -245,22 +252,25 @@ impl Task {
             let why = format!("Gathr's copy of Claude Code is now {version}");
             self.close(&why).await;
         }
+        let folder = self.chats.account_folder();
+        if self.engine.is_some() && self.folder != folder {
+            self.close("the chats moved to another account").await;
+        }
         // A wrong path fails the send at once, signed in or not (hand check 8).
         let program = match self.engine {
             Some(_) => None,
             None => Some(self.find_engine(&next.trace).await?),
         };
-        if self.login().await == Login::SignedOut {
-            if self.queue.front().map(|q| &q.turn) != Some(&next.turn) {
-                self.queue.push_front(next.clone());
-            }
-            self.set_turn(&next.turn, &next.trace, "waiting_sign_in", None)
-                .await;
-            return Ok("waiting_sign_in");
+        // No account yet waits like a signed-out one: adding one and signing it in sends it.
+        let Some(folder) = folder else {
+            return Ok(self.wait_for_sign_in(next).await);
+        };
+        if self.login(&folder).await == Login::SignedOut {
+            return Ok(self.wait_for_sign_in(next).await);
         }
-        let gate = self.chats.gate(&self.chats.account_folder()).pass().await;
+        let gate = self.chats.gate(&folder).pass().await;
         if let Some(program) = program {
-            self.spawn(&program, &next.trace).await?;
+            self.spawn(&program, &folder, &next.trace).await?;
         }
         self.open_turn(&next.turn, &next.trace, gate);
         if let Err(e) = self
@@ -273,6 +283,27 @@ impl Task {
         self.set_turn(&next.turn, &next.trace, "running", None)
             .await;
         Ok("running")
+    }
+
+    async fn wait_for_sign_in(&mut self, next: &Queued) -> &'static str {
+        if self.queue.front().map(|q| &q.turn) != Some(&next.turn) {
+            self.queue.push_front(next.clone());
+        }
+        self.set_turn(&next.turn, &next.trace, "waiting_sign_in", None)
+            .await;
+        "waiting_sign_in"
+    }
+
+    /// Lets go of an account being removed: its engine closes and a turn under way stops.
+    async fn leave(&mut self, folder: &std::path::Path) {
+        if self.engine.is_none() || self.folder.as_deref() != Some(folder) {
+            return;
+        }
+        self.close("its account is being removed").await;
+        if let Some(running) = self.turn.take() {
+            self.set_turn(&running.turn, &running.trace, "stopped", None)
+                .await;
+        }
     }
 
     /// The turn under way from now: its span starts here.
@@ -327,9 +358,8 @@ impl Task {
         self.set_turn(&turn, &trace, "running", None).await;
     }
 
-    async fn login(&mut self) -> Login {
-        let folder = self.chats.account_folder();
-        let file = login::credentials(&folder);
+    async fn login(&mut self, folder: &std::path::Path) -> Login {
+        let file = login::credentials(folder);
         if let Some((stamp, when)) = self.refused {
             let unchanged = login_stamp(&file) == stamp;
             let file_based = stamp.is_some() || !cfg!(target_os = "macos");
@@ -338,7 +368,7 @@ impl Task {
             }
             self.refused = None;
         }
-        self.chats.login_status(&folder).await.0
+        self.chats.login_status(folder).await.0
     }
 
     /// Claude Code's path, found at every start so a new copy applies at once.
@@ -374,7 +404,12 @@ impl Task {
         })
     }
 
-    async fn spawn(&mut self, program: &std::path::Path, trace: &str) -> Result<(), String> {
+    async fn spawn(
+        &mut self,
+        program: &std::path::Path,
+        folder: &std::path::Path,
+        trace: &str,
+    ) -> Result<(), String> {
         let chat = self.chat.clone();
         let session = self
             .chats
@@ -388,13 +423,12 @@ impl Task {
             Some(id) => command::args(Session::Resume(id)),
             None => command::args(Session::New(&new_id)),
         };
-        let folder = self.chats.account_folder();
         let cwd = self.chats.data.path().join("chats").join(&self.chat);
-        for dir in [&folder, &cwd] {
+        for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
-        let env = command::env(std::env::vars_os(), &folder);
+        let env = command::env(std::env::vars_os(), folder);
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
                 self.record(
@@ -409,6 +443,7 @@ impl Task {
                 );
                 self.engine = Some(engine);
                 self.program = Some(program.to_path_buf());
+                self.folder = Some(folder.to_path_buf());
                 self.lines = Some(lines);
                 self.last_stderr = None;
                 Ok(())
