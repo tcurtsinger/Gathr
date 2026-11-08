@@ -258,7 +258,7 @@ impl Task {
                 .await;
             return Ok("waiting_sign_in");
         }
-        let gate = self.chats.gate.pass().await;
+        let gate = self.chats.gate(&self.chats.account_folder()).pass().await;
         if let Some(program) = program {
             self.spawn(&program, &next.trace).await?;
         }
@@ -338,19 +338,17 @@ impl Task {
             }
             self.refused = None;
         }
-        self.chats.login_status().await.0
+        self.chats.login_status(&folder).await.0
     }
 
-    /// Claude Code's path, from Settings at every start so a change applies at once (S26).
+    /// Claude Code's path, found at every start so a new copy applies at once.
     async fn find_engine(&self, trace: &str) -> Result<std::path::PathBuf, String> {
-        let setting = self.chats.path_setting().await;
-        let program = command::find(setting.as_deref(), self.chats.copy()).inspect_err(|why| {
+        let program = command::find(self.chats.copy()).inspect_err(|why| {
             self.record(
                 Event::point("gathr.engine.start")
                     .trace(trace)
                     .error("engine_not_found")
-                    .attr("why", why.clone())
-                    .attr("path_setting", setting.clone()),
+                    .attr("why", why.clone()),
             );
         })?;
         // An engine too old for the switches it's given fails here by its version, not later

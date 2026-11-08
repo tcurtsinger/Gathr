@@ -39,10 +39,16 @@ export interface History {
 }
 
 export interface Engine {
-  path: string | null;
   found: string | null;
   why_not_found: string | null;
-  account: { folder: string; login: string; expires: string | null };
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  engine: string;
+  login: string;
+  expires: string | null;
   /** A sign-in from Settings: waiting (with its page once there is one), or failed with why and a reference. */
   sign_in: { state: 'waiting'; url?: string } | { state: 'failed'; why: string; ref: string } | null;
 }
@@ -89,10 +95,11 @@ export const api = {
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
   engine: () => call<Engine>('GET', '/api/engines/claude'),
-  setEnginePath: (path: string | null) => call<unknown>('PUT', '/api/engines/claude', { path }),
-  signIn: () => call<{ url: string }>('POST', '/api/engines/claude/sign-in'),
-  signInCode: (code: string) => call<unknown>('POST', '/api/engines/claude/sign-in/code', { code }),
-  cancelSignIn: () => call<unknown>('DELETE', '/api/engines/claude/sign-in'),
+  account: (account: string) => call<Account>('GET', `/api/accounts/${account}`),
+  signIn: (account: string) => call<{ url: string }>('POST', `/api/accounts/${account}/sign-in`),
+  signInCode: (account: string, code: string) =>
+    call<unknown>('POST', `/api/accounts/${account}/sign-in/code`, { code }),
+  cancelSignIn: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}/sign-in`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>

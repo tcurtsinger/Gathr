@@ -35,12 +35,6 @@ impl DataDir {
         self.0.join("crash.log")
     }
 
-    /// The Claude account's own folder, `CLAUDE_CONFIG_DIR` for its engines (0002). The first
-    /// slice has one account, `main`.
-    pub fn claude_folder(&self) -> PathBuf {
-        self.0.join("accounts").join("main").join("claude")
-    }
-
     /// Takes the data folder's lock: one service, or one seed, at a time.
     /// The lock lasts as long as the returned file is open.
     pub fn take_lock(&self) -> Result<std::fs::File, Error> {

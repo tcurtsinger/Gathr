@@ -5,17 +5,16 @@ mod common;
 
 use std::time::Duration;
 
-use common::{TempDir, TestService, gathr, recording, replay_engine, sign_in};
+use common::{TempDir, TestService, gathr, recording, sign_in};
 use serde_json::{Value, json};
 
 /// The sidebar lists chats by name: a new chat takes its first message's first line.
 #[test]
 fn a_chat_is_named_after_its_first_message_and_keeps_that_name() {
     let data = TempDir::new();
-    let service = TestService::start(&data.0);
     // No engine at this path: the send fails, but the message is kept, which is all this needs.
     let missing = data.0.join("no-such-claude.exe");
-    service.send("PUT", "/api/engines/claude", json!({ "path": missing }));
+    let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
     let say = |chat: &str, text: &str| {
         service.send(
             "POST",
@@ -54,13 +53,8 @@ and list the fixes",
 fn a_chats_history_holds_its_open_approvals_until_they_are_answered() {
     let data = TempDir::new();
     sign_in(&data.0);
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(
         "POST",
@@ -87,13 +81,8 @@ fn a_chats_history_holds_its_open_approvals_until_they_are_answered() {
 fn a_chats_turns_carry_their_ask_tools_and_token_totals() {
     let data = TempDir::new();
     sign_in(&data.0);
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(
         "POST",

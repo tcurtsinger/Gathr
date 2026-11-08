@@ -1,11 +1,13 @@
-//! Sign in from Settings > Engines: the service runs `claude auth login` in the account's folder
-//! with no terminal. Claude Code prints its sign-in page, opens the browser itself, and finishes
-//! on the browser's callback or a `code#state` pasted on its stdin (task 893). Exit 0 is signed in.
+//! Sign in and out from Settings > Engines, one account at a time. Sign in runs `claude auth login`
+//! in the account's folder with no terminal: Claude Code prints its sign-in page, opens the browser
+//! itself, and finishes on the browser's callback or a `code#state` pasted on its stdin (task 893).
+//! Exit 0 is signed in. Sign out runs `claude auth logout`, which removes the folder's login.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use axum::extract::{Extension, State as Extract};
+use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
@@ -17,12 +19,46 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 
+use crate::accounts::find;
 use crate::api::{State, Trace};
 use crate::chats::Chats;
 use crate::routes::{Answer, Fail, fail};
 
 /// How long Claude Code has to print its sign-in page (it took 0.2 s in task 893).
 const PAGE_WAIT: Duration = Duration::from_secs(30);
+/// `claude auth logout` took 0.4 s on 2.1.318 (task 947).
+const SIGN_OUT_WAIT: Duration = Duration::from_secs(30);
+
+/// Each account's sign-in, made when first asked for.
+#[derive(Default)]
+pub struct SignIns(Mutex<HashMap<String, Arc<SignIn>>>);
+
+impl SignIns {
+    pub fn get(&self, account: &str) -> Arc<SignIn> {
+        let mut all = self.0.lock().expect("never poisoned");
+        let made = || {
+            Arc::new(SignIn {
+                account: account.to_string(),
+                ..SignIn::default()
+            })
+        };
+        all.entry(account.to_string()).or_insert_with(made).clone()
+    }
+
+    /// Ends every sign-in still waiting, at shutdown.
+    pub async fn cancel_all(&self) {
+        let all: Vec<_> = self
+            .0
+            .lock()
+            .expect("never poisoned")
+            .values()
+            .cloned()
+            .collect();
+        for sign_in in all {
+            sign_in.cancel().await;
+        }
+    }
+}
 
 enum Ask {
     Code(String),
@@ -31,6 +67,7 @@ enum Ask {
 
 #[derive(Default)]
 pub struct SignIn {
+    account: String,
     /// What Settings shows: null, `waiting` (with the page once there is one), or `failed` with
     /// why and a reference.
     shown: Mutex<Value>,
@@ -53,7 +90,7 @@ impl SignIn {
 
     fn show(&self, chats: &Chats, value: Value) {
         *self.shown.lock().expect("never poisoned") = value;
-        chats.publish(json!({ "type": "engine" }));
+        chats.publish(json!({ "type": "accounts" }));
     }
 
     /// Ends a sign-in still waiting, and any start queued. Killing it there leaves no login behind
@@ -90,8 +127,12 @@ async fn stop(running: Option<mpsc::UnboundedSender<Ask>>) {
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
-        .route("/api/engines/claude/sign-in", post(start).delete(cancel))
-        .route("/api/engines/claude/sign-in/code", post(code))
+        .route(
+            "/api/accounts/{account}/sign-in",
+            post(start).delete(cancel),
+        )
+        .route("/api/accounts/{account}/sign-in/code", post(code))
+        .route("/api/accounts/{account}/sign-out", post(sign_out))
 }
 
 fn failed(status: StatusCode, why: &str, trace: &str) -> Fail {
@@ -100,25 +141,30 @@ fn failed(status: StatusCode, why: &str, trace: &str) -> Fail {
 
 /// A newer start replaces one still waiting. Registered before the process starts, so Cancel
 /// reaches it while Claude Code is still getting its page.
-async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    let cancels = s.sign_in.running.lock().expect("never poisoned").cancels;
-    let _one = s.sign_in.starting.lock().await;
+async fn start(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
+) -> Answer {
+    let account = find(&s, &t, &account, "Sign in failed").await?;
+    let sign_in = s.sign_ins.get(&account.id);
+    let cancels = sign_in.running.lock().expect("never poisoned").cancels;
+    let _one = sign_in.starting.lock().await;
     let fail = |why: String| failed(StatusCode::INTERNAL_SERVER_ERROR, &why, &t.0);
-    let setting = s.chats.path_setting().await;
-    let program = command::find(setting.as_deref(), s.chats.copy()).map_err(fail)?;
-    let folder = s.chats.account_folder();
+    let program = command::find(s.chats.copy()).map_err(fail)?;
+    let folder = account.folder(&s.data);
     std::fs::create_dir_all(&folder).map_err(|e| fail(e.to_string()))?;
 
     let (mine, mut asks) = mpsc::unbounded_channel();
     let previous = {
-        let mut running = s.sign_in.running.lock().expect("never poisoned");
+        let mut running = sign_in.running.lock().expect("never poisoned");
         if running.cancels != cancels {
             return Ok(Json(json!({ "cancelled": true })));
         }
         running.asks.replace(mine.clone())
     };
     stop(previous).await;
-    s.sign_in.show(&s.chats, json!({ "state": "waiting" }));
+    sign_in.show(&s.chats, json!({ "state": "waiting" }));
 
     let env = command::env(std::env::vars_os(), &folder);
     let args = ["auth".to_string(), "login".to_string()];
@@ -126,8 +172,8 @@ async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) 
     let (engine, mut lines) = match Engine::start(&program, &args, env, &folder) {
         Ok(engine) => engine,
         Err(e) => {
-            s.sign_in.release(&mine);
-            s.sign_in.show(&s.chats, Value::Null);
+            sign_in.release(&mine);
+            sign_in.show(&s.chats, Value::Null);
             return Err(fail(e.to_string()));
         }
     };
@@ -142,7 +188,7 @@ async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) 
     let url = match waited {
         Ok(Ok(Some(url))) => url,
         Ok(Err(done)) => {
-            end_cancelled(&s, engine, &t.0, done).await;
+            end_cancelled(&s, &sign_in, engine, &t.0, done).await;
             return Ok(Json(json!({ "cancelled": true })));
         }
         Ok(Ok(None)) | Err(_) => {
@@ -154,19 +200,19 @@ async fn start(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) 
                 "Claude Code gave no sign-in page ({code}): {}",
                 said.join(" ")
             );
-            record(&s, &t.0, Some(&why), started).await;
-            if s.sign_in.release(&mine) {
-                s.sign_in.show(&s.chats, Value::Null);
+            record_as(&s, "sign_in", &account.id, &t.0, Some(&why), started).await;
+            if sign_in.release(&mine) {
+                sign_in.show(&s.chats, Value::Null);
             }
             return Err(fail(why));
         }
     };
-    s.sign_in
-        .show(&s.chats, json!({ "state": "waiting", "url": url }));
+    sign_in.show(&s.chats, json!({ "state": "waiting", "url": url }));
     let job = Job {
         trace: t.0.clone(),
         started,
         mine,
+        sign_in: sign_in.clone(),
     };
     tokio::spawn(watch(s.clone(), engine, lines, asks, job));
     Ok(Json(json!({ "url": url })))
@@ -182,11 +228,18 @@ async fn cancelled(asks: &mut mpsc::UnboundedReceiver<Ask>) -> Option<oneshot::S
     None
 }
 
-async fn end_cancelled(s: &State, engine: Engine, trace: &str, done: Option<oneshot::Sender<()>>) {
+async fn end_cancelled(
+    s: &State,
+    sign_in: &SignIn,
+    engine: Engine,
+    trace: &str,
+    done: Option<oneshot::Sender<()>>,
+) {
     engine.close(Duration::ZERO).await;
     let ended = Event::point("gathr.engine.sign_in").trace(trace);
+    let ended = ended.attr("account", sign_in.account.clone());
     s.writer.record(ended.attr("ended", "cancelled"));
-    s.sign_in.show(&s.chats, Value::Null);
+    sign_in.show(&s.chats, Value::Null);
     if let Some(done) = done {
         let _ = done.send(());
     }
@@ -209,6 +262,7 @@ struct Job {
     started: Instant,
     /// This sign-in's own sender: it keeps `asks` open, and tells it from a newer sign-in.
     mine: mpsc::UnboundedSender<Ask>,
+    sign_in: Arc<SignIn>,
 }
 
 /// Passes a pasted code on, and reports how the sign-in ended.
@@ -223,6 +277,7 @@ async fn watch(
         trace,
         started,
         mine,
+        sign_in,
     } = job;
     let mut last_error = None;
     loop {
@@ -242,11 +297,11 @@ async fn watch(
                         last_error = Some(format!("the code didn't reach Claude Code: {e}"));
                     }
                 }
-                Ask::Cancel(done) => return end_cancelled(&s, engine, &trace, Some(done)).await,
+                Ask::Cancel(done) => return end_cancelled(&s, &sign_in, engine, &trace, Some(done)).await,
             },
         }
     }
-    let ours = s.sign_in.release(&mine);
+    let ours = sign_in.release(&mine);
     // Its output has ended, so it's exiting: the grace is for it to finish saving the login.
     let code = match engine.close(Duration::from_secs(10)).await {
         Closed::Exited(code) => code,
@@ -254,7 +309,15 @@ async fn watch(
     };
     let why = (code != Some(0))
         .then(|| last_error.unwrap_or_else(|| format!("Claude Code exited ({code:?})")));
-    record(&s, &trace, why.as_deref(), started).await;
+    record_as(
+        &s,
+        "sign_in",
+        &sign_in.account,
+        &trace,
+        why.as_deref(),
+        started,
+    )
+    .await;
     if !ours {
         return;
     }
@@ -262,14 +325,22 @@ async fn watch(
         Some(why) => json!({ "state": "failed", "why": why, "ref": ids::reference(&trace) }),
         None => Value::Null,
     };
-    s.sign_in.show(&s.chats, shown);
+    sign_in.show(&s.chats, shown);
 }
 
 /// Recorded before the answer goes out, so its reference traces at once (0019).
-async fn record(s: &State, trace: &str, why: Option<&str>, started: Instant) {
-    let mut event = Event::point("gathr.engine.sign_in").trace(trace);
+async fn record_as(
+    s: &State,
+    what: &str,
+    account: &str,
+    trace: &str,
+    why: Option<&str>,
+    started: Instant,
+) {
+    let event = Event::point(&format!("gathr.engine.{what}")).trace(trace);
+    let mut event = event.attr("account", account);
     event = match why {
-        Some(why) => event.error("sign_in").attr("why", why),
+        Some(why) => event.error(what).attr("why", why),
         None => event.ok(),
     };
     event.duration_us = Some(started.elapsed().as_micros() as i64);
@@ -284,11 +355,14 @@ struct Code {
 async fn code(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
     Json(body): Json<Code>,
 ) -> Answer {
+    let account = find(&s, &t, &account, "Sign in failed").await?;
     let code = body.code.trim().to_string();
     let running = s
-        .sign_in
+        .sign_ins
+        .get(&account.id)
         .running
         .lock()
         .expect("never poisoned")
@@ -300,7 +374,65 @@ async fn code(
     }
 }
 
-async fn cancel(Extract(s): Extract<Arc<State>>) -> Json<Value> {
-    s.sign_in.cancel().await;
-    Json(json!({ "cancelled": true }))
+async fn cancel(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
+) -> Answer {
+    let account = find(&s, &t, &account, "Cancel failed").await?;
+    s.sign_ins.get(&account.id).cancel().await;
+    Ok(Json(json!({ "cancelled": true })))
+}
+
+/// Ends a sign-in still waiting, then runs `claude auth logout` in the account's folder. Engines
+/// on the account keep running; their next turn finds it signed out and waits (0002).
+async fn sign_out(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(account): Path<String>,
+) -> Answer {
+    let account = find(&s, &t, &account, "Sign out failed").await?;
+    s.sign_ins.get(&account.id).cancel().await;
+    let started = Instant::now();
+    let done = log_out(&s, &account.folder(&s.data)).await;
+    let why = done.as_ref().err().map(String::as_str);
+    record_as(&s, "sign_out", &account.id, &t.0, why, started).await;
+    s.chats.publish(json!({ "type": "accounts" }));
+    match done {
+        Ok(()) => Ok(Json(json!({ "signed_out": true }))),
+        Err(why) => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Sign out failed",
+            &why,
+            &t.0,
+        )),
+    }
+}
+
+async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> {
+    let program = command::find(s.chats.copy())?;
+    std::fs::create_dir_all(folder)
+        .map_err(|e| format!("{} wasn't made: {e}", folder.display()))?;
+    // Never while an engine on it renews the login: that renewal would save over the sign-out.
+    let _gate = s.chats.gate(folder).pass().await;
+    let env = command::env(std::env::vars_os(), folder);
+    let args = ["auth".to_string(), "logout".to_string()];
+    let (engine, mut lines) = Engine::start(&program, &args, env, folder)
+        .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
+    let closed = engine.close(SIGN_OUT_WAIT).await;
+    let mut said = Vec::new();
+    let next = Duration::from_secs(2);
+    while let Ok(Some(Line::Out(text) | Line::Err(text))) =
+        tokio::time::timeout(next, lines.recv()).await
+    {
+        said.push(text);
+    }
+    match closed {
+        Closed::Exited(Some(0)) => Ok(()),
+        Closed::Exited(code) => Err(format!("Claude Code exited ({code:?}): {}", said.join(" "))),
+        Closed::Killed => Err(format!(
+            "Claude Code didn't finish signing out in {} s",
+            SIGN_OUT_WAIT.as_secs()
+        )),
+    }
 }

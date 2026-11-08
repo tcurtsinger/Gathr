@@ -25,7 +25,7 @@ pub struct State {
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
     pub updates: Arc<crate::updates::Updates>,
-    pub sign_in: Arc<crate::sign_in::SignIn>,
+    pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub models: crate::models::Models,
 }
 
@@ -38,6 +38,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/health", get(health))
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
+        .merge(crate::accounts::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))

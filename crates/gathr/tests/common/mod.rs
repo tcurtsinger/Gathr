@@ -60,6 +60,14 @@ impl TestService {
         }
     }
 
+    /// Starts it with the replay engine as Claude Code (`GATHR_CLAUDE_PATH`), plus `env`.
+    pub fn with_engine(data: &Path, env: &[(&str, &Path)]) -> TestService {
+        let engine = replay_engine();
+        let mut all = vec![("GATHR_CLAUDE_PATH", engine.as_path())];
+        all.extend_from_slice(env);
+        Self::start_with(data, &all)
+    }
+
     pub fn get(&self, path: &str, headers: &[(&str, &str)]) -> Response {
         http::request(self.info.port, "GET", path, headers).unwrap()
     }
@@ -151,6 +159,26 @@ pub fn sign_in(data: &Path) {
     let login = serde_json::json!({ "claudeAiOauth": {
         "accessToken": "made-up", "refreshToken": "made-up", "expiresAt": expires } });
     std::fs::write(folder.join(".credentials.json"), login.to_string()).unwrap();
+}
+
+/// Polls the account until `done` holds for it, or fails after 10 s.
+pub fn account_until(
+    service: &TestService,
+    account: &str,
+    what: &str,
+    done: impl Fn(&Value) -> bool,
+) -> Value {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let found = service
+            .call("GET", &format!("/api/accounts/{account}"))
+            .json();
+        if done(&found) {
+            return found;
+        }
+        assert!(Instant::now() < deadline, "waited 10 s for {what}: {found}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 /// Runs `gathr --data <data> <args>`; returns its JSON answer (stdout, or stderr on failure).

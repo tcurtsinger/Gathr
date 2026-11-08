@@ -11,7 +11,8 @@
 //!
 //! `auth login` prints what Claude Code 2.1.318 prints with no terminal (task 893), waits for a
 //! pasted `code#state` on stdin, and signs the folder in when the code is `made-up-code`.
-//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher.
+//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher. `auth logout`
+//! removes the folder's login file, as Claude Code 2.1.318 does.
 //!
 //! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
 //! `stall` there answers only after a minute, as a launcher that hangs; `folder` answers the name
@@ -40,6 +41,12 @@ fn main() {
             return;
         }
         println!("{}", version.as_deref().unwrap_or("2.1.318 (Claude Code)"));
+        return;
+    }
+    if args.iter().map(String::as_str).eq(["auth", "logout"]) {
+        let folder = std::env::var_os("CLAUDE_CONFIG_DIR").unwrap_or_default();
+        let _ = std::fs::remove_file(std::path::Path::new(&folder).join(".credentials.json"));
+        println!("Successfully logged out from your Anthropic account.");
         return;
     }
     if args.iter().map(String::as_str).eq(["auth", "status"]) {

@@ -2,7 +2,7 @@
 //! this keeps them, and starts them when a message arrives or the service starts.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use gathr::claude::copies::Copies;
@@ -16,7 +16,8 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::turns;
 
-pub use gathr::claude::command::PATH_SETTING;
+/// Chats run on this account until agents pick theirs: the one from before accounts had names.
+const CHAT_ACCOUNT: &str = "main";
 
 pub enum Cmd {
     Send {
@@ -55,24 +56,34 @@ pub struct Chats {
     pub data: DataDir,
     /// Everything live, to every client's WebSocket (0004).
     pub live: broadcast::Sender<Value>,
-    pub gate: Gate,
+    /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
+    gates: Mutex<HashMap<PathBuf, Gate>>,
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
 }
 
 impl Chats {
     pub fn new(writer: Writer, data: DataDir) -> Arc<Chats> {
-        let gate = Gate::new(&data.claude_folder());
         Arc::new(Chats {
             writer,
             data,
             live: broadcast::channel(4096).0,
-            gate,
+            gates: Mutex::default(),
             tasks: Mutex::default(),
         })
     }
 
+    /// The chats' account's Claude folder.
     pub fn account_folder(&self) -> PathBuf {
-        self.data.claude_folder()
+        gathr::accounts::folder(&self.data, CHAT_ACCOUNT, "claude")
+    }
+
+    /// The account folder's renewal gate (0002).
+    pub fn gate(&self, folder: &Path) -> Gate {
+        let mut gates = self.gates.lock().expect("the gates lock is never poisoned");
+        gates
+            .entry(folder.to_path_buf())
+            .or_insert_with(|| Gate::new(folder))
+            .clone()
     }
 
     /// The chat's task, started if it isn't running.
@@ -127,28 +138,17 @@ impl Chats {
         }
     }
 
-    /// Claude Code's path as set in Settings, read at every start so a change applies at once.
-    pub async fn path_setting(&self) -> Option<String> {
-        self.writer
-            .call(|conn| store::setting(conn, PATH_SETTING))
-            .await
-            .and_then(Result::ok)
-            .flatten()
-    }
-
-    /// The account's sign-in state and expiry, off the async threads: on macOS it may run
+    /// An account folder's sign-in state and expiry, off the async threads: on macOS it may run
     /// `claude auth status` (0016).
-    pub async fn login_status(&self) -> (Login, Option<i64>) {
-        let (folder, setting) = (self.account_folder(), self.path_setting().await);
+    pub async fn login_status(&self, folder: &Path) -> (Login, Option<i64>) {
+        let folder = folder.to_path_buf();
         let (copy, now_ms) = (self.copy(), gathr::ids::now_us() / 1000);
-        tokio::task::spawn_blocking(move || {
-            login::status(&folder, setting.as_deref(), copy, now_ms)
-        })
-        .await
-        .unwrap_or((Login::Unknown, None))
+        tokio::task::spawn_blocking(move || login::status(&folder, copy, now_ms))
+            .await
+            .unwrap_or((Login::Unknown, None))
     }
 
-    /// Gathr's own copy of Claude Code, the one a chat starts when no path is set (0025).
+    /// Gathr's own copy of Claude Code, the one every start uses outside dev and tests (0025).
     pub fn copy(&self) -> Option<PathBuf> {
         Copies::new(&self.data).program()
     }

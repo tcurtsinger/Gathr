@@ -1,6 +1,7 @@
 //! `gathrd`: Gathr's service (docs/decisions/0004-service-process.md).
 #![windows_subsystem = "windows"]
 
+mod accounts;
 mod api;
 mod chats;
 mod logs;
@@ -87,11 +88,11 @@ async fn serve(
     .write(data)?;
     let chats = chats::Chats::new(writer.clone(), data.clone());
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
-    let sign_in = Arc::new(sign_in::SignIn::default());
+    let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
         updates: updates.clone(),
-        sign_in: sign_in.clone(),
+        sign_ins: sign_ins.clone(),
         models: Default::default(),
         writer: writer.clone(),
         token,
@@ -127,7 +128,7 @@ async fn serve(
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
-    sign_in.cancel().await;
+    sign_ins.cancel_all().await;
     tokio::join!(chats.close_all(), state.models.closed());
     writer
         .record_now(

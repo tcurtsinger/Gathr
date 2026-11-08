@@ -81,17 +81,12 @@ pub fn read(file: &Path, now_ms: i64) -> (Login, Option<i64>) {
 /// The account's state, for sends, Settings and `gathr diag` alike: the login file, or on
 /// macOS, where the login is in the Keychain (0016), `claude auth status`. Blocks while the
 /// probe runs; the service calls it off its async threads.
-pub fn status(
-    folder: &Path,
-    path_setting: Option<&str>,
-    copy: Option<std::path::PathBuf>,
-    now_ms: i64,
-) -> (Login, Option<i64>) {
+pub fn status(folder: &Path, copy: Option<PathBuf>, now_ms: i64) -> (Login, Option<i64>) {
     let from_file = read(&credentials(folder), now_ms);
     if !cfg!(target_os = "macos") || from_file.0 != Login::SignedOut {
         return from_file;
     }
-    match super::command::find(path_setting, copy) {
+    match super::command::find(copy) {
         Ok(program) => (probe(&program, folder), None),
         Err(_) => (Login::Unknown, None),
     }

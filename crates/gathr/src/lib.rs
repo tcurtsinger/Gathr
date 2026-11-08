@@ -1,6 +1,7 @@
 //! What the service (`gathrd`) and the command line (`gathr`) share: the data folder,
 //! the database, the event record, error references and the diagnostics queries.
 
+pub mod accounts;
 pub mod claude;
 pub mod crash_log;
 pub mod data;

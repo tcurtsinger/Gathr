@@ -139,14 +139,15 @@ fn keep(name: &OsString) -> bool {
         || name == "AWS_BEARER_TOKEN_BEDROCK")
 }
 
-/// The setting that holds Claude Code's path; none means Gathr's copy, else `claude` on the PATH.
-pub const PATH_SETTING: &str = "engines.claude.path";
+/// Stands in for Gathr's copy in dev and tests: the replay engine, or a missing file for a
+/// forced failure. Settings has no path (0026).
+pub const PATH_VAR: &str = "GATHR_CLAUDE_PATH";
 
-/// The engine's path: the one set in Settings, else Gathr's own copy (0025), else `claude` on the
+/// The engine's path: `GATHR_CLAUDE_PATH`, else Gathr's own copy (0025), else `claude` on the
 /// PATH.
-pub fn find(setting: Option<&str>, copy: Option<PathBuf>) -> Result<PathBuf, String> {
-    if let Some(path) = setting.filter(|p| !p.trim().is_empty()) {
-        let path = PathBuf::from(path.trim());
+pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {
+    let set = std::env::var_os(PATH_VAR).filter(|p| !p.is_empty());
+    if let Some(path) = set.map(PathBuf::from) {
         return match path.is_file() {
             true => Ok(path),
             false => Err(format!(
@@ -158,9 +159,8 @@ pub fn find(setting: Option<&str>, copy: Option<PathBuf>) -> Result<PathBuf, Str
     if let Some(copy) = copy {
         return Ok(copy);
     }
-    crate::platform::find_on_path("claude").ok_or_else(|| {
-        "claude wasn't found on the PATH: set its path in Settings, Engines".to_string()
-    })
+    crate::platform::find_on_path("claude")
+        .ok_or_else(|| "Claude Code isn't installed yet, and claude isn't on the PATH".to_string())
 }
 
 /// The oldest Claude Code all the switches above were proven on (0024). Its changelog has
