@@ -140,3 +140,47 @@ fn dev_stopped_over_the_api_ends_cleanly() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+/// A window that can't start (here, no `gathr-app` beside `gathr`) fails `gathr dev`, and the
+/// service it started stops with it rather than running on unseen.
+#[test]
+fn dev_window_failing_stops_the_service() {
+    let dir = TempDir::new();
+    let bin = dir.0.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    for exe in [env!("CARGO_BIN_EXE_gathr"), env!("CARGO_BIN_EXE_gathrd")] {
+        let exe = std::path::Path::new(exe);
+        std::fs::copy(exe, bin.join(exe.file_name().unwrap())).unwrap();
+    }
+    let data = dir.0.join("data");
+    // To a file, not a pipe: a service left running would hold a pipe open, and the test hang.
+    let log = dir.0.join("dev.log");
+    let status =
+        std::process::Command::new(bin.join(format!("gathr{}", std::env::consts::EXE_SUFFIX)))
+            .args([
+                "--data",
+                data.to_str().unwrap(),
+                "dev",
+                "--port",
+                "0",
+                "--window",
+            ])
+            .env_remove("CARGO")
+            .stdout(std::fs::File::create(&log).unwrap())
+            .stderr(std::fs::File::create(dir.0.join("dev.err")).unwrap())
+            .status()
+            .unwrap();
+    let said = std::fs::read_to_string(dir.0.join("dev.err")).unwrap();
+    assert!(
+        !status.success(),
+        "gathr dev started a window with no gathr-app"
+    );
+    let info = ServiceInfo::read(&DataDir::new(&data)).expect("gathr dev started no service");
+    if http::call(info.port, &info.token, "GET", "/health").is_ok() {
+        let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
+        panic!(
+            "gathrd pid {} still ran after gathr dev failed ({said})",
+            info.pid
+        );
+    }
+}

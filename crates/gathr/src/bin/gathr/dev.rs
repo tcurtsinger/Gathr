@@ -66,7 +66,13 @@ async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error>
         data.path().display()
     );
     let window = match window {
-        true => Some(crate::window::start(data, info.port).await?),
+        true => match crate::window::start(data, info.port).await {
+            Ok(window) => Some(window),
+            Err(e) => {
+                stop(&mut child, pid, &info).await?;
+                return Err(e);
+            }
+        },
         false => None,
     };
     let stopped = tokio::select! {
@@ -79,12 +85,19 @@ async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error>
     if let Some(status) = stopped {
         return ended(data, pid, status);
     }
+    stop(&mut child, pid, &info).await
+}
+
+async fn stop(
+    child: &mut tokio::process::Child,
+    pid: u32,
+    info: &ServiceInfo,
+) -> Result<(), Error> {
     println!("Stopping gathrd pid {pid}…");
+    let (port, token) = (info.port, info.token.clone());
     // The service may have had the Ctrl+C itself (macOS sends it to the whole group) and be gone already.
-    let _ = tokio::task::spawn_blocking(move || {
-        http::call(info.port, &info.token, "POST", "/api/shutdown")
-    })
-    .await;
+    let _ = tokio::task::spawn_blocking(move || http::call(port, &token, "POST", "/api/shutdown"))
+        .await;
     match tokio::time::timeout(Duration::from_secs(10), child.wait()).await {
         Ok(status) => println!("Stopped: gathrd pid {pid} exited ({}).", status?),
         Err(_) => {
