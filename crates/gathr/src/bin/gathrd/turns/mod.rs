@@ -22,6 +22,7 @@ use crate::chats::{Chats, Cmd, Failed};
 mod process;
 mod reading;
 mod records;
+mod workspace;
 
 pub use process::CLOSE_GRACE;
 

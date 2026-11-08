@@ -10,19 +10,21 @@ use crate::redact::redact;
 /// The longest raw body kept for a frame that isn't JSON (0011).
 const MALFORMED_CAP: usize = 64 * 1024;
 
-pub fn create_chat(conn: &Connection, title: &str) -> Result<Value, Error> {
+/// A new chat, with the project folder it works in, if any (0013: set only here).
+pub fn create_chat(conn: &Connection, title: &str, project: Option<&str>) -> Result<Value, Error> {
     let (id, ts) = (ulid(now_us()), now_us());
     conn.execute(
-        "INSERT INTO chats (id, title, created_ts) VALUES (?1, ?2, ?3)",
-        params![id, title, ts],
+        "INSERT INTO chats (id, title, created_ts, project) VALUES (?1, ?2, ?3, ?4)",
+        params![id, title, ts, project],
     )?;
-    Ok(json!({ "id": id, "title": title, "created": crate::ids::utc(ts) }))
+    Ok(json!({ "id": id, "title": title, "created": crate::ids::utc(ts), "project": project }))
 }
 
 pub fn chats(conn: &Connection) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
-                (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1)
+                (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
+                c.project
          FROM chats c ORDER BY c.created_ts DESC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -33,6 +35,7 @@ pub fn chats(conn: &Connection) -> Result<Value, Error> {
             "messages": r.get::<_, i64>(3)?,
             // The last turn's agent, so the composer's picker reopens on it.
             "agent": r.get::<_, Option<String>>(4)?,
+            "project": r.get::<_, Option<String>>(5)?,
         }))
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
@@ -45,26 +48,20 @@ pub fn chat_exists(conn: &Connection, chat: &str) -> Result<bool, Error> {
         .is_some())
 }
 
-/// A chat's messages in order, and its turns with how each ended.
+/// A chat's messages in order, its turns with how each ended, its project and its agents.
+///
+/// Messages keep their turn's place, taken when the turn started (0028): replies from agents
+/// working at once never interleave, and a turn not started yet shows last.
 pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT id, turn_id, ts, role, kind, body FROM messages WHERE chat_id = ?1 ORDER BY ts, id",
-    )?;
+    let mut stmt = conn.prepare_cached(&format!(
+        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY t.position IS NULL, t.position, m.ts, m.id"
+    ))?;
     let messages = stmt
-        .query_map([chat], |r| {
-            Ok(message_json(
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                &r.get::<_, String>(3)?,
-                &r.get::<_, String>(4)?,
-                r.get(5)?,
-            ))
-        })?
+        .query_map([chat], message_row)?
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
-        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id FROM turns
-         WHERE chat_id = ?1 ORDER BY created_ts",
+        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position
+         FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
         .query_map([chat], |r| {
@@ -76,27 +73,49 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "created": crate::ids::utc(r.get(4)?),
                 "ended": r.get::<_, Option<i64>>(5)?.map(crate::ids::utc),
                 "agent": r.get::<_, Option<String>>(6)?,
+                "position": r.get::<_, Option<i64>>(7)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
-    Ok(json!({ "chat": chat, "agent": agent, "messages": messages, "turns": turns }))
+    let project: Option<String> = conn
+        .query_row("SELECT project FROM chats WHERE id = ?1", [chat], |r| {
+            r.get(0)
+        })
+        .optional()?
+        .flatten();
+    let members = crate::team::members(conn, chat)?;
+    Ok(
+        json!({ "chat": chat, "agent": agent, "project": project, "members": members,
+        "messages": messages, "turns": turns }),
+    )
 }
 
+/// A message's columns, with the agent of its turn: who it was for, or who wrote it.
+const MESSAGE: &str = "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id
+     FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+
 /// A message as the API shows it; tool messages carry their JSON body as an object.
-pub fn message_json(
-    id: String,
-    turn: Option<String>,
-    ts: i64,
-    role: &str,
-    kind: &str,
-    body: String,
-) -> Value {
-    let body = match kind {
+fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
+    let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
+    let body = match kind.as_str() {
         "tool" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
-    json!({ "id": id, "turn": turn, "time": crate::ids::utc(ts), "role": role, "kind": kind, "body": body })
+    Ok(json!({
+        "id": r.get::<_, String>(0)?,
+        "turn": r.get::<_, Option<String>>(1)?,
+        "time": crate::ids::utc(r.get(2)?),
+        "role": r.get::<_, String>(3)?,
+        "kind": kind,
+        "body": body,
+        "agent": r.get::<_, Option<String>>(6)?,
+    }))
+}
+
+fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
+    let sql = format!("{MESSAGE} WHERE m.id = ?1");
+    Ok(conn.prepare_cached(&sql)?.query_row([id], message_row)?)
 }
 
 /// A new chat's name until its first message names it.
@@ -130,14 +149,7 @@ pub fn add_message(
         conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
             .execute(params![chat, title, UNTITLED])?;
     }
-    Ok(message_json(
-        id,
-        Some(turn.into()),
-        ts,
-        role,
-        kind,
-        body.into(),
-    ))
+    message(conn, &id)
 }
 
 pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), Error> {
@@ -147,25 +159,11 @@ pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), E
 }
 
 /// Moves a message to another turn: one sent into a turn that the engine answered after it.
-/// Moves a message to another turn: the message as it is now, for the live socket.
+/// The message as it is now, for the live socket.
 pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Error> {
-    let moved = conn
-        .prepare_cached(
-            "UPDATE messages SET turn_id = ?2 WHERE id = ?1
-             RETURNING id, turn_id, ts, role, kind, body",
-        )?
-        .query_row(params![id, turn], |r| {
-            let (role, kind): (String, String) = (r.get(3)?, r.get(4)?);
-            Ok(message_json(
-                r.get(0)?,
-                r.get(1)?,
-                r.get(2)?,
-                &role,
-                &kind,
-                r.get(5)?,
-            ))
-        })?;
-    Ok(moved)
+    conn.prepare_cached("UPDATE messages SET turn_id = ?2 WHERE id = ?1")?
+        .execute(params![id, turn])?;
+    message(conn, id)
 }
 
 /// A new turn, run as `agent`, or on the oldest account when it's sent to none.
@@ -184,11 +182,19 @@ pub fn add_turn(
     Ok(())
 }
 
-/// Moves a turn on; an ending status also stamps when it ended.
+/// Moves a turn on; an ending status also stamps when it ended. A turn leaving the wait takes
+/// the chat's next place (0028).
 pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) -> Result<(), Error> {
     let ended = matches!(status, "done" | "stopped" | "failed").then(now_us);
-    conn.prepare_cached("UPDATE turns SET status = ?2, why = ?3, ended_ts = ?4 WHERE id = ?1")?
-        .execute(params![id, status, why, ended])?;
+    let placed = !matches!(status, "queued" | "waiting_sign_in");
+    conn.prepare_cached(
+        "UPDATE turns SET status = ?2, why = ?3, ended_ts = ?4,
+             position = CASE WHEN ?5 AND position IS NULL
+                 THEN (SELECT COALESCE(max(p.position), 0) + 1 FROM turns p WHERE p.chat_id = turns.chat_id)
+                 ELSE position END
+         WHERE id = ?1",
+    )?
+    .execute(params![id, status, why, ended, placed])?;
     Ok(())
 }
 

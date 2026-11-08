@@ -3,6 +3,8 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
+pub mod env;
+
 /// Where Gathr keeps its data when no `--data` is given.
 pub fn default_data_dir() -> PathBuf {
     if cfg!(windows) {
@@ -33,17 +35,10 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
     if let Some(found) = std::env::var_os("PATH").and_then(|p| in_path(&p)) {
         return Some(found);
     }
-    if !cfg!(target_os = "macos") {
-        return None;
-    }
-    let shell = std::env::var_os("SHELL").unwrap_or_else(|| "/bin/zsh".into());
-    let output = std::process::Command::new(shell)
-        .args(["-lc", "printf %s \"$PATH\""])
-        .output()
-        .ok()?;
-    in_path(std::ffi::OsStr::new(
-        &String::from_utf8_lossy(&output.stdout).into_owned(),
-    ))
+    #[cfg(target_os = "macos")]
+    return in_path(std::ffi::OsStr::new(&env::login_path().ok()?));
+    #[cfg(not(target_os = "macos"))]
+    None
 }
 
 /// Starts a child with no console window on Windows, never detached (0001); on Unix in its

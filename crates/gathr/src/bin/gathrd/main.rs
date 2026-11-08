@@ -9,6 +9,7 @@ mod logs;
 mod models;
 mod routes;
 mod sign_in;
+mod team;
 mod tools;
 mod turns;
 mod updates;
