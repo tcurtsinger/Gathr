@@ -82,7 +82,7 @@ fn main() {
             .append(true)
             .open(file)
             .expect("the args file opens");
-        writeln!(out, "{}", serde_json::to_string(&args).unwrap()).unwrap();
+        append_line(&mut out, serde_json::to_string(&args).unwrap());
     }
     if let Ok(file) = std::env::var("GATHR_REPLAY_ENV") {
         let token = std::env::var("GATHR_AGENT_TOKEN").ok();
@@ -98,7 +98,7 @@ fn main() {
         let push = std::env::var("GATHR_PUSH_URL").ok();
         let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
             "GATHR_PUSH_URL": push });
-        writeln!(out, "{start}").unwrap();
+        append_line(&mut out, start.to_string());
     }
     let text = match recording.as_str() {
         "" => String::new(),
@@ -147,6 +147,13 @@ fn main() {
         let ms = ms.and_then(|ms| ms.parse().ok()).unwrap_or(60_000);
         std::thread::sleep(std::time::Duration::from_millis(ms));
     }
+}
+
+/// One write per line: `writeln!` on a file writes in pieces, and a test polling the file read a
+/// line cut short (column 1001 of the env line, macOS CI).
+fn append_line(out: &mut std::fs::File, mut line: String) {
+    line.push('\n');
+    out.write_all(line.as_bytes()).unwrap();
 }
 
 /// Answers an `initialize` request as Claude Code 2.1.318 did, signed in or out by the login
