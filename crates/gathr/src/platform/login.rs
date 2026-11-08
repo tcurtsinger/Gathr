@@ -105,7 +105,7 @@ fn turned_off(export: &str, name: &str) -> bool {
 }
 
 /// Whether Gathr starts at login as this item: its LaunchAgent is there, as this build writes it,
-/// and launchd hasn't been told to skip it.
+/// and not turned off in System Settings.
 #[cfg(target_os = "macos")]
 pub fn is_on(item: &Item) -> Result<bool, String> {
     let file = agent_file(item)?;
@@ -114,18 +114,10 @@ pub fn is_on(item: &Item) -> Result<bool, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
         Err(e) => return Err(format!("{} wasn't read: {e}", file.display())),
     };
-    if !listed {
-        return Ok(false);
-    }
-    let disabled = launchctl(&["print-disabled", &gui_domain()?])?;
-    Ok(!turned_off_in_launchd(
-        &String::from_utf8_lossy(&disabled),
-        &item.name,
-    ))
+    Ok(listed && !turned_off_in_system_settings(&file))
 }
 
-/// Writes or removes the item's LaunchAgent, and clears any earlier "off" so that on means on. It
-/// takes effect at the next login.
+/// Writes or removes the item's LaunchAgent. It takes effect at the next login.
 #[cfg(target_os = "macos")]
 pub fn set(item: &Item, on: bool) -> Result<(), String> {
     let file = agent_file(item)?;
@@ -140,34 +132,27 @@ pub fn set(item: &Item, on: bool) -> Result<(), String> {
         }),
     };
     done.map_err(|e| format!("{} wasn't changed: {e}", file.display()))?;
-    if on {
-        launchctl(&["enable", &format!("{}/{}", gui_domain()?, item.name)])?;
+    if on && turned_off_in_system_settings(&file) {
+        // macOS keeps the person's "off" even for a file written anew, and only they can undo it.
+        unsafe { objc2_service_management::SMAppService::openSystemSettingsLoginItems() };
+        return Err("Turned off in System Settings > Login Items".into());
     }
     Ok(())
 }
 
-/// The person's login session in launchd, `gui/<uid>`.
+/// Whether the person turned the LaunchAgent off in System Settings > Login Items (macOS 13 on).
+/// macOS keeps that in its own record of background items, not in launchd's disabled list.
 #[cfg(target_os = "macos")]
-fn gui_domain() -> Result<String, String> {
-    let mut id = std::process::Command::new("/usr/bin/id");
-    id.arg("-u");
-    let uid = super::env::run(id, std::time::Duration::from_secs(5))?;
-    Ok(format!("gui/{}", String::from_utf8_lossy(&uid).trim()))
-}
-
-#[cfg(target_os = "macos")]
-fn launchctl(args: &[&str]) -> Result<Vec<u8>, String> {
-    let mut command = std::process::Command::new("/bin/launchctl");
-    command.args(args);
-    super::env::run(command, std::time::Duration::from_secs(5))
-}
-
-/// Whether `launchctl print-disabled` lists `label` as disabled, as System Settings > Login Items
-/// leaves an item turned off there.
-#[cfg(any(target_os = "macos", test))]
-fn turned_off_in_launchd(listing: &str, label: &str) -> bool {
-    let line = format!("\"{label}\" => disabled");
-    listing.lines().any(|l| l.trim() == line)
+fn turned_off_in_system_settings(file: &Path) -> bool {
+    use objc2_service_management::{SMAppService, SMAppServiceStatus};
+    if !objc2::available!(macos = 13.0) {
+        return false;
+    }
+    let Some(url) = objc2_foundation::NSURL::from_file_path(file) else {
+        return false;
+    };
+    let status = unsafe { SMAppService::statusForLegacyURL(&url) };
+    status == SMAppServiceStatus::RequiresApproval
 }
 
 #[cfg(target_os = "macos")]
@@ -252,23 +237,13 @@ mod tests {
         assert!(turned_off(export, "Other"));
     }
 
+    /// Calls macOS's record of background items for real: it must answer, not crash, and a file it
+    /// has never seen isn't off.
+    #[cfg(target_os = "macos")]
     #[test]
-    fn only_its_own_label_listed_as_disabled_turns_a_launch_agent_off() {
-        let listing = "\n\tdisabled services = {\n\t\t\"io.example.gathr.data-1\" => disabled\n\
-            \t\t\"io.example.gathr\" => enabled\n\t\t\"io.example.other\" => disabled\n\t}\n";
-        assert!(turned_off_in_launchd(listing, "io.example.gathr.data-1"));
-        assert!(
-            !turned_off_in_launchd(listing, "io.example.gathr"),
-            "enabled"
-        );
-        assert!(
-            !turned_off_in_launchd(listing, "io.example"),
-            "a prefix of another"
-        );
-        assert!(
-            !turned_off_in_launchd(listing, "io.example.new"),
-            "not listed"
-        );
+    fn a_launch_agent_macos_has_never_seen_isnt_turned_off() {
+        let file = std::env::temp_dir().join(format!("gathr-{}.plist", crate::ids::span_id()));
+        assert!(!turned_off_in_system_settings(&file));
     }
 
     #[test]

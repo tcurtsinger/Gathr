@@ -9,8 +9,16 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
 
+  // Read again on coming back to the window: the person may have changed it in the system's settings.
   useEffect(() => {
-    api.startup().then(setOn, setFailure);
+    const read = () =>
+      api.startup().then((next) => {
+        setOn(next);
+        if (next) setFailure(null);
+      }, setFailure);
+    read();
+    window.addEventListener('focus', read);
+    return () => window.removeEventListener('focus', read);
   }, []);
 
   /** Shows the change at once; a failure puts the switch back as it was. */
