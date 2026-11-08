@@ -127,15 +127,18 @@ impl Task {
             None => command::args(Session::New(&new_id), given),
         };
         let folder = assigned.folder.as_path();
-        let cwd = self.chats.data.path().join("chats").join(&assigned.chat);
+        let place = self.workspace(&assigned, trace).await?;
+        let cwd = place.cwd;
         for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
-        let pass = self.pass_for(&assigned, trace).await?;
+        let worktree = place.project.map(|project| (cwd.clone(), project));
+        let pass = self.pass_for(&assigned, worktree, trace).await?;
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         args.extend(command::given(&url, &pass.briefing));
-        let mut env = command::env(std::env::vars_os(), folder);
+        let (env_from, env_why) = (place.env.from, place.env.why);
+        let mut env = command::env(place.env.vars.into_iter(), folder);
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
         let started = Instant::now();
         match Engine::start(program, &args, env, &cwd) {
@@ -153,7 +156,10 @@ impl Task {
                         .attr("gen_ai.agent.id", assigned.agent.clone())
                         .attr("gathr.account", assigned.account.clone())
                         .attr("gen_ai.request.model", assigned.model.clone())
-                        .attr("gathr.effort", assigned.effort.clone()),
+                        .attr("gathr.effort", assigned.effort.clone())
+                        .attr("cwd", cwd.display().to_string())
+                        .attr("gathr.env.from", env_from)
+                        .attr("gathr.env.why", env_why),
                 );
                 self.engine = Some(engine);
                 self.program = Some(program.to_path_buf());
@@ -178,12 +184,17 @@ impl Task {
     }
 
     /// The engine's token and briefing, written before it starts (0005, 0021).
-    async fn pass_for(&self, assigned: &Assignment, trace: &str) -> Result<Pass, String> {
+    async fn pass_for(
+        &self,
+        assigned: &Assignment,
+        worktree: Option<(PathBuf, String)>,
+        trace: &str,
+    ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
         let facts = self
             .chats
             .writer
-            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref()))
+            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree))
             .await;
         let facts = match facts {
             Some(read) => read.map_err(|e| e.to_string()),

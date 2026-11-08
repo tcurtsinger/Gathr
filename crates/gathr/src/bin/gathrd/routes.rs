@@ -20,8 +20,8 @@ use crate::chats::Cmd;
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
-        .route("/api/chats", get(list).post(create))
-        .route("/api/chats/{chat}", get(history))
+        .route("/api/chats", get(list).post(crate::team::create))
+        .route("/api/chats/{chat}", get(history).patch(crate::team::change))
         .route("/api/chats/{chat}/messages", post(send))
         .route("/api/chats/{chat}/stop", post(stop))
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
@@ -52,23 +52,6 @@ async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -
     db(&s, &t, "Chats failed", |conn| store::chats(conn)).await
 }
 
-#[derive(Deserialize)]
-struct NewChat {
-    title: Option<String>,
-}
-
-async fn create(
-    Extract(s): Extract<Arc<State>>,
-    Extension(t): Extension<Trace>,
-    Json(body): Json<NewChat>,
-) -> Answer {
-    let title = body.title.unwrap_or_else(|| store::UNTITLED.into());
-    db(&s, &t, "New chat failed", move |conn| {
-        store::create_chat(conn, &title)
-    })
-    .await
-}
-
 async fn history(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -76,11 +59,11 @@ async fn history(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let open = s.chats.approvals(&chat).await;
-    let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
-        store::history(conn, &chat)
-    })
-    .await?;
+    let id = chat.clone();
+    let Json(mut history) =
+        db(&s, &t, "Chat failed", move |conn| store::history(conn, &id)).await?;
     history["approvals"] = json!(open);
+    crate::team::with_folders(&s, &chat, &mut history);
     Ok(Json(history))
 }
 
@@ -108,12 +91,13 @@ async fn send(
     if let Some(agent) = &body.agent {
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
+    let agent = addressee(&s, &t, &chat, body.agent, &body.text).await?;
     let (reply, answer) = oneshot::channel();
-    let task = s.chats.task(&chat, body.agent.as_deref());
+    let task = s.chats.task(&chat, agent.as_deref());
     let command = Cmd::Send {
         chat,
         text: body.text,
-        agent: body.agent,
+        agent,
         trace: t.0.clone(),
         reply,
     };
@@ -278,7 +262,44 @@ async fn forward(mut socket: WebSocket, mut events: tokio::sync::broadcast::Rece
     }
 }
 
-async fn known(s: &State, t: &Trace, chat: &str) -> Result<(), Fail> {
+/// Who the message goes to among the chat's agents (0028).
+async fn addressee(
+    s: &State,
+    t: &Trace,
+    chat: &str,
+    sent_to: Option<String>,
+    text: &str,
+) -> Result<Option<String>, Fail> {
+    let id = chat.to_string();
+    let members = s
+        .writer
+        .call(move |conn| gathr::team::members(conn, &id))
+        .await;
+    let members = match members {
+        Some(Ok(members)) => members,
+        Some(Err(e)) => {
+            return Err(fail(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Send failed",
+                &e.to_string(),
+                &t.0,
+            ));
+        }
+        None => {
+            let why = "the database didn't answer";
+            return Err(fail(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Send failed",
+                why,
+                &t.0,
+            ));
+        }
+    };
+    gathr::team::addressee(&members, sent_to.as_deref(), text)
+        .map_err(|why| fail(StatusCode::BAD_REQUEST, "Send failed", why, &t.0))
+}
+
+pub async fn known(s: &State, t: &Trace, chat: &str) -> Result<(), Fail> {
     let id = chat.to_string();
     match s
         .writer

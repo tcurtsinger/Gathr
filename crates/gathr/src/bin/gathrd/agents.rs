@@ -144,8 +144,19 @@ async fn remove(
     const ERROR: &str = "Delete failed";
     let agent = find(&s, &t, &id, ERROR).await?;
     let gone = agent.id.clone();
-    match s.writer.call(move |conn| agents::remove(conn, &gone)).await {
-        Some(Ok(_)) => s.chats.retire(&agent.id),
+    let removed = s
+        .writer
+        .call(move |conn| match gathr::team::a_chat_of(conn, &gone)? {
+            Some(chat) => Ok(Err(chat)),
+            None => agents::remove(conn, &gone).map(Ok),
+        })
+        .await;
+    match removed {
+        Some(Ok(Ok(_))) => s.chats.retire(&agent.id),
+        Some(Ok(Err(chat))) => {
+            let why = format!("the agent is in the chat \"{chat}\"");
+            return Err(fail(StatusCode::CONFLICT, ERROR, &why, &t.0));
+        }
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::INTERNAL_SERVER_ERROR,
