@@ -110,6 +110,7 @@ async fn serve(
             .attr("pid", std::process::id()),
     );
     writer.record(health_event(data, port, early_lines));
+    chats.pick_account().await;
     chats.take_over().await;
     tokio::spawn(updates::run(updates.clone()));
 

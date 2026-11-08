@@ -287,8 +287,9 @@ impl Task {
                 text: self.text_of(&turn.turn).await,
             });
             self.close("the login was refused").await;
-            let file = login::credentials(&self.chats.account_folder());
-            self.refused = Some((login_stamp(&file), std::time::Instant::now()));
+            let stamp = self.folder.as_deref().map(login::credentials);
+            let stamp = stamp.and_then(|file| login_stamp(&file));
+            self.refused = Some((stamp, std::time::Instant::now()));
         }
         self.set_turn(&turn.turn, &turn.trace, status, why.as_deref())
             .await;

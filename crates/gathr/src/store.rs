@@ -209,6 +209,12 @@ pub fn engine_session(conn: &Connection, chat: &str) -> Result<Option<String>, E
         .flatten())
 }
 
+/// Every chat starts a new engine session next time: their old ones were on another login.
+pub fn forget_engine_sessions(conn: &Connection) -> Result<(), Error> {
+    conn.execute("UPDATE chats SET engine_session = NULL", [])?;
+    Ok(())
+}
+
 pub fn set_engine_session(conn: &Connection, chat: &str, session: &str) -> Result<(), Error> {
     conn.execute(
         "UPDATE chats SET engine_session = ?2 WHERE id = ?1",

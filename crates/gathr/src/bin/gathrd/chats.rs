@@ -1,7 +1,7 @@
 //! Chats with Claude Code: one task per chat owns its engine and its turns ([`crate::turns`]);
 //! this keeps them, and starts them when a message arrives or the service starts.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -15,9 +15,6 @@ use serde_json::Value;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::turns;
-
-/// Chats run on this account until agents pick theirs: the one from before accounts had names.
-const CHAT_ACCOUNT: &str = "main";
 
 pub enum Cmd {
     Send {
@@ -40,6 +37,11 @@ pub enum Cmd {
     },
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
+    /// Closes the chat's engine if it runs in this account folder; the chat's queue stays.
+    Leave {
+        folder: PathBuf,
+        done: oneshot::Sender<()>,
+    },
     Close {
         done: oneshot::Sender<()>,
     },
@@ -59,6 +61,11 @@ pub struct Chats {
     /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
     gates: Mutex<HashMap<PathBuf, Gate>>,
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
+    /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
+    account: Mutex<Option<String>>,
+    /// Accounts being removed, never picked even while their rows remain.
+    removing: Mutex<HashSet<String>>,
+    picking: tokio::sync::Mutex<()>,
 }
 
 impl Chats {
@@ -69,12 +76,81 @@ impl Chats {
             live: broadcast::channel(4096).0,
             gates: Mutex::default(),
             tasks: Mutex::default(),
+            account: Mutex::default(),
+            removing: Mutex::default(),
+            picking: tokio::sync::Mutex::default(),
         })
     }
 
-    /// The chats' account's Claude folder.
-    pub fn account_folder(&self) -> PathBuf {
-        gathr::accounts::folder(&self.data, CHAT_ACCOUNT, "claude")
+    /// The chats' account's Claude folder, if there's an account.
+    pub fn account_folder(&self) -> Option<PathBuf> {
+        let account = self.account.lock().expect("never poisoned").clone()?;
+        Some(gathr::accounts::folder(&self.data, &account, "claude"))
+    }
+
+    /// Marks an account as being removed, or kept after all; either way the chats pick again.
+    pub async fn removing(&self, id: &str, removing: bool) {
+        {
+            let mut set = self.removing.lock().expect("never poisoned");
+            match removing {
+                true => set.insert(id.to_string()),
+                false => set.remove(id),
+            };
+        }
+        self.pick_account().await;
+    }
+
+    /// An account removed: its row is gone, so it needs no mark any more.
+    pub fn removed(&self, id: &str) {
+        self.removing.lock().expect("never poisoned").remove(id);
+    }
+
+    /// Picks the chats' account again: the oldest not being removed.
+    /// A new account has none of the old one's Claude Code sessions, so chats start new ones.
+    pub async fn pick_account(&self) {
+        // One pick at a time: one that listed before a removal began must not land after it.
+        let _one = self.picking.lock().await;
+        let except = self.removing.lock().expect("never poisoned").clone();
+        let picked = self
+            .writer
+            .call(move |conn| {
+                let listed = gathr::accounts::list(conn)?;
+                let next = listed.into_iter().find(|a| !except.contains(&a.id));
+                Ok::<_, gathr::Error>(next.map(|a| a.id))
+            })
+            .await;
+        let Some(Ok(next)) = picked else { return };
+        let before = std::mem::replace(
+            &mut *self.account.lock().expect("never poisoned"),
+            next.clone(),
+        );
+        if before.is_some() && before != next {
+            self.writer
+                .call(|conn| store::forget_engine_sessions(conn))
+                .await;
+        }
+    }
+
+    /// Closes every chat engine running in `folder` the gentle way; the chats carry on.
+    pub async fn leave(&self, folder: &Path) {
+        let tasks: Vec<_> = self
+            .tasks
+            .lock()
+            .expect("the chats lock is never poisoned")
+            .values()
+            .cloned()
+            .collect();
+        let mut waits = Vec::new();
+        for tx in tasks {
+            let (done, wait) = oneshot::channel();
+            let folder = folder.to_path_buf();
+            if tx.send(Cmd::Leave { folder, done }).is_ok() {
+                waits.push(wait);
+            }
+        }
+        for wait in waits {
+            let _ = wait.await;
+        }
     }
 
     /// The account folder's renewal gate (0002).

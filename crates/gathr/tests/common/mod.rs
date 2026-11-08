@@ -80,6 +80,21 @@ impl TestService {
         http::send(self.info.port, &self.info.token, method, path, &body).unwrap()
     }
 
+    /// Adds an account through the API: its id.
+    pub fn add_account(&self, name: &str) -> String {
+        let body = serde_json::json!({ "engine": "claude", "name": name });
+        let added = self.send("POST", "/api/accounts", body);
+        assert_eq!(added.status, 200, "{}", added.body);
+        added.json()["id"].as_str().unwrap().to_string()
+    }
+
+    /// Adds an account with a made-up login, where chats then run: its id.
+    pub fn signed_in(&self, data: &Path) -> String {
+        let id = self.add_account("Test");
+        sign_in_account(data, &id);
+        id
+    }
+
     /// A new chat's id.
     pub fn new_chat(&self) -> String {
         let chat = self.send("POST", "/api/chats", serde_json::json!({}));
@@ -152,8 +167,9 @@ pub fn recording(name: &str) -> PathBuf {
 }
 
 /// A made-up login in the test account's folder, current for an hour, so a turn may start.
-pub fn sign_in(data: &Path) {
-    let folder = data.join("accounts/main/claude");
+/// A made-up login in the account's folder, as `claude auth login` leaves one.
+pub fn sign_in_account(data: &Path, account: &str) {
+    let folder = data.join("accounts").join(account).join("claude");
     std::fs::create_dir_all(&folder).unwrap();
     let expires = gathr::ids::now_us() / 1000 + 3_600_000;
     let login = serde_json::json!({ "claudeAiOauth": {

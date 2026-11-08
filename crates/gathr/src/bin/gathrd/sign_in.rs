@@ -11,8 +11,8 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::post;
 use axum::{Json, Router};
-use gathr::claude::command;
 use gathr::claude::engine::{Closed, Engine, Line};
+use gathr::claude::{command, login};
 use gathr::event::Event;
 use gathr::ids;
 use serde::Deserialize;
@@ -330,7 +330,7 @@ async fn watch(
 }
 
 /// Recorded before the answer goes out, so its reference traces at once (0019).
-async fn record_as(
+pub async fn record_as(
     s: &State,
     what: &str,
     account: &str,
@@ -410,20 +410,35 @@ async fn sign_out(
     }
 }
 
+const STOPPING: &str = "the service stopped before Claude Code finished signing out";
+
+/// The account folder's renewal gate, or why it wasn't passed. Signing out never runs while an
+/// engine on it renews the login: that renewal would save over the sign-out.
+pub async fn pass_gate(s: &State, folder: &std::path::Path) -> Result<login::Hold, String> {
+    let gate = s.chats.gate(folder);
+    tokio::select! {
+        gate = gate.pass() => Ok(gate),
+        () = s.stopped() => Err(STOPPING.into()),
+    }
+}
+
 async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> {
     let program = command::find(s.chats.copy())?;
+    let _gate = pass_gate(s, folder).await?;
+    log_out_held(s, &program, folder).await
+}
+
+/// `claude auth logout` in the folder, with its renewal gate already held.
+pub async fn log_out_held(
+    s: &State,
+    program: &std::path::Path,
+    folder: &std::path::Path,
+) -> Result<(), String> {
     std::fs::create_dir_all(folder)
         .map_err(|e| format!("{} wasn't made: {e}", folder.display()))?;
-    const STOPPING: &str = "the service stopped before Claude Code finished signing out";
-    // Never while an engine on it renews the login: that renewal would save over the sign-out.
-    let gate = s.chats.gate(folder);
-    let _gate = tokio::select! {
-        gate = gate.pass() => gate,
-        () = s.stopped() => return Err(STOPPING.into()),
-    };
     let env = command::env(std::env::vars_os(), folder);
     let args = ["auth".to_string(), "logout".to_string()];
-    let (mut engine, mut lines) = Engine::start(&program, &args, env, folder)
+    let (mut engine, mut lines) = Engine::start(program, &args, env, folder)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
     // `None` when shutdown came first: it then gets the grace every engine gets to finish.
     let waited = tokio::select! {

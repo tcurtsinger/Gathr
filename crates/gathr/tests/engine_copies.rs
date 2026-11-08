@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, recording, replay_engine, sign_in};
+use common::{TempDir, TestService, gathr, recording, replay_engine};
 use serde_json::{Value, json};
 
 /// Claude Code's release feed as its installer reads it: `latest`, then each release's
@@ -106,15 +106,16 @@ impl Feed {
 
 /// A service on the feed whose replay engine names the release folder it runs from as its version.
 fn service_on(data: &Path, feed: &Feed) -> TestService {
-    sign_in(data);
-    TestService::start_with(
+    let service = TestService::start_with(
         data,
         &[
             ("GATHR_CLAUDE_RELEASES", &feed.url()),
             ("GATHR_REPLAY", &recording("signed_in")),
             ("GATHR_REPLAY_VERSION", Path::new("folder")),
         ],
-    )
+    );
+    service.signed_in(data);
+    service
 }
 
 /// The engine's state once the check under way has ended, waiting up to 60 s.
