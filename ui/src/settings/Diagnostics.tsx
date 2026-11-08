@@ -150,6 +150,12 @@ function Timeline({ turn }: { turn: TurnTimeline }) {
             <dd>{n.toLocaleString()}</dd>
           </div>
         ))}
+        {f.given.map(([label, size]) => (
+          <div key={label}>
+            <dt>{label}</dt>
+            <dd>{size}</dd>
+          </div>
+        ))}
       </dl>
       {turn.status === 'failed' && (
         <>
