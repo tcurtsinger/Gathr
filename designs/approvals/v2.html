@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gathr | Approvals</title>
+<link rel="stylesheet" href="../../ui/src/base.css">
+<link rel="stylesheet" href="../../ui/src/settings/settings.css">
+<link rel="stylesheet" href="../../ui/src/settings/agents.css">
+<style>
+.preview-bar{display:flex;
+justify-content:space-between;
+padding:16px 24px}
+.help-label{display:flex;
+align-items:center;
+gap:4px}
+.help-button{width:28px;
+min-height:28px;
+padding:0;
+color:var(--muted)}
+.help-glyph{display:inline-grid;
+place-items:center;
+width:16px;
+height:16px;
+border:1px solid currentColor;
+border-radius:50%;
+font-size:12px;
+line-height:1}
+.help-panel{padding:16px;
+color:var(--text);
+background:var(--surface);
+border:1px solid var(--control);
+border-radius:7px;
+font-size:13px;
+line-height:1.55}
+.help-panel[popover]{position:fixed;
+margin:0;
+width:350px;
+max-width:calc(100vw - 40px);
+max-height:calc(100dvh - 40px);
+overflow:auto}
+.help-panel h4{margin:0 0 12px;
+font-size:14px}
+.help-panel dl{display:grid;
+grid-template-columns:42px 1fr;
+gap:4px 12px;
+margin:0}
+.help-panel dt{font-weight:600}.help-panel dd{margin:0 0 8px}
+.help-panel p{margin:8px 0 0;
+color:var(--muted)}
+.help-panel[hidden]{display:none}.agent-list{scrollbar-gutter:stable}
+@media(max-width:767px){.help-button{width:44px;
+min-height:44px}.agent-field select,.agent-field input{font-size:16px}}
+
+</style>
+</head>
+<body>
+<header class="preview-bar">
+<strong>Gathr</strong>
+<button id="theme" data-id="theme">Theme</button>
+</header>
+<button id="reopen" data-id="settings-open">Settings</button>
+<dialog class="settings-panel" id="settings" aria-labelledby="settings-title">
+<header class="settings-header">
+<h2 id="settings-title" data-id="settings-title">Settings</h2>
+<button id="close" aria-label="Close Settings" data-id="settings-close">Close</button>
+</header>
+<div class="settings-body">
+<nav class="settings-categories" aria-label="Settings">
+<button>Engines</button>
+<button aria-current="page">Agents</button>
+<button>Diagnostics</button>
+</nav>
+<main class="settings-page">
+<section class="agents" aria-label="Agents">
+<nav class="agent-list" aria-label="Agents" data-id="agent-list">
+<button class="agent-add" disabled>Add</button>
+<button class="agent-pick" >Planner</button>
+<button class="agent-pick" aria-current="true">Builder</button>
+<button class="agent-pick" >Reviewer</button>
+<button class="agent-pick" >Writer</button>
+<button class="agent-pick" >Researcher</button>
+<button class="agent-pick" >Tester</button>
+<button class="agent-pick" >Analyst</button>
+<button class="agent-pick" >Editor</button>
+<button class="agent-pick" >Designer</button>
+<button class="agent-pick" >Coordinator</button>
+<button class="agent-pick" >Maintainer</button>
+<button class="agent-pick" >Explorer</button>
+</nav>
+<div class="agent-form">
+<form id="editor">
+<h3 id="agent-title" data-id="agent-title">Builder</h3>
+<label class="agent-field">Account<select>
+<option>Personal / Claude Code</option>
+</select>
+</label>
+<fieldset class="agent-field">
+<legend>Model</legend>
+<p class="agent-chosen">Opus Latest</p>
+<input type="search" id="find" placeholder="Find models" aria-label="Find models">
+<div class="model-results" role="group" aria-label="Models">
+<button type="button" aria-pressed="false">Engine default</button>
+<button type="button" aria-pressed="true">Opus Latest</button>
+<button type="button" aria-pressed="false">Sonnet Latest</button>
+<button type="button" aria-pressed="false">Haiku Latest</button>
+</div>
+</fieldset>
+<label class="agent-field">Effort<select>
+<option>Engine default</option>
+</select>
+</label>
+<div class="agent-field" data-id="approvals-field">
+<div class="help-label">
+<label for="approvals">Approvals</label>
+<button class="help-button" id="help-trigger" type="button" aria-label="About approvals" aria-expanded="false"
+ aria-controls="help" data-id="approvals-help">
+<span class="help-glyph" aria-hidden="true">?</span>
+</button>
+</div>
+<select id="approvals" data-id="approvals-select">
+<option>Ask</option>
+<option>Edits</option>
+<option selected>Auto</option>
+<option>Full</option>
+</select>
+<div class="help-panel" id="help" hidden data-id="approvals-detail" role="region" aria-label="About approvals">
+<h4>Approvals</h4>
+<dl>
+<dt>Ask</dt>
+<dd>Ask before actions that need permission.</dd>
+<dt>Edits</dt>
+<dd>Allow file edits in the worktree. Ask before other actions that need permission.</dd>
+<dt>Auto</dt>
+<dd>The engine checks actions. Pushes and file-tool writes outside the worktree ask.</dd>
+<dt>Full</dt>
+<dd>Run actions without asking.</dd>
+</dl>
+<p>Auto does not confine shell commands to the worktree.</p>
+</div>
+</div>
+<div class="agent-actions">
+<button type="button" disabled>Remove</button>
+<span role="status" id="status">
+</span>
+<button type="reset">Cancel</button>
+<button type="submit" class="primary">Save</button>
+</div>
+</form>
+</div>
+</section>
+</main>
+</div>
+</dialog>
+<script>
+const settings=document.querySelector('#settings'),help=document.querySelector('#help'),trigger=document.querySelector('#help-trigger');
+
+if(location.hash==='#light')document.documentElement.classList.add('light');
+
+document.querySelector('#theme').onclick=()=>document.documentElement.classList.toggle('light');
+
+settings.showModal();
+
+document.querySelector('#close').onclick=()=>settings.close();
+
+document.querySelector('#reopen').onclick=()=>settings.showModal();
+
+document.querySelector('#editor').onsubmit=e=>{e.preventDefault();
+document.querySelector('#status').textContent='Saved'};
+
+document.querySelector('#editor').oninput=()=>document.querySelector('#status').textContent='';
+
+document.querySelectorAll('.agent-pick').forEach(button=>button.onclick=()=>{
+ document.querySelectorAll('.agent-pick').forEach(b=>b.removeAttribute('aria-current'));
+
+ button.setAttribute('aria-current','true');
+document.querySelector('#agent-title').textContent=button.textContent;
+
+ document.querySelector('#status').textContent='';
+
+});
+
+document.querySelector('#find').oninput=e=>document.querySelectorAll('.model-results button').forEach(b=>
+ b.hidden=!b.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
+
+document.querySelectorAll('.model-results button').forEach(button=>button.onclick=()=>{
+ document.querySelectorAll('.model-results button').forEach(b=>b.setAttribute('aria-pressed','false'));
+
+ button.setAttribute('aria-pressed','true');
+document.querySelector('.agent-chosen').textContent=button.textContent;
+
+});
+
+if(trigger&&help.hasAttribute('popover')){
+ const position=()=>{const r=trigger.getBoundingClientRect();
+
+  help.style.left=Math.max(20,Math.min(r.left,innerWidth-help.offsetWidth-20))+'px';
+
+  help.style.top=Math.max(20,r.bottom+help.offsetHeight+26<=innerHeight?r.bottom+6:r.top-help.offsetHeight-6)+'px'};
+
+ help.addEventListener('toggle',()=>{const open=help.matches(':popover-open');
+
+  trigger.setAttribute('aria-expanded',String(open));
+if(open)position()});
+
+ addEventListener('resize',()=>{if(help.matches(':popover-open'))position()});
+
+}
+if(trigger&&!help.hasAttribute('popover')){
+ trigger.onclick=()=>{help.hidden=!help.hidden;
+trigger.setAttribute('aria-expanded',String(!help.hidden))};
+
+ settings.addEventListener('keydown',e=>{if(e.key==='Escape'&&!help.hidden){
+  e.preventDefault();
+e.stopPropagation();
+help.hidden=true;
+trigger.setAttribute('aria-expanded','false');
+trigger.focus()}});
+
+}
+if(new URLSearchParams(location.search).has('help'))trigger?.click();
+
+</script>
+</body>
+</html>

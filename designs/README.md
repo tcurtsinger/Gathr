@@ -45,3 +45,9 @@ provider capability claim. No engine, login, service or durable storage connects
 Named accounts revision: `settings-entry/v5.html`, layout pending approval.
 Settings entry option 1 is selected. Earlier engine and agent pages are historical
 for account/source controls; v5 shows the account-only assignment form.
+
+Selected setting help: `approvals/v1.html`, a pop-up from the ? beside a label.
+`approvals/now.html` captures the earlier form; `approvals/v2.html` is the
+unselected expanding option. See `approvals/README.md` for copy and checks.
+The shared runtime component is `ui/src/components/Help.tsx`, demonstrated in
+`system.html` with its runtime stylesheet.
