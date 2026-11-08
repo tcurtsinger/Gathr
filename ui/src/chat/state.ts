@@ -52,7 +52,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         status: event.status,
         why: event.why ?? before?.why ?? null,
         ref: event.ref ?? before?.ref ?? '',
-        agent: before?.agent,
+        agent: event.agent,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
@@ -65,12 +65,6 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
     default:
       return state;
   }
-}
-
-/** A turn this window sent: live turn events don't say its agent, so Retry learns it here. */
-export function sent(state: ChatState, turn: string, status: Turn['status'], agent?: string): ChatState {
-  const before = state.turns[turn] ?? { id: turn, status, why: null, ref: '' };
-  return { ...state, turns: { ...state.turns, [turn]: { ...before, agent: agent ?? null } } };
 }
 
 export function answered(state: ChatState, request: string): ChatState {

@@ -23,8 +23,8 @@ export interface Turn {
   status: TurnStatus;
   why: string | null;
   ref: string;
-  /** The agent it ran as; none for a turn sent to no agent. Set in the saved history. */
-  agent?: string | null;
+  /** The agent it was sent to; null for a turn sent to no agent. */
+  agent: string | null;
 }
 
 export interface Chat {

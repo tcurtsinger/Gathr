@@ -1,12 +1,13 @@
 import { expect, test } from 'vitest';
-import { apply, empty, sent } from './state';
+import { apply, empty } from './state';
 
-const update = (status: 'running' | 'failed') => ({ type: 'turn', chat: 'c', turn: 't', status }) as const;
+const update = (status: 'running' | 'failed', agent: string | null) =>
+  ({ type: 'turn', chat: 'c', turn: 't', status, agent }) as const;
 
-test('the agent a turn was sent to survives its live updates, whichever arrives first', () => {
-  const answerFirst = apply(apply(sent(empty, 't', 'queued', 'a'), update('running')), update('failed'));
-  expect(answerFirst.turns.t).toMatchObject({ status: 'failed', agent: 'a' });
+test('a turn sent from another window knows its agent from its live updates alone', () => {
+  const failed = apply(apply(empty, update('running', 'a')), update('failed', 'a'));
+  expect(failed.turns.t).toMatchObject({ status: 'failed', agent: 'a' });
 
-  const liveFirst = sent(apply(empty, update('running')), 't', 'queued', 'a');
-  expect(liveFirst.turns.t).toMatchObject({ status: 'running', agent: 'a' });
+  const noAgent = apply(empty, update('failed', null));
+  expect(noAgent.turns.t).toMatchObject({ status: 'failed', agent: null });
 });

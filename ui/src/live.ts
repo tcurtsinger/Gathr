@@ -5,7 +5,16 @@ export type LiveEvent =
   | { type: 'delta'; chat: string; turn: string; text: string }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody }
-  | { type: 'turn'; chat: string; turn: string; status: TurnStatus; why?: string | null; ref?: string }
+  // `agent`: the agent the turn was sent to, null for none.
+  | {
+      type: 'turn';
+      chat: string;
+      turn: string;
+      status: TurnStatus;
+      agent: string | null;
+      why?: string | null;
+      ref?: string;
+    }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
   // An account was added, renamed, or signed in or out: reload accounts.

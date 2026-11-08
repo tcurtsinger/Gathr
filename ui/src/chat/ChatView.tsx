@@ -74,11 +74,12 @@ export function ChatView(props: Props) {
   const actions: NoticeActions = {
     diagnostics: (t) => openSettings('diagnostics', t),
     signIn: () => openSettings('engines'),
-    // To the agent it was sent to, never the one picked now: if that agent was removed,
-    // the service refuses and the failure shows with its reference.
+    // To the agent it was sent to (none if it was sent to none), never the one picked now:
+    // if that agent was removed, the service refuses and the failure shows with its reference.
     retry: (t) => {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
-      if (asked) submit(asked.body as string, state.turns[t]?.agent ?? undefined);
+      const turn = state.turns[t];
+      if (asked && turn) submit(asked.body as string, turn.agent ?? undefined);
     },
     resend: (f) => submit(f.text, f.agent, f),
     carryOn: () => {
