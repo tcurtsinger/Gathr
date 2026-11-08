@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { type Account, api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
@@ -22,6 +22,8 @@ export function Accounts({ onReference }: { onReference: Open }) {
   const [failure, setFailure] = useState<Failure | null>(null);
   /** The form, open to add (no account) or to rename one. */
   const [form, setForm] = useState<{ account?: Account; opener: HTMLElement } | null>(null);
+  /** Gets focus once an account is removed, as its row goes. */
+  const addButton = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(() => api.accounts().then(setAccounts, setFailure), []);
   useEffect(() => {
@@ -44,7 +46,7 @@ export function Accounts({ onReference }: { onReference: Open }) {
     <>
       <div className="account-heading">
         <h3 id="engines-title">Accounts</h3>
-        <button type="button" onClick={(e) => open(e.currentTarget)}>
+        <button type="button" ref={addButton} onClick={(e) => open(e.currentTarget)}>
           Add
         </button>
       </div>
@@ -72,6 +74,7 @@ export function Accounts({ onReference }: { onReference: Open }) {
             key={account.id}
             account={account}
             onRename={(opener) => open(opener, account)}
+            onRemoved={() => addButton.current?.focus()}
             onFailure={setFailure}
             onReference={onReference}
           />
@@ -151,12 +154,16 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
 interface RowProps {
   account: Account;
   onRename: (opener: HTMLElement) => void;
+  onRemoved: () => void;
   onFailure: (f: Failure) => void;
   onReference: Open;
 }
 
-function AccountRow({ account, onRename, onFailure, onReference }: RowProps) {
+function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: RowProps) {
   const [busy, setBusy] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  /** Focus goes back to Remove when its question is cancelled. */
+  const cancelled = useRef(false);
   const name = useId();
   const id = account.id;
   const waiting = account.sign_in?.state === 'waiting' ? account.sign_in : null;
@@ -191,12 +198,39 @@ function AccountRow({ account, onRename, onFailure, onReference }: RowProps) {
           {engineName(account.engine)} / {state}
         </small>
       </div>
-      <div className="account-actions">
-        <button type="button" aria-describedby={name} onClick={(e) => onRename(e.currentTarget)}>
-          Rename
-        </button>
-        {!busy && action}
-      </div>
+      {confirming ? (
+        <ConfirmRemove
+          name={account.name}
+          onCancel={() => {
+            cancelled.current = true;
+            setConfirming(false);
+          }}
+          onRemove={() => {
+            setConfirming(false);
+            act('Removing', api.removeAccount(id).then(onRemoved));
+          }}
+        />
+      ) : (
+        <div className="account-actions">
+          <button type="button" aria-describedby={name} onClick={(e) => onRename(e.currentTarget)}>
+            Rename
+          </button>
+          {!busy && action}
+          {!busy && (
+            <button
+              type="button"
+              aria-describedby={name}
+              ref={(b) => {
+                if (b && cancelled.current) b.focus();
+                cancelled.current = false;
+              }}
+              onClick={() => setConfirming(true)}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      )}
       {failed && (
         <Notice
           danger
@@ -207,6 +241,40 @@ function AccountRow({ account, onRename, onFailure, onReference }: RowProps) {
       )}
       {waiting?.url && <SignInCode account={id} url={waiting.url} onFailure={onFailure} />}
     </li>
+  );
+}
+
+/** A short question, Cancel and the verb, in place of the row's actions. Escape cancels it, not Settings. */
+function ConfirmRemove({
+  name,
+  onCancel,
+  onRemove,
+}: {
+  name: string;
+  onCancel: () => void;
+  onRemove: () => void;
+}) {
+  const question = useId();
+  return (
+    <fieldset
+      className="account-actions"
+      aria-labelledby={question}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }}
+    >
+      <span id={question}>Remove {name}?</span>
+      {/* biome-ignore lint/a11y/noAutofocus: the question opens from Remove; Cancel is the safe answer */}
+      <button type="button" autoFocus onClick={onCancel}>
+        Cancel
+      </button>
+      <button type="button" className="danger" onClick={onRemove}>
+        Remove
+      </button>
+    </fieldset>
   );
 }
 
