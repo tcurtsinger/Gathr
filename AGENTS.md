@@ -58,7 +58,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - The window's own events: `POST /api/ui/events {"name": "gathr.ui.…", "duration_ms", "error", "attrs"}`, recorded like the service's (UI errors, open and switch timings, first text shown).
 - **A signed-in test account:** a new data folder has none. Add one in Settings (or `POST /api/accounts`) and sign it in there; its login lives in `<folder>/accounts/<id>/claude`. Never point Claude Code at `~/.claude`.
 - **Engine recordings:** the tests replay real Claude Code frames from `crates/gathr/tests/frames` through `examples/replay_engine.rs`, which `cargo test` builds. To record one, run the turn on a dev service, export its frames with the query in `scripts/scrub-frames.mjs`, run that script, and read the result for anything personal before committing it.
-- **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one.
+- **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one. Released means part of a build published to people; until the first, a migration on `main` may be edited, and the PR says so.
 
 ## Done means used, with proof
 
