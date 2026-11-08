@@ -104,18 +104,28 @@ fn turned_off(export: &str, name: &str) -> bool {
     })
 }
 
-/// Whether Gathr starts at login as this item: its LaunchAgent is there, as this build writes it.
+/// Whether Gathr starts at login as this item: its LaunchAgent is there, as this build writes it,
+/// and launchd hasn't been told to skip it.
 #[cfg(target_os = "macos")]
 pub fn is_on(item: &Item) -> Result<bool, String> {
     let file = agent_file(item)?;
-    match std::fs::read_to_string(&file) {
-        Ok(text) => Ok(text == plist(&item.name, &item.args)),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(format!("{} wasn't read: {e}", file.display())),
+    let listed = match std::fs::read_to_string(&file) {
+        Ok(text) => text == plist(&item.name, &item.args),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+        Err(e) => return Err(format!("{} wasn't read: {e}", file.display())),
+    };
+    if !listed {
+        return Ok(false);
     }
+    let disabled = launchctl(&["print-disabled", &gui_domain()?])?;
+    Ok(!turned_off_in_launchd(
+        &String::from_utf8_lossy(&disabled),
+        &item.name,
+    ))
 }
 
-/// Writes or removes the item's LaunchAgent. It takes effect at the next login.
+/// Writes or removes the item's LaunchAgent, and clears any earlier "off" so that on means on. It
+/// takes effect at the next login.
 #[cfg(target_os = "macos")]
 pub fn set(item: &Item, on: bool) -> Result<(), String> {
     let file = agent_file(item)?;
@@ -129,7 +139,35 @@ pub fn set(item: &Item, on: bool) -> Result<(), String> {
             _ => Err(e),
         }),
     };
-    done.map_err(|e| format!("{} wasn't changed: {e}", file.display()))
+    done.map_err(|e| format!("{} wasn't changed: {e}", file.display()))?;
+    if on {
+        launchctl(&["enable", &format!("{}/{}", gui_domain()?, item.name)])?;
+    }
+    Ok(())
+}
+
+/// The person's login session in launchd, `gui/<uid>`.
+#[cfg(target_os = "macos")]
+fn gui_domain() -> Result<String, String> {
+    let mut id = std::process::Command::new("/usr/bin/id");
+    id.arg("-u");
+    let uid = super::env::run(id, std::time::Duration::from_secs(5))?;
+    Ok(format!("gui/{}", String::from_utf8_lossy(&uid).trim()))
+}
+
+#[cfg(target_os = "macos")]
+fn launchctl(args: &[&str]) -> Result<Vec<u8>, String> {
+    let mut command = std::process::Command::new("/bin/launchctl");
+    command.args(args);
+    super::env::run(command, std::time::Duration::from_secs(5))
+}
+
+/// Whether `launchctl print-disabled` lists `label` as disabled, as System Settings > Login Items
+/// leaves an item turned off there.
+#[cfg(any(target_os = "macos", test))]
+fn turned_off_in_launchd(listing: &str, label: &str) -> bool {
+    let line = format!("\"{label}\" => disabled");
+    listing.lines().any(|l| l.trim() == line)
 }
 
 #[cfg(target_os = "macos")]
@@ -212,6 +250,25 @@ mod tests {
         assert!(!turned_off(export, "Made-up app"));
         assert!(!turned_off(export, "Gathr"), "a name that is only a prefix");
         assert!(turned_off(export, "Other"));
+    }
+
+    #[test]
+    fn only_its_own_label_listed_as_disabled_turns_a_launch_agent_off() {
+        let listing = "\n\tdisabled services = {\n\t\t\"io.example.gathr.data-1\" => disabled\n\
+            \t\t\"io.example.gathr\" => enabled\n\t\t\"io.example.other\" => disabled\n\t}\n";
+        assert!(turned_off_in_launchd(listing, "io.example.gathr.data-1"));
+        assert!(
+            !turned_off_in_launchd(listing, "io.example.gathr"),
+            "enabled"
+        );
+        assert!(
+            !turned_off_in_launchd(listing, "io.example"),
+            "a prefix of another"
+        );
+        assert!(
+            !turned_off_in_launchd(listing, "io.example.new"),
+            "not listed"
+        );
     }
 
     #[test]
