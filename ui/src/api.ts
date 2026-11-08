@@ -45,6 +45,8 @@ export interface Agent {
 export interface Model {
   id: string;
   name: string;
+  /** A family alias that always runs that family's newest model (0025). */
+  latest: boolean;
   description: string | null;
   efforts: string[];
 }
