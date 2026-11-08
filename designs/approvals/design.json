@@ -1,1 +1,12 @@
-{"title":"Approvals help","for":"Choose how the shared Settings question mark opens mode details.","knobs":[]}
+{
+  "title": "Approvals help",
+  "for": "Choose how the shared Settings question mark opens mode details.",
+  "knobs": [],
+  "built": {
+    "from": "v1.html",
+    "widths": [
+      "desktop"
+    ]
+  },
+  "picked": "v1.html"
+}
