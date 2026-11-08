@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { Switch } from '../components/Switch';
@@ -8,14 +8,22 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // Counts saves started and ended: a read that began before a save ended may answer the old state.
+  const saves = useRef(0);
 
   // Read again on coming back to the window: the person may have changed it in the system's settings.
   useEffect(() => {
-    const read = () =>
-      api.startup().then((next) => {
-        setOn(next);
-        if (next) setFailure(null);
-      }, setFailure);
+    const read = () => {
+      const at = saves.current;
+      api.startup().then(
+        (next) => {
+          if (at !== saves.current) return;
+          setOn(next);
+          if (next) setFailure(null);
+        },
+        (f: Failure) => at === saves.current && setFailure(f),
+      );
+    };
     read();
     window.addEventListener('focus', read);
     return () => window.removeEventListener('focus', read);
@@ -24,6 +32,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   /** Shows the change at once; a failure puts the switch back as it was. */
   const change = (next: boolean) => {
     const before = on;
+    saves.current++;
     setOn(next);
     setSaving(true);
     setFailure(null);
@@ -33,7 +42,10 @@ export function General({ onReference }: { onReference: (ref: string) => void })
         setOn(before);
         setFailure(f);
       })
-      .finally(() => setSaving(false));
+      .finally(() => {
+        saves.current++;
+        setSaving(false);
+      });
   };
 
   return (
