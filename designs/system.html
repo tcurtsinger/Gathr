@@ -44,7 +44,7 @@ nav {
 }
 </style>
 <link rel="stylesheet" href="phase1-prototype.css"><link rel="stylesheet" href="settings-overlay.css">
-<link rel="stylesheet" href="phase1-selected.css"><link rel="stylesheet" href="../ui/src/components/help.css"></head>
+<link rel="stylesheet" href="phase1-selected.css"><link rel="stylesheet" href="../ui/src/components/help.css"><link rel="stylesheet" href="../ui/src/components/switch.css"></head>
 <body>
 <h1 data-id="title">Gathr</h1><button data-id="theme" onclick="document.documentElement.classList.toggle('light')">Switch theme</button>
 <nav data-id="screens">
@@ -199,6 +199,10 @@ Lucide's "settings" icon (https://lucide.dev), under its ISC License:
 <h4>Approvals</h4><dl><dt>Ask</dt><dd>Ask before actions that need permission.</dd><dt>Auto</dt>
 <dd>The engine checks actions. Pushes and file-tool writes outside the worktree ask.</dd></dl>
 <p>A popover from the ?, below it or above it, inside the window. Escape closes it before Settings.</p></section>
+</section><section data-id="switch"><h2>Switch</h2>
+<p><span id="switch-off">Open at login</span> <button type="button" class="switch" role="switch" aria-checked="false" aria-labelledby="switch-off"><span></span></button>
+<span id="switch-on">Open at login</span> <button type="button" class="switch" role="switch" aria-checked="true" aria-labelledby="switch-on"><span></span></button></p>
+<p>Applies at once. Thumb left and raised is off; right and accent is on.</p>
 </section><section data-id="danger-tokens"><h2>Error tokens</h2><div class="swatches">
 <div class="swatch" style="color:var(--danger);background:var(--danger-surface);border-color:var(--danger-border)">
 <code>danger</code><br><code>danger-surface</code><br><code>danger-border</code></div></div></section>

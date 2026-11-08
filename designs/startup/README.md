@@ -1,6 +1,6 @@
 # Open at login: placement proposals
 
-Unselected. Do not implement until a version is picked.
+Selected: v1, Settings > General (the owner's pick). Built in `ui/src/settings/General.tsx`.
 
 ## Summary
 

@@ -1,17 +1,3 @@
-.settingrow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 0;
-  border-bottom: 1px solid var(--border);
-}
-.settingrow h4 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
 .pathfield {
   margin-top: 28px;
 }
@@ -42,8 +28,7 @@
   margin: 0;
 }
 .account-heading button,
-.account-actions button,
-.settingrow button {
+.account-actions button {
   border: 1px solid var(--control);
 }
 .account-list {

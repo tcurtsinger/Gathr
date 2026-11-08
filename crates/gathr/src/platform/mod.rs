@@ -4,6 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 pub mod env;
+pub mod login;
 
 /// Where Gathr keeps its data when no `--data` is given.
 pub fn default_data_dir() -> PathBuf {

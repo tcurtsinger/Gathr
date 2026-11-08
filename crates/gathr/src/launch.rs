@@ -1,7 +1,8 @@
 //! How the window and `gathr open` reach the service (0004): the one already running on the data
 //! folder, else a `gathrd` they start, which outlives them.
 
-use std::path::Path;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -117,4 +118,76 @@ pub fn one_time_link(info: &ServiceInfo) -> Result<String, Error> {
 pub fn beside_me(program: &str) -> Result<std::path::PathBuf, Error> {
     let name = format!("{program}{}", std::env::consts::EXE_SUFFIX);
     Ok(std::env::current_exe()?.with_file_name(name))
+}
+
+/// The key for a data folder other than the person's own (`None` for theirs): the window's
+/// one-instance key, and the name of its entry at login, so a test folder never stands in for
+/// theirs. Every caller runs the same build, so the hasher's output matches between them.
+pub fn folder_key(data: &Path, default: &Path) -> Option<String> {
+    let data = identity(data);
+    if identity(default) == data {
+        return None;
+    }
+    let mut hasher = DefaultHasher::new();
+    data.hash(&mut hasher);
+    Some(format!(".data-{:016x}", hasher.finish()))
+}
+
+/// A folder as the file system knows it: links and `..` resolved, and case ignored, as Windows'
+/// and macOS's file systems do by default. A folder that doesn't exist yet is only made absolute,
+/// so the caller creates it first.
+fn identity(path: &Path) -> String {
+    let path = std::fs::canonicalize(path)
+        .or_else(|_| std::path::absolute(path))
+        .unwrap_or_else(|_| path.to_path_buf());
+    let path: PathBuf = path.components().collect();
+    path.to_string_lossy().to_lowercase()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::folder_key;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn each_data_folder_gets_its_own_window_and_the_persons_own_keeps_the_plain_one() {
+        let own = Path::new("/home/someone/Gathr");
+        let a = folder_key(Path::new("/work/data/a"), own);
+        assert_eq!(folder_key(own, own), None, "the person's own folder");
+        assert!(a.is_some(), "a test folder has a key");
+        assert_ne!(a, folder_key(Path::new("/work/data/b"), own), "two folders");
+        assert_eq!(
+            a,
+            folder_key(Path::new("/work/data/a/"), own),
+            "the same folder, spelt with a /"
+        );
+    }
+
+    // Windows' and macOS's file systems ignore case by default, so `X:\CODE` is `X:\code`.
+    #[test]
+    fn one_folder_spelt_another_way_gets_the_same_window() {
+        let root = std::env::temp_dir().join(format!("gathr-key-{}", std::process::id()));
+        let folder = root.join("Data");
+        std::fs::create_dir_all(&folder).unwrap();
+        let own = Path::new("/home/someone/Gathr");
+        let key = folder_key(&folder, own);
+        let upper = PathBuf::from(folder.to_string_lossy().to_uppercase());
+        let dotted = root.join("Data").join("..").join("Data");
+        let (by_upper, by_dots) = (folder_key(&upper, own), folder_key(&dotted, own));
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(
+            key,
+            by_upper,
+            "{} and {}",
+            folder.display(),
+            upper.display()
+        );
+        assert_eq!(
+            key,
+            by_dots,
+            "{} and {}",
+            folder.display(),
+            dotted.display()
+        );
+    }
 }

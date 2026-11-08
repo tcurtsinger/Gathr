@@ -85,22 +85,34 @@ pub fn login_path() -> Result<String, String> {
 /// One key's variables: name, value, and whether it's expanded (`REG_EXPAND_SZ`).
 #[cfg(windows)]
 fn registry(key: &str) -> Result<Vec<(String, String, bool)>, String> {
-    // `reg export` writes UTF-16, where `reg query` prints in a code page that varies by computer.
-    let file = std::env::temp_dir().join(format!("gathr-env-{}.reg", crate::ids::span_id()));
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-    let mut command = Command::new(std::path::PathBuf::from(root).join(r"System32\reg.exe"));
+    Ok(parse_reg(&export(key)?))
+}
+
+/// A registry key as `reg export` writes it: UTF-16, where `reg query` prints in a code page that
+/// varies by computer.
+#[cfg(windows)]
+pub(super) fn export(key: &str) -> Result<Vec<u8>, String> {
+    let file = std::env::temp_dir().join(format!("gathr-reg-{}.reg", crate::ids::span_id()));
+    let mut command = reg();
     command.args(["export", key]).arg(&file).arg("/y");
     let ran = run(command, Duration::from_secs(10));
     let read = std::fs::read(&file);
     let _ = std::fs::remove_file(&file);
     ran?;
-    let bytes = read.map_err(|e| format!("{key} wasn't read: {e}"))?;
-    Ok(parse_reg(&bytes))
+    read.map_err(|e| format!("{key} wasn't read: {e}"))
+}
+
+/// `reg.exe` by its full path, so the PATH can't swap it.
+#[cfg(windows)]
+pub(super) fn reg() -> Command {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+    Command::new(std::path::PathBuf::from(root).join(r"System32\reg.exe"))
 }
 
 /// Runs a short command with no input: its output, or why not, killed past `limit`. Only for
-/// commands that change nothing (a shell printing its PATH, `reg export`).
-fn run(mut command: Command, limit: Duration) -> Result<Vec<u8>, String> {
+/// commands that change nothing (a shell printing its PATH, `reg export`) or one value (`reg
+/// import` of Gathr's own entry at login).
+pub(super) fn run(mut command: Command, limit: Duration) -> Result<Vec<u8>, String> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -168,7 +180,7 @@ fn entry(line: &str) -> Option<(String, String, bool)> {
 }
 
 #[cfg(any(windows, test))]
-fn utf16le(bytes: &[u8]) -> String {
+pub(super) fn utf16le(bytes: &[u8]) -> String {
     let units: Vec<u16> = bytes
         .as_chunks::<2>()
         .0

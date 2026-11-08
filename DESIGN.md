@@ -52,6 +52,8 @@ Focus uses a 2 px accent outline with 2 px offset; in the composer it goes aroun
 
 Help (approvals/v1, `ui/src/components/Help.tsx`): a setting's detail sits behind a plain ? in a 16 px circle, in a 28 px muted button beside its label (44 px at narrow widths), named "About <setting>". Click, Enter or Space opens a popover up to 350 px wide, below the ? or above it when there's no room, inside the window; it doesn't move the form. Escape or a click outside closes it before Settings, and focus stays on the ?. No hover-only content or title tooltips.
 
+Switch (startup/v1, `ui/src/components/Switch.tsx`): a setting that applies at once, with no Save. A native button with role switch, named by its label and described by its scope ("This computer"). A 44 by 24 px track in a 44 by 32 px hit area (44 by 44 at narrow widths), 16 px thumb: off is raised with a control outline and a text thumb at the left, on is accent with a canvas thumb at the right, so position carries the state along with colour. Space or Enter toggles it. While its change is saved it ignores presses, keeps focus and announces Saving; a failed change puts it back and shows Change failed with its reference. No animation.
+
 ## Token ownership
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
 
@@ -65,6 +67,8 @@ sit in a 200 px left rail. Close and Escape restore focus to the opener and pres
 chat position, draft and form fields. Below 768 px categories move above content.
 Shared rules: settings-overlay.css and phase1-selected.css; shared interactions:
 phase1-selected.js. Preview selectors and simulated completion never ship.
+
+General comes first in the categories (startup/v1): one row, Open at login, This computer, a Switch. It applies at once to this computer, whoever its accounts are; Gathr then starts in the tray at login. Settings still opens at Engines.
 
 Settings entry: Lucide settings cog plus Settings at the bottom left, one click (settings-entry/v5).
 Use the app's 18 px icon, 24 px viewBox, 1.5 px stroke and rounded caps and joins; retain its ISC notice.

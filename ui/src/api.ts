@@ -140,6 +140,9 @@ export const api = {
   cancelSignIn: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}/sign-in`),
   models: (account: string) =>
     call<{ models: Model[] }>('GET', `/api/accounts/${account}/models`).then((m) => m.models),
+  /** Whether this computer opens Gathr at login, as the system says now. */
+  startup: () => call<{ on: boolean }>('GET', '/api/startup').then((s) => s.on),
+  setStartup: (on: boolean) => call<{ on: boolean }>('PUT', '/api/startup', { on }).then((s) => s.on),
   agents: () => call<{ agents: Agent[] }>('GET', '/api/agents').then((a) => a.agents),
   addAgent: (agent: Omit<Agent, 'id'>) => call<Agent>('POST', '/api/agents', agent),
   saveAgent: ({ id, ...agent }: Agent) => call<Agent>('PATCH', `/api/agents/${id}`, agent),
