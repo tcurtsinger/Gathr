@@ -1,4 +1,4 @@
-import type { KeyboardEvent, Ref } from 'react';
+import type { KeyboardEvent, ReactNode, Ref } from 'react';
 import './composer.css';
 
 interface Props {
@@ -8,10 +8,12 @@ interface Props {
   /** Set while a turn runs: the button stops it instead of sending. */
   onStop?: () => void;
   inputRef?: Ref<HTMLTextAreaElement>;
+  /** Controls at the bottom left, such as the agent picker. */
+  tools?: ReactNode;
 }
 
 /** The one composer. Enter sends, Shift+Enter is a new line. */
-export function Composer({ draft, onDraft, onSend, onStop, inputRef }: Props) {
+export function Composer({ draft, onDraft, onSend, onStop, inputRef, tools }: Props) {
   const canSend = draft.trim().length > 0;
   const keyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
@@ -29,6 +31,7 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef }: Props) {
         onKeyDown={keyDown}
       />
       <div className="composer-bottom">
+        {tools}
         {onStop && !canSend ? (
           <button type="button" className="round" aria-label="Stop" onClick={onStop}>
             <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">

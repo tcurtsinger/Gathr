@@ -27,9 +27,20 @@
 }
 .composer-bottom {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 3px;
 }
+.composer-bottom select {
+  /* As wide as the chosen name; where that's unsupported, as wide as the longest. */
+  field-sizing: content;
+  max-width: 50%;
+  padding: 4px 8px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .round {
   display: inline-grid;
   place-items: center;
@@ -41,4 +52,7 @@
 }
 .round:hover {
   background: var(--muted);
+}
+.composer-bottom .round {
+  margin-left: auto;
 }
