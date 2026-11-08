@@ -3,18 +3,18 @@
 use gathr::claude::command;
 use gathr::claude::engine::Line;
 use gathr::claude::frames::{self, Frame, TurnEnd};
+use gathr::claude::login;
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id};
 use gathr::store;
 use serde_json::{Value, json};
 
 use super::{Queued, Task, login_stamp};
-use gathr::claude::login;
 
 impl Task {
     pub(super) async fn on_line(&mut self, line: Line) {
         let pid = self.engine.as_ref().map_or(0, |e| e.pid);
-        let turn = self.turn.as_ref().map(|t| t.turn.clone());
+        let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
         let (direction, text) = match &line {
             Line::Out(text) => ("out", text),
             Line::Err(text) => ("err", text),
@@ -22,11 +22,7 @@ impl Task {
         // Written, redacted, before it's acted on (0011).
         self.raw(turn.as_deref(), pid, direction, text).await;
         let Line::Out(text) = line else {
-            self.record(
-                Event::point("gathr.engine.stderr")
-                    .chat(&self.chat)
-                    .attr("line", text.clone()),
-            );
+            self.record(Event::point("gathr.engine.stderr").attr("line", text.clone()));
             if !text.trim().is_empty() {
                 self.last_stderr = Some(text.clone());
             }
@@ -40,15 +36,20 @@ impl Task {
             }
             Err(e) => self.record(
                 Event::point("gathr.engine.frame")
-                    .chat(&self.chat)
                     .error("malformed")
                     .attr("why", e.to_string()),
             ),
         }
     }
 
+    /// The chat the engine runs in.
+    fn here(&self) -> String {
+        let chat = self.assigned.as_ref().map(|a| a.chat.clone());
+        chat.unwrap_or_default()
+    }
+
     pub(super) async fn on_frame(&mut self, frame: Frame) {
-        let chat = self.chat.clone();
+        let chat = self.here();
         if matches!(
             frame,
             Frame::Replied | Frame::Text(_) | Frame::ToolStart { .. }
@@ -63,11 +64,14 @@ impl Task {
             } => {
                 self.check_tools(&tools);
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
-                let account = account.unwrap_or_default();
+                let (account, agent) = (account.unwrap_or_default(), self.agent.clone());
                 let saved = self
                     .chats
                     .writer
-                    .call(move |conn| store::set_engine_session(conn, &chat, &session_id, &account))
+                    .call(move |conn| {
+                        let agent = agent.as_deref();
+                        store::set_engine_session(conn, &chat, agent, &session_id, &account)
+                    })
                     .await;
                 if let Some(Err(e)) = saved {
                     self.record(
@@ -83,12 +87,13 @@ impl Task {
                 };
                 turn.partial.push_str(&text);
                 let first = !std::mem::replace(&mut turn.streamed, true);
-                let (id, trace, sent) = (turn.turn.clone(), turn.trace.clone(), turn.sent_us);
-                self.publish(json!({ "type": "delta", "chat": chat, "turn": id, "text": text }));
+                let (ids, sent) = (turn.ids.clone(), turn.sent_us);
+                let delta = json!({ "type": "delta", "turn": ids.turn, "text": text });
+                self.publish(&ids.chat, delta);
                 if first {
-                    let mut event = Event::point("gathr.turn.first_token").trace(&trace).ok();
+                    let mut event = Event::point("gathr.turn.first_token").trace(&ids.trace);
                     event.duration_us = Some(now_us() - sent);
-                    self.record(event);
+                    self.record(event.chat(&ids.chat).ok());
                 }
             }
             Frame::Text(text) => {
@@ -96,10 +101,10 @@ impl Task {
                     return;
                 };
                 turn.partial.clear();
-                let id = turn.turn.clone();
+                let ids = turn.ids.clone();
                 if !text.is_empty() {
-                    let message = self.db_message(&id, "assistant", "text", &text).await;
-                    self.publish(json!({ "type": "message", "message": message }));
+                    let message = self.db_message(&ids, "assistant", "text", &text).await;
+                    self.publish(&ids.chat, json!({ "type": "message", "message": message }));
                 }
             }
             Frame::ToolStart { id, name } => self.tool_started(id, name).await,
@@ -116,8 +121,8 @@ impl Task {
                     // its own. That turn gets its row here, and the message moves to it.
                     self.begin_read_turn(&message).await;
                 }
-                let turn = self.turn.as_ref().map(|t| t.turn.clone());
-                self.publish(json!({ "type": "read", "chat": chat, "turn": turn, "text": text }));
+                let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
+                self.publish(&chat, json!({ "type": "read", "turn": turn, "text": text }));
             }
             Frame::ApprovalAsked {
                 request_id,
@@ -129,16 +134,19 @@ impl Task {
                 };
                 turn.approvals
                     .insert(request_id.clone(), (tool.clone(), input.clone()));
-                let id = turn.turn.clone();
-                self.publish(json!({ "type": "approval", "chat": chat, "turn": id,
-                    "request_id": request_id, "tool": tool, "input": input }));
+                let ids = turn.ids.clone();
+                self.publish(
+                    &ids.chat,
+                    json!({ "type": "approval", "turn": ids.turn,
+                    "request_id": request_id, "tool": tool, "input": input }),
+                );
             }
             Frame::EngineError { kind, message } => {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
                 turn.signed_out |= kind == "authentication_failed";
-                let trace = turn.trace.clone();
+                let trace = turn.ids.trace.clone();
                 self.record(
                     Event::point("gathr.engine.error")
                         .trace(&trace)
@@ -166,7 +174,6 @@ impl Task {
         if !denied.is_empty() || !unknown.is_empty() {
             self.record(
                 Event::point("gathr.engine.tools")
-                    .chat(&self.chat)
                     .error("tools_changed")
                     .attr("denied_but_offered", json!(denied))
                     .attr("not_looked_at", json!(unknown)),
@@ -178,11 +185,11 @@ impl Task {
         let Some(turn) = self.turn.as_ref() else {
             return;
         };
-        let turn_id = turn.turn.clone();
+        let ids = turn.ids.clone();
         let body = json!({ "tool": name, "status": "running" }).to_string();
-        let message = self.db_message(&turn_id, "assistant", "tool", &body).await;
+        let message = self.db_message(&ids, "assistant", "tool", &body).await;
         let message_id = message["id"].as_str().unwrap_or_default().to_string();
-        self.publish(json!({ "type": "message", "message": message }));
+        self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         if let Some(turn) = self.turn.as_mut() {
             turn.tools.insert(id, (message_id, name, now_us()));
         }
@@ -195,7 +202,7 @@ impl Task {
         let Some((message_id, name, started)) = turn.tools.remove(id) else {
             return;
         };
-        let (trace, span) = (turn.trace.clone(), turn.span.clone());
+        let (ids, span) = (turn.ids.clone(), turn.span.clone());
         let duration_us = now_us() - started;
         let body = json!({ "tool": name, "status": status, "duration_ms": duration_us / 1000 });
         let (body_text, mid) = (body.to_string(), message_id.clone());
@@ -203,12 +210,11 @@ impl Task {
             .writer
             .call(move |conn| store::set_message_body(conn, &mid, &body_text))
             .await;
-        self.publish(
-            json!({ "type": "tool", "chat": self.chat, "message": message_id, "body": body }),
-        );
+        let update = json!({ "type": "tool", "message": message_id, "body": body });
+        self.publish(&ids.chat, update);
         let mut event = Event::point(&format!("execute_tool {name}"))
-            .trace(&trace)
-            .chat(&self.chat)
+            .trace(&ids.trace)
+            .chat(&ids.chat)
             .span("end", &span_id())
             .attr("gen_ai.tool.name", name);
         event.parent_span_id = Some(span);
@@ -227,11 +233,11 @@ impl Task {
             return;
         };
         let text = std::mem::take(&mut turn.partial);
-        let id = turn.turn.clone();
+        let ids = turn.ids.clone();
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         if !text.is_empty() {
-            let message = self.db_message(&id, "assistant", "text", &text).await;
-            self.publish(json!({ "type": "message", "message": message }));
+            let message = self.db_message(&ids, "assistant", "text", &text).await;
+            self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         }
         for id in open {
             self.tool_ended(&id, "stopped").await;
@@ -245,6 +251,7 @@ impl Task {
         };
         // Ended, so the login needs no guarding: the next start mustn't wait on this one.
         turn.gate.release();
+        self.idle_since = std::time::Instant::now();
         let status = match () {
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
@@ -258,8 +265,8 @@ impl Task {
                 .unwrap_or_else(|| end.subtype.clone())
         });
         let mut event = Event::point("invoke_agent claude")
-            .trace(&turn.trace)
-            .chat(&self.chat)
+            .trace(&turn.ids.trace)
+            .chat(&turn.ids.chat)
             .span("end", &turn.span)
             .attr("gathr.turn.status", status)
             .attr("gen_ai.usage.input_tokens", end.usage.input)
@@ -284,10 +291,8 @@ impl Task {
         if turn.signed_out {
             // The message waits for a sign-in (0002); the engine that failed is closed.
             self.queue.push_front(Queued {
-                turn: turn.turn.clone(),
-                trace: turn.trace.clone(),
-                text: self.text_of(&turn.turn).await,
-                agent: turn.agent.clone(),
+                ids: turn.ids.clone(),
+                text: self.text_of(&turn.ids.turn).await,
             });
             self.close("the login was refused").await;
             if let Some(folder) = self.assigned.as_ref().map(|a| a.folder.clone()) {
@@ -295,14 +300,7 @@ impl Task {
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }
-        self.set_turn(
-            &turn.turn,
-            &turn.trace,
-            turn.agent.as_deref(),
-            status,
-            why.as_deref(),
-        )
-        .await;
+        self.set_turn(&turn.ids, status, why.as_deref()).await;
         self.try_next().await;
     }
 

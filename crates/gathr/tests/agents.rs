@@ -5,7 +5,7 @@ mod common;
 
 use std::path::Path;
 
-use common::{TempDir, TestService, gathr, recording, sign_in_account};
+use common::{TempDir, TestService, gathr, next_live, recording, sign_in_account};
 use serde_json::{Value, json};
 
 /// The arguments of the engine's last start.
@@ -97,35 +97,6 @@ fn a_turn_runs_on_its_agents_account_model_and_effort_and_a_change_applies_from_
         !has(&on_work, "--resume"),
         "a session from another login folder was resumed: {on_work:?}"
     );
-}
-
-/// The next JSON sent on the live socket (the service's frames are unmasked and unfragmented).
-fn next_live(socket: &mut std::net::TcpStream) -> Value {
-    use std::io::Read;
-    loop {
-        let mut head = [0u8; 2];
-        socket
-            .read_exact(&mut head)
-            .expect("the live socket went quiet");
-        let len = match head[1] & 0x7F {
-            126 => {
-                let mut n = [0u8; 2];
-                socket.read_exact(&mut n).unwrap();
-                u16::from_be_bytes(n) as usize
-            }
-            127 => {
-                let mut n = [0u8; 8];
-                socket.read_exact(&mut n).unwrap();
-                u64::from_be_bytes(n) as usize
-            }
-            n => n as usize,
-        };
-        let mut body = vec![0u8; len];
-        socket.read_exact(&mut body).unwrap();
-        if head[0] & 0x0F == 1 {
-            return serde_json::from_slice(&body).unwrap();
-        }
-    }
 }
 
 /// A window that didn't send a turn still learns whose it is, so its Retry goes to that agent.
