@@ -19,13 +19,15 @@ function InDialog() {
   );
 }
 
-test('the ? opens its detail; Escape closes the detail, not the dialog, and focus goes back to the ?', async () => {
+// From the keyboard: Safari never focuses a clicked button, so only there is focus the ?'s to keep.
+test('Enter on the ? opens its detail; Escape closes the detail, not the dialog, and focus stays on the ?', async () => {
   const screen = await render(<InDialog />);
   const open = screen.getByRole('button', { name: 'About made-up' });
   const detail = screen.getByRole('region', { name: 'About made-up' });
   await expect.element(detail).not.toBeInTheDocument();
 
-  await open.click();
+  open.element().focus();
+  await userEvent.keyboard('{Enter}');
   await expect.element(detail).toBeVisible();
   await expect.element(open).toHaveAttribute('aria-expanded', 'true');
 
