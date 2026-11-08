@@ -20,8 +20,10 @@ pub fn folder(data: &Path, chat: &str, agent: &str) -> PathBuf {
     data.join("worktrees").join(chat).join(agent)
 }
 
-/// The branch a new worktree takes: the agent's name and the chat, such as `gathr/orin-x4k2pq`.
-pub fn branch(name: &str, chat: &str) -> String {
+/// The branch a new worktree takes: the agent's name, the chat and the start of the agent's id,
+/// such as `gathr/orin-x4k2pq-85613e`. Names that read the same here ("Build A", "Build-A") are
+/// told apart by the id.
+pub fn branch(name: &str, agent: &str, chat: &str) -> String {
     let mut slug = String::new();
     for c in name.to_lowercase().chars() {
         match c.is_ascii_alphanumeric() {
@@ -37,7 +39,8 @@ pub fn branch(name: &str, chat: &str) -> String {
         slug
     };
     let tail = chat.len().saturating_sub(6);
-    format!("gathr/{slug}-{}", chat[tail..].to_lowercase())
+    let id: String = agent.chars().take(6).collect();
+    format!("gathr/{slug}-{}-{id}", chat[tail..].to_lowercase())
 }
 
 /// A worktree just made: its branch, the commit it started from, and why the fetch before it
@@ -131,8 +134,8 @@ pub async fn ensure(
     }))
 }
 
-/// Runs git in `dir` with `env`, never asking for a password: its output, or the first line of
-/// what it said went wrong. Past `limit` it's stopped.
+/// Runs git in `dir` with `env`, never asking for a password: its output, or the line of what it
+/// said that gives the reason. Past `limit` it's stopped.
 async fn git(env: &Vars, dir: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
     let mut command = std::process::Command::new("git");
     command
@@ -153,11 +156,16 @@ async fn git(env: &Vars, dir: &Path, args: &[&str], limit: Duration) -> Result<S
         .map_err(|e| format!("git didn't start: {e}"))?;
     if !out.status.success() {
         let said = String::from_utf8_lossy(&out.stderr);
-        let said = said
+        // Progress lines ("Preparing worktree …") come first; the reason is its `fatal:` line.
+        let lines: Vec<&str> = said
             .lines()
-            .find(|l| !l.trim().is_empty())
-            .unwrap_or("")
-            .trim();
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        let reason = lines
+            .iter()
+            .find(|l| l.starts_with("fatal:") || l.starts_with("error:"));
+        let said = reason.or(lines.last()).copied().unwrap_or("");
         return Err(format!("{what} failed ({}): {said}", out.status));
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())

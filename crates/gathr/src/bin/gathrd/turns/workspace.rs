@@ -61,7 +61,7 @@ impl Task {
             });
         };
         let folder = worktree::folder(self.chats.data.path(), &assigned.chat, &agent);
-        let branch = worktree::branch(&name, &assigned.chat);
+        let branch = worktree::branch(&name, &agent, &assigned.chat);
         let made = worktree::ensure(project.as_ref(), &folder, &branch, &fresh.vars).await;
         let event = Event::point("gathr.worktree.add")
             .trace(trace)

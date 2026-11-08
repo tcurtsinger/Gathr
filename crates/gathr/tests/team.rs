@@ -292,6 +292,51 @@ fn replies_keep_their_place_by_when_their_turn_started() {
     );
 }
 
+/// The briefing the engine's last start was given, read while that engine still runs.
+fn last_briefing(args: &Path) -> String {
+    let starts = std::fs::read_to_string(args).unwrap();
+    let last: Vec<String> = serde_json::from_str(starts.lines().last().unwrap()).unwrap();
+    let at = last
+        .iter()
+        .position(|a| a == "--append-system-prompt-file")
+        .unwrap();
+    std::fs::read_to_string(&last[at + 1]).unwrap()
+}
+
+#[test]
+fn a_new_supervisor_reaches_the_next_turns_briefing() {
+    let data = TempDir::new();
+    let args = data.0.join("engine-args.jsonl");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("signed_in")),
+            ("GATHR_REPLAY_ARGS", &args),
+        ],
+    );
+    let ids = agents(&service, &data.0, &["Orin", "Pia"]);
+    let chat = team_chat(
+        &service,
+        json!([member(&ids[0], "supervisor"), member(&ids[1], "member")]),
+        None,
+    );
+    send(&service, &chat, json!({ "text": "Start" }));
+    service.wait_for(&chat, 10, "Orin's first turn", |h| ended(h, 1));
+    let before = last_briefing(&args);
+    assert!(before.contains("as its Supervisor"), "{before}");
+
+    let swapped = json!({ "members": [member(&ids[0], "member"), member(&ids[1], "supervisor")] });
+    let answer = service.send("PATCH", &format!("/api/chats/{chat}"), swapped);
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    send(&service, &chat, json!({ "text": "@Orin again" }));
+    service.wait_for(&chat, 10, "Orin's turn after the swap", |h| ended(h, 2));
+    let after = last_briefing(&args);
+    assert!(
+        !after.contains("as its Supervisor") && after.contains("Pia (Supervisor)"),
+        "the engine kept the old roles: {after}"
+    );
+}
+
 fn git(dir: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .args([
@@ -359,14 +404,15 @@ fn each_agent_works_in_its_own_worktree_from_the_fetched_default_branch() {
             ("GATHR_REPLAY_ENV", &env),
         ],
     );
-    let ids = agents(&service, &data.0, &["Orin", "Pia"]);
+    // Two names that differ only in what a branch name can't hold (Vale's review of #49).
+    let ids = agents(&service, &data.0, &["Build A", "Build-A"]);
     let team = json!([member(&ids[0], "supervisor"), member(&ids[1], "member")]);
     let chat = team_chat(&service, team, Some(&project));
 
     send(&service, &chat, json!({ "text": "Start" }));
-    service.wait_for(&chat, 20, "Orin's turn", |h| ended(h, 1));
-    send(&service, &chat, json!({ "text": "@Pia go" }));
-    let history = service.wait_for(&chat, 20, "Pia's turn", |h| ended(h, 2));
+    service.wait_for(&chat, 20, "Build A's turn", |h| ended(h, 1));
+    send(&service, &chat, json!({ "text": "@Build-A go" }));
+    let history = service.wait_for(&chat, 20, "Build-A's turn", |h| ended(h, 2));
     let failed: Vec<&Value> = history["turns"]
         .as_array()
         .unwrap()
