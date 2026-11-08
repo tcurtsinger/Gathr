@@ -123,10 +123,10 @@ fn signing_one_account_in_and_out_leaves_the_other_as_it_was() {
     assert_eq!(started.status, 200, "{}", started.body);
     let code = json!({ "code": "made-up-code#made-up-state" });
     service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
-    let signed_in = common::account_until(&service, &id, "the sign-in to finish", |a| {
-        a["login"] == "signed_in"
+    // The login file lands just before `auth login` exits and the sign-in ends: wait for both.
+    common::account_until(&service, &id, "the sign-in to finish", |a| {
+        a["login"] == "signed_in" && a["sign_in"].is_null()
     });
-    assert!(signed_in["sign_in"].is_null(), "{signed_in}");
     let folder = data.0.join("accounts").join(&id).join("claude");
     assert!(
         folder.join(".credentials.json").is_file(),
