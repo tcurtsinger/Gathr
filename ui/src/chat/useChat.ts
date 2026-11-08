@@ -3,7 +3,7 @@ import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './rows';
-import { answered, apply, type ChatState, empty, fromHistory } from './state';
+import { answered, apply, type ChatState, empty, fromHistory, sent } from './state';
 
 /** Changes the chat's messages that never reached the service; the app keeps them across switches. */
 export type Unsent = (update: (list: SendFailure[]) => SendFailure[]) => void;
@@ -54,7 +54,8 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const send = useCallback(
     async (text: string, agent?: string, retrying?: SendFailure) => {
       try {
-        await api.send(chat, text, agent);
+        const { turn, status } = await api.send(chat, text, agent);
+        setState((s) => sent(s, turn, status, agent));
         if (retrying) onUnsent((list) => list.filter((f) => f.id !== retrying.id));
       } catch (e) {
         const failed = { id: retrying?.id ?? crypto.randomUUID(), text, agent, failure: e as Failure };

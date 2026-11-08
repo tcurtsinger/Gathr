@@ -120,14 +120,20 @@ interface FormProps {
   onReference: Open;
 }
 
+/** Model is undefined until a new agent's models arrive and it takes the first Latest. */
+type Fields = { name: string; account: string; model: string | null | undefined; effort: string | null };
+
 /** One Account picker (it implies the engine), then the account's models and their efforts. */
 function AgentForm(props: FormProps) {
   const { agent, accounts, saved, onSaved, onCancelNew, onRemoved, onReference } = props;
-  const [name, setName] = useState(agent?.name ?? '');
-  const [account, setAccount] = useState(agent?.account ?? accounts[0].id);
-  /** Undefined until a new agent's models arrive and it takes the first Latest. */
-  const [model, setModel] = useState<string | null | undefined>(agent ? agent.model : undefined);
-  const [effort, setEffort] = useState(agent?.effort ?? null);
+  // Only the fields edited here, over the agent as saved, so a save from elsewhere shows in
+  // every field not edited here and Save never writes an untouched field back.
+  const [edits, setEdits] = useState<Partial<Fields>>({});
+  const edit = (fields: Partial<Fields>) => setEdits((e) => ({ ...e, ...fields }));
+  const { name, account, model, effort }: Fields = {
+    ...(agent ?? { name: '', account: accounts[0].id, model: undefined, effort: null }),
+    ...edits,
+  };
   const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -139,7 +145,8 @@ function AgentForm(props: FormProps) {
 
   const list = models.list ?? [];
   useEffect(() => {
-    if (model === undefined && models.list) setModel(firstLatest(models.list));
+    const loaded = models.list;
+    if (model === undefined && loaded) setEdits((e) => ({ ...e, model: firstLatest(loaded) }));
   }, [model, models.list]);
 
   const draft = { name: name.trim(), account, model: model ?? null, effort };
@@ -152,20 +159,12 @@ function AgentForm(props: FormProps) {
   const offered = efforts(list, draft.model);
   const found = choices(list).filter((c) => c.label.toLowerCase().includes(find.trim().toLowerCase()));
 
-  const pickAccount = (id: string) => {
-    setAccount(id);
-    setModel(null);
-    setEffort(null);
-  };
-  const pickModel = (id: string | null) => {
-    setModel(id);
-    if (effort && !efforts(list, id).includes(effort)) setEffort(null);
-  };
+  const pickAccount = (id: string) => edit({ account: id, model: null, effort: null });
+  const pickModel = (id: string | null) =>
+    edit(effort && !efforts(list, id).includes(effort) ? { model: id, effort: null } : { model: id });
   const reset = () => {
     if (!agent) return onCancelNew();
-    setAccount(agent.account);
-    setModel(agent.model);
-    setEffort(agent.effort);
+    setEdits({});
     setFind('');
   };
   const remove = () => {
@@ -185,6 +184,7 @@ function AgentForm(props: FormProps) {
     call.then(
       (done) => {
         setBusy(false);
+        setEdits({});
         onSaved(done);
       },
       (f: Failure) => {
@@ -207,7 +207,7 @@ function AgentForm(props: FormProps) {
             spellCheck={false}
             // biome-ignore lint/a11y/noAutofocus: the form opens from Add, to type the name
             autoFocus
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => edit({ name: e.target.value })}
           />
         </label>
       )}
@@ -265,7 +265,7 @@ function AgentForm(props: FormProps) {
       </fieldset>
       <label className="agent-field">
         Effort
-        <select value={effort ?? ''} onChange={(e) => setEffort(e.target.value || null)}>
+        <select value={effort ?? ''} onChange={(e) => edit({ effort: e.target.value || null })}>
           <option value="">Engine default</option>
           {offered.map((level) => (
             <option key={level} value={level}>

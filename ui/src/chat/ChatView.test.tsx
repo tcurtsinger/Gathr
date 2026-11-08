@@ -82,3 +82,34 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
   await expect.poll(() => sent).toEqual([{ text: 'Made-up question', agent: 'b' }]);
   vi.unstubAllGlobals();
 });
+
+test('Retry sends a failed turn to the agent it was sent to, whoever is picked now', async () => {
+  const sent: unknown[] = [];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.endsWith('/messages')) {
+      sent.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ turn: 'u', status: 'running' }));
+    }
+    const asked = { id: 'm', turn: 't', time: '', role: 'user', kind: 'text', body: 'Made-up ask' };
+    const turns = [{ id: 't', status: 'failed', why: 'made-up', ref: 'r', agent: 'a' }];
+    return new Response(JSON.stringify({ chat: 'c', messages: [asked], turns, approvals: [] }));
+  });
+  const made = (id: string, name: string) => ({ id, name, account: 'a', model: null, effort: null });
+  const screen = await render(
+    <ChatView
+      chat={{ id: 'c', title: 'Made-up chat' }}
+      agents={[made('a', 'Made-up A'), made('b', 'Made-up B')]}
+      onEditAgent={() => {}}
+      draft=""
+      onDraft={() => {}}
+      unsent={[]}
+      onUnsent={() => {}}
+      openSettings={() => {}}
+      onNamed={() => {}}
+    />,
+  );
+  await screen.getByRole('combobox', { name: 'Agent' }).selectOptions('Made-up B');
+  await screen.getByRole('button', { name: 'Retry' }).click();
+  await expect.poll(() => sent).toEqual([{ text: 'Made-up ask', agent: 'a' }]);
+  vi.unstubAllGlobals();
+});

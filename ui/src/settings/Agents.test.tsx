@@ -2,7 +2,19 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Account, Agent, Model } from '../api';
+import type { LiveEvent } from '../live';
 import { Agents } from './Agents';
+
+const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
+vi.mock('../live', () => ({
+  listen: (listener: (event: LiveEvent) => void) => {
+    live.add(listener);
+    return () => live.delete(listener);
+  },
+}));
+const savedElsewhere = () => {
+  for (const listener of live) listener({ type: 'agents' });
+};
 
 const account = (id: string, name: string): Account => ({
   id,
@@ -99,6 +111,41 @@ test('another account resets model and effort to the engine default and lists it
         body: { name: 'Made-up agent', account: 'b', model: null, effort: null },
       },
     ]);
+});
+
+test('a change saved elsewhere shows in the open editor, and Save keeps it unless the field was edited here', async () => {
+  const agents = [agent({ model: 'opus', effort: null })];
+  service(agents, listed);
+  const screen = await render(<Agents onReference={() => {}} />);
+  const effort = screen.getByRole('combobox', { name: 'Effort' });
+  await expect
+    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .toHaveAttribute('aria-pressed', 'true');
+
+  agents[0] = agent({ model: 'sonnet', effort: 'high' });
+  savedElsewhere();
+  await expect
+    .element(screen.getByRole('button', { name: 'Sonnet Latest' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect.element(effort).toHaveValue('high');
+  await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+  await effort.selectOptions('low');
+  agents[0] = agent({ model: 'opus', effort: 'high' });
+  savedElsewhere();
+  await expect
+    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect.element(effort).toHaveValue('low');
+  await screen.getByRole('button', { name: 'Save' }).click();
+  await expect
+    .poll(() => sent.at(-1)?.body)
+    .toEqual({
+      name: 'Made-up agent',
+      account: 'a',
+      model: 'opus',
+      effort: 'low',
+    });
 });
 
 test('models that fail to load say so with a reference that opens', async () => {
