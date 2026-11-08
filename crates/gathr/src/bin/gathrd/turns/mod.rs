@@ -71,9 +71,6 @@ struct Running {
     approvals: HashMap<String, (String, Value)>,
     stopping: bool,
     signed_out: bool,
-    /// Characters of what the turn was asked: its message, and each one sent into it that the
-    /// engine read during it (0020).
-    ask_chars: usize,
     /// The account's renewal gate, held until the provider first answers (0016).
     gate: login::Hold,
 }
@@ -534,7 +531,6 @@ impl Task {
             approvals: HashMap::new(),
             stopping: false,
             signed_out: false,
-            ask_chars,
             gate,
         });
     }

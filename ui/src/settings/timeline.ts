@@ -45,13 +45,16 @@ const parts: [string, string][] = [
 
 /** What Gathr gave the turn: characters, and Gathr's own token estimate (0020). */
 function given(turn: TurnTimeline) {
-  // The end's count includes messages read during the turn; a turn still running has only its start.
-  const ends = turn.events.filter((e) => e.name.startsWith('invoke_agent ')).reverse();
+  // The turn's start has its message; each follow-up it read during the turn has an event of its own.
+  const sum = (attr: string) =>
+    turn.events.reduce(
+      (n, e) => n + (typeof e.attrs?.[attr] === 'number' ? (e.attrs[attr] as number) : 0),
+      0,
+    );
   return parts.flatMap(([label, key]) => {
-    const event = ends.find((e) => typeof e.attrs?.[`${key}.chars`] === 'number');
-    const chars = event?.attrs?.[`${key}.chars`];
-    const estimate = event?.attrs?.[`${key}.tokens_estimate`];
-    if (typeof chars !== 'number' || typeof estimate !== 'number') return [];
+    const recorded = turn.events.some((e) => typeof e.attrs?.[`${key}.chars`] === 'number');
+    if (!recorded) return [];
+    const [chars, estimate] = [sum(`${key}.chars`), sum(`${key}.tokens_estimate`)];
     return [[label, `${chars.toLocaleString()} chars, ~${estimate.toLocaleString()} tokens`] as const];
   });
 }
@@ -102,6 +105,7 @@ const known: Record<string, [string, string]> = {
   'gathr.engine.start': ['Engine started', 'Engine start'],
   'gathr.turn.first_token': ['First text', 'First text'],
   'gathr.turn.steer': ['Message sent into the turn', 'Message into the turn'],
+  'gathr.turn.read': ['Message read', 'Message read'],
   'gathr.api.request': ['Request', 'Request'],
   'gathr.engine.sign_in': ['Signed in', 'Sign in'],
 };

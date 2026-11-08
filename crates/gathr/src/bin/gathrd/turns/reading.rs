@@ -114,9 +114,17 @@ impl Task {
             Frame::Read(text) => {
                 let unread = self.unread.iter().position(|(_, t)| *t == text);
                 let read = unread.map(|i| self.unread.remove(i));
-                // Read inside the turn: part of what this turn was given.
-                if let (Some(_), Some(turn)) = (&read, self.turn.as_mut()) {
-                    turn.ask_chars += text.chars().count();
+                // Read inside the turn: part of what it was given (0020), recorded now, so the
+                // turn keeps it however it ends.
+                if let (Some(_), Some(turn)) = (&read, self.turn.as_ref()) {
+                    let chars = text.chars().count();
+                    let event = Event::point("gathr.turn.read")
+                        .trace(&turn.ids.trace)
+                        .chat(&turn.ids.chat)
+                        .ok()
+                        .attr("gathr.context.ask.chars", chars)
+                        .attr("gathr.context.ask.tokens_estimate", chars.div_ceil(4));
+                    self.record(event);
                 }
                 if let Some((message, _)) = read
                     && self.turn.is_none()
@@ -282,12 +290,6 @@ impl Task {
                 end.usage.cache_write,
             )
             .attr("gathr.cost_usd", end.cost_usd)
-            // The whole ask, follow-ups read during the turn included; the start has the first.
-            .attr("gathr.context.ask.chars", turn.ask_chars)
-            .attr(
-                "gathr.context.ask.tokens_estimate",
-                turn.ask_chars.div_ceil(4),
-            )
             .attr(
                 "gen_ai.response.finish_reasons",
                 json!([end.reason.clone().unwrap_or(end.subtype.clone())]),
