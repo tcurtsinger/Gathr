@@ -20,12 +20,13 @@ fn held_recording(dir: &Path) -> PathBuf {
     held
 }
 
-/// The `n`th line of a file the replay engine appends to, once it's there.
+/// The `n`th line of a file the replay engine appends to, once it's there and whole.
 fn nth(file: &Path, n: usize) -> Value {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
         let text = std::fs::read_to_string(file).unwrap_or_default();
-        if let Some(line) = text.lines().nth(n) {
+        let whole = text.rsplit_once('\n').map_or("", |(lines, _)| lines);
+        if let Some(line) = whole.lines().nth(n) {
             return serde_json::from_str(line).unwrap();
         }
         assert!(
