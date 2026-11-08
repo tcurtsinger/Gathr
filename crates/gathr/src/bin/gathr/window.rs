@@ -14,9 +14,14 @@ pub struct Window {
 }
 
 pub async fn start(data: &DataDir, port: u16) -> Result<Window, Error> {
-    let built = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui");
-    // A build from another computer (CI's for the Mac) uses the `ui` folder it's started in.
-    let ui = if built.is_dir() { built } else { "ui".into() };
+    // The `ui` folder it's started in (a build from CI, on the Mac), else the one it was built from.
+    // Absolute, because Vite runs inside it: a relative path would resolve as `ui/ui/…`.
+    let here = std::path::absolute("ui")?;
+    let ui = if here.is_dir() {
+        here
+    } else {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui")
+    };
     let vite = ui.join("node_modules/vite/bin/vite.js");
     if !vite.is_file() {
         return Err(Error::Other(

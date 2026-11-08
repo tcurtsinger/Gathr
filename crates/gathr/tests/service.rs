@@ -146,6 +146,55 @@ fn dev_stopped_over_the_api_ends_cleanly() {
 #[test]
 fn dev_window_failing_stops_the_service() {
     let dir = TempDir::new();
+    let (data, said) = dev_window_without_app(&dir, 0);
+    let info = ServiceInfo::read(&DataDir::new(&data)).expect("gathr dev started no service");
+    if http::call(info.port, &info.token, "GET", "/health").is_ok() {
+        let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
+        panic!(
+            "gathrd pid {} still ran after gathr dev failed ({said})",
+            info.pid
+        );
+    }
+}
+
+/// CI's Mac build is started beside a `ui` folder, named relative to where it starts (the owner's
+/// first Mac run looked for `ui/ui/node_modules/…`).
+#[test]
+fn dev_window_runs_vite_from_the_ui_folder_it_starts_in() {
+    let dir = TempDir::new();
+    let vite = dir.0.join("ui/node_modules/vite/bin");
+    std::fs::create_dir_all(&vite).unwrap();
+    std::fs::write(
+        vite.join("vite.js"),
+        "require('fs').writeFileSync('../vite-ran', process.cwd());\n\
+         require('net').createServer().listen(+process.env.GATHR_UI_PORT, '127.0.0.1');\n",
+    )
+    .unwrap();
+    // Port 0 could land within 10 of the top, leaving the UI no port.
+    let port = loop {
+        let port = std::net::TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        if port <= u16::MAX - 10 {
+            break port;
+        }
+    };
+    let (_, said) = dev_window_without_app(&dir, port);
+    let ran = std::fs::read_to_string(dir.0.join("vite-ran"))
+        .unwrap_or_else(|_| panic!("the UI's dev server never ran: {said}"));
+    // Canonical on both sides: macOS's temp folder is behind a link.
+    assert_eq!(
+        std::fs::canonicalize(&ran).unwrap(),
+        std::fs::canonicalize(dir.0.join("ui")).unwrap(),
+        "Vite ran in the wrong folder"
+    );
+}
+
+/// Runs a copy of `gathr dev --window` from `dir`, where no `gathr-app` sits beside it, so it
+/// fails once the UI's dev server is up. Answers the data folder and what it wrote to stderr.
+fn dev_window_without_app(dir: &TempDir, port: u16) -> (std::path::PathBuf, String) {
     let bin = dir.0.join("bin");
     std::fs::create_dir(&bin).unwrap();
     for exe in [env!("CARGO_BIN_EXE_gathr"), env!("CARGO_BIN_EXE_gathrd")] {
@@ -162,10 +211,11 @@ fn dev_window_failing_stops_the_service() {
                 data.to_str().unwrap(),
                 "dev",
                 "--port",
-                "0",
+                &port.to_string(),
                 "--window",
             ])
             .env_remove("CARGO")
+            .current_dir(&dir.0)
             .stdout(std::fs::File::create(&log).unwrap())
             .stderr(std::fs::File::create(dir.0.join("dev.err")).unwrap())
             .status()
@@ -175,12 +225,5 @@ fn dev_window_failing_stops_the_service() {
         !status.success(),
         "gathr dev started a window with no gathr-app"
     );
-    let info = ServiceInfo::read(&DataDir::new(&data)).expect("gathr dev started no service");
-    if http::call(info.port, &info.token, "GET", "/health").is_ok() {
-        let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
-        panic!(
-            "gathrd pid {} still ran after gathr dev failed ({said})",
-            info.pid
-        );
-    }
+    (data, said)
 }
