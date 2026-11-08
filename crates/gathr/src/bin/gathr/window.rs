@@ -14,7 +14,9 @@ pub struct Window {
 }
 
 pub async fn start(data: &DataDir, port: u16) -> Result<Window, Error> {
-    let ui = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui");
+    let built = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../ui");
+    // A build from another computer (CI's for the Mac) uses the `ui` folder it's started in.
+    let ui = if built.is_dir() { built } else { "ui".into() };
     let vite = ui.join("node_modules/vite/bin/vite.js");
     if !vite.is_file() {
         return Err(Error::Other(
