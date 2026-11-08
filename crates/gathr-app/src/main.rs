@@ -27,7 +27,12 @@ fn main() {
         let title = arg("--title").unwrap_or_else(|| "Gathr".into());
         return dev(context, parse(&ui), title);
     }
-    let data = DataDir::new(arg("--data").map_or_else(platform::default_data_dir, PathBuf::from));
+    // `GATHR_DATA` for a Mac app bundle on a test folder: a bundle can't pass arguments, only its
+    // `LSEnvironment`, and macOS ignores `HOME` there.
+    let data = arg("--data")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("GATHR_DATA").map(PathBuf::from));
+    let data = DataDir::new(data.unwrap_or_else(platform::default_data_dir));
     installed(context, data, opened);
 }
 
