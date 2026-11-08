@@ -1,0 +1,117 @@
+.agents {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  height: 100%;
+}
+.agent-list {
+  padding: 16px 12px;
+  border-right: 1px solid var(--border);
+  overflow: auto;
+}
+.agent-list button {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.agent-list .agent-add {
+  border: 1px solid var(--control);
+}
+.agent-list [aria-current] {
+  background: var(--raised);
+  outline: 1px solid var(--control);
+}
+.agent-form {
+  padding: 24px;
+  overflow: auto;
+}
+.agent-form form {
+  display: grid;
+  gap: 16px;
+}
+.settings-page .agent-form h3 {
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.agent-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 13px;
+}
+.agent-field legend {
+  margin-bottom: 6px;
+  padding: 0;
+}
+.agent-field input,
+.agent-field select {
+  width: 100%;
+  font-size: 14px;
+}
+.agent-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.agent-chosen {
+  margin: 0;
+  min-height: 1.65em;
+}
+.model-results {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid var(--control);
+  border-radius: 7px;
+}
+.model-results button {
+  display: block;
+  width: 100%;
+  border-radius: 0;
+  font-size: 14px;
+  text-align: left;
+}
+.model-results [aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--accent);
+}
+.model-results p {
+  margin: 0;
+  padding: 6px 10px;
+}
+.agent-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.agent-actions [role="status"] {
+  margin-right: auto;
+  font-size: 13px;
+}
+@media (max-width: 767px) {
+  .agents {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .agent-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .agent-list button {
+    width: auto;
+    margin: 0;
+  }
+  .agent-form {
+    padding: 16px;
+    overflow: visible;
+  }
+}

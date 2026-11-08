@@ -10,6 +10,8 @@ export type LiveEvent =
   | { type: 'read'; chat: string; turn: string | null; text: string }
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
+  // An agent was added or changed: reload agents.
+  | { type: 'agents' }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };
 

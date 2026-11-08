@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react';
+import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import './settings.css';
 
-export type Page = 'engines' | 'diagnostics';
+export type Page = 'engines' | 'agents' | 'diagnostics';
 
 export interface SettingsTarget {
   page: Page;
+  /** Agents opens at this agent. */
+  agent?: string;
   /** Diagnostics opens at this chat, and this turn when one is given. */
   chat?: string;
   title?: string;
@@ -27,6 +30,7 @@ interface Props {
 
 const pages: [Page, string][] = [
   ['engines', 'Engines'],
+  ['agents', 'Agents'],
   ['diagnostics', 'Diagnostics'],
 ];
 
@@ -81,6 +85,8 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
             <div className="settings-page">
               {target.page === 'engines' ? (
                 <Engines onReference={onReference} />
+              ) : target.page === 'agents' ? (
+                <Agents start={target.agent} onReference={onReference} />
               ) : (
                 <Diagnostics
                   chat={target.chat}

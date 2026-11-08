@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react';
-import type { Chat } from '../api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { Agent, Chat } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
+import { AgentPicker } from './AgentPicker';
 import { rows, type SendFailure } from './rows';
 import { running } from './state';
 import { type NoticeActions, Transcript } from './Transcript';
@@ -11,6 +12,9 @@ import './chat.css';
 
 interface Props {
   chat: Chat;
+  agents: Agent[];
+  /** Opens Settings > Agents at this agent. */
+  onEditAgent: (agent: string) => void;
   draft: string;
   onDraft: (text: string) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
@@ -22,7 +26,8 @@ interface Props {
   onNamed: () => void;
 }
 
-export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings, onNamed }: Props) {
+export function ChatView(props: Props) {
+  const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -34,6 +39,9 @@ export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings,
   const input = useRef<HTMLTextAreaElement>(null);
   const pinned = useRef(true);
   const ours = useRef(0);
+  const [picked, setPicked] = useState(chat.agent ?? null);
+  // The chat's agent, else the first; one removed since falls back the same way.
+  const agent = agents.find((a) => a.id === picked)?.id ?? agents[0]?.id;
 
   useFirstTokenReport(state.partial);
 
@@ -51,9 +59,9 @@ export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings,
     return () => follow.disconnect();
   }, []);
 
-  const submit = (text: string, retrying?: SendFailure) => {
+  const submit = (text: string, to = agent, retrying?: SendFailure) => {
     pinned.current = true;
-    return send(text, retrying);
+    return send(text, to, retrying);
   };
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
@@ -69,7 +77,7 @@ export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings,
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       if (asked) submit(asked.body as string);
     },
-    resend: (f) => submit(f.text, f),
+    resend: (f) => submit(f.text, f.agent, f),
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();
@@ -132,6 +140,16 @@ export function ChatView({ chat, draft, onDraft, unsent, onUnsent, openSettings,
           onSend={sendDraft}
           onStop={turn ? stop : undefined}
           inputRef={input}
+          tools={
+            agent && (
+              <AgentPicker
+                agents={agents}
+                selected={agent}
+                onSelect={setPicked}
+                onEdit={() => onEditAgent(agent)}
+              />
+            )
+          }
         />
       </div>
     </main>

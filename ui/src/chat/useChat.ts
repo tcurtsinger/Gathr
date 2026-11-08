@@ -52,12 +52,12 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   }, [chat, load]);
 
   const send = useCallback(
-    async (text: string, retrying?: SendFailure) => {
+    async (text: string, agent?: string, retrying?: SendFailure) => {
       try {
-        await api.send(chat, text);
+        await api.send(chat, text, agent);
         if (retrying) onUnsent((list) => list.filter((f) => f.id !== retrying.id));
       } catch (e) {
-        const failed = { id: retrying?.id ?? crypto.randomUUID(), text, failure: e as Failure };
+        const failed = { id: retrying?.id ?? crypto.randomUUID(), text, agent, failure: e as Failure };
         onUnsent((list) =>
           retrying ? list.map((f) => (f.id === failed.id ? failed : f)) : [...list, failed],
         );

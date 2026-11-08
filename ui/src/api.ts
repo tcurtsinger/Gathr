@@ -28,6 +28,25 @@ export interface Turn {
 export interface Chat {
   id: string;
   title: string;
+  /** The agent the last message went to, so the picker reopens on it. */
+  agent?: string | null;
+}
+
+/** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
+export interface Agent {
+  id: string;
+  name: string;
+  account: string;
+  model: string | null;
+  effort: string | null;
+}
+
+/** A model as the account's engine lists it (0025), in the engine's order. */
+export interface Model {
+  id: string;
+  name: string;
+  description: string | null;
+  efforts: string[];
 }
 
 export interface History {
@@ -95,8 +114,8 @@ export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
   createChat: () => call<Chat>('POST', '/api/chats', {}),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
-  send: (chat: string, text: string) =>
-    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text }),
+  send: (chat: string, text: string, agent?: string) =>
+    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
   stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
@@ -113,6 +132,11 @@ export const api = {
   signInCode: (account: string, code: string) =>
     call<unknown>('POST', `/api/accounts/${account}/sign-in/code`, { code }),
   cancelSignIn: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}/sign-in`),
+  models: (account: string) =>
+    call<{ models: Model[] }>('GET', `/api/accounts/${account}/models`).then((m) => m.models),
+  agents: () => call<{ agents: Agent[] }>('GET', '/api/agents').then((a) => a.agents),
+  addAgent: (agent: Omit<Agent, 'id'>) => call<Agent>('POST', '/api/agents', agent),
+  saveAgent: ({ id, ...agent }: Agent) => call<Agent>('PATCH', `/api/agents/${id}`, agent),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>
