@@ -65,3 +65,32 @@ test('a read on focus that answers after a save never undoes the save', async ()
   await new Promise((done) => setTimeout(done, 50));
   await expect.element(toggle).toHaveAttribute('aria-checked', 'true');
 });
+
+test('a read on focus that fails while a save is pending leaves no failure once the save succeeds', async () => {
+  let release = () => {};
+  let holdPut = false;
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    if (init?.method !== 'PUT') {
+      if (!holdPut) return new Response(JSON.stringify({ on: false }));
+      const body = { error: 'Open at login failed', why: 'made-up read failure', ref: 'made-up-read-ref' };
+      return new Response(JSON.stringify(body), { status: 500 });
+    }
+    await new Promise<void>((done) => {
+      release = done;
+    });
+    return new Response(JSON.stringify({ on: true }));
+  });
+  const screen = await render(<General onReference={() => {}} />);
+  const toggle = screen.getByRole('switch', { name: 'Open at login' });
+  await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
+
+  holdPut = true;
+  await toggle.click();
+  window.dispatchEvent(new Event('focus'));
+  await new Promise((done) => setTimeout(done, 50));
+  release();
+  await expect.element(toggle).not.toHaveAttribute('aria-disabled', 'true');
+  await new Promise((done) => setTimeout(done, 50));
+  await expect.element(toggle).toHaveAttribute('aria-checked', 'true');
+  expect(screen.container.textContent).not.toContain('Open at login failed');
+});

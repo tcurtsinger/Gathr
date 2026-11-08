@@ -8,13 +8,15 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  // Counts saves started and ended: a read that began before a save ended may answer the old state.
+  // Counts saves started and ended, so it's odd while one is pending: a read then, or one that began
+  // before a save ended, may answer the old state.
   const saves = useRef(0);
 
   // Read again on coming back to the window: the person may have changed it in the system's settings.
   useEffect(() => {
     const read = () => {
       const at = saves.current;
+      if (at % 2) return;
       api.startup().then(
         (next) => {
           if (at !== saves.current) return;
