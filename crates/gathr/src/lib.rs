@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod agents;
+pub mod approvals;
 pub mod claude;
 pub mod crash_log;
 pub mod data;

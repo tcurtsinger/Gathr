@@ -46,7 +46,8 @@ struct Queued {
     text: String,
 }
 
-/// Who the engine runs as and where: the agent, its account's folder, model and effort (0026),
+/// Who the engine runs as and where: the agent, its account's folder, model, effort (0026) and
+/// approvals (0029),
 /// read when a turn starts so a saved change applies from the agent's next turn, the chat whose
 /// session it runs, and that chat's roles, which its briefing names (0028).
 #[derive(Clone, PartialEq)]
@@ -56,6 +57,7 @@ struct Assignment {
     folder: PathBuf,
     model: Option<String>,
     effort: Option<String>,
+    approvals: gathr::agents::Approvals,
     chat: String,
     team: Vec<(String, gathr::team::Role)>,
 }
@@ -349,7 +351,7 @@ impl Task {
                     "the next turn runs on another account"
                 }
                 (Some(was), Some(now)) if was.team != now.team => "the chat's roles changed",
-                _ => "the next turn runs with another model or effort",
+                _ => "the next turn runs with another model, effort or approvals",
             };
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
@@ -453,12 +455,13 @@ impl Task {
     /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,
     /// the chats' account and the engine's defaults. `None` while there's no account.
     async fn assignment(&self, next: &Queued) -> Result<Option<Assignment>, String> {
-        let on = |account: String, agent, model, effort, team| Assignment {
+        let on = |account: String, agent, (model, effort, approvals), team| Assignment {
             folder: gathr::accounts::folder(&self.chats.data, &account, "claude"),
             account,
             agent,
             model,
             effort,
+            approvals,
             chat: next.ids.chat.clone(),
             team,
         };
@@ -466,7 +469,7 @@ impl Task {
             return Ok(self
                 .chats
                 .account()
-                .map(|a| on(a, None, None, None, Vec::new())));
+                .map(|a| on(a, None, (None, None, Default::default()), Vec::new())));
         };
         let chat = next.ids.chat.clone();
         let read = move |conn: &mut rusqlite::Connection| {
@@ -476,7 +479,8 @@ impl Task {
         };
         match self.chats.writer.call(read).await {
             Some(Ok(Some((a, team)))) => {
-                Ok(Some(on(a.account, Some(a.id), a.model, a.effort, team)))
+                let given = (a.model, a.effort, a.approvals);
+                Ok(Some(on(a.account, Some(a.id), given, team)))
             }
             Some(Ok(None)) => Err("its agent was deleted".into()),
             Some(Err(e)) => Err(format!("its agent wasn't read: {e}")),
@@ -528,6 +532,7 @@ impl Task {
                     assigned.and_then(|a| a.model.clone()),
                 )
                 .attr("gathr.effort", assigned.and_then(|a| a.effort.clone()))
+                .attr("gathr.approvals", assigned.map(|a| a.approvals.as_str()))
                 .attr("gathr.account", assigned.map(|a| a.account.clone()))
                 .attr("gathr.turn.id", ids.turn.clone()),
         );

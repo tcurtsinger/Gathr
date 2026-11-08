@@ -217,7 +217,8 @@ fn initialize(program: &Path, scratch: &Path, stop: &AtomicBool) -> Result<(), S
     command
         .args(command::args(
             command::Session::New(&crate::ids::uuid()),
-            Default::default(),
+            command::Assigned::handshake(),
+            None,
         ))
         .env_clear()
         .envs(command::env(std::env::vars_os(), &scratch.join("claude")))

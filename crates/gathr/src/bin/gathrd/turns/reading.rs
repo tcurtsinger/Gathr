@@ -60,9 +60,13 @@ impl Task {
         match frame {
             Frame::Replied => {}
             Frame::Init {
-                session_id, tools, ..
+                session_id,
+                tools,
+                permission_mode,
+                ..
             } => {
                 self.check_tools(&tools);
+                self.check_mode(&permission_mode);
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
                 let (account, agent) = (account.unwrap_or_default(), self.agent.clone());
                 let saved = self
@@ -141,6 +145,7 @@ impl Task {
                 request_id,
                 tool,
                 input,
+                why,
             } => {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
@@ -151,8 +156,18 @@ impl Task {
                 self.publish(
                     &ids.chat,
                     json!({ "type": "approval", "turn": ids.turn,
-                    "request_id": request_id, "tool": tool, "input": input }),
+                    "request_id": request_id, "tool": tool, "input": input, "why": why }),
                 );
+            }
+            Frame::Blocked { tool, by, why } => {
+                let trace = self.turn.as_ref().map(|t| t.ids.trace.clone());
+                let event = Event::point("gathr.approvals.blocked")
+                    .trace(&trace.unwrap_or_else(gathr::ids::trace_id))
+                    .chat(&chat)
+                    .error(&by)
+                    .attr("gen_ai.tool.name", tool)
+                    .attr("why", why);
+                self.record(event);
             }
             Frame::EngineError { kind, message } => {
                 let Some(turn) = self.turn.as_mut() else {
@@ -172,6 +187,27 @@ impl Task {
             // agent's own messages or tools (friction ledger G24).
             Frame::Sub { .. } | Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
+    }
+
+    /// Records an engine that runs in another permission mode than its agent's approvals: Claude
+    /// Code starts in Manual when auto mode isn't offered for the account or model (0029).
+    fn check_mode(&self, running: &str) {
+        let Some(assigned) = self.assigned.as_ref() else {
+            return;
+        };
+        let given = command::mode(assigned.approvals);
+        if running == given {
+            return;
+        }
+        let trace = self.turn.as_ref().map(|t| t.ids.trace.clone());
+        let event = Event::point("gathr.approvals.mode")
+            .trace(&trace.unwrap_or_else(gathr::ids::trace_id))
+            .chat(&assigned.chat)
+            .error("other_mode")
+            .attr("gathr.approvals", assigned.approvals.as_str())
+            .attr("given", given)
+            .attr("running", running.to_string());
+        self.record(event);
     }
 
     /// Records a tool the engine offers that's denied, or that nobody has looked at (0001).

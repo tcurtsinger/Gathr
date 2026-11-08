@@ -6,11 +6,12 @@ use serde_json::{Value, json};
 /// What one line of Claude Code's output means to the driver.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
-    /// The session is up: its id, model and the tools it offers.
+    /// The session is up: its id, model, the tools it offers and the permission mode it runs in.
     Init {
         session_id: String,
         model: String,
         tools: Vec<String>,
+        permission_mode: String,
     },
     /// The provider has begun a reply (`message_start`): the login worked (0016's gate).
     Replied,
@@ -28,11 +29,19 @@ pub enum Frame {
     },
     /// A message it has read, said back (`--replay-user-messages`): one sent mid-turn is taken.
     Read(String),
-    /// It asks to run a tool (`--permission-prompt-tool stdio`).
+    /// It asks to run a tool (`--permission-prompt-tool stdio`), with why it asks when it says.
     ApprovalAsked {
         request_id: String,
         tool: String,
         input: Value,
+        why: Option<String>,
+    },
+    /// It refused a tool call without asking, and what decided it: `classifier` is auto mode's
+    /// own check (0029).
+    Blocked {
+        tool: String,
+        by: String,
+        why: String,
     },
     /// The answer to a control request the driver sent.
     ControlAnswer {
@@ -119,6 +128,12 @@ fn read_own(value: &Value) -> Vec<Frame> {
             session_id: text(value, "session_id"),
             model: text(value, "model"),
             tools: strings(value.get("tools")),
+            permission_mode: text(value, "permissionMode"),
+        }],
+        "system" if text(value, "subtype") == "permission_denied" => vec![Frame::Blocked {
+            tool: text(value, "tool_name"),
+            by: text(value, "decision_reason_type"),
+            why: text(value, "decision_reason"),
         }],
         "stream_event" => delta(value).into_iter().collect(),
         "assistant" => assistant(value),
@@ -142,6 +157,9 @@ fn read_own(value: &Value) -> Vec<Frame> {
                 request_id: text(value, "request_id"),
                 tool: text(&value["request"], "tool_name"),
                 input: value["request"]["input"].clone(),
+                why: value["request"]["decision_reason"]
+                    .as_str()
+                    .map(String::from),
             }]
         }
         "control_response" => vec![Frame::ControlAnswer {
