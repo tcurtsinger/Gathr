@@ -193,7 +193,7 @@ impl Task {
             let _ = engine.write(&frames::interrupt("close")).await;
         }
         self.keep_what_was_shown().await;
-        self.drop_unread(&format!("its engine closed: {why}"));
+        self.requeue_unread().await;
         engine.close_input();
         let assigned = self.assigned.as_ref();
         self.closing = Some(Closing {
@@ -330,6 +330,7 @@ impl Task {
             .attr("process.exit.code", code);
         let last_stderr = self.last_stderr.take();
         self.keep_what_was_shown().await;
+        self.requeue_unread().await;
         let Some(turn) = self.turn.take() else {
             self.record(event);
             return self.try_next().await;

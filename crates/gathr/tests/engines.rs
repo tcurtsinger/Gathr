@@ -280,6 +280,8 @@ fn a_message_sent_into_a_turn_is_answered_before_the_agent_moves_to_another_chat
     let steered = service.send("POST", &path, json!({ "text": "Follow up", "agent": orin }));
     assert_eq!(steered.json()["steered"], true, "{}", steered.body);
     assert_eq!(send(&service, &b, &orin)["status"], "queued");
+    // No timer gives up on it: the turn runs 31 s, past the 30 s an earlier fix allowed.
+    std::thread::sleep(Duration::from_secs(31));
     std::fs::write(&go, "").unwrap();
 
     let history = service.wait_for(&a, 10, "the follow-up's own turn", |h| {
@@ -351,4 +353,41 @@ fn a_deleted_agents_engine_closes_at_once() {
         closed["error_type"].is_null() && closed["code"] == 0,
         "{closed}"
     );
+}
+
+/// An engine that exits before reading a message sent into its turn: the message becomes the
+/// chat's next turn and is sent again, never dropped.
+#[test]
+fn a_message_the_engine_never_read_becomes_the_chats_next_turn() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let (first, rest) = frames.split_once('\n').unwrap();
+    let exits = data.0.join("exits.jsonl");
+    let rows = format!(
+        "{first}\n{{\"dir\":\"hold\"}}\n{{\"dir\":\"in\"}}\n{rest}\n{{\"dir\":\"exit\",\"line\":\"0\"}}"
+    );
+    std::fs::write(&exits, rows).unwrap();
+    let service = TestService::with_engine(
+        &data.0,
+        &[("GATHR_REPLAY", &exits), ("GATHR_REPLAY_HOLD", &go)],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    send(&service, &chat, &orin);
+    let path = format!("/api/chats/{chat}/messages");
+    let steered = service.send("POST", &path, json!({ "text": "Follow up", "agent": orin }));
+    assert_eq!(steered.json()["steered"], true, "{}", steered.body);
+    std::fs::write(&go, "").unwrap();
+
+    let history = service.wait_for(&chat, 10, "the follow-up as a turn of its own", |h| {
+        statuses(h).len() == 2 && statuses(h)[1] == "running"
+    });
+    let second = history["turns"][1]["id"].clone();
+    let moved = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["body"] == "Follow up" && m["turn"] == second);
+    assert!(moved, "the follow-up isn't the new turn's: {history}");
 }

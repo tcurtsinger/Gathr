@@ -27,9 +27,6 @@ pub use process::CLOSE_GRACE;
 
 /// How often a turn waiting for sign-in looks at the login again.
 const SIGN_IN_POLL: Duration = Duration::from_secs(2);
-/// How long a message sent into a turn may wait for the engine to read it before the agent moves
-/// on to another turn: Claude Code reads it right after the turn ends, and answers it.
-const READ_WAIT: Duration = Duration::from_secs(30);
 /// Where the login isn't in a file (macOS), a refused login is tried again after this long.
 const REFUSED_RETRY: Duration = Duration::from_secs(60);
 
@@ -95,9 +92,8 @@ struct Task {
     /// The account folder whose login the engine refused, its login file then, and when: held
     /// as signed out until the file changes, so a refused login doesn't start an engine every poll.
     refused: Option<(PathBuf, Option<std::time::SystemTime>, Instant)>,
-    /// Messages sent into a turn under way that the engine hasn't read yet: their id, text and
-    /// when they were sent.
-    unread: Vec<(String, String, Instant)>,
+    /// Messages sent into a turn under way that the engine hasn't read yet: their id and text.
+    unread: Vec<(String, String)>,
     /// An engine closed the gentle way that hasn't exited yet; nothing new starts until it has.
     closing: Option<process::Closing>,
     /// Account removals waiting for the closing engine to exit.
@@ -251,7 +247,7 @@ impl Task {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, text, Instant::now()));
+            self.unread.push((id, text));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             let steer = Event::point("gathr.turn.steer").trace(&ids.trace);
             self.record(steer.chat(&ids.chat).ok());
@@ -394,28 +390,45 @@ impl Task {
     }
 
     /// Whether a message sent into the last turn is still to be read: the engine answers it with
-    /// a turn of its own, so nothing else may start, nor the engine close, until it has. One
-    /// unread past `READ_WAIT` is given up on, and recorded.
-    fn awaiting_read(&mut self) -> bool {
-        if self.engine.is_none() || self.unread.is_empty() {
-            return false;
-        }
-        if self
-            .unread
-            .iter()
-            .any(|(_, _, sent)| sent.elapsed() < READ_WAIT)
-        {
-            return true;
-        }
-        self.drop_unread("Claude Code didn't read it within 30 s");
-        false
+    /// a turn of its own, so it goes before any other turn, and no timer gives up on it.
+    fn awaiting_read(&self) -> bool {
+        self.engine.is_some() && !self.unread.is_empty()
     }
 
-    /// Records messages sent into a turn that the engine will never read now.
-    fn drop_unread(&mut self, why: &str) {
-        for (message, _, _) in std::mem::take(&mut self.unread) {
-            let event = Event::point("gathr.turn.steer").error("unread");
-            self.record(event.attr("gathr.message.id", message).attr("why", why));
+    /// Messages sent into a turn that the engine will now never read become the chat's next
+    /// turns, first in the queue, so each still gets its answer.
+    pub(super) async fn requeue_unread(&mut self) {
+        let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
+            return;
+        };
+        for (at, (message, text)) in std::mem::take(&mut self.unread).into_iter().enumerate() {
+            let ids = Ids {
+                chat: chat.clone(),
+                turn: ulid(now_us()),
+                trace: gathr::ids::trace_id(),
+                agent: self.agent.clone(),
+            };
+            let row = ids.clone();
+            let saved = self
+                .chats
+                .writer
+                .call(move |conn| {
+                    store::add_turn(conn, &row.chat, &row.turn, &row.trace, row.agent.as_deref())?;
+                    store::move_message(conn, &message, &row.turn)
+                })
+                .await;
+            if let Some(Err(e)) = saved {
+                let event = Event::point("gathr.turn.requeue").trace(&ids.trace);
+                self.record(event.error("sqlite").attr("why", e.to_string()));
+            }
+            self.queue.insert(
+                at,
+                Queued {
+                    ids: ids.clone(),
+                    text,
+                },
+            );
+            self.set_turn(&ids, "queued", None).await;
         }
     }
 
