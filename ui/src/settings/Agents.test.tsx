@@ -15,6 +15,7 @@ const account = (id: string, name: string): Account => ({
 const model = (id: string, name: string, efforts = ['low', 'high']): Model => ({
   id,
   name,
+  latest: ['opus', 'sonnet', 'haiku'].includes(id),
   description: null,
   efforts,
 });
