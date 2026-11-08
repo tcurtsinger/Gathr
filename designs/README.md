@@ -1,16 +1,30 @@
 # Gathr design previews
 
-Selected direction: one centred conversation, Team in the side panel for multi-agent chats.
+Current visual reference: the assistant-ui React prototype, adapted to Gathr's
+accepted decisions. See [system.html](system.html), [DESIGN.md](../DESIGN.md) and
+[prototype-reference.md](prototype-reference.md). Open system.html locally; append
+`#light` for light mode or use Switch theme. Run `node designs/check.cjs`.
+
+Settings retains the centred Gathr layout. The team-message layout is pending an
+owner choice. Everyone dispatch and moving 0015's Team tab into Summary require
+the integration plan to resolve them explicitly. The portable page has no service.
+
+## Retired selected shell pages
+
+These pages are retained as historical fixtures, not selected designs:
 
 - `chat/v14.html`: multi-agent chat
 - `single-chat/v12.html`: one-agent chat
 - `new-chat/v12.html`: new chat
 - `start-chat/v13.html`: choose agents
-- `system.html`: tokens and components
 
-The picked direction continues in the polished versions listed above. Earlier versions and directions are in git history. All names and messages are invented fixtures. Open files locally, append `#light` for light mode, or use Switch theme. Run `node designs/check.cjs`. Actions are local simulations; no providers, terminal or persistence.
+The prototype supersedes their shell, typography, palette, spacing, composer and
+workspace presentation. Do not build from them. Their older versions are also
+historical. All fixtures are invented. Actions are local simulations.
 
-`components.css` imports shared shell, conversation, panels and responsive styles in that order.
+`components.css` retains the four historical imports so older evidence stays
+viewable, then imports `system-reference.css` for the current portable reference.
+That page demonstrates static anatomy, not substitute React implementations.
 
 Phase 1 proposals: `diagnostics/v1.html` and `v2.html`, `engines/v1.html` and `v2.html`,
 `chat-states/v1.html` and `v2.html`. These are unselected options. See `phase1-options.md`

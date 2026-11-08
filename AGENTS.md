@@ -169,4 +169,9 @@ Friction is how Gathr learns what not to repeat, so it's read all the time, not 
 
 ## Design preview checks
 
-The selected desktop prototypes are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root. Open the four latest pages at 1440 and 1024 px in dark and light (`#light`), exercise New, Search, composer, panel tabs and agent roles. `DESIGN.md`, `designs/tokens.css`, `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes. No engine, real terminal or Settings service is connected. Browser interaction and keyboard checks complement the static command.
+The current reference and retired pages are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root.
+Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
+Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
+`designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
+The assistant-ui prototype is the visual reference; Settings keeps 0023's layout and the team-message layout awaits the owner's pick.
+No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.

@@ -2,3 +2,5 @@
 @import "./conversation.css";
 @import "./panels.css";
 @import "./responsive.css";
+/* Earlier pages retain their original composition; the current reference is below. */
+@import "./system-reference.css";

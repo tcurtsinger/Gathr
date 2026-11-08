@@ -1,151 +1,233 @@
 ---
 name: Gathr
-description: Desktop chat shell with a Team panel for multi-agent work.
+description: A desktop conversation workspace for a team of agents.
 tokens: designs/tokens.css
 colors:
-  canvas: "#191919"
-  surface: "#222222"
-  raised: "#303030"
-  text: "#e8e8e6"
-  muted: "#b0b0ad"
-  border: "#383838"
-  accent: "#a6c4df"
-  focus: "#a6c4df"
-  control: "#777774"
-  danger: "#ffb4b4"
-  danger-surface: "#382525"
-  danger-border: "#885454"
-  backdrop: "#00000088"
+  background: "#181818"
+  foreground: "oklch(.985 .002 106)"
+  card: "#202020"
+  popover: "#202020"
+  primary: "oklch(.922 .002 106)"
+  primary-foreground: "oklch(.215 .003 106)"
+  secondary: "#202020"
+  muted-surface: "#202020"
+  muted-foreground: "oklch(.708 .004 106)"
+  accent-surface: "#202020"
+  destructive: "lab(63.7053% 60.745 31.3109)"
+  border: "oklch(.985 .002 106 / 10%)"
+  input: "oklch(.985 .002 106 / 15%)"
+  ring: "oklch(.556 .004 106)"
+  attention: "#60a5fa"
 typography:
-  body: { fontFamily: "Segoe UI Variable", fontSize: "15px", fontWeight: 400 }
-rounded: { sm: "7px", md: "16px", composer: "22px" }
-spacing: { sm: "8px", md: "16px", lg: "32px" }
+  body: { fontFamily: "Public Sans Variable", fontSize: "14px", fontWeight: 400 }
+  composer: { fontFamily: "Public Sans Variable", fontSize: "15px", fontWeight: 400 }
+rounded: { sm: "8px", floating: "16px", composer: "24px", action: "9999px" }
+spacing: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px" }
 components:
-  composer: { backgroundColor: "{colors.raised}", rounded: "{rounded.composer}" }
+  composer: { backgroundColor: "{colors.popover}", rounded: "{rounded.composer}" }
 ---
+
 ## Overview
-Operate mode for local desktop agent work. Variance 2, motion 1, density 4. The selected Team panel keeps activity beside a single conversation. No production UI exists yet.
+
+The assistant-ui React prototype is the visual and interaction reference. Adapt
+its look to Gathr's service and accepted decisions. Its simulated data, routing,
+streaming, account controls and task transitions are not production contracts.
+Operate mode: variance 2, motion 2, density 5. One centred conversation, a project
+sidebar, a composer and a resizable workspace. No Rooms or Overview screen.
+
+The source record and component map are in [prototype-reference.md](designs/prototype-reference.md).
+The portable reference is [system.html](designs/system.html). It demonstrates
+tokens and static component anatomy, not replacement runtime components.
+
 ## Colors
-Neutral charcoal canvas, surface for sidebar and user messages, raised composer. Off-white text, secondary muted text. Borders separate regions; control is the stronger outline for small controls. Blue accent only for focus, links and selected reactions. Light theme: canvas #faf9f6, surface #f0efeb, raised #e6e5e0, text #292927, muted #63635e, border #dbdad4, accent/focus #365b7b, control #85857f.
-The backdrop token is #00000088 (black at 53.3% opacity) in both themes. Dialogs and the narrow navigation drawer share it; content and controls remain opaque.
+
+Dark canvas is #181818; sidebar, workspace, composer and floating surfaces are
+#202020. Light uses the prototype's warm near-white background and neutral muted
+surface. `tokens.css` records both themes. Foreground carries text and primary
+actions. `muted-foreground` is metadata; `muted-surface` is a background.
+`border` separates regions; `input` bounds inputs; `ring` is the upstream ring.
+Blue is attention, links, active work and keyboard focus, not an agent palette.
+Errors combine destructive text, a tinted surface, an icon and a reference.
+
+The prototype calls its neutral surface tokens `muted` and `accent`. Existing
+Gathr code uses those names for text. Here they are `muted-surface` and
+`accent-surface`; the old names remain compatibility aliases to readable text.
+The runtime adapter maps these two names back for assistant-ui. Do not paste the
+prototype's conflicting names into the existing UI. Other aliases: canvas to
+background, surface to card, text to foreground, danger to destructive.
+
 ## Typography
-Segoe UI Variable then Segoe UI. Prose 15/24.75, sidebar 13, controls and metadata 12, empty title 28. Weight 400 to 600.
+
+Public Sans Variable, self-hosted under the SIL Open Font License, then Public
+Sans and the platform sans-serif. The preview includes the Latin variable file;
+other scripts use fallback fonts. No remote font requests. Body 14px; composer
+15px; navigation and agent names 13px; text actions 12px; metadata 11 to 12px
+monospace. Headings 26px for a new chat and 20px for a panel. Weights 400 and 500,
+600 where emphasis needs it. Prose has relaxed line spacing; code stays monospace.
+
 ## Layout
-248 px project sidebar, conversation max 760 px, optional 330 px side panel. At 1024 the sidebar is 205 and panel 285. Below 768 px the sidebar folds into a native popover drawer opened by the topbar sidebar icon. Its matching Close control, Escape or outside click dismisses it and returns focus to the opener. The panel overlays. Desktop is the target; small-width reflow keeps controls reachable.
+
+- Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px.
+- Chat header and workspace tabstrip align at 46px. The prototype's 40px preview
+  strip is fixture chrome, not a Gathr requirement.
+- Thread column is 44rem including 16px inner padding, leaving 672px at the
+  normal 16px root size. Composer shares that content width. New chat centres
+  its heading, optional project notch and composer.
+- Workspace starts at 40% of available width, initially clamped to 480 to 760px.
+  Resize minimum is 360px; desktop sizing preserves at least 360px for chat.
+  At 1200px and below it overlays chat. Close stays at its far right.
+- A document's adjacent file tree starts at 240px, resizes from 160 to 480px and
+  leaves at least 200px for the reader. Reader padding is 24px, 20px narrow, or
+  16px around highlighted source.
+- Human task content and its pinned Back/Next/Send footer share a 600px column.
+  Settings is the explicit layout exception described below.
+
+ResizeHandle supports pointer capture, 10px arrows, 40px Shift+arrows and Home/End.
+Maintain native scrolling, a thin themed rail and independent scrolling regions.
+Desktop checks are at 1440 and 1024px, light and dark. Small screens reflow
+controls; they do not create a second mobile product.
+
 ## Elevation
-No shadows in the shell. Dialog is the sole blocking layer.
+
+Flat chat and navigation. Floating popovers use a tonal surface and a soft shadow.
+Summary anchors 8px below and 8px inside the chat header corner, independently of
+workspace width. Its width is 320px, padding 12px, radius 16px and maximum height
+560px bounded by the viewport. Navigation flyouts have no dimmed backdrop.
+Blocking Settings uses the shared backdrop. Layers must not clip focused controls.
+
 ## Shapes
-7 px controls, 18 px content-sized user messages (10 px vertical, 16 px horizontal padding), 22 px composer, circular agent monograms. Agent replies have no containing box.
+
+Text actions use the prototype's shared 32px pill Button. Icon controls keep their
+contextual square or circular shape. Small controls use the 8px base radius;
+floating surfaces 16px; ComposerBar 24px with 10px padding. User messages have
+16px corners and fit their content. Agent replies remain unboxed.
+
 ## Components
-Shared sidebar, transcript, tool disclosure, message actions, reaction, composer, context control, task row, agent row, side-job disclosure, panel tabs. All four screens use designs/components.css and designs/tokens.css. New chat and setup differ because their job is configuration. Multi-agent chats add a Team tab: named agents, roles, tasks, side jobs and waits. Single-agent chats omit it. New chat centres the composer; Choose agents configures membership and roles before opening the conversation.
+
+Use actual assistant-ui primitives and the recorded official registry components
+after the integration decision is approved. Do not build lookalikes in `ui/`.
+The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
+Six recorded adaptations are FileTree, SpeakerIdentity, Button, ElicitationForm,
+OptionList and SubagentList. Retain source notices and original/adapted hashes.
+Dependency approval, pinned versions and file splitting belong to the integration
+decision; this design update adds no JavaScript dependency.
+
+### Conversation and composer
+
+Compose ThreadPrimitive, MessagePrimitive and the shared ChatComposer. The full
+upstream Thread has no Composer override. ChatComposer uses the modular Composer,
+attachments, mentions, slash actions, selection quoting and Send/Stop through the
+runtime adapter. The recipient picker selects an agent, never its model or effort.
+Default routing remains the Supervisor, per 0028. Everyone's dispatch behavior
+requires a separate decision and must not be inferred from the fixture callback.
+
+Streamdown is the rendering reference, pending integration approval. Keep user
+messages plain text; render agent Markdown, lists, headings, quotes, code, tables,
+sources, files and tool results. Wide code and tables scroll inside the reply.
+Raw HTML policy, link behavior and Diagnostics references stay governed by Gathr.
+Tools are collapsed where they happened. MessageActions serve hover and keyboard
+focus. Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
+pass pointer input through and leave the scrollbar clear.
+
+**Team-message layout: pending the owner's pick.** The prototype's default agent
+message arrangement is not selected. Compare grouped four-agent replies, tool
+runs, a long reply and a separate Supervisor wrap-up. Preserve 0028's turn-start
+order; concurrent output never interleaves. The user request remains visible when
+the exchange collapses. A chosen arrangement must expose every agent's identity
+and retain the place and draft while opening a turn's context. Do not treat any
+option as permission to change routing or coordination state.
+
+### Navigation and workspace
+
+New, Search and Tasks sit above projects and their chats. Settings stays bottom
+left. Search and the pending human Tasks list share a contextual flyout, at most
+340px wide, beside navigation. Escape, outside click, Close or the same trigger
+dismisses it. Search matches titles and message text, supports arrow selection and
+Enter, and retains its query. A task routes to its exact chat and task.
+
+Workspace has a permanent Home tab, then Tasks, Changes, Terminal, Files, Web and
+canonical document tabs as opened. Plus returns to Home. Each chat retains its
+tabs, selection and tool state; canonical paths reuse a tab, terminals may have
+several instances. Close other tabs retains Home and Recents. Arrow keys,
+Home/End and Delete operate tabs. Moving 0015's Team tab into Summary is a
+prototype difference for the integration decision to resolve. This document
+records its appearance, not an unapproved change to the accepted workflow.
+
+Team status moves to Summary. Inline SubagentList rows show chat role and named
+state, with a TodoList disclosure for that agent's assignments in that chat.
+No card borders around the inline rows. Progress must derive from real task
+completion, not a decorative timer. States include Working, Ready and named waits
+with their start times. No assignment says No assigned tasks. Plans have their own
+identity and tab. A typed note is never approval.
+
+### Human tasks
+
+The navigation badge counts pending human tasks across chats. The workspace Tasks
+tab shows the current chat's questions, one at a time, with title and source.
+Only the Supervisor asks the person (the sole agent in a one-agent chat).
+Inline OptionList stages single/multiple choices. ElicitationForm supplies the
+optional Notes field or the open-ended answer. There is no duplicate Confirm or
+automatic Next. Back/Next retain drafts; final Send submits ready answers only.
+Notes alone do not make a structured answer ready. Unanswered tasks remain open.
+Lifecycle/history policy and persistence are service work, not prototype rules.
+
+### Settings, accounts and agents
+
+Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:
+at most 1024 by 760px, 32px horizontal and 48px vertical clearance, a fixed header,
+a 200px category rail and Close at top right. Below 768px categories move above
+content. Escape/Close return focus and preserve the chat's draft and position.
+Apply the new shared tokens, type and controls within that layout.
+
+General includes Open at login for This computer, applied immediately with Switch.
+Engines manages named accounts and one Gathr-owned program per engine. No custom
+path. A new Gathr has no accounts and does not reuse external logins. Agents has
+one shared editor: Account, Model, Effort, Approvals. Account implies engine;
+model/effort choices come from that installed engine. Family Latest follows new
+releases; numbered versions stay pinned. Do not ship prototype fixture models,
+temperature or extra toggles as product settings. Save affects future turns in
+all chats using the agent; running turns retain their assignment. Roles are
+chat-specific, with one Supervisor for two to five members and an optional,
+distinct Reviewer. Edit agent opens this same editor from every entry point.
+
+Approvals is Ask, Edits, Auto (new-agent default) or Full, per 0029. Detail stays
+behind Help beside the label. The shared ? opens an in-window popover; Escape
+closes Help before Settings and preserves focus. Switch remains the existing
+accessible immediate setting, with pending save and referenced failure states.
+
+Diagnostics stays a Settings category: a 210px turn list beside the independently
+scrolling timeline. Failure links open its matching turn and reset conflicting
+filters. Preserve category/filter state and make long turns usable. No normal
+header Diagnostics action. The prototype's component gallery is a reference tool.
+
+### Recovery, focus and motion
+
+Stopped, waiting for sign-in and failed-send notices stay at their affected reply
+per 0023. Preserve partial text and drafts. Neutral for stopped/waiting; destructive
+for failure, with the reference, Diagnostics and Retry. Errors end in failed.
+Sign in opens Engines in the same Settings panel.
+
+Keep visible keyboard focus and native keyboard behavior. The prototype's subtle
+registry focus treatments are a reference, not a reason to weaken Gathr's visible
+focus. The portable page uses a 2px attention outline with 2px offset. Icon buttons
+have accessible names. Dialogs trap focus, Escape closes the top layer and returns
+focus. Reduced motion removes movement. Keep registry hover/press feedback and
+purposeful transitions, never animate a simulated service result into truth.
+
 ## Do's and Don'ts
-Use one chat model with optional project. Capitalize Gathr. Keep replies plain. Fold tool runs. Name waits and start times. No overview, separate room navigation, tinted canvas, agent portraits, or explanatory subtitles. Sample data only.
+
+- Capitalize Gathr. Keep one component for each repeated pattern.
+- Use the prototype's real components with Gathr adapters and real state.
+- Keep copy terse, action labels as verbs and detail behind Help/disclosure.
+- Keep screenshots and fixture data invented; never port personal content.
+- Do not replace accepted architecture, membership, safety or lifecycle policy
+  with a prototype callback. Conflicts go to the decision/plan, not into styling.
+- Do not claim the current production screens already match this reference.
+
 ## Check
-Run node designs/check.cjs. Open each HTML locally; #light selects light mode. All actions are local prototype interactions. No engine, filesystem folder picker, terminal process or settings service is connected.
 
-## Patterns and states
-Use + New and Search with matching 16 px outline icons, no shortcut hint. Icons use currentColor and a 1.5 px stroke. Keep the product name in the sidebar only. User messages size to their text; message actions appear below on hover or keyboard focus. Never reserve action-row height inside the message bubble.
-
-Tools use native details disclosures. Panel tabs share one content region. Message actions, reactions, queue removal, send, pause and context summarisation provide local feedback. Role selection allows one to five agents; two or more require a Supervisor; Reviewer is optional and distinct. Disabled Create reflects invalid membership. Every setting must ultimately have a Settings control. The Phase 1 previews open the centered Settings panel.
-
-Focus uses a 2 px accent outline with 2 px offset; in the composer it goes around the rounded box, not the text area inside. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
-
-Help (selected: approvals/v1, `ui/src/components/Help.tsx`): a setting's detail sits behind a plain ? in a 16 px circle, in a 28 px muted button beside its label (44 px at narrow widths), named "About <setting>". Click, Enter or Space opens a popover up to 350 px wide, below the ? or above it when there's no room, inside the window; it doesn't move the form. Escape or a click outside closes it before Settings, and focus stays on the ?. No hover-only content or title tooltips.
-
-Switch (startup/v1, `ui/src/components/Switch.tsx`): a setting that applies at once, with no Save. A native button with role switch, named by its label and described by its scope ("This computer"). A 44 by 24 px track in a 44 by 32 px hit area (44 by 44 at narrow widths), 16 px thumb: off is raised with a control outline and a text thumb at the left, on is accent with a canvas thumb at the right, so position carries the state along with colour. Space or Enter toggles it. While its change is saved it ignores presses, keeps focus and announces Saving; a failed change puts it back and shows Change failed with its reference. No animation.
-
-## Token ownership
-The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
-
-Shared styles enter through `designs/components.css`, which imports shell, conversation, panels and responsive rules in cascade order.
-
-## Settings and Diagnostics
-Selected previews: engines/v4.html, diagnostics/v3.html and chat-states/v3.html.
-Settings opens over the current screen as a native modal dialog, at most 1024 by 760 px,
-with 32 px horizontal and 48 px vertical clearance. The header stays fixed; categories
-sit in a 200 px left rail. Close and Escape restore focus to the opener and preserve
-chat position, draft and form fields. Below 768 px categories move above content.
-Shared rules: settings-overlay.css and phase1-selected.css; shared interactions:
-phase1-selected.js. Preview selectors and simulated completion never ship.
-
-General comes first in the categories (startup/v1): one row, Open at login, This computer, a Switch. It applies at once to this computer, whoever its accounts are; Gathr then starts in the tray at login. Settings still opens at Engines.
-
-Settings entry: Lucide settings cog plus Settings at the bottom left, one click (settings-entry/v5).
-Use the app's 18 px icon, 24 px viewBox, 1.5 px stroke and rounded caps and joins; retain its ISC notice.
-Engines lists named accounts. Each row shows name, engine, sign-in state, Rename
-and Sign in or Sign out. Add asks for engine and name, then starts sign-in.
-Gathr owns one program per engine; version and updates appear once per engine
-below the accounts. There is no custom path or engine source control.
-Each account keeps its own login folder, per 0002. Updating a program leaves
-account assignments and logins intact. The preview simulates login completion.
-The accounts layout, entry and account model are approved.
-Diagnostics is another category,
-with a 210 px independently scrolling turn list beside a scrolling timeline. Filters
-stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
-Below 768 px the turn list sits above the timeline. Only an error link in the
-chat and Settings > Diagnostics open Diagnostics; no header or chat menu entry.
-An error link opens Diagnostics filtered to the affected turn.
-Clearing Find restores all turns. Switching categories preserves the filtered view.
-Opening a failure reference resets the status filter so the affected turn is visible.
-References in the timeline simulate Copy, without using the system clipboard.
-
-## Rich cards and scrolling
-Design, image and file cards show a still preview until opened. Nothing off screen
-keeps animating. Chats must scroll smoothly with 500 messages and dozens of cards;
-the app window PR includes scroll timings as proof.
-
-## Reply notices
-The shared notice occupies the reply width below the related user message. Stopped
-sits after any retained partial reply; Continue fills the composer. Waiting for sign-in
-uses the same neutral surface, with Sign in opening Engines. A failed send uses
-Send failed, its reference, Diagnostics and Retry at the right. Retrying disables
-Retry and changes its label to Retrying in this simulation. A new preview selection
-resets it. Production completion replaces the notice with the reply or a new failure.
-The draft remains intact when opening Settings or retrying.
-
-Failures alone use danger, danger-surface and danger-border. Dark values are in the
-YAML; light values are #a62626, #fff3f2 and #d49a98. Neutral notices retain surface,
-text and control tokens. This is a semantic error role, separate from the blue action
-accent. Normal replies remain unboxed. No service integration is claimed.
-
-## Reply formatting
-An agent's Markdown is formatted (0027) with the shared `Markdown` component: body
-type for paragraphs and lists, 20, 17 and 15 px semibold headings, accent links that
-open in the person's browser. Code, code blocks and tables sit on surface with
-border lines; code is 13 px monospace, 12 px inside blocks. Quotes take a 3 px border
-and muted text. Wide code blocks and tables scroll sideways inside the reply width.
-Raw HTML shows as text. User messages stay plain text.
-
-## Agent selection and editing
-The composer selects an agent. It has no model or effort control. Each agent owns
-its engine, account, model and effort. Selecting another recipient never changes
-those assignments. Selected shell previews: chat/v14, single-chat/v12,
-new-chat/v12 and start-chat/v13. Approval and context controls keep their own jobs.
-
-Selected: Settings > Agents (agents/v1), in the centred Settings panel with its
-category list at the left. Edit agent in the chat's agent picker opens this same
-editor at the selected agent. It is unavailable while Everyone is selected.
-The inline Team editor (agents/v2) and separate chat menu editor (agents/v3)
-were not chosen. There is one editor for single and team chats.
-
-Save updates the reusable agent everywhere it is used. There is no per-save Scope
-control. Future turns use the new assignment; running turns retain theirs.
-Roles remain chat-specific. Decision 0026 records the selected design; engine
-integration still needs its approved implementation plan.
-The editor has one Account picker, then Model and Effort. The account implies
-the engine; there is no separate Engine picker. Account changes refresh models
-and effort and reset dependent selections to the engine default. Signed-out
-accounts stay labelled and selectable; sending asks for sign-in.
-Models are searchable and independently scroll;
-the chosen model stays visible above the list. No free-text model identifier.
-Production choices must come from the installed engine, including supported
-effort values and unavailable-model states, pending Cass's capability research.
-Family Latest follows new releases in that family without editing each agent; a
-numbered version stays pinned. Engine default follows the engine's own default,
-which may differ from the selected family. Latest is the default for new
-agents when supported. The sample Opus Latest and Opus 4.6 choices illustrate
-these assignments only; actual discovery and resolution await Cass's research.
-Approvals goes below Effort: Ask, Edits, Auto or Full (0029), Auto for a new agent, each mode's detail behind its Help.
-Cancel and Escape discard form changes and restore focus. Save gives local feedback.
-Preview changes last only while the page remains open. The form and native dialog
-reuse Gathr's tokens, focus, button and Settings shell patterns. No new palette.
+Run `node designs/check.cjs`. Open `designs/system.html` at 1440 and 1024px,
+dark and light (`#light` or Switch theme). Exercise composer, tool disclosure,
+tabs, Summary, Settings categories, Help, Switch, Escape and keyboard focus.
+The old selected pages are retired as layout authority; see designs/README.md.
+No engine, account sign-in, real command or Settings service connects to this page.
