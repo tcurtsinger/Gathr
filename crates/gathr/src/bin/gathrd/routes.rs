@@ -75,13 +75,12 @@ async fn history(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    let (reply, open) = oneshot::channel();
-    let _ = s.chats.task(&chat).send(Cmd::Approvals { reply });
+    let open = s.chats.approvals(&chat).await;
     let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
         store::history(conn, &chat)
     })
     .await?;
-    history["approvals"] = open.await.unwrap_or_else(|_| json!([]));
+    history["approvals"] = json!(open);
     Ok(Json(history))
 }
 
@@ -110,13 +109,15 @@ async fn send(
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
     let (reply, answer) = oneshot::channel();
+    let task = s.chats.task(&chat, body.agent.as_deref());
     let command = Cmd::Send {
+        chat,
         text: body.text,
         agent: body.agent,
         trace: t.0.clone(),
         reply,
     };
-    let _ = s.chats.task(&chat).send(command);
+    let _ = task.send(command);
     match answer.await {
         Ok(Ok(sent)) => Ok(Json(sent)),
         Ok(Err(failed)) => Err(fail(
@@ -140,16 +141,7 @@ async fn stop(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    let (reply, answer) = oneshot::channel();
-    let _ = s.chats.task(&chat).send(Cmd::Stop { reply });
-    answer.await.map(Json).map_err(|_| {
-        fail(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Stop failed",
-            "the chat's task ended",
-            &t.0,
-        )
-    })
+    Ok(Json(json!({ "stopped": s.chats.stop(&chat).await })))
 }
 
 #[derive(Deserialize)]
@@ -163,16 +155,9 @@ async fn approve(
     Path((chat, request)): Path<(String, String)>,
     Json(body): Json<Approval>,
 ) -> Answer {
-    let (reply, answer) = oneshot::channel();
-    let command = Cmd::Approve {
-        request_id: request,
-        allow: body.allow,
-        reply,
-    };
-    let _ = s.chats.task(&chat).send(command);
-    match answer.await {
-        Ok(true) => Ok(Json(json!({ "answered": true }))),
-        _ => Err(fail(
+    match s.chats.approve(&chat, &request, body.allow).await {
+        true => Ok(Json(json!({ "answered": true }))),
+        false => Err(fail(
             StatusCode::NOT_FOUND,
             "Answer failed",
             "no such question is open",

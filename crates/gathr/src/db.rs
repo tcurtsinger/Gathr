@@ -12,6 +12,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0002_turns.sql"),
     include_str!("../migrations/0003_accounts.sql"),
     include_str!("../migrations/0004_agents.sql"),
+    include_str!("../migrations/0005_engine_sessions.sql"),
 ];
 
 /// The schema version this build writes.
@@ -116,9 +117,41 @@ mod tests {
         .unwrap();
         drop(conn);
         let conn = open(&path).unwrap();
-        let session = |chat| crate::store::engine_session(&conn, chat, "oldest").unwrap();
+        let session = |chat| crate::store::engine_session(&conn, chat, None, "oldest").unwrap();
         assert_eq!(session("talked").as_deref(), Some("session-1"));
         assert_eq!(session("quiet"), None);
+    }
+
+    /// A chat's session belongs to the agent that ran it (F2): each agent keeps its own session in
+    /// each chat, so the session a chat had before is the agent's of its last turn.
+    #[test]
+    fn a_chat_session_moves_to_the_agent_of_its_last_turn() {
+        let path = temp_db("agent-sessions");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..4] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 4;
+             INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('work', 'claude', 'Work', 'work', 1);
+             INSERT INTO chats (id, title, created_ts, engine_session, engine_account) VALUES
+                 ('by-agent', 'A', 1, 'session-a', 'work'), ('no-agent', 'B', 1, 'session-b', 'work');
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id) VALUES
+                 ('t1', 'by-agent', 'x', 'done', 1, 'orin'), ('t2', 'by-agent', 'x', 'done', 2, 'cass'),
+                 ('t3', 'no-agent', 'x', 'done', 1, NULL);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let session =
+            |chat, agent| crate::store::engine_session(&conn, chat, agent, "work").unwrap();
+        assert_eq!(
+            session("by-agent", Some("cass")).as_deref(),
+            Some("session-a")
+        );
+        assert_eq!(session("by-agent", Some("orin")), None);
+        assert_eq!(session("no-agent", None).as_deref(), Some("session-b"));
+        assert_eq!(session("no-agent", Some("cass")), None);
     }
 
     #[test]

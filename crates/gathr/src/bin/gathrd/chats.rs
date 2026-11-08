@@ -1,5 +1,7 @@
-//! Chats with Claude Code: one task per chat owns its engine and its turns ([`crate::turns`]);
-//! this keeps them, and starts them when a message arrives or the service starts.
+//! Chats with Claude Code: one task per agent owns its engine and runs its turns, one at a time
+//! across its chats ([`crate::turns`], 0010 Sessions). Turns sent to no agent get a task per chat.
+//! This keeps the tasks, starts them when a message arrives or the service starts, and asks every
+//! task for what concerns a whole chat (stop, approvals) or an account (leave).
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -18,6 +20,7 @@ use crate::turns;
 
 pub enum Cmd {
     Send {
+        chat: String,
         text: String,
         /// The agent it's sent to; none runs on the chats' account with the engine's defaults.
         agent: Option<String>,
@@ -25,21 +28,26 @@ pub enum Cmd {
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
     },
+    /// Stops the chat's turns: the task's queued ones, and its running one if it's the chat's.
     Stop {
-        reply: oneshot::Sender<Value>,
+        chat: String,
+        reply: oneshot::Sender<Vec<String>>,
     },
     Approve {
+        chat: String,
         request_id: String,
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
-    /// The approvals still waiting for an answer.
+    /// The chat's approvals still waiting for an answer.
     Approvals {
-        reply: oneshot::Sender<Value>,
+        chat: String,
+        reply: oneshot::Sender<Vec<Value>>,
     },
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
-    /// Closes the chat's engine if it runs in this account folder; the chat's queue stays.
+    /// Closes the task's engine if it runs in this account folder, answering once it has exited;
+    /// the queue stays.
     Leave {
         folder: PathBuf,
         done: oneshot::Sender<()>,
@@ -62,7 +70,10 @@ pub struct Chats {
     pub live: broadcast::Sender<Value>,
     /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
     gates: Mutex<HashMap<PathBuf, Gate>>,
+    /// Each agent's task by `agent:<id>`, and each chat's for turns to no agent by `chat:<id>`.
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
+    /// Agents whose engine hasn't exited 30 s after its close: what each is held on (0010).
+    holds: Mutex<HashMap<String, Value>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
     /// Accounts being removed, never picked even while their rows remain.
@@ -78,6 +89,7 @@ impl Chats {
             live: broadcast::channel(4096).0,
             gates: Mutex::default(),
             tasks: Mutex::default(),
+            holds: Mutex::default(),
             account: Mutex::default(),
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
@@ -128,8 +140,48 @@ impl Chats {
         *self.account.lock().expect("never poisoned") = next;
     }
 
-    /// Closes every chat engine running in `folder` the gentle way; the chats carry on.
+    /// Closes every engine running in `folder` the gentle way, once each has exited; the chats
+    /// carry on.
     pub async fn leave(&self, folder: &Path) {
+        self.ask_all(|done| Cmd::Leave {
+            folder: folder.to_path_buf(),
+            done,
+        })
+        .await;
+    }
+
+    /// Stops the chat's turns, whichever agents they're for: the turns stopped.
+    pub async fn stop(&self, chat: &str) -> Vec<String> {
+        let chat = chat.to_string();
+        let stopped = self.ask_all(|reply| Cmd::Stop {
+            chat: chat.clone(),
+            reply,
+        });
+        stopped.await.into_iter().flatten().collect()
+    }
+
+    /// Answers an approval the chat's running turn asked: false when none is open.
+    pub async fn approve(&self, chat: &str, request_id: &str, allow: bool) -> bool {
+        let answered = self.ask_all(|reply| Cmd::Approve {
+            chat: chat.to_string(),
+            request_id: request_id.to_string(),
+            allow,
+            reply,
+        });
+        answered.await.into_iter().any(|a| a)
+    }
+
+    /// The chat's open approvals, for a window that opens it later.
+    pub async fn approvals(&self, chat: &str) -> Vec<Value> {
+        let open = self.ask_all(|reply| Cmd::Approvals {
+            chat: chat.to_string(),
+            reply,
+        });
+        open.await.into_iter().flatten().collect()
+    }
+
+    /// Sends every task a command and waits for every answer.
+    async fn ask_all<T>(&self, command: impl Fn(oneshot::Sender<T>) -> Cmd) -> Vec<T> {
         let tasks: Vec<_> = self
             .tasks
             .lock()
@@ -139,15 +191,30 @@ impl Chats {
             .collect();
         let mut waits = Vec::new();
         for tx in tasks {
-            let (done, wait) = oneshot::channel();
-            let folder = folder.to_path_buf();
-            if tx.send(Cmd::Leave { folder, done }).is_ok() {
+            let (reply, wait) = oneshot::channel();
+            if tx.send(command(reply)).is_ok() {
                 waits.push(wait);
             }
         }
+        let mut answers = Vec::new();
         for wait in waits {
-            let _ = wait.await;
+            answers.extend(wait.await);
         }
+        answers
+    }
+
+    /// What the agent's engine is held on, or null.
+    pub fn hold(&self, agent: &str) -> Value {
+        let holds = self.holds.lock().expect("never poisoned");
+        holds.get(agent).cloned().unwrap_or(Value::Null)
+    }
+
+    pub fn set_hold(&self, agent: &str, hold: Option<Value>) {
+        let mut holds = self.holds.lock().expect("never poisoned");
+        match hold {
+            Some(hold) => holds.insert(agent.to_string(), hold),
+            None => holds.remove(agent),
+        };
     }
 
     /// The account folder's renewal gate (0002).
@@ -159,15 +226,20 @@ impl Chats {
             .clone()
     }
 
-    /// The chat's task, started if it isn't running.
-    pub fn task(self: &Arc<Self>, chat: &str) -> mpsc::UnboundedSender<Cmd> {
+    /// The task that runs the turn: its agent's, or the chat's for a turn sent to no agent.
+    pub fn task(self: &Arc<Self>, chat: &str, agent: Option<&str>) -> mpsc::UnboundedSender<Cmd> {
+        let key = match agent {
+            Some(agent) => format!("agent:{agent}"),
+            None => format!("chat:{chat}"),
+        };
         let mut tasks = self.tasks.lock().expect("the chats lock is never poisoned");
-        if let Some(tx) = tasks.get(chat).filter(|tx| !tx.is_closed()) {
+        if let Some(tx) = tasks.get(&key).filter(|tx| !tx.is_closed()) {
             return tx.clone();
         }
         let (tx, rx) = mpsc::unbounded_channel();
-        tokio::spawn(turns::run(self.clone(), chat.to_string(), rx));
-        tasks.insert(chat.to_string(), tx.clone());
+        let agent = agent.map(String::from);
+        tokio::spawn(turns::run(self.clone(), agent, rx));
+        tasks.insert(key, tx.clone());
         tx
     }
 
@@ -177,7 +249,8 @@ impl Chats {
         match waiting {
             Some(Ok(waiting)) => {
                 for turn in waiting {
-                    let _ = self.task(&turn.chat.clone()).send(Cmd::Resume(turn));
+                    let task = self.task(&turn.chat, turn.agent.as_deref());
+                    let _ = task.send(Cmd::Resume(turn));
                 }
             }
             Some(Err(e)) => {
@@ -190,25 +263,10 @@ impl Chats {
         }
     }
 
-    /// Closes every chat's engine the gentle way, at shutdown.
+    /// Closes every engine at shutdown: the gentle way, killed only after the grace period.
     pub async fn close_all(&self) {
-        let tasks: Vec<_> = self
-            .tasks
-            .lock()
-            .expect("the chats lock is never poisoned")
-            .drain()
-            .map(|(_, tx)| tx)
-            .collect();
-        let mut waits = Vec::new();
-        for tx in tasks {
-            let (done, wait) = oneshot::channel();
-            if tx.send(Cmd::Close { done }).is_ok() {
-                waits.push(wait);
-            }
-        }
-        for wait in waits {
-            let _ = wait.await;
-        }
+        self.ask_all(|done| Cmd::Close { done }).await;
+        self.tasks.lock().expect("never poisoned").clear();
     }
 
     /// An account folder's sign-in state and expiry, off the async threads: on macOS it may run

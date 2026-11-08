@@ -214,31 +214,35 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// The chat's engine session, if it lives in `account`'s login folder: only there can it resume.
+/// The agent's engine session in the chat (`None`: turns sent to no agent), if it lives in
+/// `account`'s login folder: only there can it resume.
 pub fn engine_session(
     conn: &Connection,
     chat: &str,
+    agent: Option<&str>,
     account: &str,
 ) -> Result<Option<String>, Error> {
     Ok(conn
         .query_row(
-            "SELECT engine_session FROM chats WHERE id = ?1 AND engine_account = ?2",
-            [chat, account],
+            "SELECT session_id FROM engine_sessions
+             WHERE chat_id = ?1 AND agent_key = ?2 AND account_id = ?3",
+            [chat, agent.unwrap_or_default(), account],
             |r| r.get(0),
         )
-        .optional()?
-        .flatten())
+        .optional()?)
 }
 
 pub fn set_engine_session(
     conn: &Connection,
     chat: &str,
+    agent: Option<&str>,
     session: &str,
     account: &str,
 ) -> Result<(), Error> {
     conn.execute(
-        "UPDATE chats SET engine_session = ?2, engine_account = ?3 WHERE id = ?1",
-        params![chat, session, account],
+        "INSERT INTO engine_sessions (chat_id, agent_key, account_id, session_id) VALUES (?1, ?2, ?3, ?4)
+         ON CONFLICT (chat_id, agent_key) DO UPDATE SET account_id = ?3, session_id = ?4",
+        params![chat, agent.unwrap_or_default(), account, session],
     )?;
     Ok(())
 }

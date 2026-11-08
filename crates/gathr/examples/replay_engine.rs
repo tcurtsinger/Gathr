@@ -23,7 +23,8 @@
 //!
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
-//! `GATHR_REPLAY_INIT=silent` never answers it; `linger` stays a minute after its input closes.
+//! `GATHR_REPLAY_INIT=silent` never answers it; `linger` stays a minute after its input closes
+//! (`GATHR_REPLAY_LINGER_MS` sets how long).
 
 use std::io::{BufRead, Write};
 
@@ -119,7 +120,9 @@ fn main() {
         }
     }
     if std::env::var("GATHR_REPLAY_INIT").as_deref() == Ok("linger") {
-        std::thread::sleep(std::time::Duration::from_secs(60));
+        let ms = std::env::var("GATHR_REPLAY_LINGER_MS").ok();
+        let ms = ms.and_then(|ms| ms.parse().ok()).unwrap_or(60_000);
+        std::thread::sleep(std::time::Duration::from_millis(ms));
     }
 }
 
