@@ -180,3 +180,36 @@ fn a_list_that_fails_has_a_reference_that_traces() {
         "{asked}"
     );
 }
+
+/// The engine that lists models runs on the account's login and may be renewing it, so it's
+/// never killed for taking long to exit (0001): only shutdown kills, after its grace.
+#[test]
+fn a_model_list_engine_slow_to_exit_is_never_killed() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY_INIT", Path::new("linger")),
+            ("GATHR_REPLAY_LINGER_MS", Path::new("11500")),
+        ],
+    );
+    let path = format!("/api/accounts/{}/models", service.add_account("Test"));
+    let listed = service.call("GET", &path);
+    assert_eq!(listed.status, 200, "{}", listed.body);
+    let sql = "SELECT error_type, json_extract(attrs, '$.\"process.exit.code\"') AS code \
+               FROM event_log WHERE name = 'gathr.engine.models.close'";
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let closed = loop {
+        let (ok, rows) = gathr(&data.0, &["diag", "query", sql]);
+        assert!(ok, "{rows}");
+        if let Some(row) = rows["rows"].get(0) {
+            break row.clone();
+        }
+        assert!(Instant::now() < deadline, "the engine never closed");
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    assert!(
+        closed["error_type"].is_null() && closed["code"] == 0,
+        "it was killed: {closed}"
+    );
+}

@@ -10,7 +10,7 @@ use axum::{Json, Router};
 use gathr::agents::{self, Agent, Change, Refused};
 use gathr::event::Event;
 use serde::{Deserialize, Deserializer};
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::accounts::find as find_account;
 use crate::api::{State, Trace};
@@ -74,7 +74,10 @@ pub async fn find(s: &State, t: &Trace, id: &str, error: &'static str) -> Result
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     match s.writer.call(|conn| agents::list(conn)).await {
-        Some(Ok(listed)) => Ok(Json(json!({ "agents": listed }))),
+        Some(Ok(listed)) => {
+            let shown: Vec<Value> = listed.iter().map(|a| shown(&s, a)).collect();
+            Ok(Json(json!({ "agents": shown })))
+        }
         Some(Err(e)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Agents failed",
@@ -95,7 +98,14 @@ async fn one(
     Extension(t): Extension<Trace>,
     Path(id): Path<String>,
 ) -> Answer {
-    Ok(Json(json!(find(&s, &t, &id, "Agent failed").await?)))
+    Ok(Json(shown(&s, &find(&s, &t, &id, "Agent failed").await?)))
+}
+
+/// The agent with its engine's hold, if a close it's waiting on has taken too long (0010).
+fn shown(s: &State, agent: &Agent) -> Value {
+    let mut shown = json!(agent);
+    shown["hold"] = s.chats.hold(&agent.id);
+    shown
 }
 
 async fn add(
@@ -135,7 +145,7 @@ async fn remove(
     let agent = find(&s, &t, &id, ERROR).await?;
     let gone = agent.id.clone();
     match s.writer.call(move |conn| agents::remove(conn, &gone)).await {
-        Some(Ok(_)) => {}
+        Some(Ok(_)) => s.chats.retire(&agent.id),
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::INTERNAL_SERVER_ERROR,

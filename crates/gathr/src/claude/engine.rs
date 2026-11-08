@@ -76,6 +76,11 @@ impl Engine {
         stdin.flush().await
     }
 
+    /// Closes stdin, so the engine ends on its own (0001); `wait` then sees it exit.
+    pub fn close_input(&mut self) {
+        drop(self.stdin.take());
+    }
+
     /// Closes stdin and waits for its exit, as long as it takes: the caller bounds it, and can
     /// still `close` it after.
     pub async fn wait(&mut self) -> Option<i32> {

@@ -253,3 +253,32 @@ pub fn gathr(data: &Path, args: &[&str]) -> (bool, Value) {
         .unwrap_or_else(|e| panic!("gathr {args:?} didn't answer JSON ({e}): {text}"));
     (status.success(), value)
 }
+
+/// The next JSON sent on the live socket (the service's frames are unmasked and unfragmented).
+pub fn next_live(socket: &mut std::net::TcpStream) -> Value {
+    use std::io::Read;
+    loop {
+        let mut head = [0u8; 2];
+        socket
+            .read_exact(&mut head)
+            .expect("the live socket went quiet");
+        let len = match head[1] & 0x7F {
+            126 => {
+                let mut n = [0u8; 2];
+                socket.read_exact(&mut n).unwrap();
+                u16::from_be_bytes(n) as usize
+            }
+            127 => {
+                let mut n = [0u8; 8];
+                socket.read_exact(&mut n).unwrap();
+                u64::from_be_bytes(n) as usize
+            }
+            n => n as usize,
+        };
+        let mut body = vec![0u8; len];
+        socket.read_exact(&mut body).unwrap();
+        if head[0] & 0x0F == 1 {
+            return serde_json::from_slice(&body).unwrap();
+        }
+    }
+}
