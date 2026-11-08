@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react';
 import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
+import { General } from './General';
 import './settings.css';
 
-export type Page = 'engines' | 'agents' | 'diagnostics';
+export type Page = 'general' | 'engines' | 'agents' | 'diagnostics';
 
 export interface SettingsTarget {
   page: Page;
@@ -29,6 +30,7 @@ interface Props {
 }
 
 const pages: [Page, string][] = [
+  ['general', 'General'],
   ['engines', 'Engines'],
   ['agents', 'Agents'],
   ['diagnostics', 'Diagnostics'],
@@ -83,7 +85,9 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
               ))}
             </nav>
             <div className="settings-page">
-              {target.page === 'engines' ? (
+              {target.page === 'general' ? (
+                <General onReference={onReference} />
+              ) : target.page === 'engines' ? (
                 <Engines onReference={onReference} />
               ) : target.page === 'agents' ? (
                 <Agents start={target.agent} onReference={onReference} />

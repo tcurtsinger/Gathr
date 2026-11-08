@@ -61,6 +61,29 @@
   font-size: 18px;
   font-weight: 600;
 }
+.settingrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border);
+}
+.settingrow h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settingrow button {
+  border: 1px solid var(--control);
+}
+/* Who a setting applies to, beside its control. */
+.setting-scope {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
 @media (max-width: 767px) {
   .settings-panel {
     width: calc(100vw - 24px);

@@ -57,6 +57,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::agents::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
+        .merge(crate::startup::routes())
         .nest_service("/mcp", crate::tools::service(state.chats.clone()))
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
