@@ -63,7 +63,7 @@
 <div class="ds-tool-content" id="pane-home" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 <ul><li>Tasks</li><li>Changes</li><li>Terminal</li><li>Files</li><li>Web</li></ul></div>
 <div class="ds-tool-content" id="pane-tasks" role="tabpanel" aria-labelledby="tab-tasks" tabindex="0" hidden>
-<h3>Keep the partial reply?</h3><p class="ds-mono">Supervisor · Reconnect repair</p>
+<h3>Keep the partial reply?</h3><p class="ds-role">Supervisor · Reconnect repair</p>
 <label class="ds-row"><input type="radio" name="answer" value="keep">Keep it</label>
 <label class="ds-row"><input type="radio" name="answer" value="restart">Start again</label>
 <button class="ds-button" data-variant="primary" id="answer-send">Send</button></div>
@@ -86,7 +86,7 @@ Checked request deadline</pre></details>
 <div class="ds-composer-toolbar">
 <button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-<select aria-label="Recipient" data-id="recipient"><option>Agent A</option><option>Agent B</option><option>Agent C</option></select>
+<select aria-label="Recipient" data-id="recipient"><option>Mira</option><option>Rowan</option><option>Kit</option></select>
 <button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
 </div>
@@ -107,9 +107,18 @@ Checked request deadline</pre></details>
 </div>
 <div class="ds-summary" id="summary" popover data-id="summary">
 <h3>Agents</h3>
-<details class="ds-agent"><summary><span>Agent A</span><small>Supervisor · Waiting for review</small></summary><ul><li>Wrap up after review</li></ul></details>
-<details class="ds-agent"><summary><span>Agent B</span><small>Member · Ready</small></summary><ul><li>Cursor patch done</li></ul></details>
-<details class="ds-agent"><summary><span>Agent C</span><small>Reviewer · Working</small></summary><ul><li>Check failure reference</li></ul></details>
+<details class="ds-agent">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<small class="ds-role">Supervisor · Waiting for review</small></summary>
+<ul><li>Wrap up after review</li></ul></details>
+<details class="ds-agent">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
+<small class="ds-role">Member · Ready</small></summary>
+<ul><li>Cursor patch done</li></ul></details>
+<details class="ds-agent">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
+<small class="ds-role">Reviewer · Working</small></summary>
+<ul><li>Check failure reference</li></ul></details>
 </div>
 <section id="help" popover class="help-panel" data-id="help"><h4>Approvals</h4>
 <dl><dt>Ask</dt><dd>Ask before actions that need permission.</dd><dt>Edits</dt><dd>Allow file edits.</dd>

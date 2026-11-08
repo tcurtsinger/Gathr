@@ -375,9 +375,25 @@
 	cursor: pointer;
 	min-height: 28px;
 }
-.ds-agent summary small {
+.ds-agent-identity {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+}
+.ds-avatar {
+	display: inline-grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 24px;
+	border-radius: 50%;
+	background: var(--raised);
+	color: var(--foreground);
+	font: 500 11px / 1 var(--font-sans);
+}
+.ds-role {
+	font: 11px / 1.6 var(--font-sans);
 	color: var(--muted-foreground);
-	font-size: 11px;
 }
 .ds-agent ul {
 	padding-left: 20px;
@@ -478,10 +494,10 @@
 	font-size: 13px;
 	color: var(--muted-foreground);
 }
-.system-page :is(button, a, input, select, summary):focus-visible {
+.system-page :focus-visible {
 	outline: none;
 }
-.system-page :is(button:not(.ds-button):not(.switch), summary, select, input):is(:hover, :focus-visible) {
+.system-page :is(button:not(.ds-button):not(.switch), summary, select, input, [role="tabpanel"]):is(:hover, :focus-visible) {
 	background: var(--raised);
 }
 .system-page .switch:is(:hover, :focus-visible) {

@@ -170,6 +170,8 @@ Friction is how Gathr learns what not to repeat, so it's read all the time, not 
 ## Design preview checks
 
 The current reference and retired pages are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root.
+`node designs/check-focus.cjs` checks keyboard panel focus against hover in installed Edge on Windows or WebKit on macOS
+(uses the UI dependencies).
 Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
 Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
 `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.

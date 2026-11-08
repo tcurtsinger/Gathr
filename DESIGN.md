@@ -62,7 +62,8 @@ Public Sans Variable, self-hosted under the SIL Open Font License, then Public
 Sans and the platform sans-serif. The preview includes the Latin variable file;
 other scripts use fallback fonts. No remote font requests. Body 14px; composer
 15px; navigation and agent names 13px; text actions 12px; metadata 11 to 12px
-monospace. Headings 26px for a new chat and 20px for a panel. Weights 400 and 500,
+monospace, except agent roles: those use the normal sans-serif. Headings 26px for
+a new chat and 20px for a panel. Weights 400 and 500,
 600 where emphasis needs it. Prose has relaxed line spacing; code stays monospace.
 
 ## Layout
@@ -156,6 +157,9 @@ several instances. Close other tabs retains Home and Recents. Arrow keys,
 Home/End and Delete operate tabs. Moving 0015's Team tab into Summary is a
 prototype difference for the integration decision to resolve. This document
 records its appearance, not an unapproved change to the accepted workflow.
+
+Agents show their initials beside their name, replacing the shared robot icon.
+Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
 Team status moves to Summary. Inline SubagentList rows show chat role and named
 state, with a TodoList disclosure for that agent's assignments in that chat.
