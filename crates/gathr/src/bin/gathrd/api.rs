@@ -134,7 +134,8 @@ fn admit(
         return Err(refused);
     }
     let path = uri.path();
-    let tools = path == "/mcp" || path.starts_with("/mcp/") || path == crate::tools::HOOK_PATH;
+    let hook = [crate::tools::HOOK_PATH, crate::tools::PUSH_PATH].contains(&path);
+    let tools = path == "/mcp" || path.starts_with("/mcp/") || hook;
     if !tools && !path.starts_with("/api/") && path != "/health" {
         return Ok(None);
     }

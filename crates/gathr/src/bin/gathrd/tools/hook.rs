@@ -5,6 +5,7 @@
 use std::sync::Arc;
 
 use axum::extract::{Extension, State as Extract};
+use axum::http::HeaderMap;
 use axum::routing::post;
 use axum::{Json, Router};
 use gathr::event::Event;
@@ -15,9 +16,41 @@ use crate::api::State;
 
 /// Where the hook is: admitted with a running engine's token only, like `/mcp`.
 pub const HOOK_PATH: &str = "/hook";
+/// Where an agent's worktree's `pre-push` hook asks, with its engine's token too.
+pub const PUSH_PATH: &str = "/hook/push";
 
 pub fn routes() -> Router<Arc<State>> {
-    Router::new().route(HOOK_PATH, post(pre_tool_use))
+    Router::new()
+        .route(HOOK_PATH, post(pre_tool_use))
+        .route(PUSH_PATH, post(pre_push))
+}
+
+/// A `git push` from the engine's worktree, however it was run: `allow` once the person allows
+/// it (or the agent's mode is Full, or they just allowed the command that runs it), else `deny`.
+/// It waits as long as the person takes; a push whose hook gives up is ended by git.
+async fn pre_push(
+    Extract(s): Extract<Arc<State>>,
+    Extension(caller): Extension<Caller>,
+    headers: HeaderMap,
+    refs: String,
+) -> &'static str {
+    let header = |name: &str| {
+        let value = headers.get(name).and_then(|v| v.to_str().ok());
+        value.unwrap_or_default().to_string()
+    };
+    let (remote, url) = (header("gathr-remote"), header("gathr-url"));
+    let refs: Vec<&str> = refs.lines().filter(|l| !l.trim().is_empty()).collect();
+    let input = json!({ "command": format!("git push {remote}"), "remote": remote, "url": url,
+        "refs": refs });
+    // A service that stops refuses the push rather than wait: its server waits on this request.
+    let allowed = tokio::select! {
+        allowed = s.chats.ask_push(&caller, input) => allowed,
+        () = s.stopped() => false,
+    };
+    match allowed {
+        true => "allow",
+        false => "deny",
+    }
 }
 
 async fn pre_tool_use(

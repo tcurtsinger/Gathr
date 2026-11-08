@@ -134,6 +134,95 @@ pub async fn ensure(
     }))
 }
 
+/// Where Gathr's git hooks for an agent's worktree are written.
+pub fn hooks_folder(data: &Path, chat: &str, agent: &str) -> PathBuf {
+    data.join("hooks").join(chat).join(agent)
+}
+
+const HOOK: &str = include_str!("git-hook.sh");
+
+/// Hooks git runs from a hooks folder; Gathr's stands in for each the project has, so the
+/// project's own still run.
+const HOOK_NAMES: &[&str] = &[
+    "applypatch-msg",
+    "pre-applypatch",
+    "post-applypatch",
+    "pre-commit",
+    "pre-merge-commit",
+    "prepare-commit-msg",
+    "commit-msg",
+    "post-commit",
+    "pre-rebase",
+    "post-checkout",
+    "post-merge",
+    "post-rewrite",
+    "reference-transaction",
+    "pre-auto-gc",
+    "post-index-change",
+];
+
+/// Makes every `git push` from the worktree at `folder` wait for the person's answer (0029): a
+/// `pre-push` hook in `hooks`, set for this worktree alone (`extensions.worktreeConfig`), so the
+/// project's own checkout and other worktrees keep theirs. The project's hooks folder is kept as
+/// `gathr.hooks`, and Gathr's runs the project's hook of each name after its own part.
+pub async fn guard_pushes(folder: &Path, hooks: &Path, env: &Vars) -> Result<(), String> {
+    let pattern = r"^(core\.hookspath|gathr\.hooks)$";
+    let set = git(
+        env,
+        folder,
+        &["config", "--worktree", "--get-regexp", pattern],
+        LOCAL_LIMIT,
+    )
+    .await
+    .unwrap_or_default();
+    let value = |key: &str| {
+        set.lines()
+            .find_map(|l| l.strip_prefix(key)?.strip_prefix(' '))
+            .map(PathBuf::from)
+    };
+    let (own, kept) = match value("gathr.hooks") {
+        Some(own) => (own, true),
+        None => {
+            // Before Gathr's is set: the folder git runs this worktree's hooks from now.
+            let path = ["rev-parse", "--path-format=absolute", "--git-path", "hooks"];
+            (
+                PathBuf::from(git(env, folder, &path, LOCAL_LIMIT).await?),
+                false,
+            )
+        }
+    };
+    write_hooks(hooks, &own).map_err(|e| format!("{} wasn't written: {e}", hooks.display()))?;
+    let pointed = value("core.hookspath").as_deref() == Some(hooks);
+    if kept && pointed {
+        return Ok(());
+    }
+    // Without the extension, `--worktree` writes the project's shared config: every checkout's.
+    let on = ["config", "extensions.worktreeConfig", "true"];
+    git(env, folder, &on, LOCAL_LIMIT).await?;
+    let (own, hooks) = (own.to_string_lossy(), hooks.to_string_lossy());
+    for (key, value) in [("gathr.hooks", own), ("core.hooksPath", hooks)] {
+        let set = ["config", "--worktree", key, &value];
+        git(env, folder, &set, LOCAL_LIMIT).await?;
+    }
+    Ok(())
+}
+
+/// Gathr's hook as `pre-push`, and under the name of each hook the project has in `own`.
+fn write_hooks(hooks: &Path, own: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(hooks)?;
+    let names = HOOK_NAMES.iter().filter(|name| own.join(name).is_file());
+    for name in std::iter::once(&"pre-push").chain(names) {
+        let file = hooks.join(name);
+        std::fs::write(&file, HOOK)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))?;
+        }
+    }
+    Ok(())
+}
+
 /// Runs git in `dir` with `env`, never asking for a password: its output, or the line of what it
 /// said that gives the reason. Past `limit` it's stopped.
 async fn git(env: &Vars, dir: &Path, args: &[&str], limit: Duration) -> Result<String, String> {

@@ -146,6 +146,12 @@ impl Task {
         let (env_from, env_why) = (place.env.from, place.env.why);
         let mut env = command::env(place.env.vars.into_iter(), folder);
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
+        let push = format!(
+            "http://127.0.0.1:{}{}",
+            self.chats.port,
+            crate::tools::PUSH_PATH
+        );
+        env.push((command::PUSH_VAR.into(), push.into()));
         let started = Instant::now();
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {

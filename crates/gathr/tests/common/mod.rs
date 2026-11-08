@@ -282,3 +282,43 @@ pub fn next_live(socket: &mut std::net::TcpStream) -> Value {
         }
     }
 }
+
+pub fn git(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// A project cloned from a remote that has since moved on: the project, and the remote's newest
+/// commit.
+pub fn project(root: &Path) -> (PathBuf, String) {
+    let seed = root.join("seed");
+    std::fs::create_dir_all(&seed).unwrap();
+    git(&seed, &["init", "-q", "-b", "main"]);
+    std::fs::write(seed.join("README.md"), "made up\n").unwrap();
+    git(&seed, &["add", "."]);
+    git(&seed, &["commit", "-q", "-m", "first"]);
+    git(root, &["clone", "-q", "--bare", "seed", "origin.git"]);
+    git(root, &["clone", "-q", "origin.git", "project"]);
+    git(root, &["clone", "-q", "origin.git", "other"]);
+    let other = root.join("other");
+    std::fs::write(other.join("NEXT.md"), "later\n").unwrap();
+    git(&other, &["add", "."]);
+    git(&other, &["commit", "-q", "-m", "second"]);
+    git(&other, &["push", "-q", "origin", "main"]);
+    (root.join("project"), git(&other, &["rev-parse", "HEAD"]))
+}

@@ -14,21 +14,57 @@ pub fn ask(tool: &str, input: &Value, boundary: &Path) -> Option<&'static str> {
             let path = text("file_path").or_else(|| text("notebook_path"))?;
             (!inside(Path::new(path), boundary)).then_some("it writes outside the agent's worktree")
         }
-        "Bash" | "PowerShell" => pushes(text("command")?).then_some("it pushes"),
+        "Bash" | "PowerShell" => runs_push(tool, input).then_some("it pushes"),
         _ => None,
     }
 }
 
-/// Whether `path`, relative to `boundary` when it isn't absolute, is in `boundary`, compared by
-/// its parts with `..` worked out. Case is folded: Gathr runs on Windows and macOS, whose disks
-/// ignore case by default.
-fn inside(path: &Path, boundary: &Path) -> bool {
-    let fold = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
-    let (base, path) = (lexical(&fold(boundary)), fold(path));
-    lexical(&base.join(path)).starts_with(&base)
+/// Whether the call is a shell command that reads as a push. The worktree's `pre-push` hook is
+/// what catches every push; this asks earlier, before the command runs.
+pub fn runs_push(tool: &str, input: &Value) -> bool {
+    let command = input.get("command").and_then(Value::as_str);
+    matches!(tool, "Bash" | "PowerShell") && command.is_some_and(pushes)
 }
 
-/// The path with `.` and `..` worked out by its text alone, so a link is never followed.
+/// Whether `path`, relative to `boundary` when it isn't absolute, is in `boundary` as the disk
+/// resolves both: links (symlinks, junctions) followed. Windows works out `..` by the text
+/// before following a link and macOS after, so the path must be inside both ways. Case is
+/// folded: both systems' disks ignore it by default.
+fn inside(path: &Path, boundary: &Path) -> bool {
+    let fold = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
+    let Some(base) = real(boundary).map(|b| fold(&b)) else {
+        return false;
+    };
+    let path = boundary.join(path);
+    [real(&path), real(&lexical(&path))]
+        .into_iter()
+        .all(|p| p.is_some_and(|p| fold(&p).starts_with(&base)))
+}
+
+/// The path with each part that exists resolved by the disk, links followed, and the rest as
+/// written; `None` past a link that leads nowhere yet, since a write there lands wherever it
+/// points.
+fn real(path: &Path) -> Option<PathBuf> {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::CurDir => {}
+            Component::ParentDir => _ = out.pop(),
+            Component::Normal(_) => {
+                out.push(part);
+                match std::fs::canonicalize(&out) {
+                    Ok(resolved) => out = resolved,
+                    Err(_) if std::fs::symlink_metadata(&out).is_ok() => return None,
+                    Err(_) => {}
+                }
+            }
+            other => out.push(other),
+        }
+    }
+    Some(out)
+}
+
+/// The path with `.` and `..` worked out by its text alone.
 fn lexical(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for part in path.components() {
@@ -99,6 +135,56 @@ mod tests {
         assert_eq!(ask("NotebookEdit", &notebook, &tree), outside);
         let read = json!({ "file_path": at(&["elsewhere", "x"]) });
         assert_eq!(ask("Read", &read, &tree), None, "reads never ask");
+    }
+
+    /// A link at `link` to the folder `to`: a junction on Windows (no admin needed), else a
+    /// symlink. `to` need not exist.
+    fn link(to: &Path, link: &Path) {
+        #[cfg(windows)]
+        {
+            let made = std::process::Command::new("cmd")
+                .args(["/C", "mklink", "/J"])
+                .arg(link)
+                .arg(to)
+                .output()
+                .unwrap();
+            assert!(made.status.success(), "mklink: {made:?}");
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(to, link).unwrap();
+    }
+
+    #[test]
+    fn links_are_followed_before_a_write_is_called_inside() {
+        let root = std::env::temp_dir().join(format!("gathr-links-{}", crate::ids::span_id()));
+        let (tree, outside) = (root.join("tree"), root.join("outside"));
+        std::fs::create_dir_all(&tree).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        link(&outside, &tree.join("out"));
+        link(&root.join("gone"), &tree.join("dangling"));
+        link(&tree, &root.join("tree-link"));
+        let write = |path: PathBuf, tree: &Path| ask("Write", &json!({ "file_path": path }), tree);
+        let asks = Some("it writes outside the agent's worktree");
+        let through = tree.join("out").join("proof.txt");
+        assert_eq!(write(through, &tree), asks, "through a link out");
+        let deeper = tree.join("out").join("new").join("proof.txt");
+        assert_eq!(write(deeper, &tree), asks, "a new folder past a link out");
+        let dangling = tree.join("dangling").join("x.txt");
+        assert_eq!(write(dangling, &tree), asks, "a link to nowhere yet");
+        let real = tree.join("a.txt");
+        let linked = root.join("tree-link");
+        assert_eq!(
+            write(real, &linked),
+            None,
+            "the worktree named through a link"
+        );
+        let via = linked.join("b.txt");
+        assert_eq!(
+            write(via, &tree),
+            None,
+            "a file named through a link to the worktree"
+        );
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[cfg(windows)]

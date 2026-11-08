@@ -10,7 +10,7 @@ pub mod briefing;
 mod hook;
 mod server;
 
-pub use hook::{HOOK_PATH, routes as hook_routes};
+pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
 pub use server::service;
 
 /// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.

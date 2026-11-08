@@ -174,6 +174,9 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
 /// process on the computer can read (0005).
 pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 
+/// Where the worktree's `pre-push` hook asks Gathr, with the token above (0029).
+pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
+
 /// Gathr's tools at `url` with the engine's token, allowed without asking, and the briefing in
 /// `briefing`, a file for the same reason as the token (0005, 0021).
 pub fn given(url: &str, briefing: &Path) -> Vec<String> {

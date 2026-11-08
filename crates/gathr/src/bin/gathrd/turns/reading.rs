@@ -251,6 +251,7 @@ impl Task {
         let Some((message_id, name, started)) = turn.tools.remove(id) else {
             return;
         };
+        turn.push_allowed = false;
         let (ids, span) = (turn.ids.clone(), turn.span.clone());
         let duration_us = now_us() - started;
         let body = json!({ "tool": name, "status": status, "duration_ms": duration_us / 1000 });

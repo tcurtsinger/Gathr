@@ -20,6 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::chats::{Chats, Cmd, Failed};
 
 mod process;
+mod pushes;
 mod reading;
 mod records;
 mod workspace;
@@ -73,6 +74,10 @@ struct Running {
     tools: HashMap<String, (String, String, i64)>,
     /// Questions Claude Code asked and nobody has answered: each tool and its input.
     approvals: HashMap<String, (String, Value)>,
+    /// Of those, the ones a worktree's `pre-push` hook asked: where each answer goes.
+    pushes: HashMap<String, oneshot::Sender<bool>>,
+    /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
+    push_allowed: bool,
     stopping: bool,
     signed_out: bool,
     /// The account's renewal gate, held until the provider first answers (0016).
@@ -214,6 +219,7 @@ impl Task {
             } => {
                 let _ = reply.send(self.approve(&chat, &request_id, allow).await);
             }
+            Cmd::AskPush { chat, input, reply } => self.ask_push(&chat, input, reply),
             Cmd::Approvals { chat, reply } => {
                 let _ = reply.send(self.open_approvals(&chat));
             }
@@ -544,6 +550,8 @@ impl Task {
             streamed: false,
             tools: HashMap::new(),
             approvals: HashMap::new(),
+            pushes: HashMap::new(),
+            push_allowed: false,
             stopping: false,
             signed_out: false,
             gate,
@@ -640,18 +648,21 @@ impl Task {
     }
 
     async fn approve(&mut self, chat: &str, request_id: &str, allow: bool) -> bool {
-        let Some(input) = self
-            .turn
-            .as_mut()
-            .filter(|t| t.ids.chat == chat)
-            .and_then(|t| t.approvals.remove(request_id))
-            .map(|(_, input)| input)
-        else {
+        let Some(turn) = self.turn.as_mut().filter(|t| t.ids.chat == chat) else {
             return false;
         };
-        let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
+        let Some((tool, input)) = turn.approvals.remove(request_id) else {
+            return false;
+        };
+        if let Some(reply) = turn.pushes.remove(request_id) {
+            return self.answer_push(request_id, allow, reply);
+        }
+        if allow && gathr::approvals::runs_push(&tool, &input) {
+            turn.push_allowed = true;
+        }
+        let turn = turn.ids.turn.clone();
         let answer = frames::approval(request_id, allow, &input);
-        self.write(&answer, turn.as_deref()).await.is_ok()
+        self.write(&answer, Some(&turn)).await.is_ok()
     }
 
     /// The chat's questions still open, as the live socket sent them, for a window that opens
@@ -660,7 +671,12 @@ impl Task {
         let Some(turn) = self.turn.as_ref().filter(|t| t.ids.chat == chat) else {
             return Vec::new();
         };
-        let open = turn.approvals.iter().map(|(request_id, (tool, input))| {
+        // A push whose hook gave up (git ended it) has no one to answer.
+        let open = turn.approvals.iter().filter(|(request_id, _)| {
+            let push = turn.pushes.get(*request_id);
+            push.is_none_or(|reply| !reply.is_closed())
+        });
+        let open = open.map(|(request_id, (tool, input))| {
             json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input })
         });
         open.collect()
