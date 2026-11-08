@@ -68,6 +68,8 @@ fn the_service_serves_its_ui_and_a_one_time_link_signs_a_browser_in() {
         service.get("/api/chats", &[("Cookie", &other_port)]).status,
         401
     );
+    let tools = service.get("/mcp", &[("Cookie", pair)]);
+    assert_eq!(tools.status, 401, "the cookie opened /mcp: {}", tools.body);
 
     let again = service.get(&format!("/?once={code}"), &[]);
     assert_eq!(again.status, 401, "a link works once");

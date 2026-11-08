@@ -1,0 +1,95 @@
+//! Gathr's tools for agents: one MCP server at `/mcp` (docs/decisions/0005-mcp-server.md). Each
+//! running engine gets a token of its own, so a tool knows which agent calls it and in which
+//! chat, and the token ends when the engine exits.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+pub mod briefing;
+mod server;
+
+pub use server::service;
+
+/// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.
+#[derive(Clone)]
+pub struct Caller {
+    pub agent: Option<String>,
+    pub chat: String,
+    turn: Arc<Mutex<Option<String>>>,
+}
+
+impl Caller {
+    /// The trace of the engine's turn, or of the last one it ran.
+    pub fn trace(&self) -> Option<String> {
+        self.turn.lock().expect("never poisoned").clone()
+    }
+}
+
+/// The tokens of the engines running now.
+#[derive(Default)]
+pub struct Passes(Mutex<HashMap<String, Caller>>);
+
+impl Passes {
+    pub fn caller(&self, token: &str) -> Option<Caller> {
+        self.0.lock().expect("never poisoned").get(token).cloned()
+    }
+}
+
+/// What one engine was given: its token and its briefing's file. Both end when it's dropped,
+/// which is when the engine has exited.
+pub struct Pass {
+    pub token: String,
+    pub briefing: PathBuf,
+    pub briefing_chars: usize,
+    turn: Arc<Mutex<Option<String>>>,
+    passes: Arc<Passes>,
+}
+
+impl Pass {
+    /// A new token for an engine about to start as `agent` in `chat`, with its briefing written
+    /// where the engine reads it and the agent's own tools don't look: the data folder.
+    pub fn new(
+        passes: &Arc<Passes>,
+        folder: PathBuf,
+        agent: Option<String>,
+        chat: &str,
+        briefing: &str,
+    ) -> std::io::Result<Pass> {
+        std::fs::create_dir_all(&folder)?;
+        let token = gathr::ids::token();
+        let file = folder.join(format!("{}.md", gathr::ids::uuid()));
+        std::fs::write(&file, briefing)?;
+        let turn = Arc::new(Mutex::new(None));
+        let caller = Caller {
+            agent,
+            chat: chat.to_string(),
+            turn: turn.clone(),
+        };
+        let mut all = passes.0.lock().expect("never poisoned");
+        all.insert(token.clone(), caller);
+        Ok(Pass {
+            token,
+            briefing: file,
+            briefing_chars: briefing.chars().count(),
+            turn,
+            passes: passes.clone(),
+        })
+    }
+
+    /// The engine's turn from now, so its tool calls are recorded on that turn's trace.
+    pub fn on_turn(&self, trace: &str) {
+        *self.turn.lock().expect("never poisoned") = Some(trace.to_string());
+    }
+}
+
+impl Drop for Pass {
+    fn drop(&mut self) {
+        self.passes
+            .0
+            .lock()
+            .expect("never poisoned")
+            .remove(&self.token);
+        let _ = std::fs::remove_file(&self.briefing);
+    }
+}

@@ -80,6 +80,8 @@ struct Task {
     /// The agent this task runs; `None` for a chat's turns sent to no agent.
     agent: Option<String>,
     engine: Option<Engine>,
+    /// The engine's token for Gathr's tools and its briefing, while it runs.
+    pass: Option<crate::tools::Pass>,
     /// The file the engine runs, so an engine on Gathr's copy moves when it updates (0025).
     program: Option<PathBuf>,
     /// What the engine runs as, while it runs.
@@ -114,6 +116,7 @@ pub async fn run(
         chats,
         agent,
         engine: None,
+        pass: None,
         program: None,
         assigned: None,
         lines: None,
@@ -364,7 +367,7 @@ impl Task {
         if let Some(program) = program {
             self.spawn(&program, assigned, &next.ids.trace).await?;
         }
-        self.open_turn(next.ids.clone(), gate);
+        self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         if let Err(e) = self
             .write(&frames::user(&next.text), Some(&next.ids.turn))
             .await
@@ -488,11 +491,23 @@ impl Task {
     }
 
     /// The turn under way from now: its span starts here.
-    fn open_turn(&mut self, ids: Ids, gate: login::Hold) {
+    fn open_turn(&mut self, ids: Ids, gate: login::Hold, ask_chars: usize) {
         let span = span_id();
         let assigned = self.assigned.as_ref();
+        if let Some(pass) = &self.pass {
+            pass.on_turn(&ids.trace);
+        }
+        // What Gathr gave the turn, in characters with a rough token estimate (0020: the engines
+        // report totals only, so the parts are Gathr's own count, labelled an estimate).
+        let briefing = self.pass.as_ref().map_or(0, |p| p.briefing_chars);
+        let estimate = |chars: usize| chars.div_ceil(4);
         self.record(
             Event::point("invoke_agent claude")
+                .attr("gathr.context.briefing.chars", briefing)
+                .attr("gathr.context.briefing.tokens_estimate", estimate(briefing))
+                .attr("gathr.context.ask.chars", ask_chars)
+                .attr("gathr.context.ask.tokens_estimate", estimate(ask_chars))
+                .attr("gathr.tools.off", crate::tools::briefing::off())
                 .trace(&ids.trace)
                 .chat(&ids.chat)
                 .span("start", &span)
@@ -521,7 +536,7 @@ impl Task {
     }
 
     /// A turn the engine began itself, to answer a message sent into the last one.
-    async fn begin_read_turn(&mut self, message: &str) {
+    async fn begin_read_turn(&mut self, message: &str, ask_chars: usize) {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
@@ -551,7 +566,7 @@ impl Task {
                 .error("sqlite");
             self.record(event.attr("why", e.to_string()));
         }
-        self.open_turn(ids.clone(), login::Hold::default());
+        self.open_turn(ids.clone(), login::Hold::default(), ask_chars);
         self.set_turn(&ids, "running", None).await;
     }
 

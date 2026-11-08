@@ -57,6 +57,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::agents::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
+        .nest_service("/mcp", crate::tools::service(state.chats.clone()))
         .merge(crate::ui::routes())
         .fallback(crate::ui::page)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
@@ -88,11 +89,16 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
     let started = Instant::now();
     let trace = traceparent(req.headers()).unwrap_or_else(ids::trace_id);
     let (method, path) = (req.method().to_string(), req.uri().path().to_string());
-    let refused = refusal(&s, req.headers(), req.uri());
+    let admitted = admit(&s, req.headers(), req.uri());
     req.extensions_mut().insert(Trace(trace.clone()));
-    let mut response = match refused {
-        Some((status, why)) => failure(status, "Request failed", Some(why), &trace),
-        None => next.run(req).await,
+    let mut response = match admitted {
+        Err((status, why)) => failure(status, "Request failed", Some(why), &trace),
+        Ok(caller) => {
+            if let Some(caller) = caller {
+                req.extensions_mut().insert(caller);
+            }
+            next.run(req).await
+        }
     };
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
@@ -114,9 +120,49 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
     response
 }
 
-/// Why a request is refused, if it is: a foreign Host or Origin (403), or no valid token or
-/// cookie (401). The UI's own files need neither: they hold nothing secret.
-fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'static str)> {
+/// Whether a request may go on: refused for a foreign Host or Origin (403), or no valid token or
+/// cookie (401). The UI's own files need neither: they hold nothing secret. Gathr's tools take
+/// only a running engine's own token, never the service's or the cookie: the engine they admit
+/// is the caller the tools act as (0005).
+fn admit(
+    s: &State,
+    headers: &HeaderMap,
+    uri: &Uri,
+) -> Result<Option<crate::tools::Caller>, (StatusCode, &'static str)> {
+    if let Some(refused) = refusal(s, headers) {
+        return Err(refused);
+    }
+    let path = uri.path();
+    let tools = path == "/mcp" || path.starts_with("/mcp/");
+    if !tools && !path.starts_with("/api/") && path != "/health" {
+        return Ok(None);
+    }
+    if !tools
+        && cookie(headers, &crate::ui::cookie_name(s.port))
+            .is_some_and(|c| same(c.as_bytes(), s.session.as_bytes()))
+    {
+        return Ok(None);
+    }
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .or_else(|| live_token(uri));
+    match (token, tools) {
+        (None, _) => Err((StatusCode::UNAUTHORIZED, "token missing")),
+        (Some(t), true) => match s.chats.passes.caller(t) {
+            Some(caller) => Ok(Some(caller)),
+            None => Err((StatusCode::UNAUTHORIZED, "not a running engine's token")),
+        },
+        (Some(t), false) if !same(t.as_bytes(), s.token.as_bytes()) => {
+            Err((StatusCode::UNAUTHORIZED, "token wrong"))
+        }
+        (Some(_), false) => Ok(None),
+    }
+}
+
+/// Why a request is refused before its token is looked at: a foreign Host or Origin.
+fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)> {
     let port = s.port;
     let host = headers
         .get(header::HOST)
@@ -136,26 +182,7 @@ fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'s
             return Some((StatusCode::FORBIDDEN, "origin not allowed"));
         }
     }
-    if !uri.path().starts_with("/api/") && uri.path() != "/health" {
-        return None;
-    }
-    if cookie(headers, &crate::ui::cookie_name(port))
-        .is_some_and(|c| same(c.as_bytes(), s.session.as_bytes()))
-    {
-        return None;
-    }
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .or_else(|| live_token(uri));
-    match token {
-        None => Some((StatusCode::UNAUTHORIZED, "token missing")),
-        Some(t) if !same(t.as_bytes(), s.token.as_bytes()) => {
-            Some((StatusCode::UNAUTHORIZED, "token wrong"))
-        }
-        Some(_) => None,
-    }
+    None
 }
 
 /// A cookie's value by name, from every `Cookie` header.

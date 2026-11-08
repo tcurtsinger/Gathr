@@ -15,6 +15,7 @@ use gathr::store::{self, RawFrame};
 use serde_json::json;
 
 use super::{Assignment, Task};
+use crate::tools::{Pass, briefing};
 
 /// How long an engine gets at shutdown to exit on its own before it's killed (0001).
 pub const CLOSE_GRACE: Duration = Duration::from_secs(10);
@@ -46,6 +47,8 @@ impl Times {
 /// An engine whose input is closed, waiting for its own exit.
 pub struct Closing {
     engine: Engine,
+    /// Its token and briefing: they end when it has exited, not when it's asked to.
+    pass: Option<Pass>,
     pub folder: PathBuf,
     chat: String,
     why: String,
@@ -119,7 +122,7 @@ impl Task {
             model: assigned.model.as_deref(),
             effort: assigned.effort.as_deref(),
         };
-        let args = match &session {
+        let mut args = match &session {
             Some(id) => command::args(Session::Resume(id), given),
             None => command::args(Session::New(&new_id), given),
         };
@@ -129,10 +132,15 @@ impl Task {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
-        let env = command::env(std::env::vars_os(), folder);
+        let pass = self.pass_for(&assigned, trace).await?;
+        let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
+        args.extend(command::given(&url, &pass.briefing));
+        let mut env = command::env(std::env::vars_os(), folder);
+        env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
         let started = Instant::now();
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
+                self.pass = Some(pass);
                 self.record(
                     Event::point("gathr.engine.start")
                         .trace(trace)
@@ -169,6 +177,36 @@ impl Task {
         }
     }
 
+    /// The engine's token and briefing, written before it starts (0005, 0021).
+    async fn pass_for(&self, assigned: &Assignment, trace: &str) -> Result<Pass, String> {
+        let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
+        let facts = self
+            .chats
+            .writer
+            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref()))
+            .await;
+        let facts = match facts {
+            Some(read) => read.map_err(|e| e.to_string()),
+            None => Err("the database didn't answer".to_string()),
+        };
+        let made = facts.and_then(|facts| {
+            let folder = self.chats.data.path().join("briefings");
+            let text = briefing::text(&facts);
+            let (agent, chat) = (assigned.agent.clone(), &assigned.chat);
+            Pass::new(&self.chats.passes, folder, agent, chat, &text).map_err(|e| e.to_string())
+        });
+        made.map_err(|e| {
+            let why = format!("the engine's briefing wasn't written: {e}");
+            let event = Event::point("gathr.engine.start")
+                .trace(trace)
+                .chat(&assigned.chat)
+                .error("briefing")
+                .attr("why", why.clone());
+            self.record(event);
+            why
+        })
+    }
+
     /// The version Gathr's copy moved to, when the engine runs an older copy: called between
     /// turns only, so a turn is never cut short and a renewal, which happens inside one, never is.
     pub(super) fn copy_moved(&self) -> Option<String> {
@@ -198,6 +236,7 @@ impl Task {
         let assigned = self.assigned.as_ref();
         self.closing = Some(Closing {
             engine,
+            pass: self.pass.take(),
             folder: assigned.map(|a| a.folder.clone()).unwrap_or_default(),
             chat: assigned.map(|a| a.chat.clone()).unwrap_or_default(),
             why: why.to_string(),
@@ -208,9 +247,11 @@ impl Task {
 
     /// The closing engine exited: the next turn may start.
     pub(super) async fn on_closed(&mut self, code: Option<i32>) {
-        let Some(closed) = self.closing.take() else {
+        let Some(mut closed) = self.closing.take() else {
             return;
         };
+        // Its token and briefing end now, before anything queued starts the next engine.
+        drop(closed.pass.take());
         let mut event = Event::point("gathr.engine.close")
             .chat(&closed.chat)
             .ok()
@@ -325,6 +366,7 @@ impl Task {
             self.close("it closed its output but didn't exit").await;
         }
         self.engine = None;
+        self.pass = None;
         let event = Event::point("gathr.engine.exit")
             .chat(&chat)
             .attr("process.exit.code", code);

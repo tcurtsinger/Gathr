@@ -113,13 +113,26 @@ impl Task {
             }
             Frame::Read(text) => {
                 let unread = self.unread.iter().position(|(_, t)| *t == text);
-                if let Some((message, _)) = unread.map(|i| self.unread.remove(i))
+                let read = unread.map(|i| self.unread.remove(i));
+                // Read inside the turn: part of what it was given (0020), recorded now, so the
+                // turn keeps it however it ends.
+                if let (Some(_), Some(turn)) = (&read, self.turn.as_ref()) {
+                    let chars = text.chars().count();
+                    let event = Event::point("gathr.turn.read")
+                        .trace(&turn.ids.trace)
+                        .chat(&turn.ids.chat)
+                        .ok()
+                        .attr("gathr.context.ask.chars", chars)
+                        .attr("gathr.context.ask.tokens_estimate", chars.div_ceil(4));
+                    self.record(event);
+                }
+                if let Some((message, _)) = read
                     && self.turn.is_none()
                 {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the
                     // turn, then reads the message sent into it and answers it as a turn of
                     // its own. That turn gets its row here, and the message moves to it.
-                    self.begin_read_turn(&message).await;
+                    self.begin_read_turn(&message, text.chars().count()).await;
                 }
                 let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
                 self.publish(&chat, json!({ "type": "read", "turn": turn, "text": text }));

@@ -45,6 +45,11 @@ pub fn send(
     exchange(port, method, path, &headers, &body.to_string())
 }
 
+/// A POST with its own headers and body: an engine calling Gathr's tools with its own token.
+pub fn post(port: u16, path: &str, headers: &[(&str, &str)], body: &str) -> io::Result<Response> {
+    exchange(port, "POST", path, headers, body)
+}
+
 fn exchange(
     port: u16,
     method: &str,

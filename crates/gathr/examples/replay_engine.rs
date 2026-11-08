@@ -6,7 +6,8 @@
 //! the engine goes on; without that variable it's skipped.
 //!
 //! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
-//! its arguments to, as one JSON line.
+//! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
+//! for Gathr's tools to (`{"GATHR_AGENT_TOKEN": …}`), so a test can call them as the engine.
 //!
 //! `auth status` answers as Claude Code does where its login is a file: exit 0 when
 //! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
@@ -19,7 +20,8 @@
 //!
 //! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
 //! `stall` there answers only after a minute, as a launcher that hangs; `folder` answers the name
-//! of the folder it runs from, as Gathr lays out its copies (0025).
+//! of the folder it runs from, as Gathr lays out its copies (0025). While the file
+//! `GATHR_REPLAY_VERSION_HOLD` names exists, `--version` waits, so a test can hold the next start.
 //!
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
@@ -34,6 +36,10 @@ fn main() {
         auth_login();
     }
     if args == ["--version"] {
+        let held = std::env::var_os("GATHR_REPLAY_VERSION_HOLD").unwrap_or_default();
+        while !held.is_empty() && std::path::Path::new(&held).exists() {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
         let version = std::env::var("GATHR_REPLAY_VERSION");
         if version.as_deref() == Ok("stall") {
             std::thread::sleep(std::time::Duration::from_secs(60));
@@ -76,6 +82,15 @@ fn main() {
             .open(file)
             .expect("the args file opens");
         writeln!(out, "{}", serde_json::to_string(&args).unwrap()).unwrap();
+    }
+    if let Ok(file) = std::env::var("GATHR_REPLAY_ENV") {
+        let token = std::env::var("GATHR_AGENT_TOKEN").ok();
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)
+            .expect("the env file opens");
+        writeln!(out, "{}", serde_json::json!({ "GATHR_AGENT_TOKEN": token })).unwrap();
     }
     let text = match recording.as_str() {
         "" => String::new(),
