@@ -405,13 +405,15 @@ fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
     assert_eq!(first.json()["status"], "running", "{}", first.body);
     service.send("POST", &format!("/api/chats/{chat}/stop"), json!({}));
     let second = service.send("POST", &path, json!({ "text": "Say hi" }));
-    assert_eq!(second.json()["status"], "queued", "{}", second.body);
+    // The stop can end the first turn before this send arrives, so it may start at once.
+    let status = &second.json()["status"];
+    assert!(status == "queued" || status == "running", "{}", second.body);
 
     let started = std::time::Instant::now();
     service.wait_for(&chat, 10, "the next message to start", |h| {
         h["turns"]
             .as_array()
-            .is_some_and(|t| t.len() == 2 && t[1]["status"] == "running")
+            .is_some_and(|t| t.len() == 2 && t[1]["status"] != "queued")
     });
     assert!(
         started.elapsed() < Duration::from_secs(5),
