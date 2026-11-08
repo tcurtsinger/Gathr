@@ -117,8 +117,8 @@ pub fn text(facts: &Facts) -> String {
     }
     if let Some((folder, project)) = &facts.worktree {
         lines.push(format!(
-            "Your folder {} is your own git worktree of {project}: work and commit there, never in \
-             the project folder or another agent's.",
+            "Your worktree is \"{}\", from \"{project}\". Make changes and commits only in your \
+             worktree.",
             folder.display()
         ));
     }
