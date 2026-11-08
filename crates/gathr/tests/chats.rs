@@ -383,16 +383,19 @@ fn an_approval_answered_through_the_api_lets_the_tool_run() {
 
 /// Where the login isn't a file (the macOS Keychain), every start holds the account's gate
 /// until its first reply. A turn stopped before any reply must let the next one go at once,
-/// not after the gate's 30 s.
+/// not after the gate's 30 s. The next message is queued while the stopped turn still holds
+/// the gate: the engine holds its answer to the Stop until the test lets it go.
 #[cfg(target_os = "macos")]
 #[test]
 fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
     let data = TempDir::new();
+    let go = data.0.join("stop-answered");
     let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &recording("stopped_before_reply")),
             ("GATHR_REPLAY_AUTH", Path::new("0")),
+            ("GATHR_REPLAY_HOLD", &go),
         ],
     );
     let chat = service.new_chat();
@@ -404,10 +407,11 @@ fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
     );
     assert_eq!(first.json()["status"], "running", "{}", first.body);
     service.send("POST", &format!("/api/chats/{chat}/stop"), json!({}));
+    let started = std::time::Instant::now();
     let second = service.send("POST", &path, json!({ "text": "Say hi" }));
     assert_eq!(second.json()["status"], "queued", "{}", second.body);
+    std::fs::write(&go, "").unwrap();
 
-    let started = std::time::Instant::now();
     service.wait_for(&chat, 10, "the next message to start", |h| {
         h["turns"]
             .as_array()
