@@ -88,6 +88,7 @@ async fn history(
 #[derive(Deserialize)]
 struct NewMessage {
     text: String,
+    agent: Option<String>,
 }
 
 async fn send(
@@ -105,9 +106,13 @@ async fn send(
             &t.0,
         ));
     }
+    if let Some(agent) = &body.agent {
+        crate::agents::find(&s, &t, agent, "Send failed").await?;
+    }
     let (reply, answer) = oneshot::channel();
     let command = Cmd::Send {
         text: body.text,
+        agent: body.agent,
         trace: t.0.clone(),
         reply,
     };

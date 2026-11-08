@@ -146,25 +146,7 @@ fn the_live_socket_answers_a_close_and_drops_the_connection() {
     use std::io::{Read, Write};
     let data = TempDir::new();
     let service = TestService::start(&data.0);
-    let mut socket = std::net::TcpStream::connect(("127.0.0.1", service.info.port)).unwrap();
-    socket
-        .set_read_timeout(Some(Duration::from_secs(3)))
-        .unwrap();
-    let handshake = format!(
-        "GET /api/live?token={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
-         Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
-         Sec-WebSocket-Version: 13\r\n\r\n",
-        service.info.token, service.info.port
-    );
-    socket.write_all(handshake.as_bytes()).unwrap();
-    let mut head = Vec::new();
-    let mut byte = [0u8];
-    while !head.ends_with(b"\r\n\r\n") {
-        socket.read_exact(&mut byte).unwrap();
-        head.push(byte[0]);
-    }
-    let head = String::from_utf8_lossy(&head);
-    assert!(head.starts_with("HTTP/1.1 101"), "{head}");
+    let mut socket = service.live();
 
     // Close, code 1000, masked as a client must, with a zero mask so the payload reads as is.
     let started = std::time::Instant::now();

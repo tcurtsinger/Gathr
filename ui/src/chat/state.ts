@@ -52,6 +52,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         status: event.status,
         why: event.why ?? before?.why ?? null,
         ref: event.ref ?? before?.ref ?? '',
+        agent: event.agent,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);

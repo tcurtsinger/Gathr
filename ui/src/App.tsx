@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Chat, type Failure } from './api';
+import { type Agent, api, type Chat, type Failure } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/rows';
 import { Notice } from './components/Notice';
+import { listen } from './live';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
@@ -10,6 +11,7 @@ import './app.css';
 
 export function App() {
   const [chats, setChats] = useState<Chat[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
@@ -24,6 +26,14 @@ export function App() {
       setSelected((s) => s ?? list[0]?.id ?? null);
       timeToPaint('gathr.ui.start', started, { chats: list.length });
     }, setFailure);
+  }, []);
+
+  useEffect(() => {
+    const load = () => api.agents().then(setAgents, setFailure);
+    load();
+    return listen((event) => {
+      if (event.type === 'agents' || event.type === 'lagged') load();
+    });
   }, []);
 
   const newChat = useCallback(() => {
@@ -61,6 +71,10 @@ export function App() {
         <ChatView
           key={chat.id}
           chat={chat}
+          agents={agents}
+          onEditAgent={(agent) =>
+            setSettings({ page: 'agents', agent, opener: document.activeElement as HTMLElement })
+          }
           draft={drafts.current.get(chat.id) ?? ''}
           onDraft={(text) => {
             drafts.current.set(chat.id, text);

@@ -48,6 +48,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
         .merge(crate::accounts::routes())
+        .merge(crate::agents::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))
@@ -94,8 +95,8 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
             .attr("url.path", path)
             .attr("http.response.status_code", status.as_u16());
         event.duration_us = Some(started.elapsed().as_micros() as i64);
-        if let Some((_, why)) = refused {
-            event = event.attr("reason", why);
+        if let Some(Said(error, why)) = response.extensions().get::<Said>().cloned() {
+            event = event.attr("error", error).attr("reason", why);
         }
         s.writer.record_now(event).await;
     }
@@ -172,5 +173,12 @@ fn traceparent(headers: &HeaderMap) -> Option<String> {
 /// An error answer: "… failed", why, and the reference the person can trace.
 pub fn failure(status: StatusCode, error: &str, why: Option<&str>, trace: &str) -> Response {
     let body = json!({ "error": error, "why": why, "ref": ids::reference(trace) });
-    (status, Json(body)).into_response()
+    let mut response = (status, Json(body)).into_response();
+    let said = Said(error.to_string(), why.map(String::from));
+    response.extensions_mut().insert(said);
+    response
 }
+
+/// What an error answer said, so the request's event records it and its reference finds why.
+#[derive(Clone)]
+struct Said(String, Option<String>);

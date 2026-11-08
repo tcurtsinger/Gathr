@@ -11,6 +11,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
+use gathr::accounts::Account;
 use gathr::claude::command::{self, Session};
 use gathr::claude::engine::{Closed, Engine, Line};
 use gathr::claude::frames;
@@ -55,6 +56,19 @@ async fn models(
     Path(account): Path<String>,
 ) -> Answer {
     let account = find(&s, &t, &account, "Models failed").await?;
+    match list(&s, &t.0, &account).await {
+        Ok(list) => Ok(Json(list)),
+        Err(why) => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Models failed",
+            &why,
+            &t.0,
+        )),
+    }
+}
+
+/// The account's models, asked of its engine once per engine copy and sign-in state.
+pub async fn list(s: &State, trace: &str, account: &Account) -> Result<Value, String> {
     let folder = account.folder(&s.data);
     // One ask at a time: a second request waits for the first's list instead of starting another.
     let mut last = s.models.last.lock().await;
@@ -64,15 +78,15 @@ async fn models(
         && program == was
         && login == *was_login
     {
-        return Ok(Json(list.clone()));
+        return Ok(list.clone());
     }
     let started = Instant::now();
     let asked = match program.clone() {
-        Ok(program) => ask(&s, &program, &folder).await,
+        Ok(program) => ask(s, &program, &folder).await,
         Err(why) => Err(why),
     };
     let mut event = Event::point("gathr.engine.models")
-        .trace(&t.0)
+        .trace(trace)
         .attr("account", account.id.clone())
         .attr("login", json!(login))
         .attr(
@@ -90,20 +104,40 @@ async fn models(
                     .attr("version", list["version"].clone()),
             );
             let program = program.expect("asked only with a program");
-            last.insert(account.id, (program, login, list.clone()));
-            Ok(Json(list))
+            last.insert(account.id.clone(), (program, login, list.clone()));
+            Ok(list)
         }
         Err(why) => {
             s.writer
                 .record_now(event.error("engine_models").attr("why", why.clone()))
                 .await;
-            Err(fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Models failed",
-                &why,
-                &t.0,
-            ))
+            Err(why)
         }
+    }
+}
+
+/// Whether the account's engine lists `model` (its default when `None`) with `effort`, if one is
+/// given. Claude Code only warns on stderr about an effort it doesn't know, then ignores it.
+pub fn offered(list: &Value, model: Option<&str>, effort: Option<&str>) -> Result<(), String> {
+    let id = model.unwrap_or("default");
+    let models = list["models"].as_array().into_iter().flatten();
+    let Some(found) = models.into_iter().find(|m| m["id"] == id) else {
+        return match model {
+            Some(model) => Err(format!("the account has no model {model}")),
+            None => Ok(()),
+        };
+    };
+    match effort {
+        Some(effort)
+            if !found["efforts"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .any(|e| e == effort) =>
+        {
+            Err(format!("{id} has no {effort} effort"))
+        }
+        _ => Ok(()),
     }
 }
 
@@ -125,7 +159,7 @@ async fn ask(
         gate = gate.pass() => gate,
         () = s.stopped() => return Err(STOPPING.into()),
     };
-    let args = command::args(Session::New(&gathr::ids::uuid()));
+    let args = command::args(Session::New(&gathr::ids::uuid()), Default::default());
     let env = command::env(std::env::vars_os(), folder);
     let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
@@ -192,8 +226,14 @@ fn listed(init: &Value) -> Value {
         .into_iter()
         .flatten()
         .map(|m| {
+            // A family's Latest: an alias the engine resolves to its newest model today (0025).
+            let latest = m["value"] != "default"
+                && m["resolvedModel"].is_string()
+                && m["value"] != m["resolvedModel"];
             json!({
                 "id": m["value"],
+                "resolved": m["resolvedModel"],
+                "latest": latest,
                 "name": m["displayName"],
                 "description": m["description"],
                 "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),

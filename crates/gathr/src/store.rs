@@ -21,7 +21,8 @@ pub fn create_chat(conn: &Connection, title: &str) -> Result<Value, Error> {
 
 pub fn chats(conn: &Connection) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
-        "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id)
+        "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
+                (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1)
          FROM chats c ORDER BY c.created_ts DESC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -30,6 +31,8 @@ pub fn chats(conn: &Connection) -> Result<Value, Error> {
             "title": r.get::<_, String>(1)?,
             "created": crate::ids::utc(r.get(2)?),
             "messages": r.get::<_, i64>(3)?,
+            // The last turn's agent, so the composer's picker reopens on it.
+            "agent": r.get::<_, Option<String>>(4)?,
         }))
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
@@ -60,7 +63,7 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
-        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts FROM turns
+        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id FROM turns
          WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -72,10 +75,12 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "ref": r.get::<_, String>(3)?,
                 "created": crate::ids::utc(r.get(4)?),
                 "ended": r.get::<_, Option<i64>>(5)?.map(crate::ids::utc),
+                "agent": r.get::<_, Option<String>>(6)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(json!({ "chat": chat, "messages": messages, "turns": turns }))
+    let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
+    Ok(json!({ "chat": chat, "agent": agent, "messages": messages, "turns": turns }))
 }
 
 /// A message as the API shows it; tool messages carry their JSON body as an object.
@@ -148,11 +153,19 @@ pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<(), Error
     Ok(())
 }
 
-pub fn add_turn(conn: &Connection, chat: &str, id: &str, trace: &str) -> Result<(), Error> {
+/// A new turn, run as `agent`, or on the oldest account when it's sent to none.
+pub fn add_turn(
+    conn: &Connection,
+    chat: &str,
+    id: &str,
+    trace: &str,
+    agent: Option<&str>,
+) -> Result<(), Error> {
     conn.prepare_cached(
-        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts) VALUES (?1, ?2, ?3, 'queued', ?4)",
+        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5)",
     )?
-    .execute(params![id, chat, trace, now_us()])?;
+    .execute(params![id, chat, trace, now_us(), agent])?;
     Ok(())
 }
 
@@ -171,6 +184,7 @@ pub struct Waiting {
     pub trace: String,
     pub status: String,
     pub text: String,
+    pub agent: Option<String>,
 }
 
 /// Turns that were waiting when the service last stopped, oldest first. Turns that were
@@ -183,7 +197,8 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     )?;
     let mut stmt = conn.prepare(
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
-                (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role = 'user' ORDER BY ts LIMIT 1)
+                (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role = 'user' ORDER BY ts LIMIT 1),
+                t.agent_id
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -193,32 +208,37 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             trace: r.get(2)?,
             status: r.get(3)?,
             text: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
+            agent: r.get(5)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-pub fn engine_session(conn: &Connection, chat: &str) -> Result<Option<String>, Error> {
+/// The chat's engine session, if it lives in `account`'s login folder: only there can it resume.
+pub fn engine_session(
+    conn: &Connection,
+    chat: &str,
+    account: &str,
+) -> Result<Option<String>, Error> {
     Ok(conn
         .query_row(
-            "SELECT engine_session FROM chats WHERE id = ?1",
-            [chat],
+            "SELECT engine_session FROM chats WHERE id = ?1 AND engine_account = ?2",
+            [chat, account],
             |r| r.get(0),
         )
         .optional()?
         .flatten())
 }
 
-/// Every chat starts a new engine session next time: their old ones were on another login.
-pub fn forget_engine_sessions(conn: &Connection) -> Result<(), Error> {
-    conn.execute("UPDATE chats SET engine_session = NULL", [])?;
-    Ok(())
-}
-
-pub fn set_engine_session(conn: &Connection, chat: &str, session: &str) -> Result<(), Error> {
+pub fn set_engine_session(
+    conn: &Connection,
+    chat: &str,
+    session: &str,
+    account: &str,
+) -> Result<(), Error> {
     conn.execute(
-        "UPDATE chats SET engine_session = ?2 WHERE id = ?1",
-        params![chat, session],
+        "UPDATE chats SET engine_session = ?2, engine_account = ?3 WHERE id = ?1",
+        params![chat, session, account],
     )?;
     Ok(())
 }

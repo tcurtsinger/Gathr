@@ -124,6 +124,31 @@ impl TestService {
         }
     }
 
+    /// The live socket, past its handshake, reading with a 3 s timeout.
+    pub fn live(&self) -> std::net::TcpStream {
+        use std::io::{Read, Write};
+        let mut socket = std::net::TcpStream::connect(("127.0.0.1", self.info.port)).unwrap();
+        socket
+            .set_read_timeout(Some(Duration::from_secs(3)))
+            .unwrap();
+        let handshake = format!(
+            "GET /api/live?token={} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nUpgrade: websocket\r\n\
+             Connection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+             Sec-WebSocket-Version: 13\r\n\r\n",
+            self.info.token, self.info.port
+        );
+        socket.write_all(handshake.as_bytes()).unwrap();
+        let mut head = Vec::new();
+        let mut byte = [0u8];
+        while !head.ends_with(b"\r\n\r\n") {
+            socket.read_exact(&mut byte).unwrap();
+            head.push(byte[0]);
+        }
+        let head = String::from_utf8_lossy(&head);
+        assert!(head.starts_with("HTTP/1.1 101"), "{head}");
+        socket
+    }
+
     /// Asks the service to stop and waits for it to exit.
     pub fn stop(mut self) -> std::process::ExitStatus {
         let _ = self.call("POST", "/api/shutdown");

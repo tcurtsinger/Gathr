@@ -14,6 +14,8 @@ export type Row =
 export interface SendFailure {
   id: string;
   text: string;
+  /** The agent it was for, so a resend goes to the same one. */
+  agent?: string;
   failure: Failure;
 }
 

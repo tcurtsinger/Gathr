@@ -215,7 +215,10 @@ fn probe(program: &Path, version: &str, root: &Path, stop: &AtomicBool) -> Resul
 fn initialize(program: &Path, scratch: &Path, stop: &AtomicBool) -> Result<(), String> {
     let mut command = Command::new(program);
     command
-        .args(command::args(command::Session::New(&crate::ids::uuid())))
+        .args(command::args(
+            command::Session::New(&crate::ids::uuid()),
+            Default::default(),
+        ))
         .env_clear()
         .envs(command::env(std::env::vars_os(), &scratch.join("claude")))
         .current_dir(scratch)
