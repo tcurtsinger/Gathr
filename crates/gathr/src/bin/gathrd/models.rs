@@ -226,10 +226,14 @@ fn listed(init: &Value) -> Value {
         .into_iter()
         .flatten()
         .map(|m| {
+            // A family's Latest: an alias the engine resolves to its newest model today (0025).
+            let latest = m["value"] != "default"
+                && m["resolvedModel"].is_string()
+                && m["value"] != m["resolvedModel"];
             json!({
                 "id": m["value"],
-                // What a family alias such as `opus` runs today: it moves to each new release.
                 "resolved": m["resolvedModel"],
+                "latest": latest,
                 "name": m["displayName"],
                 "description": m["description"],
                 "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),
