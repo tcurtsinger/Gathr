@@ -21,7 +21,8 @@ pub fn create_chat(conn: &Connection, title: &str) -> Result<Value, Error> {
 
 pub fn chats(conn: &Connection) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
-        "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id)
+        "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
+                (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1)
          FROM chats c ORDER BY c.created_ts DESC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -30,6 +31,8 @@ pub fn chats(conn: &Connection) -> Result<Value, Error> {
             "title": r.get::<_, String>(1)?,
             "created": crate::ids::utc(r.get(2)?),
             "messages": r.get::<_, i64>(3)?,
+            // The last turn's agent, so the composer's picker reopens on it.
+            "agent": r.get::<_, Option<String>>(4)?,
         }))
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
@@ -76,7 +79,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(json!({ "chat": chat, "messages": messages, "turns": turns }))
+    let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
+    Ok(json!({ "chat": chat, "agent": agent, "messages": messages, "turns": turns }))
 }
 
 /// A message as the API shows it; tool messages carry their JSON body as an object.
