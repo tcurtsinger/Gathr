@@ -71,7 +71,7 @@ Gathr owns one program per engine; version and updates appear once per engine
 below the accounts. There is no custom path or engine source control.
 Each account keeps its own login folder, per 0002. Updating a program leaves
 account assignments and logins intact. The preview simulates login completion.
-The accounts layout awaits approval; the entry and account model are selected.
+The accounts layout, entry and account model are approved.
 Diagnostics is another category,
 with a 210 px independently scrolling turn list beside a scrolling timeline. Filters
 stay above both. Forty-eight turns and a fifty-tool-call turn are the size fixtures.
