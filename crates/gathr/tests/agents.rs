@@ -131,11 +131,15 @@ fn saves_are_checked_against_the_engine_and_an_account_in_use_stays() {
     for (body, status, what) in refused {
         let answer = service.send("POST", "/api/agents", body);
         assert_eq!(answer.status, status, "{what}: {}", answer.body);
-        assert_eq!(
-            answer.json()["error"],
-            "Add failed",
-            "{what}: {}",
-            answer.body
+        let answer = answer.json();
+        assert_eq!(answer["error"], "Add failed", "{what}: {answer}");
+        // A reference explains itself (0019): its trace holds the answer's why.
+        let reference = answer["ref"].as_str().unwrap();
+        let (_, trace) = gathr(&data.0, &["diag", "trace", reference]);
+        let why = answer["why"].as_str().unwrap();
+        assert!(
+            trace.to_string().contains(why),
+            "{what}: {why:?} not in {trace}"
         );
     }
 
