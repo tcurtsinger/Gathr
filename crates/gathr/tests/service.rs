@@ -170,17 +170,14 @@ fn dev_window_runs_vite_from_the_ui_folder_it_starts_in() {
          require('net').createServer().listen(+process.env.GATHR_UI_PORT, '127.0.0.1');\n",
     )
     .unwrap();
-    // Port 0 could land within 10 of the top, leaving the UI no port.
-    let port = loop {
-        let port = std::net::TcpListener::bind("127.0.0.1:0")
-            .unwrap()
-            .local_addr()
-            .unwrap()
-            .port();
-        if port <= u16::MAX - 10 {
-            break port;
-        }
-    };
+    // Not from port 0: macOS hands those out in order, so another test's service can hold port + 10,
+    // and the UI's port would answer before this Vite ran. Below every system's ephemeral range,
+    // with both ports free when picked.
+    let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
+    let start = 20_000 + (std::process::id() % 10_000) as u16;
+    let port = (start..30_000)
+        .find(|&p| free(p) && free(p + 10))
+        .expect("no free pair of ports");
     let (_, said) = dev_window_without_app(&dir, port);
     let ran = std::fs::read_to_string(dir.0.join("vite-ran"))
         .unwrap_or_else(|_| panic!("the UI's dev server never ran: {said}"));
