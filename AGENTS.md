@@ -129,6 +129,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 - The repo is public. Plans that mention the owner, reviews, evidence, screenshots of real use, and friction go in `X:\code\gathr-work` (`plans\`, `reviews\`, `FRICTION.md`), never in the repo. Screenshots the owner should see are sent to them.
 - Each member works in its own worktree: `git fetch`, then `git worktree add X:\code\gathr-work\trees\<your name>-<topic> -b room/<topic> origin/main`.
 - Dev ports and data folders: each member's dev service runs on its own port and data folder: Orin 47100, Cass 47101, Pia 47102, Juno 47103, Vale 47104, each with `X:\code\gathr-work\data\<name>`; with `--window` the UI takes the port plus 10 (47110 to 47114). Never use another member's, and never run without `--data`.
+- The installed app too: open `gathr-app --data X:\code\gathr-work\data\<name>-<topic>`, never `gathr-app` alone or by double-click. With no `--data` it runs on the owner's real Gathr folder (`%APPDATA%\Gathr`, `~/Library/Application Support/Gathr`). A release build's service downloads its own Claude Code (about 345 MB) into the data folder on first start: reuse a folder that already has it, and delete the folder when you're done with it.
 - After a merge, bring `X:\code\gathr` up to date: `git fetch`, then `git merge --ff-only origin/main`. Check `git status` first and never discard the owner's changes: if something would be overwritten, stop and ask.
 
 ### Learning from SerenityOS
