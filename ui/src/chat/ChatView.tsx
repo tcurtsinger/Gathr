@@ -60,7 +60,7 @@ export function ChatView(props: Props) {
     return () => follow.disconnect();
   }, []);
 
-  const submit = (text: string, to = agent, retrying?: SendFailure) => {
+  const submit = (text: string, to: string | undefined, retrying?: SendFailure) => {
     pinned.current = true;
     return send(text, to, retrying);
   };
@@ -68,15 +68,17 @@ export function ChatView(props: Props) {
   const sendDraft = () => {
     const first = state.messages.length === 0;
     onDraft('');
-    submit(draft).then(() => first && onNamed());
+    submit(draft, agent).then(() => first && onNamed());
   };
 
   const actions: NoticeActions = {
     diagnostics: (t) => openSettings('diagnostics', t),
     signIn: () => openSettings('engines'),
+    // To the agent it was sent to, never the one picked now: if that agent was removed,
+    // the service refuses and the failure shows with its reference.
     retry: (t) => {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
-      if (asked) submit(asked.body as string);
+      if (asked) submit(asked.body as string, state.turns[t]?.agent ?? undefined);
     },
     resend: (f) => submit(f.text, f.agent, f),
     carryOn: () => {
