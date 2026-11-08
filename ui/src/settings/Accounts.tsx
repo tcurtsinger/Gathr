@@ -56,7 +56,15 @@ export function Accounts({ onReference }: { onReference: Open }) {
           links={failure.why && <span className="muted">{failure.why}</span>}
         />
       )}
-      {form && <AccountForm account={form.account} onClose={close} onFailure={setFailure} />}
+      {form && (
+        // A new form for each account, so one account's draft never carries to another.
+        <AccountForm
+          key={form.account?.id ?? ''}
+          account={form.account}
+          onClose={close}
+          onFailure={setFailure}
+        />
+      )}
       {accounts?.length === 0 && <p className="muted">No accounts</p>}
       <ul className="account-list">
         {accounts?.map((account) => (

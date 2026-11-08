@@ -23,13 +23,13 @@ function Programs({ onReference }: { onReference: (ref: string) => void }) {
   useEffect(() => {
     load();
   }, [load]);
-  // A check sends no live event: look again until it ends.
+  // A check sends no live event: look again after each answer, until one says it ended.
   const checking = engine?.copy.state === 'checking';
   useEffect(() => {
-    if (!checking) return;
+    if (engine?.copy.state !== 'checking') return;
     const again = setTimeout(load, 1000);
     return () => clearTimeout(again);
-  }, [checking, load]);
+  }, [engine, load]);
 
   const check = () => {
     setFailure(null);
@@ -42,7 +42,7 @@ function Programs({ onReference }: { onReference: (ref: string) => void }) {
     ? 'Checking'
     : copy?.state === 'off'
       ? 'Updates off'
-      : copy?.checked
+      : copy?.checked && copy.version && !copy.failed
         ? 'Up to date'
         : '';
   return (
