@@ -147,10 +147,25 @@ pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), E
 }
 
 /// Moves a message to another turn: one sent into a turn that the engine answered after it.
-pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<(), Error> {
-    conn.prepare_cached("UPDATE messages SET turn_id = ?2 WHERE id = ?1")?
-        .execute(params![id, turn])?;
-    Ok(())
+/// Moves a message to another turn: the message as it is now, for the live socket.
+pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Error> {
+    let moved = conn
+        .prepare_cached(
+            "UPDATE messages SET turn_id = ?2 WHERE id = ?1
+             RETURNING id, turn_id, ts, role, kind, body",
+        )?
+        .query_row(params![id, turn], |r| {
+            let (role, kind): (String, String) = (r.get(3)?, r.get(4)?);
+            Ok(message_json(
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                &role,
+                &kind,
+                r.get(5)?,
+            ))
+        })?;
+    Ok(moved)
 }
 
 /// A new turn, run as `agent`, or on the oldest account when it's sent to none.

@@ -417,6 +417,9 @@ impl Task {
                     store::move_message(conn, &message, &row.turn)
                 })
                 .await;
+            if let Some(Ok(message)) = &saved {
+                self.publish(&ids.chat, json!({ "type": "message", "message": message }));
+            }
             if let Some(Err(e)) = saved {
                 let event = Event::point("gathr.turn.requeue").trace(&ids.trace);
                 self.record(event.error("sqlite").attr("why", e.to_string()));
@@ -537,6 +540,10 @@ impl Task {
                 store::move_message(conn, &id, &row.turn)
             })
             .await;
+        // An open window moves the message to its new turn, where its reply or failure shows.
+        if let Some(Ok(message)) = &saved {
+            self.publish(&ids.chat, json!({ "type": "message", "message": message }));
+        }
         if let Some(Err(e)) = saved {
             let event = Event::point("gathr.turn.read")
                 .trace(&ids.trace)

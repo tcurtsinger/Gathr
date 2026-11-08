@@ -7,7 +7,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, recording, sign_in_account};
+use common::{TempDir, TestService, gathr, next_live, recording, sign_in_account};
 use serde_json::{Value, json};
 
 /// Every start's arguments, in order.
@@ -374,11 +374,22 @@ fn a_message_the_engine_never_read_becomes_the_chats_next_turn() {
     );
     let orin = agent(&service, &data.0, "Orin");
     let chat = service.new_chat();
-    send(&service, &chat, &orin);
+    let first = send(&service, &chat, &orin)["turn"].clone();
     let path = format!("/api/chats/{chat}/messages");
     let steered = service.send("POST", &path, json!({ "text": "Follow up", "agent": orin }));
     assert_eq!(steered.json()["steered"], true, "{}", steered.body);
+    let mut live = service.live();
     std::fs::write(&go, "").unwrap();
+
+    // An open window learns the message moved, so the new turn's failure or reply shows under it.
+    loop {
+        let update = next_live(&mut live);
+        let message = &update["message"];
+        if update["type"] == "message" && message["body"] == "Follow up" {
+            assert_ne!(message["turn"], first, "{update}");
+            break;
+        }
+    }
 
     let history = service.wait_for(&chat, 10, "the follow-up as a turn of its own", |h| {
         statuses(h).len() == 2 && statuses(h)[1] == "running"
