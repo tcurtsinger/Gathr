@@ -39,6 +39,12 @@ pub enum Cmd {
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
+    /// A `git push` from the agent's worktree, waiting for its answer (0029).
+    AskPush {
+        chat: String,
+        input: Value,
+        reply: oneshot::Sender<bool>,
+    },
     /// The chat's approvals still waiting for an answer.
     Approvals {
         chat: String,
@@ -186,6 +192,25 @@ impl Chats {
             reply,
         });
         open.await.into_iter().flatten().collect()
+    }
+
+    /// Whether a `git push` from the engine of `caller` may go on: its agent's task asks the
+    /// person and answers once they have. No task running for it: no.
+    pub async fn ask_push(&self, caller: &crate::tools::Caller, input: Value) -> bool {
+        let key = match &caller.agent {
+            Some(agent) => format!("agent:{agent}"),
+            None => format!("chat:{}", caller.chat),
+        };
+        let task = self
+            .tasks
+            .lock()
+            .expect("never poisoned")
+            .get(&key)
+            .cloned();
+        let (reply, answer) = oneshot::channel();
+        let chat = caller.chat.clone();
+        let asked = task.is_some_and(|t| t.send(Cmd::AskPush { chat, input, reply }).is_ok());
+        asked && answer.await.unwrap_or(false)
     }
 
     /// Sends every task a command and waits for every answer.

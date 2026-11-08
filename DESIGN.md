@@ -50,6 +50,8 @@ Tools use native details disclosures. Panel tabs share one content region. Messa
 
 Focus uses a 2 px accent outline with 2 px offset; in the composer it goes around the rounded box, not the text area inside. Native buttons, selects, checkboxes and details preserve keyboard operation. Escape closes the dialog or panel. Reduced motion removes transitions. At narrow widths, sidebar and panel controls reveal their regions; touch targets grow to 44 px. Error copy ends in failed, confirms use a short question, Cancel and the verb. No helper subtitles.
 
+Help (approvals/v1, `ui/src/components/Help.tsx`): a setting's detail sits behind a plain ? in a 16 px circle, in a 28 px muted button beside its label (44 px at narrow widths), named "About <setting>". Click, Enter or Space opens a popover up to 350 px wide, below the ? or above it when there's no room, inside the window; it doesn't move the form. Escape or a click outside closes it before Settings, and focus stays on the ?. No hover-only content or title tooltips.
+
 ## Token ownership
 The YAML above records dark values; light overrides live in designs/tokens.css. Use canvas for the conversation, surface for the sidebar and user bubbles, raised for the composer and hover, text for primary copy, muted for metadata, border for separators, control for input outlines, accent for links and reactions, focus for keyboard focus. Separators are not control boundaries. No independent per-screen palettes or duplicate shared components. The runtime frontend must implement these as shared components when it is built.
 
@@ -139,6 +141,7 @@ numbered version stays pinned. Engine default follows the engine's own default,
 which may differ from the selected family. Latest is the default for new
 agents when supported. The sample Opus Latest and Opus 4.6 choices illustrate
 these assignments only; actual discovery and resolution await Cass's research.
+Approvals goes below Effort: Ask, Edits, Auto or Full (0029), Auto for a new agent, each mode's detail behind its Help.
 Cancel and Escape discard form changes and restore focus. Save gives local feedback.
 Preview changes last only while the page remains open. The form and native dialog
 reuse Gathr's tokens, focus, button and Settings shell patterns. No new palette.

@@ -20,8 +20,10 @@ use tokio::sync::{mpsc, oneshot};
 use crate::chats::{Chats, Cmd, Failed};
 
 mod process;
+mod pushes;
 mod reading;
 mod records;
+mod workspace;
 
 pub use process::CLOSE_GRACE;
 
@@ -45,9 +47,10 @@ struct Queued {
     text: String,
 }
 
-/// Who the engine runs as and where: the agent, its account's folder, model and effort (0026),
-/// read when a turn starts so a saved change applies from the agent's next turn, and the chat
-/// whose session it runs.
+/// Who the engine runs as and where: the agent, its account's folder, model, effort (0026) and
+/// approvals (0029),
+/// read when a turn starts so a saved change applies from the agent's next turn, the chat whose
+/// session it runs, and that chat's roles, which its briefing names (0028).
 #[derive(Clone, PartialEq)]
 struct Assignment {
     agent: Option<String>,
@@ -55,7 +58,9 @@ struct Assignment {
     folder: PathBuf,
     model: Option<String>,
     effort: Option<String>,
+    approvals: gathr::agents::Approvals,
     chat: String,
+    team: Vec<(String, gathr::team::Role)>,
 }
 
 struct Running {
@@ -69,6 +74,10 @@ struct Running {
     tools: HashMap<String, (String, String, i64)>,
     /// Questions Claude Code asked and nobody has answered: each tool and its input.
     approvals: HashMap<String, (String, Value)>,
+    /// Of those, the ones a worktree's `pre-push` hook asked: where each answer goes.
+    pushes: HashMap<String, oneshot::Sender<bool>>,
+    /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
+    push_allowed: bool,
     stopping: bool,
     signed_out: bool,
     /// The account's renewal gate, held until the provider first answers (0016).
@@ -210,6 +219,7 @@ impl Task {
             } => {
                 let _ = reply.send(self.approve(&chat, &request_id, allow).await);
             }
+            Cmd::AskPush { chat, input, reply } => self.ask_push(&chat, input, reply),
             Cmd::Approvals { chat, reply } => {
                 let _ = reply.send(self.open_approvals(&chat));
             }
@@ -346,7 +356,8 @@ impl Task {
                 (Some(was), Some(now)) if was.account != now.account => {
                     "the next turn runs on another account"
                 }
-                _ => "the next turn runs with another model or effort",
+                (Some(was), Some(now)) if was.team != now.team => "the chat's roles changed",
+                _ => "the next turn runs with another model, effort or approvals",
             };
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
@@ -450,24 +461,33 @@ impl Task {
     /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,
     /// the chats' account and the engine's defaults. `None` while there's no account.
     async fn assignment(&self, next: &Queued) -> Result<Option<Assignment>, String> {
-        let on = |account: String, agent, model, effort| Assignment {
+        let on = |account: String, agent, (model, effort, approvals), team| Assignment {
             folder: gathr::accounts::folder(&self.chats.data, &account, "claude"),
             account,
             agent,
             model,
             effort,
+            approvals,
             chat: next.ids.chat.clone(),
+            team,
         };
         let Some(id) = next.ids.agent.clone() else {
-            return Ok(self.chats.account().map(|a| on(a, None, None, None)));
+            return Ok(self
+                .chats
+                .account()
+                .map(|a| on(a, None, (None, None, Default::default()), Vec::new())));
         };
-        match self
-            .chats
-            .writer
-            .call(move |conn| agents::get(conn, &id))
-            .await
-        {
-            Some(Ok(Some(a))) => Ok(Some(on(a.account, Some(a.id), a.model, a.effort))),
+        let chat = next.ids.chat.clone();
+        let read = move |conn: &mut rusqlite::Connection| {
+            let team = gathr::team::members(conn, &chat)?;
+            let team = team.into_iter().map(|m| (m.agent, m.role)).collect();
+            Ok::<_, gathr::Error>(agents::get(conn, &id)?.map(|a| (a, team)))
+        };
+        match self.chats.writer.call(read).await {
+            Some(Ok(Some((a, team)))) => {
+                let given = (a.model, a.effort, a.approvals);
+                Ok(Some(on(a.account, Some(a.id), given, team)))
+            }
             Some(Ok(None)) => Err("its agent was deleted".into()),
             Some(Err(e)) => Err(format!("its agent wasn't read: {e}")),
             None => Err("its agent wasn't read: the database didn't answer".into()),
@@ -518,6 +538,7 @@ impl Task {
                     assigned.and_then(|a| a.model.clone()),
                 )
                 .attr("gathr.effort", assigned.and_then(|a| a.effort.clone()))
+                .attr("gathr.approvals", assigned.map(|a| a.approvals.as_str()))
                 .attr("gathr.account", assigned.map(|a| a.account.clone()))
                 .attr("gathr.turn.id", ids.turn.clone()),
         );
@@ -529,6 +550,8 @@ impl Task {
             streamed: false,
             tools: HashMap::new(),
             approvals: HashMap::new(),
+            pushes: HashMap::new(),
+            push_allowed: false,
             stopping: false,
             signed_out: false,
             gate,
@@ -625,18 +648,21 @@ impl Task {
     }
 
     async fn approve(&mut self, chat: &str, request_id: &str, allow: bool) -> bool {
-        let Some(input) = self
-            .turn
-            .as_mut()
-            .filter(|t| t.ids.chat == chat)
-            .and_then(|t| t.approvals.remove(request_id))
-            .map(|(_, input)| input)
-        else {
+        let Some(turn) = self.turn.as_mut().filter(|t| t.ids.chat == chat) else {
             return false;
         };
-        let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
+        let Some((tool, input)) = turn.approvals.remove(request_id) else {
+            return false;
+        };
+        if let Some(reply) = turn.pushes.remove(request_id) {
+            return self.answer_push(request_id, allow, reply);
+        }
+        if allow && gathr::approvals::runs_push(&tool, &input) {
+            turn.push_allowed = true;
+        }
+        let turn = turn.ids.turn.clone();
         let answer = frames::approval(request_id, allow, &input);
-        self.write(&answer, turn.as_deref()).await.is_ok()
+        self.write(&answer, Some(&turn)).await.is_ok()
     }
 
     /// The chat's questions still open, as the live socket sent them, for a window that opens
@@ -645,7 +671,12 @@ impl Task {
         let Some(turn) = self.turn.as_ref().filter(|t| t.ids.chat == chat) else {
             return Vec::new();
         };
-        let open = turn.approvals.iter().map(|(request_id, (tool, input))| {
+        // A push whose hook gave up (git ended it) has no one to answer.
+        let open = turn.approvals.iter().filter(|(request_id, _)| {
+            let push = turn.pushes.get(*request_id);
+            push.is_none_or(|reply| !reply.is_closed())
+        });
+        let open = open.map(|(request_id, (tool, input))| {
             json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input })
         });
         open.collect()

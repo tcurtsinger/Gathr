@@ -59,7 +59,14 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
     return new Response(JSON.stringify({ chat: 'c', messages: [], turns, approvals: [] }));
   });
   const edited: string[] = [];
-  const made = (id: string, name: string) => ({ id, name, account: 'a', model: null, effort: null });
+  const made = (id: string, name: string) => ({
+    id,
+    name,
+    account: 'a',
+    model: null,
+    effort: null,
+    approvals: 'auto' as const,
+  });
   const screen = await render(
     <ChatView
       chat={{ id: 'c', title: 'Made-up chat' }}
@@ -94,7 +101,14 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
     const turns = [{ id: 't', status: 'failed', why: 'made-up', ref: 'r', agent: 'a' }];
     return new Response(JSON.stringify({ chat: 'c', messages: [asked], turns, approvals: [] }));
   });
-  const made = (id: string, name: string) => ({ id, name, account: 'a', model: null, effort: null });
+  const made = (id: string, name: string) => ({
+    id,
+    name,
+    account: 'a',
+    model: null,
+    effort: null,
+    approvals: 'auto' as const,
+  });
   const screen = await render(
     <ChatView
       chat={{ id: 'c', title: 'Made-up chat' }}

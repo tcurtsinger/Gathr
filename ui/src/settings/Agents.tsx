@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { type Account, type Agent, api, type Failure, type Model } from '../api';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
+import { Help } from '../components/Help';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
@@ -121,7 +122,20 @@ interface FormProps {
 }
 
 /** Model is undefined until a new agent's models arrive and it takes the first Latest. */
-type Fields = { name: string; account: string; model: string | null | undefined; effort: string | null };
+type Fields = {
+  name: string;
+  account: string;
+  model: string | null | undefined;
+  effort: string | null;
+  approvals: Approvals;
+};
+
+const modes: [Approvals, string, string][] = [
+  ['ask', 'Ask', 'Ask before actions that need permission.'],
+  ['edits', 'Edits', 'Allow file edits in the worktree. Ask before other actions that need permission.'],
+  ['auto', 'Auto', 'The engine checks actions. Pushes and file-tool writes outside the worktree ask.'],
+  ['full', 'Full', 'Run actions without asking.'],
+];
 
 /** One Account picker (it implies the engine), then the account's models and their efforts. */
 function AgentForm(props: FormProps) {
@@ -130,8 +144,8 @@ function AgentForm(props: FormProps) {
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const edit = (fields: Partial<Fields>) => setEdits((e) => ({ ...e, ...fields }));
-  const { name, account, model, effort }: Fields = {
-    ...(agent ?? { name: '', account: accounts[0].id, model: undefined, effort: null }),
+  const { name, account, model, effort, approvals }: Fields = {
+    ...(agent ?? { name: '', account: accounts[0].id, model: undefined, effort: null, approvals: 'auto' }),
     ...edits,
   };
   const [find, setFind] = useState('');
@@ -142,6 +156,7 @@ function AgentForm(props: FormProps) {
   const [failure, setFailure] = useState<Failure | null>(null);
   const models = useModels(account);
   const title = useId();
+  const approvalsId = useId();
 
   const list = models.list ?? [];
   useEffect(() => {
@@ -149,13 +164,14 @@ function AgentForm(props: FormProps) {
     if (model === undefined && loaded) setEdits((e) => ({ ...e, model: firstLatest(loaded) }));
   }, [model, models.list]);
 
-  const draft = { name: name.trim(), account, model: model ?? null, effort };
+  const draft = { name: name.trim(), account, model: model ?? null, effort, approvals };
   const changed =
     !agent ||
     draft.name !== agent.name ||
     draft.account !== agent.account ||
     draft.model !== agent.model ||
-    draft.effort !== agent.effort;
+    draft.effort !== agent.effort ||
+    draft.approvals !== agent.approvals;
   const offered = efforts(list, draft.model);
   const found = choices(list).filter((c) => c.label.toLowerCase().includes(find.trim().toLowerCase()));
 
@@ -275,6 +291,34 @@ function AgentForm(props: FormProps) {
           {effort && !offered.includes(effort) && <option value={effort}>{effort} / Unavailable</option>}
         </select>
       </label>
+      <div className="agent-field">
+        <span className="agent-label">
+          <label htmlFor={approvalsId}>Approvals</label>
+          <Help label="About approvals">
+            <h4>Approvals</h4>
+            <dl>
+              {modes.map(([mode, label, detail]) => (
+                <Fragment key={mode}>
+                  <dt>{label}</dt>
+                  <dd>{detail}</dd>
+                </Fragment>
+              ))}
+            </dl>
+            <p>Auto does not confine shell commands to the worktree.</p>
+          </Help>
+        </span>
+        <select
+          id={approvalsId}
+          value={approvals}
+          onChange={(e) => edit({ approvals: e.target.value as Approvals })}
+        >
+          {modes.map(([mode, label]) => (
+            <option key={mode} value={mode}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </div>
       {failure && (
         <Notice
           danger

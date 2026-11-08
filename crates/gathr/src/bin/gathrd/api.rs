@@ -58,6 +58,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .nest_service("/mcp", crate::tools::service(state.chats.clone()))
+        .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
         .fallback(crate::ui::page)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
@@ -121,9 +122,9 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
 }
 
 /// Whether a request may go on: refused for a foreign Host or Origin (403), or no valid token or
-/// cookie (401). The UI's own files need neither: they hold nothing secret. Gathr's tools take
-/// only a running engine's own token, never the service's or the cookie: the engine they admit
-/// is the caller the tools act as (0005).
+/// cookie (401). The UI's own files need neither: they hold nothing secret. Gathr's tools and its
+/// hook take only a running engine's own token, never the service's or the cookie: the engine
+/// they admit is the caller they act for (0005, 0029).
 fn admit(
     s: &State,
     headers: &HeaderMap,
@@ -133,7 +134,8 @@ fn admit(
         return Err(refused);
     }
     let path = uri.path();
-    let tools = path == "/mcp" || path.starts_with("/mcp/");
+    let hook = [crate::tools::HOOK_PATH, crate::tools::PUSH_PATH].contains(&path);
+    let tools = path == "/mcp" || path.starts_with("/mcp/") || hook;
     if !tools && !path.starts_with("/api/") && path != "/health" {
         return Ok(None);
     }

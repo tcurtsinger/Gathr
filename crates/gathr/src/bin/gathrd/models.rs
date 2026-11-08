@@ -159,7 +159,11 @@ async fn ask(
         gate = gate.pass() => gate,
         () = s.stopped() => return Err(STOPPING.into()),
     };
-    let args = command::args(Session::New(&gathr::ids::uuid()), Default::default());
+    let args = command::args(
+        Session::New(&gathr::ids::uuid()),
+        command::Assigned::handshake(),
+        None,
+    );
     let env = command::env(std::env::vars_os(), folder);
     let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;

@@ -7,7 +7,7 @@ use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
-use gathr::agents::{self, Agent, Change, Refused};
+use gathr::agents::{self, Agent, Approvals, Change, Refused};
 use gathr::event::Event;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
@@ -33,6 +33,7 @@ struct Body {
     model: Option<Option<String>>,
     #[serde(default, deserialize_with = "present")]
     effort: Option<Option<String>>,
+    approvals: Option<Approvals>,
 }
 
 /// Tells `"model": null` (clear it) from no `model` at all (keep it).
@@ -47,6 +48,7 @@ impl Body {
             account: self.account,
             model: self.model,
             effort: self.effort,
+            approvals: self.approvals,
         }
     }
 }
@@ -120,6 +122,7 @@ async fn add(
         account: String::new(),
         model: None,
         effort: None,
+        approvals: Approvals::default(),
     };
     let agent = blank.changed(body.change());
     save(&s, &t, ("add", ERROR), agent).await
@@ -144,8 +147,19 @@ async fn remove(
     const ERROR: &str = "Delete failed";
     let agent = find(&s, &t, &id, ERROR).await?;
     let gone = agent.id.clone();
-    match s.writer.call(move |conn| agents::remove(conn, &gone)).await {
-        Some(Ok(_)) => s.chats.retire(&agent.id),
+    let removed = s
+        .writer
+        .call(move |conn| match gathr::team::a_chat_of(conn, &gone)? {
+            Some(chat) => Ok(Err(chat)),
+            None => agents::remove(conn, &gone).map(Ok),
+        })
+        .await;
+    match removed {
+        Some(Ok(Ok(_))) => s.chats.retire(&agent.id),
+        Some(Ok(Err(chat))) => {
+            let why = format!("the agent is in the chat \"{chat}\"");
+            return Err(fail(StatusCode::CONFLICT, ERROR, &why, &t.0));
+        }
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -230,6 +244,7 @@ fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent) {
         .attr("account", agent.account.clone())
         .attr("model", agent.model.clone())
         .attr("effort", agent.effort.clone())
+        .attr("approvals", agent.approvals.as_str())
         .attr("change", change);
     s.writer.record(event);
     s.chats.publish(json!({ "type": "agents" }));
