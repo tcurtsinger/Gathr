@@ -83,6 +83,7 @@ assert(
 	"prototype dark surfaces",
 );
 assert(design.includes("Team-message layout: pending"), "no unselected agent arrangement");
+assert(design.includes("There is no Everyone option"), "one named recipient, no fan-out");
 assert(
 	design.includes("1024 by 760px") && design.includes("200px category rail"),
 	"accepted Settings geometry",

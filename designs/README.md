@@ -6,8 +6,9 @@ accepted decisions. See [system.html](system.html), [DESIGN.md](../DESIGN.md) an
 `#light` for light mode or use Switch theme. Run `node designs/check.cjs`.
 
 Settings retains the centred Gathr layout. The team-message layout is pending an
-owner choice. Everyone dispatch and moving 0015's Team tab into Summary require
-the integration plan to resolve them explicitly. The portable page has no service.
+owner choice. The recipient picker defaults to the Supervisor by name and has no
+Everyone option. Moving 0015's Team tab into Summary remains an integration
+question. The portable page has no service.
 
 ## Retired selected shell pages
 

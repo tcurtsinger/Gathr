@@ -118,8 +118,11 @@ Compose ThreadPrimitive, MessagePrimitive and the shared ChatComposer. The full
 upstream Thread has no Composer override. ChatComposer uses the modular Composer,
 attachments, mentions, slash actions, selection quoting and Send/Stop through the
 runtime adapter. The recipient picker selects an agent, never its model or effort.
-Default routing remains the Supervisor, per 0028. Everyone's dispatch behavior
-requires a separate decision and must not be inferred from the fixture callback.
+The recipient picker is decided: default to the Supervisor, shown by name first,
+then the other members. Choosing another agent addresses it just like @Name.
+There is no Everyone option. A chat without a project starts with one agent, its
+lead. Choosing another agent adds it to that chat, up to five. This rule is to be
+recorded in 0028 with F8; it does not introduce a fan-out callback.
 
 Streamdown is the rendering reference, pending integration approval. Keep user
 messages plain text; render agent Markdown, lists, headings, quotes, code, tables,
@@ -130,8 +133,9 @@ focus. Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
 **Team-message layout: pending the owner's pick.** The prototype's default agent
-message arrangement is not selected. Compare grouped four-agent replies, tool
-runs, a long reply and a separate Supervisor wrap-up. Preserve 0028's turn-start
+message arrangement is not selected. Compare a request to the Supervisor, its
+hand-offs to two members, their replies, tool runs, a long reply and the
+Supervisor's wrap-up. Preserve 0028's turn-start
 order; concurrent output never interleaves. The user request remains visible when
 the exchange collapses. A chosen arrangement must expose every agent's identity
 and retain the place and draft while opening a turn's context. Do not treat any

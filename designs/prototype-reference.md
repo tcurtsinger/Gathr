@@ -9,8 +9,9 @@ of its local fixtures. No fixture conversation or account data was copied here.
 - DESIGN.md and tokens.css adapt the prototype's appearance to Gathr.
 - Accepted decisions govern service state, routing, safety and data ownership.
 - Settings retains 0023's centred panel and category rail.
-- Team-message arrangement awaits the owner's choice. Everyone dispatch and
-  Summary replacing 0015's Team tab await explicit integration decisions.
+- Team-message arrangement awaits the owner's choice. Recipient routing is
+  decided: the Supervisor by name first, other members after it, no Everyone.
+  Summary replacing 0015's Team tab awaits an explicit integration decision.
 - No JavaScript packages are added by this design PR. The integration proposal
   owns dependency approval, version pinning, runtime adapters and file splitting.
 
