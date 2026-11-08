@@ -1,4 +1,5 @@
-.agents {
+.settings-page > .agents {
+  padding: 0;
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
   height: 100%;
@@ -95,7 +96,7 @@
   font-size: 13px;
 }
 @media (max-width: 767px) {
-  .agents {
+  .settings-page > .agents {
     grid-template-columns: 1fr;
     height: auto;
   }

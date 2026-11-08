@@ -23,13 +23,13 @@ export interface Turn {
   status: TurnStatus;
   why: string | null;
   ref: string;
+  /** The agent it ran as; none for a turn sent to no agent. Set in the saved history. */
+  agent?: string | null;
 }
 
 export interface Chat {
   id: string;
   title: string;
-  /** The agent the last message went to, so the picker reopens on it. */
-  agent?: string | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -137,6 +137,7 @@ export const api = {
   agents: () => call<{ agents: Agent[] }>('GET', '/api/agents').then((a) => a.agents),
   addAgent: (agent: Omit<Agent, 'id'>) => call<Agent>('POST', '/api/agents', agent),
   saveAgent: ({ id, ...agent }: Agent) => call<Agent>('PATCH', `/api/agents/${id}`, agent),
+  removeAgent: (agent: string) => call<unknown>('DELETE', `/api/agents/${agent}`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>

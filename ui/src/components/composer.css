@@ -31,6 +31,8 @@
   gap: 3px;
 }
 .composer-bottom select {
+  /* As wide as the chosen name; where that's unsupported, as wide as the longest. */
+  field-sizing: content;
   max-width: 50%;
   padding: 4px 8px;
   background: transparent;

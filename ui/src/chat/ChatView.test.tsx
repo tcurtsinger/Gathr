@@ -51,17 +51,18 @@ test('a message that never reached the service is still there, with Retry, after
   await expect.element(screen.getByRole('alert').filter({ hasText: 'Request failed' }).last()).toBeVisible();
 });
 
-test('the chat reopens on its agent, Edit agent keeps it, and the message goes to it', async () => {
+test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the message goes to it', async () => {
   const sent: unknown[] = [];
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (init?.method === 'POST' && path.endsWith('/messages')) sent.push(JSON.parse(String(init.body)));
-    return new Response(JSON.stringify({ chat: 'c', messages: [], turns: [], approvals: [] }));
+    const turns = [{ id: 't', status: 'done', why: null, ref: 'r', agent: 'b' }];
+    return new Response(JSON.stringify({ chat: 'c', messages: [], turns, approvals: [] }));
   });
   const edited: string[] = [];
   const made = (id: string, name: string) => ({ id, name, account: 'a', model: null, effort: null });
   const screen = await render(
     <ChatView
-      chat={{ id: 'c', title: 'Made-up chat', agent: 'b' }}
+      chat={{ id: 'c', title: 'Made-up chat' }}
       agents={[made('a', 'Made-up A'), made('b', 'Made-up B')]}
       onEditAgent={(agent) => edited.push(agent)}
       draft="Made-up question"

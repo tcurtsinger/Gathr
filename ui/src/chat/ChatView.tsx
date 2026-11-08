@@ -39,9 +39,10 @@ export function ChatView(props: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   const pinned = useRef(true);
   const ours = useRef(0);
-  const [picked, setPicked] = useState(chat.agent ?? null);
-  // The chat's agent, else the first; one removed since falls back the same way.
-  const agent = agents.find((a) => a.id === picked)?.id ?? agents[0]?.id;
+  const [picked, setPicked] = useState<string | null>(null);
+  // The one picked here, else the agent of the chat's last turn, else the first; a removed one is skipped.
+  const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
+  const agent = [picked, last].find((id) => agents.some((a) => a.id === id)) ?? agents[0]?.id;
 
   useFirstTokenReport(state.partial);
 

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { type Account, type Agent, api, type Failure, type Model } from '../api';
+import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
+import { engineName } from './Accounts';
 import { choices, chosen, efforts, firstLatest } from './models';
 import './agents.css';
 
@@ -33,6 +35,10 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
   const shown = selected ?? agents?.[0]?.id ?? null;
   const agent = agents?.find((a) => a.id === shown);
   const ready = agents !== null && accounts !== null;
+  const toAdd = () => {
+    setSelected(null);
+    addButton.current?.focus();
+  };
 
   return (
     <section className="agents" aria-label="Agents">
@@ -91,9 +97,10 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
               setSelected(done.id);
               setSaved(done.id);
             }}
-            onCancelNew={() => {
-              setSelected(null);
-              addButton.current?.focus();
+            onCancelNew={toAdd}
+            onRemoved={() => {
+              setAgents((list) => list?.filter((a) => a.id !== shown) ?? null);
+              toAdd();
             }}
             onReference={onReference}
           />
@@ -109,11 +116,13 @@ interface FormProps {
   saved: boolean;
   onSaved: (agent: Agent) => void;
   onCancelNew: () => void;
+  onRemoved: () => void;
   onReference: Open;
 }
 
 /** One Account picker (it implies the engine), then the account's models and their efforts. */
-function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }: FormProps) {
+function AgentForm(props: FormProps) {
+  const { agent, accounts, saved, onSaved, onCancelNew, onRemoved, onReference } = props;
   const [name, setName] = useState(agent?.name ?? '');
   const [account, setAccount] = useState(agent?.account ?? accounts[0].id);
   /** Undefined until a new agent's models arrive and it takes the first Latest. */
@@ -121,7 +130,9 @@ function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }
   const [effort, setEffort] = useState(agent?.effort ?? null);
   const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
-
+  const [confirming, setConfirming] = useState(false);
+  /** Focus goes back to Remove when its question is cancelled. */
+  const cancelled = useRef(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const models = useModels(account);
   const title = useId();
@@ -156,6 +167,15 @@ function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }
     setModel(agent.model);
     setEffort(agent.effort);
     setFind('');
+  };
+  const remove = () => {
+    if (!agent) return;
+    setConfirming(false);
+    setBusy(true);
+    api.removeAgent(agent.id).then(onRemoved, (f: Failure) => {
+      setBusy(false);
+      setFailure(f);
+    });
   };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -196,7 +216,8 @@ function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }
         <select value={account} onChange={(e) => pickAccount(e.target.value)}>
           {accounts.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.name} / Claude Code{a.login === 'signed_out' ? ' / Signed out' : ''}
+              {a.name} / {engineName(a.engine)}
+              {a.login === 'signed_out' ? ' / Signed out' : ''}
             </option>
           ))}
         </select>
@@ -251,6 +272,7 @@ function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }
               {level}
             </option>
           ))}
+          {effort && !offered.includes(effort) && <option value={effort}>{effort} / Unavailable</option>}
         </select>
       </label>
       {failure && (
@@ -262,6 +284,29 @@ function AgentForm({ agent, accounts, saved, onSaved, onCancelNew, onReference }
         />
       )}
       <div className="agent-actions">
+        {agent &&
+          (confirming ? (
+            <ConfirmRemove
+              name={agent.name}
+              onCancel={() => {
+                setConfirming(false);
+                cancelled.current = true;
+              }}
+              onRemove={remove}
+            />
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              ref={(b) => {
+                if (b && cancelled.current) b.focus();
+                cancelled.current = false;
+              }}
+              onClick={() => setConfirming(true)}
+            >
+              Remove
+            </button>
+          ))}
         <span className="muted" role="status">
           {saved && !changed ? 'Saved' : ''}
         </span>

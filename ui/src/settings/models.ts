@@ -13,7 +13,11 @@ const latest = (id: string) => id !== DEFAULT && !/\d/.test(id);
 
 /** Latest first, then Engine default, then numbered models, each in the engine's order. */
 export function choices(models: Model[]): Choice[] {
-  const aliases = models.filter((m) => latest(m.id)).map((m) => ({ id: m.id, label: `${m.name} Latest` }));
+  // The family from the alias: signed in, the engine names it by today's version ("Opus 5.5").
+  const family = (id: string) => id.charAt(0).toUpperCase() + id.slice(1);
+  const aliases = models
+    .filter((m) => latest(m.id))
+    .map((m) => ({ id: m.id, label: `${family(m.id)} Latest` }));
   const pinned = models
     .filter((m) => m.id !== DEFAULT && !latest(m.id))
     .map((m) => ({ id: m.id, label: m.name }));

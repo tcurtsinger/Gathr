@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { type Account, api, type Failure } from '../api';
+import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
 
 /** The engines Gathr can run, as the service names them. Codex joins with its driver. */
 const engines: [string, string][] = [['claude', 'Claude Code']];
-const engineName = (engine: string) => engines.find(([id]) => id === engine)?.[1] ?? engine;
+export const engineName = (engine: string) => engines.find(([id]) => id === engine)?.[1] ?? engine;
 
 const said: Record<string, string> = {
   signed_in: 'Signed in',
@@ -241,40 +242,6 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
       )}
       {waiting?.url && <SignInCode account={id} url={waiting.url} onFailure={onFailure} />}
     </li>
-  );
-}
-
-/** A short question, Cancel and the verb, in place of the row's actions. Escape cancels it, not Settings. */
-function ConfirmRemove({
-  name,
-  onCancel,
-  onRemove,
-}: {
-  name: string;
-  onCancel: () => void;
-  onRemove: () => void;
-}) {
-  const question = useId();
-  return (
-    <fieldset
-      className="account-actions"
-      aria-labelledby={question}
-      onKeyDown={(e) => {
-        if (e.key !== 'Escape') return;
-        e.preventDefault();
-        e.stopPropagation();
-        onCancel();
-      }}
-    >
-      <span id={question}>Remove {name}?</span>
-      {/* biome-ignore lint/a11y/noAutofocus: the question opens from Remove; Cancel is the safe answer */}
-      <button type="button" autoFocus onClick={onCancel}>
-        Cancel
-      </button>
-      <button type="button" className="danger" onClick={onRemove}>
-        Remove
-      </button>
-    </fieldset>
   );
 }
 

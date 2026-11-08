@@ -24,7 +24,7 @@ const lists: Record<string, Model[]> = {
   a: [
     model('default', 'Default'),
     model('made-up-9-9', 'Made-up 9.9'),
-    model('opus', 'Opus'),
+    model('opus', 'Opus 5.5'),
     model('sonnet', 'Sonnet'),
   ],
   b: [model('default', 'Default', ['medium']), model('haiku', 'Haiku', ['medium'])],
@@ -35,7 +35,8 @@ function service(agents: Agent[], models: (account: string) => Response | Promis
   const answer = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
-    if (method !== 'GET' && path !== '/api/ui/events') sent.push({ method, path, body: JSON.parse(String(init?.body)) });
+    if (method !== 'GET' && path !== '/api/ui/events')
+      sent.push({ method, path, body: JSON.parse(String(init?.body)) });
     if (path === '/api/agents' && method === 'GET') return answer({ agents });
     if (path === '/api/agents') return answer({ id: 'new', ...JSON.parse(String(init?.body)) });
     if (path === '/api/accounts')
@@ -60,8 +61,8 @@ const agent = (over: Partial<Agent>): Agent => ({
   ...over,
 });
 
-test('Latest comes first, then Engine default, then numbered models; a model no longer listed says so', async () => {
-  service([agent({ model: 'made-up-1-0' })], listed);
+test('Latest comes first, then Engine default, then numbered models; a model or effort no longer listed says so', async () => {
+  service([agent({ model: 'made-up-1-0', effort: 'made-up-effort' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
   await expect.element(list.first()).toHaveTextContent('Opus Latest');
@@ -72,6 +73,7 @@ test('Latest comes first, then Engine default, then numbered models; a model no 
     'Made-up 9.9',
   ]);
   await expect.element(screen.getByText('made-up-1-0 / Unavailable')).toBeVisible();
+  await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveValue('made-up-effort');
 });
 
 test('another account resets model and effort to the engine default and lists its own models', async () => {
