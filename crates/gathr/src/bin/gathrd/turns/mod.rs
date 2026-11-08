@@ -27,6 +27,9 @@ pub use process::CLOSE_GRACE;
 
 /// How often a turn waiting for sign-in looks at the login again.
 const SIGN_IN_POLL: Duration = Duration::from_secs(2);
+/// How long a message sent into a turn may wait for the engine to read it before the agent moves
+/// on to another turn: Claude Code reads it right after the turn ends, and answers it.
+const READ_WAIT: Duration = Duration::from_secs(30);
 /// Where the login isn't in a file (macOS), a refused login is tried again after this long.
 const REFUSED_RETRY: Duration = Duration::from_secs(60);
 
@@ -92,14 +95,17 @@ struct Task {
     /// The account folder whose login the engine refused, its login file then, and when: held
     /// as signed out until the file changes, so a refused login doesn't start an engine every poll.
     refused: Option<(PathBuf, Option<std::time::SystemTime>, Instant)>,
-    /// Messages sent into a turn under way that the engine hasn't read yet: their id and text.
-    unread: Vec<(String, String)>,
+    /// Messages sent into a turn under way that the engine hasn't read yet: their id, text and
+    /// when they were sent.
+    unread: Vec<(String, String, Instant)>,
     /// An engine closed the gentle way that hasn't exited yet; nothing new starts until it has.
     closing: Option<process::Closing>,
     /// Account removals waiting for the closing engine to exit.
     leaving: Vec<oneshot::Sender<()>>,
     /// When the engine last finished a turn or started.
     idle_since: Instant,
+    /// The agent was deleted: its engine closes as soon as it's free.
+    retired: bool,
     times: process::Times,
 }
 
@@ -123,6 +129,7 @@ pub async fn run(
         closing: None,
         leaving: Vec::new(),
         idle_since: Instant::now(),
+        retired: false,
         times: process::Times::from_env(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
@@ -133,7 +140,14 @@ pub async fn run(
         let free = task.turn.is_none() && task.closing.is_none();
         let waiting = free && !task.queue.is_empty();
         let idle = free && task.engine.is_some() && task.queue.is_empty();
-        let idle_at = tokio::time::Instant::from_std(task.idle_since + task.times.idle_close);
+        let idle_at = match task.retired {
+            true => tokio::time::Instant::now(),
+            false => tokio::time::Instant::from_std(task.idle_since + task.times.idle_close),
+        };
+        let idle_why = match task.retired {
+            true => "its agent was deleted",
+            false => "it was idle",
+        };
         let hold_after = task.times.hold_after;
         tokio::select! {
             command = commands.recv() => match command {
@@ -156,7 +170,7 @@ pub async fn run(
                 Some(code) => task.on_closed(code).await,
                 None => task.on_held(),
             },
-            _ = tokio::time::sleep_until(idle_at), if idle => task.close("it was idle").await,
+            _ = tokio::time::sleep_until(idle_at), if idle => task.close(idle_why).await,
             _ = sign_in_poll.tick(), if waiting => task.try_next().await,
         }
     }
@@ -211,6 +225,7 @@ impl Task {
                 self.try_next().await;
             }
             Cmd::Leave { folder, done } => self.leave(&folder, done).await,
+            Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
         }
     }
@@ -236,7 +251,7 @@ impl Task {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, text));
+            self.unread.push((id, text, Instant::now()));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             let steer = Event::point("gathr.turn.steer").trace(&ids.trace);
             self.record(steer.chat(&ids.chat).ok());
@@ -277,6 +292,7 @@ impl Task {
         if self.turn.is_some() || self.closing.is_some() || !self.queue.is_empty() {
             self.queue.push_back(queued.clone());
             self.set_turn(ids, "queued", None).await;
+            self.trace_hold(ids);
             return Ok(answer("queued"));
         }
         match self.start(&queued).await {
@@ -314,7 +330,7 @@ impl Task {
     /// another session's engine closes; `waiting_sign_in`; or why it couldn't. A turn that
     /// doesn't run stays first in the queue.
     async fn start(&mut self, next: &Queued) -> Result<&'static str, String> {
-        if self.closing.is_some() {
+        if self.closing.is_some() || self.awaiting_read() {
             return Ok(self.hold_back(next, "queued").await);
         }
         if let Some(version) = self.copy_moved() {
@@ -366,11 +382,50 @@ impl Task {
 
     /// Keeps the turn first in the queue, with `status`.
     async fn hold_back(&mut self, next: &Queued, status: &'static str) -> &'static str {
-        if self.queue.front().map(|q| &q.ids.turn) != Some(&next.ids.turn) {
+        let first = self.queue.front().map(|q| &q.ids.turn) != Some(&next.ids.turn);
+        if first {
             self.queue.push_front(next.clone());
         }
         self.set_turn(&next.ids, status, None).await;
+        if first {
+            self.trace_hold(&next.ids);
+        }
         status
+    }
+
+    /// Whether a message sent into the last turn is still to be read: the engine answers it with
+    /// a turn of its own, so nothing else may start, nor the engine close, until it has. One
+    /// unread past `READ_WAIT` is given up on, and recorded.
+    fn awaiting_read(&mut self) -> bool {
+        if self.engine.is_none() || self.unread.is_empty() {
+            return false;
+        }
+        if self
+            .unread
+            .iter()
+            .any(|(_, _, sent)| sent.elapsed() < READ_WAIT)
+        {
+            return true;
+        }
+        self.drop_unread("Claude Code didn't read it within 30 s");
+        false
+    }
+
+    /// Records messages sent into a turn that the engine will never read now.
+    fn drop_unread(&mut self, why: &str) {
+        for (message, _, _) in std::mem::take(&mut self.unread) {
+            let event = Event::point("gathr.turn.steer").error("unread");
+            self.record(event.attr("gathr.message.id", message).attr("why", why));
+        }
+    }
+
+    /// The agent was deleted: its waiting turns fail, and its engine closes once it's free.
+    async fn retire(&mut self) {
+        self.retired = true;
+        for queued in std::mem::take(&mut self.queue) {
+            self.set_turn(&queued.ids, "failed", Some("its agent was deleted"))
+                .await;
+        }
     }
 
     /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,

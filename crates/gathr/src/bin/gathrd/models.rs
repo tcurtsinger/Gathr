@@ -173,9 +173,17 @@ async fn ask(
     };
     gate.release();
     // Its exit takes another 0.6 s, which the list needn't wait for, but shutdown does.
+    // Never killed for being slow: it runs on the account's login and may be renewing it (0001).
+    // Only shutdown kills, after the grace every engine gets.
     let (writer, pid) = (s.writer.clone(), engine.pid);
+    let mut stopping = s.stopping.subscribe();
     let close = async move {
-        let event = match engine.close(CLOSE_GRACE).await {
+        engine.close_input();
+        let closed = tokio::select! {
+            code = engine.wait() => Closed::Exited(code),
+            () = async { _ = stopping.wait_for(|stop| *stop).await } => engine.close(CLOSE_GRACE).await,
+        };
+        let event = match closed {
             Closed::Exited(code) => Event::point("gathr.engine.models.close")
                 .ok()
                 .attr("process.exit.code", code),
@@ -183,7 +191,7 @@ async fn ask(
                 .error("killed")
                 .attr(
                     "killed_because",
-                    "it hadn't exited 10 s after its input closed",
+                    "it hadn't exited 10 s after its input closed, at shutdown",
                 ),
         };
         writer.record_now(event.attr("process.pid", pid)).await;

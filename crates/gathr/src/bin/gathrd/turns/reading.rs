@@ -112,8 +112,8 @@ impl Task {
                 self.tool_ended(&id, if ok { "ok" } else { "error" }).await
             }
             Frame::Read(text) => {
-                let unread = self.unread.iter().position(|(_, t)| *t == text);
-                if let Some((message, _)) = unread.map(|i| self.unread.remove(i))
+                let unread = self.unread.iter().position(|(_, t, _)| *t == text);
+                if let Some((message, _, _)) = unread.map(|i| self.unread.remove(i))
                     && self.turn.is_none()
                 {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the

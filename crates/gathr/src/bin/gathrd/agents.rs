@@ -145,7 +145,7 @@ async fn remove(
     let agent = find(&s, &t, &id, ERROR).await?;
     let gone = agent.id.clone();
     match s.writer.call(move |conn| agents::remove(conn, &gone)).await {
-        Some(Ok(_)) => {}
+        Some(Ok(_)) => s.chats.retire(&agent.id),
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::INTERNAL_SERVER_ERROR,

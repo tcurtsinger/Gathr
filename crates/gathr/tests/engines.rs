@@ -235,3 +235,120 @@ fn an_idle_engine_closes_gently_and_the_next_turn_resumes_its_session() {
     assert_eq!(runs.len(), 2, "{runs:?}");
     assert!(resumed(&runs[1]), "the session wasn't resumed: {runs:?}");
 }
+
+/// `signed_in`, held until `go` exists, with a message sent into the turn read only after the
+/// turn's result, 400 ms later, and answered as a turn of its own (as Claude Code does).
+fn read_after_turn_recording(dir: &Path) -> PathBuf {
+    let rows: Vec<Value> = std::fs::read_to_string(recording("signed_in"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() });
+    let mut all = rows[..2].to_vec();
+    all.extend([json!({ "dir": "hold" }), json!({ "dir": "in" })]);
+    all.extend(rows[2..].iter().cloned());
+    all.push(json!({ "dir": "sleep", "line": "400" }));
+    all.push(out(json!({ "type": "user", "isReplay": true,
+        "message": { "role": "user", "content": "Follow up" } })));
+    all.push(out(json!({ "type": "assistant",
+        "message": { "content": [{ "type": "text", "text": "FOLLOWUP REPLY" }] } })));
+    all.push(rows.last().unwrap().clone());
+    let file = dir.join("read-after-turn.jsonl");
+    let text: Vec<String> = all.iter().map(Value::to_string).collect();
+    std::fs::write(&file, text.join("\n")).unwrap();
+    file
+}
+
+/// A message sent into a turn is accepted; switching the agent to another chat must wait for
+/// the engine to read and answer it, or the message is lost.
+#[test]
+fn a_message_sent_into_a_turn_is_answered_before_the_agent_moves_to_another_chat() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &read_after_turn_recording(&data.0)),
+            ("GATHR_REPLAY_HOLD", &go),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let (a, b) = (service.new_chat(), service.new_chat());
+    assert_eq!(send(&service, &a, &orin)["status"], "running");
+    let path = format!("/api/chats/{a}/messages");
+    let steered = service.send("POST", &path, json!({ "text": "Follow up", "agent": orin }));
+    assert_eq!(steered.json()["steered"], true, "{}", steered.body);
+    assert_eq!(send(&service, &b, &orin)["status"], "queued");
+    std::fs::write(&go, "").unwrap();
+
+    let history = service.wait_for(&a, 10, "the follow-up's own turn", |h| {
+        statuses(h) == ["done", "done"]
+    });
+    assert!(
+        history.to_string().contains("FOLLOWUP REPLY"),
+        "the follow-up's answer was lost: {history}"
+    );
+    service.wait_for(&b, 10, "chat B's turn, after the follow-up", |h| {
+        statuses(h) == ["running"]
+    });
+}
+
+/// A turn that arrives while an idle close is held still finds the hold from its reference.
+#[test]
+fn a_turn_sent_during_an_idle_hold_traces_the_hold() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("signed_in")),
+            ("GATHR_REPLAY_INIT", Path::new("linger")),
+            ("GATHR_REPLAY_LINGER_MS", Path::new("3000")),
+            ("GATHR_HOLD_AFTER_MS", Path::new("300")),
+            ("GATHR_IDLE_CLOSE_MS", Path::new("500")),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    send(&service, &chat, &orin);
+    service.wait_for(&chat, 10, "the first turn", |h| statuses(h) == ["done"]);
+    until(5, "the idle close to hold", || {
+        let agents = service.call("GET", "/api/agents").json();
+        (!agents["agents"][0]["hold"].is_null()).then_some(())
+    });
+
+    let waiting = send(&service, &chat, &orin);
+    assert_eq!(waiting["status"], "queued", "{waiting}");
+    let (_, trace) = gathr(
+        &data.0,
+        &["diag", "trace", waiting["ref"].as_str().unwrap()],
+    );
+    assert!(
+        trace.to_string().contains("gathr.engine.hold"),
+        "the turn's reference doesn't find the hold: {trace}"
+    );
+}
+
+#[test]
+fn a_deleted_agents_engine_closes_at_once() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    send(&service, &chat, &orin);
+    service.wait_for(&chat, 10, "the turn", |h| statuses(h) == ["done"]);
+
+    let deleted = service.call("DELETE", &format!("/api/agents/{orin}"));
+    assert_eq!(deleted.status, 200, "{}", deleted.body);
+    let sql = "SELECT error_type, json_extract(attrs, '$.why') AS why, \
+               json_extract(attrs, '$.\"process.exit.code\"') AS code \
+               FROM event_log WHERE name = 'gathr.engine.close'";
+    let closed = until(5, "the deleted agent's engine to close", || {
+        query(&data.0, sql).pop()
+    });
+    assert_eq!(closed["why"], "its agent was deleted", "{closed}");
+    assert!(
+        closed["error_type"].is_null() && closed["code"] == 0,
+        "{closed}"
+    );
+}

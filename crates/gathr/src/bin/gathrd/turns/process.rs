@@ -193,6 +193,7 @@ impl Task {
             let _ = engine.write(&frames::interrupt("close")).await;
         }
         self.keep_what_was_shown().await;
+        self.drop_unread(&format!("its engine closed: {why}"));
         engine.close_input();
         let assigned = self.assigned.as_ref();
         self.closing = Some(Closing {
@@ -234,28 +235,37 @@ impl Task {
             return;
         };
         closing.held = true;
-        let (chat, why, pid) = (
-            closing.chat.clone(),
-            closing.why.clone(),
-            closing.engine.pid,
-        );
-        let mut event = Event::point("gathr.engine.hold")
-            .chat(&chat)
+        let (chat, pid) = (closing.chat.clone(), closing.engine.pid);
+        // On each waiting turn's trace, so its reference finds why it hasn't started (0019).
+        let waiting: Vec<_> = self.queue.iter().map(|q| q.ids.clone()).collect();
+        match waiting.is_empty() {
+            true => self.record(self.hold_event()),
+            false => waiting.iter().for_each(|ids| self.trace_hold(ids)),
+        }
+        let since = now_us() - self.times.hold_after.as_micros() as i64;
+        let hold = json!({ "why": "Claude Code hasn't exited", "pid": pid, "since_us": since });
+        self.show_hold(&chat, Some(hold));
+    }
+
+    /// The hold, recorded on a turn that waits behind it, when the closing engine is held.
+    pub(super) fn trace_hold(&self, ids: &super::Ids) {
+        if self.closing.as_ref().is_some_and(|c| c.held) {
+            self.record(self.hold_event().trace(&ids.trace));
+        }
+    }
+
+    fn hold_event(&self) -> Event {
+        let closing = self.closing.as_ref();
+        let why = closing.map(|c| c.why.clone()).unwrap_or_default();
+        Event::point("gathr.engine.hold")
+            .chat(&closing.map(|c| c.chat.clone()).unwrap_or_default())
             .error("held")
-            .attr("process.pid", pid)
+            .attr("process.pid", closing.map(|c| c.engine.pid))
             .attr(
                 "why",
                 format!("Claude Code hasn't exited since its close: {why}"),
             )
-            .attr("gen_ai.agent.id", self.agent.clone());
-        // On the waiting turn's trace, so its reference finds why it hasn't started (0019).
-        if let Some(next) = self.queue.front() {
-            event = event.trace(&next.ids.trace);
-        }
-        self.record(event);
-        let since = now_us() - self.times.hold_after.as_micros() as i64;
-        let hold = json!({ "why": "Claude Code hasn't exited", "pid": pid, "since_us": since });
-        self.show_hold(&chat, Some(hold));
+            .attr("gen_ai.agent.id", self.agent.clone())
     }
 
     fn show_hold(&self, chat: &str, hold: Option<serde_json::Value>) {

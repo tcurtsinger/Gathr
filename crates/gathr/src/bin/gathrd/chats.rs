@@ -44,6 +44,8 @@ pub enum Cmd {
         chat: String,
         reply: oneshot::Sender<Vec<Value>>,
     },
+    /// The agent was deleted: its waiting turns fail and its engine closes once it's free.
+    Retire,
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
     /// Closes the task's engine if it runs in this account folder, answering once it has exited;
@@ -201,6 +203,14 @@ impl Chats {
             answers.extend(wait.await);
         }
         answers
+    }
+
+    /// Lets a deleted agent's task go: its engine closes the gentle way, without waiting to idle.
+    pub fn retire(&self, agent: &str) {
+        let tasks = self.tasks.lock().expect("the chats lock is never poisoned");
+        if let Some(task) = tasks.get(&format!("agent:{agent}")) {
+            let _ = task.send(Cmd::Retire);
+        }
     }
 
     /// What the agent's engine is held on, or null.

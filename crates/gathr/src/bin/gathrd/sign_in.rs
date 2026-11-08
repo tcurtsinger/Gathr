@@ -303,10 +303,14 @@ async fn watch(
         }
     }
     let ours = sign_in.release(&mine);
-    // Its output has ended, so it's exiting: the grace is for it to finish saving the login.
-    let code = match engine.close(Duration::from_secs(10)).await {
-        Closed::Exited(code) => code,
-        Closed::Killed => None,
+    // Its output has ended, so it's exiting, but it may still be saving the login: never killed
+    // for that (0001), only at shutdown after the grace every engine gets.
+    let code = tokio::select! {
+        code = engine.wait() => code,
+        () = s.stopped() => match engine.close(CLOSE_GRACE).await {
+            Closed::Exited(code) => code,
+            Closed::Killed => None,
+        },
     };
     let why = (code != Some(0))
         .then(|| last_error.unwrap_or_else(|| format!("Claude Code exited ({code:?})")));
