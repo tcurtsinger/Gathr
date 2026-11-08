@@ -48,6 +48,9 @@ struct Service {
 }
 
 fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
+    // Made now, so the first launch keys the folder as every later one does. A folder that can't
+    // be made fails in `connect`, with the reason shown.
+    let _ = std::fs::create_dir_all(data.path());
     let key = folder_key(data.path(), &platform::default_data_dir());
     if let Some(key) = &key {
         context.config_mut().identifier.push_str(key);
@@ -63,23 +66,23 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             data,
             info: Mutex::new(None),
         })
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let shown = window.hide();
+                let attrs = serde_json::json!({});
+                report(
+                    window.app_handle(),
+                    "gathr.ui.window.hide",
+                    Instant::now(),
+                    &attrs,
+                    shown.err(),
+                );
+            }
+        })
         .setup(move |app| {
             let (url, started) = connect(app.handle());
-            let window = window(app.handle(), url, "Gathr", webview_data)?;
-            let hidden = window.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    let shown = hidden.hide();
-                    report(
-                        hidden.app_handle(),
-                        "gathr.ui.window.hide",
-                        Instant::now(),
-                        &serde_json::json!({}),
-                        shown.err(),
-                    );
-                }
-            });
+            window(app.handle(), url, "Gathr", webview_data)?;
             tray(app.handle())?;
             if let Some(started) = started {
                 let attrs = serde_json::json!({ "started_service": started });
@@ -106,13 +109,24 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
 /// test folder's window never stands in for theirs. Both launches run the same build, so the
 /// hasher's output matches between them.
 fn folder_key(data: &Path, default: &Path) -> Option<String> {
-    let data = std::path::absolute(data).unwrap_or_else(|_| data.to_path_buf());
-    if std::path::absolute(default).is_ok_and(|default| default == data) {
+    let data = identity(data);
+    if identity(default) == data {
         return None;
     }
     let mut hasher = DefaultHasher::new();
     data.hash(&mut hasher);
     Some(format!(".data-{:016x}", hasher.finish()))
+}
+
+/// A folder as the file system knows it: links and `..` resolved, and case ignored, as Windows'
+/// and macOS's file systems do by default. A folder that doesn't exist yet is only made absolute,
+/// so the caller creates it first.
+fn identity(path: &Path) -> String {
+    let path = std::fs::canonicalize(path)
+        .or_else(|_| std::path::absolute(path))
+        .unwrap_or_else(|_| path.to_path_buf());
+    let path: PathBuf = path.components().collect();
+    path.to_string_lossy().to_lowercase()
 }
 
 /// The service, found or started, kept for Quit, and a one-time link into it (and whether this
@@ -184,6 +198,9 @@ fn window(
         .title(title)
         .inner_size(1440.0, 900.0)
         .min_inner_size(480.0, 480.0)
+        // Shown once built: a close while WebView2 was still being set up skipped the close
+        // handler and quit Gathr.
+        .visible(false)
         // With no handler, the webview drops a link's new window: nothing opens.
         .on_new_window(|url, _| {
             open_in_browser(&url);
@@ -192,7 +209,9 @@ fn window(
     if let Some(folder) = webview_data {
         builder = builder.data_directory(folder);
     }
-    builder.build()
+    let window = builder.build()?;
+    window.show()?;
+    Ok(window)
 }
 
 /// The tray icon (the menu bar on macOS). On Windows a click opens the window and the menu is on
@@ -292,7 +311,7 @@ fn exit(message: &str) -> ! {
 #[cfg(test)]
 mod tests {
     use super::folder_key;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn each_data_folder_gets_its_own_window_and_the_persons_own_keeps_the_plain_one() {
@@ -305,6 +324,34 @@ mod tests {
             a,
             folder_key(Path::new("/work/data/a/"), own),
             "the same folder, spelt with a /"
+        );
+    }
+
+    // Windows' and macOS's file systems ignore case by default, so `X:\CODE` is `X:\code`.
+    #[test]
+    fn one_folder_spelt_another_way_gets_the_same_window() {
+        let root = std::env::temp_dir().join(format!("gathr-key-{}", std::process::id()));
+        let folder = root.join("Data");
+        std::fs::create_dir_all(&folder).unwrap();
+        let own = Path::new("/home/someone/Gathr");
+        let key = folder_key(&folder, own);
+        let upper = PathBuf::from(folder.to_string_lossy().to_uppercase());
+        let dotted = root.join("Data").join("..").join("Data");
+        let (by_upper, by_dots) = (folder_key(&upper, own), folder_key(&dotted, own));
+        std::fs::remove_dir_all(&root).unwrap();
+        assert_eq!(
+            key,
+            by_upper,
+            "{} and {}",
+            folder.display(),
+            upper.display()
+        );
+        assert_eq!(
+            key,
+            by_dots,
+            "{} and {}",
+            folder.display(),
+            dotted.display()
         );
     }
 }
