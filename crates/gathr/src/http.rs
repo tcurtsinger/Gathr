@@ -52,7 +52,9 @@ fn exchange(
     body: &str,
 ) -> io::Result<Response> {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(500))?;
+    // A closed port is refused at once, and a stuck service still completes the handshake, so the
+    // limit only cuts off a slow machine: 500 ms failed a test on a loaded macOS runner.
+    let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(10))?;
     stream.set_read_timeout(Some(Duration::from_secs(30)))?;
     let length = body.len();
     let mut head =
