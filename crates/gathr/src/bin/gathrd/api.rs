@@ -30,6 +30,12 @@ pub struct State {
     /// Set once shutdown starts, before the server waits on its requests: a request waiting on
     /// an engine ends at once instead of holding the stop.
     pub stopping: tokio::sync::watch::Sender<bool>,
+    /// The built UI's folder.
+    pub ui: std::path::PathBuf,
+    /// The cookie's value: a browser's stand-in for the token, new at each start.
+    pub session: String,
+    /// One-time codes not yet swapped for the cookie, with when each was made.
+    pub once_codes: std::sync::Mutex<Vec<(String, Instant)>>,
 }
 
 impl State {
@@ -51,6 +57,8 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::agents::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
+        .merge(crate::ui::routes())
+        .fallback(crate::ui::page)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }
@@ -106,7 +114,8 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
     response
 }
 
-/// Why a request is refused, if it is: a foreign Host or Origin (403), or no valid token (401).
+/// Why a request is refused, if it is: a foreign Host or Origin (403), or no valid token or
+/// cookie (401). The UI's own files need neither: they hold nothing secret.
 fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'static str)> {
     let port = s.port;
     let host = headers
@@ -127,6 +136,14 @@ fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'s
             return Some((StatusCode::FORBIDDEN, "origin not allowed"));
         }
     }
+    if !uri.path().starts_with("/api/") && uri.path() != "/health" {
+        return None;
+    }
+    if cookie(headers, &crate::ui::cookie_name(port))
+        .is_some_and(|c| same(c.as_bytes(), s.session.as_bytes()))
+    {
+        return None;
+    }
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -139,6 +156,16 @@ fn refusal(s: &State, headers: &HeaderMap, uri: &Uri) -> Option<(StatusCode, &'s
         }
         Some(_) => None,
     }
+}
+
+/// A cookie's value by name, from every `Cookie` header.
+fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(';'))
+        .find_map(|pair| pair.trim().strip_prefix(name)?.strip_prefix('='))
 }
 
 /// A browser can't set headers on a WebSocket, so the live socket may carry the token in its query.

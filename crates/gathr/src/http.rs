@@ -5,10 +5,11 @@ use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::time::Duration;
 
-/// A response: its status code and body.
+/// A response: its status code, header lines and body.
 #[derive(Debug)]
 pub struct Response {
     pub status: u16,
+    pub headers: String,
     pub body: String,
 }
 
@@ -84,6 +85,7 @@ fn exchange(
     })?;
     Ok(Response {
         status,
+        headers: head.split_once("\r\n").map_or("", |(_, h)| h).to_string(),
         body: body.to_string(),
     })
 }

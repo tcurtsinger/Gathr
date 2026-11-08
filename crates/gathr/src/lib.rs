@@ -1,4 +1,4 @@
-//! What the service (`gathrd`) and the command line (`gathr`) share: the data folder,
+//! What the service (`gathrd`), the command line (`gathr`) and the window share: the data folder,
 //! the database, the event record, error references and the diagnostics queries.
 
 pub mod accounts;
@@ -12,6 +12,7 @@ pub mod error;
 pub mod event;
 pub mod http;
 pub mod ids;
+pub mod launch;
 pub mod platform;
 pub mod redact;
 pub mod seed;

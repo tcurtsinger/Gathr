@@ -1135,6 +1135,8 @@ dependencies = [
 name = "gathr-app"
 version = "0.0.0"
 dependencies = [
+ "gathr",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
