@@ -6,7 +6,8 @@
 //! the engine goes on; without that variable it's skipped.
 //!
 //! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
-//! its arguments to, as one JSON line.
+//! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
+//! for Gathr's tools to (`{"GATHR_AGENT_TOKEN": …}`), so a test can call them as the engine.
 //!
 //! `auth status` answers as Claude Code does where its login is a file: exit 0 when
 //! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
@@ -76,6 +77,15 @@ fn main() {
             .open(file)
             .expect("the args file opens");
         writeln!(out, "{}", serde_json::to_string(&args).unwrap()).unwrap();
+    }
+    if let Ok(file) = std::env::var("GATHR_REPLAY_ENV") {
+        let token = std::env::var("GATHR_AGENT_TOKEN").ok();
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)
+            .expect("the env file opens");
+        writeln!(out, "{}", serde_json::json!({ "GATHR_AGENT_TOKEN": token })).unwrap();
     }
     let text = match recording.as_str() {
         "" => String::new(),

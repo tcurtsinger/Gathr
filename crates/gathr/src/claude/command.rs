@@ -130,6 +130,26 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>) -> Vec<String> {
     args
 }
 
+/// The engine's own token for Gathr's tools, in its environment: never in its arguments, which any
+/// process on the computer can read (0005).
+pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
+
+/// Gathr's tools at `url` with the engine's token, allowed without asking, and the briefing in
+/// `briefing`, a file for the same reason as the token (0005, 0021).
+pub fn given(url: &str, briefing: &Path) -> Vec<String> {
+    let auth = format!("Bearer ${{{TOKEN_VAR}}}");
+    let servers = serde_json::json!({ "mcpServers": { "gathr": {
+        "type": "http", "url": url, "headers": { "Authorization": auth } } } });
+    vec![
+        "--mcp-config".into(),
+        servers.to_string(),
+        "--allowedTools".into(),
+        "mcp__gathr".into(),
+        "--append-system-prompt-file".into(),
+        briefing.display().to_string(),
+    ]
+}
+
 /// The parent's environment without anything that picks a credential, a provider or another
 /// Claude Code session, plus the account's folder.
 pub fn env(

@@ -9,6 +9,7 @@ mod logs;
 mod models;
 mod routes;
 mod sign_in;
+mod tools;
 mod turns;
 mod updates;
 
@@ -87,7 +88,9 @@ async fn serve(
         pid: std::process::id(),
     }
     .write(data)?;
-    let chats = chats::Chats::new(writer.clone(), data.clone());
+    // Briefings live as long as their engines; any left are from a run that didn't stop cleanly.
+    let _ = std::fs::remove_dir_all(data.path().join("briefings"));
+    let chats = chats::Chats::new(writer.clone(), data.clone(), port);
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
     let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {

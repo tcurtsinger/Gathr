@@ -35,7 +35,23 @@ export function facts(turn: TurnTimeline) {
   const summary = [tools === 1 ? '1 tool' : `${tools} tools`, duration === null ? '' : seconds(duration)]
     .filter(Boolean)
     .join(', ');
-  return { tokens, duration, summary };
+  return { tokens, given: given(turn), duration, summary };
+}
+
+const parts: [string, string][] = [
+  ['Briefing', 'gathr.context.briefing'],
+  ['Message', 'gathr.context.ask'],
+];
+
+/** What Gathr gave the turn: characters, and Gathr's own token estimate (0020). */
+function given(turn: TurnTimeline) {
+  const start = turn.events.find((e) => e.name.startsWith('invoke_agent ') && e.phase === 'start');
+  return parts.flatMap(([label, key]) => {
+    const chars = start?.attrs?.[`${key}.chars`];
+    const estimate = start?.attrs?.[`${key}.tokens_estimate`];
+    if (typeof chars !== 'number' || typeof estimate !== 'number') return [];
+    return [[label, `${chars.toLocaleString()} chars, ~${estimate.toLocaleString()} tokens`] as const];
+  });
 }
 
 export interface Step {
@@ -91,6 +107,8 @@ const known: Record<string, [string, string]> = {
 function label(e: TurnEvent): string {
   const failed = e.status === 'error' ? ` failed${e.error ? ` (${e.error})` : ''}` : '';
   if (e.name.startsWith('execute_tool ')) return `${e.name.slice(13)}${failed}`;
+  const tool = e.name === 'gathr.tool.call' ? e.attrs?.['gen_ai.tool.name'] : undefined;
+  if (typeof tool === 'string') return `Gathr's ${tool}${e.status === 'error' ? ' failed' : ''}`;
   if (e.name.startsWith('invoke_agent ')) {
     if (e.phase === 'start') return 'Turn started';
     const status = e.attrs?.['gathr.turn.status'];

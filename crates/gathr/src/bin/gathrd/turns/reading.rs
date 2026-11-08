@@ -119,7 +119,7 @@ impl Task {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the
                     // turn, then reads the message sent into it and answers it as a turn of
                     // its own. That turn gets its row here, and the message moves to it.
-                    self.begin_read_turn(&message).await;
+                    self.begin_read_turn(&message, text.chars().count()).await;
                 }
                 let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
                 self.publish(&chat, json!({ "type": "read", "turn": turn, "text": text }));

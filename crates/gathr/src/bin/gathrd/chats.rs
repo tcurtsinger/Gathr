@@ -68,6 +68,10 @@ pub struct Failed {
 pub struct Chats {
     pub writer: Writer,
     pub data: DataDir,
+    /// The service's port, where engines reach Gathr's tools.
+    pub port: u16,
+    /// The tokens of the engines running now (0005).
+    pub passes: Arc<crate::tools::Passes>,
     /// Everything live, to every client's WebSocket (0004).
     pub live: broadcast::Sender<Value>,
     /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
@@ -84,10 +88,12 @@ pub struct Chats {
 }
 
 impl Chats {
-    pub fn new(writer: Writer, data: DataDir) -> Arc<Chats> {
+    pub fn new(writer: Writer, data: DataDir, port: u16) -> Arc<Chats> {
         Arc::new(Chats {
             writer,
             data,
+            port,
+            passes: Arc::default(),
             live: broadcast::channel(4096).0,
             gates: Mutex::default(),
             tasks: Mutex::default(),

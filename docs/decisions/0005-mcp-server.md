@@ -33,6 +33,11 @@ Status: proposed. Date: 2026-11-06.
 - **Writing the protocol ourselves.** MCP moves fast (2025-11-25 to 2026-07-28 dropped sessions and the initialize handshake ([versioning](https://modelcontextprotocol.io/specification/versioning))); the official SDK tracks it.
 - **One shared token for all agents.** The server couldn't tell agents apart.
 
+## Checked
+
+- Claude Code 2.1.318 on Windows, signed in (slice 2, F3): with `--mcp-config` as above, `system/init` showed `gathr` as `connected`, so `${GATHR_AGENT_TOKEN}` in the header is filled in from the environment; the guard refuses any other token. Claude Code defers MCP tools behind its `ToolSearch`, so an agent finds a Gathr tool only by searching for it: each engine's briefing names Gathr's tools (0021).
+
 ## Not verified
 
 - Codex's MCP client against rmcp 3.9's server, both revisions. Checked live in the first slice.
+- Which revision Claude Code 2.1.318 speaks to it: the server answered it, but its requests weren't recorded.
