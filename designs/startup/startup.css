@@ -1,0 +1,17 @@
+.startup-row { display: flex; align-items: center; gap: 16px; min-height: 64px; border-bottom: 1px solid var(--border); }
+.startup-scope { margin-left: auto; color: var(--muted); font-size: 12px; }
+.startup-switch { width: 44px; height: 32px; padding: 0; position: relative; flex-shrink: 0; border-radius: 16px; }
+.startup-switch::before { content: ''; position: absolute; inset: 4px 0; border: 1px solid var(--control); border-radius: 12px; background: var(--raised); }
+.startup-switch span { position: absolute; top: 8px; left: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--text); }
+.startup-switch[aria-checked="true"]::before { background: var(--accent); border-color: var(--accent); }
+.startup-switch[aria-checked="true"] span { left: 24px; background: var(--canvas); }
+.startup-switch:hover::before { border-color: var(--text); }
+.startup-section { margin-top: 32px; }
+.startup-section h4 { font-size: 14px; font-weight: 600; margin: 0; }
+@media (max-width: 767px) {
+  .startup-row { gap: 8px; flex-wrap: wrap; }
+  .startup-switch { height: 44px; }
+  .startup-switch::before { inset-block: 10px; }
+  .startup-switch span { top: 14px; }
+  .settings-categories { display: flex; flex-wrap: wrap; }
+}
