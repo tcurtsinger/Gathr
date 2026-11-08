@@ -7,8 +7,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub mod briefing;
+mod hook;
 mod server;
 
+pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
 pub use server::service;
 
 /// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.
@@ -16,6 +18,9 @@ pub use server::service;
 pub struct Caller {
     pub agent: Option<String>,
     pub chat: String,
+    /// The folder the engine runs in: its worktree in a project's chat. Gathr asks before a
+    /// write outside it (0029).
+    pub cwd: PathBuf,
     turn: Arc<Mutex<Option<String>>>,
 }
 
@@ -47,13 +52,13 @@ pub struct Pass {
 }
 
 impl Pass {
-    /// A new token for an engine about to start as `agent` in `chat`, with its briefing written
-    /// where the engine reads it and the agent's own tools don't look: the data folder.
+    /// A new token for an engine about to start as `agent` in `chat` from `cwd`, with its
+    /// briefing written where the engine reads it and the agent's own tools don't look: the data
+    /// folder.
     pub fn new(
         passes: &Arc<Passes>,
         folder: PathBuf,
-        agent: Option<String>,
-        chat: &str,
+        (agent, chat, cwd): (Option<String>, &str, &std::path::Path),
         briefing: &str,
     ) -> std::io::Result<Pass> {
         std::fs::create_dir_all(&folder)?;
@@ -64,6 +69,7 @@ impl Pass {
         let caller = Caller {
             agent,
             chat: chat.to_string(),
+            cwd: cwd.to_path_buf(),
             turn: turn.clone(),
         };
         let mut all = passes.0.lock().expect("never poisoned");

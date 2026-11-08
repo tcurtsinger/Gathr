@@ -39,7 +39,11 @@ export interface Agent {
   account: string;
   model: string | null;
   effort: string | null;
+  /** What it may do without asking (0029). */
+  approvals: Approvals;
 }
+
+export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
 /** A model as the account's engine lists it (0025), in the engine's order. */
 export interface Model {

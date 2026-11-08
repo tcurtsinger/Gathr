@@ -121,10 +121,16 @@ impl Task {
         let given = command::Assigned {
             model: assigned.model.as_deref(),
             effort: assigned.effort.as_deref(),
+            approvals: assigned.approvals,
         };
+        let hook = format!(
+            "http://127.0.0.1:{}{}",
+            self.chats.port,
+            crate::tools::HOOK_PATH
+        );
         let mut args = match &session {
-            Some(id) => command::args(Session::Resume(id), given),
-            None => command::args(Session::New(&new_id), given),
+            Some(id) => command::args(Session::Resume(id), given, Some(&hook)),
+            None => command::args(Session::New(&new_id), given, Some(&hook)),
         };
         let folder = assigned.folder.as_path();
         let place = self.workspace(&assigned, trace).await?;
@@ -134,12 +140,18 @@ impl Task {
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
         let worktree = place.project.map(|project| (cwd.clone(), project));
-        let pass = self.pass_for(&assigned, worktree, trace).await?;
+        let pass = self.pass_for(&assigned, worktree, &cwd, trace).await?;
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         args.extend(command::given(&url, &pass.briefing));
         let (env_from, env_why) = (place.env.from, place.env.why);
         let mut env = command::env(place.env.vars.into_iter(), folder);
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
+        let push = format!(
+            "http://127.0.0.1:{}{}",
+            self.chats.port,
+            crate::tools::PUSH_PATH
+        );
+        env.push((command::PUSH_VAR.into(), push.into()));
         let started = Instant::now();
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
@@ -157,6 +169,7 @@ impl Task {
                         .attr("gathr.account", assigned.account.clone())
                         .attr("gen_ai.request.model", assigned.model.clone())
                         .attr("gathr.effort", assigned.effort.clone())
+                        .attr("gathr.approvals", assigned.approvals.as_str())
                         .attr("cwd", cwd.display().to_string())
                         .attr("gathr.env.from", env_from)
                         .attr("gathr.env.why", env_why),
@@ -188,6 +201,7 @@ impl Task {
         &self,
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
+        cwd: &Path,
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
@@ -204,7 +218,8 @@ impl Task {
             let folder = self.chats.data.path().join("briefings");
             let text = briefing::text(&facts);
             let (agent, chat) = (assigned.agent.clone(), &assigned.chat);
-            Pass::new(&self.chats.passes, folder, agent, chat, &text).map_err(|e| e.to_string())
+            let caller = (agent, chat.as_str(), cwd);
+            Pass::new(&self.chats.passes, folder, caller, &text).map_err(|e| e.to_string())
         });
         made.map_err(|e| {
             let why = format!("the engine's briefing wasn't written: {e}");

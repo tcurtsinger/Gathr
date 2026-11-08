@@ -4,6 +4,8 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use crate::agents::Approvals;
+
 /// Tools turned off for every agent, each with its reason (0001).
 pub const DENIED_TOOLS: &[(&str, &str)] = &[
     (
@@ -80,14 +82,52 @@ pub enum Session<'a> {
     Resume(&'a str),
 }
 
-/// The agent's model and effort (0026); `None` leaves each to Claude Code's own default.
+/// The agent's model and effort (0026), `None` leaving each to Claude Code's own default, and
+/// what it may do without asking (0029).
 #[derive(Clone, Copy, Default)]
 pub struct Assigned<'a> {
     pub model: Option<&'a str>,
     pub effort: Option<&'a str>,
+    pub approvals: Approvals,
 }
 
-pub fn args(session: Session<'_>, assigned: Assigned<'_>) -> Vec<String> {
+impl Assigned<'_> {
+    /// For an engine started only for its handshake, which runs no tools: nothing to allow.
+    pub fn handshake() -> Self {
+        Assigned {
+            approvals: Approvals::Ask,
+            ..Assigned::default()
+        }
+    }
+}
+
+/// Claude Code's permission mode for each of Gathr's (0029).
+pub fn mode(approvals: Approvals) -> &'static str {
+    match approvals {
+        Approvals::Ask => "default",
+        Approvals::Edits => "acceptEdits",
+        Approvals::Auto => "auto",
+        Approvals::Full => "bypassPermissions",
+    }
+}
+
+/// `SETTINGS`, plus, in every mode but Full, Gathr's hook at `hook`, if there is one, before
+/// each file write and command (0029). It asks with the engine's own token, and a hook that fails blocks the call,
+/// so a Gathr that can't answer never lets a push through.
+fn settings(approvals: Approvals, hook: Option<&str>) -> String {
+    let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
+    if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
+        let auth = format!("Bearer ${TOKEN_VAR}");
+        settings["hooks"] = serde_json::json!({ "PreToolUse": [{
+            "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell",
+            "hooks": [{ "type": "http", "url": hook, "timeout": 30, "onFailure": "block",
+                "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] }] }] });
+    }
+    settings.to_string()
+}
+
+/// Claude Code's arguments, with Gathr's hook at `hook` for an engine that runs turns (0029).
+pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) -> Vec<String> {
     let denied: Vec<&str> = DENIED_TOOLS.iter().map(|(name, _)| *name).collect();
     let mut args: Vec<String> = [
         "-p",
@@ -109,13 +149,13 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>) -> Vec<String> {
         "--strict-mcp-config",
         "--setting-sources",
         "project,local",
-        "--settings",
-        SETTINGS,
         "--disallowedTools",
     ]
     .map(String::from)
     .into();
     args.push(denied.join(","));
+    args.extend(["--settings".into(), settings(assigned.approvals, hook)]);
+    args.push(format!("--permission-mode={}", mode(assigned.approvals)));
     match session {
         Session::New(id) => args.extend(["--session-id".into(), id.into()]),
         Session::Resume(id) => args.extend(["--resume".into(), id.into()]),
@@ -133,6 +173,9 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>) -> Vec<String> {
 /// The engine's own token for Gathr's tools, in its environment: never in its arguments, which any
 /// process on the computer can read (0005).
 pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
+
+/// Where the worktree's `pre-push` hook asks Gathr, with the token above (0029).
+pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
 /// Gathr's tools at `url` with the engine's token, allowed without asking, and the briefing in
 /// `briefing`, a file for the same reason as the token (0005, 0021).

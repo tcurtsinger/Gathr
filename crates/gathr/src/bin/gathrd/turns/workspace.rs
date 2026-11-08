@@ -83,6 +83,17 @@ impl Task {
                 return Err(format!("the agent's worktree wasn't made: {why}"));
             }
         }
+        let hooks = worktree::hooks_folder(self.chats.data.path(), &assigned.chat, &agent);
+        if let Err(why) = worktree::guard_pushes(&folder, &hooks, &fresh.vars).await {
+            let event = Event::point("gathr.approvals.push_guard")
+                .trace(trace)
+                .chat(&assigned.chat)
+                .error("push_guard")
+                .attr("gen_ai.agent.id", agent.clone())
+                .attr("why", why.clone());
+            self.record(event);
+            return Err(format!("the worktree's push guard wasn't set: {why}"));
+        }
         Ok(Workspace {
             cwd: folder,
             project: Some(project),

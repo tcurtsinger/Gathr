@@ -6,11 +6,12 @@ use serde_json::{Value, json};
 /// What one line of Claude Code's output means to the driver.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
-    /// The session is up: its id, model and the tools it offers.
+    /// The session is up: its id, model, the tools it offers and the permission mode it runs in.
     Init {
         session_id: String,
         model: String,
         tools: Vec<String>,
+        permission_mode: String,
     },
     /// The provider has begun a reply (`message_start`): the login worked (0016's gate).
     Replied,
@@ -28,11 +29,19 @@ pub enum Frame {
     },
     /// A message it has read, said back (`--replay-user-messages`): one sent mid-turn is taken.
     Read(String),
-    /// It asks to run a tool (`--permission-prompt-tool stdio`).
+    /// It asks to run a tool (`--permission-prompt-tool stdio`), with why it asks when it says.
     ApprovalAsked {
         request_id: String,
         tool: String,
         input: Value,
+        why: Option<String>,
+    },
+    /// It refused a tool call without asking, and what decided it: `classifier` is auto mode's
+    /// own check (0029).
+    Blocked {
+        tool: String,
+        by: String,
+        why: String,
     },
     /// The answer to a control request the driver sent.
     ControlAnswer {
@@ -119,6 +128,12 @@ fn read_own(value: &Value) -> Vec<Frame> {
             session_id: text(value, "session_id"),
             model: text(value, "model"),
             tools: strings(value.get("tools")),
+            permission_mode: text(value, "permissionMode"),
+        }],
+        "system" if text(value, "subtype") == "permission_denied" => vec![Frame::Blocked {
+            tool: text(value, "tool_name"),
+            by: text(value, "decision_reason_type"),
+            why: text(value, "decision_reason"),
         }],
         "stream_event" => delta(value).into_iter().collect(),
         "assistant" => assistant(value),
@@ -142,6 +157,9 @@ fn read_own(value: &Value) -> Vec<Frame> {
                 request_id: text(value, "request_id"),
                 tool: text(&value["request"], "tool_name"),
                 input: value["request"]["input"].clone(),
+                why: value["request"]["decision_reason"]
+                    .as_str()
+                    .map(String::from),
             }]
         }
         "control_response" => vec![Frame::ControlAnswer {
@@ -371,6 +389,39 @@ mod tests {
         );
     }
 
+    /// 0029: lines from Claude Code 2.1.319 in auto mode (message cut short): a block by its
+    /// own check comes as `permission_denied`, never as a question, and a question from Gathr's
+    /// hook carries the hook's reason.
+    #[test]
+    fn auto_modes_blocks_and_gathrs_asks_read_as_what_they_are() {
+        let blocked = json!({ "type": "system", "subtype": "permission_denied",
+            "tool_name": "Bash", "tool_use_id": "toolu_01", "decision_reason_type": "classifier",
+            "decision_reason": "[Data Exfiltration]",
+            "message": "Permission for this action was denied by the Claude Code auto mode classifier." });
+        let by = Frame::Blocked {
+            tool: "Bash".into(),
+            by: "classifier".into(),
+            why: "[Data Exfiltration]".into(),
+        };
+        assert_eq!(read(&blocked), [by]);
+        let asked = json!({ "type": "control_request", "request_id": "r1", "request": {
+            "subtype": "can_use_tool", "tool_name": "Write", "input": { "file_path": "x" },
+            "decision_reason": "Gathr asks because it pushes", "decision_reason_type": "hook" } });
+        let [Frame::ApprovalAsked { why, .. }] = &read(&asked)[..] else {
+            panic!("not an approval: {:?}", read(&asked));
+        };
+        assert_eq!(why.as_deref(), Some("Gathr asks because it pushes"));
+        let init = json!({ "type": "system", "subtype": "init", "permissionMode": "auto" });
+        let [
+            Frame::Init {
+                permission_mode, ..
+            },
+        ] = &read(&init)[..]
+        else {
+            panic!("not init");
+        };
+        assert_eq!(permission_mode, "auto");
+    }
     /// 0001: fails when a denied tool is still offered, or the engine offers one nobody looked at.
     #[test]
     fn the_engine_offers_no_denied_tool_and_none_unlooked_at() {

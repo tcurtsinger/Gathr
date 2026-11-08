@@ -44,6 +44,11 @@
   border: 0;
   font-size: 13px;
 }
+.agent-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .agent-field legend {
   margin-bottom: 6px;
   padding: 0;

@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use rusqlite::{Connection, OptionalExtension, params};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::accounts::{self, Refused as Name};
 use crate::{Error, ids};
@@ -17,6 +17,43 @@ pub struct Agent {
     /// `None` is the engine's own default.
     pub model: Option<String>,
     pub effort: Option<String>,
+    pub approvals: Approvals,
+}
+
+/// What the agent may do without asking (0029). Gathr asks before a push or a write outside the
+/// agent's worktree in every mode but `Full`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Approvals {
+    /// Everything but reading asks.
+    Ask,
+    /// File edits inside the worktree run; every command asks.
+    Edits,
+    /// The engine's own check decides each action.
+    #[default]
+    Auto,
+    /// Nothing asks.
+    Full,
+}
+
+impl Approvals {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Approvals::Ask => "ask",
+            Approvals::Edits => "edits",
+            Approvals::Auto => "auto",
+            Approvals::Full => "full",
+        }
+    }
+
+    fn parse(text: &str) -> Approvals {
+        match text {
+            "ask" => Approvals::Ask,
+            "edits" => Approvals::Edits,
+            "full" => Approvals::Full,
+            _ => Approvals::Auto,
+        }
+    }
 }
 
 /// A change to an agent: each field left out stays; `Some(None)` clears a model or effort.
@@ -26,6 +63,7 @@ pub struct Change {
     pub account: Option<String>,
     pub model: Option<Option<String>>,
     pub effort: Option<Option<String>>,
+    pub approvals: Option<Approvals>,
 }
 
 impl Agent {
@@ -41,6 +79,7 @@ impl Agent {
         next.name = change.name.unwrap_or(next.name);
         next.model = change.model.unwrap_or(next.model);
         next.effort = change.effort.unwrap_or(next.effort);
+        next.approvals = change.approvals.unwrap_or(next.approvals);
         next
     }
 }
@@ -70,7 +109,7 @@ impl Refused {
 
 pub type Saved = Result<Result<Agent, Refused>, Error>;
 
-const COLUMNS: &str = "SELECT id, name, account_id, model, effort FROM agents";
+const COLUMNS: &str = "SELECT id, name, account_id, model, effort, approvals FROM agents";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -79,6 +118,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
         account: r.get(2)?,
         model: r.get(3)?,
         effort: r.get(4)?,
+        approvals: Approvals::parse(&r.get::<_, String>(5)?),
     })
 }
 
@@ -118,8 +158,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
         Err(refused) => return Ok(Err(refused)),
     };
     let added = conn.execute(
-        "INSERT INTO agents (id, name, name_key, account_id, model, effort, created_ts)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO agents (id, name, name_key, account_id, model, effort, approvals, created_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             agent.id,
             name,
@@ -127,6 +167,7 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
             agent.account,
             agent.model,
             agent.effort,
+            agent.approvals.as_str(),
             ids::now_us()
         ],
     );
@@ -140,15 +181,16 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
         Err(refused) => return Ok(Err(refused)),
     };
     let updated = conn.execute(
-        "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6
-         WHERE id = ?1",
+        "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
+         approvals = ?7 WHERE id = ?1",
         params![
             agent.id,
             name,
             accounts::key(&name),
             agent.account,
             agent.model,
-            agent.effort
+            agent.effort,
+            agent.approvals.as_str()
         ],
     );
     match saved(updated)? {
@@ -205,6 +247,7 @@ mod tests {
             account: account.into(),
             model: Some("opus".into()),
             effort: Some("high".into()),
+            approvals: Approvals::Auto,
         }
     }
 

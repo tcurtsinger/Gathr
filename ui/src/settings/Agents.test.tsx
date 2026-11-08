@@ -71,6 +71,7 @@ const agent = (over: Partial<Agent>): Agent => ({
   account: 'a',
   model: null,
   effort: null,
+  approvals: 'auto',
   ...over,
 });
 
@@ -108,7 +109,7 @@ test('another account resets model and effort to the engine default and lists it
       {
         method: 'PATCH',
         path: '/api/agents/x',
-        body: { name: 'Made-up agent', account: 'b', model: null, effort: null },
+        body: { name: 'Made-up agent', account: 'b', model: null, effort: null, approvals: 'auto' },
       },
     ]);
 });
@@ -145,6 +146,7 @@ test('a change saved elsewhere shows in the open editor, and Save keeps it unles
       account: 'a',
       model: 'opus',
       effort: 'low',
+      approvals: 'auto',
     });
 });
 
@@ -179,7 +181,18 @@ test('a new agent takes its account’s first Latest and is saved with it', asyn
     {
       method: 'POST',
       path: '/api/agents',
-      body: { name: 'Made-up new', account: 'a', model: 'opus', effort: null },
+      body: { name: 'Made-up new', account: 'a', model: 'opus', effort: null, approvals: 'auto' },
     },
   ]);
+});
+
+test('a change of approvals enables Save and is saved', async () => {
+  service([agent({ approvals: 'full' })], listed);
+  const screen = await render(<Agents onReference={() => {}} />);
+  const approvals = screen.getByRole('combobox', { name: 'Approvals' });
+  await expect.element(approvals).toHaveValue('full');
+  await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await approvals.selectOptions('Ask');
+  await screen.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(() => sent.at(-1)?.body).toMatchObject({ approvals: 'ask' });
 });

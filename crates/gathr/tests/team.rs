@@ -4,10 +4,9 @@
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, recording, sign_in_account};
+use common::{TempDir, TestService, gathr, git, project, recording, sign_in_account};
 use serde_json::{Value, json};
 
 /// A signed-in account's agent: its id.
@@ -335,46 +334,6 @@ fn a_new_supervisor_reaches_the_next_turns_briefing() {
         !after.contains("as its Supervisor") && after.contains("Pia (Supervisor)"),
         "the engine kept the old roles: {after}"
     );
-}
-
-fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .args([
-            "-c",
-            "user.name=Test",
-            "-c",
-            "user.email=test@example.invalid",
-        ])
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
-    assert!(
-        out.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    String::from_utf8_lossy(&out.stdout).trim().to_string()
-}
-
-/// A project cloned from a remote that has since moved on: the project, and the remote's newest
-/// commit.
-fn project(root: &Path) -> (PathBuf, String) {
-    let seed = root.join("seed");
-    std::fs::create_dir_all(&seed).unwrap();
-    git(&seed, &["init", "-q", "-b", "main"]);
-    std::fs::write(seed.join("README.md"), "made up\n").unwrap();
-    git(&seed, &["add", "."]);
-    git(&seed, &["commit", "-q", "-m", "first"]);
-    git(root, &["clone", "-q", "--bare", "seed", "origin.git"]);
-    git(root, &["clone", "-q", "origin.git", "project"]);
-    git(root, &["clone", "-q", "origin.git", "other"]);
-    let other = root.join("other");
-    std::fs::write(other.join("NEXT.md"), "later\n").unwrap();
-    git(&other, &["add", "."]);
-    git(&other, &["commit", "-q", "-m", "second"]);
-    git(&other, &["push", "-q", "origin", "main"]);
-    (root.join("project"), git(&other, &["rev-parse", "HEAD"]))
 }
 
 /// Each engine start's working folder and PATH, as the replay engine wrote them.
