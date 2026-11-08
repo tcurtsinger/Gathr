@@ -45,10 +45,12 @@ const parts: [string, string][] = [
 
 /** What Gathr gave the turn: characters, and Gathr's own token estimate (0020). */
 function given(turn: TurnTimeline) {
-  const start = turn.events.find((e) => e.name.startsWith('invoke_agent ') && e.phase === 'start');
+  // The end's count includes messages read during the turn; a turn still running has only its start.
+  const ends = turn.events.filter((e) => e.name.startsWith('invoke_agent ')).reverse();
   return parts.flatMap(([label, key]) => {
-    const chars = start?.attrs?.[`${key}.chars`];
-    const estimate = start?.attrs?.[`${key}.tokens_estimate`];
+    const event = ends.find((e) => typeof e.attrs?.[`${key}.chars`] === 'number');
+    const chars = event?.attrs?.[`${key}.chars`];
+    const estimate = event?.attrs?.[`${key}.tokens_estimate`];
     if (typeof chars !== 'number' || typeof estimate !== 'number') return [];
     return [[label, `${chars.toLocaleString()} chars, ~${estimate.toLocaleString()} tokens`] as const];
   });

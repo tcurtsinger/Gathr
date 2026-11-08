@@ -113,7 +113,12 @@ impl Task {
             }
             Frame::Read(text) => {
                 let unread = self.unread.iter().position(|(_, t)| *t == text);
-                if let Some((message, _)) = unread.map(|i| self.unread.remove(i))
+                let read = unread.map(|i| self.unread.remove(i));
+                // Read inside the turn: part of what this turn was given.
+                if let (Some(_), Some(turn)) = (&read, self.turn.as_mut()) {
+                    turn.ask_chars += text.chars().count();
+                }
+                if let Some((message, _)) = read
                     && self.turn.is_none()
                 {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the
@@ -277,6 +282,12 @@ impl Task {
                 end.usage.cache_write,
             )
             .attr("gathr.cost_usd", end.cost_usd)
+            // The whole ask, follow-ups read during the turn included; the start has the first.
+            .attr("gathr.context.ask.chars", turn.ask_chars)
+            .attr(
+                "gathr.context.ask.tokens_estimate",
+                turn.ask_chars.div_ceil(4),
+            )
             .attr(
                 "gen_ai.response.finish_reasons",
                 json!([end.reason.clone().unwrap_or(end.subtype.clone())]),

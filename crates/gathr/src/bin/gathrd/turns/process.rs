@@ -48,7 +48,7 @@ impl Times {
 pub struct Closing {
     engine: Engine,
     /// Its token and briefing: they end when it has exited, not when it's asked to.
-    _pass: Option<Pass>,
+    pass: Option<Pass>,
     pub folder: PathBuf,
     chat: String,
     why: String,
@@ -236,7 +236,7 @@ impl Task {
         let assigned = self.assigned.as_ref();
         self.closing = Some(Closing {
             engine,
-            _pass: self.pass.take(),
+            pass: self.pass.take(),
             folder: assigned.map(|a| a.folder.clone()).unwrap_or_default(),
             chat: assigned.map(|a| a.chat.clone()).unwrap_or_default(),
             why: why.to_string(),
@@ -247,9 +247,11 @@ impl Task {
 
     /// The closing engine exited: the next turn may start.
     pub(super) async fn on_closed(&mut self, code: Option<i32>) {
-        let Some(closed) = self.closing.take() else {
+        let Some(mut closed) = self.closing.take() else {
             return;
         };
+        // Its token and briefing end now, before anything queued starts the next engine.
+        drop(closed.pass.take());
         let mut event = Event::point("gathr.engine.close")
             .chat(&closed.chat)
             .ok()

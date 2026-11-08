@@ -305,3 +305,133 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
         (!file.exists()).then_some(())
     });
 }
+
+/// A signed-in account and an agent on it: the agent's id.
+fn agent(service: &TestService, data: &Path, name: &str) -> String {
+    let account = service.add_account(&format!("{name}'s"));
+    sign_in_account(data, &account);
+    let body = json!({ "name": name, "account": account });
+    let added = service.send("POST", "/api/agents", body);
+    assert_eq!(added.status, 200, "{}", added.body);
+    added.json()["id"].as_str().unwrap().to_string()
+}
+
+fn send(service: &TestService, chat: &str, agent: &str, text: &str) -> Value {
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": text, "agent": agent }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    sent.json()
+}
+
+#[test]
+fn an_exited_engines_token_ends_before_the_next_engine_starts() {
+    let data = TempDir::new();
+    let (go, args, env, version_hold) = (
+        data.0.join("go"),
+        data.0.join("args.jsonl"),
+        data.0.join("env.jsonl"),
+        data.0.join("version-hold"),
+    );
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY_HOLD", &go),
+            ("GATHR_REPLAY_ARGS", &args),
+            ("GATHR_REPLAY_ENV", &env),
+            ("GATHR_REPLAY_VERSION_HOLD", &version_hold),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let (a, b) = (service.new_chat(), service.new_chat());
+    assert_eq!(send(&service, &a, &orin, "Say hi")["status"], "running");
+    assert_eq!(send(&service, &b, &orin, "Say hi")["status"], "queued");
+    let first = started(&args, &env);
+    let briefing = PathBuf::from(first.after("--append-system-prompt-file"));
+
+    // The switch to chat B closes A's engine; B's start then waits on its version check.
+    std::fs::write(&version_hold, "").unwrap();
+    std::fs::write(&go, "").unwrap();
+    until(10, "A's engine to exit", || {
+        let closed = query(
+            &data.0,
+            "SELECT 1 FROM event_log WHERE name = 'gathr.engine.close'",
+        );
+        (!closed.is_empty()).then_some(())
+    });
+    let port = service.info.port;
+    let answer = mcp(port, &first.token, "tools/list", json!({}), None);
+    assert_eq!(
+        answer.status, 401,
+        "an exited engine's token still works: {}",
+        answer.body
+    );
+    assert!(
+        !briefing.exists(),
+        "an exited engine's briefing is still there"
+    );
+
+    std::fs::remove_file(&version_hold).unwrap();
+    service.wait_for(&b, 10, "chat B's turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+}
+
+/// `signed_in`, held until `go` exists, with a message sent into the turn read during it.
+fn read_in_turn_recording(dir: &Path, follow_up: &str) -> PathBuf {
+    let rows: Vec<Value> = std::fs::read_to_string(recording("signed_in"))
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let echo = json!({ "type": "user", "isReplay": true,
+        "message": { "role": "user", "content": follow_up } });
+    let mut all = rows[..2].to_vec();
+    all.extend([json!({ "dir": "hold" }), json!({ "dir": "in" })]);
+    all.push(json!({ "dir": "out", "line": echo.to_string() }));
+    all.extend(rows[2..].iter().cloned());
+    let file = dir.join("read-in-turn.jsonl");
+    let text: Vec<String> = all.iter().map(Value::to_string).collect();
+    std::fs::write(&file, text.join("\n")).unwrap();
+    file
+}
+
+#[test]
+fn a_follow_up_read_during_a_turn_counts_in_what_the_turn_was_given() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let follow_up = "x".repeat(24_000);
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &read_in_turn_recording(&data.0, &follow_up)),
+            ("GATHR_REPLAY_HOLD", &go),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    assert_eq!(send(&service, &chat, &orin, "Say hi")["status"], "running");
+    assert_eq!(send(&service, &chat, &orin, &follow_up)["steered"], true);
+    std::fs::write(&go, "").unwrap();
+    service.wait_for(&chat, 10, "the turn's end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+
+    let rows = query(
+        &data.0,
+        "SELECT json_extract(attrs, '$.\"gathr.context.ask.chars\"') AS ask, \
+         json_extract(attrs, '$.\"gathr.context.ask.tokens_estimate\"') AS estimate \
+         FROM event_log WHERE name = 'invoke_agent claude' AND phase = 'end'",
+    );
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(
+        rows[0]["ask"],
+        6 + 24_000,
+        "the follow-up isn't counted: {rows:?}"
+    );
+    assert_eq!(
+        rows[0]["estimate"],
+        (6 + 24_000_u64).div_ceil(4),
+        "{rows:?}"
+    );
+}
