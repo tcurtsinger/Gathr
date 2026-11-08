@@ -2,6 +2,8 @@
 //! Each recorded `in` line waits for a line on stdin; each `out` or `err` line is written as it
 //! was recorded; an `exit` line ends it with that code. So the service's driver meets the engine's real frames, in their real order.
 //! A `sleep` row pauses that many milliseconds, for a stream at a real pace (timings, not tests).
+//! A `hold` row waits until the file `GATHR_REPLAY_HOLD` names exists, so a test decides when
+//! the engine goes on; without that variable it's skipped.
 //!
 //! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line.
@@ -99,6 +101,12 @@ fn main() {
             Some("exit") => std::process::exit(line.parse().unwrap_or(1)),
             Some("sleep") => {
                 std::thread::sleep(std::time::Duration::from_millis(line.parse().unwrap_or(0)))
+            }
+            Some("hold") => {
+                let file = std::env::var_os("GATHR_REPLAY_HOLD").unwrap_or_default();
+                while !file.is_empty() && !std::path::Path::new(&file).exists() {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
             }
             _ => {}
         }
