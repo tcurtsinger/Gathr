@@ -9,19 +9,27 @@ use std::time::{Duration, Instant};
 use common::{TempDir, TestService, account_until, gathr};
 use serde_json::{Value, json};
 
-fn service(data: &TempDir) -> TestService {
-    TestService::with_engine(&data.0, &[])
+/// The service, and an account added on it.
+fn service(data: &TempDir) -> (TestService, String) {
+    let service = TestService::with_engine(&data.0, &[]);
+    let id = service.add_account("Test");
+    (service, id)
 }
 
-fn engine_until(service: &TestService, what: &str, done: impl Fn(&Value) -> bool) -> Value {
-    account_until(service, "main", what, done)
+fn engine_until(
+    service: &TestService,
+    id: &str,
+    what: &str,
+    done: impl Fn(&Value) -> bool,
+) -> Value {
+    account_until(service, id, what, done)
 }
 
 #[test]
 fn a_pasted_code_signs_the_account_in() {
     let data = TempDir::new();
-    let service = service(&data);
-    let started = service.call("POST", "/api/accounts/main/sign-in");
+    let (service, id) = service(&data);
+    let started = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(started.status, 200, "{}", started.body);
     let url = started.json()["url"]
         .as_str()
@@ -33,14 +41,14 @@ fn a_pasted_code_signs_the_account_in() {
         started.body
     );
 
-    let engine = service.call("GET", "/api/accounts/main").json();
+    let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
     assert_eq!(engine["login"], "signed_out", "{engine}");
     assert_eq!(engine["sign_in"], json!({ "state": "waiting", "url": url }));
 
     let code = json!({ "code": "made-up-code#made-up-state" });
-    let sent = service.send("POST", "/api/accounts/main/sign-in/code", code);
+    let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
     assert_eq!(sent.status, 200, "{}", sent.body);
-    let engine = engine_until(&service, "the sign-in to finish", |e| {
+    let engine = engine_until(&service, &id, "the sign-in to finish", |e| {
         e["sign_in"].is_null()
     });
     assert_eq!(engine["login"], "signed_in", "{engine}");
@@ -49,12 +57,12 @@ fn a_pasted_code_signs_the_account_in() {
 #[test]
 fn a_refused_code_fails_with_a_reference_that_finds_why() {
     let data = TempDir::new();
-    let service = service(&data);
-    service.call("POST", "/api/accounts/main/sign-in");
+    let (service, id) = service(&data);
+    service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     let code = json!({ "code": "wrong#made-up-state" });
-    service.send("POST", "/api/accounts/main/sign-in/code", code);
+    service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
 
-    let engine = engine_until(&service, "the sign-in to fail", |e| {
+    let engine = engine_until(&service, &id, "the sign-in to fail", |e| {
         e["sign_in"]["state"] == "failed"
     });
     assert_eq!(engine["login"], "signed_out", "{engine}");
@@ -78,14 +86,14 @@ fn a_refused_code_fails_with_a_reference_that_finds_why() {
 #[test]
 fn cancel_ends_the_wait_and_sign_in_starts_again() {
     let data = TempDir::new();
-    let service = service(&data);
-    service.call("POST", "/api/accounts/main/sign-in");
-    let cancelled = service.call("DELETE", "/api/accounts/main/sign-in");
+    let (service, id) = service(&data);
+    service.call("POST", &format!("/api/accounts/{id}/sign-in"));
+    let cancelled = service.call("DELETE", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(cancelled.status, 200, "{}", cancelled.body);
-    let engine = service.call("GET", "/api/accounts/main").json();
+    let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
     assert!(engine["sign_in"].is_null(), "still signing in: {engine}");
 
-    let again = service.call("POST", "/api/accounts/main/sign-in");
+    let again = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(again.status, 200, "{}", again.body);
 }
 
@@ -95,18 +103,19 @@ fn cancel_before_the_page_stops_both_of_two_starts() {
     let data = TempDir::new();
     let slow = [("GATHR_REPLAY_PAGE_MS", Path::new("3000"))];
     let service = TestService::with_engine(&data.0, &slow);
+    let id = service.add_account("Test");
 
     let started = Instant::now();
     let answers = std::thread::scope(|scope| {
-        let start = || service.call("POST", "/api/accounts/main/sign-in");
+        let start = || service.call("POST", &format!("/api/accounts/{id}/sign-in"));
         let starts = [scope.spawn(start), scope.spawn(start)];
         std::thread::sleep(Duration::from_millis(1000));
-        let engine = service.call("GET", "/api/accounts/main").json();
+        let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
         assert_eq!(
             engine["sign_in"]["state"], "waiting",
             "Cancel isn't shown yet: {engine}"
         );
-        let cancelled = service.call("DELETE", "/api/accounts/main/sign-in");
+        let cancelled = service.call("DELETE", &format!("/api/accounts/{id}/sign-in"));
         assert_eq!(cancelled.status, 200, "{}", cancelled.body);
         starts.map(|s| s.join().expect("the start answers"))
     });
@@ -122,10 +131,10 @@ fn cancel_before_the_page_stops_both_of_two_starts() {
         "the starts waited for the page: {:?}",
         started.elapsed()
     );
-    let engine = service.call("GET", "/api/accounts/main").json();
+    let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
     assert!(engine["sign_in"].is_null(), "still signing in: {engine}");
     let code = json!({ "code": "made-up-code#made-up-state" });
-    let sent = service.send("POST", "/api/accounts/main/sign-in/code", code);
+    let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
     assert_eq!(
         sent.status, 409,
         "a sign-in is still waiting: {}",
@@ -136,9 +145,9 @@ fn cancel_before_the_page_stops_both_of_two_starts() {
 #[test]
 fn a_code_with_no_sign_in_running_fails() {
     let data = TempDir::new();
-    let service = service(&data);
+    let (service, id) = service(&data);
     let code = json!({ "code": "made-up-code#made-up-state" });
-    let sent = service.send("POST", "/api/accounts/main/sign-in/code", code);
+    let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
     assert_eq!(sent.status, 409, "{}", sent.body);
     assert_eq!(sent.json()["error"], "Sign in failed", "{}", sent.body);
 }
@@ -148,7 +157,8 @@ fn sign_in_fails_with_why_when_claude_code_isnt_there() {
     let data = TempDir::new();
     let missing = data.0.join("no-such-claude.exe");
     let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
-    let started = service.call("POST", "/api/accounts/main/sign-in");
+    let id = service.add_account("Test");
+    let started = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(started.status, 500, "{}", started.body);
     let answer = started.json();
     assert_eq!(answer["error"], "Sign in failed", "{answer}");
@@ -161,13 +171,17 @@ fn sign_in_fails_with_why_when_claude_code_isnt_there() {
 #[test]
 fn shutdown_during_a_sign_out_closes_its_engine_within_the_grace() {
     let data = TempDir::new();
-    common::sign_in(&data.0);
     let stall = [("GATHR_REPLAY_LOGOUT", Path::new("stall"))];
     let service = TestService::with_engine(&data.0, &stall);
+    let id = service.signed_in(&data.0);
     let (port, token) = (service.info.port, service.info.token.clone());
-    let path = "/api/accounts/main/sign-out";
-    let signing_out = std::thread::spawn(move || gathr::http::call(port, &token, "POST", path));
-    let started = data.0.join("accounts/main/claude/logout-started");
+    let path = format!("/api/accounts/{id}/sign-out");
+    let signing_out = std::thread::spawn(move || gathr::http::call(port, &token, "POST", &path));
+    let started = data
+        .0
+        .join("accounts")
+        .join(&id)
+        .join("claude/logout-started");
     let deadline = Instant::now() + Duration::from_secs(10);
     while !started.is_file() {
         assert!(Instant::now() < deadline, "auth logout never started");

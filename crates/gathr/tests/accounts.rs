@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{TempDir, TestService, sign_in};
+use common::{TempDir, TestService, gathr, recording, sign_in_account};
 use serde_json::{Value, json};
 
 fn accounts(service: &TestService) -> Vec<Value> {
@@ -13,29 +13,10 @@ fn accounts(service: &TestService) -> Vec<Value> {
 }
 
 #[test]
-fn the_account_signed_in_before_accounts_had_names_carries_over_signed_in() {
-    let data = TempDir::new();
-    sign_in(&data.0);
-    let service = TestService::with_engine(&data.0, &[]);
-    let listed = accounts(&service);
-    assert_eq!(listed.len(), 1, "{listed:?}");
-    let main = &listed[0];
-    assert_eq!(
-        (&main["id"], &main["name"], &main["engine"], &main["login"]),
-        (
-            &json!("main"),
-            &json!("Main"),
-            &json!("claude"),
-            &json!("signed_in")
-        ),
-        "{main}"
-    );
-}
-
-#[test]
 fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_restart() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[]);
+    service.add_account("Personal");
     let added = service.send(
         "POST",
         "/api/accounts",
@@ -49,7 +30,6 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
         "{work}"
     );
     let id = work["id"].as_str().unwrap().to_string();
-    assert_ne!(id, "main");
 
     let refused = [
         (
@@ -95,7 +75,7 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
     let taken = service.send(
         "PATCH",
         &format!("/api/accounts/{id}"),
-        json!({ "name": "MAIN" }),
+        json!({ "name": "PERSONAL" }),
     );
     assert_eq!(
         taken.status, 409,
@@ -111,20 +91,15 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
         .iter()
         .map(|a| a["name"].clone())
         .collect();
-    assert_eq!(names, [json!("Main"), json!("Équipe")]);
+    assert_eq!(names, [json!("Personal"), json!("Équipe")]);
 }
 
 #[test]
 fn signing_one_account_in_and_out_leaves_the_other_as_it_was() {
     let data = TempDir::new();
-    sign_in(&data.0);
     let service = TestService::with_engine(&data.0, &[]);
-    let work = service.send(
-        "POST",
-        "/api/accounts",
-        json!({ "engine": "claude", "name": "Work" }),
-    );
-    let id = work.json()["id"].as_str().unwrap().to_string();
+    let first = service.signed_in(&data.0);
+    let id = service.add_account("Work");
 
     let started = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
     assert_eq!(started.status, 200, "{}", started.body);
@@ -140,16 +115,143 @@ fn signing_one_account_in_and_out_leaves_the_other_as_it_was() {
         "not signed in its own folder"
     );
 
-    let out = service.call("POST", "/api/accounts/main/sign-out");
+    let out = service.call("POST", &format!("/api/accounts/{first}/sign-out"));
     assert_eq!(out.status, 200, "{}", out.body);
     let login =
         |id: &str| service.call("GET", &format!("/api/accounts/{id}")).json()["login"].clone();
-    assert_eq!(login("main"), "signed_out");
+    assert_eq!(login(&first), "signed_out");
     assert_eq!(
         login(&id),
         "signed_in",
-        "signing Main out signed Work out too"
+        "signing one out signed Work out too"
     );
     let unknown = service.call("POST", "/api/accounts/nope/sign-in");
+    assert_eq!(unknown.status, 404, "{}", unknown.body);
+}
+
+fn turns_done(history: &Value) -> usize {
+    let turns = history["turns"].as_array().cloned().unwrap_or_default();
+    turns.iter().filter(|t| t["status"] == "done").count()
+}
+
+#[test]
+fn a_new_data_folder_has_no_accounts_and_its_chats_wait_for_the_first_one_signed_in() {
+    let data = TempDir::new();
+    let reply = recording("signed_in");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &reply)]);
+    assert_eq!(accounts(&service), Vec::<Value>::new());
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_eq!(sent.json()["status"], "waiting_sign_in", "{}", sent.body);
+
+    let work = service.add_account("Work");
+    sign_in_account(&data.0, &work);
+    service.wait_for(&chat, 10, "the message to run on Work", |h| {
+        turns_done(h) == 1
+    });
+}
+
+#[test]
+fn removing_an_account_signs_it_out_deletes_its_folder_and_moves_chats_to_the_next() {
+    let data = TempDir::new();
+    let reply = recording("signed_in");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &reply)]);
+    let work = service.add_account("Work");
+    let second = service.add_account("Second");
+    sign_in_account(&data.0, &work);
+    sign_in_account(&data.0, &second);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    service.send("POST", &path, json!({ "text": "Say hi" }));
+    service.wait_for(&chat, 10, "the first reply", |h| turns_done(h) == 1);
+
+    let removed = service.call("DELETE", &format!("/api/accounts/{work}"));
+    assert_eq!(removed.status, 200, "{}", removed.body);
+    let names: Vec<Value> = accounts(&service)
+        .iter()
+        .map(|a| a["name"].clone())
+        .collect();
+    assert_eq!(names, [json!("Second")]);
+    assert!(
+        !data.0.join("accounts").join(&work).exists(),
+        "the removed account's folder is still there"
+    );
+    let sql = format!(
+        "SELECT error_type FROM event_log WHERE name = 'gathr.engine.sign_out' \
+         AND json_extract(attrs, '$.account') = '{work}'"
+    );
+    let (ok, rows) = gathr(&data.0, &["diag", "query", &sql]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"].as_array().map(Vec::len), Some(1), "{rows}");
+    assert!(rows["rows"][0]["error_type"].is_null(), "{rows}");
+
+    service.send("POST", &path, json!({ "text": "Say hi again" }));
+    service.wait_for(&chat, 10, "the next reply, on Second", |h| {
+        turns_done(h) == 2
+    });
+}
+
+#[test]
+fn removing_the_account_of_a_turn_under_way_stops_it_and_closes_its_engine_gently() {
+    let data = TempDir::new();
+    let asks = recording("approval");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &asks)]);
+    let id = service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    service.send("POST", &path, json!({ "text": "Write note.txt" }));
+    service.wait_for(&chat, 10, "the approval", |h| {
+        h["approvals"][0]["tool"] == "Write"
+    });
+
+    let removed = service.call("DELETE", &format!("/api/accounts/{id}"));
+    assert_eq!(removed.status, 200, "{}", removed.body);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(history["turns"][0]["status"], "stopped", "{history}");
+    let sql = "SELECT error_type FROM event_log WHERE name = 'gathr.engine.close'";
+    let (ok, rows) = gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"].as_array().map(Vec::len), Some(1), "{rows}");
+    assert!(rows["rows"][0]["error_type"].is_null(), "killed: {rows}");
+}
+
+#[test]
+fn a_remove_whose_sign_out_fails_keeps_the_account_and_answers_a_reference_that_traces() {
+    let data = TempDir::new();
+    let missing = data.0.join("no-such-claude.exe");
+    let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
+    let id = service.signed_in(&data.0);
+
+    let removed = service.call("DELETE", &format!("/api/accounts/{id}"));
+    assert_eq!(removed.status, 500, "{}", removed.body);
+    let answer = removed.json();
+    assert_eq!(answer["error"], "Remove failed", "{answer}");
+    let reference = answer["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{trace}");
+    let failed = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "gathr.engine.sign_out");
+    assert_eq!(
+        failed.map(|e| &e["error_type"]),
+        Some(&json!("sign_out")),
+        "{trace}"
+    );
+    assert_eq!(accounts(&service).len(), 1, "the account went anyway");
+    let login = data
+        .0
+        .join("accounts")
+        .join(&id)
+        .join("claude/.credentials.json");
+    assert!(login.is_file(), "the login went anyway");
+
+    // Never signed in, so there's no login to end: it goes without Claude Code.
+    let spare = service.add_account("Spare");
+    let removed = service.call("DELETE", &format!("/api/accounts/{spare}"));
+    assert_eq!(removed.status, 200, "{}", removed.body);
+    let unknown = service.call("DELETE", "/api/accounts/nope");
     assert_eq!(unknown.status, 404, "{}", unknown.body);
 }

@@ -6,12 +6,12 @@ mod common;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, sign_in};
+use common::{TempDir, TestService, gathr, sign_in_account};
 use gathr::http;
 use serde_json::{Value, json};
 
-fn models(service: &TestService) -> Value {
-    let answer = service.call("GET", "/api/accounts/main/models");
+fn models(service: &TestService, account: &str) -> Value {
+    let answer = service.call("GET", &format!("/api/accounts/{account}/models"));
     assert_eq!(answer.status, 200, "{}", answer.body);
     answer.json()
 }
@@ -37,19 +37,20 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
     let data = TempDir::new();
     let args = data.0.join("args.jsonl");
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY_ARGS", &args)]);
+    let first = service.add_account("First");
 
-    let signed_out = models(&service);
+    let signed_out = models(&service, &first);
     assert_eq!(signed_out["version"], "2.1.318");
     assert_eq!(
         signed_out["models"].as_array().unwrap().len(),
         5,
         "{signed_out}"
     );
-    assert_eq!(models(&service), signed_out);
+    assert_eq!(models(&service, &first), signed_out);
     assert_eq!(runs(&args), 1, "a second ask started the engine again");
 
-    sign_in(&data.0);
-    let signed_in = models(&service);
+    sign_in_account(&data.0, &first);
+    let signed_in = models(&service, &first);
     assert_eq!(runs(&args), 2, "signing in didn't ask the engine again");
     assert_eq!(
         signed_in["models"].as_array().unwrap().len(),
@@ -78,11 +79,11 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
         "a signed-out account got the signed-in one's list: {work_models}"
     );
     assert_eq!(
-        models(&service),
+        models(&service, &first),
         signed_in,
-        "Work's ask replaced Main's list"
+        "Work's ask replaced First's list"
     );
-    assert_eq!(runs(&args), 3, "Main's list was asked again");
+    assert_eq!(runs(&args), 3, "First's list was asked again");
 }
 
 /// Starts the service with the replay engine in `mode` (`GATHR_REPLAY_INIT`), asks for the list
@@ -94,9 +95,9 @@ fn stop_while_asking(data: &Path, mode: &str) -> Duration {
         ("GATHR_REPLAY_INIT", Path::new(mode)),
     ];
     let service = TestService::with_engine(data, &mode);
+    let path = format!("/api/accounts/{}/models", service.add_account("Test"));
     let (port, token) = (service.info.port, service.info.token.clone());
-    let asking =
-        std::thread::spawn(move || http::call(port, &token, "GET", "/api/accounts/main/models"));
+    let asking = std::thread::spawn(move || http::call(port, &token, "GET", &path));
     let deadline = Instant::now() + Duration::from_secs(10);
     while runs(&args) == 0 {
         assert!(Instant::now() < deadline, "the engine never started");
@@ -157,7 +158,8 @@ fn a_list_that_fails_has_a_reference_that_traces() {
     let missing = data.0.join("no-such-claude.exe");
     let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
 
-    let answer = service.call("GET", "/api/accounts/main/models");
+    let id = service.add_account("Test");
+    let answer = service.call("GET", &format!("/api/accounts/{id}/models"));
     assert_eq!(answer.status, 500, "{}", answer.body);
     let answer = answer.json();
     assert_eq!(answer["error"], "Models failed");

@@ -11,9 +11,5 @@ CREATE TABLE accounts (
 
 CREATE UNIQUE INDEX accounts_by_name ON accounts (name_key);
 
--- The one account from before accounts had names: its folder is accounts/main/claude already,
--- so its login carries over with no new sign-in.
-INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('main', 'claude', 'Main', 'main', 0);
-
 -- Claude Code's path is no longer a setting: GATHR_CLAUDE_PATH stands in for it in dev and tests.
 DELETE FROM settings WHERE key = 'engines.claude.path';

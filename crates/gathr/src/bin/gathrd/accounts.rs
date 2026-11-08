@@ -1,24 +1,30 @@
-//! Settings > Engines' accounts (0026): list, add and rename. Signing in and out is in
+//! Settings > Engines' accounts (0026): list, add, rename and remove. Signing in and out is in
 //! [`crate::sign_in`], and each account's models in [`crate::models`].
 
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::extract::{Extension, Path, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
 use gathr::accounts::{self, Account, Refused};
+use gathr::claude::{command, login};
 use gathr::event::Event;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::api::{State, Trace};
 use crate::routes::{Answer, Fail, fail};
+use crate::sign_in::{log_out_held, pass_gate, record_as};
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/accounts", get(list).post(add))
-        .route("/api/accounts/{account}", get(one).patch(rename))
+        .route(
+            "/api/accounts/{account}",
+            get(one).patch(rename).delete(remove),
+        )
 }
 
 /// The account, or a 404 that says so under `error`.
@@ -127,6 +133,83 @@ async fn rename(
     changed(&s, &t, ("rename", "Rename failed"), renamed).await
 }
 
+/// Signs the account out, deletes its folder and forgets it. Chats on it move to the next
+/// account first, and its engines close the gentle way (0002).
+async fn remove(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(id): Path<String>,
+) -> Answer {
+    const ERROR: &str = "Remove failed";
+    let account = find(&s, &t, &id, ERROR).await?;
+    s.sign_ins.get(&account.id).cancel().await;
+    s.chats.pick_account(Some(&account.id)).await;
+    let done = let_go(&s, &t.0, &account).await;
+    if done.is_err() {
+        s.chats.pick_account(None).await;
+    }
+    let mut event = Event::point("gathr.account.change")
+        .trace(&t.0)
+        .attr("account", account.id.clone())
+        .attr("engine", account.engine.clone())
+        .attr("change", "remove");
+    event = match &done {
+        Ok(()) => event.ok(),
+        Err(why) => event.error("remove").attr("why", why.clone()),
+    };
+    s.writer.record(event);
+    s.chats.publish(json!({ "type": "accounts" }));
+    match done {
+        Ok(()) => Ok(Json(json!({ "removed": true }))),
+        Err(why) => Err(fail(StatusCode::INTERNAL_SERVER_ERROR, ERROR, &why, &t.0)),
+    }
+}
+
+async fn let_go(s: &State, trace: &str, account: &Account) -> Result<(), String> {
+    let folder = account.folder(&s.data);
+    s.chats.leave(&folder).await;
+    // Held to the end, so nothing starts on the account between its sign-out and its removal.
+    let _gate = if folder.exists() {
+        let started = Instant::now();
+        let done = sign_out(s, &folder).await;
+        let why = done.as_ref().err().map(String::as_str);
+        record_as(s, "sign_out", &account.id, trace, why, started).await;
+        Some(done?)
+    } else {
+        // Never signed in here, so there's no login to end.
+        None
+    };
+    delete_folder(&s.data.path().join("accounts").join(&account.id)).await?;
+    let id = account.id.clone();
+    match s.writer.call(move |conn| accounts::remove(conn, &id)).await {
+        Some(Ok(_)) => Ok(()),
+        Some(Err(e)) => Err(e.to_string()),
+        None => Err("the database didn't answer".into()),
+    }
+}
+
+/// `claude auth logout`, which also clears the login's macOS Keychain entry; the gate stays held.
+async fn sign_out(s: &State, folder: &std::path::Path) -> Result<login::Hold, String> {
+    let program = command::find(s.chats.copy())?;
+    let gate = pass_gate(s, folder).await?;
+    log_out_held(s, &program, folder).await?;
+    Ok(gate)
+}
+
+/// A process just closed may still hold its files for a moment on Windows: tried a few times.
+async fn delete_folder(path: &std::path::Path) -> Result<(), String> {
+    let mut tries = 0;
+    loop {
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) if tries == 5 => return Err(format!("{} wasn't deleted: {e}", path.display())),
+            Err(_) => tries += 1,
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
 /// Answers an add or rename, records it, and tells every window.
 async fn changed(
     s: &State,
@@ -155,6 +238,9 @@ async fn changed(
         .attr("engine", account.engine.clone())
         .attr("change", change);
     s.writer.record(event);
+    if change == "add" {
+        s.chats.pick_account(None).await;
+    }
     s.chats.publish(json!({ "type": "accounts" }));
     Ok(Json(view(s, &account).await))
 }

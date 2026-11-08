@@ -5,7 +5,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{TempDir, TestService, gathr, recording, sign_in};
+use common::{TempDir, TestService, gathr, recording};
 use serde_json::{Value, json};
 
 /// The sidebar lists chats by name: a new chat takes its first message's first line.
@@ -52,8 +52,8 @@ and list the fixes",
 #[test]
 fn a_chats_history_holds_its_open_approvals_until_they_are_answered() {
     let data = TempDir::new();
-    sign_in(&data.0);
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
+    service.signed_in(&data.0);
     let chat = service.new_chat();
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(
@@ -80,8 +80,8 @@ fn a_chats_history_holds_its_open_approvals_until_they_are_answered() {
 #[test]
 fn a_chats_turns_carry_their_ask_tools_and_token_totals() {
     let data = TempDir::new();
-    sign_in(&data.0);
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
+    service.signed_in(&data.0);
     let chat = service.new_chat();
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(

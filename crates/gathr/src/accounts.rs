@@ -121,6 +121,11 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Changed {
     }
 }
 
+/// Whether there was such an account.
+pub fn remove(conn: &Connection, id: &str) -> Result<bool, Error> {
+    Ok(conn.execute("DELETE FROM accounts WHERE id = ?1", [id])? > 0)
+}
+
 fn checked(name: &str) -> Result<&str, Refused> {
     let name = name.trim();
     match name.chars().count() {

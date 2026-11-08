@@ -16,9 +16,6 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 use crate::turns;
 
-/// Chats run on this account until agents pick theirs: the one from before accounts had names.
-const CHAT_ACCOUNT: &str = "main";
-
 pub enum Cmd {
     Send {
         text: String,
@@ -40,6 +37,11 @@ pub enum Cmd {
     },
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
+    /// Closes the chat's engine if it runs in this account folder; the chat's queue stays.
+    Leave {
+        folder: PathBuf,
+        done: oneshot::Sender<()>,
+    },
     Close {
         done: oneshot::Sender<()>,
     },
@@ -59,6 +61,8 @@ pub struct Chats {
     /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
     gates: Mutex<HashMap<PathBuf, Gate>>,
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
+    /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
+    account: Mutex<Option<String>>,
 }
 
 impl Chats {
@@ -69,12 +73,60 @@ impl Chats {
             live: broadcast::channel(4096).0,
             gates: Mutex::default(),
             tasks: Mutex::default(),
+            account: Mutex::default(),
         })
     }
 
-    /// The chats' account's Claude folder.
-    pub fn account_folder(&self) -> PathBuf {
-        gathr::accounts::folder(&self.data, CHAT_ACCOUNT, "claude")
+    /// The chats' account's Claude folder, if there's an account.
+    pub fn account_folder(&self) -> Option<PathBuf> {
+        let account = self.account.lock().expect("never poisoned").clone()?;
+        Some(gathr::accounts::folder(&self.data, &account, "claude"))
+    }
+
+    /// Picks the chats' account again: the oldest, other than `except` (one being removed).
+    /// A new account has none of the old one's Claude Code sessions, so chats start new ones.
+    pub async fn pick_account(&self, except: Option<&str>) {
+        let except = except.map(str::to_string);
+        let picked = self
+            .writer
+            .call(move |conn| {
+                let listed = gathr::accounts::list(conn)?;
+                let next = listed.into_iter().find(|a| Some(&a.id) != except.as_ref());
+                Ok::<_, gathr::Error>(next.map(|a| a.id))
+            })
+            .await;
+        let Some(Ok(next)) = picked else { return };
+        let before = std::mem::replace(
+            &mut *self.account.lock().expect("never poisoned"),
+            next.clone(),
+        );
+        if before.is_some() && before != next {
+            self.writer
+                .call(|conn| store::forget_engine_sessions(conn))
+                .await;
+        }
+    }
+
+    /// Closes every chat engine running in `folder` the gentle way; the chats carry on.
+    pub async fn leave(&self, folder: &Path) {
+        let tasks: Vec<_> = self
+            .tasks
+            .lock()
+            .expect("the chats lock is never poisoned")
+            .values()
+            .cloned()
+            .collect();
+        let mut waits = Vec::new();
+        for tx in tasks {
+            let (done, wait) = oneshot::channel();
+            let folder = folder.to_path_buf();
+            if tx.send(Cmd::Leave { folder, done }).is_ok() {
+                waits.push(wait);
+            }
+        }
+        for wait in waits {
+            let _ = wait.await;
+        }
     }
 
     /// The account folder's renewal gate (0002).

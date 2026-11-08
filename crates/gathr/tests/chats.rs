@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::Duration;
 
-use common::{TempDir, TestService, gathr, recording, sign_in};
+use common::{TempDir, TestService, gathr, recording};
 use serde_json::{Value, json};
 
 fn turn_status(history: &Value) -> Option<&str> {
@@ -88,7 +88,7 @@ fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_re
         ],
     );
     let chat = service.new_chat();
-    sign_in(&data.0);
+    service.signed_in(&data.0);
 
     let sent = service.send(
         "POST",
@@ -127,7 +127,7 @@ fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
         ],
     );
     let chat = service.new_chat();
-    sign_in(&data.0);
+    service.signed_in(&data.0);
 
     let (port, token) = (service.info.port, service.info.token.clone());
     let (tx, rx) = std::sync::mpsc::channel();
@@ -162,7 +162,7 @@ fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
     let service =
         TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("engine_exits"))]);
     let chat = service.new_chat();
-    sign_in(&data.0);
+    service.signed_in(&data.0);
 
     let sent = service.send(
         "POST",
@@ -196,7 +196,7 @@ fn an_engine_that_exits_mid_reply_keeps_the_text_already_shown_and_stops_its_too
     let fixture = recording("exits_mid_reply");
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
     let chat = service.new_chat();
-    sign_in(&data.0);
+    service.signed_in(&data.0);
     service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),
@@ -247,7 +247,7 @@ fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retry
     );
 
     // A login appears; the engine refuses it, as Claude Code does ("Not logged in").
-    sign_in(&data.0);
+    service.signed_in(&data.0);
     service.wait_for(&chat, 10, "the engine to start", |_| {
         !engine_runs(&args).is_empty()
     });
@@ -277,11 +277,11 @@ fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retry
 #[test]
 fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
     let data = TempDir::new();
-    sign_in(&data.0);
     let service = TestService::with_engine(
         &data.0,
         &[("GATHR_REPLAY", &recording("steered_after_turn"))],
     );
+    service.signed_in(&data.0);
     let chat = service.new_chat();
     let path = format!("/api/chats/{chat}/messages");
     let first = service.send(
@@ -328,7 +328,6 @@ fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
 #[test]
 fn an_approval_answered_through_the_api_lets_the_tool_run() {
     let data = TempDir::new();
-    sign_in(&data.0);
     let fixture = recording("approval");
     let request = std::fs::read_to_string(&fixture)
         .unwrap()
@@ -339,6 +338,7 @@ fn an_approval_answered_through_the_api_lets_the_tool_run() {
         .map(|f| f["request_id"].as_str().unwrap().to_string())
         .expect("the recording asks for an approval");
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    service.signed_in(&data.0);
     let chat = service.new_chat();
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(
@@ -398,6 +398,7 @@ fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
             ("GATHR_REPLAY_HOLD", &go),
         ],
     );
+    service.add_account("Test");
     let chat = service.new_chat();
     let path = format!("/api/chats/{chat}/messages");
     let first = service.send(

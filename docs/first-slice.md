@@ -38,8 +38,8 @@ $data = "$env:USERPROFILE\gathr-check"
 
 1. Start Gathr with the made-up chats: `cargo dev --port 47100 --data $data --seed --window`. The first build takes a few minutes; the window opens when it's done. Leave this terminal running.
 2. Click **Seed: 500 messages** in the sidebar: it should open at once, at its latest message. Click **Seed: 50 tool calls in a turn**, then back.
-3. Click **Settings** (the gear at the bottom left). **Engines** lists the accounts, with **Main** signed out. Click **Sign in** on Main: Claude's sign-in page opens in your browser. Sign in there. If the browser didn't open, click **Open sign-in page**; if the page shows a code, paste it into **Code** and click **Sign in**. Main reads **Claude Code / Signed in**.
-4. Still in Settings: click **Add**, type `Work`, click **Sign in** and sign in the same way. Click **Rename** on Work, type `Second`, **Save**. Click **Sign out** on Second: only Second reads Signed out; Main stays signed in, because each account has its own login folder ([0002](decisions/0002-login-folders.md)). Close Settings.
+3. Click **Settings** (the gear at the bottom left). **Engines** has no accounts yet. Click **Add**, type `Personal`, then click **Sign in** on Personal: Claude's sign-in page opens in your browser. Sign in there. If the browser didn't open, click **Open sign-in page**; if the page shows a code, paste it into **Code** and click **Sign in**. Personal reads **Claude Code / Signed in**. Chats run on the first account added.
+4. Still in Settings: click **Add**, type `Work`, click **Sign in** and sign in the same way. Click **Rename** on Work, type `Second`, **Save**. Click **Sign out** on Second: only Second reads Signed out; Personal stays signed in, because each account has its own login folder ([0002](decisions/0002-login-folders.md)). Close Settings.
 5. Click **New**, type `Write 2,000 words on rivers`, press Enter. Watch it stream. Click **Stop** partway: the reply shows Stopped, with what it had written.
 6. Type `What were you writing?` and send. It should know: same session.
 7. Quit: press Ctrl+C in the terminal (the window closes with it). Run step 1's command again without `--seed`: `cargo dev --port 47100 --data $data --window`. Open the chat and ask `What were you writing?` once more. Same session, history intact.
@@ -50,7 +50,7 @@ $data = "$env:USERPROFILE\gathr-check"
    cargo dev --port 47100 --data $data --window
    ```
    Send a message. The chat shows **Send failed** with a reference. In a second terminal, in the repo root: `cargo run -q --bin gathr -- diag trace <reference> --data $data --text` (set `$data` there too). It shows the message, the engine start that failed and why. Quit, run `Remove-Item Env:GATHR_CLAUDE_PATH`, and start again as in step 7.
-10. Open **Settings** and click **Sign out** on Main. Close Settings and send a message. Per [0002](decisions/0002-login-folders.md) it doesn't run: the chat says it's waiting for sign-in. In the second terminal, `cargo run -q --bin gathr -- diag health --data $data --text` shows Main as `signed_out`, with the message under `held`. Sign Main in again (step 3): the message sends.
+10. Open **Settings** and click **Sign out** on Personal. Close Settings and send a message. Per [0002](decisions/0002-login-folders.md) it doesn't run: the chat says it's waiting for sign-in. In the second terminal, `cargo run -q --bin gathr -- diag health --data $data --text` shows Personal as `signed_out`, with the message under `held`. Sign Personal in again (step 3): the message sends.
 11. Quit (Ctrl+C). Make a folder with a broken database, with no logins in it:
     ```powershell
     New-Item -ItemType Directory "$data-broken"
@@ -59,7 +59,7 @@ $data = "$env:USERPROFILE\gathr-check"
     ```
     Gathr fails to start. `cargo run -q --bin gathr -- diag health --data "$data-broken" --text` says the database didn't open, why (`file is not a database`), and shows the crash log's last lines, with nothing read by hand.
 
-To clean up: sign out of Main in Settings, quit, and delete `$data` and `$data-broken`.
+To clean up: sign out of each account in Settings, quit, and delete `$data` and `$data-broken`.
 
 ## Proof in the PR
 
