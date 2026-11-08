@@ -52,29 +52,24 @@ pub fn text(facts: &Facts) -> String {
         Some(name) => format!("You are {name}, an agent"),
         None => "You are an agent".to_string(),
     };
-    let mut lines = vec![format!(
-        "{who} working in Gathr, in the chat \"{}\". The person who runs Gathr writes to you here.",
-        facts.title
-    )];
+    let mut lines = vec![format!("{who} in Gathr, in the chat \"{}\".", facts.title)];
     if !facts.others.is_empty() {
         lines.push(format!(
-            "Others who have worked in this chat: {}. Their replies aren't in your conversation.",
+            "Other agents who have worked here: {}. Their replies may be missing from your context.",
             facts.others.join(", ")
         ));
     }
     lines.extend([
-        "The project's own instructions (AGENTS.md, CLAUDE.md) are already loaded when its folder \
-         has them: follow them."
+        "Follow the project's AGENTS.md and CLAUDE.md when present.".to_string(),
+        "Check facts in code, current docs or a live run before stating or relying on them. Say \
+         what you couldn't verify."
             .to_string(),
-        "Check a fact in the code, the current docs or by running it before you state it or build \
-         on it, and say plainly what you couldn't check."
-            .to_string(),
-        "Gathr's tools (the gathr server): read_chat, this chat's earlier messages by who wrote \
-         them, for anything that isn't in your conversation."
+        // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
+        "Use read_chat on the gathr server for earlier messages and other agents' replies missing \
+         from your context. Find it with ToolSearch if needed."
             .to_string(),
         format!(
-            "Turned off in Gathr: {}. Gathr closes your process between turns, so a timer or \
-             wake-up you set wouldn't fire.",
+            "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
             off().join(", ")
         ),
     ]);
