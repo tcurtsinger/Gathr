@@ -82,9 +82,16 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
     let renamed = service.send(
         "PATCH",
         &format!("/api/accounts/{id}"),
-        json!({ "name": "Side" }),
+        json!({ "name": "Équipe" }),
     );
     assert_eq!(renamed.status, 200, "{}", renamed.body);
+    let other_case = json!({ "engine": "claude", "name": "équipe" });
+    let taken = service.send("POST", "/api/accounts", other_case);
+    assert_eq!(
+        taken.status, 409,
+        "a name differing only in a non-ASCII letter's case: {}",
+        taken.body
+    );
     let taken = service.send(
         "PATCH",
         &format!("/api/accounts/{id}"),
@@ -104,7 +111,7 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
         .iter()
         .map(|a| a["name"].clone())
         .collect();
-    assert_eq!(names, [json!("Main"), json!("Side")]);
+    assert_eq!(names, [json!("Main"), json!("Équipe")]);
 }
 
 #[test]

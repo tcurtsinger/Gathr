@@ -94,6 +94,7 @@ async fn serve(
         updates: updates.clone(),
         sign_ins: sign_ins.clone(),
         models: Default::default(),
+        stopping: Default::default(),
         writer: writer.clone(),
         token,
         port,
@@ -119,8 +120,8 @@ async fn serve(
             _ = stop_state.stop.notified() => "requested over the API",
             _ = os_stop_signal() => "stop signal from the system",
         };
-        // Before the server waits on its requests, so a model ask doesn't hold it.
-        stop_state.models.stop();
+        // Before the server waits on its requests, so a model ask or sign-out doesn't hold it.
+        stop_state.stopping.send_replace(true);
         let _ = stopped_tx.send(reason);
     };
     axum::serve(listener, api::router(state.clone()))

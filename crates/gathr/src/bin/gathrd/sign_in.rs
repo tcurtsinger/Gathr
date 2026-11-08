@@ -23,6 +23,7 @@ use crate::accounts::find;
 use crate::api::{State, Trace};
 use crate::chats::Chats;
 use crate::routes::{Answer, Fail, fail};
+use crate::turns::CLOSE_GRACE;
 
 /// How long Claude Code has to print its sign-in page (it took 0.2 s in task 893).
 const PAGE_WAIT: Duration = Duration::from_secs(30);
@@ -413,13 +414,30 @@ async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> {
     let program = command::find(s.chats.copy())?;
     std::fs::create_dir_all(folder)
         .map_err(|e| format!("{} wasn't made: {e}", folder.display()))?;
+    const STOPPING: &str = "the service stopped before Claude Code finished signing out";
     // Never while an engine on it renews the login: that renewal would save over the sign-out.
-    let _gate = s.chats.gate(folder).pass().await;
+    let gate = s.chats.gate(folder);
+    let _gate = tokio::select! {
+        gate = gate.pass() => gate,
+        () = s.stopped() => return Err(STOPPING.into()),
+    };
     let env = command::env(std::env::vars_os(), folder);
     let args = ["auth".to_string(), "logout".to_string()];
-    let (engine, mut lines) = Engine::start(&program, &args, env, folder)
+    let (mut engine, mut lines) = Engine::start(&program, &args, env, folder)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
-    let closed = engine.close(SIGN_OUT_WAIT).await;
+    // `None` when shutdown came first: it then gets the grace every engine gets to finish.
+    let waited = tokio::select! {
+        exited = tokio::time::timeout(SIGN_OUT_WAIT, engine.wait()) => Some(exited),
+        () = s.stopped() => None,
+    };
+    let closed = match waited {
+        Some(Ok(code)) => Closed::Exited(code),
+        Some(Err(_)) => engine.close(Duration::ZERO).await,
+        None => match engine.close(CLOSE_GRACE).await {
+            Closed::Killed => return Err(STOPPING.into()),
+            exited => exited,
+        },
+    };
     let mut said = Vec::new();
     let next = Duration::from_secs(2);
     while let Ok(Some(Line::Out(text) | Line::Err(text))) =

@@ -21,7 +21,7 @@ use crate::chats::{Chats, Cmd, Failed};
 mod reading;
 
 /// How long a closing engine gets to exit on its own before it's killed (0001).
-const CLOSE_GRACE: Duration = Duration::from_secs(10);
+pub const CLOSE_GRACE: Duration = Duration::from_secs(10);
 /// How often a chat waiting for sign-in looks at the login again.
 const SIGN_IN_POLL: Duration = Duration::from_secs(2);
 

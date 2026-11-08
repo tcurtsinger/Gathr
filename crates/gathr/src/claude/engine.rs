@@ -76,6 +76,13 @@ impl Engine {
         stdin.flush().await
     }
 
+    /// Closes stdin and waits for its exit, as long as it takes: the caller bounds it, and can
+    /// still `close` it after.
+    pub async fn wait(&mut self) -> Option<i32> {
+        drop(self.stdin.take());
+        self.child.wait().await.ok().and_then(|s| s.code())
+    }
+
     /// The gentle close: stdin closed, then the engine's own exit. Killed only after `grace`.
     pub async fn close(mut self, grace: Duration) -> Closed {
         drop(self.stdin.take());

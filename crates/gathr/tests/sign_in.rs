@@ -157,3 +157,32 @@ fn sign_in_fails_with_why_when_claude_code_isnt_there() {
         "{answer}"
     );
 }
+
+#[test]
+fn shutdown_during_a_sign_out_closes_its_engine_within_the_grace() {
+    let data = TempDir::new();
+    common::sign_in(&data.0);
+    let stall = [("GATHR_REPLAY_LOGOUT", Path::new("stall"))];
+    let service = TestService::with_engine(&data.0, &stall);
+    let (port, token) = (service.info.port, service.info.token.clone());
+    let path = "/api/accounts/main/sign-out";
+    let signing_out = std::thread::spawn(move || gathr::http::call(port, &token, "POST", path));
+    let started = data.0.join("accounts/main/claude/logout-started");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !started.is_file() {
+        assert!(Instant::now() < deadline, "auth logout never started");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let began = Instant::now();
+    service.stop();
+    let took = began.elapsed();
+    let _ = signing_out.join();
+    assert!(
+        took < Duration::from_secs(15),
+        "the service took {took:?} to stop"
+    );
+    let sql = "SELECT error_type FROM event_log WHERE name = 'gathr.engine.sign_out'";
+    let (ok, rows) = gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"][0]["error_type"], "sign_out", "{rows}");
+}

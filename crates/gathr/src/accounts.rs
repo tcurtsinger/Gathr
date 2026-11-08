@@ -93,8 +93,14 @@ pub fn add(conn: &Connection, engine: &str, name: &str) -> Changed {
         engine: engine.to_string(),
     };
     let added = conn.execute(
-        "INSERT INTO accounts (id, engine, name, created_ts) VALUES (?1, ?2, ?3, ?4)",
-        params![account.id, account.engine, account.name, ids::now_us()],
+        "INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![
+            account.id,
+            account.engine,
+            account.name,
+            key(name),
+            ids::now_us()
+        ],
     );
     taken_or(added.map(|_| account))
 }
@@ -105,8 +111,8 @@ pub fn rename(conn: &Connection, id: &str, name: &str) -> Changed {
         Err(refused) => return Ok(Err(refused)),
     };
     let renamed = conn.execute(
-        "UPDATE accounts SET name = ?2 WHERE id = ?1",
-        params![id, name],
+        "UPDATE accounts SET name = ?2, name_key = ?3 WHERE id = ?1",
+        params![id, name, key(name)],
     );
     match taken_or(renamed)? {
         Ok(0) => Ok(Err(Refused::Unknown)),
@@ -124,7 +130,12 @@ fn checked(name: &str) -> Result<&str, Refused> {
     }
 }
 
-/// Names are unique, ignoring case, so a picker never shows two the same.
+/// Names are unique, ignoring case in any script (Équipe is équipe), so a picker never shows two
+/// the same.
+fn key(name: &str) -> String {
+    name.to_lowercase()
+}
+
 fn taken_or<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
     match done {
         Ok(value) => Ok(Ok(value)),

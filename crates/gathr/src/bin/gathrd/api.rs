@@ -27,6 +27,15 @@ pub struct State {
     pub updates: Arc<crate::updates::Updates>,
     pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub models: crate::models::Models,
+    /// Set once shutdown starts, before the server waits on its requests: a request waiting on
+    /// an engine ends at once instead of holding the stop.
+    pub stopping: tokio::sync::watch::Sender<bool>,
+}
+
+impl State {
+    pub async fn stopped(&self) {
+        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
+    }
 }
 
 /// The request's trace id, for handlers: a failure's reference and its events share it.

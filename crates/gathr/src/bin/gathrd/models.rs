@@ -17,17 +17,16 @@ use gathr::claude::frames;
 use gathr::claude::login::Login;
 use gathr::event::Event;
 use serde_json::{Value, json};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::accounts::find;
 use crate::api::{State, Trace};
 use crate::routes::{Answer, fail};
+use crate::turns::CLOSE_GRACE;
 
 /// Claude Code 2.1.318 answered in 0.65 s signed in; past this it isn't coming.
 const ANSWER_WAIT: Duration = Duration::from_secs(30);
-/// It exits about 0.6 s after its input closes; it may be renewing the login, so no kill sooner.
-const CLOSE_GRACE: Duration = Duration::from_secs(10);
 const ASKED: &str = "gathr-models";
 
 pub fn routes() -> Router<Arc<State>> {
@@ -38,25 +37,15 @@ pub fn routes() -> Router<Arc<State>> {
 pub struct Models {
     /// Each account's last list, and the engine copy and sign-in state it came from.
     last: Mutex<HashMap<String, (PathBuf, Login, Value)>>,
-    stopping: watch::Sender<bool>,
     /// Engines still closing after their answer, which shutdown waits for.
     closing: std::sync::Mutex<JoinSet<()>>,
 }
 
 impl Models {
-    /// Ends any ask under way, at shutdown; its engine still closes the gentle way.
-    pub fn stop(&self) {
-        self.stopping.send_replace(true);
-    }
-
     /// Waits for every engine an ask started to have exited.
     pub async fn closed(&self) {
         let closing = std::mem::take(&mut *self.closing.lock().expect("never poisoned"));
         closing.join_all().await;
-    }
-
-    async fn stopped(&self) {
-        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
     }
 }
 
@@ -134,7 +123,7 @@ async fn ask(
     let gate = chats.gate(folder);
     let mut gate = tokio::select! {
         gate = gate.pass() => gate,
-        () = models.stopped() => return Err(STOPPING.into()),
+        () = s.stopped() => return Err(STOPPING.into()),
     };
     let args = command::args(Session::New(&gathr::ids::uuid()));
     let env = command::env(std::env::vars_os(), folder);
@@ -144,7 +133,7 @@ async fn ask(
         Ok(()) => tokio::select! {
             answer = tokio::time::timeout(ANSWER_WAIT, answered(&mut lines)) => answer
                 .unwrap_or_else(|_| Err(format!("Claude Code didn't answer in {} s", ANSWER_WAIT.as_secs()))),
-            () = models.stopped() => Err(STOPPING.into()),
+            () = s.stopped() => Err(STOPPING.into()),
         },
         Err(e) => Err(format!("Claude Code didn't take the request: {e}")),
     };
