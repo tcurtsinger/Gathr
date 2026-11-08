@@ -1,5 +1,5 @@
-//! `gathr`: Gathr's command line. `diag` reads the event record; `seed` makes test data;
-//! `dev` runs the service for development.
+//! `gathr`: Gathr's command line. `diag` reads the event record; `open` gives a browser a way in;
+//! `seed` makes test data; `dev` runs the service for development.
 
 mod dev;
 mod text;
@@ -10,7 +10,7 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use gathr::data::DataDir;
-use gathr::{Error, db, diag, ids, platform, seed};
+use gathr::{Error, db, diag, ids, launch, platform, seed};
 use serde_json::{Value, json};
 
 #[derive(Parser)]
@@ -31,6 +31,8 @@ enum Command {
     /// Diagnostics from the event record, read-only.
     #[command(subcommand)]
     Diag(Diag),
+    /// Starts the service if it isn't running, and prints a link that signs a browser in once.
+    Open,
     /// Adds made-up chats: 500 messages, 50 tool calls in a turn, a 20,000-word answer.
     Seed,
     /// Starts the service on a data folder and port; Ctrl+C stops it and everything it started.
@@ -73,6 +75,22 @@ enum Diag {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    // Made-up data never lands in the person's own Gathr by a missed flag.
+    let made_up = match cli.command {
+        Command::Seed => Some("seed"),
+        Command::Dev { .. } => Some("dev"),
+        _ => None,
+    };
+    if let Some(name) = made_up
+        && cli.data.is_none()
+    {
+        let why = "--data is required: without it, this would use the installed Gathr's own data";
+        eprintln!(
+            "{}",
+            json!({ "error": format!("gathr {name} failed"), "why": why })
+        );
+        return ExitCode::FAILURE;
+    }
     let data = DataDir::new(cli.data.unwrap_or_else(platform::default_data_dir));
     // A person reads `dev`; agents read the rest as JSON unless they ask for text.
     let text = cli.text || matches!(cli.command, Command::Dev { .. });
@@ -82,6 +100,7 @@ fn main() -> ExitCode {
     };
     let (name, result) = match cli.command {
         Command::Diag(diag) => ("diag", run_diag(&data, diag)),
+        Command::Open => ("open", run_open(&data)),
         Command::Seed => ("seed", run_seed(&data)),
         Command::Dev { port, seed, window } => (
             "dev",
@@ -116,6 +135,12 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
         Diag::Failures { since } => diag::failures(&conn, ids::now_us() - parse_since(&since)?),
         Diag::Query { sql } => diag::query(&conn, &sql),
     }
+}
+
+fn run_open(data: &DataDir) -> Result<Value, Error> {
+    let found = launch::find_or_start(data, &launch::beside_me("gathrd")?)?;
+    let url = launch::one_time_link(&found.info)?;
+    Ok(json!({ "url": url, "port": found.info.port, "started": found.started }))
 }
 
 /// Seeds with the data folder's lock held, so the service can't start mid-seed.

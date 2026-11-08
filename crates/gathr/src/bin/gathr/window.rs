@@ -43,7 +43,7 @@ pub async fn start(data: &DataDir, port: u16) -> Result<Window, Error> {
     let exe = std::env::current_exe()?
         .with_file_name(format!("gathr-app{}", std::env::consts::EXE_SUFFIX));
     let app = Command::new(exe)
-        .args(["--ui", &address])
+        .args(["--ui", &address, "--title", &format!("Gathr (dev {port})")])
         .kill_on_drop(true)
         .spawn()?;
     println!("Gathr window on {address} (a browser can open it too).");

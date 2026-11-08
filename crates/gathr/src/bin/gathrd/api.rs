@@ -30,6 +30,12 @@ pub struct State {
     /// Set once shutdown starts, before the server waits on its requests: a request waiting on
     /// an engine ends at once instead of holding the stop.
     pub stopping: tokio::sync::watch::Sender<bool>,
+    /// The built UI's folder.
+    pub ui: std::path::PathBuf,
+    /// The cookie's value: a browser's stand-in for the token, new at each start.
+    pub session: String,
+    /// One-time codes not yet swapped for the cookie, with when each was made.
+    pub once_codes: std::sync::Mutex<Vec<(String, Instant)>>,
 }
 
 impl State {
@@ -52,6 +58,8 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .nest_service("/mcp", crate::tools::service(state.chats.clone()))
+        .merge(crate::ui::routes())
+        .fallback(crate::ui::page)
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }
@@ -112,9 +120,10 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
     response
 }
 
-/// Whether a request may go on: refused for a foreign Host or Origin (403), or no valid token
-/// (401). Gathr's tools take only a running engine's own token, never the service's: the engine
-/// they admit is the caller the tools act as (0005).
+/// Whether a request may go on: refused for a foreign Host or Origin (403), or no valid token or
+/// cookie (401). The UI's own files need neither: they hold nothing secret. Gathr's tools take
+/// only a running engine's own token, never the service's or the cookie: the engine they admit
+/// is the caller the tools act as (0005).
 fn admit(
     s: &State,
     headers: &HeaderMap,
@@ -123,12 +132,22 @@ fn admit(
     if let Some(refused) = refusal(s, headers) {
         return Err(refused);
     }
+    let path = uri.path();
+    let tools = path == "/mcp" || path.starts_with("/mcp/");
+    if !tools && !path.starts_with("/api/") && path != "/health" {
+        return Ok(None);
+    }
+    if !tools
+        && cookie(headers, &crate::ui::cookie_name(s.port))
+            .is_some_and(|c| same(c.as_bytes(), s.session.as_bytes()))
+    {
+        return Ok(None);
+    }
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .or_else(|| live_token(uri));
-    let tools = uri.path() == "/mcp" || uri.path().starts_with("/mcp/");
     match (token, tools) {
         (None, _) => Err((StatusCode::UNAUTHORIZED, "token missing")),
         (Some(t), true) => match s.chats.passes.caller(t) {
@@ -164,6 +183,16 @@ fn refusal(s: &State, headers: &HeaderMap) -> Option<(StatusCode, &'static str)>
         }
     }
     None
+}
+
+/// A cookie's value by name, from every `Cookie` header.
+fn cookie<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
+    headers
+        .get_all(header::COOKIE)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(';'))
+        .find_map(|pair| pair.trim().strip_prefix(name)?.strip_prefix('='))
 }
 
 /// A browser can't set headers on a WebSocket, so the live socket may carry the token in its query.

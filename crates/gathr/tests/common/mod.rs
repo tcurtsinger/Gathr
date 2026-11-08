@@ -43,6 +43,19 @@ impl TestService {
         for (name, value) in env {
             command.env(name, value);
         }
+        Self::spawn(command, data)
+    }
+
+    /// Starts it with extra arguments, such as `--ui <folder>`.
+    pub fn start_args(data: &Path, args: &[(&str, &Path)]) -> TestService {
+        let mut command = gathrd(data);
+        for (name, value) in args {
+            command.arg(name).arg(value);
+        }
+        Self::spawn(command, data)
+    }
+
+    fn spawn(mut command: Command, data: &Path) -> TestService {
         let mut child = command.spawn().unwrap();
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
