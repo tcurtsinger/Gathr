@@ -192,6 +192,49 @@ fn removing_an_account_signs_it_out_deletes_its_folder_and_moves_chats_to_the_ne
     });
 }
 
+/// An account added while another is being removed must not hand the chats back to the one
+/// going: its engine is held mid-turn, so the removal waits on its close while Second is added.
+#[test]
+fn an_account_added_during_a_removal_never_picks_the_account_being_removed() {
+    let data = TempDir::new();
+    let go = data.0.join("close-done");
+    let held = data.0.join("held.jsonl");
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let (first, rest) = frames.split_once('\n').unwrap();
+    std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
+    let service = TestService::with_engine(
+        &data.0,
+        &[("GATHR_REPLAY", &held), ("GATHR_REPLAY_HOLD", &go)],
+    );
+    let work = service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_eq!(sent.json()["status"], "running", "{}", sent.body);
+
+    let removed = std::thread::scope(|scope| {
+        let removing = scope.spawn(|| service.call("DELETE", &format!("/api/accounts/{work}")));
+        // Long enough for the removal to reach the engine's close, which waits on `go`.
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        let second = service.add_account("Second");
+        sign_in_account(&data.0, &second);
+        std::fs::write(&go, "").unwrap();
+        removing.join().unwrap()
+    });
+    assert_eq!(removed.status, 200, "{}", removed.body);
+
+    let next = service.new_chat();
+    let path = format!("/api/chats/{next}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_ne!(
+        sent.json()["status"],
+        "waiting_sign_in",
+        "the chats went back to the removed account: {}",
+        sent.body
+    );
+    service.wait_for(&next, 10, "the reply on Second", |h| turns_done(h) == 1);
+}
+
 #[test]
 fn removing_the_account_of_a_turn_under_way_stops_it_and_closes_its_engine_gently() {
     let data = TempDir::new();

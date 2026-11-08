@@ -143,10 +143,11 @@ async fn remove(
     const ERROR: &str = "Remove failed";
     let account = find(&s, &t, &id, ERROR).await?;
     s.sign_ins.get(&account.id).cancel().await;
-    s.chats.pick_account(Some(&account.id)).await;
+    s.chats.removing(&account.id, true).await;
     let done = let_go(&s, &t.0, &account).await;
-    if done.is_err() {
-        s.chats.pick_account(None).await;
+    match &done {
+        Ok(()) => s.chats.removed(&account.id),
+        Err(_) => s.chats.removing(&account.id, false).await,
     }
     let mut event = Event::point("gathr.account.change")
         .trace(&t.0)
@@ -239,7 +240,7 @@ async fn changed(
         .attr("change", change);
     s.writer.record(event);
     if change == "add" {
-        s.chats.pick_account(None).await;
+        s.chats.pick_account().await;
     }
     s.chats.publish(json!({ "type": "accounts" }));
     Ok(Json(view(s, &account).await))

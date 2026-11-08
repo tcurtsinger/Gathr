@@ -1,7 +1,7 @@
 //! Chats with Claude Code: one task per chat owns its engine and its turns ([`crate::turns`]);
 //! this keeps them, and starts them when a message arrives or the service starts.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -63,6 +63,9 @@ pub struct Chats {
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
+    /// Accounts being removed, never picked even while their rows remain.
+    removing: Mutex<HashSet<String>>,
+    picking: tokio::sync::Mutex<()>,
 }
 
 impl Chats {
@@ -74,6 +77,8 @@ impl Chats {
             gates: Mutex::default(),
             tasks: Mutex::default(),
             account: Mutex::default(),
+            removing: Mutex::default(),
+            picking: tokio::sync::Mutex::default(),
         })
     }
 
@@ -83,15 +88,34 @@ impl Chats {
         Some(gathr::accounts::folder(&self.data, &account, "claude"))
     }
 
-    /// Picks the chats' account again: the oldest, other than `except` (one being removed).
+    /// Marks an account as being removed, or kept after all; either way the chats pick again.
+    pub async fn removing(&self, id: &str, removing: bool) {
+        {
+            let mut set = self.removing.lock().expect("never poisoned");
+            match removing {
+                true => set.insert(id.to_string()),
+                false => set.remove(id),
+            };
+        }
+        self.pick_account().await;
+    }
+
+    /// An account removed: its row is gone, so it needs no mark any more.
+    pub fn removed(&self, id: &str) {
+        self.removing.lock().expect("never poisoned").remove(id);
+    }
+
+    /// Picks the chats' account again: the oldest not being removed.
     /// A new account has none of the old one's Claude Code sessions, so chats start new ones.
-    pub async fn pick_account(&self, except: Option<&str>) {
-        let except = except.map(str::to_string);
+    pub async fn pick_account(&self) {
+        // One pick at a time: one that listed before a removal began must not land after it.
+        let _one = self.picking.lock().await;
+        let except = self.removing.lock().expect("never poisoned").clone();
         let picked = self
             .writer
             .call(move |conn| {
                 let listed = gathr::accounts::list(conn)?;
-                let next = listed.into_iter().find(|a| Some(&a.id) != except.as_ref());
+                let next = listed.into_iter().find(|a| !except.contains(&a.id));
                 Ok::<_, gathr::Error>(next.map(|a| a.id))
             })
             .await;
