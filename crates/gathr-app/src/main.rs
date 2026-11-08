@@ -1,74 +1,225 @@
 //! Gathr's window (0012): it shows the web UI and holds no state. Installed, it finds the service
 //! on the data folder or starts `gathrd` beside it, and signs in through a one-time link (0004).
-//! Engines live in `gathrd`, so closing the window never touches a turn; Quit in the tray stops both.
+//! Closing it hides it to the tray (the menu bar on macOS); Quit there stops the service and the
+//! window. Opening Gathr again shows the same window: one per data folder.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Instant;
 
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::{http, launch, platform};
 use tauri::menu::{Menu, MenuItem};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::webview::NewWindowResponse;
-use tauri::{AppHandle, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Context, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    WindowEvent, Wry,
+};
 
 fn main() {
     let opened = Instant::now();
-    // `gathr dev --window`: the UI's dev server, which adds the token itself.
+    let context = tauri::generate_context!();
+    // `gathr dev --window`: the UI's dev server, which adds the token itself. Closing it quits.
     if let Some(ui) = arg("--ui") {
         let title = arg("--title").unwrap_or_else(|| "Gathr".into());
-        return run(parse(&ui), title, None);
+        return dev(context, parse(&ui), title);
     }
     let data = DataDir::new(arg("--data").map_or_else(platform::default_data_dir, PathBuf::from));
-    match reach(&data) {
-        Ok((info, url, started)) => {
-            report_open(&info, opened, started);
-            run(parse(&url), "Gathr".into(), Some(info));
-        }
-        Err(why) => run(failed_page(&why), "Gathr".into(), None),
-    }
+    installed(context, data, opened);
 }
 
-/// The service on the data folder, found or started, and a one-time link into it.
-fn reach(data: &DataDir) -> Result<(ServiceInfo, String, bool), gathr::Error> {
-    let found = launch::find_or_start(data, &launch::beside_me("gathrd")?)?;
-    let url = launch::one_time_link(&found.info)?;
-    Ok((found.info, url, found.started))
-}
-
-fn run(url: tauri::Url, title: String, service: Option<ServiceInfo>) {
+fn dev(context: Context<Wry>, url: tauri::Url, title: String) {
     tauri::Builder::default()
         .setup(move |app| {
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                .title(title)
-                .inner_size(1440.0, 900.0)
-                .min_inner_size(480.0, 480.0)
-                // With no handler, the webview drops a link's new window: nothing opens.
-                .on_new_window(|url, _| {
-                    open_in_browser(&url);
-                    NewWindowResponse::Deny
-                })
-                .build()?;
-            if let Some(info) = service {
-                tray(app.handle(), info)?;
-            }
+            window(app.handle(), url, &title, None)?;
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .run(context)
         .unwrap_or_else(|e| exit(&format!("Start failed: {e}")));
 }
 
-/// The tray icon (the menu bar on macOS): Quit stops the service the gentle way, then the window.
-fn tray(app: &AppHandle, info: ServiceInfo) -> tauri::Result<()> {
+/// The data folder, and the service on it once reached: Quit stops that one.
+struct Service {
+    data: DataDir,
+    info: Mutex<Option<ServiceInfo>>,
+}
+
+fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
+    let key = folder_key(data.path(), &platform::default_data_dir());
+    if let Some(key) = &key {
+        context.config_mut().identifier.push_str(key);
+    }
+    // A test folder keeps its webview's data with it, so deleting the folder leaves nothing behind.
+    let webview_data = key.map(|_| data.path().join("webview"));
+    let app = tauri::Builder::default()
+        // A second launch on this folder hands over to this one and exits before its own setup runs.
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            reopen(app, "second launch")
+        }))
+        .manage(Service {
+            data,
+            info: Mutex::new(None),
+        })
+        .setup(move |app| {
+            let (url, started) = connect(app.handle());
+            let window = window(app.handle(), url, "Gathr", webview_data)?;
+            let hidden = window.clone();
+            window.on_window_event(move |event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let shown = hidden.hide();
+                    report(
+                        hidden.app_handle(),
+                        "gathr.ui.window.hide",
+                        Instant::now(),
+                        &serde_json::json!({}),
+                        shown.err(),
+                    );
+                }
+            });
+            tray(app.handle())?;
+            if let Some(started) = started {
+                let attrs = serde_json::json!({ "started_service": started });
+                report(app.handle(), "gathr.ui.window.open", opened, &attrs, None);
+            }
+            Ok(())
+        })
+        .build(context)
+        .unwrap_or_else(|e| exit(&format!("Start failed: {e}")));
+    app.run(|app, event| match event {
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => reopen(app, "dock"),
+        // Quit in the tray, Cmd+Q, or the system ending the session: the service goes too, gently.
+        RunEvent::Exit => {
+            if let Some(info) = app.state::<Service>().info.lock().unwrap().take() {
+                let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
+            }
+        }
+        _ => {}
+    });
+}
+
+/// The one-instance key for a data folder other than the person's own (`None` for theirs), so a
+/// test folder's window never stands in for theirs. Both launches run the same build, so the
+/// hasher's output matches between them.
+fn folder_key(data: &Path, default: &Path) -> Option<String> {
+    let data = std::path::absolute(data).unwrap_or_else(|_| data.to_path_buf());
+    if std::path::absolute(default).is_ok_and(|default| default == data) {
+        return None;
+    }
+    let mut hasher = DefaultHasher::new();
+    data.hash(&mut hasher);
+    Some(format!(".data-{:016x}", hasher.finish()))
+}
+
+/// The service, found or started, kept for Quit, and a one-time link into it (and whether this
+/// started it); or a page saying why it couldn't be reached.
+fn connect(app: &AppHandle) -> (tauri::Url, Option<bool>) {
+    let service = app.state::<Service>();
+    let reached = launch::beside_me("gathrd")
+        .and_then(|gathrd| launch::find_or_start(&service.data, &gathrd))
+        .and_then(|found| Ok((launch::one_time_link(&found.info)?, found)));
+    match reached {
+        Ok((url, found)) => {
+            *service.info.lock().unwrap() = Some(found.info);
+            (parse(&url), Some(found.started))
+        }
+        Err(why) => (failed_page(&why), None),
+    }
+}
+
+/// Shows the hidden window. The service may have stopped meanwhile: then it's found or started
+/// again, as a fresh launch would, and the window loads it.
+fn reopen(app: &AppHandle, via: &'static str) {
+    let app = app.clone();
+    // Off the event loop: starting the service can take a while.
+    std::thread::spawn(move || {
+        let opened = Instant::now();
+        let Some(window) = app.get_webview_window("main") else {
+            return;
+        };
+        let mut started = Some(false);
+        if !still_running(&app) {
+            let url;
+            (url, started) = connect(&app);
+            if let Err(e) = window.navigate(url) {
+                report(
+                    &app,
+                    "gathr.ui.window.reopen",
+                    opened,
+                    &serde_json::json!({}),
+                    Some(e),
+                );
+            }
+        }
+        let shown = window
+            .unminimize()
+            .and_then(|()| window.show())
+            .and_then(|()| window.set_focus());
+        let attrs = serde_json::json!({ "via": via, "started_service": started });
+        report(&app, "gathr.ui.window.reopen", opened, &attrs, shown.err());
+    });
+}
+
+/// Whether the service the window shows still answers on its folder.
+fn still_running(app: &AppHandle) -> bool {
+    let service = app.state::<Service>();
+    let Some(known) = service.info.lock().unwrap().clone() else {
+        return false;
+    };
+    ServiceInfo::read(&service.data).is_ok_and(|now| now.pid == known.pid)
+        && http::call(known.port, &known.token, "GET", "/health").is_ok_and(|r| r.status == 200)
+}
+
+fn window(
+    app: &AppHandle,
+    url: tauri::Url,
+    title: &str,
+    webview_data: Option<PathBuf>,
+) -> tauri::Result<WebviewWindow> {
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+        .title(title)
+        .inner_size(1440.0, 900.0)
+        .min_inner_size(480.0, 480.0)
+        // With no handler, the webview drops a link's new window: nothing opens.
+        .on_new_window(|url, _| {
+            open_in_browser(&url);
+            NewWindowResponse::Deny
+        });
+    if let Some(folder) = webview_data {
+        builder = builder.data_directory(folder);
+    }
+    builder.build()
+}
+
+/// The tray icon (the menu bar on macOS). On Windows a click opens the window and the menu is on
+/// the right button; on macOS a click opens the menu, as menu bar items do.
+fn tray(app: &AppHandle) -> tauri::Result<()> {
+    let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let mut builder = TrayIconBuilder::new()
         .tooltip("Gathr")
-        .menu(&Menu::with_items(app, &[&quit])?)
-        .on_menu_event(move |app, event| {
-            if event.id() == "quit" {
-                let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
-                app.exit(0);
+        .menu(&Menu::with_items(app, &[&open, &quit])?)
+        .show_menu_on_left_click(cfg!(target_os = "macos"))
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => reopen(app, "tray"),
+            "quit" => app.exit(0),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            let click = matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            );
+            if cfg!(windows) && click {
+                reopen(tray.app_handle(), "tray");
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -78,12 +229,22 @@ fn tray(app: &AppHandle, info: ServiceInfo) -> tauri::Result<()> {
     Ok(())
 }
 
-/// How long the window took to reach the service, recorded with the service's own events.
-fn report_open(info: &ServiceInfo, opened: Instant, started: bool) {
+/// What the window did, recorded with the service's own events.
+fn report(
+    app: &AppHandle,
+    name: &str,
+    since: Instant,
+    attrs: &serde_json::Value,
+    error: Option<tauri::Error>,
+) {
+    let Some(info) = app.state::<Service>().info.lock().unwrap().clone() else {
+        return;
+    };
     let body = serde_json::json!({
-        "name": "gathr.ui.window.open",
-        "duration_ms": opened.elapsed().as_millis() as u64,
-        "attrs": { "started_service": started },
+        "name": name,
+        "duration_ms": since.elapsed().as_millis() as u64,
+        "attrs": attrs,
+        "error": error.map(|e| e.to_string()),
     });
     let _ = http::send(info.port, &info.token, "POST", "/api/ui/events", &body);
 }
@@ -126,4 +287,24 @@ fn open_in_browser(url: &tauri::Url) {
 fn exit(message: &str) -> ! {
     eprintln!("{message}");
     std::process::exit(2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::folder_key;
+    use std::path::Path;
+
+    #[test]
+    fn each_data_folder_gets_its_own_window_and_the_persons_own_keeps_the_plain_one() {
+        let own = Path::new("/home/someone/Gathr");
+        let a = folder_key(Path::new("/work/data/a"), own);
+        assert_eq!(folder_key(own, own), None, "the person's own folder");
+        assert!(a.is_some(), "a test folder has a key");
+        assert_ne!(a, folder_key(Path::new("/work/data/b"), own), "two folders");
+        assert_eq!(
+            a,
+            folder_key(Path::new("/work/data/a/"), own),
+            "the same folder, spelt with a /"
+        );
+    }
 }
