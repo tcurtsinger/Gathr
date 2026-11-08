@@ -41,6 +41,13 @@ export interface History {
 export interface Engine {
   found: string | null;
   why_not_found: string | null;
+  /** Gathr's own copy (0025): its version, and the last check of the release feed. */
+  copy: {
+    version: string | null;
+    state: 'off' | 'checking' | 'idle';
+    checked: string | null;
+    failed: { why: string; ref: string } | null;
+  };
 }
 
 export interface Account {
@@ -95,7 +102,12 @@ export const api = {
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
   engine: () => call<Engine>('GET', '/api/engines/claude'),
-  account: (account: string) => call<Account>('GET', `/api/accounts/${account}`),
+  checkEngine: () => call<unknown>('POST', '/api/engines/claude/update'),
+  accounts: () => call<{ accounts: Account[] }>('GET', '/api/accounts').then((a) => a.accounts),
+  addAccount: (engine: string, name: string) => call<Account>('POST', '/api/accounts', { engine, name }),
+  renameAccount: (account: string, name: string) =>
+    call<Account>('PATCH', `/api/accounts/${account}`, { name }),
+  signOut: (account: string) => call<unknown>('POST', `/api/accounts/${account}/sign-out`),
   signIn: (account: string) => call<{ url: string }>('POST', `/api/accounts/${account}/sign-in`),
   signInCode: (account: string, code: string) =>
     call<unknown>('POST', `/api/accounts/${account}/sign-in/code`, { code }),

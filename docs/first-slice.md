@@ -30,17 +30,36 @@ A seed command makes made-up chats: one with 500 messages, one with 50 tool call
 
 ## How the person checks it by hand
 
-To be filled in with exact commands when it's built; the shape:
-1. Run the dev build (one command) and the seed command.
-2. Open the app. Open the 500-message chat; it should open at once. Switch to another and back.
-3. Sign the engine in from Settings, Engines.
-4. In a new chat, ask for something long ("write 2,000 words on rivers"). Watch it stream. Press Stop partway.
-5. Ask "what were you writing?" It should know: same session.
-6. Quit Gathr completely, start it again, open the chat, and ask once more. Same session, history intact.
-7. Open Diagnostics from the chat. Each turn shows its timeline, tokens and how it ended; the stopped one says stopped.
-8. Start the service with `GATHR_CLAUDE_PATH` set to a file that doesn't exist (Settings has no path, [0026](decisions/0026-agent-settings.md)), and send a message. The chat shows "Send failed" with a reference. In a terminal, `gathr diag trace <reference>` shows the message, the engine start that failed and why. Start it again without the variable.
-9. Sign the engine out in its folder and send a message. Per [0002](decisions/0002-login-folders.md) it doesn't run: the message waits, and the chat says it's waiting for sign-in. `gathr diag health` shows the account as signed out and the message held on it; signing back in sends it.
-10. Quit Gathr, make a copy of the test data folder, and replace its `gathr.db` with a few bytes of text. Start Gathr on the copy: it fails to start. `gathr diag health` on the copy says the database didn't open, why, and shows the crash log's last lines, with nothing read by hand.
+Once, on a computer with the toolchain from [AGENTS.md](../AGENTS.md) ("Build and check"): clone the repo, then run `npm ci` in `ui/`. Every command below runs in PowerShell from the repo root. The test folder is new and only for this; Gathr never touches your own `~/.claude`.
+
+```powershell
+$data = "$env:USERPROFILE\gathr-check"
+```
+
+1. Start Gathr with the made-up chats: `cargo dev --port 47100 --data $data --seed --window`. The first build takes a few minutes; the window opens when it's done. Leave this terminal running.
+2. Click **Seed: 500 messages** in the sidebar: it should open at once, at its latest message. Click **Seed: 50 tool calls in a turn**, then back.
+3. Click **Settings** (the gear at the bottom left). **Engines** lists the accounts, with **Main** signed out. Click **Sign in** on Main: Claude's sign-in page opens in your browser. Sign in there. If the browser didn't open, click **Open sign-in page**; if the page shows a code, paste it into **Code** and click **Sign in**. Main reads **Claude Code / Signed in**.
+4. Still in Settings: click **Add**, type `Work`, click **Sign in** and sign in the same way. Click **Rename** on Work, type `Second`, **Save**. Click **Sign out** on Second: only Second reads Signed out; Main stays signed in, because each account has its own login folder ([0002](decisions/0002-login-folders.md)). Close Settings.
+5. Click **New**, type `Write 2,000 words on rivers`, press Enter. Watch it stream. Click **Stop** partway: the reply shows Stopped, with what it had written.
+6. Type `What were you writing?` and send. It should know: same session.
+7. Quit: press Ctrl+C in the terminal (the window closes with it). Run step 1's command again without `--seed`: `cargo dev --port 47100 --data $data --window`. Open the chat and ask `What were you writing?` once more. Same session, history intact.
+8. Open **Settings**, **Diagnostics**. Each turn of the chat shows its timeline, tokens and how it ended; the stopped one says stopped.
+9. Quit (Ctrl+C). Start with an engine that doesn't exist (Settings has no path, [0026](decisions/0026-agent-settings.md)):
+   ```powershell
+   $env:GATHR_CLAUDE_PATH = "$data\no-such-claude.exe"
+   cargo dev --port 47100 --data $data --window
+   ```
+   Send a message. The chat shows **Send failed** with a reference. In a second terminal, in the repo root: `cargo run -q --bin gathr -- diag trace <reference> --data $data --text` (set `$data` there too). It shows the message, the engine start that failed and why. Quit, run `Remove-Item Env:GATHR_CLAUDE_PATH`, and start again as in step 7.
+10. Open **Settings** and click **Sign out** on Main. Close Settings and send a message. Per [0002](decisions/0002-login-folders.md) it doesn't run: the chat says it's waiting for sign-in. In the second terminal, `cargo run -q --bin gathr -- diag health --data $data --text` shows Main as `signed_out`, with the message under `held`. Sign Main in again (step 3): the message sends.
+11. Quit (Ctrl+C). Make a folder with a broken database, with no logins in it:
+    ```powershell
+    New-Item -ItemType Directory "$data-broken"
+    Set-Content "$data-broken\gathr.db" 'not a database'
+    cargo dev --port 47100 --data "$data-broken"
+    ```
+    Gathr fails to start. `cargo run -q --bin gathr -- diag health --data "$data-broken" --text` says the database didn't open, why (`file is not a database`), and shows the crash log's last lines, with nothing read by hand.
+
+To clean up: sign out of Main in Settings, quit, and delete `$data` and `$data-broken`.
 
 ## Proof in the PR
 

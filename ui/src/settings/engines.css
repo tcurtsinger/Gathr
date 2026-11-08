@@ -31,10 +31,88 @@
   color: var(--danger);
   font-size: 13px;
 }
-.rowend {
+.account-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 16px;
+}
+.settings-page .account-heading h3 {
+  margin: 0;
+}
+.account-heading button,
+.account-actions button,
+.settingrow button {
+  border: 1px solid var(--control);
+}
+.account-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.account-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.account-row > :nth-child(n + 3) {
+  grid-column: 1 / -1;
+}
+.account-row strong,
+.account-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.account-row strong {
+  font-weight: 500;
+}
+.account-row small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid var(--control);
+  border-radius: 8px;
+}
+.account-form h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.account-form label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+.account-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.engine-list {
+  margin-top: 32px;
+}
+.settings-page .engine-list h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+@media (max-width: 767px) {
+  .account-row {
+    grid-template-columns: 1fr;
+  }
 }
 .pathfield a {
   display: inline-block;

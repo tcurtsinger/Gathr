@@ -39,7 +39,16 @@ export function Sidebar({ chats, selected, onSelect, onNew, onSettings }: Props)
         ))}
       </div>
       <div className="sidebar-foot">
-        <button type="button" onClick={(e) => onSettings(e.currentTarget)}>
+        <button type="button" className="navbutton" onClick={(e) => onSettings(e.currentTarget)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="m9 3-1 3-3 1-2 3 2 2-1 3 3 3 3-1 2 3 3-1 1-3 3-1 2-3-2-2 1-3-3-3-3 1-2-3Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
           Settings
         </button>
       </div>
