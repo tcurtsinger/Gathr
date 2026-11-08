@@ -1,7 +1,8 @@
 //! An account's models and effort levels, as its Claude Code lists them in `initialize` (0025).
 //! Signed out it lists the aliases only; signed in, what the account may use. So the list is
-//! kept per engine copy and sign-in state, and asked again when either changes.
+//! kept per account, engine copy and sign-in state, and asked again when either changes.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,16 +17,16 @@ use gathr::claude::frames;
 use gathr::claude::login::Login;
 use gathr::event::Event;
 use serde_json::{Value, json};
-use tokio::sync::{Mutex, watch};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
+use crate::accounts::find;
 use crate::api::{State, Trace};
 use crate::routes::{Answer, fail};
+use crate::turns::CLOSE_GRACE;
 
 /// Claude Code 2.1.318 answered in 0.65 s signed in; past this it isn't coming.
 const ANSWER_WAIT: Duration = Duration::from_secs(30);
-/// It exits about 0.6 s after its input closes; it may be renewing the login, so no kill sooner.
-const CLOSE_GRACE: Duration = Duration::from_secs(10);
 const ASKED: &str = "gathr-models";
 
 pub fn routes() -> Router<Arc<State>> {
@@ -34,27 +35,17 @@ pub fn routes() -> Router<Arc<State>> {
 
 #[derive(Default)]
 pub struct Models {
-    /// The last list, and the engine copy and sign-in state it came from.
-    last: Mutex<Option<(PathBuf, Login, Value)>>,
-    stopping: watch::Sender<bool>,
+    /// Each account's last list, and the engine copy and sign-in state it came from.
+    last: Mutex<HashMap<String, (PathBuf, Login, Value)>>,
     /// Engines still closing after their answer, which shutdown waits for.
     closing: std::sync::Mutex<JoinSet<()>>,
 }
 
 impl Models {
-    /// Ends any ask under way, at shutdown; its engine still closes the gentle way.
-    pub fn stop(&self) {
-        self.stopping.send_replace(true);
-    }
-
     /// Waits for every engine an ask started to have exited.
     pub async fn closed(&self) {
         let closing = std::mem::take(&mut *self.closing.lock().expect("never poisoned"));
         closing.join_all().await;
-    }
-
-    async fn stopped(&self) {
-        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
     }
 }
 
@@ -63,20 +54,13 @@ async fn models(
     Extension(t): Extension<Trace>,
     Path(account): Path<String>,
 ) -> Answer {
-    if account != "main" {
-        return Err(fail(
-            StatusCode::NOT_FOUND,
-            "Models failed",
-            "no such account",
-            &t.0,
-        ));
-    }
+    let account = find(&s, &t, &account, "Models failed").await?;
+    let folder = account.folder(&s.data);
     // One ask at a time: a second request waits for the first's list instead of starting another.
     let mut last = s.models.last.lock().await;
-    let setting = s.chats.path_setting().await;
-    let program = command::find(setting.as_deref(), s.chats.copy());
-    let login = s.chats.login_status().await.0;
-    if let (Ok(program), Some((was, was_login, list))) = (&program, last.as_ref())
+    let program = command::find(s.chats.copy());
+    let login = s.chats.login_status(&folder).await.0;
+    if let (Ok(program), Some((was, was_login, list))) = (&program, last.get(&account.id))
         && program == was
         && login == *was_login
     {
@@ -84,11 +68,12 @@ async fn models(
     }
     let started = Instant::now();
     let asked = match program.clone() {
-        Ok(program) => ask(&s, &program).await,
+        Ok(program) => ask(&s, &program, &folder).await,
         Err(why) => Err(why),
     };
     let mut event = Event::point("gathr.engine.models")
         .trace(&t.0)
+        .attr("account", account.id.clone())
         .attr("login", json!(login))
         .attr(
             "path",
@@ -104,11 +89,8 @@ async fn models(
                     .attr("models", count)
                     .attr("version", list["version"].clone()),
             );
-            *last = Some((
-                program.expect("asked only with a program"),
-                login,
-                list.clone(),
-            ));
+            let program = program.expect("asked only with a program");
+            last.insert(account.id, (program, login, list.clone()));
             Ok(Json(list))
         }
         Err(why) => {
@@ -126,28 +108,32 @@ async fn models(
 }
 
 /// Starts the account's Claude Code as a chat does, asks `initialize`, and closes it gently.
-async fn ask(s: &State, program: &std::path::Path) -> Result<Value, String> {
+async fn ask(
+    s: &State,
+    program: &std::path::Path,
+    folder: &std::path::Path,
+) -> Result<Value, String> {
     const STOPPING: &str = "the service is stopping";
     let (chats, models) = (&s.chats, &s.models);
-    let folder = chats.account_folder();
     let cwd = chats.data.path().join("chats");
-    for dir in [&folder, &cwd] {
+    for dir in [folder, &cwd] {
         std::fs::create_dir_all(dir).map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
     }
     // It runs on the account's login, so it takes the renewal gate like any start (0002).
+    let gate = chats.gate(folder);
     let mut gate = tokio::select! {
-        gate = chats.gate.pass() => gate,
-        () = models.stopped() => return Err(STOPPING.into()),
+        gate = gate.pass() => gate,
+        () = s.stopped() => return Err(STOPPING.into()),
     };
     let args = command::args(Session::New(&gathr::ids::uuid()));
-    let env = command::env(std::env::vars_os(), &folder);
+    let env = command::env(std::env::vars_os(), folder);
     let (mut engine, mut lines) = Engine::start(program, &args, env, &cwd)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
     let answer = match engine.write(&frames::initialize(ASKED)).await {
         Ok(()) => tokio::select! {
             answer = tokio::time::timeout(ANSWER_WAIT, answered(&mut lines)) => answer
                 .unwrap_or_else(|_| Err(format!("Claude Code didn't answer in {} s", ANSWER_WAIT.as_secs()))),
-            () = models.stopped() => Err(STOPPING.into()),
+            () = s.stopped() => Err(STOPPING.into()),
         },
         Err(e) => Err(format!("Claude Code didn't take the request: {e}")),
     };

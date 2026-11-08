@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, replay_engine, sign_in};
+use common::{TempDir, TestService, gathr, sign_in};
 use gathr::http;
 use serde_json::{Value, json};
 
@@ -36,13 +36,7 @@ fn runs(args_file: &std::path::Path) -> usize {
 fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
     let data = TempDir::new();
     let args = data.0.join("args.jsonl");
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY_ARGS", &args)]);
-    let saved = service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
-    assert_eq!(saved.status, 200, "{}", saved.body);
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY_ARGS", &args)]);
 
     let signed_out = models(&service);
     assert_eq!(signed_out["version"], "2.1.318");
@@ -73,6 +67,22 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
         json!([]),
         "a model with no effort levels lists none"
     );
+
+    let work = json!({ "engine": "claude", "name": "Work" });
+    let work = service.send("POST", "/api/accounts", work).json();
+    let path = format!("/api/accounts/{}/models", work["id"].as_str().unwrap());
+    let work_models = service.call("GET", &path).json();
+    assert_eq!(
+        work_models["models"].as_array().map(Vec::len),
+        Some(5),
+        "a signed-out account got the signed-in one's list: {work_models}"
+    );
+    assert_eq!(
+        models(&service),
+        signed_in,
+        "Work's ask replaced Main's list"
+    );
+    assert_eq!(runs(&args), 3, "Main's list was asked again");
 }
 
 /// Starts the service with the replay engine in `mode` (`GATHR_REPLAY_INIT`), asks for the list
@@ -83,12 +93,7 @@ fn stop_while_asking(data: &Path, mode: &str) -> Duration {
         ("GATHR_REPLAY_ARGS", args.as_path()),
         ("GATHR_REPLAY_INIT", Path::new(mode)),
     ];
-    let service = TestService::start_with(data, &mode);
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
+    let service = TestService::with_engine(data, &mode);
     let (port, token) = (service.info.port, service.info.token.clone());
     let asking =
         std::thread::spawn(move || http::call(port, &token, "GET", "/api/accounts/main/models"));
@@ -149,9 +154,8 @@ fn shutdown_waits_for_an_engine_closing_after_its_answer_then_ends_it() {
 #[test]
 fn a_list_that_fails_has_a_reference_that_traces() {
     let data = TempDir::new();
-    let service = TestService::start(&data.0);
     let missing = data.0.join("no-such-claude.exe");
-    service.send("PUT", "/api/engines/claude", json!({ "path": missing }));
+    let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
 
     let answer = service.call("GET", "/api/accounts/main/models");
     assert_eq!(answer.status, 500, "{}", answer.body);

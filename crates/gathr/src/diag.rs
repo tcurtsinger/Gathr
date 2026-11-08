@@ -21,11 +21,10 @@ pub fn health(data: &DataDir) -> Value {
         Ok((conn, _)) => held(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
         Err(_) => Value::Null,
     };
-    let path_setting = opened.as_ref().ok().and_then(|(conn, _)| {
-        crate::store::setting(conn, crate::claude::command::PATH_SETTING)
-            .ok()
-            .flatten()
-    });
+    let accounts = match &opened {
+        Ok((conn, _)) => accounts(data, conn, held),
+        Err(_) => Value::Null,
+    };
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -36,24 +35,42 @@ pub fn health(data: &DataDir) -> Value {
         }),
         Err(e) => json!({ "opened": false, "path": data.db(), "why": e.to_string() }),
     };
-    let folder = data.claude_folder();
-    let copy = crate::claude::copies::Copies::new(data).program();
-    let now_ms = crate::ids::now_us() / 1000;
-    let (login, expires) =
-        crate::claude::login::status(&folder, path_setting.as_deref(), copy, now_ms);
     let crash_log = CrashLog::new(data.crash_log());
     json!({
         "service": service_now(data),
-        "accounts": [{
-            "engine": "claude",
-            "folder": folder,
-            "login": login,
-            "expires": expires.map(|ms| crate::ids::utc(ms * 1000)),
-            "held": held,
-        }],
+        "accounts": accounts,
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
     })
+}
+
+/// Each account's sign-in state. Chats run on the first account until agents pick theirs, so
+/// the messages held are shown on it.
+fn accounts(data: &DataDir, conn: &Connection, held: Value) -> Value {
+    let listed = match crate::accounts::list(conn) {
+        Ok(listed) => listed,
+        Err(e) => return json!({ "why": e.to_string() }),
+    };
+    let copy = crate::claude::copies::Copies::new(data).program();
+    let now_ms = crate::ids::now_us() / 1000;
+    let mut held = Some(held);
+    let shown: Vec<Value> = listed
+        .iter()
+        .map(|account| {
+            let folder = account.folder(data);
+            let (login, expires) = crate::claude::login::status(&folder, copy.clone(), now_ms);
+            json!({
+                "id": account.id,
+                "name": account.name,
+                "engine": account.engine,
+                "folder": folder,
+                "login": login,
+                "expires": expires.map(|ms| crate::ids::utc(ms * 1000)),
+                "held": held.take().unwrap_or(json!([])),
+            })
+        })
+        .collect();
+    json!(shown)
 }
 
 fn service_now(data: &DataDir) -> Value {

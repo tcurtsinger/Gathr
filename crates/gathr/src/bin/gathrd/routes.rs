@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use tokio::sync::oneshot;
 
 use crate::api::{State, Trace, failure};
-use crate::chats::{Cmd, PATH_SETTING};
+use crate::chats::Cmd;
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
@@ -28,7 +28,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/turns", get(turns))
         .route("/api/trace/{reference}", get(trace))
         .route("/api/ui/events", post(ui_event))
-        .route("/api/engines/claude", get(engine).put(set_engine))
+        .route("/api/engines/claude", get(engine))
         .route("/api/engines/claude/update", post(update_engine))
         .route("/api/live", get(live))
 }
@@ -231,19 +231,13 @@ async fn ui_event(
     Ok(Json(json!({ "recorded": true })))
 }
 
-/// Claude Code's path (set, and where it was found) and the account's sign-in state.
+/// Claude Code itself, once for every account: where it was found, and Gathr's copy (0025).
 async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
-    let setting = s.chats.path_setting().await;
-    let found = command::find(setting.as_deref(), s.chats.copy());
-    let folder = s.chats.account_folder();
-    let (state, expires) = s.chats.login_status().await;
+    let found = command::find(s.chats.copy());
     Json(json!({
-        "path": setting,
         "found": found.as_ref().ok().map(|p| p.display().to_string()),
         "why_not_found": found.err(),
-        "account": { "folder": folder, "login": state, "expires": expires.map(|ms| gathr::ids::utc(ms * 1000)) },
         "copy": s.updates.view(),
-        "sign_in": s.sign_in.shown(),
     }))
 }
 
@@ -254,25 +248,6 @@ async fn update_engine(Extract(s): Extract<Arc<State>>, Extension(t): Extension<
         return Err(fail(StatusCode::CONFLICT, "Update failed", why, &t.0));
     }
     Ok(Json(json!({ "checking": true })))
-}
-
-#[derive(Deserialize)]
-struct EngineSettings {
-    path: Option<String>,
-}
-
-/// Sets Claude Code's path; the next start uses it, with no restart (S26).
-async fn set_engine(
-    Extract(s): Extract<Arc<State>>,
-    Extension(t): Extension<Trace>,
-    Json(body): Json<EngineSettings>,
-) -> Answer {
-    let path = body.path.filter(|p| !p.trim().is_empty());
-    db(&s, &t, "Save failed", move |conn| {
-        store::set_setting(conn, PATH_SETTING, path.as_deref())?;
-        Ok(json!({ "path": path }))
-    })
-    .await
 }
 
 /// Everything live, as JSON messages: deltas, messages, tools, turns and approvals.

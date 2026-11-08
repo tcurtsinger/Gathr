@@ -38,6 +38,13 @@ Status: proposed. Date: 2026-11-06, revised 2026-11-07 (one folder per account, 
 - **Status checks are never killed.** `claude auth status` may itself renew; the service waits for it to exit on its own (the previous app waited up to 30 s, then trusted the file).
 - **An account folder is deleted only when the person removes the account,** after every agent on it has moved to another account or been deleted, and every process on it has exited.
 
+## Named accounts in the service (2026-11-07, task 947)
+
+- **Stored** in the `accounts` table: an id, its engine and a name. The folder is `<data>/accounts/<id>/<engine>`, named by id, so a rename never moves a login. Names are unique, ignoring case, so a picker never shows two the same. Turned down: folders named after the account, which a rename would have to move while an engine might be renewing in it.
+- **The account from before names** is the row `main`, added by the migration, so its folder `accounts/main/claude` and its login carry over with no new sign-in. Chats run on it until agents pick their own account (0026). Turned down: no account on a fresh install, which would leave chats with nowhere to run until the agent editor exists.
+- **Sign out** runs the engine's own `claude auth logout` in the account's folder (2.1.318 removes `.credentials.json` and exits 0 in 0.4 s; on macOS it clears the Keychain entry, not verified), after the account's renewal gate, so it never lands under a renewal. Engines still running on the account aren't stopped: their next turn finds it signed out and waits. Turned down: deleting the login file ourselves, which can't reach the Keychain.
+- **Codex accounts** are refused until the Codex driver exists; the table already takes them.
+
 ## Turned down
 
 - **One folder per agent, each signed in separately** (this decision's first version, and the team's pick). Only one process ever renews each login, so the race can't happen; but every agent needs its own browser sign-in, a dozen for a dozen agents. Turned down by the owner on 2026-11-07.

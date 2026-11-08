@@ -6,7 +6,7 @@ mod common;
 use std::path::Path;
 use std::time::Duration;
 
-use common::{TempDir, TestService, gathr, recording, replay_engine, sign_in};
+use common::{TempDir, TestService, gathr, recording, sign_in};
 use serde_json::{Value, json};
 
 fn turn_status(history: &Value) -> Option<&str> {
@@ -25,11 +25,9 @@ fn engine_runs(args_file: &Path) -> Vec<Value> {
 fn a_send_with_no_engine_at_the_set_path_fails_with_a_reference_that_traces() {
     // Signed out too: a wrong path fails the send rather than holding it for a sign-in.
     let data = TempDir::new();
-    let service = TestService::start(&data.0);
-    let chat = service.new_chat();
     let missing = data.0.join("no-such-claude.exe");
-    let saved = service.send("PUT", "/api/engines/claude", json!({ "path": missing }));
-    assert_eq!(saved.status, 200, "{}", saved.body);
+    let service = TestService::start_with(&data.0, &[("GATHR_CLAUDE_PATH", &missing)]);
+    let chat = service.new_chat();
 
     let sent = service.send(
         "POST",
@@ -81,7 +79,7 @@ fn a_send_with_no_engine_at_the_set_path_fails_with_a_reference_that_traces() {
 fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_reference() {
     let data = TempDir::new();
     let runs = data.0.join("runs.jsonl");
-    let service = TestService::start_with(
+    let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &recording("engine_exits")),
@@ -90,8 +88,6 @@ fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_re
         ],
     );
     let chat = service.new_chat();
-    let engine = json!({ "path": replay_engine() });
-    service.send("PUT", "/api/engines/claude", engine);
     sign_in(&data.0);
 
     let sent = service.send(
@@ -123,7 +119,7 @@ fn a_claude_code_older_than_gathr_needs_fails_the_send_with_its_version_and_a_re
 #[test]
 fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
     let data = TempDir::new();
-    let service = TestService::start_with(
+    let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &recording("engine_exits")),
@@ -131,11 +127,6 @@ fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
         ],
     );
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     sign_in(&data.0);
 
     let (port, token) = (service.info.port, service.info.token.clone());
@@ -168,13 +159,9 @@ fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
 #[test]
 fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
     let data = TempDir::new();
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &recording("engine_exits"))]);
+    let service =
+        TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("engine_exits"))]);
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     sign_in(&data.0);
 
     let sent = service.send(
@@ -207,13 +194,8 @@ fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {
 fn an_engine_that_exits_mid_reply_keeps_the_text_already_shown_and_stops_its_tools() {
     let data = TempDir::new();
     let fixture = recording("exits_mid_reply");
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     sign_in(&data.0);
     service.send(
         "POST",
@@ -243,7 +225,7 @@ fn an_engine_that_exits_mid_reply_keeps_the_text_already_shown_and_stops_its_too
 fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retrying() {
     let data = TempDir::new();
     let args = data.0.join("engine-args.jsonl");
-    let service = TestService::start_with(
+    let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &recording("signed_out")),
@@ -251,11 +233,6 @@ fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retry
         ],
     );
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
 
     let sent = service.send(
         "POST",
@@ -301,16 +278,11 @@ fn a_message_sent_signed_out_waits_and_a_refused_login_waits_again_without_retry
 fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
     let data = TempDir::new();
     sign_in(&data.0);
-    let service = TestService::start_with(
+    let service = TestService::with_engine(
         &data.0,
         &[("GATHR_REPLAY", &recording("steered_after_turn"))],
     );
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     let path = format!("/api/chats/{chat}/messages");
     let first = service.send(
         "POST",
@@ -366,13 +338,8 @@ fn an_approval_answered_through_the_api_lets_the_tool_run() {
         .find(|f| f["request"]["subtype"] == "can_use_tool")
         .map(|f| f["request_id"].as_str().unwrap().to_string())
         .expect("the recording asks for an approval");
-    let service = TestService::start_with(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     let text = "Create a file named note.txt in the current folder containing the word hi. Use the Write tool.";
     service.send(
         "POST",
@@ -421,7 +388,7 @@ fn an_approval_answered_through_the_api_lets_the_tool_run() {
 #[test]
 fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
     let data = TempDir::new();
-    let service = TestService::start_with(
+    let service = TestService::with_engine(
         &data.0,
         &[
             ("GATHR_REPLAY", &recording("stopped_before_reply")),
@@ -429,11 +396,6 @@ fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
         ],
     );
     let chat = service.new_chat();
-    service.send(
-        "PUT",
-        "/api/engines/claude",
-        json!({ "path": replay_engine() }),
-    );
     let path = format!("/api/chats/{chat}/messages");
     let first = service.send(
         "POST",

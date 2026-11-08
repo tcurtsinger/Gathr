@@ -1,6 +1,7 @@
 //! `gathrd`: Gathr's service (docs/decisions/0004-service-process.md).
 #![windows_subsystem = "windows"]
 
+mod accounts;
 mod api;
 mod chats;
 mod logs;
@@ -87,12 +88,13 @@ async fn serve(
     .write(data)?;
     let chats = chats::Chats::new(writer.clone(), data.clone());
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
-    let sign_in = Arc::new(sign_in::SignIn::default());
+    let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
         updates: updates.clone(),
-        sign_in: sign_in.clone(),
+        sign_ins: sign_ins.clone(),
         models: Default::default(),
+        stopping: Default::default(),
         writer: writer.clone(),
         token,
         port,
@@ -118,8 +120,8 @@ async fn serve(
             _ = stop_state.stop.notified() => "requested over the API",
             _ = os_stop_signal() => "stop signal from the system",
         };
-        // Before the server waits on its requests, so a model ask doesn't hold it.
-        stop_state.models.stop();
+        // Before the server waits on its requests, so a model ask or sign-out doesn't hold it.
+        stop_state.stopping.send_replace(true);
         let _ = stopped_tx.send(reason);
     };
     axum::serve(listener, api::router(state.clone()))
@@ -127,7 +129,7 @@ async fn serve(
         .await?;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
-    sign_in.cancel().await;
+    sign_ins.cancel_all().await;
     tokio::join!(chats.close_all(), state.models.closed());
     writer
         .record_now(

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Engine, type Failure } from '../api';
+import { type Account, api, type Engine, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
 import './engines.css';
@@ -11,45 +11,37 @@ const said: Record<string, string> = {
   unknown: 'Checking',
 };
 
-/** Settings > Engines: Claude Code's sign-in and path (engines/v4). */
+/** Chats run on this account until agents pick theirs; the accounts list is settings-entry/v5. */
+const CHAT_ACCOUNT = 'main';
+
+/** Settings > Engines: Claude Code and the chats' account's sign-in. */
 export function Engines({ onReference }: { onReference: (ref: string) => void }) {
   const [engine, setEngine] = useState<Engine | null>(null);
-  const [path, setPath] = useState('');
+  const [account, setAccount] = useState<Account | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [saved, setSaved] = useState(false);
-  const [folderShown, setFolderShown] = useState(false);
 
   const load = useCallback(
     () =>
-      api.engine().then((e) => {
+      Promise.all([api.engine(), api.account(CHAT_ACCOUNT)]).then(([e, a]) => {
         setEngine(e);
-        setPath(e.path ?? '');
+        setAccount(a);
       }, setFailure),
     [],
   );
   useEffect(() => {
     load();
     return listen((event) => {
-      if (event.type === 'engine' || event.type === 'lagged') load();
+      if (event.type === 'accounts' || event.type === 'lagged') load();
     });
   }, [load]);
 
-  const save = () => {
-    setSaved(false);
-    api.setEnginePath(path.trim() || null).then(() => {
-      setSaved(true);
-      setFailure(null);
-      load();
-    }, setFailure);
-  };
-
   const signIn = () => {
     setFailure(null);
-    api.signIn().then(load, setFailure);
+    api.signIn(CHAT_ACCOUNT).then(load, setFailure);
   };
 
-  const signingIn = engine?.sign_in?.state === 'waiting' ? engine.sign_in : null;
-  const signInFailed = engine?.sign_in?.state === 'failed' ? engine.sign_in : null;
+  const signingIn = account?.sign_in?.state === 'waiting' ? account.sign_in : null;
+  const signInFailed = account?.sign_in?.state === 'failed' ? account.sign_in : null;
   return (
     <section aria-labelledby="engines-title">
       <h3 id="engines-title">Engines</h3>
@@ -69,20 +61,20 @@ export function Engines({ onReference }: { onReference: (ref: string) => void })
           links={<span className="muted">{signInFailed.why}</span>}
         />
       )}
-      {engine && (
+      {engine && account && (
         <>
           <div className="settingrow">
             <h4>Claude Code</h4>
             <span className="rowend">
               <span className="muted">
-                {signingIn ? 'Signing in' : (said[engine.account.login] ?? engine.account.login)}
+                {signingIn ? 'Signing in' : (said[account.login] ?? account.login)}
               </span>
               {signingIn ? (
-                <button type="button" onClick={() => api.cancelSignIn().then(load, setFailure)}>
+                <button type="button" onClick={() => api.cancelSignIn(CHAT_ACCOUNT).then(load, setFailure)}>
                   Cancel
                 </button>
               ) : (
-                engine.account.login === 'signed_out' && (
+                account.login === 'signed_out' && (
                   <button type="button" className="primary" onClick={signIn}>
                     Sign in
                   </button>
@@ -91,30 +83,7 @@ export function Engines({ onReference }: { onReference: (ref: string) => void })
             </span>
           </div>
           {signingIn?.url && <SignInCode url={signingIn.url} onFailure={setFailure} />}
-          <div className="pathfield">
-            <label htmlFor="claude-path">Claude Code path</label>
-            <div className="pathline">
-              <input
-                id="claude-path"
-                value={path}
-                placeholder={engine.found ?? 'Not found'}
-                onChange={(e) => {
-                  setPath(e.target.value);
-                  setSaved(false);
-                }}
-              />
-              <button type="button" onClick={save}>
-                {saved ? 'Saved' : 'Save'}
-              </button>
-            </div>
-            {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
-          </div>
-          <details className="folder" onToggle={(e) => setFolderShown(e.currentTarget.open)}>
-            <summary>
-              Login folder<span>{folderShown ? 'Hide' : 'Show'}</span>
-            </summary>
-            <code>{engine.account.folder}</code>
-          </details>
+          {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}
         </>
       )}
     </section>
@@ -128,7 +97,7 @@ function SignInCode({ url, onFailure }: { url: string; onFailure: (f: Failure) =
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setSent(true);
-    api.signInCode(code.trim()).catch((f) => {
+    api.signInCode(CHAT_ACCOUNT, code.trim()).catch((f) => {
       setSent(false);
       onFailure(f);
     });

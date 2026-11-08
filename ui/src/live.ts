@@ -8,8 +8,8 @@ export type LiveEvent =
   | { type: 'turn'; chat: string; turn: string; status: TurnStatus; why?: string | null; ref?: string }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
-  // Claude Code's sign-in changed: reload it.
-  | { type: 'engine' }
+  // An account was added, renamed, or signed in or out: reload accounts.
+  | { type: 'accounts' }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };
 

@@ -25,8 +25,17 @@ pub struct State {
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
     pub updates: Arc<crate::updates::Updates>,
-    pub sign_in: Arc<crate::sign_in::SignIn>,
+    pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub models: crate::models::Models,
+    /// Set once shutdown starts, before the server waits on its requests: a request waiting on
+    /// an engine ends at once instead of holding the stop.
+    pub stopping: tokio::sync::watch::Sender<bool>,
+}
+
+impl State {
+    pub async fn stopped(&self) {
+        let _ = self.stopping.subscribe().wait_for(|stop| *stop).await;
+    }
 }
 
 /// The request's trace id, for handlers: a failure's reference and its events share it.
@@ -38,6 +47,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/health", get(health))
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
+        .merge(crate::accounts::routes())
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .layer(middleware::from_fn_with_state(state.clone(), guard))

@@ -9,8 +9,8 @@ The person never installs Claude Code or Codex, and their own installs are never
 
 - **Where:** `<data>/engines/claude/<version>/claude(.exe)`. `current.json` names the copy in use
   and the one before it.
-- **Which engine a chat runs:** the path set in Settings > Engines (an override), else Gathr's
-  copy, else `claude` on the PATH.
+- **Which engine a chat runs:** Gathr's copy, else `claude` on the PATH. Settings has no path
+  (0026); `GATHR_CLAUDE_PATH` overrides both in dev and tests only.
 - **When:** at service start, then every 24 hours, and on `POST /api/engines/claude/update`.
 - **From where:** Claude Code's own release feed, the one its installer reads:
   `https://downloads.claude.ai/claude-code-releases/latest` (a bare version) and

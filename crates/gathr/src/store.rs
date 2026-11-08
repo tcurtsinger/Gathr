@@ -1,4 +1,4 @@
-//! Chats, turns, messages, raw engine frames and settings in the database.
+//! Chats, turns, messages, raw engine frames and accounts in the database.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
@@ -214,25 +214,6 @@ pub fn set_engine_session(conn: &Connection, chat: &str, session: &str) -> Resul
         "UPDATE chats SET engine_session = ?2 WHERE id = ?1",
         params![chat, session],
     )?;
-    Ok(())
-}
-
-pub fn setting(conn: &Connection, key: &str) -> Result<Option<String>, Error> {
-    Ok(conn
-        .query_row("SELECT value FROM settings WHERE key = ?1", [key], |r| {
-            r.get(0)
-        })
-        .optional()?)
-}
-
-pub fn set_setting(conn: &Connection, key: &str, value: Option<&str>) -> Result<(), Error> {
-    match value {
-        Some(value) => conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = ?2",
-            params![key, value],
-        )?,
-        None => conn.execute("DELETE FROM settings WHERE key = ?1", [key])?,
-    };
     Ok(())
 }
 
