@@ -45,6 +45,9 @@ jobs:
       - name: test
         run: cargo test --workspace --locked
       # The Mac checks run CI's build, so nothing gets built on the Mac.
+      - name: build the window
+        if: matrix.name == 'macOS'
+        run: cargo build -p gathr-app --locked
       - name: keep the macOS build
         if: matrix.name == 'macOS'
         uses: actions/upload-artifact@v4
@@ -53,6 +56,7 @@ jobs:
           path: |
             target/debug/gathrd
             target/debug/gathr
+            target/debug/gathr-app
           retention-days: 7
 
   ui:

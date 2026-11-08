@@ -1,7 +1,7 @@
 import react from '@vitejs/plugin-react';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
-import { serviceProxy } from './proxy';
+import { serviceProxy } from './proxy.ts';
 
 const uiPort = Number(process.env.GATHR_UI_PORT ?? 47112);
 // GATHR_DATA is the service's --data folder; without it there's no service to forward to.
