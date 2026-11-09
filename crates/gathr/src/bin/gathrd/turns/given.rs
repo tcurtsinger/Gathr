@@ -18,7 +18,13 @@ impl Task {
             agent: Some(start.agent),
             task: start.task,
             answers: start.answers,
+            person: false,
         };
+        self.queue_given(ids, start.text, start.message).await;
+    }
+
+    /// Queues a turn Gathr saved, with its message, as `given` does: for an agent, or none.
+    pub(super) async fn queue_given(&mut self, ids: Ids, text: String, message: serde_json::Value) {
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
             .chat(&ids.chat);
@@ -26,24 +32,24 @@ impl Task {
             Some(task) => event.task(task),
             None => event,
         };
-        let message = start.message;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             event
                 .ok()
                 .attr("gathr.turn.id", ids.turn.clone())
                 .attr("gen_ai.agent.id", ids.agent.clone())
-                .attr("gathr.message.chars", start.text.chars().count()),
+                .attr("gathr.message.chars", text.chars().count()),
         );
         let queued = Queued {
             ids,
-            text: start.text,
+            text,
+            held: None,
         };
         let _ = self.enqueue(&queued).await;
     }
 
-    /// Why a turn on a task may not start now (0010's gate), or `None`. Pause and usage holds join
-    /// it with F10.
+    /// Why a turn on a task may not start now (0010's gate), or `None`. Pauses and usage holds
+    /// keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
         let task = ids.task?;
         let asked = self

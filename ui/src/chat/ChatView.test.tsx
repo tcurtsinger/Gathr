@@ -33,6 +33,8 @@ function TwoChats() {
         onProject={() => {}}
         onNewProject={() => {}}
         onStart={() => {}}
+        pauses={{ pauses: [], usage: [] }}
+        onPause={async () => {}}
       />
     </>
   );
@@ -86,6 +88,8 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={() => {}}
+      pauses={{ pauses: [], usage: [] }}
+      onPause={async () => {}}
     />,
   );
   const picker = screen.getByRole('combobox', { name: 'Agent' });
@@ -133,6 +137,8 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={() => {}}
+      pauses={{ pauses: [], usage: [] }}
+      onPause={async () => {}}
     />,
   );
   await screen.getByRole('combobox', { name: 'Agent' }).click();
@@ -176,6 +182,8 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={() => {}}
+      pauses={{ pauses: [], usage: [] }}
+      onPause={async () => {}}
     />
   );
   const screen = await render(view('p'));
@@ -229,6 +237,8 @@ test('a new chat is made with its first message, in its project, to its Supervis
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={(text, agent) => started.push({ text, agent })}
+      pauses={{ pauses: [], usage: [] }}
+      onPause={async () => {}}
     />,
   );
   await expect.element(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('p');

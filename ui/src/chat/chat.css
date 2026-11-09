@@ -6,6 +6,7 @@
 }
 /* 46px, so it lines up with the workspace's tabstrip (DESIGN.md). */
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -26,6 +27,14 @@
 }
 .empty {
   color: var(--muted-foreground);
+}
+/* Paused or stopped: a current state after the latest content, not a saved event (the prototype). */
+.run-line {
+  margin: 0 0 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 13px;
 }
 /* A new chat's project, above the composer (the prototype's notch). */
 .project-pick {

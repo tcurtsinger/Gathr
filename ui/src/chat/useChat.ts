@@ -95,9 +95,11 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
     [chat, onUnsent],
   );
 
-  const stop = useCallback(
-    () => api.stop(chat).catch((e: Failure) => setActionFailure({ id: 'stop', text: '', failure: e })),
-    [chat],
+  // Stop now, Pause, Resume: a refusal shows in the chat, with its reference.
+  const attempt = useCallback(
+    (id: string, action: () => Promise<unknown>) =>
+      action().catch((e: Failure) => setActionFailure({ id, text: '', failure: e })),
+    [],
   );
 
   const approve = useCallback(
@@ -111,5 +113,5 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   );
 
   const failed = actionFailure ? [...unsent, actionFailure] : unsent;
-  return { state, loaded, loadFailure, failed, send, stop, approve, reload: load };
+  return { state, loaded, loadFailure, failed, send, attempt, approve, reload: load };
 }

@@ -100,6 +100,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         created: before?.created,
         task: event.task ?? before?.task,
         answers: event.answers ?? before?.answers,
+        held: event.held,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
@@ -122,9 +123,10 @@ export function answered(state: ChatState, request: string): ChatState {
   return { ...state, approvals: state.approvals.filter((a) => a.request !== request) };
 }
 
-/** A turn still under way, if any: Stop applies to the chat's turns. */
+/** A turn still under way, if any: Stop applies to the chat's turns. A held turn waits for Resume or
+ * for usage to come back, so it isn't under way. */
 export function running(state: ChatState): Turn | undefined {
-  return Object.values(state.turns).find((t) => t.status === 'running' || t.status === 'queued');
+  return Object.values(state.turns).find((t) => t.status === 'running' || (t.status === 'queued' && !t.held));
 }
 
 function without(record: Record<string, string>, key: string): Record<string, string> {

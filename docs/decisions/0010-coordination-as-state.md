@@ -130,7 +130,8 @@ States per scope: `running`, `pausing` (paused, but turns or commands still run)
 - A message the person types into a paused scope starts only the agent it's for. What that turn gives out (tasks, @names, the check on its answer) is held until resume.
 - `pausing` becomes `paused` when the service's own state shows no turn, check, side job or tracked background command in the scope. The service then says once: "Everything is paused. Nothing is running." Agents never say it.
 - While `pausing`, the service lists what still runs and whose.
-- Stop now (the person's alone): interrupts every turn in the scope, ends the background commands those turns started by process id (never by name), and holds a carry-on per agent naming what was ended.
+- Stop now (the person's alone): interrupts every turn in the scope, ends the background commands those turns started by the engine's own id (never by name), and holds a carry-on per agent naming what was ended. The scope stays paused as `stopped`; Restart is its resume.
+- F10 builds the person's pauses. The Supervisor's chat pause, the hand-off limit's pause and holding notifications come with the features that need them.
 - Who may pause: the whole app, the person only; a chat, the person or its Supervisor; an agent, the person. The Supervisor may resume only its own pause, or the person's once the person has written in the chat since.
 - Notifications and sounds are held during an app-wide pause, except sign-in and security problems; resume shows one summary.
 
@@ -165,6 +166,14 @@ A side job (`ask`) is a record: asker, helper, question, the asker's turn it cam
 ## Usage holds
 
 When an engine's account is out of usage until a time it gives, the turn isn't failed: it's held on that account and starts 30 seconds after the reset, oldest first, one turn per conversation. A turn cut off partway carries on on the same engine, never another, since it could repeat what it already did. Holds outlast a restart.
+
+Built in F10: Claude Code says so with a `rate_limit_event` whose status is `rejected` and whose `resetsAt` is the reset (Unix seconds). A turn that ran no tool is sent again at the reset; one that ran a tool ends `stopped` and a carry-on asks the agent to check what already happened. Not yet seen live: no account here ran out.
+
+## Background commands (F10)
+
+Claude Code reports the commands it runs in the background as a whole list (`background_tasks_changed`), ends one with its own `stop_task` control request, and starts a turn by itself, with no input, when one ends (checked live on 2.1.319). Gathr keeps each under the turn that started it: its task stays `held` while one runs, a pause stays `pausing`, the engine isn't closed as idle, Stop now ends them by id (never a process kill), and the engine's own turn gets its row on that task. They end with their engine, so a start forgets them and a task held only on one carries on.
+
+Turned down: tracking them by process id. Claude Code's frames carry no pid, and its own stop ends the command's whole tree.
 
 ## Sessions
 

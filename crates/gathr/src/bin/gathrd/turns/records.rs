@@ -49,6 +49,7 @@ impl Task {
             trace: &ids.trace,
         };
         crate::coord::turn_moved(&self.chats, moved, status, why).await;
+        self.chats.settle_pauses(false).await;
         let reference = gathr::ids::reference(&ids.trace);
         self.publish(
             &ids.chat,

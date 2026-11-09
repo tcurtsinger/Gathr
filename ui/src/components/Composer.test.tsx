@@ -41,7 +41,7 @@ test('keyboard focus shows no ring, on the message box or its buttons (DESIGN.md
   await input.click();
   // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
   await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
-  const stop = screen.getByRole('button', { name: 'Stop' }).element() as HTMLElement;
+  const stop = screen.getByRole('button', { name: 'Stop this chat now' }).element() as HTMLElement;
   expect(document.activeElement).toBe(stop);
   expect(stop.matches(':focus-visible')).toBe(true);
   for (const el of [
@@ -60,7 +60,7 @@ test('keyboard focus shows no ring, on the message box or its buttons (DESIGN.md
 
 test('while a turn runs the button stops it, and typing turns it back into Send', async () => {
   const screen = await render(<Chat running />);
-  await screen.getByRole('button', { name: 'Stop' }).click();
+  await screen.getByRole('button', { name: 'Stop this chat now' }).click();
   await expect.element(screen.getByText('Stopped')).toBeVisible();
 
   await screen.getByRole('textbox', { name: 'Message' }).fill('also check the tests');

@@ -8,6 +8,7 @@ mod chats;
 mod coord;
 mod logs;
 mod models;
+mod pauses;
 mod projects;
 mod routes;
 mod sign_in;
@@ -143,6 +144,8 @@ async fn serve(
     writer.record(health_event(data, port, early_lines));
     chats.pick_account().await;
     coord::recover(&chats).await;
+    // Before the queues fill: what a pause holds stays held after a restart.
+    chats.pauses_changed().await;
     chats.take_over().await;
     tokio::spawn(coord::run(chats.clone()));
     tokio::spawn(updates::run(updates.clone()));

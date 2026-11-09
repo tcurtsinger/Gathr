@@ -62,13 +62,16 @@ interface Props {
   actions: Actions;
   /** Shown above the messages: the chat's own load failure. */
   header?: ReactNode;
+  /** Shown after the latest message: the quiet "You paused" line. */
+  after?: ReactNode;
   empty: boolean;
   /** The composer, kept below the messages as they scroll. */
   children: ReactNode;
 }
 
 /** The chat's messages, drawn by assistant-ui's thread over Gathr's own chat state (0030). */
-export function Thread({ state, agents, unsent, running, actions, header, empty, children }: Props) {
+export function Thread(props: Props) {
+  const { state, agents, unsent, running, actions, header, after, empty, children } = props;
   const cache = useRef(new Map());
   const all = useMemo(() => toThread(state, agents, unsent, cache.current), [state, agents, unsent]);
   const [chosen, setChosen] = useState(rememberedFolds);
@@ -132,6 +135,7 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
                 <div className="thread-messages">
                   <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
                 </div>
+                {after}
                 <ThreadPrimitive.ViewportFooter className="thread-footer">
                   <ThreadPrimitive.ScrollToBottom asChild>
                     <TooltipIconButton

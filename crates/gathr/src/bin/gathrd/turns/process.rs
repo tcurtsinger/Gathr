@@ -27,6 +27,8 @@ const IDLE_CLOSE: Duration = Duration::from_secs(600);
 pub struct Times {
     pub hold_after: Duration,
     pub idle_close: Duration,
+    /// A turn with no progress this long (twice that during a tool) is flagged, never stopped.
+    pub stall: Duration,
 }
 
 impl Times {
@@ -40,6 +42,7 @@ impl Times {
         Times {
             hold_after: ms("GATHR_HOLD_AFTER_MS", HOLD_AFTER),
             idle_close: ms("GATHR_IDLE_CLOSE_MS", IDLE_CLOSE),
+            stall: ms("GATHR_STALL_AFTER_MS", Duration::from_secs(600)),
         }
     }
 }
@@ -289,6 +292,7 @@ impl Task {
         if closed.held {
             self.show_hold(&closed.chat, None);
         }
+        self.engine_gone(closed.chat.clone()).await;
         for done in self.leaving.drain(..) {
             let _ = done.send(());
         }
@@ -393,6 +397,9 @@ impl Task {
         }
         self.engine = None;
         self.pass = None;
+        if self.closing.is_none() {
+            self.engine_gone(chat.clone()).await;
+        }
         let event = Event::point("gathr.engine.exit")
             .chat(&chat)
             .attr("process.exit.code", code);

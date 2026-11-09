@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type Agent, api, type Chat, type Failure, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
+import { usePauses } from './chat/pauses';
 import { Notice } from './components/Notice';
 import { listen } from './live';
 import { NewProject } from './NewProject';
@@ -27,6 +28,7 @@ export function App() {
   const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
   const person = usePersonTasks(setFailure);
+  const pauses = usePauses(setFailure);
   // Each chat's workspace: the files opened from its questions, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
 
@@ -147,6 +149,8 @@ export function App() {
           onProject={(project) => setFresh({ project })}
           onStart={start}
           onNewProject={() => setNewProject(true)}
+          pauses={pauses.pauses}
+          onPause={pauses.act}
           headerEnd={
             chat.id &&
             !paneOpen && (

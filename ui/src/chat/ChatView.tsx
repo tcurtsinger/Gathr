@@ -1,11 +1,13 @@
 import { Folder } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import type { Agent, Chat, Member, Project } from '../api';
+import type { Agent, Chat, Member, PauseScope, Pauses, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
+import { ChatMenu } from './ChatMenu';
 import type { SendFailure } from './messages';
+import { type PauseAction, type Run, runOf } from './pauses';
 import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread } from './Thread';
@@ -35,17 +37,23 @@ interface Props {
   onStart: (text: string, agent?: string) => void;
   /** At the header's end: the workspace's opener. */
   headerEnd?: ReactNode;
+  /** Every pause, and what the person can do to one (the app keeps them for every chat). */
+  pauses: Pauses;
+  onPause: (action: PauseAction, scope: PauseScope) => Promise<void>;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
-  const { projects, onProject, onNewProject, onStart, headerEnd } = props;
-  const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
+  const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
+  const { state, loaded, loadFailure, failed, send, attempt, approve, reload } = useChat(
     chat.id,
     unsent,
     onUnsent,
   );
   const turn = running(state);
+  const run = runOf(pauses, chat.id);
+  const act = (action: PauseAction, scope: PauseScope) => attempt(action, () => onPause(action, scope));
+  const thisChat: PauseScope = { scope: 'chat', target: chat.id };
   const input = useRef<HTMLTextAreaElement>(null);
   const [picked, setPicked] = useState<string | null>(null);
   // A new chat isn't made yet: its team is its project's, if it has one.
@@ -93,7 +101,15 @@ export function ChatView(props: Props) {
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
         <h1>{chat.title}</h1>
-        {state.members.length > 1 && <Summary state={state} />}
+        {state.members.length > 1 && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
+        {!fresh && (
+          <ChatMenu
+            state={run.state}
+            all={run.scope?.scope === 'app'}
+            onPause={() => act('pause', thisChat)}
+            onResume={() => act('resume', run.scope ?? thisChat)}
+          />
+        )}
         {headerEnd}
       </header>
       <Thread
@@ -103,6 +119,7 @@ export function ChatView(props: Props) {
         running={!!turn}
         actions={actions}
         empty={loaded && state.messages.length === 0 && failed.length === 0}
+        after={<RunLine run={run} members={state.members} />}
         header={
           loadFailure && (
             <Notice
@@ -142,7 +159,7 @@ export function ChatView(props: Props) {
           draft={draft}
           onDraft={onDraft}
           onSend={sendDraft}
-          onStop={turn ? stop : undefined}
+          onStop={turn ? () => act('stop', thisChat) : undefined}
           inputRef={input}
           tools={
             agent && (
@@ -157,6 +174,17 @@ export function ChatView(props: Props) {
         />
       </Thread>
     </main>
+  );
+}
+
+/** The quiet line after the latest content while the chat isn't running (the prototype's run note). */
+function RunLine({ run, members }: { run: Run; members: Member[] }) {
+  if (run.state === 'running') return null;
+  const who = run.by ? (members.find((m) => m.agent === run.by)?.name ?? 'An agent') : 'You';
+  return (
+    <p className="run-line" role="status">
+      {run.state === 'pausing' ? 'Pausing…' : `${who} ${run.state}`}
+    </p>
   );
 }
 

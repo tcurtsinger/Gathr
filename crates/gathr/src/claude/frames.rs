@@ -54,6 +54,15 @@ pub enum Frame {
         message: String,
     },
     TurnEnd(TurnEnd),
+    /// Every command running in the background now (`background_tasks_changed`): id and what it is.
+    Background(Vec<(String, String)>),
+    /// Where the account stands on usage (`rate_limit_event`): `rejected` turns turns away until
+    /// `resets_at` (Unix seconds); `kind` names the limit (`five_hour`, `seven_day`).
+    Limit {
+        status: String,
+        resets_at: Option<i64>,
+        kind: Option<String>,
+    },
     /// A sub-agent's frame, under the Agent or Skill call that started it (`parent_tool_use_id`).
     /// Never the agent's own words or tools.
     Sub {
@@ -135,6 +144,19 @@ fn read_own(value: &Value) -> Vec<Frame> {
             by: text(value, "decision_reason_type"),
             why: text(value, "decision_reason"),
         }],
+        "system" if text(value, "subtype") == "background_tasks_changed" => {
+            let tasks = blocks(&value["tasks"]);
+            let tasks = tasks.map(|t| (text(t, "task_id"), text(t, "description")));
+            vec![Frame::Background(tasks.collect())]
+        }
+        "rate_limit_event" => {
+            let info = &value["rate_limit_info"];
+            vec![Frame::Limit {
+                status: text(info, "status"),
+                resets_at: info["resetsAt"].as_i64(),
+                kind: info["rateLimitType"].as_str().map(String::from),
+            }]
+        }
         "stream_event" => delta(value).into_iter().collect(),
         "assistant" => assistant(value),
         "user" if value.get("isReplay") == Some(&Value::Bool(true)) => {
@@ -256,6 +278,13 @@ pub fn user(text: &str) -> Value {
 /// Stop: the engine's own interrupt, never a kill.
 pub fn interrupt(request_id: &str) -> Value {
     json!({ "type": "control_request", "request_id": request_id, "request": { "subtype": "interrupt" } })
+}
+
+/// Ends a command the engine runs in the background, by its id: the engine's own stop, never a
+/// kill by process (checked live on 2.1.319: it answers `task_updated` with `killed`).
+pub fn stop_task(request_id: &str, task: &str) -> Value {
+    json!({ "type": "control_request", "request_id": request_id,
+        "request": { "subtype": "stop_task", "task_id": task } })
 }
 
 /// The handshake that lists the engine's models and checks its switches, without a turn (0025).

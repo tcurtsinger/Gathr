@@ -31,6 +31,8 @@ export interface Turn {
   task?: number | null;
   /** A hear-back's: the turn whose tasks it reports on, which its reply links back to. */
   answers?: string | null;
+  /** Queued but held: by a pause, or until its account's usage comes back. */
+  held?: 'pause' | 'usage' | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -39,6 +41,28 @@ export interface Member {
   agent: string;
   name: string;
   role: Role;
+}
+
+/** The whole app, or one chat or agent. */
+export type PauseScope = { scope: 'app' } | { scope: 'chat' | 'agent'; target: string };
+
+/**
+ * A pause (0010): pausing while a turn, background command or wait's check in it still runs, paused once quiet,
+ * stopped after Stop now until Restart (its resume).
+ */
+export interface Pause {
+  scope: 'app' | 'chat' | 'agent';
+  /** The chat's or agent's id; empty for the app. */
+  target: string;
+  state: 'pausing' | 'paused' | 'stopped';
+  /** The agent that paused it; null for the person. */
+  by: string | null;
+}
+
+/** Every pause, and each account out of usage until its reset, with the agents on it. */
+export interface Pauses {
+  pauses: Pause[];
+  usage: { account: string; until_us: number; agents: string[] }[];
 }
 
 export type TaskState =
@@ -221,7 +245,12 @@ export const api = {
     ),
   send: (chat: string, text: string, agent?: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
-  stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),
+  pauses: () => call<Pauses>('GET', '/api/pauses'),
+  // Each answers every pause as it is then.
+  pause: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses', scope),
+  resume: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses/resume', scope),
+  /** Stop now: ends the scope's turns and the commands they started; carry-ons wait for Restart. */
+  stop: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses/stop', scope),
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
