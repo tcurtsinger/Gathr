@@ -89,6 +89,15 @@ jobs:
       - run: npx biome ci
       - run: npx tsc --noEmit
       - run: npx vitest run
+      # A failing test leaves its screenshot in ui/.vitest: kept, so a failure on the other system shows.
+      - name: keep failing tests' screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-failures-${{ matrix.name }}
+          path: ui/.vitest
+          include-hidden-files: true
+          retention-days: 7
       - run: npx vite build
       # The built UI, which gathrd serves from a `ui` folder beside it (AGENTS.md "Run it installed").
       - name: keep the built UI
