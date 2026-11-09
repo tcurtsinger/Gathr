@@ -75,7 +75,7 @@ test('Back and Next keep drafts, and Send answers only the ready questions', asy
   await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
   await screen.getByRole('button', { name: 'Next' }).click();
   await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
-  await expect.element(screen.getByText('2 Done')).toBeVisible();
+  await expect.element(screen.getByText('2 ready')).toBeVisible();
   await screen.getByRole('button', { name: 'Send' }).click();
   await expect
     .element(screen.getByLabelText('Sent'))

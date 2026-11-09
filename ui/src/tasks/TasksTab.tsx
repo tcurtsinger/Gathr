@@ -1,4 +1,5 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import type { PersonTask } from '../api';
 import { Notice } from '../components/Notice';
 import { type Draft, ready } from './model';
@@ -42,7 +43,7 @@ export function TasksTab(props: Props) {
     tasks.findIndex((t) => t.number === selected),
   );
   const task = tasks[at];
-  const done = tasks.filter((t) => ready(t, drafts[t.number])).length;
+  const staged = tasks.filter((t) => ready(t, drafts[t.number])).length;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new question starts at its top
   useLayoutEffect(() => {
@@ -115,19 +116,18 @@ export function TasksTab(props: Props) {
           <span>
             {at + 1} of {tasks.length}
           </span>
-          <span role="status">{done} Done</span>
+          <span role="status">{staged} ready</span>
           <div>
-            <button type="button" disabled={at === 0} onClick={() => go(at - 1)}>
+            <Button size="sm" variant="ghost" disabled={at === 0} onClick={() => go(at - 1)}>
               Back
-            </button>
-            <button
-              type="button"
-              className="primary"
-              disabled={last && (sending || done === 0)}
+            </Button>
+            <Button
+              size="sm"
+              disabled={last && (sending || staged === 0)}
               onClick={() => (last ? send() : go(at + 1))}
             >
               {last ? 'Send' : 'Next'}
-            </button>
+            </Button>
           </div>
         </div>
       </footer>

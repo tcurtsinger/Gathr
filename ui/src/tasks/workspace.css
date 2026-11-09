@@ -1,11 +1,23 @@
 /* The chat's workspace pane (the prototype's WorkspacePane): 40% of the room beside navigation. */
 .workspace {
+  container: workspace / inline-size;
   display: flex;
   flex-direction: column;
   width: clamp(480px, calc((100vw - 246px) * 0.4), 760px);
+  max-width: calc(100vw - 48px);
   min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--card);
+}
+/* Too narrow to share: the pane lies over the chat, which keeps its width. */
+@media (max-width: 1200px) {
+  .workspace {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+  }
 }
 .workspace-tabs {
   display: flex;

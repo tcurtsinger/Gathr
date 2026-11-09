@@ -214,7 +214,7 @@ export const api = {
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   personTasks: () => call<{ tasks: PersonTask[] }>('GET', '/api/person-tasks').then((t) => t.tasks),
   answer: (answers: PersonAnswer[]) =>
-    call<{ answered: number[]; refused: { task: number; why: string; ref: string | null }[] }>(
+    call<{ answered: Task[]; refused: { task: number; why: string; ref: string | null }[] }>(
       'POST',
       '/api/person-tasks/answer',
       { answers },

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, type Failure, type PersonTask } from '../api';
 import { listen } from '../live';
 import { type Draft, toAnswer } from './model';
@@ -14,11 +14,19 @@ export function usePersonTasks(onFailure: (f: Failure) => void) {
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
+  // Counts every newer list (live, or a Send), so a read started before one never overwrites it.
+  const version = useRef(0);
   useEffect(() => {
-    const load = () => api.personTasks().then(setTasks, onFailure);
+    const load = () => {
+      const at = version.current;
+      api.personTasks().then((list) => version.current === at && setTasks(list), onFailure);
+    };
     load();
     return listen((event) => {
-      if (event.type === 'person_tasks') setTasks(event.tasks);
+      if (event.type === 'person_tasks') {
+        version.current++;
+        setTasks(event.tasks);
+      }
       if (event.type === 'lagged') load();
     });
   }, [onFailure]);
@@ -26,10 +34,10 @@ export function usePersonTasks(onFailure: (f: Failure) => void) {
   const send = async (ready: PersonTask[]): Promise<Refusal[]> => {
     try {
       const { answered, refused } = await api.answer(ready.map((t) => toAnswer(t, drafts[t.number])));
-      setTasks((list) => list.filter((t) => !answered.includes(t.number)));
-      setDrafts((all) =>
-        Object.fromEntries(Object.entries(all).filter(([n]) => !answered.includes(Number(n)))),
-      );
+      const closed = new Set(answered.map((t) => t.number));
+      version.current++;
+      setTasks((list) => list.filter((t) => !closed.has(t.number)));
+      setDrafts((all) => Object.fromEntries(Object.entries(all).filter(([n]) => !closed.has(Number(n)))));
       return refused;
     } catch (e) {
       const f = e as Failure;
