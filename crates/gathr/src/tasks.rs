@@ -163,9 +163,7 @@ impl Start {
         (task, answers): (Option<i64>, Option<&str>),
         text: String,
     ) -> Result<Start, Error> {
-        let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
-        crate::store::add_turn(conn, chat, &turn, &trace, (Some(agent), task, answers))?;
-        let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", &text)?;
+        let (turn, trace, message) = Self::save(conn, (chat, Some(agent)), (task, answers), &text)?;
         Ok(Start {
             chat: chat.to_string(),
             agent: agent.to_string(),
@@ -176,6 +174,20 @@ impl Start {
             trace,
             message,
         })
+    }
+
+    /// Saves the turn and its ask, for an agent or (in a chat sent to no agent) none: its id, trace
+    /// and message.
+    pub fn save(
+        conn: &Connection,
+        (chat, agent): (&str, Option<&str>),
+        (task, answers): (Option<i64>, Option<&str>),
+        text: &str,
+    ) -> Result<(String, String, serde_json::Value), Error> {
+        let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
+        crate::store::add_turn(conn, chat, &turn, &trace, (agent, task, answers))?;
+        let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", text)?;
+        Ok((turn, trace, message))
     }
 }
 
@@ -598,6 +610,29 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     }
     tx.commit()?;
     Ok(working.len())
+}
+
+/// The engine in `chat` for `agent` exited: its background commands ended with it, so they're
+/// forgotten, and a task held only on one carries on, as after a restart.
+pub fn engine_gone(
+    conn: &mut Connection,
+    engine: (&str, Option<&str>),
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let mut held_on: Vec<i64> = crate::background::set(&tx, engine, &[], None)?
+        .into_iter()
+        .filter_map(|(_, task)| task)
+        .collect();
+    held_on.dedup();
+    let mut starts = Vec::new();
+    for task in held_on {
+        if state_of(&tx, task)? == Some(State::Held) && held::open_on(&tx, task)?.is_empty() {
+            let carry = "your engine closed while your background command ran, which ended it";
+            starts.push(ready(&tx, task, Some(carry))?);
+        }
+    }
+    tx.commit()?;
+    Ok(starts)
 }
 
 /// A task's PR has been looked at: merged settles it, closed cancels it (G67, G44); a review

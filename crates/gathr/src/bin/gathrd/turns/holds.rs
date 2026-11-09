@@ -165,18 +165,27 @@ impl Task {
         true
     }
 
-    /// Queues a turn that carries on from `ids` in the same session, on the same task.
+    /// Queues a turn that carries on from `ids` in the same session, on the same task: for its
+    /// agent, or for none in a chat sent to no agent.
     async fn carry_on(&mut self, ids: &Ids, text: String) {
-        let Some(agent) = ids.agent.clone() else {
-            return;
-        };
-        let (chat, task, answers) = (ids.chat.clone(), ids.task, ids.turn.clone());
-        let queued = self
-            .chats
-            .writer
-            .call(move |c| Start::queue(c, (&chat, &agent), (task, Some(&answers)), text));
-        match queued.await {
-            Some(Ok(start)) => self.given(start).await,
+        let (chat, agent) = (ids.chat.clone(), ids.agent.clone());
+        let (task, answers, said) = (ids.task, ids.turn.clone(), text.clone());
+        let saved = self.chats.writer.call(move |c| {
+            Start::save(c, (&chat, agent.as_deref()), (task, Some(&answers)), &said)
+        });
+        match saved.await {
+            Some(Ok((turn, trace, message))) => {
+                let carry = Ids {
+                    chat: ids.chat.clone(),
+                    turn,
+                    trace,
+                    agent: ids.agent.clone(),
+                    task,
+                    answers: Some(ids.turn.clone()),
+                    person: false,
+                };
+                self.queue_given(carry, text, message).await;
+            }
             Some(Err(e)) => {
                 let event = Event::point("gathr.turn.carry_on")
                     .trace(&ids.trace)
@@ -275,6 +284,28 @@ impl Task {
                     self.woke_from = Some(last);
                 }
             }
+            Some(Err(e)) => self.record(
+                Event::point("gathr.engine.background")
+                    .error("sqlite")
+                    .attr("why", e.to_string()),
+            ),
+            None => {}
+        }
+        self.chats.settle_pauses(false).await;
+    }
+
+    /// The engine in `chat` exited, on a close or on its own: its background commands ended with
+    /// it, so a pause stops waiting on them and a task held on them carries on.
+    pub(super) async fn engine_gone(&mut self, chat: String) {
+        self.background = 0;
+        self.woke_from = None;
+        let agent = self.agent.clone();
+        let gone = self
+            .chats
+            .writer
+            .call(move |c| gathr::tasks::engine_gone(c, (&chat, agent.as_deref())));
+        match gone.await {
+            Some(Ok(starts)) => self.chats.start(starts),
             Some(Err(e)) => self.record(
                 Event::point("gathr.engine.background")
                     .error("sqlite")

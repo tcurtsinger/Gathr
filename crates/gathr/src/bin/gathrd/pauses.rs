@@ -29,7 +29,8 @@ pub struct Scope {
 }
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    db(&s, &t, "Pauses failed", |c| pauses::listed(c)).await
+    let checks = s.chats.checking();
+    db(&s, &t, "Pauses failed", move |c| pauses::listed(c, &checks)).await
 }
 
 async fn pause(
@@ -45,10 +46,10 @@ async fn resume(
     Extension(t): Extension<Trace>,
     Json(body): Json<Scope>,
 ) -> Answer {
-    let trace = t.0.clone();
+    let (trace, checks) = (t.0.clone(), s.chats.checking());
     let answer = db(&s, &t, "Resume failed", move |c| {
         pauses::resume(c, &body.scope, &body.target, &trace)?;
-        pauses::listed(c)
+        pauses::listed(c, &checks)
     })
     .await;
     s.chats.pauses_changed().await;
@@ -64,7 +65,8 @@ async fn stop_now(
     let (scope, target) = (body.scope.clone(), body.target.clone());
     let _paused = changed(&s, &t, "Stop failed", body, true).await?;
     s.chats.stop_now(&scope, &target).await;
-    db(&s, &t, "Stop failed", |c| pauses::listed(c)).await
+    let checks = s.chats.checking();
+    db(&s, &t, "Stop failed", move |c| pauses::listed(c, &checks)).await
 }
 
 async fn changed(
@@ -74,11 +76,11 @@ async fn changed(
     body: Scope,
     stopped: bool,
 ) -> Answer {
-    let trace = t.0.clone();
+    let (trace, checks) = (t.0.clone(), s.chats.checking());
     let answer = db(s, t, error, move |c| {
         pauses::pause(c, &body.scope, &body.target, stopped, &trace)?;
-        pauses::settle(c, &trace)?;
-        pauses::listed(c)
+        pauses::settle(c, &checks, &trace)?;
+        pauses::listed(c, &checks)
     })
     .await;
     s.chats.pauses_changed().await;

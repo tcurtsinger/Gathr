@@ -173,8 +173,12 @@ pub fn resume(conn: &Connection, scope: &str, target: &str, trace: &str) -> Resu
     Ok(())
 }
 
-/// Turns still running and background commands still open in the scope: whose, and where.
-pub fn running(conn: &Connection, p: &Pause) -> Result<Value, Error> {
+/// Wait checks running now, by the service itself: each one's chat and agent.
+pub type Checks = [(String, String)];
+
+/// Turns still running, background commands still open and wait checks still running in the
+/// scope: whose, and where.
+pub fn running(conn: &Connection, p: &Pause, checks: &Checks) -> Result<Value, Error> {
     let scoped =
         "(?1 = 'app' OR (?1 = 'chat' AND t.chat_id = ?2) OR (?1 = 'agent' AND t.agent_id = ?2))";
     let mut turns = conn.prepare_cached(&format!(
@@ -196,18 +200,24 @@ pub fn running(conn: &Connection, p: &Pause) -> Result<Value, Error> {
             "agent": r.get::<_, Option<String>>(2)? }),
         )
     })?;
+    let checks: Vec<Value> = checks
+        .iter()
+        .filter(|(chat, agent)| p.covers(chat, Some(agent)))
+        .map(|(chat, agent)| json!({ "chat": chat, "agent": agent }))
+        .collect();
     Ok(json!({
         "turns": turns.collect::<Result<Vec<_>, _>>()?,
         "background": commands.collect::<Result<Vec<_>, _>>()?,
+        "checks": checks,
     }))
 }
 
 /// Each pause with its state: `pausing` while something in it still runs (and what), else `paused`.
-pub fn listed(conn: &Connection) -> Result<Value, Error> {
+pub fn listed(conn: &Connection, checks: &Checks) -> Result<Value, Error> {
     let mut pauses = Vec::new();
     for p in list(conn)? {
         let mut shown = shown(&p);
-        shown["running"] = running(conn, &p)?;
+        shown["running"] = running(conn, &p, checks)?;
         pauses.push(shown);
     }
     let usage = usage(conn)?;
@@ -225,12 +235,12 @@ pub fn listed(conn: &Connection) -> Result<Value, Error> {
 /// Pauses in which nothing runs any more become `paused`, once, with an event that says so: the
 /// service's own state decides it, never an agent (0010). One the person's own message started a
 /// turn in is `pausing` again until that ends. The pauses that changed.
-pub fn settle(conn: &Connection, trace: &str) -> Result<Vec<Pause>, Error> {
+pub fn settle(conn: &Connection, checks: &Checks, trace: &str) -> Result<Vec<Pause>, Error> {
     let mut changed = Vec::new();
     for p in list(conn)? {
-        let running = running(conn, &p)?;
+        let running = running(conn, &p, checks)?;
         let idle = |key: &str| running[key].as_array().is_none_or(Vec::is_empty);
-        let quiet = idle("turns") && idle("background");
+        let quiet = idle("turns") && idle("background") && idle("checks");
         if quiet == p.quiet_us.is_some() {
             continue;
         }
@@ -364,8 +374,8 @@ mod tests {
         )
         .unwrap();
         pause(&conn, "chat", "c1", false, "tr").unwrap();
-        assert!(settle(&conn, "tr").unwrap().is_empty(), "a turn runs");
-        let shown = listed(&conn).unwrap();
+        assert!(settle(&conn, &[], "tr").unwrap().is_empty(), "a turn runs");
+        let shown = listed(&conn, &[]).unwrap();
         assert_eq!(shown["pauses"][0]["state"], "pausing");
         assert_eq!(
             shown["pauses"][0]["running"]["background"][0]["command"],
@@ -374,13 +384,13 @@ mod tests {
         conn.execute("UPDATE turns SET status = 'done'", [])
             .unwrap();
         assert!(
-            settle(&conn, "tr").unwrap().is_empty(),
+            settle(&conn, &[], "tr").unwrap().is_empty(),
             "its command still runs"
         );
         conn.execute("DELETE FROM background", []).unwrap();
-        assert_eq!(settle(&conn, "tr").unwrap().len(), 1);
-        assert!(settle(&conn, "tr").unwrap().is_empty(), "said once");
-        assert_eq!(listed(&conn).unwrap()["pauses"][0]["state"], "paused");
+        assert_eq!(settle(&conn, &[], "tr").unwrap().len(), 1);
+        assert!(settle(&conn, &[], "tr").unwrap().is_empty(), "said once");
+        assert_eq!(listed(&conn, &[]).unwrap()["pauses"][0]["state"], "paused");
     }
 
     #[test]
