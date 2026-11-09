@@ -76,17 +76,28 @@ fn start_again(app: &AppHandle, from_pid: u32) {
     }
 }
 
-/// Loads the window on `info` with a fresh one-time link and keeps it for Quit and the tray.
-fn sign_in(app: &AppHandle, info: ServiceInfo, event: &str, attrs: serde_json::Value) {
+/// Signs the window in to `info` with a fresh one-time link and keeps it for Quit and the tray.
+/// On the same port the page stays and only swaps the link for the new cookie, so unsent drafts
+/// and answers survive; its live socket reconnects by itself and reloads what it shows. On
+/// another port (the old one was taken) the page's origin changes, so it has to load anew.
+fn sign_in(app: &AppHandle, info: ServiceInfo, event: &str, mut attrs: serde_json::Value) {
     let since = Instant::now();
+    let mut in_place = false;
     let loaded = launch::one_time_link(&info).and_then(|url| {
         let window = app.get_webview_window("main");
         let window = window.ok_or_else(|| Error::Other("no window".into()))?;
-        window
-            .navigate(parse(&url))
-            .map_err(|e| Error::Other(e.to_string()))
+        in_place = window.url().is_ok_and(|u| u.port() == Some(info.port));
+        let done = match in_place {
+            // A fetch that never reached the service leaves the code unused: load the link then.
+            true => window.eval(format!(
+                "fetch({url:?}, {{credentials: 'same-origin'}}).catch(() => location.replace({url:?}))"
+            )),
+            false => window.navigate(parse(&url)),
+        };
+        done.map_err(|e| Error::Other(e.to_string()))
     });
     *app.state::<Service>().info.lock().unwrap() = Some(info);
+    attrs["in_place"] = in_place.into();
     report(
         app,
         event,

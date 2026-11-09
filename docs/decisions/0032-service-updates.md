@@ -53,7 +53,9 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
 - **Installing:** Windows runs the new NSIS installer quietly (`/S /UPDATE /R`), which checks only for a running
   `gathr-app` and starts it again with its arguments. macOS replaces `Gathr.app` in place, and the window restarts.
 - **After a hand-over:** when `service.json` names a new process that answers, the window signs in to it with a fresh
-  one-time link (`gathr.ui.window.follow`).
+  one-time link (`gathr.ui.window.follow`). On the same port, which a service keeps when it's free, the page stays
+  and only fetches the link for its new cookie, so drafts, staged answers and the open chat survive; its live socket
+  reconnects and reloads what it shows (`in_place`). On another port the page's origin changes, so it loads anew.
 - **A service that dies while the window is open:** after 3 s without an answer the window starts it again through
   `launch`, as a launch does, so a copy that died on trial rolls back at once (`gathr.ui.window.restart`). A start
   racing the hand-over's own finds the one that won. A failed restart goes to the crash log.
