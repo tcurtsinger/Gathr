@@ -15,6 +15,7 @@ pub struct Event {
     pub span_id: Option<String>,
     pub parent_span_id: Option<String>,
     pub conversation_id: Option<String>,
+    pub task_id: Option<i64>,
     pub duration_us: Option<i64>,
     pub status: Option<&'static str>,
     pub error_type: Option<String>,
@@ -32,6 +33,7 @@ impl Event {
             span_id: None,
             parent_span_id: None,
             conversation_id: None,
+            task_id: None,
             duration_us: None,
             status: None,
             error_type: None,
@@ -46,6 +48,12 @@ impl Event {
 
     pub fn chat(mut self, chat: &str) -> Self {
         self.conversation_id = Some(chat.to_string());
+        self
+    }
+
+    /// The task it's about (0010).
+    pub fn task(mut self, number: i64) -> Self {
+        self.task_id = Some(number);
         self
     }
 
@@ -79,8 +87,8 @@ impl Event {
             .then(|| redact_strings(Value::Object(self.attrs.clone())).to_string());
         conn.prepare_cached(
             "INSERT INTO events (id, ts, name, phase, trace_id, span_id, parent_span_id, conversation_id,
-                duration_us, status, error_type, attrs)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, jsonb(?12))",
+                duration_us, status, error_type, attrs, task_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, jsonb(?12), ?13)",
         )?
         .execute(params![
             ulid(self.ts),
@@ -95,6 +103,7 @@ impl Event {
             self.status,
             self.error_type,
             attrs,
+            self.task_id.map(|n| n.to_string()),
         ])?;
         Ok(())
     }

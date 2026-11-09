@@ -12,6 +12,8 @@ pub enum Error {
     },
     /// Another `gathrd` holds the data folder's lock.
     AlreadyRunning,
+    /// A change the rules turn down, and why, in words for whoever asked (S68).
+    Refused(String),
     Other(String),
 }
 
@@ -27,7 +29,7 @@ impl fmt::Display for Error {
                 )
             }
             Error::AlreadyRunning => write!(f, "another gathrd is running on this data folder"),
-            Error::Other(why) => write!(f, "{why}"),
+            Error::Refused(why) | Error::Other(why) => write!(f, "{why}"),
         }
     }
 }

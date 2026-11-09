@@ -322,7 +322,8 @@ pub async fn known(s: &State, t: &Trace, chat: &str) -> Result<(), Fail> {
     }
 }
 
-async fn db(
+/// Runs `work` on the database: its answer, a rule's refusal (409), or a failure.
+pub async fn db(
     s: &State,
     t: &Trace,
     error: &'static str,
@@ -330,6 +331,7 @@ async fn db(
 ) -> Answer {
     match s.writer.call(work).await {
         Some(Ok(value)) => Ok(Json(value)),
+        Some(Err(gathr::Error::Refused(why))) => Err(fail(StatusCode::CONFLICT, error, &why, &t.0)),
         Some(Err(e)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
             error,

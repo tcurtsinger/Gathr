@@ -1,0 +1,90 @@
+//! A task's row: read, moved to a state with its event, and its state alone.
+
+use rusqlite::{Connection, OptionalExtension, params};
+
+use super::{Kind, State, Task};
+use crate::Error;
+use crate::event::Event;
+use crate::ids::now_us;
+
+/// Moves a task to `state`, with why, and records it.
+pub fn set(
+    tx: &Connection,
+    task: i64,
+    state: State,
+    reason: Option<&str>,
+    trace: &str,
+) -> Result<(), Error> {
+    let chat: String = tx.query_row(
+        "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4 WHERE number = ?1
+         RETURNING chat_id",
+        params![task, state.as_str(), reason, now_us()],
+        |r| r.get(0),
+    )?;
+    let event = Event::point("gathr.task.state").trace(trace).chat(&chat);
+    let event = event.task(task).attr("gathr.task.state", state.as_str());
+    let event = match state {
+        State::Failed => event.error("task_failed"),
+        _ => event.ok(),
+    };
+    event.attr("gathr.task.reason", reason).insert(tx)?;
+    Ok(())
+}
+
+pub fn state_of(conn: &Connection, task: i64) -> Result<Option<State>, Error> {
+    let found: Option<String> = conn
+        .query_row("SELECT state FROM tasks WHERE number = ?1", [task], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    Ok(found.as_deref().map(State::named))
+}
+
+pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
+    let mut t = conn.query_row(
+        "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
+                blocked_on, pr, reviewed, outdated
+         FROM tasks WHERE number = ?1",
+        [task],
+        |r| {
+            Ok(Task {
+                number: r.get(0)?,
+                chat: r.get(1)?,
+                giver: r.get(2)?,
+                owner: r.get(3)?,
+                given_in: r.get(4)?,
+                parent: r.get(5)?,
+                kind: Kind::named(&r.get::<_, String>(6)?).unwrap_or(Kind::Work),
+                what: r.get(7)?,
+                why: r.get(8)?,
+                state: State::named(&r.get::<_, String>(9)?),
+                reason: r.get(10)?,
+                after: Vec::new(),
+                blocked_on: r.get(11)?,
+                pr: r.get(12)?,
+                reviewed: r.get(13)?,
+                outdated: r.get(14)?,
+            })
+        },
+    )?;
+    let mut stmt =
+        conn.prepare_cached("SELECT after_task FROM task_after WHERE task = ?1 ORDER BY 1")?;
+    t.after = stmt
+        .query_map([task], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    Ok(t)
+}
+
+pub trait OptionalTask {
+    fn optional_task(self) -> Result<Option<Task>, Error>;
+}
+
+impl OptionalTask for Result<Task, Error> {
+    fn optional_task(self) -> Result<Option<Task>, Error> {
+        match self {
+            Ok(t) => Ok(Some(t)),
+            Err(Error::Db(rusqlite::Error::QueryReturnedNoRows)) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+}

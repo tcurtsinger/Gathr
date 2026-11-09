@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::http::{self, Response};
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// A temp folder, removed when dropped.
 pub struct TempDir(pub PathBuf);
@@ -321,4 +321,61 @@ pub fn project(root: &Path) -> (PathBuf, String) {
     git(&other, &["commit", "-q", "-m", "second"]);
     git(&other, &["push", "-q", "origin", "main"]);
     (root.join("project"), git(&other, &["rev-parse", "HEAD"]))
+}
+
+/// `signed_in` with the engine held after the message arrives, until `go` exists.
+pub fn held_recording(dir: &Path) -> PathBuf {
+    let held = dir.join("held.jsonl");
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let (first, rest) = frames.split_once('\n').unwrap();
+    std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
+    held
+}
+
+pub fn until<T>(secs: u64, what: &str, mut found: impl FnMut() -> Option<T>) -> T {
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    loop {
+        if let Some(found) = found() {
+            return found;
+        }
+        assert!(Instant::now() < deadline, "waited {secs} s for {what}");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// One JSON-RPC request to `/mcp` as an engine sends it under the 2026-07-28 revision.
+pub fn mcp(port: u16, token: &str, method: &str, params: Value, name: Option<&str>) -> Response {
+    let mut params = params;
+    params["_meta"] = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": { "name": "test", "version": "1.0" },
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
+    let auth = format!("Bearer {token}");
+    let mut headers = vec![
+        ("Authorization", auth.as_str()),
+        ("Content-Type", "application/json"),
+        ("Accept", "application/json, text/event-stream"),
+        ("MCP-Protocol-Version", "2026-07-28"),
+        ("Mcp-Method", method),
+    ];
+    if let Some(name) = name {
+        headers.push(("Mcp-Name", name));
+    }
+    http::post(port, "/mcp", &headers, &body.to_string()).unwrap()
+}
+
+pub fn call_tool(port: u16, token: &str, tool: &str, arguments: Value) -> Value {
+    let params = json!({ "name": tool, "arguments": arguments });
+    let answer = mcp(port, token, "tools/call", params, Some(tool));
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    answer.json()["result"].clone()
+}
+
+pub fn text(result: &Value) -> String {
+    result["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string()
 }

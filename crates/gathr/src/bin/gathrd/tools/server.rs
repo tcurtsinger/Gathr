@@ -33,7 +33,7 @@ pub fn service(chats: Arc<Chats>) -> StreamableHttpService<Tools, LocalSessionMa
     let tools = move || {
         Ok(Tools {
             chats: chats.clone(),
-            tool_router: Tools::tool_router(),
+            tool_router: Tools::tool_router() + Tools::coord_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)
@@ -41,7 +41,7 @@ pub fn service(chats: Arc<Chats>) -> StreamableHttpService<Tools, LocalSessionMa
 
 #[derive(Clone)]
 pub struct Tools {
-    chats: Arc<Chats>,
+    pub(super) chats: Arc<Chats>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -68,8 +68,7 @@ impl Tools {
         Parameters(ask): Parameters<ReadChat>,
         Extension(parts): Extension<Parts>,
     ) -> Result<CallToolResult, ErrorData> {
-        let caller = parts.extensions.get::<Caller>().cloned();
-        let caller = caller.ok_or_else(|| ErrorData::internal_error("no caller", None))?;
+        let caller = caller_of(&parts)?;
         let started = Instant::now();
         let chat = caller.chat.clone();
         let read = self
@@ -78,28 +77,47 @@ impl Tools {
             .call(move |conn| read(conn, &chat, &ask))
             .await
             .unwrap_or_else(|| Err("the database didn't answer".into()));
+        Ok(self.respond(&caller, "read_chat", started, read).await)
+    }
+}
+
+/// The engine calling, as the API's guard found it.
+pub(super) fn caller_of(parts: &Parts) -> Result<Caller, ErrorData> {
+    let caller = parts.extensions.get::<Caller>().cloned();
+    caller.ok_or_else(|| ErrorData::internal_error("no caller", None))
+}
+
+impl Tools {
+    /// A tool's answer, with its call recorded on the turn's trace; a failure says why and gives
+    /// the reference that finds it, recorded before the answer goes out (0019).
+    pub(super) async fn respond(
+        &self,
+        caller: &Caller,
+        tool: &str,
+        started: Instant,
+        result: Result<String, String>,
+    ) -> CallToolResult {
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
         let mut event = Event::point("gathr.tool.call")
             .trace(&trace)
             .chat(&caller.chat)
-            .attr("gen_ai.tool.name", "read_chat")
+            .attr("gen_ai.tool.name", tool)
             .attr("gen_ai.agent.id", caller.agent.clone());
         event.duration_us = Some(started.elapsed().as_micros() as i64);
-        match read {
+        match result {
             Ok(text) => {
                 let event = event
                     .ok()
                     .attr("gathr.tool.result.chars", text.chars().count());
                 self.chats.writer.record(event);
-                Ok(CallToolResult::success(vec![ContentBlock::text(text)]))
+                CallToolResult::success(vec![ContentBlock::text(text)])
             }
-            // Recorded before the answer, so its reference traces at once (0019).
             Err(why) => {
-                let event = event.error("read_chat").attr("why", why.clone());
+                let event = event.error(tool).attr("why", why.clone());
                 self.chats.writer.record_now(event).await;
                 let reference = gathr::ids::reference(&trace);
-                let said = format!("read_chat failed: {why} (ref {reference})");
-                Ok(CallToolResult::error(vec![ContentBlock::text(said)]))
+                let said = format!("{tool} failed: {why} (ref {reference})");
+                CallToolResult::error(vec![ContentBlock::text(said)])
             }
         }
     }
@@ -187,6 +205,7 @@ fn rows(
         let name: Option<String> = r.get(2)?;
         let author = match role.as_str() {
             "user" => "person".to_string(),
+            "gathr" => "Gathr".to_string(),
             _ => name.unwrap_or_else(|| "agent".to_string()),
         };
         Ok(Row {

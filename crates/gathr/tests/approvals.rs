@@ -52,6 +52,9 @@ fn mode(args: &[Value]) -> &str {
         .unwrap_or_else(|| panic!("no permission mode in {args:?}"))
 }
 
+/// Gathr's `wait` tool as Claude Code names it.
+const WAIT_TOOL: &str = "mcp__gathr__wait";
+
 fn hook(port: u16, token: &str, tool: &str, input: Value) -> http::Response {
     let body = json!({ "hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input });
     let auth = format!("Bearer {token}");
@@ -148,6 +151,19 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
         pushed["hookSpecificOutput"]["permissionDecision"], "ask",
         "{pushed}"
     );
+    let matcher = settings["hooks"]["PreToolUse"][0]["matcher"].as_str();
+    assert!(
+        matcher.is_some_and(|m| m.split('|').any(|t| t == WAIT_TOOL)),
+        "{settings}"
+    );
+    let wait = |input: Value| hook(port, token, WAIT_TOOL, input).json();
+    let check = wait(json!({ "check": "printf x > ../out", "then": "go on" }));
+    assert_eq!(
+        check["hookSpecificOutput"]["permissionDecision"], "ask",
+        "Gathr runs a check outside Claude Code's checks: {check}"
+    );
+    let on_pr = wait(json!({ "pr": 5, "then": "go on" }));
+    assert_eq!(on_pr, json!({}), "a wait without a check asked");
     let refused = hook(
         port,
         &service.info.token,

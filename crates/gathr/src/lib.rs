@@ -16,10 +16,13 @@ pub mod ids;
 pub mod launch;
 pub mod platform;
 pub mod redact;
+pub mod run;
 pub mod seed;
 pub mod store;
+pub mod tasks;
 pub mod team;
 pub mod timeline;
+pub mod waits;
 pub mod worktree;
 pub mod writer;
 

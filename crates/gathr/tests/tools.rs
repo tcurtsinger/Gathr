@@ -5,31 +5,12 @@
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, recording, sign_in_account};
-use gathr::http::{self, Response};
+use common::{
+    TempDir, TestService, call_tool, gathr, held_recording, mcp, recording, sign_in_account, text,
+    until,
+};
 use serde_json::{Value, json};
-
-/// `signed_in` with the engine held after the message arrives, until `go` exists.
-fn held_recording(dir: &Path) -> PathBuf {
-    let held = dir.join("held.jsonl");
-    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
-    let (first, rest) = frames.split_once('\n').unwrap();
-    std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
-    held
-}
-
-fn until<T>(secs: u64, what: &str, mut found: impl FnMut() -> Option<T>) -> T {
-    let deadline = Instant::now() + Duration::from_secs(secs);
-    loop {
-        if let Some(found) = found() {
-            return found;
-        }
-        assert!(Instant::now() < deadline, "waited {secs} s for {what}");
-        std::thread::sleep(Duration::from_millis(50));
-    }
-}
 
 fn query(data: &Path, sql: &str) -> Vec<Value> {
     let (ok, rows) = gathr(data, &["diag", "query", sql]);
@@ -65,43 +46,6 @@ fn started(args: &Path, env: &Path) -> Started {
         args,
         token: token.to_string(),
     }
-}
-
-/// One JSON-RPC request to `/mcp` as an engine sends it under the 2026-07-28 revision.
-fn mcp(port: u16, token: &str, method: &str, params: Value, name: Option<&str>) -> Response {
-    let mut params = params;
-    params["_meta"] = json!({
-        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-        "io.modelcontextprotocol/clientInfo": { "name": "test", "version": "1.0" },
-        "io.modelcontextprotocol/clientCapabilities": {}
-    });
-    let body = json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
-    let auth = format!("Bearer {token}");
-    let mut headers = vec![
-        ("Authorization", auth.as_str()),
-        ("Content-Type", "application/json"),
-        ("Accept", "application/json, text/event-stream"),
-        ("MCP-Protocol-Version", "2026-07-28"),
-        ("Mcp-Method", method),
-    ];
-    if let Some(name) = name {
-        headers.push(("Mcp-Name", name));
-    }
-    http::post(port, "/mcp", &headers, &body.to_string()).unwrap()
-}
-
-fn call_tool(port: u16, token: &str, tool: &str, arguments: Value) -> Value {
-    let params = json!({ "name": tool, "arguments": arguments });
-    let answer = mcp(port, token, "tools/call", params, Some(tool));
-    assert_eq!(answer.status, 200, "{}", answer.body);
-    answer.json()["result"].clone()
-}
-
-fn text(result: &Value) -> String {
-    result["content"][0]["text"]
-        .as_str()
-        .unwrap_or_default()
-        .to_string()
 }
 
 #[test]
@@ -161,7 +105,17 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         .iter()
         .filter_map(|t| t["name"].as_str())
         .collect();
-    assert_eq!(names, ["read_chat"], "{tools}");
+    let all = [
+        "cancel_task",
+        "end_wait",
+        "finish_task",
+        "give_task",
+        "list_tasks",
+        "read_chat",
+        "restart_task",
+        "wait",
+    ];
+    assert_eq!(names, all, "{tools}");
 
     // As Orin, in the chat the engine runs: the person's message, by its author.
     let read = call_tool(port, &engine.token, "read_chat", json!({}));

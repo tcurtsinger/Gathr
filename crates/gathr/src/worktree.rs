@@ -223,39 +223,16 @@ fn write_hooks(hooks: &Path, own: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Runs git in `dir` with `env`, never asking for a password: its output, or the line of what it
-/// said that gives the reason. Past `limit` it's stopped.
+/// Runs git in `dir` with `env`: its output, or the line of what it said that gives the reason.
 async fn git(env: &Vars, dir: &Path, args: &[&str], limit: Duration) -> Result<String, String> {
-    let mut command = std::process::Command::new("git");
-    command
-        .args(args)
-        .current_dir(dir)
-        .env_clear()
-        .envs(env.iter().cloned())
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GCM_INTERACTIVE", "never")
-        .stdin(std::process::Stdio::null());
-    crate::platform::no_window(&mut command);
-    let mut command = tokio::process::Command::from(command);
-    command.kill_on_drop(true);
-    let what = format!("git {}", args.first().unwrap_or(&""));
-    let out = tokio::time::timeout(limit, command.output())
-        .await
-        .map_err(|_| format!("{what} didn't finish in {} s", limit.as_secs()))?
-        .map_err(|e| format!("git didn't start: {e}"))?;
-    if !out.status.success() {
-        let said = String::from_utf8_lossy(&out.stderr);
-        // Progress lines ("Preparing worktree …") come first; the reason is its `fatal:` line.
-        let lines: Vec<&str> = said
-            .lines()
-            .map(str::trim)
-            .filter(|l| !l.is_empty())
-            .collect();
-        let reason = lines
-            .iter()
-            .find(|l| l.starts_with("fatal:") || l.starts_with("error:"));
-        let said = reason.or(lines.last()).copied().unwrap_or("");
-        return Err(format!("{what} failed ({}): {said}", out.status));
+    let ran = crate::run::run(Path::new("git"), args, dir, env, limit).await?;
+    match ran.code {
+        Some(0) => Ok(ran.out),
+        code => {
+            // Progress lines ("Preparing worktree …") come first; the reason is its `fatal:` line.
+            let what = format!("git {}", args.first().unwrap_or(&""));
+            let status = code.map_or("a signal".to_string(), |c| format!("exit code: {c}"));
+            Err(format!("{what} failed ({status}): {}", ran.reason()))
+        }
     }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }

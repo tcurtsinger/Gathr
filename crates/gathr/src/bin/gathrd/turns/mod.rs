@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod given;
 mod process;
 mod pushes;
 mod reading;
@@ -39,6 +40,8 @@ struct Ids {
     turn: String,
     trace: String,
     agent: Option<String>,
+    /// The task it works on (0010).
+    task: Option<i64>,
 }
 
 #[derive(Clone)]
@@ -229,10 +232,12 @@ impl Task {
                     turn: w.turn,
                     trace: w.trace,
                     agent: w.agent,
+                    task: w.task,
                 };
                 self.queue.push_back(Queued { ids, text: w.text });
                 self.try_next().await;
             }
+            Cmd::Start(start) => self.given(start).await,
             Cmd::Leave { folder, done } => self.leave(&folder, done).await,
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
@@ -271,6 +276,7 @@ impl Task {
             turn: ulid(now_us()),
             trace,
             agent,
+            task: None,
         };
         let queued = Queued { ids, text };
         let row = queued.ids.clone();
@@ -278,7 +284,13 @@ impl Task {
             .chats
             .writer
             .call(move |conn| {
-                store::add_turn(conn, &row.chat, &row.turn, &row.trace, row.agent.as_deref())
+                store::add_turn(
+                    conn,
+                    &row.chat,
+                    &row.turn,
+                    &row.trace,
+                    (row.agent.as_deref(), row.task),
+                )
             })
             .await;
         let ids = &queued.ids;
@@ -298,22 +310,30 @@ impl Task {
         );
         let reference = gathr::ids::reference(&ids.trace).to_string();
         let answer = |status: &str| json!({ "turn": ids.turn, "status": status, "ref": reference });
+        match self.enqueue(&queued).await {
+            Ok(status) => Ok(answer(status)),
+            Err(why) => Err(Failed {
+                why,
+                trace: ids.trace.clone(),
+            }),
+        }
+    }
+
+    /// Starts the turn now, or queues it behind what the agent is doing: its status, or why it
+    /// failed.
+    async fn enqueue(&mut self, queued: &Queued) -> Result<&'static str, String> {
+        let ids = &queued.ids;
         if self.turn.is_some() || self.closing.is_some() || !self.queue.is_empty() {
             self.queue.push_back(queued.clone());
             self.set_turn(ids, "queued", None).await;
             self.trace_hold(ids);
-            return Ok(answer("queued"));
+            return Ok("queued");
         }
-        match self.start(&queued).await {
-            Ok(status) => Ok(answer(status)),
-            Err(why) => {
-                self.set_turn(ids, "failed", Some(&why)).await;
-                Err(Failed {
-                    why,
-                    trace: ids.trace.clone(),
-                })
-            }
+        let started = self.start(queued).await;
+        if let Err(why) = &started {
+            self.set_turn(ids, "failed", Some(why)).await;
         }
+        started
     }
 
     /// Starts the turns waiting, in order, while nothing runs or closes.
@@ -323,7 +343,7 @@ impl Task {
                 return;
             };
             match self.start(&next).await {
-                Ok("running") => {
+                Ok("running" | "dropped") => {
                     self.queue.pop_front();
                 }
                 Ok(_) => return,
@@ -336,9 +356,13 @@ impl Task {
     }
 
     /// Sends a turn to the engine, starting it first if needed: `running`; `queued` while
-    /// another session's engine closes; `waiting_sign_in`; or why it couldn't. A turn that
-    /// doesn't run stays first in the queue.
+    /// another session's engine closes; `waiting_sign_in`; `dropped` when its task may no longer
+    /// start (0010's gate); or why it couldn't. A turn that doesn't run stays first in the queue.
     async fn start(&mut self, next: &Queued) -> Result<&'static str, String> {
+        if let Some(why) = self.gate(&next.ids).await {
+            self.set_turn(&next.ids, "stopped", Some(&why)).await;
+            return Ok("dropped");
+        }
         if self.closing.is_some() || self.awaiting_read() {
             return Ok(self.hold_back(next, "queued").await);
         }
@@ -421,13 +445,20 @@ impl Task {
                 turn: ulid(now_us()),
                 trace: gathr::ids::trace_id(),
                 agent: self.agent.clone(),
+                task: None,
             };
             let row = ids.clone();
             let saved = self
                 .chats
                 .writer
                 .call(move |conn| {
-                    store::add_turn(conn, &row.chat, &row.turn, &row.trace, row.agent.as_deref())?;
+                    store::add_turn(
+                        conn,
+                        &row.chat,
+                        &row.turn,
+                        &row.trace,
+                        (row.agent.as_deref(), row.task),
+                    )?;
                     store::move_message(conn, &message, &row.turn)
                 })
                 .await;
@@ -515,7 +546,11 @@ impl Task {
         let span = span_id();
         let assigned = self.assigned.as_ref();
         if let Some(pass) = &self.pass {
-            pass.on_turn(&ids.trace);
+            pass.on_turn(crate::tools::OnTurn {
+                trace: ids.trace.clone(),
+                turn: ids.turn.clone(),
+                task: ids.task,
+            });
         }
         // What Gathr gave the turn, in characters with a rough token estimate (0020: the engines
         // report totals only, so the parts are Gathr's own count, labelled an estimate).
@@ -568,13 +603,20 @@ impl Task {
             turn: ulid(now_us()),
             trace: gathr::ids::trace_id(),
             agent: self.agent.clone(),
+            task: None,
         };
         let (row, id) = (ids.clone(), message.to_string());
         let saved = self
             .chats
             .writer
             .call(move |conn| {
-                store::add_turn(conn, &row.chat, &row.turn, &row.trace, row.agent.as_deref())?;
+                store::add_turn(
+                    conn,
+                    &row.chat,
+                    &row.turn,
+                    &row.trace,
+                    (row.agent.as_deref(), row.task),
+                )?;
                 store::move_message(conn, &id, &row.turn)
             })
             .await;
