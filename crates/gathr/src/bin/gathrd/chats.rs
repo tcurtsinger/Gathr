@@ -72,6 +72,13 @@ pub enum Cmd {
         target: String,
         done: oneshot::Sender<()>,
     },
+    /// The chat was archived, or with close deleted (F11): its turns and background commands end,
+    /// and with close its engines close, answering once each has exited.
+    EndChat {
+        chat: String,
+        close: bool,
+        done: oneshot::Sender<()>,
+    },
     Close {
         done: oneshot::Sender<()>,
     },
@@ -416,6 +423,16 @@ impl Chats {
         self.ask_all(|done| Cmd::StopNow {
             scope: scope.to_string(),
             target: target.to_string(),
+            done,
+        })
+        .await;
+    }
+
+    /// Ends a chat's work in every agent's queue once it's archived or, with close, being deleted.
+    pub async fn end_chat(&self, chat: &str, close: bool) {
+        self.ask_all(|done| Cmd::EndChat {
+            chat: chat.to_string(),
+            close,
             done,
         })
         .await;

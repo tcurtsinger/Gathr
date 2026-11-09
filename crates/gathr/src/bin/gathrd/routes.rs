@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Extension, Path, State as Extract};
+use axum::extract::{Extension, Path, Query, State as Extract};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -48,8 +48,21 @@ pub fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> 
     Fail(status, error, why.to_string(), trace.to_string())
 }
 
-async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    db(&s, &t, "Chats failed", |conn| store::chats(conn)).await
+#[derive(Deserialize)]
+struct Listed {
+    #[serde(default)]
+    archived: bool,
+}
+
+async fn list(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Query(q): Query<Listed>,
+) -> Answer {
+    db(&s, &t, "Chats failed", move |conn| {
+        store::chats(conn, q.archived)
+    })
+    .await
 }
 
 async fn history(
@@ -117,6 +130,11 @@ async fn send(
     if let Some(agent) = &body.agent {
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
+    let id = chat.clone();
+    let _ = db(&s, &t, "Send failed", move |conn| {
+        gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
+    })
+    .await?;
     let agent = addressee(&s, &t, &chat, body.agent, &body.text).await?;
     let (reply, answer) = oneshot::channel();
     let task = s.chats.task(&chat, agent.as_deref());

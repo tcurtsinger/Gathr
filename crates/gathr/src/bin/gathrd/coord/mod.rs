@@ -55,7 +55,12 @@ pub fn person_listed(
     conn: &rusqlite::Connection,
     chat: Option<&str>,
 ) -> Result<Value, gathr::Error> {
-    Ok(json!({ "tasks": tasks::person::open(conn, chat)? }))
+    let mut listed = json!({ "tasks": tasks::person::open(conn, chat)? });
+    if chat.is_none() {
+        // Across chats, the person's list also groups agents' stale tasks (F11).
+        listed["stale"] = json!(tasks::stale::open(conn)?);
+    }
+    Ok(listed)
 }
 
 /// Runs after each write: every chat whose tasks or waits it changed goes out live, whole, for

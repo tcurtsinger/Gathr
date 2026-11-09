@@ -45,14 +45,16 @@ pub fn put_in_project(
     }
 }
 
-pub fn chats(conn: &Connection) -> Result<Value, Error> {
+/// The chats in the list, newest first; with rchived, the archived ones, last archived first.
+pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project
-         FROM chats c ORDER BY c.created_ts DESC",
+                c.project_id, c.project, c.archived_ts
+         FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
+         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC",
     )?;
-    let rows = stmt.query_map([], |r| {
+    let rows = stmt.query_map([archived], |r| {
         Ok(json!({
             "id": r.get::<_, String>(0)?,
             "title": r.get::<_, String>(1)?,
@@ -62,6 +64,7 @@ pub fn chats(conn: &Connection) -> Result<Value, Error> {
             "agent": r.get::<_, Option<String>>(4)?,
             "project": r.get::<_, Option<String>>(5)?,
             "folder": r.get::<_, Option<String>>(6)?,
+            "archived": r.get::<_, Option<i64>>(7)?.map(crate::ids::utc),
         }))
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
@@ -111,18 +114,18 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
-    let (project, folder): (Option<String>, Option<String>) = conn
+    let (project, folder, archived): (Option<String>, Option<String>, Option<i64>) = conn
         .query_row(
-            "SELECT project_id, project FROM chats WHERE id = ?1",
+            "SELECT project_id, project, archived_ts FROM chats WHERE id = ?1",
             [chat],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?)),
         )
         .optional()?
         .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
     Ok(
         json!({ "chat": chat, "agent": agent, "project": project, "folder": folder,
-        "members": members, "messages": messages, "turns": turns }),
+        "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns }),
     )
 }
 

@@ -213,11 +213,15 @@ async fn let_go(s: &State, trace: &str, account: &Account) -> Result<(), String>
     }
 }
 
-/// `claude auth logout`, which also clears the login's macOS Keychain entry; the gate stays held.
+/// Ends the login before its folder goes, with the gate held to the end: `claude auth logout`,
+/// which also clears its macOS Keychain item. One that reads signed out has nothing to end, so it
+/// goes without Claude Code (F11).
 async fn sign_out(s: &State, folder: &std::path::Path) -> Result<login::Hold, String> {
-    let program = command::find(s.chats.copy())?;
     let gate = pass_gate(s, folder).await?;
-    log_out_held(s, &program, folder).await?;
+    if s.chats.login_status(folder).await.0 != login::Login::SignedOut {
+        let program = command::find(s.chats.copy())?;
+        log_out_held(s, &program, folder).await?;
+    }
     Ok(gate)
 }
 

@@ -345,6 +345,14 @@ fn a_remove_whose_sign_out_fails_keeps_the_account_and_answers_a_reference_that_
     let spare = service.add_account("Spare");
     let removed = service.call("DELETE", &format!("/api/accounts/{spare}"));
     assert_eq!(removed.status, 200, "{}", removed.body);
+    // Signed out since (its folder stays, with no login in it): nothing to end either (F11).
+    let old = service.add_account("Old");
+    let folder = data.0.join("accounts").join(&old).join("claude");
+    std::fs::create_dir_all(&folder).unwrap();
+    std::fs::write(folder.join(".claude.json"), "{}").unwrap();
+    let removed = service.call("DELETE", &format!("/api/accounts/{old}"));
+    assert_eq!(removed.status, 200, "{}", removed.body);
+    assert!(!folder.exists(), "its folder went");
     let unknown = service.call("DELETE", "/api/accounts/nope");
     assert_eq!(unknown.status, 404, "{}", unknown.body);
 }

@@ -9,8 +9,9 @@ use axum::extract::{Extension, Path, Query, State as Extract};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
+use gathr::event::Event;
 use gathr::tasks;
-use gathr::tasks::{Start, person};
+use gathr::tasks::{Start, person, stale};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -25,6 +26,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/person-tasks", get(person_open))
         .route("/api/person-tasks/answer", post(person_answer))
         .route("/api/tasks/{task}/files/{index}", get(file))
+        .route("/api/settings", get(settings).patch(change_settings))
 }
 
 /// A file given with a task, as copied then. An agent wrote it, so a page never runs as Gathr's:
@@ -59,6 +61,51 @@ async fn file(
         (header::CONTENT_SECURITY_POLICY, "sandbox"),
     ];
     Ok((headers, bytes).into_response())
+}
+
+/// Settings > General's stale days (F11): after how many days without a move a task is stale, and
+/// cancelled.
+async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
+    db(&s, &t, "Settings failed", |c| shown(c)).await
+}
+
+#[derive(Deserialize)]
+pub struct Change {
+    stale_days: Option<i64>,
+    cancel_days: Option<i64>,
+}
+
+async fn change_settings(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Json(body): Json<Change>,
+) -> Answer {
+    let trace = t.0.clone();
+    db(&s, &t, "Save failed", move |c| {
+        let was = stale::days(c)?;
+        let days = stale::Days {
+            stale: body.stale_days.unwrap_or(was.stale),
+            cancel: body.cancel_days.unwrap_or(was.cancel),
+        };
+        let saved = stale::set_days(c, days);
+        let event = Event::point("gathr.settings.change").trace(&trace);
+        let event = match &saved {
+            Ok(()) => event.ok(),
+            Err(e) => event.error("refused").attr("why", e.to_string()),
+        };
+        event
+            .attr("stale_days", days.stale)
+            .attr("cancel_days", days.cancel)
+            .insert(c)?;
+        saved?;
+        shown(c)
+    })
+    .await
+}
+
+fn shown(c: &rusqlite::Connection) -> Result<serde_json::Value, gathr::Error> {
+    let days = stale::days(c)?;
+    Ok(json!({ "stale_days": days.stale, "cancel_days": days.cancel }))
 }
 
 #[derive(Deserialize)]

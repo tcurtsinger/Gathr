@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod ended;
 mod given;
 mod holds;
 mod process;
@@ -297,6 +298,7 @@ impl Task {
                 self.stop_now(scope, target).await;
                 let _ = done.send(());
             }
+            Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
         }

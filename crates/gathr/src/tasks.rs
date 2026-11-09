@@ -12,6 +12,7 @@ use crate::ids::now_us;
 mod held;
 pub mod person;
 mod records;
+pub mod stale;
 pub mod touched;
 mod words;
 
@@ -137,6 +138,8 @@ pub struct Task {
     /// The person's answer, as sent.
     pub answer: Option<serde_json::Value>,
     pub created_us: i64,
+    /// Since when nothing has moved it, once it's stale (F11).
+    pub stale_us: Option<i64>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -264,6 +267,7 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
         )));
     }
     let tx = conn.transaction()?;
+    crate::archive::refuse_archived(&tx, g.chat)?;
     in_team(&tx, g.chat, g.owner)?;
     for &n in g.after.iter().chain(&g.parent) {
         let chat: Option<String> = tx
@@ -518,13 +522,7 @@ pub fn cancel(
         let state = t.state.as_str();
         return Err(refused(format!("task #{task} is already {state}")));
     }
-    set(&tx, task, State::Cancelled, Some(why), trace)?;
-    tx.execute(
-        "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = 'its task was cancelled'
-         WHERE task = ?1 AND state IN ('open', 'met')",
-        params![task, now_us()],
-    )?;
-    let mut starts = cascade(&tx, task, trace)?;
+    let mut starts = cancel_in(&tx, task, why, trace)?;
     if t.kind == Kind::Person {
         starts.extend(person::heard(&tx, &[task], by, trace)?);
     }
@@ -532,7 +530,7 @@ pub fn cancel(
     Ok(starts)
 }
 
-/// Starts a failed, stopped or blocked task again, by its giver or the person.
+/// Starts a failed, stopped, blocked or cancelled task again, by its giver or the person.
 pub fn restart(
     conn: &mut Connection,
     by: Option<&str>,
@@ -542,10 +540,11 @@ pub fn restart(
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
     may_change(&t, by, "restart")?;
-    if !matches!(t.state, State::Failed | State::Stopped | State::Blocked) {
+    crate::archive::refuse_archived(&tx, &t.chat)?;
+    if !t.state.settled() || t.state == State::Done {
         let state = t.state.as_str();
         return Err(refused(format!(
-            "task #{task} is {state}: only a failed, stopped or blocked task restarts"
+            "task #{task} is {state}: only a failed, stopped, blocked or cancelled task restarts"
         )));
     }
     let carry = match t.state {
@@ -790,6 +789,11 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                 starts.push(ready(tx, dependant, None)?)
             }
             State::Done => {}
+            // It can never go on (F11): cancelled at once, not left blocked.
+            State::Cancelled => {
+                let why = format!("#{task} was cancelled");
+                starts.extend(cancel_in(tx, dependant, &why, trace)?);
+            }
             _ => {
                 let why = format!("#{task} is {}", state.as_str());
                 set(tx, dependant, State::Blocked, Some(&why), trace)?;
@@ -797,21 +801,28 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
             }
         }
     }
-    if state == State::Done {
-        let on_it: Vec<i64> = {
-            let mut stmt = tx.prepare_cached(
-                "SELECT number FROM tasks WHERE blocked_on = ?1 AND state = 'blocked'",
-            )?;
-            let rows = stmt.query_map([task], |r| r.get(0))?;
-            rows.collect::<Result<_, _>>()?
-        };
-        for blocked in on_it {
-            tx.execute(
-                "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
-                [blocked],
-            )?;
-            let carry = format!("#{task}, which it was blocked on, is done");
-            starts.push(ready(tx, blocked, Some(&carry))?);
+    let on_it: Vec<i64> = {
+        let mut stmt = tx.prepare_cached(
+            "SELECT number FROM tasks WHERE blocked_on = ?1 AND state = 'blocked'",
+        )?;
+        let rows = stmt.query_map([task], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for blocked in on_it {
+        match state {
+            State::Done => {
+                tx.execute(
+                    "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
+                    [blocked],
+                )?;
+                let carry = format!("#{task}, which it was blocked on, is done");
+                starts.push(ready(tx, blocked, Some(&carry))?);
+            }
+            State::Cancelled => {
+                let why = format!("#{task}, which it was blocked on, was cancelled");
+                starts.extend(cancel_in(tx, blocked, &why, trace)?);
+            }
+            _ => {}
         }
     }
     let given_in: Option<String> = tx.query_row(
@@ -823,6 +834,23 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         starts.extend(held::hear_backs(tx, &turn, trace)?);
     }
     Ok(starts)
+}
+
+/// Cancels the task with why and nothing else: for archiving, which ends everything around it.
+pub(crate) fn cancelled_with(
+    conn: &Connection,
+    task: i64,
+    why: &str,
+    trace: &str,
+) -> Result<(), Error> {
+    set(conn, task, State::Cancelled, Some(why), trace)
+}
+
+/// Cancels the task with why: its open waits end, and what follows it moves.
+fn cancel_in(tx: &Transaction, task: i64, why: &str, trace: &str) -> Result<Vec<Start>, Error> {
+    set(tx, task, State::Cancelled, Some(why), trace)?;
+    end_waits(tx, task, "its task was cancelled")?;
+    cascade(tx, task, trace)
 }
 
 fn end_waits(tx: &Transaction, task: i64, why: &str) -> Result<(), Error> {
