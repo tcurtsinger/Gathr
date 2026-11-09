@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './base.css';
+import './theme.css';
 
 // The theme follows the system's light or dark setting.
 const light = matchMedia('(prefers-color-scheme: light)');

@@ -1,0 +1,86 @@
+/* The conversation column (DESIGN.md: 44rem including 16px padding, the composer at its width). */
+.thread {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--background);
+}
+.thread-viewport {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  overflow-y: scroll;
+}
+.thread-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 24px 16px 0;
+}
+.thread-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-bottom: 56px;
+}
+.thread-messages:empty {
+  display: none;
+}
+.thread-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: auto;
+  padding-bottom: 20px;
+  background: var(--background);
+}
+.thread-bottom {
+  position: absolute;
+  top: -48px;
+  z-index: 1;
+  border-radius: 9999px;
+}
+.thread-bottom:disabled {
+  visibility: hidden;
+}
+/* Off-screen messages skip layout and paint until they're scrolled near. */
+.user-message,
+.reply {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
+}
+.user-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 8px;
+}
+.user-bubble {
+  max-width: calc(100% - 72px);
+  padding: 8px 16px;
+  border-radius: 16px;
+  background: var(--muted-surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.reply {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 8px;
+}
+.reply-body {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.reply-body:empty {
+  display: none;
+}

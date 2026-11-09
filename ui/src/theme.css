@@ -1,0 +1,51 @@
+/* The UI's one stylesheet entry (0030): Tailwind for the registry components, then Gathr's own base. */
+@import "../../designs/tokens.css";
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./registry/registry.css";
+@import "./base.css" layer(base);
+@source "../node_modules/streamdown/dist/*.js";
+
+/* Dark is the default and html.light selects light (tokens.css), so the registry's dark: follows it. */
+@custom-variant dark (&:where(:root:not(.light), :root:not(.light) *));
+
+/* The shadcn names the registry uses, mapped to Gathr's tokens. Gathr's --muted and --accent are text
+   colours, so the registry's muted and accent surfaces read --muted-surface and --accent-surface. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted-surface);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent-surface);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* No focus rings anywhere (DESIGN.md). Most registry rings name their colour in the class, not --ring,
+   so the ring colour is cleared here. Unlayered, this wins over Tailwind's layered utilities. */
+:focus-visible {
+  outline: none;
+  --tw-ring-color: transparent;
+}
+/* Keyboard focus shows the quiet hover highlight, laid over the control's own background. */
+:is(button, a, summary, [role="option"], [role="menuitem"], [role="tab"]):focus-visible {
+  background-image: linear-gradient(var(--hover-tint), var(--hover-tint));
+}
+:root {
+  --hover-tint: color-mix(in oklab, var(--foreground) 7%, transparent);
+}

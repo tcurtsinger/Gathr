@@ -1,5 +1,5 @@
-@import "../../designs/tokens.css";
-
+/* Gathr's own element styles, in Tailwind's base layer (theme.css). Registry controls carry data-slot
+   and keep their own classes, so these skip them. */
 * {
   box-sizing: border-box;
   scrollbar-color: var(--control) transparent;
@@ -10,33 +10,28 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--text);
-  font:
-    15px / 1.65 "Segoe UI Variable",
-    "Segoe UI",
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
+  font: 14px / 1.6 var(--font-sans);
 }
-button,
-input,
-select,
-textarea {
+button:where(:not([data-slot])),
+input:where(:not([data-slot])),
+select:where(:not([data-slot])),
+textarea:where(:not([data-slot])) {
   font: inherit;
   color: inherit;
 }
-button,
-select {
+button:where(:not([data-slot])),
+select:where(:not([data-slot])) {
   cursor: pointer;
 }
-button {
+button:where(:not([data-slot])) {
   min-height: 32px;
   padding: 6px 10px;
   border: 0;
   border-radius: 7px;
   background: transparent;
 }
-button:hover,
-select:hover {
+button:where(:not([data-slot])):hover,
+select:where(:not([data-slot])):hover {
   background: var(--raised);
 }
 button.primary {
@@ -68,13 +63,17 @@ button.link {
 button.link:hover {
   background: transparent;
 }
-input,
-select {
+input:where(:not([data-slot])),
+select:where(:not([data-slot])) {
   min-width: 0;
   padding: 7px 10px;
   background: var(--canvas);
   border: 1px solid var(--control);
   border-radius: 7px;
+}
+/* Tailwind's reset clears the browser's own margin: auto that centres a modal dialog. */
+dialog:modal {
+  margin: auto;
 }
 /* Read by screen readers, not shown: a status such as Saving. */
 .visually-hidden {
@@ -84,10 +83,6 @@ select {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
 }
 ::selection {
   background: var(--accent);

@@ -1,3 +1,5 @@
+import { fileURLToPath } from 'node:url';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
@@ -9,7 +11,9 @@ const data = process.env.GATHR_DATA;
 const mac = process.platform === 'darwin';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  // The registry files import each other as @/… (0030).
+  resolve: { alias: { '@': fileURLToPath(new URL('./src/registry', import.meta.url)) } },
   clearScreen: false,
   envPrefix: ['VITE_', 'TAURI_ENV_*'],
   server: {
@@ -17,6 +21,8 @@ export default defineConfig({
     port: uiPort,
     strictPort: true,
     proxy: data ? serviceProxy(data, uiPort) : {},
+    // tokens.css's font is in designs/, outside this folder.
+    fs: { allow: ['.', '../designs'] },
   },
   // Bundled before the tests start: discovering them mid-run reloads a test (seen in CI).
   optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime', 'vitest-browser-react'] },

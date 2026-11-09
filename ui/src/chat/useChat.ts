@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
-import type { SendFailure } from './rows';
+import type { SendFailure } from './messages';
 import { answered, apply, type ChatState, empty, fromHistory } from './state';
 
 /** Changes the chat's messages that never reached the service; the app keeps them across switches. */

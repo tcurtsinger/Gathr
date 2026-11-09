@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Agent, Chat } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker } from './AgentPicker';
-import { rows, type SendFailure } from './rows';
+import type { SendFailure } from './messages';
 import { running } from './state';
-import { type NoticeActions, Transcript } from './Transcript';
+import { type Actions, Thread } from './Thread';
 import { type Unsent, useChat } from './useChat';
 import './chat.css';
 
@@ -33,12 +33,8 @@ export function ChatView(props: Props) {
     unsent,
     onUnsent,
   );
-  const list = useMemo(() => rows(state, failed), [state, failed]);
   const turn = running(state);
-  const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
-  const pinned = useRef(true);
-  const ours = useRef(0);
   const [picked, setPicked] = useState<string | null>(null);
   // The one picked here, else the agent of the chat's last turn, else the first; a removed one is skipped.
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
@@ -46,32 +42,14 @@ export function ChatView(props: Props) {
 
   useFirstTokenReport(state.partial);
 
-  // Keeps the newest text in view while it streams, and while off-screen rows settle from
-  // their estimated height to their real one, unless the person scrolled up to read.
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el?.firstElementChild) return;
-    const follow = new ResizeObserver(() => {
-      if (!pinned.current) return;
-      el.scrollTop = el.scrollHeight;
-      ours.current = el.scrollTop;
-    });
-    follow.observe(el.firstElementChild);
-    return () => follow.disconnect();
-  }, []);
-
-  const submit = (text: string, to: string | undefined, retrying?: SendFailure) => {
-    pinned.current = true;
-    return send(text, to, retrying);
-  };
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
     const first = state.messages.length === 0;
     onDraft('');
-    submit(draft, agent).then(() => first && onNamed());
+    send(draft, agent).then(() => first && onNamed());
   };
 
-  const actions: NoticeActions = {
+  const actions: Actions = {
     diagnostics: (t) => openSettings('diagnostics', t),
     signIn: () => openSettings('engines'),
     // To the agent it was sent to (none if it was sent to none), never the one picked now:
@@ -79,13 +57,14 @@ export function ChatView(props: Props) {
     retry: (t) => {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       const turn = state.turns[t];
-      if (asked && turn) submit(asked.body as string, turn.agent ?? undefined);
+      if (asked && turn) send(asked.body as string, turn.agent ?? undefined);
     },
-    resend: (f) => submit(f.text, f.agent, f),
+    resend: (f) => send(f.text, f.agent, f),
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();
     },
+    approve,
   };
 
   return (
@@ -93,17 +72,15 @@ export function ChatView(props: Props) {
       <header className="topbar">
         <h1>{chat.title}</h1>
       </header>
-      <div
-        className="scroller"
-        ref={scroller}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          if (el.scrollTop === ours.current) return;
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-        }}
-      >
-        <div className="reading">
-          {loadFailure && (
+      <Thread
+        state={state}
+        agents={agents}
+        unsent={failed}
+        running={!!turn}
+        actions={actions}
+        empty={loaded && state.messages.length === 0 && failed.length === 0}
+        header={
+          loadFailure && (
             <Notice
               danger
               title={loadFailure.error}
@@ -116,28 +93,9 @@ export function ChatView(props: Props) {
                 </button>
               }
             />
-          )}
-          {loaded && list.length === 0 && <p className="empty">No messages yet</p>}
-          <Transcript rows={list} actions={actions} />
-          {state.approvals.map((a) => (
-            <Notice
-              key={a.request}
-              title={`Allow ${a.tool}?`}
-              links={
-                <button type="button" className="link" onClick={() => approve(a.request, false)}>
-                  Deny
-                </button>
-              }
-              action={
-                <button type="button" onClick={() => approve(a.request, true)}>
-                  Allow
-                </button>
-              }
-            />
-          ))}
-        </div>
-      </div>
-      <div className="composer-area">
+          )
+        }
+      >
         <Composer
           draft={draft}
           onDraft={onDraft}
@@ -155,7 +113,7 @@ export function ChatView(props: Props) {
             )
           }
         />
-      </div>
+      </Thread>
     </main>
   );
 }

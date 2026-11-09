@@ -38,6 +38,8 @@ jobs:
         run: bash scripts/check-file-size.sh
       - name: recording scrub
         run: node scripts/scrub-frames.check.mjs
+      - name: registry files unchanged
+        run: node scripts/registry.check.mjs
       - name: fmt
         run: cargo fmt --all --check
       - name: clippy

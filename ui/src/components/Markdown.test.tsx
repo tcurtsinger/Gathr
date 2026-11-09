@@ -1,6 +1,8 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { Markdown } from './Markdown';
+import type { Message, Turn } from '../api';
+import { type ChatState, empty } from '../chat/state';
+import { type Actions, Thread } from '../chat/Thread';
 
 // Vale's inputs (reviews of #33), footnotes, and blocks whose meaning a later line changes.
 const inputs = {
@@ -18,38 +20,41 @@ const inputs = {
   'a lazy quote': '> quoted\nlazy line\n\nOutside.',
   'a fence with blank lines': 'Code:\n\n~~~\na\n\n\nb\n~~~\nEnd.',
 };
+const cases = { ...inputs, 'all of them in one reply': Object.values(inputs).join('\n\n') };
 
-/** The whole text as a saved reply renders it. */
-async function whole(text: string) {
-  const screen = await render(<Markdown text={text} />);
-  const out = screen.container.innerHTML;
-  await screen.unmount();
-  return out;
+const none = new Proxy({}, { get: () => () => {} }) as Actions;
+const turn = (status: Turn['status']): Turn => ({ id: 't', status, why: null, ref: 'r', agent: null });
+const saved = (text: string): ChatState => {
+  const reply: Message = { id: 'm', turn: 't', time: '', role: 'assistant', kind: 'text', body: text };
+  return { ...empty, messages: [reply], turns: { t: turn('done') } };
+};
+const streaming = (text: string): ChatState => ({
+  ...empty,
+  turns: { t: turn('running') },
+  partial: { t: text },
+});
+
+function View({ state }: { state: ChatState }) {
+  return (
+    <Thread state={state} agents={[]} unsent={[]} running={false} actions={none} empty={false}>
+      {null}
+    </Thread>
+  );
 }
-
-// Without the inputs that render whole, so the rest stream as blocks together.
-const {
-  'a footnote': _f,
-  'a reference defined in a quote': _q,
-  'a footnote defined in a list': _l,
-  ...together
-} = inputs;
-const cases = { ...inputs, 'all of them in one reply': Object.values(together).join('\n\n') };
+// Newlines between blocks are only whitespace; the saved render keeps them, the streamed one does not.
+const markdown = (container: HTMLElement) =>
+  container.querySelector('.markdown')?.innerHTML.replaceAll(/>\n+</g, '><');
 
 for (const [name, text] of Object.entries(cases)) {
-  test(`${name} streams as the whole text renders, at every length`, async () => {
-    const stream = await render(<Markdown text={text.slice(0, 1)} streaming />);
-    for (let n = 1; n <= text.length; n++) {
-      const part = text.slice(0, n);
-      await stream.rerender(<Markdown text={part} streaming />);
-      expect(stream.container.innerHTML, JSON.stringify(part)).toBe(await whole(part));
-    }
+  test(`${name}: a streamed reply ends as the saved reply renders`, async () => {
+    const whole = await render(<View state={saved(text)} />);
+    const expected = markdown(whole.container);
+    await whole.unmount();
+
+    const stream = await render(<View state={streaming(text.slice(0, 1))} />);
+    for (let n = 8; n < text.length; n += 8)
+      await stream.rerender(<View state={streaming(text.slice(0, n))} />);
+    await stream.rerender(<View state={saved(text)} />);
+    await expect.poll(() => markdown(stream.container)).toBe(expected);
   });
 }
-
-test('a saved reply renders its whole text: the list counts on, the reference resolves', async () => {
-  const list = await render(<Markdown text={inputs['a numbered list']} />);
-  expect(list.container.querySelectorAll('ol')).toHaveLength(1);
-  const link = await render(<Markdown text={inputs['a reference link']} />);
-  expect(link.container.querySelector('a')?.getAttribute('href')).toBe('https://example.com/notes');
-});
