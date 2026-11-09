@@ -3,71 +3,21 @@
 
 mod common;
 
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
+use common::feed::Feed;
 use common::{TempDir, TestService, gathr, recording, replay_engine};
 use serde_json::{Value, json};
 
 /// Claude Code's release feed as its installer reads it: `latest`, then each release's
-/// `manifest.json` and its file. Counts what was asked for.
-struct Feed {
-    port: u16,
-    files: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-    asked: Arc<Mutex<Vec<String>>>,
+/// `manifest.json` and its file.
+trait ClaudeFeed {
+    fn publish(&self, version: &str, binary: &[u8], checksum: Option<&str>);
+    fn downloads(&self) -> usize;
 }
 
-impl Feed {
-    fn start() -> Feed {
-        Self::serve(false)
-    }
-
-    /// A feed that takes each request and never answers it.
-    fn silent() -> Feed {
-        Self::serve(true)
-    }
-
-    fn serve(silent: bool) -> Feed {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let files: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::default();
-        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
-        let (f, a) = (files.clone(), asked.clone());
-        std::thread::spawn(move || {
-            let mut held = Vec::new();
-            for stream in listener.incoming().flatten() {
-                if silent {
-                    a.lock().unwrap().push(String::new());
-                    held.push(stream);
-                    continue;
-                }
-                let mut line = String::new();
-                let mut reader = BufReader::new(&stream);
-                let _ = reader.read_line(&mut line);
-                let path = line.split_whitespace().nth(1).unwrap_or("").to_string();
-                while reader.read_line(&mut line).is_ok_and(|n| n > 2) {}
-                a.lock().unwrap().push(path.clone());
-                let body = f.lock().unwrap().get(&path).cloned();
-                let mut out = &stream;
-                let _ = match body {
-                    Some(body) => out
-                        .write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len()).as_bytes())
-                        .and_then(|()| out.write_all(&body)),
-                    None => out.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
-                };
-            }
-        });
-        Feed { port, files, asked }
-    }
-
-    fn url(&self) -> PathBuf {
-        PathBuf::from(format!("http://127.0.0.1:{}/releases", self.port))
-    }
-
+impl ClaudeFeed for Feed {
     /// Publishes `version` as the latest release, its file `binary`, under `checksum` (its own
     /// SHA-256 when none is given).
     fn publish(&self, version: &str, binary: &[u8], checksum: Option<&str>) {
@@ -80,27 +30,16 @@ impl Feed {
         let sha = checksum.map_or_else(|| gathr::claude::copies::sha256(binary), String::from);
         let manifest = json!({ "version": version, "platforms": {
             target: { "binary": name, "checksum": sha, "size": binary.len() } } });
-        let mut files = self.files.lock().unwrap();
-        files.insert(
-            "/releases/latest".into(),
-            format!("{version}\n").into_bytes(),
-        );
-        files.insert(
-            format!("/releases/{version}/manifest.json"),
+        self.put("latest", format!("{version}\n").into_bytes());
+        self.put(
+            &format!("{version}/manifest.json"),
             manifest.to_string().into_bytes(),
         );
-        files.insert(
-            format!("/releases/{version}/{target}/{name}"),
-            binary.to_vec(),
-        );
+        self.put(&format!("{version}/{target}/{name}"), binary.to_vec());
     }
 
     fn downloads(&self) -> usize {
-        let asked = self.asked.lock().unwrap();
-        asked
-            .iter()
-            .filter(|p| p.ends_with("/claude") || p.ends_with("/claude.exe"))
-            .count()
+        self.asked_for("/claude") + self.asked_for("/claude.exe")
     }
 }
 

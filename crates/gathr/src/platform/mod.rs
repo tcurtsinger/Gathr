@@ -118,6 +118,15 @@ pub fn curl() -> PathBuf {
     PathBuf::from("/usr/bin/curl")
 }
 
+/// The system's own tar (bsdtar on both), by its full path, for Gathr's release archives (0032).
+pub fn tar() -> PathBuf {
+    if cfg!(windows) {
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        return PathBuf::from(root).join(r"System32\tar.exe");
+    }
+    PathBuf::from("/usr/bin/tar")
+}
+
 /// Lets a downloaded program run: mode 0755 on Unix. Windows needs nothing.
 pub fn make_executable(path: &Path) -> io::Result<()> {
     #[cfg(unix)]

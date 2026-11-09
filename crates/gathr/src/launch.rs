@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::app::Copies;
 use crate::crash_log::CrashLog;
 use crate::data::{DataDir, ServiceInfo};
 use crate::{Error, http, platform};
@@ -16,7 +17,22 @@ pub struct Found {
     pub started: bool,
 }
 
-pub fn find_or_start(data: &DataDir, gathrd: &Path) -> Result<Found, Error> {
+/// How long a started `gathrd` has to write `service.json`: a first start after an update may
+/// migrate a large database.
+const START_WAIT: Duration = Duration::from_secs(60);
+
+/// Where a service started here gets its environment from.
+#[derive(Clone, Copy)]
+enum Env {
+    /// The caller's, without dev variables: the window's and `gathr open`'s.
+    Clean,
+    /// The caller's as it is: a service handing over to its update runs as it ran.
+    Kept,
+}
+
+/// The service on `data`, else the copy of `gathrd` its folder names, started (`installed` is
+/// copied in first when the folder has none, or an older one: 0032).
+pub fn find_or_start(data: &DataDir, installed: &Path) -> Result<Found, Error> {
     std::fs::create_dir_all(data.path())?;
     match data.take_lock() {
         Ok(lock) => drop(lock),
@@ -29,6 +45,39 @@ pub fn find_or_start(data: &DataDir, gathrd: &Path) -> Result<Found, Error> {
         }
         Err(e) => return Err(e),
     }
+    Copies::new(data).adopt(installed).map_err(|e| {
+        let into = Copies::new(data).root().display().to_string();
+        Error::Other(format!(
+            "copying {} into {into} failed: {e}",
+            installed.display()
+        ))
+    })?;
+    start_current(data, Env::Clean)
+}
+
+/// After an update, a stopped service starts the copy now current, which goes back to the one
+/// before if it fails to start.
+pub fn hand_over(data: &DataDir) -> Result<Found, Error> {
+    start_current(data, Env::Kept)
+}
+
+fn start_current(data: &DataDir, env: Env) -> Result<Found, Error> {
+    let copies = Copies::new(data);
+    let Some(program) = copies.program() else {
+        let why = format!("{} names no copy of gathrd", copies.root().display());
+        return Err(Error::Other(why));
+    };
+    let failed = match start(data, &program, env) {
+        Ok(found) => return Ok(found),
+        Err(e) => e,
+    };
+    match copies.roll_back(&failed.to_string())? {
+        Some(previous) => start(data, &previous, env),
+        None => Err(failed),
+    }
+}
+
+fn start(data: &DataDir, gathrd: &Path, env: Env) -> Result<Found, Error> {
     let mut command = Command::new(gathrd);
     command.arg("--data").arg(data.path());
     command
@@ -38,11 +87,11 @@ pub fn find_or_start(data: &DataDir, gathrd: &Path) -> Result<Found, Error> {
     // Dev variables never reach a service started here, so an agent's shell can't point the
     // person's own Gathr at the replay engine (as SerenityOS's server-env.mjs strips its own).
     for (name, _) in std::env::vars_os() {
-        if name
+        let dev = name
             .to_string_lossy()
             .to_ascii_uppercase()
-            .starts_with("GATHR_")
-        {
+            .starts_with("GATHR_");
+        if dev && matches!(env, Env::Clean) {
             command.env_remove(name);
         }
     }
@@ -51,7 +100,7 @@ pub fn find_or_start(data: &DataDir, gathrd: &Path) -> Result<Found, Error> {
         .spawn()
         .map_err(|e| Error::Other(format!("starting {} failed: {e}", gathrd.display())))?;
     let pid = child.id();
-    let deadline = Instant::now() + Duration::from_secs(15);
+    let deadline = Instant::now() + START_WAIT;
     loop {
         if let Ok(info) = ServiceInfo::read(data)
             && info.pid == pid
@@ -76,8 +125,12 @@ pub fn find_or_start(data: &DataDir, gathrd: &Path) -> Result<Found, Error> {
             return Err(Error::Other(format!("gathrd exited ({status}): {lines}")));
         }
         if Instant::now() > deadline {
+            // Before `service.json` it has started no engine, so ending it loses nothing.
+            let _ = child.kill();
+            let _ = child.wait();
             return Err(Error::Other(format!(
-                "gathrd pid {pid} didn't start within 15 s"
+                "gathrd pid {pid} didn't start within {} s",
+                START_WAIT.as_secs()
             )));
         }
         std::thread::sleep(Duration::from_millis(20));

@@ -38,16 +38,8 @@ pub enum Updated {
     },
 }
 
-/// Why a check stopped: `kind` is the event's `error.type`.
-#[derive(Debug)]
-pub struct Failure {
-    pub kind: &'static str,
-    pub why: String,
-}
-
-fn failed(kind: &'static str) -> impl FnOnce(String) -> Failure {
-    move |why| Failure { kind, why }
-}
+pub use crate::fetch::Failure;
+use crate::fetch::failed;
 
 pub struct Copies {
     root: PathBuf,
@@ -164,7 +156,7 @@ impl Copies {
         let disk = |e: std::io::Error| failed("disk")(e.to_string());
         let current = Current {
             version: found.version.clone(),
-            sha256: found.sha256.clone(),
+            sha256: found.file.sha256.clone(),
             previous: from,
         };
         let next = self.root.join("current.json.next");
