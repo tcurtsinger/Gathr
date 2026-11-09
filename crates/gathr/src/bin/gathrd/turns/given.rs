@@ -49,9 +49,10 @@ impl Task {
     }
 
     /// Why a turn may not start now (0010's gate), or `None`: its chat is archived or deleted
-    /// (F11), or its task may not start. Pauses and usage holds keep it queued instead (`holds`).
+    /// (F11), its task was cancelled while it was queued, or its task may not start. Pauses and
+    /// usage holds keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
-        let (chat, task) = (ids.chat.clone(), ids.task);
+        let (chat, task, turn) = (ids.chat.clone(), ids.task, ids.turn.clone());
         let asked = self
             .chats
             .writer
@@ -63,6 +64,9 @@ impl Task {
                     }
                     Err(e) => return Err(e),
                     Ok(None) => {}
+                }
+                if let Some(why) = gathr::tasks::stop_why(conn, &turn)? {
+                    return Ok(Some(why));
                 }
                 task.map_or(Ok(None), |task| gathr::tasks::may_start(conn, task))
             })

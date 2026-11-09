@@ -72,12 +72,22 @@ pub async fn once(chats: &Arc<Chats>) {
         if gathr::pauses::holding(&chats.pauses(), &wait.chat, Some(&wait.agent)).is_some() {
             continue;
         }
+        // Archive, or its task's cancel, may have ended it since the list was read.
+        if !open(chats, &wait.id).await {
+            continue;
+        }
         let checking = (wait.kind == "check").then(|| (wait.chat.clone(), wait.agent.clone()));
         if let Some((chat, agent)) = &checking {
             chats.check_running(chat, agent, true).await;
         }
-        let looked = look(&wait, chats.data.path(), &vars).await;
-        settle(chats, wait, looked).await;
+        // Ended while it's looked at: its check's command is killed as the look is dropped.
+        let looked = tokio::select! {
+            looked = look(&wait, chats.data.path(), &vars) => Some(looked),
+            () = ended(chats, &wait.id) => None,
+        };
+        if let Some(looked) = looked {
+            settle(chats, wait, looked).await;
+        }
         if let Some((chat, agent)) = &checking {
             chats.check_running(chat, agent, false).await;
         }
@@ -105,6 +115,20 @@ pub async fn once(chats: &Arc<Chats>) {
             )
         })
         .await;
+    }
+}
+
+/// Whether the wait is still open: a wait that can't be read isn't.
+async fn open(chats: &Arc<Chats>, id: &str) -> bool {
+    let id = id.to_string();
+    let read = chats.writer.call(move |c| waits::read(c, &id)).await;
+    matches!(read, Some(Ok(w)) if w.state == "open")
+}
+
+/// Returns once the wait is no longer open.
+async fn ended(chats: &Arc<Chats>, id: &str) {
+    while open(chats, id).await {
+        tokio::time::sleep(Duration::from_millis(200)).await;
     }
 }
 
@@ -275,8 +299,8 @@ async fn moved_past(
 /// A check's command: exit 0 is met; any other exit is "not yet" (G69); one that can't run or
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
-    let shell = shell(vars).ok_or("Git Bash wasn't found beside git")?;
-    let ran = run(&shell, &["-c", command], dir, vars, LIMIT).await?;
+    let (shell, vars) = shell(vars).ok_or("Git Bash wasn't found beside git")?;
+    let ran = run(&shell, &["-c", command], dir, &vars, LIMIT).await?;
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
     }
@@ -287,22 +311,33 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
     }))
 }
 
-/// The shell a check runs in: `sh`, or on Windows the Git Bash that Claude Code's Bash tool uses.
-fn shell(vars: &Vars) -> Option<PathBuf> {
+/// The shell a check runs in, with its environment: `sh`, or on Windows the Git Bash that Claude
+/// Code's Bash tool uses. Git's `bin\bash.exe` only starts `usr\bin\bash.exe`, and killing it
+/// leaves that one running the check: Gathr starts it itself, with what the launcher adds.
+fn shell(vars: &Vars) -> Option<(PathBuf, Vars)> {
     if !cfg!(windows) {
-        return Some(PathBuf::from("/bin/sh"));
+        return Some((PathBuf::from("/bin/sh"), vars.clone()));
     }
-    let path = vars.iter().find(|(k, _)| k.eq_ignore_ascii_case("PATH"))?;
-    let git = std::env::split_paths(&path.1)
+    let at = vars
+        .iter()
+        .position(|(k, _)| k.eq_ignore_ascii_case("PATH"))?;
+    let git = std::env::split_paths(&vars[at].1)
         .map(|dir| dir.join("git.exe"))
         .find(|p| p.is_file())?;
-    let dir = git.parent()?;
-    [
-        dir.join("bash.exe"),
-        dir.parent()?.join("bin").join("bash.exe"),
-    ]
-    .into_iter()
-    .find(|p| p.is_file())
+    // git.exe is in Git's cmd, bin or mingw64\bin.
+    let top = git
+        .ancestors()
+        .skip(1)
+        .take(3)
+        .find(|dir| dir.join("usr").join("bin").join("bash.exe").is_file())?;
+    let mut vars = vars.clone();
+    let folders = [top.join("mingw64").join("bin"), top.join("usr").join("bin")];
+    let path = std::env::split_paths(&vars[at].1);
+    vars[at].1 = std::env::join_paths(folders.into_iter().chain(path)).ok()?;
+    if !vars.iter().any(|(k, _)| k.eq_ignore_ascii_case("MSYSTEM")) {
+        vars.push(("MSYSTEM".into(), "MINGW64".into()));
+    }
+    Some((top.join("usr").join("bin").join("bash.exe"), vars))
 }
 
 fn pr_view<'a>(number: &'a str, fields: &'a str, repo: Option<&'a str>) -> Vec<&'a str> {

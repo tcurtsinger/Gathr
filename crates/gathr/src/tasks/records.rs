@@ -29,6 +29,14 @@ pub fn set(
         _ => event.ok(),
     };
     event.attr("gathr.task.reason", reason).insert(tx)?;
+    if state == State::Cancelled {
+        let why = reason.unwrap_or("no reason given");
+        tx.execute(
+            "UPDATE turns SET stop_why = ?2
+             WHERE task = ?1 AND status IN ('queued', 'waiting_sign_in', 'running')",
+            params![task, format!("its task #{task} was cancelled: {why}")],
+        )?;
+    }
     Ok(())
 }
 

@@ -416,3 +416,49 @@ fn a_turn_whose_task_is_cancelled_stops_and_says_why() {
         "{history}"
     );
 }
+
+/// Cancel then Restart before the running turn is looked at: that turn still stops, so only the
+/// restart's turn does the work, never both.
+#[test]
+fn a_turn_whose_task_is_cancelled_then_restarted_still_stops() {
+    let data = TempDir::new();
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("2000"))];
+    let (service, chat, _) = common::team(&data.0, &twice(&data.0), &stall);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Plan it" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let lead = common::first_token(&data.0);
+    let ask = json!({ "to": "Ann", "what": "Notes" });
+    text(&call_tool(service.info.port, &lead, "give_task", ask));
+    service.wait_for(&chat, 10, "Ann's turn running", |h| {
+        h["turns"][1]["task"] == 1 && h["turns"][1]["status"] == "running"
+    });
+
+    let why = json!({ "why": "not needed" });
+    let cancelled = service.send("POST", "/api/tasks/1/cancel", why);
+    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+    let restarted = service.call("POST", "/api/tasks/1/restart");
+    assert_eq!(restarted.status, 200, "{}", restarted.body);
+    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.turn.stop'";
+    until(10, "the cancelled turn to be stopped", || {
+        let (_, rows) = gathr(&data.0, &["diag", "query", sql]);
+        (rows["rows"][0]["n"] == 1).then_some(())
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "the cancelled turn ended", |h| {
+        !matches!(h["turns"][1]["status"].as_str(), Some("running" | "queued"))
+    });
+    assert_eq!(
+        (&history["turns"][1]["status"], &history["turns"][1]["why"]),
+        (
+            &json!("stopped"),
+            &json!("its task #1 was cancelled: not needed")
+        ),
+        "{history}"
+    );
+    let on_it = history["turns"].as_array().unwrap().iter();
+    assert_eq!(on_it.filter(|t| t["task"] == 1).count(), 2, "{history}");
+}
