@@ -175,5 +175,7 @@ The current reference and retired pages are listed in `designs/README.md`. Run `
 Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
 Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
 `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
-The assistant-ui prototype is the visual reference; Settings keeps 0023's layout and the team-message layout awaits the owner's pick.
+The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
+Team messages use 0015's inline thread with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
+manual folding, Summary (expanded assignments and short windows), keyboard links and draft retention in both sizes and themes (uses the UI dependencies).
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.

@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css">
 <link rel="stylesheet" href="../ui/src/components/help.css"><link rel="stylesheet" href="../ui/src/components/switch.css">
 <script src="system.js" defer></script>
+<link rel="stylesheet" href="team-reference.css">
+<script src="team-reference.js" defer></script>
 </head>
 <body class="system-page">
 <header class="ds-header" data-id="header">
@@ -80,18 +82,6 @@
 Checked partial tool result
 Checked repeated event
 Checked request deadline</pre></details>
-<div id="sent-messages" aria-live="polite"></div>
-<form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
-<input id="message" aria-label="Message" placeholder="Message the team…" autocomplete="off">
-<div class="ds-composer-toolbar">
-<button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-<select aria-label="Recipient" data-id="recipient"><option>Mira</option><option>Rowan</option><option>Kit</option></select>
-<button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
-</div>
-</form>
-<p class="ds-note">ComposerBar: 24px corners, 10px padding. Recipient selects an agent.</p>
 </div>
 </section>
 <section class="ds-section" id="recovery" data-id="recovery">
@@ -100,7 +90,114 @@ Checked request deadline</pre></details>
 <button class="ds-button" id="diagnostics-open">Diagnostics</button><button class="ds-button" id="retry">Retry</button></div>
 </section>
 <section class="ds-section" id="team-message" data-id="team-message">
-<h2>Team messages</h2><p class="ds-pending">Layout pending. Supervisor hand-offs, two member replies, tool runs and the wrap-up.</p>
+<h2>Team messages</h2>
+<p class="ds-note">Selected: inline thread with Summary. Invented local data; no service is connected.</p>
+<div class="ds-row ds-fixture-controls" aria-label="Thread preview controls" data-id="thread-preview-controls">
+<span class="ds-role" id="round-state" role="status">Running</span>
+<button class="ds-button" id="round-finish" data-id="round-finish">Finish</button>
+<button class="ds-button" id="round-late" data-id="round-late">Late reply</button>
+<button class="ds-button" id="round-reset" data-id="round-reset">Reset</button>
+</div>
+<div class="ds-team" data-id="team-example">
+<header class="ds-team-header" id="team-header">
+<h3>Reconnect streaming</h3>
+<button class="ds-button" id="team-summary-open" popovertarget="summary" aria-expanded="false" data-id="team-summary-open">Summary</button>
+</header>
+<div class="ds-user-message" data-id="round-request">Fix duplicate output after reconnect. Keep the keyboard shortcuts as they are.</div>
+<article class="ds-team-message" id="round-handoff" data-id="round-handoff">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<span class="ds-role">Supervisor</span><time>09:15</time></header>
+<p>I found the boundary: we save the cursor before the event is complete.</p>
+<p>Rowan, fix the cursor commit. Kit, replay interruptions and check the shortcuts. Lane, check reconnect and stopped states.
+I’ll reconcile the results and ask Sol to review.</p>
+</article>
+<details class="ds-team-thread" id="round-thread" open data-id="round-thread">
+<summary id="thread-toggle" data-id="thread-toggle"><strong>Team thread</strong>
+<span class="ds-role" id="thread-state">Kit and Lane working · Rowan done · Sol waiting</span></summary>
+<div class="ds-thread-replies" data-id="thread-replies">
+<article class="ds-team-message" data-id="thread-rowan">
+<p class="ds-assignment">Mira to Rowan · Cursor commit</p>
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
+<span class="ds-role">Member</span><time>09:42</time></header>
+<details class="ds-tool-disclosure" data-id="rowan-tools"><summary>32 tool calls</summary><pre id="rowan-tool-log"></pre></details>
+<p>The saved cursor now advances only after a complete event. A reconnect resumes the existing reply rather than creating a second one.</p>
+<h4>What changed</h4>
+<p>The stream reader keeps an unfinished frame in memory and commits its cursor when the frame terminator arrives.
+The display can still show partial text immediately. Persisting the cursor and displaying text are separate operations,
+so a slow connection does not make the reply feel stalled.</p>
+<p>Tool output stays attached to its original call. When a connection drops halfway through a result, the next connection
+resumes that result using its call ID. We no longer create another tool row for the same call.</p>
+<h4>Checks</h4>
+<p>I replayed a disconnect before the first token, between text fragments and during a tool result. The partial answer
+stayed visible each time. Repeated events did not duplicate text, and a final result arriving twice completed the turn once.</p>
+<p>The longer replay includes text, a file read, a command result and another paragraph after the tool finishes.
+Each interruption resumes the same sequence. The tool's expanded state stays with its original call, so opening the
+result before the reconnect does not create a second disclosure or close the one you were reading.</p>
+<p>I also left the chat scrolled halfway through an earlier answer while the replay continued. New text arrived below
+the reading position. Returning to the end showed the complete reply with the same cursor boundary. A queued message
+started after that reply finished, without replacing its text or borrowing its tool results.</p>
+<p>Kit still needs to check the interruption cases against the keyboard flow. Lane is checking the stopped notice.
+The cursor change is ready for their results.</p>
+</article>
+<article class="ds-team-message" data-id="thread-kit">
+<p class="ds-assignment">Mira to Kit · Interruptions and shortcuts</p>
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
+<span class="ds-role">Member</span><time>09:48</time></header>
+<details class="ds-tool-disclosure" data-id="kit-tools"><summary>18 tool calls</summary>
+<pre>Read interruption fixtures
+Replayed a disconnect during tool output
+Checked Tab, Enter and Escape</pre></details>
+<p id="kit-result">The interrupted tool result stays in its original row. I’m checking the last shortcut case now.</p>
+</article>
+<article class="ds-team-message" data-id="thread-lane">
+<p class="ds-assignment">Mira to Lane · Reconnect and stopped states</p>
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
+<span class="ds-role">Member</span><time>09:50</time></header>
+<p id="lane-result">The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.</p>
+</article>
+<article class="ds-team-message" id="late-member" hidden data-id="thread-sol">
+<p class="ds-assignment">Mira to Sol · Review the cursor change</p>
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
+<span class="ds-role">Reviewer</span><time>11:32</time></header>
+<p>The replay keeps one reply and one tool result. I checked the cursor boundary and the duplicate final event. No findings.</p>
+</article>
+</div>
+</details>
+<div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
+<article class="ds-team-message" data-id="status-without-thread">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<span class="ds-role">Supervisor</span><time>09:52</time></header>
+<p>Yes. Stop keeps the text already received.</p>
+</article>
+<div class="ds-user-message" data-id="direct-request">@Lane Does Retry keep my draft too?</div>
+<article class="ds-team-message" data-id="direct-reply">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
+<span class="ds-role">Member</span><time>09:54</time></header>
+<p>Yes. The draft stays in the composer while you retry.</p>
+</article>
+<article class="ds-team-message" id="round-final" hidden data-id="round-final">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<span class="ds-role">Supervisor</span><time id="final-time">10:03</time></header>
+<p>The cursor change is ready. Reconnect keeps one reply, tool output stays attached, and Stop keeps the partial text.
+The keyboard shortcuts are unchanged.</p>
+<a class="ds-thread-link" href="#round-thread" id="thread-back" data-id="thread-back">View team thread</a>
+<span class="ds-reaction" aria-label="Sol agrees" title="Sol agrees" data-id="review-agreement">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<path d="M7 10v11H3V10h4Zm0 1 5-8c2 0 3 2 2 5l-1 2h6c2 0 2 2 1 4l-2 7H7"/></svg>Sol</span>
+</article>
+<div id="team-sent-messages" aria-live="polite"></div>
+<form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
+<input id="message" aria-label="Message" placeholder="Message Mira…" autocomplete="off">
+<div class="ds-composer-toolbar">
+<button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<select aria-label="Recipient" data-id="recipient">
+<option>Mira</option><option>Rowan</option><option>Kit</option><option>Lane</option><option>Sol</option></select>
+<button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+</div>
+</form>
+</div>
 </section>
 <p class="ds-status" id="status" role="status" data-id="status"></p>
 </main>
@@ -109,16 +206,24 @@ Checked request deadline</pre></details>
 <h3>Agents</h3>
 <details class="ds-agent">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<small class="ds-role">Supervisor · Waiting for review</small></summary>
-<ul><li>Wrap up after review</li></ul></details>
+<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit and Lane</span></small></summary>
+<ul><li id="summary-mira-task">Reconcile results, then ask Sol to review</li></ul></details>
 <details class="ds-agent">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
 <small class="ds-role">Member · Ready</small></summary>
 <ul><li>Cursor patch done</li></ul></details>
 <details class="ds-agent">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
-<small class="ds-role">Reviewer · Working</small></summary>
-<ul><li>Check failure reference</li></ul></details>
+<small class="ds-role">Member · <span id="summary-kit-state">Working</span></small></summary>
+<ul><li id="summary-kit-task">Check interruptions and shortcuts</li></ul></details>
+<details class="ds-agent">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
+<small class="ds-role">Member · <span id="summary-lane-state">Working</span></small></summary>
+<ul><li id="summary-lane-task">Check reconnect and stopped states</li></ul></details>
+<details class="ds-agent">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
+<small class="ds-role">Reviewer · <span id="summary-sol-state">Waiting for Kit</span></small></summary>
+<ul><li id="summary-sol-task">Review after replay checks</li></ul></details>
 </div>
 <section id="help" popover class="help-panel" data-id="help"><h4>Approvals</h4>
 <dl><dt>Ask</dt><dd>Ask before actions that need permission.</dd><dt>Edits</dt><dd>Allow file edits.</dd>

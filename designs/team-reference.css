@@ -1,0 +1,161 @@
+.ds-fixture-controls {
+	margin-bottom: 24px;
+}
+.ds-team {
+	max-width: 704px;
+	padding-inline: 16px;
+	margin-inline: auto;
+	overflow-wrap: anywhere;
+}
+.ds-team-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-height: 46px;
+	margin-bottom: 24px;
+	border-bottom: 1px solid var(--border);
+}
+.ds-team-header h3 {
+	margin: 0;
+}
+.ds-team-message {
+	margin-bottom: 28px;
+}
+.ds-speaker {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 13px;
+	font-weight: 500;
+}
+.ds-speaker time {
+	margin-left: auto;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	font-weight: 400;
+	font-variant-numeric: tabular-nums;
+}
+.ds-team-message p {
+	margin: 12px 0 0;
+}
+.ds-team-message h4 {
+	font-size: 14px;
+	font-weight: 600;
+	margin: 24px 0 0;
+}
+.ds-team-thread {
+	margin-bottom: 28px;
+	border-block: 1px solid var(--border);
+}
+.ds-team-thread > summary {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 12px 8px;
+	border-radius: 8px;
+	cursor: pointer;
+	list-style: none;
+	font-size: 12px;
+	scroll-margin-block: 24px;
+}
+.ds-team-thread > summary::-webkit-details-marker {
+	display: none;
+}
+.ds-team-thread > summary::before {
+	content: "";
+	width: 6px;
+	height: 6px;
+	border-right: 1px solid currentColor;
+	border-bottom: 1px solid currentColor;
+	transform: rotate(-45deg);
+	align-self: center;
+	margin-right: 4px;
+}
+.ds-team-thread[open] > summary::before {
+	transform: rotate(45deg);
+}
+.ds-team-thread strong {
+	font-weight: 500;
+}
+.ds-team-thread > summary .ds-role {
+	margin-left: auto;
+}
+.ds-thread-replies {
+	margin: 12px 0 20px 10px;
+	padding-left: 20px;
+	border-left: 1px solid var(--border);
+}
+.ds-thread-replies .ds-team-message:last-child {
+	margin-bottom: 0;
+}
+.ds-team-message .ds-assignment {
+	color: var(--muted-foreground);
+	font-size: 11px;
+	margin: 0 0 12px;
+}
+.ds-team-message .ds-tool-disclosure {
+	margin: 8px 0 0;
+}
+.ds-team-message .ds-tool-disclosure pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ds-thread-link {
+	display: inline-block;
+	margin-top: 12px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	font-size: 12px;
+	text-underline-offset: 3px;
+}
+.ds-thread-link:is(:hover, :focus-visible) {
+	background: var(--raised);
+}
+.ds-reaction {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 12px;
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 9999px;
+	color: var(--muted-foreground);
+	font-size: 11px;
+}
+.ds-reaction svg {
+	width: 14px;
+	height: 14px;
+	stroke-width: 1.5;
+}
+.ds-summary {
+	position: fixed;
+	inset: auto;
+	margin: 0;
+	max-height: min(560px, calc(100dvh - 32px));
+}
+.ds-agent summary {
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 8px;
+}
+.ds-agent summary .ds-role {
+	padding-left: 32px;
+}
+@media (max-width: 600px) {
+	.ds-team {
+		padding-inline: 0;
+	}
+	.ds-speaker {
+		flex-wrap: wrap;
+	}
+	.ds-thread-replies {
+		padding-left: 12px;
+	}
+	.ds-team-thread > summary .ds-role {
+		flex-basis: 100%;
+		margin-left: 20px;
+	}
+}

@@ -8,10 +8,25 @@ After `npm ci` in `ui/`, run `node designs/check-help.cjs` for Help placement,
 Escape and focus return in both themes at 1440 and 1024px (Edge on Windows,
 WebKit on macOS).
 
-Settings retains the centred Gathr layout. The team-message layout is pending an
-owner choice. The recipient picker defaults to the Supervisor by name and has no
-Everyone option. Moving 0015's Team tab into Summary remains an integration
-question. The portable page has no service.
+Settings retains the centred Gathr layout. Team messages use an inline thread
+under the message that gave the task, with Summary in the chat header (0015).
+The open thread grows in the page; a late reply stays in its original thread and
+the Supervisor's final word arrives at the bottom with a link back. Messages nobody
+answers have no thread. The recipient defaults to the Supervisor by name and has
+no Everyone option. The portable page has no service.
+
+`system.html#team-message` shows the selected thread with five invented agents,
+a long reply, 32 tool calls, a message mid-round and a direct @member exchange.
+Finish and Late reply simulate two outcomes; Reset returns to running. These are
+preview controls, not product actions. Manual folding wins over automatic folding.
+The composer uses the same shared anatomy demonstrated elsewhere on the page.
+`team-reference.css` and `team-reference.js` hold this fixture only; F8b must use
+the prototype's actual React components and Gathr state rather than porting it.
+
+After UI dependencies are available, run `node designs/check-team.cjs` for the
+thread's state changes, keyboard navigation, Summary, draft retention and overflow
+at 1440 and 1024px in both themes. An optional absolute output folder saves PNGs
+and a JSON check record; keep them under `gathr-work`, outside the repository.
 
 ## Retired selected shell pages
 

@@ -488,12 +488,6 @@
 	justify-content: flex-end;
 	gap: 8px;
 }
-.ds-pending {
-	padding: 16px 0;
-	border-block: 1px solid var(--border);
-	font-size: 13px;
-	color: var(--muted-foreground);
-}
 .system-page :focus-visible {
 	outline: none;
 }
