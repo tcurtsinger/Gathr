@@ -81,6 +81,10 @@
 .in-thread.thread-first::before {
   top: 0;
 }
+/* The next item's line starts 12 px up, under this one's negative margin: drawn twice, it reads brighter. */
+.in-thread.assignment::before {
+  bottom: 12px;
+}
 .in-thread.thread-end {
   padding-bottom: 20px;
 }
