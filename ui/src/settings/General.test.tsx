@@ -67,6 +67,33 @@ test('a read on focus that answers after a save never undoes the save', async ()
   await expect.element(toggle).toHaveAttribute('aria-checked', 'true');
 });
 
+test('a read on focus that answers after a newer read never shows the older state', async () => {
+  let release = () => {};
+  // Mount reads off; the next focus read is taken while off and held; the one after reads on.
+  const reads = [
+    { on: false, hold: false },
+    { on: false, hold: true },
+    { on: true, hold: false },
+  ];
+  vi.stubGlobal('fetch', async (path: string) => {
+    if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    const read = reads.shift() ?? { on: true, hold: false };
+    const answer = new Response(JSON.stringify({ on: read.on }));
+    if (read.hold) await new Promise<void>((done) => (release = done));
+    return answer;
+  });
+  const screen = await render(<General onReference={() => {}} />);
+  const toggle = screen.getByRole('switch', { name: 'Open at login' });
+  await expect.element(toggle).toHaveAttribute('aria-checked', 'false');
+
+  window.dispatchEvent(new Event('focus'));
+  window.dispatchEvent(new Event('focus'));
+  await expect.element(toggle).toHaveAttribute('aria-checked', 'true');
+  release();
+  await new Promise((done) => setTimeout(done, 50));
+  await expect.element(toggle).toHaveAttribute('aria-checked', 'true');
+});
+
 test('a read on focus that fails while a save is pending leaves no failure once the save succeeds', async () => {
   let release = () => {};
   let holdPut = false;

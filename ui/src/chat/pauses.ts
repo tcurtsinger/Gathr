@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure, type PauseScope, type Pauses } from '../api';
 import { listen } from '../live';
+import { useNewestWins } from '../newest';
 
 /** What the person can do to a scope (0010): Restart is the resume of a stopped one. */
 export type PauseAction = 'pause' | 'resume' | 'stop';
@@ -17,44 +18,41 @@ export interface Run {
 const none: Pauses = { pauses: [], usage: [] };
 
 /**
- * Every pause and usage hold, live: one list for the whole app, as the service keeps it. A read shows
- * unless one started after it already shows. An action's answer is the list then; when another list
- * showed while it was on its way, which of the two is newer can't be told, so it reads the list again.
- * A refusal rejects with its reference.
+ * Every pause and usage hold, live: one list for the whole app, as the service keeps it. Of reads,
+ * actions' answers and live lists, only the newest started shows. An action that another list
+ * overlapped reads the list again: which of them the service applied last can't be told from the
+ * window. A refusal rejects with its reference.
  */
 export function usePauses(onFailure: (f: Failure) => void) {
   const [pauses, setPauses] = useState<Pauses>(none);
-  // Every read, action and live list takes the next number when it starts.
+  const newest = useNewestWins();
+  // Counts every read, action and live list as it starts.
   const started = useRef(0);
-  // The number of the list shown, and how many lists have shown.
-  const shown = useRef(0);
-  const changes = useRef(0);
-  const show = useCallback((at: number, list: Pauses) => {
-    shown.current = at;
-    changes.current++;
-    setPauses(list);
-  }, []);
   const load = useCallback(() => {
-    const at = ++started.current;
-    api.pauses().then((p) => at > shown.current && show(at, p), onFailure);
-  }, [onFailure, show]);
+    started.current++;
+    newest(api.pauses()).then(setPauses, onFailure);
+  }, [newest, onFailure]);
   useEffect(() => {
     load();
     return listen((event) => {
-      if (event.type === 'pauses') show(++started.current, { pauses: event.pauses, usage: event.usage });
+      if (event.type === 'pauses') {
+        started.current++;
+        newest(Promise.resolve(event)).then(setPauses);
+      }
       if (event.type === 'lagged') load();
     });
-  }, [load, show]);
+  }, [load, newest]);
 
   const act = useCallback(
     async (action: PauseAction, scope: PauseScope) => {
       const at = ++started.current;
-      const before = changes.current;
-      const answer = await api[action](scope);
-      if (changes.current !== before) return load();
-      show(at, answer);
+      const answer = api[action](scope);
+      // Shown only if it's newest; a refusal rejects below either way.
+      newest(answer).then(setPauses, () => {});
+      await answer;
+      if (started.current !== at) load();
     },
-    [load, show],
+    [newest, load],
   );
 
   return { pauses, act };

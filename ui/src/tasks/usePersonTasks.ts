@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api, type Failure, type PersonTask, type StaleTask } from '../api';
 import { listen } from '../live';
+import { useNewestWins } from '../newest';
 import { type Draft, toAnswer } from './model';
 import type { Refusal } from './TasksTab';
 
@@ -15,34 +16,38 @@ export function usePersonTasks(onFailure: (f: Failure) => void) {
   const [selected, setSelected] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  // Counts every newer list (live, or a Send), so a read started before one never overwrites it.
-  const version = useRef(0);
+  // Reads, live lists and a Send's closes: a read started before a newer one never overwrites it.
+  const newest = useNewestWins();
+  const show = useCallback(
+    (list: Promise<{ tasks: PersonTask[]; stale: StaleTask[] }>) =>
+      newest(list).then((l) => {
+        setTasks(l.tasks);
+        setStale(l.stale);
+      }),
+    [newest],
+  );
+  // Ends when its answer comes, shown or not, so a Cancel that reads after it never waits forever.
   const load = useCallback(() => {
-    const at = version.current;
-    return api.personTasks().then((list) => {
-      if (version.current !== at) return;
-      setTasks(list.tasks);
-      setStale(list.stale);
-    }, onFailure);
-  }, [onFailure]);
+    const list = api.personTasks();
+    show(list).catch(onFailure);
+    return list.then(
+      () => {},
+      () => {},
+    );
+  }, [show, onFailure]);
   useEffect(() => {
     load();
     return listen((event) => {
-      if (event.type === 'person_tasks') {
-        version.current++;
-        setTasks(event.tasks);
-        setStale(event.stale);
-      }
+      if (event.type === 'person_tasks') show(Promise.resolve(event));
       if (event.type === 'lagged') load();
     });
-  }, [load]);
+  }, [load, show]);
 
   const send = async (ready: PersonTask[]): Promise<Refusal[]> => {
     try {
       const { answered, refused } = await api.answer(ready.map((t) => toAnswer(t, drafts[t.number])));
       const closed = new Set(answered.map((t) => t.number));
-      version.current++;
-      setTasks((list) => list.filter((t) => !closed.has(t.number)));
+      newest(Promise.resolve()).then(() => setTasks((list) => list.filter((t) => !closed.has(t.number))));
       setDrafts((all) => Object.fromEntries(Object.entries(all).filter(([n]) => !closed.has(Number(n)))));
       return refused;
     } catch (e) {
