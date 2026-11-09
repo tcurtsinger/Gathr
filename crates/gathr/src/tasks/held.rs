@@ -43,6 +43,13 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
             words::owner_name(conn, owner.as_deref())?
         ));
     }
+    let mut commands = conn.prepare_cached(
+        "SELECT b.description FROM background b JOIN turns t ON t.id = b.turn_id
+         WHERE t.task = ?1 ORDER BY b.started_ts",
+    )?;
+    for described in commands.query_map([task], |r| r.get::<_, String>(0))? {
+        open.push(format!("a background command ({})", described?));
+    }
     // A review's PR is what it reviewed, not work its owner still owes.
     let pr: Option<Option<i64>> = conn
         .query_row(

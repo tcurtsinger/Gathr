@@ -157,7 +157,7 @@ pub struct Start {
 }
 
 impl Start {
-    pub(crate) fn queue(
+    pub fn queue(
         conn: &Connection,
         (chat, agent): (&str, &str),
         (task, answers): (Option<i64>, Option<&str>),
@@ -577,6 +577,19 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     for &task in &working {
         let why = "Gathr stopped during its turn";
         set(&tx, task, State::Stopped, Some(why), &trace)?;
+    }
+    // Background commands ended with their engines: a task held only on one carries on.
+    crate::background::clear(&tx)?;
+    let holding: Vec<i64> = {
+        let mut stmt = tx.prepare("SELECT number FROM tasks WHERE state = 'held'")?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for task in holding {
+        if held::open_on(&tx, task)?.is_empty() {
+            let carry = "Gathr stopped while your background command ran, which ended it";
+            ready(&tx, task, Some(carry))?;
+        }
     }
     for turn in &giving {
         let why = Some("the service stopped during this turn");

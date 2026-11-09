@@ -18,6 +18,7 @@ impl Task {
             agent: Some(start.agent),
             task: start.task,
             answers: start.answers,
+            person: false,
         };
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
@@ -38,12 +39,13 @@ impl Task {
         let queued = Queued {
             ids,
             text: start.text,
+            held: None,
         };
         let _ = self.enqueue(&queued).await;
     }
 
-    /// Why a turn on a task may not start now (0010's gate), or `None`. Pause and usage holds join
-    /// it with F10.
+    /// Why a turn on a task may not start now (0010's gate), or `None`. Pauses and usage holds
+    /// keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
         let task = ids.task?;
         let asked = self

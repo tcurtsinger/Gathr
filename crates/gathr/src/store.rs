@@ -87,7 +87,7 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
         "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task,
-                answers
+                answers, held
          FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -105,6 +105,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "task": r.get::<_, Option<i64>>(8)?,
                 // The turn it answers: the thread it belongs to (F8b).
                 "answers": r.get::<_, Option<String>>(9)?,
+                // What holds a queued turn back (F10): `pause` or `usage`.
+                "held": r.get::<_, Option<String>>(10)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -231,12 +233,27 @@ pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) ->
     let placed = !matches!(status, "queued" | "waiting_sign_in");
     conn.prepare_cached(
         "UPDATE turns SET status = ?2, why = ?3, ended_ts = ?4,
+             held = CASE WHEN ?2 = 'queued' THEN held END,
              position = CASE WHEN ?5 AND position IS NULL
                  THEN (SELECT COALESCE(max(p.position), 0) + 1 FROM turns p WHERE p.chat_id = turns.chat_id)
                  ELSE position END
          WHERE id = ?1",
     )?
     .execute(params![id, status, why, ended, placed])?;
+    Ok(())
+}
+
+/// What holds a queued turn back (`pause`, `usage`, or none), and why in words.
+pub fn set_held(
+    conn: &Connection,
+    id: &str,
+    held: Option<&str>,
+    why: Option<&str>,
+) -> Result<(), Error> {
+    conn.prepare_cached(
+        "UPDATE turns SET held = ?2, why = ?3 WHERE id = ?1 AND status = 'queued'",
+    )?
+    .execute(params![id, held, why])?;
     Ok(())
 }
 
@@ -250,6 +267,8 @@ pub struct Waiting {
     pub agent: Option<String>,
     pub task: Option<i64>,
     pub answers: Option<String>,
+    /// The person wrote it, rather than Gathr: a pause never holds it (0010).
+    pub person: bool,
 }
 
 /// Turns that were waiting when the service last stopped, oldest first. Turns that were
@@ -264,7 +283,9 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
                 (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
                  ORDER BY ts LIMIT 1),
-                t.agent_id, t.task, t.answers
+                t.agent_id, t.task, t.answers,
+                (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
+                 ORDER BY ts LIMIT 1) = 'user'
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -277,6 +298,7 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             agent: r.get(5)?,
             task: r.get(6)?,
             answers: r.get(7)?,
+            person: r.get::<_, Option<bool>>(8)?.unwrap_or(false),
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)

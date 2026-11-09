@@ -11,6 +11,7 @@ use gathr::claude::copies::Copies;
 use gathr::claude::login::{self, Gate, Login};
 use gathr::data::DataDir;
 use gathr::event::Event;
+use gathr::pauses::Pause;
 use gathr::store;
 use gathr::writer::Writer;
 use serde_json::Value;
@@ -62,6 +63,15 @@ pub enum Cmd {
         folder: PathBuf,
         done: oneshot::Sender<()>,
     },
+    /// A pause or a usage hold changed: what it held may start, or now waits.
+    Kick,
+    /// The person's Stop now (0010): the turns in the scope are interrupted, their background
+    /// commands ended, and a carry-on per agent waits for Restart.
+    StopNow {
+        scope: String,
+        target: String,
+        done: oneshot::Sender<()>,
+    },
     Close {
         done: oneshot::Sender<()>,
     },
@@ -93,6 +103,8 @@ pub struct Chats {
     /// Accounts being removed, never picked even while their rows remain.
     removing: Mutex<HashSet<String>>,
     picking: tokio::sync::Mutex<()>,
+    /// The pauses in force, as saved (0010); every queue reads them before it starts a turn.
+    pauses: Mutex<Vec<Pause>>,
 }
 
 impl Chats {
@@ -114,6 +126,7 @@ impl Chats {
             account: Mutex::default(),
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
+            pauses: Mutex::default(),
         })
     }
 
@@ -320,6 +333,65 @@ impl Chats {
             }
             None => {}
         }
+    }
+
+    /// The pauses in force now.
+    pub fn pauses(&self) -> Vec<Pause> {
+        self.pauses.lock().expect("never poisoned").clone()
+    }
+
+    /// Reads the pauses again after a change, lets every queue look at what it holds, and says
+    /// where things stand.
+    pub async fn pauses_changed(&self) {
+        if let Some(Ok(saved)) = self.writer.call(|c| gathr::pauses::list(c)).await {
+            *self.pauses.lock().expect("never poisoned") = saved;
+        }
+        let tasks: Vec<_> = self
+            .tasks
+            .lock()
+            .expect("never poisoned")
+            .values()
+            .cloned()
+            .collect();
+        for task in tasks {
+            let _ = task.send(Cmd::Kick);
+        }
+        self.settle_pauses(true).await;
+    }
+
+    /// A pause in which nothing runs any more becomes `paused`, said once, and one a turn runs in
+    /// again is `pausing` (0010). Sends the pauses live when one moved, or when `changed`.
+    pub async fn settle_pauses(&self, changed: bool) {
+        if self.pauses().is_empty() && !changed {
+            return;
+        }
+        let trace = gathr::ids::trace_id();
+        let settled = self.writer.call(move |c| {
+            let quiet = gathr::pauses::settle(c, &trace)?;
+            Ok::<_, gathr::Error>((
+                quiet.len(),
+                gathr::pauses::list(c)?,
+                gathr::pauses::listed(c)?,
+            ))
+        });
+        let Some(Ok((quiet, saved, mut listed))) = settled.await else {
+            return;
+        };
+        *self.pauses.lock().expect("never poisoned") = saved;
+        if quiet > 0 || changed {
+            listed["type"] = "pauses".into();
+            self.publish(listed);
+        }
+    }
+
+    /// Stop now in a scope: every agent's queue stops what it runs there.
+    pub async fn stop_now(&self, scope: &str, target: &str) {
+        self.ask_all(|done| Cmd::StopNow {
+            scope: scope.to_string(),
+            target: target.to_string(),
+            done,
+        })
+        .await;
     }
 
     /// Closes every engine at shutdown: the gentle way, killed only after the grace period.

@@ -57,6 +57,13 @@ impl Task {
         {
             turn.gate.release();
         }
+        if matches!(
+            frame,
+            Frame::TextDelta(_) | Frame::Text(_) | Frame::ToolStart { .. } | Frame::ToolEnd { .. }
+        ) && let Some(turn) = self.turn.as_mut()
+        {
+            turn.progress_at = std::time::Instant::now();
+        }
         match frame {
             Frame::Replied => {}
             Frame::Init {
@@ -65,6 +72,10 @@ impl Task {
                 permission_mode,
                 ..
             } => {
+                // With no turn and no message waiting to be read, the engine began one itself.
+                if self.turn.is_none() && self.unread.is_empty() && self.closing.is_none() {
+                    self.begin_woken_turn().await;
+                }
                 self.check_tools(&tools);
                 self.check_mode(&permission_mode);
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
@@ -186,6 +197,16 @@ impl Task {
                 );
             }
             Frame::TurnEnd(end) => self.turn_ended(end).await,
+            Frame::Background(listed) => self.background(listed).await,
+            Frame::Limit {
+                status,
+                resets_at,
+                kind,
+            } => {
+                if let ("rejected", Some(resets_at)) = (status.as_str(), resets_at) {
+                    self.out_of_usage(resets_at, kind).await;
+                }
+            }
             // A sub-agent's frames stay in the raw record under their Agent call, never in the
             // agent's own messages or tools (friction ledger G24).
             Frame::Sub { .. } | Frame::ControlAnswer { .. } | Frame::Other(_) => {}
@@ -244,6 +265,7 @@ impl Task {
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         if let Some(turn) = self.turn.as_mut() {
             turn.tools.insert(id, (message_id, name, now_us()));
+            turn.tools_started += 1;
         }
     }
 
@@ -342,11 +364,16 @@ impl Task {
             _ => event.ok(),
         };
         self.record(event);
+        if turn.limited && !end.ok && !turn.stopping && !turn.signed_out {
+            self.limited_end(&turn.ids, turn.tools_started).await;
+            return self.try_next().await;
+        }
         if turn.signed_out {
             // The message waits for a sign-in (0002); the engine that failed is closed.
             self.queue.push_front(Queued {
                 ids: turn.ids.clone(),
                 text: self.text_of(&turn.ids.turn).await,
+                held: None,
             });
             self.close("the login was refused").await;
             if let Some(folder) = self.assigned.as_ref().map(|a| a.folder.clone()) {
