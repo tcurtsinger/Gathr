@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, type StaleDays as Days, type Failure } from '../api';
 import { Help } from '../components/Help';
 import { Notice } from '../components/Notice';
+import { useNewestWins } from '../newest';
 
 const rows = [
   {
@@ -25,7 +26,7 @@ export function StaleDays({ onReference }: { onReference: (ref: string) => void 
   const [edits, setEdits] = useState<Partial<Record<keyof Days, string>>>({});
   const [invalid, setInvalid] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const saves = useRef(0);
+  const newest = useNewestWins();
 
   useEffect(() => {
     api.settings().then(setSaved, setFailure);
@@ -38,12 +39,10 @@ export function StaleDays({ onReference }: { onReference: (ref: string) => void 
     if (!/^\d+$/.test(typed.trim()) || days < 1 || days > 365) return setInvalid(true);
     setInvalid(false);
     setFailure(null);
-    if (days === saved[key]) return setEdits(({ [key]: _, ...rest }) => rest);
-    // Only the latest save's answer is shown, and it clears the edit only if that's still what was saved.
-    const n = ++saves.current;
-    api.saveSettings({ [key]: days }).then(
+    // Saved even when it equals what shows: a save still out may be about to change that. Only the
+    // newest request's answer shows, and it clears the edit only if that's still what was saved.
+    newest(api.saveSettings({ [key]: days })).then(
       (next) => {
-        if (n !== saves.current) return;
         setSaved(next);
         setEdits((all) => {
           if (all[key] !== typed) return all;
@@ -52,9 +51,8 @@ export function StaleDays({ onReference }: { onReference: (ref: string) => void 
         });
       },
       (f: Failure) => {
-        if (n !== saves.current) return;
         setFailure(f);
-        api.settings().then(setSaved, setFailure);
+        newest(api.settings()).then(setSaved, setFailure);
       },
     );
   };

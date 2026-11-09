@@ -79,3 +79,47 @@ test("an older save's late answer keeps the newer value, saved or still being ty
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(cancel).toHaveValue(11);
 });
+
+test('going back to the saved value while a save is out saves it again; a late re-read never undoes a newer save', async () => {
+  const sent: number[] = [];
+  const held: (() => void)[] = [];
+  let reads = 0;
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    const settings = (cancel_days: number) => new Response(JSON.stringify({ stale_days: 3, cancel_days }));
+    if (init?.method !== 'PATCH') {
+      // After the first, reads answer only when the test lets them, with what the service had then.
+      if (reads++ === 0) return settings(7);
+      return new Promise<Response>((done) => held.push(() => done(settings(7))));
+    }
+    const days: number = JSON.parse(String(init.body)).cancel_days;
+    sent.push(days);
+    if (days === 12)
+      return new Response(JSON.stringify({ error: 'Save failed', ref: 'made-up-ref' }), { status: 500 });
+    if (days === 6) return new Promise<Response>((done) => held.push(() => done(settings(6))));
+    return settings(days);
+  });
+  const screen = await render(<StaleDays onReference={() => {}} />);
+  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  await expect.element(cancel).toHaveValue(7);
+
+  await userEvent.fill(cancel, '6');
+  await userEvent.keyboard('{Enter}');
+  await userEvent.fill(cancel, '7');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => held.length).toBe(1);
+  held[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([6, 7]);
+  await expect.element(cancel).toHaveValue(7);
+
+  await userEvent.fill(cancel, '12');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByText('Save failed')).toBeVisible();
+  await userEvent.fill(cancel, '9');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent.at(-1)).toBe(9);
+  await expect.poll(() => held.length).toBe(2);
+  held[1]();
+  await new Promise((r) => setTimeout(r, 50));
+  await expect.element(cancel).toHaveValue(9);
+});
