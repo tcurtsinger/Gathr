@@ -28,6 +28,23 @@ pub fn create_chat(
     )
 }
 
+/// Puts a chat with no turns yet in a project: "New" makes the chat before its project is picked.
+pub fn put_in_project(
+    conn: &Connection,
+    chat: &str,
+    (project, folder): (&str, &str),
+) -> Result<(), Error> {
+    let moved = conn.execute(
+        "UPDATE chats SET project_id = ?2, project = ?3
+         WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1)",
+        params![chat, project, folder],
+    )?;
+    match moved {
+        0 => Err(Error::Refused("the chat has messages already".into())),
+        _ => Ok(()),
+    }
+}
+
 pub fn chats(conn: &Connection) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),

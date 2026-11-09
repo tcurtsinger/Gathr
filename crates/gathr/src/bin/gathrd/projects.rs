@@ -23,7 +23,7 @@ pub fn routes() -> Router<Arc<State>> {
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     db(&s, &t, "Projects failed", |conn| {
-        Ok(json!(projects::list(conn)?))
+        Ok(json!({ "projects": projects::list(conn)? }))
     })
     .await
 }
