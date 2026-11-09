@@ -1,0 +1,136 @@
+name: Release
+
+# A GitHub Release per merge (F7): once CI passes on a push to main, both installers, the window's
+# update (latest.json, signed with the updater's key) and the service's (gathrd.json, 0031).
+# A PR that changes how releases are built builds them too, unpublished, pointed at a feed on
+# 127.0.0.1:47199, so an update can be tried on a computer before merge.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/release.mjs
+      - crates/gathr-app/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  VERSION: 0.1.${{ github.run_number }}
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            bundles: nsis
+          - name: macOS
+            os: macos-latest
+            bundles: app,dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ui/.node-version
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - run: npm ci
+        working-directory: ui
+      - run: node scripts/release.mjs stamp ${{ env.VERSION }}
+      - run: npx vite build
+        working-directory: ui
+      - run: cargo build --release -p gathr --bin gathrd
+      - run: node scripts/release.mjs sidecar
+      - name: point a PR's build at a local feed
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: >-
+          echo '{"plugins": {"updater": {"endpoints": ["http://127.0.0.1:47199/latest.json"],
+          "dangerousInsecureTransportProtocol": true}}}' > "$RUNNER_TEMP/local-feed.json"
+      - name: installers
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          extra=()
+          if [ -f "$RUNNER_TEMP/local-feed.json" ]; then extra=(--config "$RUNNER_TEMP/local-feed.json"); fi
+          ui/node_modules/.bin/tauri build --config crates/gathr-app/tauri.release.conf.json "${extra[@]}" \
+            --bundles ${{ matrix.bundles }}
+      - run: node scripts/release.mjs collect ${{ env.VERSION }} release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.name }}
+          path: release
+          retention-days: 7
+
+  feeds:
+    name: Feeds
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: ui/.node-version
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release
+          merge-multiple: true
+      - name: gathrd.json and latest.json
+        run: |
+          base="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
+          if [ "${{ github.event_name }}" = pull_request ]; then base="http://127.0.0.1:47199"; fi
+          node scripts/release.mjs feeds "$VERSION" release "$base"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ env.VERSION }}
+          path: release
+          retention-days: 7
+
+  publish:
+    name: Publish
+    needs: feeds
+    if: github.event_name == 'workflow_run'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ env.VERSION }}
+          path: release
+      - name: GitHub Release v${{ env.VERSION }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          rm release/*-*.json 2>/dev/null || true
+          gh release create "v$VERSION" release/* --repo "${{ github.repository }}" --target "$SHA" \
+            --title "Gathr $VERSION" --notes "Built from $SHA."
