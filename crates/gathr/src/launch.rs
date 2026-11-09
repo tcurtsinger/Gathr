@@ -56,13 +56,18 @@ pub fn find_or_start(data: &DataDir, installed: &Path) -> Result<Found, Error> {
 }
 
 /// After an update, a stopped service starts the copy now current, which goes back to the one
-/// before if it fails to start.
+/// before if it fails to start. Every start first goes back from a copy that died on trial.
 pub fn hand_over(data: &DataDir) -> Result<Found, Error> {
     start_current(data, Env::Kept)
 }
 
 fn start_current(data: &DataDir, env: Env) -> Result<Found, Error> {
     let copies = Copies::new(data);
+    if copies.died_on_trial()
+        && let Some(previous) = copies.roll_back("exited on trial")?
+    {
+        return start(data, &previous, env);
+    }
     let Some(program) = copies.program() else {
         let why = format!("{} names no copy of gathrd", copies.root().display());
         return Err(Error::Other(why));

@@ -11,13 +11,14 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::app::{Copies, release};
+use gathr::app::{Copies, TRIAL, release};
 use gathr::event::Event;
 use gathr::fetch::{Failure, failed, parse_version};
 use gathr::pauses::{self, Pause};
 use gathr::{ids, platform};
 use serde_json::{Value, json};
 use tokio::sync::Notify;
+use tokio::sync::broadcast::error::RecvError;
 
 use crate::api::{State, Trace};
 use crate::chats::Chats;
@@ -136,9 +137,9 @@ impl AppUpdates {
         self.handing_over.lock().expect("never poisoned").clone()
     }
 
-    /// Records what the start found in `current.json`: an update that passed its start, or a
-    /// rollback from one that didn't.
-    pub fn started(&self) {
+    /// Records what the start found in `current.json`: an update that started, or a rollback from
+    /// one that didn't; a copy on trial is watched until it passes.
+    pub fn started(self: &Arc<Self>) {
         let started = match self.copies.started() {
             Ok(started) => started,
             Err(e) => {
@@ -164,6 +165,17 @@ impl AppUpdates {
                 .record(event.attr("why", back.why.as_str()));
             let why = format!("{} start failed: {}", back.version, back.why);
             self.shown().failed = Some((why, ids::reference(&trace).to_string()));
+        }
+        if started.on_trial {
+            tokio::spawn(trial(self.clone()));
+        }
+    }
+
+    /// A clean stop on trial, so the next start doesn't take it for a death.
+    pub fn stopped(&self) {
+        if let Err(e) = self.copies.stopped() {
+            let event = Event::point("gathr.app.trial").error("disk");
+            self.chats.writer.record(event.attr("why", e.to_string()));
         }
     }
 
@@ -277,6 +289,30 @@ impl AppUpdates {
             _ => json!({ "turns": ["unknown"] }),
         }
     }
+}
+
+/// The copy on trial passes at its first finished turn or after `TRIAL`, whichever comes first.
+async fn trial(app: Arc<AppUpdates>) {
+    let mut live = app.chats.live.subscribe();
+    let turn = async {
+        loop {
+            match live.recv().await {
+                Ok(e) if e["type"] == "turn" && e["status"] == "done" => return,
+                Err(RecvError::Closed) => std::future::pending().await,
+                _ => {}
+            }
+        }
+    };
+    let by = tokio::select! {
+        _ = tokio::time::sleep(TRIAL) => "time",
+        () = turn => "turn",
+    };
+    let event = Event::point("gathr.app.trial").attr("version", app.running.as_str());
+    let event = match app.copies.passed() {
+        Ok(_) => event.ok().attr("by", by),
+        Err(e) => event.error("disk").attr("why", e.to_string()),
+    };
+    app.chats.writer.record(event);
 }
 
 /// `GATHR_APP_HOLD_MS` shortens the hold, in dev and tests only.

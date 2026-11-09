@@ -399,6 +399,15 @@ pub fn held_recording(dir: &Path) -> PathBuf {
     held
 }
 
+/// Ends a process outright, as a crash would.
+pub fn kill(pid: &str) {
+    let _ = if cfg!(windows) {
+        Command::new("taskkill").args(["/F", "/PID", pid]).output()
+    } else {
+        Command::new("kill").args(["-KILL", pid]).output()
+    };
+}
+
 pub fn until<T>(secs: u64, what: &str, mut found: impl FnMut() -> Option<T>) -> T {
     let deadline = Instant::now() + Duration::from_secs(secs);
     loop {

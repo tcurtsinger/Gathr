@@ -183,6 +183,94 @@ fn a_release_reaches_a_running_service_between_two_turns() {
     let switched = events(&data, "gathr.app.switch");
     assert_eq!(switched.len(), 1, "{switched:?}");
     assert_eq!(switched[0]["attrs"]["from"], "0.0.1", "{switched:?}");
+    // A finished turn passes the trial: nothing goes back after it.
+    until(20, "the trial to pass", || {
+        (current(&data)["trial"] == false).then_some(())
+    });
+    let kept = data.join("app").join(format!("gathr.db.before-{VERSION}"));
+    assert!(!kept.exists(), "the database copy outlived the trial");
+}
+
+fn current(data: &Path) -> Value {
+    serde_json::from_slice(&std::fs::read(data.join("app/current.json")).unwrap()).unwrap()
+}
+
+/// `gathr open`, as the window starts the folder's service.
+fn open(dir: &Path, data: &Path) -> ServiceInfo {
+    let answer = dir.join("open.json");
+    // To a file, not a pipe: on Windows the service it starts inherits the pipe.
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_gathr"))
+        .arg("--data")
+        .arg(data)
+        .arg("open")
+        .stdout(std::fs::File::create(&answer).unwrap())
+        .status()
+        .unwrap();
+    let said = std::fs::read_to_string(&answer).unwrap();
+    assert!(status.success(), "{said}");
+    ServiceInfo::read(&DataDir::new(data)).unwrap()
+}
+
+fn until_free(data: &Path, what: &str) {
+    until(30, what, || DataDir::new(data).take_lock().ok().map(drop));
+}
+
+/// The new copy starts, then dies before it finishes a turn: the next start goes back to the copy
+/// before. `migrated`: it had moved the database on, so the database from before the update comes
+/// back too; otherwise what was written on the new copy stays.
+fn dies_on_trial(migrated: bool) {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let feed = Feed::start();
+    publish(
+        &feed,
+        &dir.0,
+        VERSION,
+        env!("CARGO_BIN_EXE_gathrd"),
+        "new ui",
+    );
+    let mut service =
+        TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
+    let _next = Successor(data.clone());
+    let new = successor(&data, service.info.pid);
+    assert!(service.child.wait().unwrap().success());
+    let made = http::send(new.port, &new.token, "POST", "/api/chats", &json!({})).unwrap();
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+
+    // Quitting during the trial isn't failing it: the next start runs the new copy again.
+    let _ = http::call(new.port, &new.token, "POST", "/api/shutdown");
+    until_free(&data, "the new copy to stop");
+    let again = open(&dir.0, &data);
+    assert_eq!(get(&again, "/api/app")["version"], VERSION);
+
+    common::kill(&again.pid.to_string());
+    until_free(&data, "the new copy to die");
+    if migrated {
+        let db = rusqlite::Connection::open(DataDir::new(&data).db()).unwrap();
+        db.pragma_update(None, "user_version", 99).unwrap();
+    }
+    let back = open(&dir.0, &data);
+    let app = get(&back, "/api/app");
+    assert_eq!(app["version"], "0.0.1", "{app}");
+    let reference = app["failed"]["ref"].as_str().unwrap_or_default();
+    let (ok, trace) = gathr(&data, &["diag", "trace", reference]);
+    assert!(ok && trace.to_string().contains("on trial"), "{trace}");
+    assert_eq!(current(&data)["refused"], json!([VERSION]));
+    let path = format!("/api/chats/{chat}");
+    let kept = http::call(back.port, &back.token, "GET", &path).unwrap();
+    assert_eq!(kept.status == 200, !migrated, "{}", kept.body);
+}
+
+#[test]
+fn a_release_that_dies_before_its_first_turn_rolls_back_and_keeps_what_it_wrote() {
+    dies_on_trial(false);
+}
+
+#[test]
+fn a_release_that_dies_after_moving_the_database_on_rolls_back_with_the_database_before() {
+    dies_on_trial(true);
 }
 
 /// A release whose program says the right version but isn't a service (the command line packed
@@ -218,8 +306,7 @@ fn a_release_that_fails_to_start_rolls_back_to_the_copy_before() {
         ok && traced.contains("exited") && traced.contains(VERSION),
         "{trace}"
     );
-    let current: Value =
-        serde_json::from_slice(&std::fs::read(data.join("app/current.json")).unwrap()).unwrap();
+    let current = current(&data);
     assert_eq!(current["refused"], json!([VERSION]), "{current}");
     assert!(
         !data.join("app").join(VERSION).exists(),
