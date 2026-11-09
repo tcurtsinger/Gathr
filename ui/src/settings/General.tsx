@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { Switch } from '../components/Switch';
+import { useNewestWins } from '../newest';
 import { StaleDays } from './StaleDays';
 
 /** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
@@ -9,46 +10,39 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  // Counts saves started and ended, so it's odd while one is pending: a read then, or one that began
-  // before a save ended, may answer the old state.
-  const saves = useRef(0);
+  const newest = useNewestWins();
+  // A read while a save is out may answer the state before it, so none starts then.
+  const pending = useRef(false);
 
   // Read again on coming back to the window: the person may have changed it in the system's settings.
   useEffect(() => {
     const read = () => {
-      const at = saves.current;
-      if (at % 2) return;
-      api.startup().then(
-        (next) => {
-          if (at !== saves.current) return;
-          setOn(next);
-          if (next) setFailure(null);
-        },
-        (f: Failure) => at === saves.current && setFailure(f),
-      );
+      if (pending.current) return;
+      newest(api.startup()).then((next) => {
+        setOn(next);
+        if (next) setFailure(null);
+      }, setFailure);
     };
     read();
     window.addEventListener('focus', read);
     return () => window.removeEventListener('focus', read);
-  }, []);
+  }, [newest]);
 
   /** Shows the change at once; a failure puts the switch back as it was. */
   const change = (next: boolean) => {
     const before = on;
-    saves.current++;
+    pending.current = true;
     setOn(next);
     setSaving(true);
     setFailure(null);
-    api
-      .setStartup(next)
-      .then(setOn, (f: Failure) => {
-        setOn(before);
-        setFailure(f);
-      })
-      .finally(() => {
-        saves.current++;
-        setSaving(false);
-      });
+    const saved = api.setStartup(next).finally(() => {
+      pending.current = false;
+      setSaving(false);
+    });
+    newest(saved).then(setOn, (f: Failure) => {
+      setOn(before);
+      setFailure(f);
+    });
   };
 
   return (

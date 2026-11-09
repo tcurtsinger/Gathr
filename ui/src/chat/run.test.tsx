@@ -171,7 +171,7 @@ function PausedAgents() {
   );
 }
 
-test('with no live updates, a read that started earlier never replaces a newer one', async () => {
+test('with no live updates, an answer to an older action never replaces the newest one', async () => {
   const agents = (...targets: string[]): Pauses => ({
     pauses: targets.flatMap((t) => paused('agent', t).pauses),
     usage: [],
@@ -188,16 +188,10 @@ test('with no live updates, a read that started earlier never replaces a newer o
   await expect.element(screen.getByText('none')).toBeVisible();
   await screen.getByRole('button', { name: 'Pause three' }).click();
   await expect.poll(() => answers.length).toBe(3);
-  answers[0](json(agents('a')));
-  await expect.element(screen.getByText('a', { exact: true })).toBeVisible();
-  // Each later answer finds a list shown since it left, so it reads the list again.
-  answers[1](json(agents('a', 'b')));
-  await expect.poll(() => reads.length).toBe(2);
   answers[2](json(agents('a', 'b', 'c')));
-  await expect.poll(() => reads.length).toBe(3);
-  reads[2](json(agents('a', 'b', 'c')));
   await expect.element(screen.getByText('a b c')).toBeVisible();
-  reads[1](json(agents('a', 'b')));
+  answers[0](json(agents('a')));
+  answers[1](json(agents('a', 'b')));
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('a b c')).toBeVisible();
 });
