@@ -22,7 +22,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **The checks CI runs**, from the repo root (run them once before pushing):
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
-  - `cargo test --workspace --locked`
+  - `cargo test --workspace --locked`. A failing test that started a service prints the service's last 50 events, and with `GATHR_TEST_KEEP=<folder>` set keeps a copy of its data folder there; in CI, a failed Rust job keeps them as the artifact `rust-failures-<Windows|macOS>`. A request that times out names itself, how long it waited and how many bytes came back.
   - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
   - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
   - `node scripts/registry.check.mjs` (the files in `ui/src/registry` are as published, [0030](docs/decisions/0030-ui-foundation.md))
