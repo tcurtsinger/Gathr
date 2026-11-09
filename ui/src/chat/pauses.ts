@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure, type PauseScope, type Pauses } from '../api';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
@@ -19,29 +19,40 @@ const none: Pauses = { pauses: [], usage: [] };
 
 /**
  * Every pause and usage hold, live: one list for the whole app, as the service keeps it. Of reads,
- * actions' answers and live lists, only the newest started shows: every change after an action sends
- * its own live list. A refusal rejects with its reference.
+ * actions' answers and live lists, only the newest started shows. An action that another list
+ * overlapped reads the list again: which of them the service applied last can't be told from the
+ * window. A refusal rejects with its reference.
  */
 export function usePauses(onFailure: (f: Failure) => void) {
   const [pauses, setPauses] = useState<Pauses>(none);
   const newest = useNewestWins();
-  const load = useCallback(() => newest(api.pauses()).then(setPauses, onFailure), [newest, onFailure]);
+  // Counts every read, action and live list as it starts.
+  const started = useRef(0);
+  const load = useCallback(() => {
+    started.current++;
+    newest(api.pauses()).then(setPauses, onFailure);
+  }, [newest, onFailure]);
   useEffect(() => {
     load();
     return listen((event) => {
-      if (event.type === 'pauses') newest(Promise.resolve(event)).then(setPauses);
+      if (event.type === 'pauses') {
+        started.current++;
+        newest(Promise.resolve(event)).then(setPauses);
+      }
       if (event.type === 'lagged') load();
     });
   }, [load, newest]);
 
   const act = useCallback(
     async (action: PauseAction, scope: PauseScope) => {
+      const at = ++started.current;
       const answer = api[action](scope);
       // Shown only if it's newest; a refusal rejects below either way.
       newest(answer).then(setPauses, () => {});
       await answer;
+      if (started.current !== at) load();
     },
-    [newest],
+    [newest, load],
   );
 
   return { pauses, act };

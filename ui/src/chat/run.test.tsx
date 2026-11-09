@@ -155,6 +155,29 @@ test('two agents paused at once, with no live updates, both read paused once bot
   await expect.element(summary).toMatchTextContent('Member · Paused');
 });
 
+test('two agents paused at once, reaching the service in reverse order with no live updates, both read paused', async () => {
+  const answers: ((r: Response) => void)[] = [];
+  service(running, () => new Promise<Response>((done) => answers.push(done)));
+  const screen = await render(<Chat />);
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Lead' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await expect.poll(() => answers.length).toBe(2);
+  // The member's pause reached the service first, so its answer lists the member alone.
+  answers[1](json(paused('agent', 'b')));
+  await expect.element(summary).toMatchTextContent('Member · Paused');
+  const both: Pauses = {
+    pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
+    usage: [],
+  };
+  listed = both;
+  answers[0](json(both));
+  await expect.element(summary).toMatchTextContent('Supervisor · Held');
+  await expect.element(summary).toMatchTextContent('Member · Paused');
+});
+
 /** The agents the app's list holds paused, and a button that pauses three at once. */
 function PausedAgents() {
   const { pauses, act } = usePauses(noFailure);
