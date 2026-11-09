@@ -101,12 +101,6 @@
 .thread-bottom:disabled {
   visibility: hidden;
 }
-/* Off-screen messages skip layout and paint until they're scrolled near. */
-.user-message,
-.reply {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 120px;
-}
 .user-message {
   display: flex;
   flex-direction: column;
