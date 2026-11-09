@@ -1,4 +1,4 @@
-import type { History, Message, ToolBody, Turn } from '../api';
+import type { History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -7,27 +7,71 @@ export interface Approval {
   tool: string;
 }
 
-/** One chat as the window shows it: saved messages, turns, and text still streaming. */
+/** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
 export interface ChatState {
   messages: Message[];
   turns: Record<string, Turn>;
   partial: Record<string, string>;
   approvals: Approval[];
+  members: Member[];
+  tasks: Task[];
+  waits: Wait[];
 }
 
-export const empty: ChatState = { messages: [], turns: {}, partial: {}, approvals: [] };
+export const empty: ChatState = {
+  messages: [],
+  turns: {},
+  partial: {},
+  approvals: [],
+  members: [],
+  tasks: [],
+  waits: [],
+};
 
-export function fromHistory(history: History): ChatState {
+export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
   const approvals = history.approvals.map((a) => ({ turn: a.turn, request: a.request_id, tool: a.tool }));
-  return { ...empty, messages: history.messages, turns, approvals };
+  const partial = Object.fromEntries((history.streaming ?? []).map((p) => [p.turn, p.text]));
+  return {
+    ...empty,
+    messages: history.messages,
+    turns,
+    partial,
+    approvals,
+    members: history.members ?? [],
+    tasks: work?.tasks ?? [],
+    waits: work?.waits ?? [],
+  };
+}
+
+/**
+ * A chat as loaded, with the live events that arrived while it loaded. The history may already hold
+ * some of them: a message it holds is skipped, a turn's deltas before a block of that turn it holds
+ * are dropped, and the rest skip what its unsaved text holds (each delta says where it starts).
+ */
+export function fromLoad(
+  history: History,
+  work: { tasks: Task[]; waits: Wait[] },
+  held: LiveEvent[],
+): ChatState {
+  const saved = new Set(history.messages.map((m) => m.id));
+  const inHistory = (e: LiveEvent, turn?: string) =>
+    e.type === 'message' && saved.has(e.message.id) && (turn === undefined || e.message.turn === turn);
+  const fresh = held.filter(
+    (e, i) =>
+      !inHistory(e) && (e.type !== 'delta' || !held.slice(i + 1).some((later) => inHistory(later, e.turn))),
+  );
+  return fresh.reduce(apply, fromHistory(history, work));
 }
 
 /** Applies one live event for this chat. Events for other chats never reach here. */
 export function apply(state: ChatState, event: LiveEvent): ChatState {
   switch (event.type) {
     case 'delta': {
-      const text = (state.partial[event.turn] ?? '') + event.text;
+      const was = state.partial[event.turn] ?? '';
+      const at = event.at ?? was.length;
+      if (at + event.text.length <= was.length) return state;
+      const text = was + event.text.slice(Math.max(0, was.length - at));
       return { ...state, partial: { ...state.partial, [event.turn]: text } };
     }
     case 'message': {
@@ -53,6 +97,9 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         why: event.why ?? before?.why ?? null,
         ref: event.ref ?? before?.ref ?? '',
         agent: event.agent,
+        created: before?.created,
+        task: event.task ?? before?.task,
+        answers: event.answers ?? before?.answers,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
@@ -62,6 +109,10 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       const approval = { turn: event.turn, request: event.request_id, tool: event.tool };
       return { ...state, approvals: [...state.approvals, approval] };
     }
+    case 'tasks':
+      return { ...state, tasks: event.tasks, waits: event.waits };
+    case 'members':
+      return { ...state, members: event.members };
     default:
       return state;
   }
@@ -71,7 +122,7 @@ export function answered(state: ChatState, request: string): ChatState {
   return { ...state, approvals: state.approvals.filter((a) => a.request !== request) };
 }
 
-/** The turn still under way, if any: Stop applies to it. */
+/** A turn still under way, if any: Stop applies to the chat's turns. */
 export function running(state: ChatState): Turn | undefined {
   return Object.values(state.turns).find((t) => t.status === 'running' || t.status === 'queued');
 }

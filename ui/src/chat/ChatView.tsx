@@ -1,12 +1,15 @@
+import { Folder } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, Chat } from '../api';
+import type { Agent, Chat, Member, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
-import { AgentPicker } from './AgentPicker';
+import { AgentPicker, type Recipient } from './AgentPicker';
 import type { SendFailure } from './messages';
+import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread } from './Thread';
+import { roleName } from './team';
 import { type Unsent, useChat } from './useChat';
 import './chat.css';
 
@@ -24,10 +27,17 @@ interface Props {
   onUnsent: Unsent;
   /** The first message names the chat (the service does it), so the list shows the name. */
   onNamed: () => void;
+  projects: Project[];
+  /** A new chat's project, picked before its first message; '' for none. */
+  onProject: (project: string) => void;
+  onNewProject: () => void;
+  /** Sends a new chat's first message: the service makes the chat then. */
+  onStart: (text: string, agent?: string) => void;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
+  const { projects, onProject, onNewProject, onStart } = props;
   const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -36,16 +46,22 @@ export function ChatView(props: Props) {
   const turn = running(state);
   const input = useRef<HTMLTextAreaElement>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  // The one picked here, else the agent of the chat's last turn, else the first; a removed one is skipped.
+  // A new chat isn't made yet: its team is its project's, if it has one.
+  const fresh = !chat.id;
+  const members = fresh ? (projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
+  const recipients = recipientsOf(members, agents, !!chat.project);
+  // The one picked here, else the chat's Supervisor, else the agent of its last turn, else the first;
+  // a removed one is skipped.
+  const lead = members.find((m) => m.role === 'supervisor')?.agent;
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
-  const agent = [picked, last].find((id) => agents.some((a) => a.id === id)) ?? agents[0]?.id;
+  const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   useFirstTokenReport(state.partial);
-
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
     const first = state.messages.length === 0;
     onDraft('');
+    if (fresh) return onStart(draft, agent);
     send(draft, agent).then(() => first && onNamed());
   };
 
@@ -59,7 +75,11 @@ export function ChatView(props: Props) {
       const turn = state.turns[t];
       if (asked && turn) send(asked.body as string, turn.agent ?? undefined);
     },
-    resend: (f) => send(f.text, f.agent, f),
+    resend: (f) => {
+      if (!fresh) return send(f.text, f.agent, f);
+      onUnsent((list) => list.filter((x) => x.id !== f.id));
+      onStart(f.text, f.agent);
+    },
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();
@@ -71,6 +91,7 @@ export function ChatView(props: Props) {
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
         <h1>{chat.title}</h1>
+        {state.members.length > 1 && <Summary state={state} />}
       </header>
       <Thread
         state={state}
@@ -96,6 +117,24 @@ export function ChatView(props: Props) {
           )
         }
       >
+        {fresh && (
+          <label className="project-pick">
+            <Folder aria-hidden="true" />
+            <select
+              aria-label="Project"
+              value={chat.project ?? ''}
+              onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
+            >
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+              <option value="new">New project</option>
+            </select>
+          </label>
+        )}
         <Composer
           draft={draft}
           onDraft={onDraft}
@@ -105,7 +144,7 @@ export function ChatView(props: Props) {
           tools={
             agent && (
               <AgentPicker
-                agents={agents}
+                agents={recipients}
                 selected={agent}
                 onSelect={setPicked}
                 onEdit={() => onEditAgent(agent)}
@@ -116,6 +155,23 @@ export function ChatView(props: Props) {
       </Thread>
     </main>
   );
+}
+
+const MOST = 5;
+
+/**
+ * Who a message can go to (0028): the chat's Supervisor by name first, then its other agents. A chat
+ * without a project can also take any other agent, up to five: sending to one adds it.
+ */
+function recipientsOf(members: Member[], agents: Agent[], project: boolean): Recipient[] {
+  const sorted = [...members].sort(
+    (a, b) => Number(b.role === 'supervisor') - Number(a.role === 'supervisor'),
+  );
+  const inChat = sorted
+    .filter((m) => agents.some((a) => a.id === m.agent))
+    .map((m) => ({ id: m.agent, name: m.name, meta: members.length > 1 ? roleName[m.role] : undefined }));
+  if (project || members.length >= MOST) return inChat;
+  return [...inChat, ...agents.filter((a) => !members.some((m) => m.agent === a.id))];
 }
 
 /** Reports when each turn's first streamed text is drawn, to set against the service's

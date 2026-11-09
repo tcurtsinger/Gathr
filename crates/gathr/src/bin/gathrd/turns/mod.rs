@@ -42,6 +42,8 @@ struct Ids {
     agent: Option<String>,
     /// The task it works on (0010).
     task: Option<i64>,
+    /// The turn it answers, when Gathr started it (F8b).
+    answers: Option<String>,
 }
 
 #[derive(Clone)]
@@ -72,11 +74,14 @@ struct Running {
     sent_us: i64,
     /// Text streamed since the last whole block: what a stopped turn keeps.
     partial: String,
+    /// `partial`'s length in UTF-16 units, as the window counts it: each delta says where it starts,
+    /// so a window that read `partial` in a chat's history skips what that already held.
+    partial_units: usize,
     streamed: bool,
     /// Tool calls under way: their message, name and start.
     tools: HashMap<String, (String, String, i64)>,
-    /// Questions Claude Code asked and nobody has answered: each tool and its input.
-    approvals: HashMap<String, (String, Value)>,
+    /// Questions Claude Code asked and nobody has answered: each tool, its input and why it asks.
+    approvals: HashMap<String, (String, Value, Option<String>)>,
     /// Of those, the ones a worktree's `pre-push` hook asked: where each answer goes.
     pushes: HashMap<String, oneshot::Sender<bool>>,
     /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
@@ -223,8 +228,8 @@ impl Task {
                 let _ = reply.send(self.approve(&chat, &request_id, allow).await);
             }
             Cmd::AskPush { chat, input, reply } => self.ask_push(&chat, input, reply),
-            Cmd::Approvals { chat, reply } => {
-                let _ = reply.send(self.open_approvals(&chat));
+            Cmd::Open { chat, reply } => {
+                let _ = reply.send((self.open_approvals(&chat), self.streaming(&chat).await));
             }
             Cmd::Resume(w) => {
                 let ids = Ids {
@@ -233,6 +238,7 @@ impl Task {
                     trace: w.trace,
                     agent: w.agent,
                     task: w.task,
+                    answers: w.answers,
                 };
                 self.queue.push_back(Queued { ids, text: w.text });
                 self.try_next().await;
@@ -277,6 +283,7 @@ impl Task {
             trace,
             agent,
             task: None,
+            answers: None,
         };
         let queued = Queued { ids, text };
         let row = queued.ids.clone();
@@ -289,7 +296,7 @@ impl Task {
                     &row.chat,
                     &row.turn,
                     &row.trace,
-                    (row.agent.as_deref(), row.task),
+                    (row.agent.as_deref(), row.task, row.answers.as_deref()),
                 )
             })
             .await;
@@ -446,6 +453,7 @@ impl Task {
                 trace: gathr::ids::trace_id(),
                 agent: self.agent.clone(),
                 task: None,
+                answers: None,
             };
             let row = ids.clone();
             let saved = self
@@ -457,7 +465,7 @@ impl Task {
                         &row.chat,
                         &row.turn,
                         &row.trace,
-                        (row.agent.as_deref(), row.task),
+                        (row.agent.as_deref(), row.task, row.answers.as_deref()),
                     )?;
                     store::move_message(conn, &message, &row.turn)
                 })
@@ -582,6 +590,7 @@ impl Task {
             span,
             sent_us: now_us(),
             partial: String::new(),
+            partial_units: 0,
             streamed: false,
             tools: HashMap::new(),
             approvals: HashMap::new(),
@@ -604,6 +613,7 @@ impl Task {
             trace: gathr::ids::trace_id(),
             agent: self.agent.clone(),
             task: None,
+            answers: None,
         };
         let (row, id) = (ids.clone(), message.to_string());
         let saved = self
@@ -615,7 +625,7 @@ impl Task {
                     &row.chat,
                     &row.turn,
                     &row.trace,
-                    (row.agent.as_deref(), row.task),
+                    (row.agent.as_deref(), row.task, row.answers.as_deref()),
                 )?;
                 store::move_message(conn, &id, &row.turn)
             })
@@ -693,7 +703,7 @@ impl Task {
         let Some(turn) = self.turn.as_mut().filter(|t| t.ids.chat == chat) else {
             return false;
         };
-        let Some((tool, input)) = turn.approvals.remove(request_id) else {
+        let Some((tool, input, _)) = turn.approvals.remove(request_id) else {
             return false;
         };
         if let Some(reply) = turn.pushes.remove(request_id) {
@@ -718,9 +728,27 @@ impl Task {
             let push = turn.pushes.get(*request_id);
             push.is_none_or(|reply| !reply.is_closed())
         });
-        let open = open.map(|(request_id, (tool, input))| {
-            json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input })
+        let open = open.map(|(request_id, (tool, input, why))| {
+            json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input,
+                "why": why })
         });
         open.collect()
+    }
+
+    /// The chat's reply still streaming: the text since its last whole block, which isn't saved yet,
+    /// with how many of the turn's messages are. Counted here, where nothing new is saved meanwhile,
+    /// so whoever reads the chat after can tell a block saved since from the text still streaming.
+    async fn streaming(&self, chat: &str) -> Option<Value> {
+        let turn = self
+            .turn
+            .as_ref()
+            .filter(|t| t.ids.chat == chat && !t.partial.is_empty())?;
+        let (chat, id) = (chat.to_string(), turn.ids.turn.clone());
+        let count = move |conn: &mut rusqlite::Connection| store::replies(conn, &chat, &id);
+        let saved = self.chats.writer.call(count).await?.ok()?;
+        Some(
+            json!({ "turn": turn.ids.turn, "agent": turn.ids.agent, "text": turn.partial,
+            "saved": saved }),
+        )
     }
 }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type Agent, api, type Chat, type Failure } from './api';
+import { type Agent, api, type Chat, type Failure, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { Notice } from './components/Notice';
 import { listen } from './live';
+import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
@@ -12,6 +13,9 @@ import './app.css';
 export function App() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newProject, setNewProject] = useState(false);
+  const [fresh, setFresh] = useState<{ project?: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
@@ -36,14 +40,41 @@ export function App() {
     });
   }, []);
 
-  const newChat = useCallback(() => {
-    api.createChat().then((chat) => {
-      setChats((list) => [chat, ...list]);
-      setSelected(chat.id);
-    }, setFailure);
+  useEffect(() => {
+    api.projects().then(setProjects, setFailure);
   }, []);
 
-  const chat = chats.find((c) => c.id === selected);
+  // A new chat is a draft until its first message: then the service makes it, in its project.
+  const newChat = useCallback((project?: string) => {
+    setFresh({ project });
+    setSelected(null);
+  }, []);
+  const keep = (chat: string, f: SendFailure) =>
+    setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
+  const current = useRef(fresh);
+  current.current = fresh;
+  const start = (text: string, agent?: string) => {
+    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, failure: e });
+    const draft = fresh;
+    api.createChat(draft?.project).then(
+      (made) => {
+        setChats((list) => [made, ...list]);
+        // Only while the person is still on this draft: another chat, or a newer draft, stays open.
+        if (current.current === draft) {
+          setFresh(null);
+          setSelected(made.id);
+        }
+        api.send(made.id, text, agent).then(
+          () => api.chats().then(setChats, setFailure),
+          (e: Failure) => keep(made.id, failed(e)),
+        );
+      },
+      (e: Failure) => keep('', failed(e)),
+    );
+  };
+
+  const chat =
+    chats.find((c) => c.id === selected) ?? (fresh && { id: '', title: 'New chat', project: fresh.project });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
   const openReference = (reference: string) =>
@@ -59,17 +90,19 @@ export function App() {
     <div className="app">
       <Sidebar
         chats={chats}
+        projects={projects}
         selected={selected}
         onSelect={(id) => {
           if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
           setSelected(id);
+          setFresh(null);
         }}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
       />
       {chat ? (
         <ChatView
-          key={chat.id}
+          key={chat.id || 'new'}
           chat={chat}
           agents={agents}
           onEditAgent={(agent) =>
@@ -84,6 +117,10 @@ export function App() {
           onUnsent={(update) => setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) }))}
           openSettings={openSettings}
           onNamed={() => api.chats().then(setChats, setFailure)}
+          projects={projects}
+          onProject={(project) => setFresh({ project })}
+          onStart={start}
+          onNewProject={() => setNewProject(true)}
         />
       ) : (
         <main className="chat">
@@ -100,6 +137,18 @@ export function App() {
           )}
         </main>
       )}
+      <NewProject
+        open={newProject}
+        agents={agents}
+        projects={projects}
+        onClose={() => setNewProject(false)}
+        onCreated={(project) => {
+          setProjects((list) => [...list, project]);
+          setNewProject(false);
+          if (fresh) setFresh({ project: project.id });
+        }}
+        onReference={openReference}
+      />
       <SettingsPanel
         target={settings}
         onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}

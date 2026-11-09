@@ -11,6 +11,7 @@ use crate::ids::now_us;
 
 mod held;
 mod records;
+pub mod touched;
 mod words;
 
 use records::{OptionalTask, read, set, state_of};
@@ -126,6 +127,8 @@ pub struct Start {
     pub chat: String,
     pub agent: String,
     pub task: Option<i64>,
+    /// The turn it answers: the one that gave its task, or that left its wait.
+    pub answers: Option<String>,
     pub text: String,
     pub turn: String,
     pub trace: String,
@@ -137,16 +140,17 @@ impl Start {
     pub(crate) fn queue(
         conn: &Connection,
         (chat, agent): (&str, &str),
-        task: Option<i64>,
+        (task, answers): (Option<i64>, Option<&str>),
         text: String,
     ) -> Result<Start, Error> {
         let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
-        crate::store::add_turn(conn, chat, &turn, &trace, (Some(agent), task))?;
+        crate::store::add_turn(conn, chat, &turn, &trace, (Some(agent), task, answers))?;
         let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", &text)?;
         Ok(Start {
             chat: chat.to_string(),
             agent: agent.to_string(),
             task,
+            answers: answers.map(String::from),
             text,
             turn,
             trace,
@@ -682,7 +686,8 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
         None => "the person".to_string(),
     };
     let text = words::brief(&t, &giver, carry);
-    Start::queue(tx, (&t.chat, &t.owner), Some(task), text)
+    let on = (Some(task), t.given_in.as_deref());
+    Start::queue(tx, (&t.chat, &t.owner), on, text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and

@@ -89,10 +89,12 @@ impl Task {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
+                let at = turn.partial_units;
                 turn.partial.push_str(&text);
+                turn.partial_units += text.encode_utf16().count();
                 let first = !std::mem::replace(&mut turn.streamed, true);
                 let (ids, sent) = (turn.ids.clone(), turn.sent_us);
-                let delta = json!({ "type": "delta", "turn": ids.turn, "text": text });
+                let delta = json!({ "type": "delta", "turn": ids.turn, "text": text, "at": at });
                 self.publish(&ids.chat, delta);
                 if first {
                     let mut event = Event::point("gathr.turn.first_token").trace(&ids.trace);
@@ -105,6 +107,7 @@ impl Task {
                     return;
                 };
                 turn.partial.clear();
+                turn.partial_units = 0;
                 let ids = turn.ids.clone();
                 if !text.is_empty() {
                     let message = self.db_message(&ids, "assistant", "text", &text).await;
@@ -150,8 +153,8 @@ impl Task {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
-                turn.approvals
-                    .insert(request_id.clone(), (tool.clone(), input.clone()));
+                let asked = (tool.clone(), input.clone(), why.clone());
+                turn.approvals.insert(request_id.clone(), asked);
                 let ids = turn.ids.clone();
                 self.publish(
                     &ids.chat,
@@ -283,6 +286,7 @@ impl Task {
             return;
         };
         let text = std::mem::take(&mut turn.partial);
+        turn.partial_units = 0;
         let ids = turn.ids.clone();
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         if !text.is_empty() {

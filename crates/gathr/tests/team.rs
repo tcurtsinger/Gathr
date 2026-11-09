@@ -33,9 +33,12 @@ fn member(agent: &str, role: &str) -> Value {
     json!({ "agent": agent, "role": role })
 }
 
-/// A new chat with `members` (and a project folder): its id.
+/// A new chat with `members` (in a project on that folder): its id.
 fn team_chat(service: &TestService, members: Value, project: Option<&Path>) -> String {
-    let body = json!({ "members": members, "project": project });
+    if let Some(folder) = project {
+        return common::project_chat(service, folder, members);
+    }
+    let body = json!({ "members": members });
     let made = service.send("POST", "/api/chats", body);
     assert_eq!(made.status, 200, "{}", made.body);
     made.json()["id"].as_str().unwrap().to_string()
@@ -70,7 +73,6 @@ fn role_rules_are_refused_through_the_api() {
         &["Orin", "Vale", "Pia", "Juno", "Cass", "Rook"],
     );
     let [a, b, c, d, e, f] = [0, 1, 2, 3, 4, 5].map(|i| ids[i].as_str());
-    let not_git = TempDir::new();
     let refused = [
         (
             "six agents",
@@ -107,11 +109,6 @@ fn role_rules_are_refused_through_the_api() {
             json!({ "members": [member(a, "supervisor"), member(b, "lead")] }),
         ),
         ("no members", json!({ "members": [] })),
-        (
-            "a project that isn't a git repository",
-            json!({ "members": [member(a, "member")],
-            "project": not_git.0 }),
-        ),
     ];
     for (what, body) in refused {
         let answer = service.send("POST", "/api/chats", body);
@@ -222,13 +219,12 @@ fn a_message_goes_to_the_supervisor_unless_it_names_a_member() {
         "each message says its agent: {history}"
     );
 
+    // Picking an agent outside a chat with no project adds it (tests/projects.rs has the rules).
     let outsider = json!({ "text": "Hello", "agent": rook });
     let answer = service.send("POST", &format!("/api/chats/{chat}/messages"), outsider);
-    assert_eq!(
-        answer.status, 400,
-        "an agent outside the chat: {}",
-        answer.body
-    );
+    assert_eq!(answer.status, 200, "{}", answer.body);
+    let history = service.wait_for(&chat, 10, "Rook's turn", |h| ended(h, 3));
+    assert_eq!(history["members"][2]["agent"], rook.as_str(), "{history}");
 }
 
 /// `signed_in` with a second text block after `go` exists: the reply is half written until then.

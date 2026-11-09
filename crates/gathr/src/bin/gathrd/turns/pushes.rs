@@ -37,16 +37,16 @@ impl Task {
             return;
         }
         let request_id = format!("gathr-push-{}", gathr::ids::uuid());
-        let tool = "git push".to_string();
-        turn.approvals
-            .insert(request_id.clone(), (tool.clone(), input.clone()));
+        let (tool, why) = ("git push".to_string(), "Gathr asks because it pushes");
+        let asked = (tool.clone(), input.clone(), Some(why.to_string()));
+        turn.approvals.insert(request_id.clone(), asked);
         turn.pushes.insert(request_id.clone(), reply);
         let ids = turn.ids.clone();
         self.record(event.ok().attr("asked", request_id.clone()));
         self.publish(
             &ids.chat,
             json!({ "type": "approval", "turn": ids.turn, "request_id": request_id,
-            "tool": tool, "input": input, "why": "Gathr asks because it pushes" }),
+            "tool": tool, "input": input, "why": why }),
         );
     }
 

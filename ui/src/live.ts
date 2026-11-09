@@ -1,8 +1,9 @@
-import type { Message, ToolBody, TurnStatus } from './api';
+import type { Member, Message, Task, ToolBody, TurnStatus, Wait } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
-  | { type: 'delta'; chat: string; turn: string; text: string }
+  // `at`: where the text starts in the turn's unsaved reply, in UTF-16 units.
+  | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody }
   // `agent`: the agent the turn was sent to, null for none.
@@ -14,9 +15,15 @@ export type LiveEvent =
       agent: string | null;
       why?: string | null;
       ref?: string;
+      task?: number | null;
+      answers?: string | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
+  // The chat's tasks and waits, whole, after any change to them.
+  | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[] }
+  // The chat's team changed: an agent joined, or a PATCH.
+  | { type: 'members'; chat: string; members: Member[] }
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
   // An agent was added or changed: reload agents.

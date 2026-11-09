@@ -2,6 +2,7 @@ import { useAuiState } from '@assistant-ui/react';
 import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { type ComponentProps, useState } from 'react';
 import { defaultRehypePlugins, defaultRemarkPlugins } from 'streamdown';
+import { blockSplitter } from './blocks';
 import './markdown.css';
 
 interface Node {
@@ -43,9 +44,11 @@ export function MarkdownText() {
   // faster). One drawn while streaming stays in streaming mode, so its end never re-parses it whole.
   const running = useAuiState((s) => s.message.status?.type === 'running');
   const [mode] = useState<'static' | 'streaming'>(running ? 'streaming' : 'static');
+  const [split] = useState(() => (running ? blockSplitter() : undefined));
   return (
     <StreamdownTextPrimitive
       mode={mode}
+      parseMarkdownIntoBlocksFn={split}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
       components={components}

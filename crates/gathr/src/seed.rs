@@ -1,5 +1,8 @@
 //! Made-up test data (docs/first-slice.md): a chat of 500 messages, a turn with 50 tool calls
-//! and a 20,000-word answer, with their events. Nothing here comes from a real conversation.
+//! and a 20,000-word answer, with their events, and a five-agent team chat (F8b). Nothing here
+//! comes from a real conversation.
+
+mod team;
 
 use rusqlite::{Connection, params};
 use serde_json::json;
@@ -25,7 +28,7 @@ pub struct Seeded {
     pub events: u32,
 }
 
-/// Adds the three chats in one transaction. Each run adds a new set.
+/// Adds the four chats in one transaction. Each run adds a new set.
 pub fn seed(conn: &mut Connection) -> Result<Seeded, Error> {
     let tx = conn.transaction()?;
     let mut s = Seeder {
@@ -37,6 +40,7 @@ pub fn seed(conn: &mut Connection) -> Result<Seeded, Error> {
     s.long_chat()?;
     s.tool_heavy_chat()?;
     s.long_answer_chat()?;
+    s.team_chat()?;
     let made = s.made;
     tx.commit()?;
     Ok(made)

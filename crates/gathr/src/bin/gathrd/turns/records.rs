@@ -53,7 +53,8 @@ impl Task {
         self.publish(
             &ids.chat,
             json!({ "type": "turn", "turn": ids.turn, "status": status,
-            "agent": ids.agent, "why": why, "ref": reference }),
+            "agent": ids.agent, "why": why, "ref": reference, "task": ids.task,
+            "answers": ids.answers }),
         );
     }
 

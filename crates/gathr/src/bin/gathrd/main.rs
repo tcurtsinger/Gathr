@@ -8,6 +8,7 @@ mod chats;
 mod coord;
 mod logs;
 mod models;
+mod projects;
 mod routes;
 mod sign_in;
 mod startup;
@@ -81,7 +82,10 @@ fn start(
     let conn =
         db::open(&data.db()).map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let early_lines = crash_log.take();
-    let writer = Writer::start(conn, crash_log.clone());
+    gathr::tasks::touched::watch(&conn)
+        .map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
+    let live = tokio::sync::broadcast::channel(4096).0;
+    let writer = Writer::start(conn, crash_log.clone(), coord::live_tasks(live.clone()));
     logs::install(writer.clone(), crash_log.clone());
     if !early_lines.is_empty() {
         writer.record(Event::point("gathr.service.early_log").attr("lines", early_lines.clone()));
@@ -89,12 +93,12 @@ fn start(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(serve(data, writer, port, ui, early_lines.len()))
+    runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()))
 }
 
 async fn serve(
     data: &DataDir,
-    writer: Writer,
+    (writer, live): (Writer, tokio::sync::broadcast::Sender<serde_json::Value>),
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
@@ -110,7 +114,7 @@ async fn serve(
     .write(data)?;
     // Briefings live as long as their engines; any left are from a run that didn't stop cleanly.
     let _ = std::fs::remove_dir_all(data.path().join("briefings"));
-    let chats = chats::Chats::new(writer.clone(), data.clone(), port);
+    let chats = chats::Chats::new(writer.clone(), data.clone(), port, live);
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
     let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {

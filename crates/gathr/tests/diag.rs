@@ -108,6 +108,64 @@ fn seed_makes_the_three_test_chats() {
     assert_eq!(rows[2]["longest"], 20_000, "{chats}");
 }
 
+/// F8b's proof data: a five-agent chat whose rounds link up the way the inline thread reads them.
+#[test]
+fn seed_makes_a_five_agent_team_chat_whose_rounds_link_up() {
+    let dir = TempDir::new();
+    for _ in 0..2 {
+        let (ok, seeded) = gathr(&dir.0, &["seed"]);
+        assert!(ok, "each run adds another set: {seeded}");
+    }
+    let query = |sql: &str| gathr(&dir.0, &["diag", "query", sql]).1["rows"].clone();
+    let team = query(
+        "SELECT chat_id, group_concat(role) AS roles, count(*) AS n FROM chat_members
+         GROUP BY chat_id ORDER BY chat_id",
+    );
+    assert_eq!(team.as_array().unwrap().len(), 2, "{team}");
+    for chat in team.as_array().unwrap() {
+        let mut roles: Vec<&str> = chat["roles"].as_str().unwrap().split(',').collect();
+        roles.sort();
+        assert_eq!(
+            roles,
+            ["member", "member", "member", "reviewer", "supervisor"]
+        );
+    }
+    let chat = team[1]["chat_id"].as_str().unwrap();
+    let one = |sql: &str| query(&sql.replace("?chat", &format!("'{chat}'")))[0]["n"].clone();
+    assert!(
+        one("SELECT count(*) AS n FROM messages WHERE chat_id = ?chat").as_i64() > Some(300),
+        "a real-size chat"
+    );
+    let unlinked = "SELECT count(*) AS n FROM tasks k JOIN turns u ON u.task = k.number
+                    WHERE k.chat_id = ?chat AND u.answers IS NOT k.given_in";
+    assert_eq!(
+        one(unlinked),
+        0,
+        "a task's turns answer the turn that gave it"
+    );
+    let given_by_lead = "SELECT count(*) AS n FROM tasks k JOIN turns u ON u.id = k.given_in
+                         JOIN chat_members m ON m.chat_id = k.chat_id AND m.agent_id = u.agent_id
+                         WHERE k.chat_id = ?chat AND m.role = 'supervisor'";
+    let tasks = one("SELECT count(*) AS n FROM tasks WHERE chat_id = ?chat");
+    assert!(tasks.as_i64() > Some(20), "{tasks}");
+    assert_eq!(one(given_by_lead), tasks, "every task is the lead's");
+    let rounds = one("SELECT count(DISTINCT given_in) AS n FROM tasks WHERE chat_id = ?chat");
+    let hear_backs = "SELECT count(DISTINCT u.answers) AS n FROM turns u
+                      JOIN messages g ON g.turn_id = u.id AND g.role = 'gathr'
+                      WHERE u.chat_id = ?chat AND u.task IS NULL AND u.answers IS NOT NULL";
+    assert_eq!(one(hear_backs), rounds, "each round ends with a hear-back");
+    let review = "SELECT count(*) AS n FROM tasks WHERE chat_id = ?chat AND kind = 'review'
+                  AND state = 'done' AND reviewed IS NOT NULL";
+    assert!(one(review).as_i64() > Some(0), "a done review");
+    let late = "SELECT count(*) AS n FROM turns w JOIN tasks k ON k.number = w.task
+                JOIN turns h ON h.answers = k.given_in AND h.task IS NULL
+                WHERE w.chat_id = ?chat AND w.position > h.position";
+    assert!(
+        one(late).as_i64() > Some(0),
+        "a reply after the lead's last word"
+    );
+}
+
 #[test]
 fn seed_waits_for_the_service_to_stop() {
     let dir = TempDir::new();

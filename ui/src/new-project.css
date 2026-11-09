@@ -1,0 +1,27 @@
+/* New project: the one dialog (components/Dialog.tsx), with Settings > Agents' fields. */
+.new-project {
+  width: min(480px, calc(100vw - 32px));
+}
+.new-project form {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  overflow: auto;
+}
+.new-project-agent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.new-project legend small {
+  margin-left: 6px;
+  color: var(--muted);
+}
+/* The service's why can carry a tool's whole output: two lines here, all of it on hover and in the reference. */
+.new-project-why {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

@@ -10,21 +10,46 @@ use crate::redact::redact;
 /// The longest raw body kept for a frame that isn't JSON (0011).
 const MALFORMED_CAP: usize = 64 * 1024;
 
-/// A new chat, with the project folder it works in, if any (0013: set only here).
-pub fn create_chat(conn: &Connection, title: &str, project: Option<&str>) -> Result<Value, Error> {
+/// A new chat, with the project it was made in and that project's folder, if any (0013: set only
+/// here; the column `project` holds the folder).
+pub fn create_chat(
+    conn: &Connection,
+    title: &str,
+    (project, folder): (Option<&str>, Option<&str>),
+) -> Result<Value, Error> {
     let (id, ts) = (ulid(now_us()), now_us());
     conn.execute(
-        "INSERT INTO chats (id, title, created_ts, project) VALUES (?1, ?2, ?3, ?4)",
-        params![id, title, ts, project],
+        "INSERT INTO chats (id, title, created_ts, project_id, project) VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![id, title, ts, project, folder],
     )?;
-    Ok(json!({ "id": id, "title": title, "created": crate::ids::utc(ts), "project": project }))
+    Ok(
+        json!({ "id": id, "title": title, "created": crate::ids::utc(ts), "project": project,
+        "folder": folder }),
+    )
+}
+
+/// Puts a chat with no turns yet in a project: "New" makes the chat before its project is picked.
+pub fn put_in_project(
+    conn: &Connection,
+    chat: &str,
+    (project, folder): (&str, &str),
+) -> Result<(), Error> {
+    let moved = conn.execute(
+        "UPDATE chats SET project_id = ?2, project = ?3
+         WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1)",
+        params![chat, project, folder],
+    )?;
+    match moved {
+        0 => Err(Error::Refused("the chat has messages already".into())),
+        _ => Ok(()),
+    }
 }
 
 pub fn chats(conn: &Connection) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project
+                c.project_id, c.project
          FROM chats c ORDER BY c.created_ts DESC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -36,6 +61,7 @@ pub fn chats(conn: &Connection) -> Result<Value, Error> {
             // The last turn's agent, so the composer's picker reopens on it.
             "agent": r.get::<_, Option<String>>(4)?,
             "project": r.get::<_, Option<String>>(5)?,
+            "folder": r.get::<_, Option<String>>(6)?,
         }))
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
@@ -60,7 +86,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .query_map([chat], message_row)?
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
-        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task
+        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task,
+                answers
          FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -76,20 +103,24 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "position": r.get::<_, Option<i64>>(7)?,
                 // The task the turn works on: its work sits under the turn that gave it.
                 "task": r.get::<_, Option<i64>>(8)?,
+                // The turn it answers: the thread it belongs to (F8b).
+                "answers": r.get::<_, Option<String>>(9)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
-    let project: Option<String> = conn
-        .query_row("SELECT project FROM chats WHERE id = ?1", [chat], |r| {
-            r.get(0)
-        })
+    let (project, folder): (Option<String>, Option<String>) = conn
+        .query_row(
+            "SELECT project_id, project FROM chats WHERE id = ?1",
+            [chat],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
         .optional()?
-        .flatten();
+        .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
     Ok(
-        json!({ "chat": chat, "agent": agent, "project": project, "members": members,
-        "messages": messages, "turns": turns }),
+        json!({ "chat": chat, "agent": agent, "project": project, "folder": folder,
+        "members": members, "messages": messages, "turns": turns }),
     )
 }
 
@@ -154,6 +185,14 @@ pub fn add_message(
     message(conn, &id)
 }
 
+/// How many of the turn's own messages are saved: its reply's blocks and tools.
+pub fn replies(conn: &Connection, chat: &str, turn: &str) -> Result<i64, Error> {
+    Ok(conn
+        .prepare_cached("SELECT count(*) FROM messages WHERE chat_id = ?1 AND turn_id = ?2 AND role = 'assistant'",
+        )?
+        .query_row([chat, turn], |r| r.get(0))?)
+}
+
 pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), Error> {
     conn.prepare_cached("UPDATE messages SET body = ?2 WHERE id = ?1")?
         .execute(params![id, body])?;
@@ -169,19 +208,19 @@ pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Er
 }
 
 /// A new turn, run as `agent`, or on the oldest account when it's sent to none; on `task` when it
-/// works on one (0010).
+/// works on one (0010); answering the turn `answers` when Gathr starts it (F8b).
 pub fn add_turn(
     conn: &Connection,
     chat: &str,
     id: &str,
     trace: &str,
-    (agent, task): (Option<&str>, Option<i64>),
+    (agent, task, answers): (Option<&str>, Option<i64>, Option<&str>),
 ) -> Result<(), Error> {
     conn.prepare_cached(
-        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task)
-         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6)",
+        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7)",
     )?
-    .execute(params![id, chat, trace, now_us(), agent, task])?;
+    .execute(params![id, chat, trace, now_us(), agent, task, answers])?;
     Ok(())
 }
 
@@ -210,6 +249,7 @@ pub struct Waiting {
     pub text: String,
     pub agent: Option<String>,
     pub task: Option<i64>,
+    pub answers: Option<String>,
 }
 
 /// Turns that were waiting when the service last stopped, oldest first. Turns that were
@@ -224,7 +264,7 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
                 (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
                  ORDER BY ts LIMIT 1),
-                t.agent_id, t.task
+                t.agent_id, t.task, t.answers
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -236,6 +276,7 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             text: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
             agent: r.get(5)?,
             task: r.get(6)?,
+            answers: r.get(7)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
