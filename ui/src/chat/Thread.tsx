@@ -94,7 +94,11 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
               </div>
               <ThreadPrimitive.ViewportFooter className="thread-footer">
                 <ThreadPrimitive.ScrollToBottom asChild>
-                  <TooltipIconButton tooltip="Scroll to bottom" variant="outline" className="thread-bottom bg-background">
+                  <TooltipIconButton
+                    tooltip="Scroll to bottom"
+                    variant="outline"
+                    className="thread-bottom bg-background"
+                  >
                     <ArrowDown />
                   </TooltipIconButton>
                 </ThreadPrimitive.ScrollToBottom>
