@@ -11,6 +11,20 @@
       "sha256": "ebea1fff3af62e619a63680227b3c4b89cec449fac059f5fcd6695cc128f38b8"
     },
     {
+      "path": "components/assistant-ui/elements/elicitation-form.tsx",
+      "url": "https://r.assistant-ui.com/elements-elicitation-form.json",
+      "sha256": "9d98ed74254ada76f5325f6d8cb333cf56bd3521763c3f6217c64e3ad8c2e621",
+      "adapted": "527b81528095bb5ac47a748301a57b61f06177ab2520f44c7431e4309b1c0d25",
+      "why": "The prototype's inline presentation for the Tasks tab (no card chrome or actions of its own; the pager sends) and a multiline text field for notes and open answers."
+    },
+    {
+      "path": "components/assistant-ui/elements/option-list.tsx",
+      "url": "https://r.assistant-ui.com/elements-option-list.json",
+      "sha256": "5f1c156aac4ad56aedac93665bef44f84a1253f357127dd92c55bf6926d230dc",
+      "adapted": "d8ca1ca63360bfa16ef15c404764cb0b734e0dda5ea96eb9a729eb1fc2501a86",
+      "why": "The prototype's inline presentation and controlled selection: picking only stages an answer; the Tasks pager owns notes, Next and Send."
+    },
+    {
       "path": "components/assistant-ui/elements/composer.tsx",
       "url": "https://r.assistant-ui.com/elements-composer.json",
       "sha256": "397fb48354d73ae3eb2e51fc4872601eb8cc863e981520a4a7de65865db65308"

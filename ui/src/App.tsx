@@ -8,6 +8,10 @@ import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
+import { TasksFlyout } from './tasks/TasksFlyout';
+import { TasksTab } from './tasks/TasksTab';
+import { usePersonTasks } from './tasks/usePersonTasks';
+import { Workspace, WorkspaceOpener } from './tasks/Workspace';
 import './app.css';
 
 export function App() {
@@ -22,6 +26,7 @@ export function App() {
   const drafts = useRef(new Map<string, string>());
   const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
+  const person = usePersonTasks();
 
   useEffect(() => {
     const started = performance.now();
@@ -77,6 +82,13 @@ export function App() {
     chats.find((c) => c.id === selected) ?? (fresh && { id: '', title: 'New chat', project: fresh.project });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
+  const choose = (id: string) => {
+    if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
+    setSelected(id);
+    setFresh(null);
+  };
+  const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
+  const paneOpen = !!chat?.id && !!person.open[chat.id];
   const openReference = (reference: string) =>
     setSettings((s) => ({
       page: 'diagnostics',
@@ -92,13 +104,19 @@ export function App() {
         chats={chats}
         projects={projects}
         selected={selected}
-        onSelect={(id) => {
-          if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
-          setSelected(id);
-          setFresh(null);
-        }}
+        onSelect={choose}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
+        actions={
+          <TasksFlyout
+            tasks={person.tasks}
+            onOpen={(t) => {
+              choose(t.chat);
+              person.select(t.chat, t.id);
+              person.setOpen(t.chat, true);
+            }}
+          />
+        }
       />
       {chat ? (
         <ChatView
@@ -121,6 +139,12 @@ export function App() {
           onProject={(project) => setFresh({ project })}
           onStart={start}
           onNewProject={() => setNewProject(true)}
+          headerEnd={
+            chat.id &&
+            !paneOpen && (
+              <WorkspaceOpener waiting={chatTasks.length > 0} onOpen={() => person.setOpen(chat.id, true)} />
+            )
+          }
         />
       ) : (
         <main className="chat">
@@ -136,6 +160,21 @@ export function App() {
             <p className="empty">No chats yet</p>
           )}
         </main>
+      )}
+      {chat?.id && paneOpen && (
+        <Workspace waiting={chatTasks.length > 0} onClose={() => person.setOpen(chat.id, false)}>
+          <TasksTab
+            key={chat.id}
+            tasks={chatTasks}
+            selected={person.selected[chat.id] ?? null}
+            onSelect={(id) => person.select(chat.id, id)}
+            drafts={person.drafts}
+            onDraft={person.draft}
+            onOpenChat={choose}
+            onSend={person.send}
+            onReference={openReference}
+          />
+        </Workspace>
       )}
       <NewProject
         open={newProject}

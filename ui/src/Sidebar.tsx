@@ -1,5 +1,5 @@
 import { Folder, FolderOpen, Plus, Settings } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import './sidebar.css';
 
@@ -11,9 +11,11 @@ interface Props {
   /** A new chat, in the project given. */
   onNew: (project?: string) => void;
   onSettings: (opener: HTMLElement) => void;
+  /** Under New: the Tasks flyout. */
+  actions?: ReactNode;
 }
 
-export function Sidebar({ chats, projects, selected, onSelect, onNew, onSettings }: Props) {
+export function Sidebar({ chats, projects, selected, onSelect, onNew, onSettings, actions }: Props) {
   // Projects start open; the person's fold of one holds while the window is open.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const plain = chats.filter((c) => !c.project || !projects.some((p) => p.id === c.project));
@@ -43,6 +45,7 @@ export function Sidebar({ chats, projects, selected, onSelect, onNew, onSettings
           <Plus aria-hidden="true" />
           New
         </button>
+        {actions}
       </div>
       <div className="chatlist">
         {projects.length > 0 && (

@@ -1,5 +1,6 @@
 /* The prototype's navigation (DESIGN.md: 246px, #202020 in dark). */
 .sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
