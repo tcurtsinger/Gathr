@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { type Agent, api, type Failure, type Project } from './api';
 import { Dialog } from './components/Dialog';
 import { Notice } from './components/Notice';
+import { Switch } from './components/Switch';
 import './new-project.css';
 
 const MOST = 5;
@@ -71,15 +72,15 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
           {agents.map((a) => {
             const on = team.includes(a.id);
             return (
-              <label key={a.id} className="new-project-agent">
-                <input
-                  type="checkbox"
-                  checked={on}
+              <div key={a.id} className="new-project-agent">
+                <span id={`project-agent-${a.id}`}>{a.name}</span>
+                <Switch
+                  on={on}
+                  labelledBy={`project-agent-${a.id}`}
                   disabled={!on && team.length >= MOST}
                   onChange={() => setTeam(on ? team.filter((id) => id !== a.id) : [...team, a.id])}
                 />
-                {a.name}
-              </label>
+              </div>
             );
           })}
         </fieldset>
@@ -117,6 +118,7 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
             reference={
               failure.ref ? { ref: failure.ref, open: () => onReference(failure.ref as string) } : undefined
             }
+            links={failure.why && <span className="muted">{failure.why}</span>}
           />
         )}
         <footer className="agent-actions">

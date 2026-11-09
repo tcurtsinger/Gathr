@@ -11,7 +11,8 @@
 .new-project-agent {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 4px 0;
 }
 .new-project legend small {
   margin-left: 6px;
