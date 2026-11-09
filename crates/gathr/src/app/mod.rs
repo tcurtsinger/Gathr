@@ -1,8 +1,8 @@
 //! Gathr's own service, kept in the data folder the way Claude Code is (0025, 0032): `gathrd` runs
 //! from `<data>/app/<version>`, never from where it was installed, so an installer or an update
 //! never touches the program that's running. `current.json` names the copy to start, the one
-//! before it, and whether the current one is still on trial: started once it's switched to, and
-//! gone back from if it doesn't start.
+//! before it, and whether the current one is still on trial: switched to and not yet proven by a
+//! finished turn or `TRIAL` of running, and gone back from if it doesn't start or dies before.
 
 pub mod release;
 
@@ -21,9 +21,16 @@ pub struct Current {
     pub version: String,
     #[serde(default)]
     pub previous: Option<String>,
-    /// Switched to and not started yet: a start that fails goes back to `previous`.
+    /// Switched to and not proven yet (a finished turn, or `TRIAL` up): a start that fails, or a
+    /// service that dies before then, goes back to `previous`.
     #[serde(default)]
     pub trial: bool,
+    /// On trial and started once: its switch is recorded.
+    #[serde(default)]
+    pub trial_started: bool,
+    /// On trial and up, or died: a clean stop clears it, so the next start finds a death.
+    #[serde(default)]
+    pub trial_running: bool,
     /// Releases that failed to start here, never switched to again.
     #[serde(default)]
     pub refused: Vec<String>,
@@ -43,7 +50,11 @@ pub struct RolledBack {
 pub struct Started {
     pub switched_from: Option<String>,
     pub rolled_back: Option<RolledBack>,
+    pub on_trial: bool,
 }
+
+/// How long a copy on trial must run with no finished turn before it passes (0032).
+pub const TRIAL: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 
 pub struct Copies {
     root: PathBuf,
@@ -194,12 +205,19 @@ impl Copies {
             previous: Some(running),
             trial: true,
             refused: current.refused,
-            rolled_back: None,
+            ..Current::default()
         })
     }
 
-    /// After the copy on trial failed to start: back to the one before it, with the database as
-    /// it was before the failed start. The copy to start then, or `None` when nothing was on trial.
+    /// The copy on trial started before and never stopped cleanly: it died.
+    pub fn died_on_trial(&self) -> bool {
+        self.current().is_some_and(|c| c.trial && c.trial_running)
+    }
+
+    /// After the copy on trial failed to start or died: back to the one before it. The database
+    /// goes back to how it was before the update only when the new copy moved its schema on, which
+    /// the one before can't open; else what was written since stays. The copy to start then, or
+    /// `None` when nothing was on trial.
     pub fn roll_back(&self, why: &str) -> io::Result<Option<PathBuf>> {
         let Some(current) = self.current().filter(|c| c.trial) else {
             return Ok(None);
@@ -209,52 +227,90 @@ impl Copies {
         };
         let kept = self.kept_db(&current.version);
         if kept.is_file() {
-            for end in ["-wal", "-shm"] {
-                let file = PathBuf::from(format!("{}{end}", self.db.display()));
-                if file.exists() {
-                    std::fs::remove_file(file)?;
+            let before = schema(&kept);
+            if before.is_some() && before == schema(&self.db) {
+                std::fs::remove_file(&kept)?;
+            } else {
+                for end in ["-wal", "-shm"] {
+                    let file = PathBuf::from(format!("{}{end}", self.db.display()));
+                    if file.exists() {
+                        std::fs::remove_file(file)?;
+                    }
                 }
+                std::fs::rename(&kept, &self.db)?;
             }
-            std::fs::rename(&kept, &self.db)?;
         }
         let mut refused = current.refused;
         refused.push(current.version.clone());
         self.write(&Current {
             version: previous.clone(),
-            previous: None,
-            trial: false,
             refused,
             rolled_back: Some(RolledBack {
                 version: current.version,
                 why: why.to_string(),
             }),
+            ..Current::default()
         })?;
         Ok(Some(self.path(&previous)))
     }
 
-    /// The service started from its copy: a trial passes, and a rollback is taken to be recorded.
+    /// The copy this program runs from, while it's on trial: `change` it and save.
+    fn on_trial(&self, change: impl FnOnce(&mut Current)) -> io::Result<bool> {
+        let Some(mut current) = self.current() else {
+            return Ok(false);
+        };
+        if !current.trial || current.version != self.running_version() {
+            return Ok(false);
+        }
+        change(&mut current);
+        self.write(&current)?;
+        Ok(true)
+    }
+
+    /// The copy on trial finished a turn or ran `TRIAL`: it stays, and the database copy goes.
+    pub fn passed(&self) -> io::Result<bool> {
+        let passed = self.on_trial(|c| {
+            c.trial = false;
+            c.trial_started = false;
+            c.trial_running = false;
+        })?;
+        if passed {
+            let _ = std::fs::remove_file(self.kept_db(&self.running_version()));
+        }
+        Ok(passed)
+    }
+
+    /// A clean stop on trial isn't a death: the next start is tried again.
+    pub fn stopped(&self) -> io::Result<()> {
+        self.on_trial(|c| c.trial_running = false).map(drop)
+    }
+
+    /// The service started from its copy: a trial runs on, and a rollback is taken to be recorded.
     pub fn started(&self) -> io::Result<Started> {
-        let none = Started {
+        let mut started = Started {
             switched_from: None,
             rolled_back: None,
+            on_trial: false,
         };
         let Some(mut current) = self.current() else {
-            return Ok(none);
+            return Ok(started);
         };
         if current.version != self.running_version() {
-            return Ok(none);
+            return Ok(started);
         }
-        let trial = std::mem::take(&mut current.trial);
-        let rolled_back = current.rolled_back.take();
-        if !trial && rolled_back.is_none() {
-            return Ok(none);
+        started.rolled_back = current.rolled_back.take();
+        if current.trial {
+            if !current.trial_started {
+                started.switched_from = current.previous.clone();
+            }
+            started.on_trial = true;
+            current.trial_started = true;
+            current.trial_running = true;
+        } else if started.rolled_back.is_none() {
+            return Ok(started);
         }
         self.write(&current)?;
-        let _ = std::fs::remove_file(self.kept_db(&current.version));
-        Ok(Started {
-            switched_from: current.previous.filter(|_| trial),
-            rolled_back,
-        })
+        Ok(started)
     }
 
     /// Deletes every copy `current` doesn't name, a staging folder left by a check that didn't
@@ -285,6 +341,13 @@ fn installed_ui(program: &Path) -> Option<PathBuf> {
     let beside = program.with_file_name("ui");
     let bundle = program.parent()?.parent()?.join("Resources").join("ui");
     [beside, bundle].into_iter().find(|p| p.is_dir())
+}
+
+/// A database's schema version, or `None` when it can't be read.
+fn schema(db: &Path) -> Option<i64> {
+    let flags = rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE;
+    let conn = rusqlite::Connection::open_with_flags(db, flags).ok()?;
+    crate::db::schema_version(&conn).ok()
 }
 
 fn same_file(a: &Path, b: &Path) -> io::Result<bool> {

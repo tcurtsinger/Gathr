@@ -25,10 +25,15 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
   ordinary way (engines closed gently, the database checkpointed and closed), keeps a copy of the database, names the
   new copy current on trial, and starts it. If something still runs after 30 minutes, the turns go on and the next
   look tries again (`gathr.app.hold`, `busy`).
-- **Rollback:** a copy on trial that exits or doesn't write `service.json` within 60 s is ended, the database copy is
-  put back, the copy before is started, and the release is never tried again here. The service that comes back records
-  it as a `gathr.app.update` `start` error with its reference. A copy that starts passes its trial
-  (`gathr.app.switch`), and the database copy is deleted.
+- **Trial:** a new copy is on trial from the switch until it finishes a turn or runs 10 minutes (`gathr.app.trial`,
+  `by` `turn` or `time`). Until then the copy before it and the database as it was before the update are kept. Its
+  first start records `gathr.app.switch`.
+- **Rollback:** a copy on trial that exits or doesn't write `service.json` within 60 s is ended and the copy before is
+  started. One that started and then died is found by the next start (the window, `gathr open`): it never stopped
+  cleanly, so that start goes back first. A clean stop on trial (Quit) isn't a death: the next start tries it again.
+  The release is never tried again here. The database copy is put back only when the new copy moved the schema on,
+  which the copy before can't open; otherwise what was written on the new copy stays. The service that comes back
+  records it as a `gathr.app.update` `start` error with its reference.
 - **What runs:** `GET /api/app` (`version`, `previous`, `state` `off`, `idle`, `checking` or `updating`, `checked`,
   `failed` with its `ref`, and `update` while it holds), sent live as `{"type": "app"}`. `/health` names the version
   that runs and the build's own.
@@ -51,8 +56,12 @@ hidden in the tray, else when it's next hidden; only the window restarts. Its ow
   hold for a release that fails.
 - **Rolling back on any later failed start:** only a copy on trial goes back; a later failure is reported, so data
   written since is never replaced by the older copy.
+- **Always putting the database copy back on a rollback:** it would drop what the person wrote on the new copy (up to
+  10 minutes) even when the copy before can read the database as it is.
+- **The window watching the new copy, or a watchdog process:** the next start already runs through one place
+  (`launch`), and a death with nobody starting Gathr needs no rollback until someone does.
 
 ## Not verified
 
 - A real release from GitHub (the first is F7's merge): the feed is proven through a stand-in on 127.0.0.1.
-- A copy that starts and then fails before its first turn isn't rolled back.
+- Passing by time (10 minutes with no turn) isn't run in a test: the tests pass a trial by a turn.

@@ -191,6 +191,7 @@ async fn serve(
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
     app.stop();
+    app.stopped();
     sign_ins.cancel_all().await;
     tokio::join!(chats.close_all(), state.models.closed());
     writer
