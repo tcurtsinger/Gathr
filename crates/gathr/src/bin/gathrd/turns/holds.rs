@@ -20,10 +20,17 @@ use super::{Ids, Task};
 const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
 
 impl Task {
-    /// Whether a pause holds the queued turn: never the person's own message (0010).
-    pub(super) fn paused(&self, ids: &Ids) -> bool {
-        !ids.person
-            && pauses::holding(&self.chats.pauses(), &ids.chat, ids.agent.as_deref()).is_some()
+    /// What holds the queued turn from starting: a pause (0010) or an update (0032), never the
+    /// person's own message, which starts at once; an update then waits for the next quiet moment.
+    pub(super) fn holder(&self, ids: &Ids) -> Option<&'static str> {
+        if ids.person {
+            return None;
+        }
+        if self.chats.updating().is_some() {
+            return Some("update");
+        }
+        let pauses = self.chats.pauses();
+        pauses::holding(&pauses, &ids.chat, ids.agent.as_deref()).map(|_| "pause")
     }
 
     /// Marks each queued turn with what holds it: saved, and sent live when it changes.
@@ -31,11 +38,8 @@ impl Task {
         let usage = self.usage_wait.is_some();
         let mut changed = Vec::new();
         for (at, queued) in self.queue.iter().enumerate() {
-            let held = match () {
-                _ if self.paused(&queued.ids) => Some("pause"),
-                _ if usage && queued.held == Some("usage") => Some("usage"),
-                _ => None,
-            };
+            let on_usage = (usage && queued.held == Some("usage")).then_some("usage");
+            let held = self.holder(&queued.ids).or(on_usage);
             if held != queued.held {
                 changed.push((at, held));
             }
@@ -50,6 +54,7 @@ impl Task {
     pub(super) async fn save_held(&self, ids: &Ids, held: Option<&'static str>) {
         let why = match held {
             Some("pause") => Some("paused".to_string()),
+            Some("update") => self.chats.updating().map(|v| format!("updating to {v}")),
             Some(_) => self.usage_words(),
             None => None,
         };

@@ -32,4 +32,4 @@ CREATE TABLE background (
 ) STRICT;
 
 -- What holds a queued turn back: 'pause' or 'usage'; NULL when only its place in the queue does.
-ALTER TABLE turns ADD COLUMN held TEXT CHECK (held IN ('pause', 'usage'));
+ALTER TABLE turns ADD COLUMN held TEXT CHECK (held IN ('pause', 'usage', 'update'));

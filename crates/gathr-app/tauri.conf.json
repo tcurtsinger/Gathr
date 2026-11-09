@@ -8,5 +8,12 @@
   },
   "bundle": {
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDYyQzVEMjNDMzE3NThCOTcKUldTWGkzVXhQTkxGWW1JTVlWRnN5T1plV3BGMkczb1pxRkFlaG5SRmlodWhpR3ZhRUFmSkRKWXkK",
+      "endpoints": ["https://github.com/tcurtsinger/Gathr/releases/latest/download/latest.json"],
+      "windows": { "installMode": "quiet" }
+    }
   }
 }

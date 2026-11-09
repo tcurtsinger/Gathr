@@ -25,6 +25,7 @@ pub struct State {
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
     pub updates: Arc<crate::updates::Updates>,
+    pub app: Arc<crate::app_update::AppUpdates>,
     pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub models: crate::models::Models,
     /// Set once shutdown starts, before the server waits on its requests: a request waiting on
@@ -62,6 +63,7 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::sign_in::routes())
         .merge(crate::models::routes())
         .merge(crate::startup::routes())
+        .merge(crate::app_update::routes())
         .nest_service("/mcp", crate::tools::service(state.chats.clone()))
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
@@ -74,7 +76,8 @@ async fn health(Extract(s): Extract<Arc<State>>) -> Json<serde_json::Value> {
     let size = std::fs::metadata(s.data.db()).map(|m| m.len()).unwrap_or(0);
     Json(json!({
         "status": "ok",
-        "version": VERSION,
+        "version": s.app.running,
+        "build": VERSION,
         "pid": s.pid,
         "port": s.port,
         "data_folder": s.data.path(),

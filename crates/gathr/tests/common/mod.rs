@@ -2,6 +2,8 @@
 // Each test file uses part of this module.
 #![allow(dead_code)]
 
+pub mod feed;
+
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
@@ -41,6 +43,16 @@ impl TestService {
     /// Starts it with extra environment variables, such as the replay engine's.
     pub fn start_with(data: &Path, env: &[(&str, &Path)]) -> TestService {
         let mut command = gathrd(data);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        Self::spawn(command, data)
+    }
+
+    /// Starts `program`, a copy of `gathrd`, with extra environment variables.
+    pub fn start_program(program: &Path, data: &Path, env: &[(&str, &Path)]) -> TestService {
+        let mut command = Command::new(program);
+        command.arg("--data").arg(data).arg("--port").arg("0");
         for (name, value) in env {
             command.env(name, value);
         }
@@ -385,6 +397,15 @@ pub fn held_recording(dir: &Path) -> PathBuf {
     let (first, rest) = frames.split_once('\n').unwrap();
     std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
     held
+}
+
+/// Ends a process outright, as a crash would.
+pub fn kill(pid: &str) {
+    let _ = if cfg!(windows) {
+        Command::new("taskkill").args(["/F", "/PID", pid]).output()
+    } else {
+        Command::new("kill").args(["-KILL", pid]).output()
+    };
 }
 
 pub fn until<T>(secs: u64, what: &str, mut found: impl FnMut() -> Option<T>) -> T {

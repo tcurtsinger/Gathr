@@ -5,7 +5,7 @@
 //! A `hold` row waits until the file `GATHR_REPLAY_HOLD` names exists, so a test decides when
 //! the engine goes on; without that variable it's skipped.
 //!
-//! `GATHR_REPLAY` names the recording; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
+//! `GATHR_REPLAY` names the recording, else a file `replay-recording` beside it; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
 //! for Gathr's tools to (`{"GATHR_AGENT_TOKEN": …}`), so a test can call them as the engine, with
 //! its working folder (`cwd`), `PATH` and `GATHR_PUSH_URL`.
@@ -30,6 +30,13 @@
 //! (`GATHR_REPLAY_LINGER_MS` sets how long).
 
 use std::io::{BufRead, Write};
+
+/// The recording named in `replay-recording` beside this program: an installed service passes
+/// engines no `GATHR_*` variable, so a check on one puts the replay engine in as its copy with this.
+fn recording_beside_me() -> std::io::Result<String> {
+    let file = std::env::current_exe()?.with_file_name("replay-recording");
+    Ok(std::fs::read_to_string(file)?.trim().to_string())
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -75,7 +82,9 @@ fn main() {
             .is_file();
         std::process::exit(if signed_in { 0 } else { 1 });
     }
-    let recording = std::env::var("GATHR_REPLAY").unwrap_or_default();
+    let recording = std::env::var("GATHR_REPLAY")
+        .or_else(|_| recording_beside_me())
+        .unwrap_or_default();
     if let Ok(file) = std::env::var("GATHR_REPLAY_ARGS") {
         let mut out = std::fs::OpenOptions::new()
             .create(true)

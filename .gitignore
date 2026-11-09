@@ -46,3 +46,5 @@ Thumbs.db
 .vitest/
 # Tauri's generated capability schemas
 crates/gathr-app/gen/
+# gathrd beside the window for `tauri build` (scripts/release.mjs sidecar)
+crates/gathr-app/binaries/

@@ -4,8 +4,12 @@
 //! window. Opening Gathr again shows the same window: one per data folder.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod follow;
+mod update;
+
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 use std::time::Instant;
 
 use gathr::data::{DataDir, ServiceInfo};
@@ -68,6 +72,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             reopen(app, "second launch")
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Service {
             data,
             info: Mutex::new(None),
@@ -84,14 +89,17 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
                     &attrs,
                     shown.err().map(|e| e.to_string()),
                 );
+                update::hidden(window.app_handle());
             }
         })
         .setup(move |app| {
             let (url, started) = connect(app.handle());
             let window = window(app.handle(), url, "Gathr", webview_data)?;
             tray(app.handle())?;
-            // Started at login (`gathr::platform::login`): in the tray, its window ready to show.
-            let hidden = std::env::args().any(|a| a == "--hidden");
+            // Started at login (`gathr::platform::login`), or after an update made while hidden:
+            // in the tray, its window ready to show.
+            let hidden = std::env::args().any(|a| a == "--hidden")
+                | update::take_restart_hidden(app.handle());
             if !hidden {
                 window.show()?;
             }
@@ -99,6 +107,8 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
                 let attrs = serde_json::json!({ "started_service": started, "hidden": hidden });
                 report(app.handle(), "gathr.ui.window.open", opened, &attrs, None);
             }
+            update::run(app.handle());
+            follow::run(app.handle());
             Ok(())
         })
         .build(context)
@@ -107,7 +117,12 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
         #[cfg(target_os = "macos")]
         RunEvent::Reopen { .. } => reopen(app, "dock"),
         // Quit in the tray, Cmd+Q, or the system ending the session: the service goes too, gently.
+        // Not for an update: only the window restarts.
         RunEvent::Exit => {
+            let updates = app.try_state::<update::Updates>();
+            if updates.is_some_and(|u| u.installing.load(Ordering::SeqCst)) {
+                return;
+            }
             if let Some(info) = app.state::<Service>().info.lock().unwrap().take() {
                 let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
             }
@@ -214,12 +229,17 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &pause, &resume, &quit])?;
     app.manage(PauseItems { pause, resume });
+    update::manage(app, menu.clone())?;
     show_paused(app);
     let mut builder = TrayIconBuilder::new()
         .tooltip("Gathr")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
+            "update" => {
+                let app = app.clone();
+                std::thread::spawn(move || update::install(&app, "tray"));
+            }
             "open" => reopen(app, "tray"),
             "pause" => pause_all(app, true),
             "resume" => pause_all(app, false),

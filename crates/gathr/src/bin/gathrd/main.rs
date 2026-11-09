@@ -4,6 +4,7 @@
 mod accounts;
 mod agents;
 mod api;
+mod app_update;
 mod archive;
 mod chats;
 mod coord;
@@ -27,11 +28,12 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use clap::Parser;
+use gathr::app::Copies;
 use gathr::crash_log::CrashLog;
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::event::Event;
 use gathr::writer::Writer;
-use gathr::{Error, VERSION, db, ids, platform};
+use gathr::{Error, VERSION, db, ids, launch, platform};
 use serde_json::json;
 use tokio::net::TcpListener;
 
@@ -55,7 +57,15 @@ fn main() -> ExitCode {
     let crash_log = CrashLog::new(data.crash_log());
     let ui = args.ui.unwrap_or_else(|| beside_me("ui"));
     match start(&data, &crash_log, args.port, ui) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(None) => ExitCode::SUCCESS,
+        // Started apart from this one, which ends here; nothing else would start it (0032).
+        Ok(Some(_)) => match launch::hand_over(&data) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => {
+                crash_log.append(&format!("handing over to the update failed: {e}"));
+                ExitCode::FAILURE
+            }
+        },
         Err(e) => {
             crash_log.append(&format!(
                 "gathrd {VERSION} pid {} on {}",
@@ -73,13 +83,14 @@ fn beside_me(name: &str) -> PathBuf {
     me.with_file_name(name)
 }
 
-/// Everything up to serving: the lock, the database, the writer and the port.
+/// Everything up to serving: the lock, the database, the writer and the port. Once stopped, the
+/// version to hand over to, if it stopped for an update: switched to while the lock is held.
 fn start(
     data: &DataDir,
     crash_log: &CrashLog,
     port: Option<u16>,
     ui: PathBuf,
-) -> Result<(), Error> {
+) -> Result<Option<String>, Error> {
     std::fs::create_dir_all(data.path())?;
     let _lock = data.take_lock()?;
     let conn =
@@ -96,7 +107,14 @@ fn start(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()))
+    let update = runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()))?;
+    if let Some(version) = &update
+        && let Err(e) = Copies::new(data).switch_to(version)
+    {
+        // The copy that ran stays current, and the hand-over starts it again.
+        crash_log.append(&format!("switching to {version} failed: {e}"));
+    }
+    Ok(update)
 }
 
 async fn serve(
@@ -105,10 +123,13 @@ async fn serve(
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
-) -> Result<(), Error> {
+) -> Result<Option<String>, Error> {
     let listener = bind(data, port).await?;
     let port = listener.local_addr()?.port();
     let token = ids::token();
+    // A copy on trial is marked running before it says it's up: a start that finds it up then
+    // never takes it for one that died, and one that dies from here on rolls back.
+    let started = Copies::new(data).started();
     ServiceInfo {
         port,
         token: token.clone(),
@@ -119,10 +140,12 @@ async fn serve(
     let _ = std::fs::remove_dir_all(data.path().join("briefings"));
     let chats = chats::Chats::new(writer.clone(), data.clone(), port, live);
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
+    let app = Arc::new(app_update::AppUpdates::new(chats.clone()));
     let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
         updates: updates.clone(),
+        app: app.clone(),
         sign_ins: sign_ins.clone(),
         models: Default::default(),
         stopping: Default::default(),
@@ -140,7 +163,8 @@ async fn serve(
     writer.record(
         Event::point("gathr.service.start")
             .ok()
-            .attr("version", VERSION)
+            .attr("version", app.running.as_str())
+            .attr("build", VERSION)
             .attr("pid", std::process::id()),
     );
     writer.record(health_event(data, port, early_lines));
@@ -151,13 +175,16 @@ async fn serve(
     chats.take_over().await;
     tokio::spawn(coord::run(chats.clone()));
     tokio::spawn(updates::run(updates.clone()));
+    app.started(started);
+    tokio::spawn(app_update::run(app.clone()));
 
     let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();
-    let stop_state = state.clone();
+    let (stop_state, stop_app) = (state.clone(), app.clone());
     let stopping = async move {
         let reason = tokio::select! {
             _ = stop_state.stop.notified() => "requested over the API",
             _ = os_stop_signal() => "stop signal from the system",
+            _ = stop_app.handover() => "Gathr is updating",
         };
         // Before the server waits on its requests, so a model ask or sign-out doesn't hold it.
         stop_state.stopping.send_replace(true);
@@ -166,6 +193,8 @@ async fn serve(
     serve::serve(listener, api::router(state.clone()), stopping).await;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
+    app.stop();
+    app.stopped();
     sign_ins.cancel_all().await;
     tokio::join!(chats.close_all(), state.models.closed());
     writer
@@ -186,7 +215,8 @@ async fn serve(
             .attr("why", why);
         writer.record_now(event).await;
     }
-    Ok(())
+    writer.close().await;
+    Ok(app.handing_over())
 }
 
 /// The room's dev services and their UIs (AGENTS.md): a service with no port asked never keeps one

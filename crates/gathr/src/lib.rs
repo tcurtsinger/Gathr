@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod agents;
+pub mod app;
 pub mod approvals;
 pub mod archive;
 pub mod background;
@@ -13,6 +14,7 @@ pub mod db;
 pub mod diag;
 pub mod error;
 pub mod event;
+pub mod fetch;
 pub mod http;
 pub mod ids;
 pub mod launch;

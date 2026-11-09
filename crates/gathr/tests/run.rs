@@ -1,4 +1,5 @@
 //! `gathr::run`, the one way the service runs a short program.
+mod common;
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -113,15 +114,7 @@ impl Strays {
 impl Drop for Strays {
     fn drop(&mut self) {
         for pid in self.left() {
-            let _ = if cfg!(windows) {
-                std::process::Command::new("taskkill")
-                    .args(["/F", "/PID", &pid])
-                    .output()
-            } else {
-                std::process::Command::new("kill")
-                    .args(["-KILL", &pid])
-                    .output()
-            };
+            common::kill(&pid);
         }
     }
 }
