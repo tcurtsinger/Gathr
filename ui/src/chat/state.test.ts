@@ -53,4 +53,16 @@ test('a chat opened mid-stream shows each streamed piece once, whatever the hist
   const state = fromLoad(history([saved], 'Second'), work, across);
   expect(state.messages.map((m) => m.body)).toEqual(['First block.']);
   expect(state.partial.t).toBe('Second block');
+
+  // A saved block the history holds never clears the newer block it is still streaming.
+  const followUp: Message = { ...block('m2', 'Follow-up'), role: 'user', turn: 'u' };
+  const overlap: LiveEvent[] = [
+    delta('First block.', 0),
+    { type: 'message', chat: 'c', message: saved },
+    delta('Second partial.', 0),
+    { type: 'message', chat: 'c', message: followUp },
+  ];
+  const both = fromLoad(history([saved, followUp], 'Second partial.'), work, overlap);
+  expect(both.messages.map((m) => m.body)).toEqual(['First block.', 'Follow-up']);
+  expect(both.partial.t).toBe('Second partial.');
 });
