@@ -18,17 +18,18 @@ const none: Pauses = { pauses: [], usage: [] };
 
 /**
  * Every pause and usage hold, live: one list for the whole app, as the service keeps it. An action's
- * answer is the list then, unless a newer one came first; a refusal rejects with its reference.
+ * answer is the list then; when another list came while it was on its way, which of the two is newer
+ * can't be told, so it reads the list again. A refusal rejects with its reference.
  */
 export function usePauses(onFailure: (f: Failure) => void) {
   const [pauses, setPauses] = useState<Pauses>(none);
   // Counts every newer list, so a read or an answer started before one never overwrites it.
   const version = useRef(0);
+  const load = useCallback(() => {
+    const at = version.current;
+    api.pauses().then((p) => version.current === at && setPauses(p), onFailure);
+  }, [onFailure]);
   useEffect(() => {
-    const load = () => {
-      const at = version.current;
-      api.pauses().then((p) => version.current === at && setPauses(p), onFailure);
-    };
     load();
     return listen((event) => {
       if (event.type === 'pauses') {
@@ -37,15 +38,18 @@ export function usePauses(onFailure: (f: Failure) => void) {
       }
       if (event.type === 'lagged') load();
     });
-  }, [onFailure]);
+  }, [load]);
 
-  const act = useCallback(async (action: PauseAction, scope: PauseScope) => {
-    const at = version.current;
-    const answer = await api[action](scope);
-    if (version.current !== at) return;
-    version.current++;
-    setPauses(answer);
-  }, []);
+  const act = useCallback(
+    async (action: PauseAction, scope: PauseScope) => {
+      const at = version.current;
+      const answer = await api[action](scope);
+      if (version.current !== at) return load();
+      version.current++;
+      setPauses(answer);
+    },
+    [load],
+  );
 
   return { pauses, act };
 }

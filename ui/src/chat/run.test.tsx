@@ -1,5 +1,6 @@
 // The service is the edge here: fetch answers as it would, and live events arrive when the test says.
 import { afterEach, expect, test, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Pauses } from '../api';
 import type { LiveEvent } from '../live';
@@ -36,21 +37,31 @@ const history = {
   ],
 };
 
+// What the service's list reads now; a test changes it as the service would.
+let listed: Pauses = running;
+
 /** The service as these tests need it; each POST is kept with its body. */
 function service(pauses: Pauses, answer: (path: string) => Promise<Response>) {
+  listed = pauses;
   const posted: { path: string; body: unknown }[] = [];
   vi.stubGlobal('fetch', (path: string, init?: RequestInit) => {
     if (init?.method === 'POST' && path.startsWith('/api/pauses')) {
       posted.push({ path, body: JSON.parse(String(init.body)) });
       return answer(path);
     }
-    if (path === '/api/pauses') return Promise.resolve(json(pauses));
+    if (path === '/api/pauses') return Promise.resolve(json(listed));
     return Promise.resolve(path.endsWith('/tasks') ? json({ tasks: [], waits: [] }) : json(history));
   });
   return posted;
 }
 
 const noFailure = () => {};
+
+/**
+ * The open Summary, to read its agents' states from. In WebKit, vitest's toBeVisible counts anything inside
+ * a closed <details> as hidden unless it is the <summary> itself, so each state is read as the dialog's text.
+ */
+const summary = page.getByRole('dialog', { name: 'Summary' });
 
 /** The chat as the app shows it, with the app's one list of pauses. */
 function Chat() {
@@ -83,8 +94,8 @@ test('a chat the whole app paused holds its turn, says so, and Resume all resume
   // The held turn isn't under way, so the composer sends rather than stops.
   await expect.element(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(screen.getByText('Supervisor · Held')).toBeVisible();
-  await expect.element(screen.getByText('Member · Paused')).toBeVisible();
+  await expect.element(summary).toMatchTextContent('Supervisor · Held');
+  await expect.element(summary).toMatchTextContent('Member · Paused');
   await screen.getByRole('button', { name: 'Summary' }).click();
 
   await screen.getByRole('button', { name: 'More', exact: true }).click();
@@ -100,7 +111,8 @@ test('a Pause answer that arrives after a newer live change never undoes it', as
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'More', exact: true }).click();
   await screen.getByRole('menuitem', { name: 'Pause' }).click();
-  for (const listener of live) listener({ type: 'pauses', ...paused('chat', 'c') });
+  listed = paused('chat', 'c');
+  for (const listener of live) listener({ type: 'pauses', ...listed });
   await expect.element(screen.getByText('You paused')).toBeVisible();
   release(json({ pauses: [{ scope: 'chat', target: 'c', state: 'pausing', by: null }], usage: [] }));
   await new Promise((r) => setTimeout(r, 50));
@@ -112,12 +124,33 @@ test('an agent paused from its row in Summary pauses that agent alone', async ()
   const posted = service(running, async () => json(paused('agent', 'b')));
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(screen.getByText('Member · Ready')).toBeVisible();
+  await expect.element(summary).toMatchTextContent('Member · Ready');
   await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
   await screen.getByRole('menuitem', { name: 'Pause' }).click();
   await expect.poll(() => posted.length).toBe(1);
-  await expect.element(screen.getByText('Member · Paused')).toBeVisible();
+  await expect.element(summary).toMatchTextContent('Member · Paused');
   expect(posted).toEqual([{ path: '/api/pauses', body: { scope: 'agent', target: 'b' } }]);
   // The chat itself still runs.
   await expect.element(screen.getByText('You paused')).not.toBeInTheDocument();
+});
+
+test('two agents paused at once, with no live updates, both read paused once both answers are in', async () => {
+  const answers: ((r: Response) => void)[] = [];
+  service(running, () => new Promise<Response>((done) => answers.push(done)));
+  const screen = await render(<Chat />);
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Lead' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await expect.poll(() => answers.length).toBe(2);
+  const both: Pauses = {
+    pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
+    usage: [],
+  };
+  listed = both;
+  answers[0](json(paused('agent', 'a')));
+  answers[1](json(both));
+  await expect.element(summary).toMatchTextContent('Supervisor · Held');
+  await expect.element(summary).toMatchTextContent('Member · Paused');
 });
