@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use rusqlite::{Connection, ErrorCode, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
 use crate::data::DataDir;
@@ -141,10 +141,14 @@ pub(crate) fn key(name: &str) -> String {
     name.to_lowercase()
 }
 
+/// SQLite reports every broken rule as a constraint failure: only the unique name index is a
+/// taken name (the id is the primary key, its own code).
 pub(crate) fn taken_or<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
     match done {
         Ok(value) => Ok(Ok(value)),
-        Err(rusqlite::Error::SqliteFailure(e, _)) if e.code == ErrorCode::ConstraintViolation => {
+        Err(rusqlite::Error::SqliteFailure(e, _))
+            if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
+        {
             Ok(Err(Refused::Taken))
         }
         Err(e) => Err(e.into()),
