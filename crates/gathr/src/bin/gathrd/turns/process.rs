@@ -292,6 +292,7 @@ impl Task {
         if closed.held {
             self.show_hold(&closed.chat, None);
         }
+        self.engine_gone(closed.chat.clone()).await;
         for done in self.leaving.drain(..) {
             let _ = done.send(());
         }
@@ -396,6 +397,9 @@ impl Task {
         }
         self.engine = None;
         self.pass = None;
+        if self.closing.is_none() {
+            self.engine_gone(chat.clone()).await;
+        }
         let event = Event::point("gathr.engine.exit")
             .chat(&chat)
             .attr("process.exit.code", code);

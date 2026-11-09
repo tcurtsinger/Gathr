@@ -55,8 +55,19 @@ pub async fn once(chats: &Arc<Chats>) {
     }
     let vars = fresh().await;
     for wait in found {
+        // A pause holds what the service would start on its own in its scope, a check's command too.
+        if gathr::pauses::holding(&chats.pauses(), &wait.chat, Some(&wait.agent)).is_some() {
+            continue;
+        }
+        let checking = (wait.kind == "check").then(|| (wait.chat.clone(), wait.agent.clone()));
+        if let Some((chat, agent)) = &checking {
+            chats.check_running(chat, agent, true).await;
+        }
         let looked = look(&wait, chats.data.path(), &vars).await;
         settle(chats, wait, looked).await;
+        if let Some((chat, agent)) = &checking {
+            chats.check_running(chat, agent, false).await;
+        }
     }
     for (task, chat, owner, pr) in prs {
         let folder = worktree::folder(chats.data.path(), &chat, &owner);

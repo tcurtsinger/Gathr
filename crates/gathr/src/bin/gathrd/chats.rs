@@ -105,6 +105,8 @@ pub struct Chats {
     picking: tokio::sync::Mutex<()>,
     /// The pauses in force, as saved (0010); every queue reads them before it starts a turn.
     pauses: Mutex<Vec<Pause>>,
+    /// Wait checks running now: each one's chat and agent. A pause stays `pausing` while one runs.
+    checking: Mutex<Vec<(String, String)>>,
 }
 
 impl Chats {
@@ -127,6 +129,7 @@ impl Chats {
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
             pauses: Mutex::default(),
+            checking: Mutex::default(),
         })
     }
 
@@ -340,6 +343,30 @@ impl Chats {
         self.pauses.lock().expect("never poisoned").clone()
     }
 
+    /// The wait checks running now.
+    pub fn checking(&self) -> Vec<(String, String)> {
+        self.checking.lock().expect("never poisoned").clone()
+    }
+
+    /// A wait check for `agent` in `chat` started (`true`) or ended: an end may quiet a pause.
+    pub async fn check_running(&self, chat: &str, agent: &str, running: bool) {
+        let one = (chat.to_string(), agent.to_string());
+        {
+            let mut checking = self.checking.lock().expect("never poisoned");
+            match running {
+                true => checking.push(one),
+                false => {
+                    if let Some(at) = checking.iter().position(|c| *c == one) {
+                        checking.remove(at);
+                    }
+                }
+            }
+        }
+        if !running {
+            self.settle_pauses(false).await;
+        }
+    }
+
     /// Reads the pauses again after a change, lets every queue look at what it holds, and says
     /// where things stand.
     pub async fn pauses_changed(&self) {
@@ -365,13 +392,13 @@ impl Chats {
         if self.pauses().is_empty() && !changed {
             return;
         }
-        let trace = gathr::ids::trace_id();
+        let (trace, checks) = (gathr::ids::trace_id(), self.checking());
         let settled = self.writer.call(move |c| {
-            let quiet = gathr::pauses::settle(c, &trace)?;
+            let quiet = gathr::pauses::settle(c, &checks, &trace)?;
             Ok::<_, gathr::Error>((
                 quiet.len(),
                 gathr::pauses::list(c)?,
-                gathr::pauses::listed(c)?,
+                gathr::pauses::listed(c, &checks)?,
             ))
         });
         let Some(Ok((quiet, saved, mut listed))) = settled.await else {

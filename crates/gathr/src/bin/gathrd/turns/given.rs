@@ -20,6 +20,11 @@ impl Task {
             answers: start.answers,
             person: false,
         };
+        self.queue_given(ids, start.text, start.message).await;
+    }
+
+    /// Queues a turn Gathr saved, with its message, as `given` does: for an agent, or none.
+    pub(super) async fn queue_given(&mut self, ids: Ids, text: String, message: serde_json::Value) {
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
             .chat(&ids.chat);
@@ -27,18 +32,17 @@ impl Task {
             Some(task) => event.task(task),
             None => event,
         };
-        let message = start.message;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             event
                 .ok()
                 .attr("gathr.turn.id", ids.turn.clone())
                 .attr("gen_ai.agent.id", ids.agent.clone())
-                .attr("gathr.message.chars", start.text.chars().count()),
+                .attr("gathr.message.chars", text.chars().count()),
         );
         let queued = Queued {
             ids,
-            text: start.text,
+            text,
             held: None,
         };
         let _ = self.enqueue(&queued).await;
