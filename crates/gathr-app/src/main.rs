@@ -215,6 +215,7 @@ fn follow_service(app: &AppHandle) {
             *service.info.lock().unwrap() = Some(now);
             let error = loaded.err().map(|e| e.to_string());
             report(&app, "gathr.ui.window.follow", since, &attrs, error);
+            update::check_now(&app);
         }
     });
 }

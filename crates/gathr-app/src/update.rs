@@ -20,6 +20,7 @@ pub struct Updates {
     ready: Mutex<Option<(Update, Vec<u8>)>>,
     /// Set from the install on: the exit that follows leaves the service running.
     pub installing: AtomicBool,
+    checking: AtomicBool,
     menu: Menu<Wry>,
     restart: MenuItem<Wry>,
 }
@@ -29,27 +30,46 @@ pub fn manage(app: &AppHandle, menu: Menu<Wry>) -> tauri::Result<()> {
     app.manage(Updates {
         ready: Mutex::new(None),
         installing: AtomicBool::new(false),
+        checking: AtomicBool::new(false),
         menu,
         restart,
     });
     Ok(())
 }
 
-/// Checks now and every hour until an update is ready. A debug build never updates.
+/// Checks now and every hour. A debug build never updates.
 pub fn run(app: &AppHandle) {
-    if cfg!(debug_assertions) {
-        return;
-    }
     let app = app.clone();
     std::thread::spawn(move || {
-        while !fetched(&app) {
+        loop {
+            check(&app);
             std::thread::sleep(EVERY);
         }
     });
 }
 
-/// Whether an update was downloaded and checked; failures are recorded and tried again later.
-fn fetched(app: &AppHandle) -> bool {
+/// Checks now, off the caller's thread: the service just updated, and the window's update comes
+/// from the same release.
+pub fn check_now(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || check(&app));
+}
+
+/// Checks for an update unless one is ready or another check runs.
+fn check(app: &AppHandle) {
+    let updates = app.state::<Updates>();
+    if cfg!(debug_assertions) || updates.ready.lock().unwrap().is_some() {
+        return;
+    }
+    if !updates.checking.swap(true, Ordering::SeqCst) {
+        fetched(app);
+        updates.checking.store(false, Ordering::SeqCst);
+    }
+}
+
+/// Downloads and checks an update, then installs it or offers it in the tray; a failure is
+/// recorded and tried again at the next check.
+fn fetched(app: &AppHandle) {
     let since = Instant::now();
     let mut offered = None;
     let found = tauri::async_runtime::block_on(async {
@@ -69,7 +89,7 @@ fn fetched(app: &AppHandle) -> bool {
     let attrs = serde_json::json!({ "current": current, "version": offered, "bytes": size });
     report(app, "gathr.ui.update.check", since, &attrs, error);
     let Ok(Some(ready)) = found else {
-        return false;
+        return;
     };
     let updates = app.state::<Updates>();
     *updates.ready.lock().unwrap() = Some(ready);
@@ -78,7 +98,6 @@ fn fetched(app: &AppHandle) -> bool {
     } else {
         install(app, "hidden");
     }
-    true
 }
 
 /// The window was hidden: a ready update installs now.
