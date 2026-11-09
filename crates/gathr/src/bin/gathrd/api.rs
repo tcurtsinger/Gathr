@@ -53,6 +53,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/health", get(health))
         .route("/api/shutdown", post(shutdown))
         .merge(crate::routes::routes())
+        .merge(crate::archive::routes())
         .merge(crate::coord::routes())
         .merge(crate::pauses::routes())
         .merge(crate::projects::routes())

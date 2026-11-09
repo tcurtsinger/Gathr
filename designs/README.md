@@ -84,3 +84,12 @@ Selected setting help: `approvals/v1.html`, a pop-up from the ? beside a label.
 unselected expanding option. See `approvals/README.md` for copy and checks.
 The shared runtime component is `ui/src/components/Help.tsx`, demonstrated in
 `system.html` with its runtime stylesheet.
+
+## Selected archive and stale patterns
+
+The folded Archived group from archive-stale/v1 is selected. The current
+reference is [archive-stale/v3.html](archive-stale/v3.html): the same layout with
+Idle age labels and the service's 1-to-365 day range. v1 is retained as the chosen
+proposal; v2's Archived-button flyout is retired and must not be built. The
+selected anatomy also appears in system.html#archive-stale. No service connects
+to these fixtures. Runtime Archive, Delete and stale rules belong to 0010.

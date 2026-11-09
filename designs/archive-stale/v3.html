@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gathr: Selected folded archive</title><link rel="stylesheet" href="../tokens.css">
+<style>
+* { box-sizing: border-box; border-color: var(--border); scrollbar-width: thin; scrollbar-color: var(--control) transparent; }
+body { margin: 0; color: var(--foreground); background: var(--background); font: 14px/1.6 var(--font-sans); }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: transparent; border-radius: 8px; min-height: 32px; padding: 6px 10px; }
+button:hover, button:focus-visible { background: var(--raised); }
+:focus-visible { outline: none; background-color: var(--raised); }
+button:disabled { opacity: .5; cursor: default; }
+button:active { transform: translateY(1px); }
+input, textarea { background: var(--background); border: 1px solid var(--control); border-radius: 8px; padding: 7px 10px; caret-color: var(--attention); }
+input:focus-visible, textarea:focus-visible { background: var(--raised); }
+::selection { background: var(--attention); color: var(--background); }
+svg { width: 16px; height: 16px; flex: none; stroke-width: 1.5; }
+strong, h1, h2, h3 { font-weight: 500; }
+h1, h2, h3, p { margin: 0; }
+small, .muted { color: var(--muted-foreground); }
+[hidden] { display: none !important; }
+.preview { min-height: 40px; padding: 4px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+.preview > strong { font-size: 12px; margin-right: auto; }
+.preview button, .preview label { font-size: 12px; }
+.preview button { min-height: 28px; padding: 3px 9px; }
+.preview label { display: flex; align-items: center; gap: 5px; }
+.preview select { color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: 6px; padding: 4px; }
+.app { display: grid; grid-template-columns: 246px minmax(0, 1fr); height: calc(100dvh - 40px); min-height: 480px; }
+.sidebar { display: flex; flex-direction: column; min-height: 0; background: var(--muted-surface); border-right: 1px solid var(--border); padding: 12px 8px; }
+.brand { height: 42px; padding: 0 8px; display: flex; align-items: center; gap: 7px; }
+.brand strong { font-size: 17px; font-weight: 600; letter-spacing: -.035em; }
+.logo { display: flex; gap: 3px; }
+.logo i { width: 5px; height: 17px; border: 1px solid currentColor; border-radius: 3px; transform: rotate(-15deg); }
+.logo i:last-child { height: 12px; margin-top: 5px; }
+.sidebar-actions { padding: 14px 0 24px; }
+.navbutton { width: 100%; height: 34px; min-height: 0; display: flex; align-items: center; gap: 10px; padding: 0 8px; text-align: left; font-size: 13px; }
+.count { margin-left: auto; font-size: 11px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.chatlist { flex: 1; min-height: 0; overflow: auto; }
+.section-label { font-size: 11px; color: var(--muted-foreground); padding: 12px 8px 6px; }
+.project { display: flex; align-items: center; }
+.project .navbutton { flex: 1; }
+.project > .icon { opacity: 0; }
+.project:hover > .icon, .project > .icon:focus-visible { opacity: 1; }
+.chatrow { display: flex; align-items: center; height: 34px; border-radius: 8px; }
+.chatrow:hover, .chatrow:focus-within, .chatrow.selected { background: var(--raised); }
+.chatrow > .chat-link { flex: 1; min-width: 0; text-align: left; height: 34px; min-height: 0; padding: 0 8px; font-size: 13px; }
+.chatrow.project-chat > .chat-link { padding-left: 34px; }
+.chat-link span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.chatrow > .row-more { flex: none; width: 30px; height: 30px; min-height: 30px; padding: 7px; opacity: 0; }
+.chatrow:hover > .row-more, .chatrow:focus-within > .row-more, .chatrow.selected > .row-more { opacity: 1; }
+.archive-group { margin-top: 24px; }
+.archived-row > .chat-link { padding-left: 34px; }
+.sidebar-foot { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--border); }
+.chat { display: flex; min-width: 0; min-height: 0; flex-direction: column; position: relative; }
+.chat-header { height: 46px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+.chat-header h1 { font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.icon { display: inline-flex; justify-content: center; align-items: center; width: 32px; height: 32px; padding: 0; }
+.pill { border-radius: 999px; min-height: 32px; padding: 6px 14px; font-size: 12px; }
+.primary { background: var(--primary); color: var(--primary-foreground); }
+.primary:hover, .primary:focus-visible { background: color-mix(in oklab, var(--primary) 85%, var(--background)); }
+.danger { color: var(--danger); border: 1px solid var(--danger-border); }
+.danger:hover, .danger:focus-visible { background: var(--danger-surface); }
+.thread { flex: 1; min-height: 0; overflow: auto; }
+.conversation { max-width: 704px; padding: 32px 16px; margin: 0 auto; }
+.message { margin: 0 0 28px; }
+.human { background: var(--secondary); border-radius: 16px; padding: 12px 16px; margin-left: auto; width: fit-content; max-width: 85%; }
+.speaker { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 500; margin-bottom: 10px; }
+.avatar { width: 24px; height: 24px; display: inline-grid; place-items: center; background: var(--raised); border-radius: 50%; font-size: 11px; }
+.reply p { margin: 12px 0; line-height: 1.8; }
+.reply ul { padding-left: 20px; line-height: 1.8; }
+.thread-fold { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 12px; margin-top: 20px; }
+.composer-wrap { flex: none; max-width: 704px; width: 100%; padding: 12px 16px 16px; margin: 0 auto; }
+.composer { border: 1px solid var(--border); background: var(--popover); border-radius: 24px; padding: 10px; }
+.composer textarea { width: 100%; resize: none; border: 0; background: transparent; min-height: 56px; font-size: 15px; padding: 6px; }
+.composer-bar { display: flex; align-items: center; gap: 4px; }
+.composer-bar .send { margin-left: auto; background: var(--primary); color: var(--primary-foreground); border-radius: 50%; }
+.recipient { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.archive-line { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 16px; color: var(--muted-foreground); font-size: 12px; }
+.menu { position: fixed;
+ z-index: 60;
+ width: 144px;
+ margin: 0;
+ padding: 4px;
+ color: var(--foreground);
+ background: var(--popover);
+ border: 1px solid var(--border);
+ border-radius: 8px;
+ box-shadow: 0 4px 12px #0002;
+ }
+.menu button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; text-align: left; font-size: 14px; min-height: 32px; }
+.menu .delete { color: var(--danger); }
+.menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px -4px; }
+.flyout { position: fixed;
+ z-index: 45;
+ left: 254px;
+ top: 80px;
+ width: 340px;
+ height: calc(100dvh - 96px);
+ max-height: 760px;
+ display: flex;
+ flex-direction: column;
+ overflow: hidden;
+ background: var(--popover);
+ border-radius: 12px;
+ box-shadow: 0 12px 32px #0003;
+ }
+.flyout > header { display: flex; flex: none; align-items: center; justify-content: space-between; height: 44px; padding: 8px 12px 8px 16px; }
+.flyout h2 { font-size: 14px; }
+.flyout-body { overflow: auto; min-height: 0; flex: 1; padding: 0 8px 12px; }
+.flyout h3 { font-size: 11px; color: var(--muted-foreground); padding: 14px 8px 4px; display: flex; }
+.task-row { width: 100%; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 5px; padding: 10px 8px; }
+.task-row > span { font-size: 13px; line-height: 1.5; }
+.task-row small { font-size: 11px; line-height: 1.4; }
+.task-meta { display: flex; flex-wrap: wrap; gap: 5px 10px; width: 100%; }
+.empty { padding: 10px 8px; color: var(--muted-foreground); font-size: 12px; }
+.workspace { position: absolute;
+ z-index: 20;
+ right: 0;
+ top: 0;
+ bottom: 0;
+ width: 480px;
+ background: var(--muted-surface);
+ border-left: 1px solid var(--border);
+ display: flex;
+ flex-direction: column;
+ }
+.workspace > header { display: flex; align-items: center; height: 46px; flex: none; border-bottom: 1px solid var(--border); gap: 4px; padding: 0 8px; }
+.workspace .tab { font-size: 12px; }
+.workspace .tab.active { background: var(--raised); }
+.workspace .close { margin-left: auto; }
+.workspace-body { flex: 1; overflow: auto; padding: 32px 24px; }
+.workspace h2 { font-size: 20px; line-height: 1.4; overflow-wrap: anywhere; margin-bottom: 12px; }
+.workspace .source { font-size: 12px; color: var(--muted-foreground); margin-bottom: 32px; }
+.stale-detail { font-size: 12px; color: var(--muted-foreground); margin-bottom: 24px; }
+.workspace textarea { width: 100%; min-height: 160px; margin-top: 8px; resize: vertical; }
+.detail-fields { display: grid; grid-template-columns: 80px 1fr; gap: 12px; font-size: 13px; }
+.detail-fields dt { color: var(--muted-foreground); }
+.detail-fields dd { margin: 0; overflow-wrap: anywhere; }
+.workspace footer { padding: 16px 24px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); }
+.workspace footer .count { margin-right: auto; margin-left: 0; }
+.dialog { padding: 0; margin: auto; max-width: none; max-height: none; background: var(--surface); color: var(--foreground); border: 1px solid var(--control); border-radius: 16px; }
+.dialog::backdrop { background: var(--backdrop); }
+.dialog-header { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.dialog-header h2 { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.confirm { width: min(420px, calc(100vw - 40px)); }
+.confirm .dialog-header { padding: 20px 24px 12px; border: 0; }
+.confirm footer { padding: 12px 24px 24px; display: flex; justify-content: flex-end; gap: 8px; }
+.settings { width: min(1024px, calc(100vw - 64px)); height: min(760px, calc(100dvh - 96px)); }
+.settings[open] { display: flex; flex-direction: column; }
+.settings-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+.settings-nav { padding: 20px 12px; border-right: 1px solid var(--border); }
+.settings-nav button { width: 100%; margin-bottom: 4px; text-align: left; }
+.settings-nav [aria-current] { background: var(--raised); }
+.settings-content { overflow: auto; min-width: 0; padding: 24px; }
+.settings-content h3 { font-size: 18px; font-weight: 600; margin-bottom: 28px; }
+.settingrow { display: flex; gap: 12px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--border); }
+.settingrow > label, .settingrow > .setting-label { display: flex; align-items: center; gap: 4px; }
+.settingrow input { width: 72px; min-height: 34px; font-variant-numeric: tabular-nums; text-align: right; }
+.setting-control { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.setting-control small { font-size: 12px; }
+.switch { border-radius: 20px; min-height: 24px; width: 42px; padding: 3px; background: var(--primary); display: flex; justify-content: flex-end; }
+.switch::after { content: ''; width: 18px; height: 18px; border-radius: 50%; background: var(--primary-foreground); }
+.switch[aria-checked=false] { background: var(--raised); justify-content: flex-start; border: 1px solid var(--control); }
+.help-button { width: 28px; min-height: 28px; padding: 0; color: var(--muted-foreground); }
+.help-button span { display: inline-grid; place-items: center; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 50%; font-size: 12px; }
+.help { position: fixed;
+ inset: auto;
+ z-index: 90;
+ width: min(350px, calc(100vw - 40px));
+ margin: 0;
+ padding: 16px;
+ border: 1px solid var(--control);
+ border-radius: 7px;
+ color: var(--foreground);
+ background: var(--surface);
+ font-size: 13px;
+ }
+.validation { margin-top: 16px; font-size: 12px; color: var(--danger); }
+.notice { padding: 12px; color: var(--danger); background: var(--danger-surface); border: 1px solid var(--danger-border); border-radius: 8px; font-size: 13px; margin: 12px 24px; }
+.notice button { color: var(--attention); text-decoration: underline; }
+.saved { font-size: 12px; color: var(--muted-foreground); margin-top: 16px; }
+@media (min-width: 1200px) { .chat:has(.workspace:not([hidden])) .thread, .chat:has(.workspace:not([hidden])) .composer-wrap { margin-right: 480px; } }
+@media (max-width: 767px) {
+ .app { grid-template-columns: 190px minmax(0, 1fr); }
+ .flyout { left: 198px; width: min(340px, calc(100vw - 214px)); }
+ .workspace { width: min(480px, 100vw); }
+ .settings { width: calc(100vw - 24px); height: calc(100dvh - 48px); }
+ .settings-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+ .settings-nav { display: flex; gap: 4px; overflow: auto; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); }
+ .settings-nav button { width: auto; white-space: nowrap; }
+ .settings-content { padding: 16px; }
+ .settingrow { flex-wrap: wrap; }
+ button, input { min-height: 44px; }
+ .icon, .row-more { min-width: 44px; min-height: 44px; }
+}
+@media (max-width: 599px) {
+ .app { display: block; }
+ .sidebar { display: none; position: fixed; inset: 80px 0 0; z-index: 30; width: min(280px, 100vw); }
+ .sidebar.mobile-open { display: flex; box-shadow: 0 12px 32px #0003; }
+ .chat { height: 100%; }
+ .flyout { left: 12px; top: 88px; width: calc(100vw - 24px); max-height: calc(100dvh - 104px); }
+ .chat-header { padding: 0 8px; }
+ .chat-header .pill { padding: 6px 8px; }
+ .preview { min-height: 80px; }
+ .app { height: calc(100dvh - 80px); }
+ .preview > strong { flex-basis: 100%; }
+}
+@media (min-width: 600px) { .mobile-nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+</style></head>
+<body data-variant="v1">
+<div class="preview" data-id="preview-controls" aria-label="Design preview controls">
+ <strong>Selected folded archive <span class="muted">(sample data)</span></strong>
+ <label>Data <select id="sample-size" data-id="sample-size"><option value="normal">Normal</option><option value="large">Large</option><option value="empty">Empty</option></select></label>
+ <label id="failure-control"><input id="simulate-failure" type="checkbox" data-id="simulate-failure">Fail action</label>
+ <button id="theme" data-id="theme">Switch theme</button><button id="reset" data-id="reset">Reset</button>
+</div>
+<div class="app" data-id="app-shell">
+<nav class="sidebar" id="sidebar" aria-label="Chats" data-id="navigation">
+ <div class="brand" data-id="brand"><span class="logo" aria-hidden="true"><i></i><i></i></span><strong>Gathr</strong></div>
+ <div class="sidebar-actions" data-id="sidebar-actions">
+  <button class="navbutton" id="new-chat" data-id="new-chat">
+<svg data-icon="plus" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 5v14M5 12h14"/>
+</svg>New</button>
+  <button class="navbutton" id="tasks-open" data-id="tasks-open" aria-haspopup="dialog">
+<svg data-icon="tasks" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m3 6 2 2 4-4M12 6h9M3 13h3M12 13h9M3 20h3M12 20h9"/>
+</svg>Tasks<span class="count" id="task-count">
+</span>
+</button>
+ </div>
+ <div class="chatlist" data-id="chat-list">
+  <h2 class="section-label" data-id="projects-heading">Projects</h2>
+  <div class="project" data-id="project-row">
+<button class="navbutton">
+<svg data-icon="folder" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z"/>
+</svg>Fieldnotes</button>
+<button class="icon" aria-label="New chat in Fieldnotes">
+<svg data-icon="plus" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 5v14M5 12h14"/>
+</svg>
+</button>
+</div>
+  <div id="project-chats"></div>
+  <h2 class="section-label" data-id="chats-heading">Chats</h2><div id="plain-chats"></div>
+  <section class="archive-group" id="archive-group" data-id="archive-group">
+   <button class="navbutton" id="archive-toggle" data-id="archive-toggle" aria-expanded="false" aria-controls="archive-content">
+<span id="archive-toggle-icon">
+<svg data-icon="right" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m9 6 6 6-6 6"/>
+</svg>
+</span>Archived<span class="count" id="archive-count">
+</span>
+</button>
+   <div id="archive-content" hidden></div>
+  </section>
+ </div>
+ <div class="sidebar-foot" data-id="sidebar-footer">
+  <button class="navbutton" id="archive-open" data-id="archive-open" aria-haspopup="dialog">
+<svg data-icon="archive" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="3" width="18" height="4" rx="1"/>
+<path d="M5 7v13h14V7M10 11h4"/>
+</svg>Archived</button>
+  <button class="navbutton" id="settings-open" data-id="settings-open">
+<svg data-icon="settings" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m9 3-.5 3-2 1-2.8-1-2 3.5L4 11v2l-2.3 1.5 2 3.5 2.8-1 2 1 .5 3h4l.5-3 2-1 2.8 1 2-3.5L18 13v-2l2.3-1.5-2-3.5-2.8 1-2-1L13 3z"/>
+<circle cx="11" cy="12" r="3"/>
+</svg>Settings</button>
+ </div>
+</nav>
+<main class="chat" data-id="conversation-pane">
+ <header class="chat-header" data-id="chat-header">
+<button class="icon mobile-nav" id="mobile-nav" aria-label="Open navigation">
+<svg data-icon="menu" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 6h16M4 12h16M4 18h16"/>
+</svg>
+</button>
+  <h1 id="chat-title" data-id="chat-title">Launch checklist</h1><small id="archive-state"></small>
+  <button class="pill" data-id="summary-open">Summary</button>
+  <button class="icon" id="header-more" data-id="header-more" aria-label="More" aria-haspopup="menu">
+<svg data-icon="more" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="5" cy="12" r="1"/>
+<circle cx="12" cy="12" r="1"/>
+<circle cx="19" cy="12" r="1"/>
+</svg>
+</button>
+  <button class="icon" data-id="workspace-open" aria-label="Open workspace">
+<svg data-icon="panel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="4" width="18" height="16" rx="2"/>
+<path d="M15 4v16"/>
+</svg>
+</button>
+ </header>
+ <div class="thread" data-id="thread">
+  <div class="conversation" id="conversation">
+   <div class="message human" data-id="human-message">What is left before we release?</div>
+   <article class="message reply" data-id="supervisor-message">
+    <div class="speaker"><span class="avatar">R</span>Rowan <small>Supervisor</small></div>
+    <p id="conversation-title" style="font-weight:500">Launch checklist</p>
+    <p>The team finished the navigation and first-run copy. Two checks remain:</p>
+    <ul><li>The release build is waiting on CI.</li><li>The keyboard shortcuts need your choice.</li></ul>
+    <p>I’ll gather those results here before the final review.</p>
+    <button class="thread-fold" data-id="team-thread">
+<svg data-icon="right" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m9 6 6 6-6 6"/>
+</svg>3 replies</button>
+   </article>
+   <p class="muted" id="run-line" hidden style="font-size:12px">You paused</p>
+  </div>
+ </div>
+ <div class="archive-line" id="archived-line" hidden data-id="archived-line">Archived<button class="pill" id="restore-chat" data-id="restore-chat">Restore</button></div>
+ <div class="composer-wrap" id="composer-wrap" data-id="composer">
+  <div class="composer"><textarea id="composer-text" placeholder="Message Rowan…" aria-label="Message Rowan"></textarea>
+   <div class="composer-bar">
+<button class="icon" aria-label="Attach">
+<svg data-icon="plus" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 5v14M5 12h14"/>
+</svg>
+</button>
+<button class="recipient">
+<span class="avatar">R</span>Rowan<svg data-icon="down" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 9 6 6 6-6"/>
+</svg>
+</button>
+    <button class="icon send" aria-label="Send message">
+<svg data-icon="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 19V5m-6 6 6-6 6 6"/>
+</svg>
+</button>
+</div>
+  </div>
+ </div>
+ <section class="workspace" id="workspace" hidden aria-label="Workspace" data-id="workspace">
+  <header>
+<button class="tab">Home</button>
+<button class="tab active" aria-current="page">Tasks</button>
+<button class="icon close" data-close="workspace" aria-label="Close workspace">
+<svg data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 6 12 12M6 18 18 6"/>
+</svg>
+</button>
+</header>
+  <div class="workspace-body"><h2 id="task-title" tabindex="-1" data-id="task-title"></h2><p id="task-source" class="source"></p>
+   <p id="task-stale" class="stale-detail" data-id="task-stale"></p>
+   <div id="person-answer"><label for="task-answer">Your answer</label><textarea id="task-answer" data-id="task-answer"></textarea></div>
+   <dl class="detail-fields" id="agent-detail"><dt>Assigned to</dt><dd id="agent-owner"></dd><dt>State</dt><dd id="agent-state"></dd><dt>Reason</dt><dd id="agent-reason"></dd></dl>
+  </div>
+  <footer>
+<span id="task-ready" class="count">
+</span>
+<button class="pill" id="task-cancel" data-id="task-cancel">Cancel</button>
+<button class="pill primary" id="task-restart" data-id="task-restart">Restart</button>
+<button class="pill primary" id="task-send" data-id="task-send">Send</button>
+</footer>
+ </section>
+</main>
+</div>
+<div id="chat-menu" class="menu" popover="auto" role="menu" aria-label="Chat actions" data-id="chat-menu">
+ <button id="menu-pause" role="menuitem">
+<svg data-icon="pause" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 5v14M16 5v14"/>
+</svg>Pause</button>
+<hr id="menu-pause-separator">
+ <button id="menu-archive" role="menuitem" data-id="menu-archive">
+<svg data-icon="archive" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="3" width="18" height="4" rx="1"/>
+<path d="M5 7v13h14V7M10 11h4"/>
+</svg>Archive</button>
+<hr>
+ <button id="menu-delete" role="menuitem" class="delete" data-id="menu-delete">
+<svg data-icon="trash" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>
+</svg>Delete</button>
+</div>
+<section class="flyout" id="tasks-flyout" hidden role="dialog" aria-label="Tasks" data-id="tasks-flyout">
+ <header>
+<h2 data-id="tasks-heading">Tasks</h2>
+<button class="icon" data-close="tasks-flyout" aria-label="Close Tasks">
+<svg data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 6 12 12M6 18 18 6"/>
+</svg>
+</button>
+</header>
+ <div class="flyout-body"><section data-id="questions-group"><h3>Questions<span class="count" id="questions-count"></span></h3><div id="fresh-tasks"></div></section>
+  <section id="stale-section" data-id="stale-group"><h3>Stale<span class="count" id="stale-count"></span></h3><div id="stale-tasks"></div></section>
+ </div>
+</section>
+<section class="flyout" id="archive-flyout" hidden role="dialog" aria-label="Archived" data-id="archive-flyout">
+ <header>
+<h2 data-id="archived-heading">Archived</h2>
+<button class="icon" data-close="archive-flyout" aria-label="Close Archived">
+<svg data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 6 12 12M6 18 18 6"/>
+</svg>
+</button>
+</header>
+ <div class="flyout-body" id="archive-results"></div>
+</section>
+<dialog class="dialog confirm" id="confirm" aria-labelledby="confirm-title" data-id="confirm">
+ <header class="dialog-header"><h2 id="confirm-title" data-id="confirm-title"></h2></header>
+ <div class="notice" id="confirm-error" hidden role="alert"><span id="confirm-error-text"></span> <button title="Sample error reference">ref sample-f11</button></div>
+ <footer><button class="pill" id="confirm-cancel" data-id="confirm-cancel">Cancel</button><button class="pill primary" id="confirm-go" data-id="confirm-go">Archive</button></footer>
+</dialog>
+<dialog class="dialog settings" id="settings" aria-labelledby="settings-title" data-id="settings">
+ <header class="dialog-header"><h2 id="settings-title" data-id="settings-title">Settings</h2><button id="settings-close" data-id="settings-close">Close</button></header>
+ <div class="settings-body">
+<nav class="settings-nav" aria-label="Settings categories">
+<button aria-current="page">General</button>
+<button>Engines</button>
+<button>Agents</button>
+<button>Diagnostics</button>
+</nav>
+  <section class="settings-content" data-id="general-settings"><h3 data-id="general-title">General</h3>
+   <div class="settingrow" data-id="startup-row">
+<span>Open at login</span>
+<div class="setting-control">
+<small>This computer</small>
+<button class="switch" id="startup" role="switch" aria-checked="true" aria-label="Open at login">
+</button>
+</div>
+</div>
+   <div id="stale-settings" >
+   <div class="settingrow" data-id="stale-days-row">
+<div class="setting-label">
+<label for="stale-days">Stale after</label>
+<button class="help-button" id="help-stale-button" aria-label="About stale days">
+<span>?</span>
+</button>
+</div>
+<div class="setting-control">
+<input id="stale-days" type="number" min="1" step="1" value="3" data-id="stale-days" aria-describedby="stale-unit">
+<small id="stale-unit">days</small>
+</div>
+</div>
+   <div class="settingrow" data-id="cancel-days-row">
+<div class="setting-label">
+<label for="cancel-days">Cancel after</label>
+<button class="help-button" id="help-cancel-button" aria-label="About cancel days">
+<span>?</span>
+</button>
+</div>
+<div class="setting-control">
+<input id="cancel-days" type="number" min="1" step="1" value="7" data-id="cancel-days" aria-describedby="cancel-unit">
+<small id="cancel-unit">days stale</small>
+</div>
+</div>
+   <p id="validation" class="validation" hidden role="alert">Enter whole days, at least 1.</p><p id="saved" class="saved" role="status"></p>
+   </div>
+  </section>
+ </div>
+</dialog>
+<section class="help" id="help" popover="auto" role="note" aria-label="Setting help" data-id="setting-help"></section>
+<div hidden>
+<svg data-icon="more" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="5" cy="12" r="1"/>
+<circle cx="12" cy="12" r="1"/>
+<circle cx="19" cy="12" r="1"/>
+</svg>
+<svg data-icon="plus" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 5v14M5 12h14"/>
+</svg>
+<svg data-icon="folder" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v10H3z"/>
+</svg>
+<svg data-icon="tasks" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m3 6 2 2 4-4M12 6h9M3 13h3M12 13h9M3 20h3M12 20h9"/>
+</svg>
+<svg data-icon="settings" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m9 3-.5 3-2 1-2.8-1-2 3.5L4 11v2l-2.3 1.5 2 3.5 2.8-1 2 1 .5 3h4l.5-3 2-1 2.8 1 2-3.5L18 13v-2l2.3-1.5-2-3.5-2.8 1-2-1L13 3z"/>
+<circle cx="11" cy="12" r="3"/>
+</svg>
+<svg data-icon="archive" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="3" width="18" height="4" rx="1"/>
+<path d="M5 7v13h14V7M10 11h4"/>
+</svg>
+<svg data-icon="restore" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M5 7v13h14V7M3 7h18V3H3zM9 13l3-3 3 3M12 10v7"/>
+</svg>
+<svg data-icon="trash" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>
+</svg>
+<svg data-icon="down" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 9 6 6 6-6"/>
+</svg>
+<svg data-icon="right" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m9 6 6 6-6 6"/>
+</svg>
+<svg data-icon="close" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="m6 6 12 12M6 18 18 6"/>
+</svg>
+<svg data-icon="arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 19V5m-6 6 6-6 6 6"/>
+</svg>
+<svg data-icon="pause" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 5v14M16 5v14"/>
+</svg>
+<svg data-icon="panel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<rect x="3" y="4" width="18" height="16" rx="2"/>
+<path d="M15 4v16"/>
+</svg>
+<svg data-icon="menu" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4 6h16M4 12h16M4 18h16"/>
+</svg>
+</div>
+<script src="preview.js"></script>
+<script src="selected.js"></script>
+</body></html>

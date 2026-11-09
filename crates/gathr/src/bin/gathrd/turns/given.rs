@@ -48,19 +48,33 @@ impl Task {
         let _ = self.enqueue(&queued).await;
     }
 
-    /// Why a turn on a task may not start now (0010's gate), or `None`. Pauses and usage holds
-    /// keep it queued instead (`holds`).
+    /// Why a turn may not start now (0010's gate), or `None`: its chat is archived or deleted
+    /// (F11), its task was cancelled while it was queued, or its task may not start. Pauses and
+    /// usage holds keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
-        let task = ids.task?;
+        let (chat, task, turn) = (ids.chat.clone(), ids.task, ids.turn.clone());
         let asked = self
             .chats
             .writer
-            .call(move |conn| gathr::tasks::may_start(conn, task))
+            .call(move |conn| {
+                match gathr::archive::archived(conn, &chat) {
+                    Ok(Some(_)) => return Ok(Some("its chat is archived".to_string())),
+                    Err(gathr::Error::Refused(_)) => {
+                        return Ok(Some("its chat was deleted".into()));
+                    }
+                    Err(e) => return Err(e),
+                    Ok(None) => {}
+                }
+                if let Some(why) = gathr::tasks::stop_why(conn, &turn)? {
+                    return Ok(Some(why));
+                }
+                task.map_or(Ok(None), |task| gathr::tasks::may_start(conn, task))
+            })
             .await;
         match asked {
             Some(Ok(why)) => why,
-            Some(Err(e)) => Some(format!("its task wasn't read: {e}")),
-            None => Some("its task wasn't read: the database didn't answer".into()),
+            Some(Err(e)) => Some(format!("its chat or task wasn't read: {e}")),
+            None => Some("its chat or task wasn't read: the database didn't answer".into()),
         }
     }
 }

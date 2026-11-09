@@ -1,8 +1,9 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { PersonTask } from '../api';
+import type { PersonTask, StaleTask } from '../api';
 import { Notice } from '../components/Notice';
 import { type Draft, ready } from './model';
+import { StaleTaskView } from './StaleTaskView';
 import { TaskAnswer } from './TaskAnswer';
 import './tasks.css';
 
@@ -26,6 +27,9 @@ interface Props {
   /** Sends the ready answers together; answers the ones refused, which stay open. */
   onSend: (tasks: PersonTask[]) => Promise<Refusal[]>;
   onReference: (ref: string) => void;
+  /** The chat's stale agent tasks (F11): each opens as its own view, outside the questions' pager. */
+  stale?: StaleTask[];
+  onSettle?: (task: StaleTask, action: 'cancel' | 'restart') => Promise<unknown>;
 }
 
 /**
@@ -63,6 +67,17 @@ export function TasksTab(props: Props) {
     if (refusals.length) onSelect(refusals[0].task);
   };
 
+  const agentTask = props.stale?.find((t) => t.number === selected) ?? (task ? undefined : props.stale?.[0]);
+  if (agentTask && props.onSettle)
+    return (
+      <StaleTaskView
+        key={agentTask.number}
+        task={agentTask}
+        name={name}
+        onSettle={props.onSettle}
+        onReference={onReference}
+      />
+    );
   if (!task) return <p className="tasks-empty">No open tasks</p>;
   const last = at === tasks.length - 1;
   const why = refused.find((r) => r.task === task.number);

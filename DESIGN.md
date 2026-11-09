@@ -204,6 +204,50 @@ automatic Next. Back/Next retain drafts; final Send submits ready answers only.
 Notes alone do not make a structured answer ready. Unanswered tasks remain open.
 Lifecycle/history policy and persistence are service work, not prototype rules.
 
+### Archive and stale (F11)
+
+The selected archive location is a folded Archived group after the active chats
+in the sidebar. It starts closed, shows a count, keeps its fold while the window
+is open and shares the chat-list scroll region. Archived rows use 34px left padding;
+More appears on hover, keyboard focus and the current chat. Restore returns a
+chat to its original project or Chats without restarting cancelled work.
+The separate Archived button and flyout are retired. See
+[the selected reference](designs/archive-stale/v3.html), a refinement of v1;
+v1 and v2 remain unchanged as the compared proposals.
+
+Header More keeps Pause/Resume/Restart first, then Archive, then Delete after a
+separator. Row menus use the same shared menu. An archived chat offers Restore
+and Delete; its composer becomes a quiet Archived line with Restore. Deleting
+the current chat selects its next sidebar neighbour, then its previous one,
+then New. Other chats retain their drafts and reading position.
+
+Confirm is a shared Dialog variant: "Archive <title>?" or "Delete <title>?",
+Cancel and the verb. The title wraps, Cancel has initial focus, Escape cancels
+and focus returns to the trigger. Archive uses the neutral primary Button;
+Delete uses the outlined danger Button. A refused action keeps the confirm
+open with "Archive failed" or "Delete failed" and its Diagnostics reference.
+Restore asks nothing; its failure uses the shared referenced Notice.
+
+The Tasks flyout has Questions, then an expanded Stale group. Each task appears
+once. Its navigation badge still counts only open human questions, including
+stale human questions. Stale rows name the chat and owner (For you for a human),
+and say "Idle 4 days" for time since last progress. An agent's real hold or state
+stays visible. This is not a countdown to cancellation.
+
+A stale human question uses the existing question pager and per-question drafts.
+It never implies automatic cancellation. A stale agent task opens that chat's
+Tasks tab at its title, giver, owner, state and reason, with Cancel and Restart.
+Restart follows the service's eligibility; a waiting task is not restartable
+just because it is stale. Agent tasks never receive a human answer form.
+
+General has Stale after (days) and Cancel after (days stale), defaults 3 and 7.
+Both accept 1 to 365 whole days and save on Enter or blur. Retain invalid input
+with "Enter whole days from 1 to 365."; retain a refused edit with its reference.
+Help explains progress and the open work that prevents automatic cancellation.
+The person's questions stay open until answered or explicitly cancelled.
+With the defaults, an eligible agent task cancels after 10 days without progress.
+The service owns that timing and every archive effect; see 0010.
+
 ### Settings, accounts and agents
 
 Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:

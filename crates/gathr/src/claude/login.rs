@@ -79,8 +79,9 @@ pub fn read(file: &Path, now_ms: i64) -> (Login, Option<i64>) {
 }
 
 /// The account's state, for sends, Settings and `gathr diag` alike: the login file, or on
-/// macOS, where the login is in the Keychain (0016), `claude auth status`. Blocks while the
-/// probe runs; the service calls it off its async threads.
+/// macOS, where the login is in the Keychain (0016), `claude auth status`, or with no Claude Code to
+/// run, whether its Keychain item is there (F11). Blocks while the probe runs; the service calls it
+/// off its async threads.
 pub fn status(folder: &Path, copy: Option<PathBuf>, now_ms: i64) -> (Login, Option<i64>) {
     let from_file = read(&credentials(folder), now_ms);
     if !cfg!(target_os = "macos") || from_file.0 != Login::SignedOut {
@@ -88,7 +89,29 @@ pub fn status(folder: &Path, copy: Option<PathBuf>, now_ms: i64) -> (Login, Opti
     }
     match super::command::find(copy) {
         Ok(program) => (probe(&program, folder), None),
-        Err(_) => (Login::Unknown, None),
+        Err(_) => (keychain_item(folder), None),
+    }
+}
+
+/// Whether the folder's Keychain item is there, read without its secret (no prompt, 0016). Claude
+/// Code names it `Claude Code-credentials-` and the first 8 hex digits of the folder path's SHA-256
+/// (read in its 2.1.319 source).
+fn keychain_item(folder: &Path) -> Login {
+    use sha2::Digest;
+    let hash = sha2::Sha256::digest(folder.to_string_lossy().as_bytes());
+    let hex: String = hash.iter().take(4).map(|b| format!("{b:02x}")).collect();
+    let item = format!("Claude Code-credentials-{hex}");
+    let found = std::process::Command::new("/usr/bin/security")
+        .args(["find-generic-password", "-s", &item])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    // 44: no such item.
+    match found.map(|s| s.code()) {
+        Ok(Some(0)) => Login::SignedIn,
+        Ok(Some(44)) => Login::SignedOut,
+        _ => Login::Unknown,
     }
 }
 

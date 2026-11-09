@@ -25,6 +25,24 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.topbar h1:has(+ .topbar-state) {
+  flex: 0 1 auto;
+}
+.topbar-state {
+  flex: 1;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+/* An archived chat reads only: its composer is this line and Restore (archive-stale/v1). */
+.archived-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
 .empty {
   color: var(--muted-foreground);
 }

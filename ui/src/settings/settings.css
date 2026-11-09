@@ -47,7 +47,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.settingrow button {
+.settingrow button:not(.help-button) {
   border: 1px solid var(--control);
 }
 /* Who a setting applies to, beside its control. */
@@ -78,4 +78,29 @@
   .settings-page > section {
     padding: 16px;
   }
+}
+/* The stale days (StaleDays.tsx): a name and its ?, a whole number and its unit. */
+.setting-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.setting-days {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.setting-days input {
+  width: 72px;
+}
+.setting-days small {
+  min-width: 64px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.setting-invalid {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 12px;
 }

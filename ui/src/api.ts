@@ -93,6 +93,13 @@ export interface Task {
   reason: string | null;
   /** Tasks it waits for before it starts. */
   after: number[];
+  /** Its last move, once it has gone the stale days without one (F11). */
+  stale_us?: number | null;
+}
+
+/** An agent's stale task, on the person's list across chats. */
+export interface StaleTask extends Task {
+  chat_title: string;
 }
 
 /** A question for the person (F9): the form says how it's answered; the first choice is the asker's pick. */
@@ -138,6 +145,14 @@ export interface Chat {
   /** Its project's id; none for a plain chat. */
   project?: string | null;
   folder?: string | null;
+  /** When the person archived it: its work ended then (F11). */
+  archived?: string | null;
+}
+
+/** Settings > General's stale rules (F11), in whole days. */
+export interface StaleDays {
+  stale_days: number;
+  cancel_days: number;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -230,13 +245,23 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
+  archivedChats: () => call<Chat[]>('GET', '/api/chats?archived=true'),
+  /** Ends the chat's work in one step; Restore (unarchive) never starts it again. */
+  archive: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/archive`),
+  unarchive: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/unarchive`),
+  deleteChat: (chat: string) => call<unknown>('DELETE', `/api/chats/${chat}`),
   createChat: (project?: string) => call<Chat>('POST', '/api/chats', project ? { project } : {}),
   projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
-  personTasks: () => call<{ tasks: PersonTask[] }>('GET', '/api/person-tasks').then((t) => t.tasks),
+  /** The person's open questions, and agents' stale tasks across chats. */
+  personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
+  cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),
+  restartTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/restart`),
+  settings: () => call<StaleDays>('GET', '/api/settings'),
+  saveSettings: (days: Partial<StaleDays>) => call<StaleDays>('PATCH', '/api/settings', days),
   answer: (answers: PersonAnswer[]) =>
     call<{ answered: Task[]; refused: { task: number; why: string; ref: string | null }[] }>(
       'POST',

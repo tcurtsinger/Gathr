@@ -1363,6 +1363,8 @@ dependencies = [
  "axum",
  "clap",
  "getrandom 0.4.3",
+ "hyper",
+ "hyper-util",
  "rmcp",
  "rusqlite",
  "serde",

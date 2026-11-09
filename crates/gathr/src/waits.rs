@@ -75,6 +75,7 @@ pub fn leave(conn: &mut Connection, l: &Leave, trace: &str) -> Result<Wait, Erro
         return Err(refused(format!("a wait has 1 to {MOST_PARTS} parts")));
     }
     let tx = conn.transaction()?;
+    crate::archive::refuse_archived(&tx, l.chat)?;
     for part in &l.parts {
         checked(&tx, l, part)?;
     }

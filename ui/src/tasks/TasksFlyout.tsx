@@ -2,13 +2,16 @@ import { ListTodo, X } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
-import type { PersonTask } from '../api';
+import type { PersonTask, StaleTask } from '../api';
+import { idle } from './model';
 import './flyout.css';
 
 interface Props {
   tasks: PersonTask[];
+  /** Agents' stale tasks across chats: grouped with the person's stale questions (F11). */
+  stale: StaleTask[];
   name: (agent: string | null) => string;
-  onOpen: (task: PersonTask) => void;
+  onOpen: (task: PersonTask | StaleTask) => void;
 }
 
 /**
@@ -16,8 +19,33 @@ interface Props {
  * prototype's Radix flyout beside navigation, so its own tooltips draw above it. Picking one opens
  * its chat's Tasks tab at that question.
  */
-export function TasksFlyout({ tasks, name, onOpen }: Props) {
+export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
   const [open, setOpen] = useState(false);
+  const questions = tasks.filter((t) => !t.stale_us);
+  // Each once: the person's own first, as they're the ones only the person can move.
+  const quiet = [...tasks.filter((t) => t.stale_us), ...stale];
+  const row = (t: PersonTask | StaleTask) => (
+    <button
+      type="button"
+      key={t.number}
+      className="flyout-task"
+      onClick={() => {
+        setOpen(false);
+        onOpen(t);
+      }}
+    >
+      <span>{t.what}</span>
+      <small>
+        {t.stale_us ? (t.owner ? name(t.owner) : 'For you') : name(t.giver)} · {t.chat_title}
+      </small>
+      {t.stale_us && (
+        <small>
+          {idle(t.stale_us)}
+          {t.owner && ` · ${t.state}`}
+        </small>
+      )}
+    </button>
+  );
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
@@ -52,23 +80,18 @@ export function TasksFlyout({ tasks, name, onOpen }: Props) {
             </TooltipIconButton>
           </header>
           <div className="flyout-body">
-            {tasks.length === 0 && <p className="flyout-empty">No tasks</p>}
-            {tasks.map((t) => (
-              <button
-                type="button"
-                key={t.number}
-                className="flyout-task"
-                onClick={() => {
-                  setOpen(false);
-                  onOpen(t);
-                }}
-              >
-                <span>{t.what}</span>
-                <small>
-                  {name(t.giver)} · {t.chat_title}
-                </small>
-              </button>
-            ))}
+            <section aria-labelledby="flyout-questions">
+              <h3 id="flyout-questions">
+                Questions<span className="nav-count">{questions.length || ''}</span>
+              </h3>
+              {questions.length ? questions.map(row) : <p className="flyout-empty">No questions</p>}
+            </section>
+            <section aria-labelledby="flyout-stale">
+              <h3 id="flyout-stale">
+                Stale<span className="nav-count">{quiet.length || ''}</span>
+              </h3>
+              {quiet.length ? quiet.map(row) : <p className="flyout-empty">No stale tasks</p>}
+            </section>
           </div>
         </Popover.Content>
       </Popover.Portal>

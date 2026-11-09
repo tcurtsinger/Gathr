@@ -30,7 +30,7 @@ test('a Send the service takes closes its questions even with no live event', as
   vi.stubGlobal('fetch', async (path: string) =>
     // The service answers each question it took whole, as a task.
     path === '/api/person-tasks'
-      ? json({ tasks: [ask(1), ask(2)] })
+      ? json({ tasks: [ask(1), ask(2)], stale: [] })
       : json({ answered: [ask(1)], refused: [] }),
   );
   const screen = await render(<Probe />);
@@ -48,9 +48,9 @@ test('a list read that answers after a live update never brings back what the up
   live.clear();
   const screen = await render(<Probe />);
   await expect.poll(() => live.size).toBe(1);
-  for (const listener of live) listener({ type: 'person_tasks', tasks: [ask(2)] });
+  for (const listener of live) listener({ type: 'person_tasks', tasks: [ask(2)], stale: [] });
   await expect.element(screen.getByText('open 2 drafts')).toBeVisible();
-  release(json({ tasks: [ask(1), ask(2)] }));
+  release(json({ tasks: [ask(1), ask(2)], stale: [] }));
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('open 2 drafts')).toBeVisible();
 });

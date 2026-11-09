@@ -1,0 +1,125 @@
+// The service is the edge here: fetch answers as it would, from made-up state.
+import { afterEach, expect, test, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
+import { render } from 'vitest-browser-react';
+import { StaleDays } from './StaleDays';
+
+afterEach(() => vi.unstubAllGlobals());
+
+test('a day count saves when the edit is committed; an invalid or refused one stays as typed', async () => {
+  const sent: unknown[] = [];
+  let refuse = false;
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    const body = JSON.parse(String(init.body));
+    sent.push(body);
+    if (refuse) {
+      const error = { error: 'Save failed', why: 'made-up refusal', ref: 'made-up-ref' };
+      return new Response(JSON.stringify(error), { status: 500 });
+    }
+    return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7, ...body }));
+  });
+  const screen = await render(<StaleDays onReference={() => {}} />);
+  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  await expect.element(cancel).toHaveValue(7);
+  await expect.element(cancel).toHaveAccessibleDescription('days stale');
+
+  await userEvent.fill(cancel, '0');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).toBeVisible();
+  await expect.element(cancel).toHaveValue(0);
+  await userEvent.fill(cancel, '366');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).toBeVisible();
+  await expect.element(cancel).toHaveValue(366);
+  expect(sent).toEqual([]);
+
+  await userEvent.fill(cancel, '10');
+  await userEvent.tab();
+  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).not.toBeInTheDocument();
+  await expect.poll(() => sent).toEqual([{ cancel_days: 10 }]);
+  await expect.element(cancel).toHaveValue(10);
+
+  refuse = true;
+  await userEvent.fill(cancel, '12');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByText('Save failed')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Reference made-up-ref' })).toBeVisible();
+  await expect.element(cancel).toHaveValue(12);
+});
+
+test("an older save's late answer keeps the newer value, saved or still being typed", async () => {
+  const held: (() => void)[] = [];
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    const body = JSON.parse(String(init.body));
+    const answer = new Response(JSON.stringify({ stale_days: 3, cancel_days: 7, ...body }));
+    // Saves of 6 and 5 answer only when the test lets them, after what came next.
+    if (body.cancel_days === 6 || body.cancel_days === 5)
+      return new Promise<Response>((done) => held.push(() => done(answer)));
+    return answer;
+  });
+  const screen = await render(<StaleDays onReference={() => {}} />);
+  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  await expect.element(cancel).toHaveValue(7);
+  await userEvent.fill(cancel, '6');
+  await userEvent.keyboard('{Enter}');
+  await userEvent.fill(cancel, '9');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => held.length).toBe(1);
+  held[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  await expect.element(cancel).toHaveValue(9);
+
+  await userEvent.fill(cancel, '5');
+  await userEvent.keyboard('{Enter}');
+  await userEvent.fill(cancel, '11');
+  await expect.poll(() => held.length).toBe(2);
+  held[1]();
+  await new Promise((r) => setTimeout(r, 50));
+  await expect.element(cancel).toHaveValue(11);
+});
+
+test('going back to the saved value while a save is out saves it again; a late re-read never undoes a newer save', async () => {
+  const sent: number[] = [];
+  const held: (() => void)[] = [];
+  let reads = 0;
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    const settings = (cancel_days: number) => new Response(JSON.stringify({ stale_days: 3, cancel_days }));
+    if (init?.method !== 'PATCH') {
+      // After the first, reads answer only when the test lets them, with what the service had then.
+      if (reads++ === 0) return settings(7);
+      return new Promise<Response>((done) => held.push(() => done(settings(7))));
+    }
+    const days: number = JSON.parse(String(init.body)).cancel_days;
+    sent.push(days);
+    if (days === 12)
+      return new Response(JSON.stringify({ error: 'Save failed', ref: 'made-up-ref' }), { status: 500 });
+    if (days === 6) return new Promise<Response>((done) => held.push(() => done(settings(6))));
+    return settings(days);
+  });
+  const screen = await render(<StaleDays onReference={() => {}} />);
+  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  await expect.element(cancel).toHaveValue(7);
+
+  await userEvent.fill(cancel, '6');
+  await userEvent.keyboard('{Enter}');
+  await userEvent.fill(cancel, '7');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => held.length).toBe(1);
+  held[0]();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(sent).toEqual([6, 7]);
+  await expect.element(cancel).toHaveValue(7);
+
+  await userEvent.fill(cancel, '12');
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByText('Save failed')).toBeVisible();
+  await userEvent.fill(cancel, '9');
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent.at(-1)).toBe(9);
+  await expect.poll(() => held.length).toBe(2);
+  held[1]();
+  await new Promise((r) => setTimeout(r, 50));
+  await expect.element(cancel).toHaveValue(9);
+});

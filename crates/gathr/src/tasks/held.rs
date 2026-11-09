@@ -139,7 +139,10 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     let Some((chat, status, own)) = found else {
         return Ok(Vec::new());
     };
-    if !matches!(status.as_str(), "done" | "failed" | "stopped") {
+    // Archiving cancelled every task in its chat: nobody is to hear back on them there.
+    if !matches!(status.as_str(), "done" | "failed" | "stopped")
+        || crate::archive::archived(tx, &chat)?.is_some()
+    {
         return Ok(Vec::new());
     }
     let givers: Vec<String> = {

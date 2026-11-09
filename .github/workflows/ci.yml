@@ -46,6 +46,17 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test
         run: cargo test --workspace --locked
+        env:
+          GATHR_TEST_KEEP: ${{ runner.temp }}/gathr-test-failures
+      # A failing test that ran a service keeps its data folder (tests/common): kept here.
+      - name: keep failing tests' data folders
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-failures-${{ matrix.name }}
+          path: ${{ runner.temp }}/gathr-test-failures
+          if-no-files-found: ignore
+          retention-days: 7
       # The Mac checks run CI's build, so nothing gets built on the Mac.
       - name: build the window
         if: matrix.name == 'macOS'

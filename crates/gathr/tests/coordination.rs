@@ -336,6 +336,38 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
     );
 }
 
+/// On Windows a check's child that outlived it kept its output pipe open, and the service didn't
+/// exit until that child did: 290 s in CI.
+#[test]
+fn shutdown_ends_a_running_check_with_everything_it_started_and_does_not_wait_for_them() {
+    let data = TempDir::new();
+    let dir = data.0.to_string_lossy().replace('\\', "/");
+    let check = format!("touch '{dir}/started'; (sleep 8; touch '{dir}/late') & wait");
+    let team = team(&data.0, &held_recording(&data.0));
+    let lead_token = lead_turn(&team, &data.0, 0);
+    std::fs::write(data.0.join("go"), "").unwrap();
+    team.service
+        .wait_for(&team.chat, 20, "the lead's turn", |h| {
+            h["turns"][0]["status"] == "done"
+        });
+    let ask = json!({ "check": check, "then": "go on" });
+    let left = text(&call_tool(team.service.info.port, &lead_token, "wait", ask));
+    assert!(left.starts_with("Waiting ("), "{left}");
+    until(20, "the check running", || {
+        data.0.join("started").exists().then_some(())
+    });
+
+    let asked = std::time::Instant::now();
+    team.service.stop();
+    let took = asked.elapsed();
+    assert!(took.as_secs() < 5, "the service took {took:?} to stop");
+    std::thread::sleep(std::time::Duration::from_secs(10) - took);
+    assert!(
+        !data.0.join("late").exists(),
+        "what the check started was ended with it"
+    );
+}
+
 #[test]
 fn a_wait_whose_looks_keep_failing_is_found_from_its_reference() {
     let data = TempDir::new();
@@ -376,4 +408,89 @@ fn a_wait_whose_looks_keep_failing_is_found_from_its_reference() {
         "{listed}"
     );
     std::fs::write(data.0.join("go"), "").unwrap();
+}
+
+/// S72: a task cancelled while its turn runs (its PR closed, or its giver or the person cancelled
+/// it) stops that turn, which says why, instead of finishing work nobody needs.
+#[test]
+fn a_turn_whose_task_is_cancelled_stops_and_says_why() {
+    let data = TempDir::new();
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("200"))];
+    let (service, chat, _) = common::team(&data.0, &held_recording(&data.0), &stall);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Plan it" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let lead = common::first_token(&data.0);
+    let ask = json!({ "to": "Ann", "what": "Review #7", "kind": "review", "pr": 7 });
+    let given = text(&call_tool(service.info.port, &lead, "give_task", ask));
+    assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
+    service.wait_for(&chat, 10, "Ann's review running", |h| {
+        h["turns"][1]["task"] == 1 && h["turns"][1]["status"] == "running"
+    });
+
+    let why = json!({ "why": "#7 was closed without merging" });
+    let cancelled = service.send("POST", "/api/tasks/1/cancel", why);
+    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.turn.stop'";
+    until(10, "the review's turn to be stopped", || {
+        let (_, rows) = gathr(&data.0, &["diag", "query", sql]);
+        (rows["rows"][0]["n"] == 1).then_some(())
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "both turns ended", |h| {
+        h["turns"][0]["status"] == "done" && h["turns"][1]["status"] == "stopped"
+    });
+    assert_eq!(
+        history["turns"][1]["why"], "its task #1 was cancelled: #7 was closed without merging",
+        "{history}"
+    );
+}
+
+/// Cancel then Restart before the running turn is looked at: that turn still stops, so only the
+/// restart's turn does the work, never both.
+#[test]
+fn a_turn_whose_task_is_cancelled_then_restarted_still_stops() {
+    let data = TempDir::new();
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("2000"))];
+    let (service, chat, _) = common::team(&data.0, &twice(&data.0), &stall);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Plan it" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let lead = common::first_token(&data.0);
+    let ask = json!({ "to": "Ann", "what": "Notes" });
+    text(&call_tool(service.info.port, &lead, "give_task", ask));
+    service.wait_for(&chat, 10, "Ann's turn running", |h| {
+        h["turns"][1]["task"] == 1 && h["turns"][1]["status"] == "running"
+    });
+
+    let why = json!({ "why": "not needed" });
+    let cancelled = service.send("POST", "/api/tasks/1/cancel", why);
+    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+    let restarted = service.call("POST", "/api/tasks/1/restart");
+    assert_eq!(restarted.status, 200, "{}", restarted.body);
+    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.turn.stop'";
+    until(10, "the cancelled turn to be stopped", || {
+        let (_, rows) = gathr(&data.0, &["diag", "query", sql]);
+        (rows["rows"][0]["n"] == 1).then_some(())
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "the cancelled turn ended", |h| {
+        !matches!(h["turns"][1]["status"].as_str(), Some("running" | "queued"))
+    });
+    assert_eq!(
+        (&history["turns"][1]["status"], &history["turns"][1]["why"]),
+        (
+            &json!("stopped"),
+            &json!("its task #1 was cancelled: not needed")
+        ),
+        "{history}"
+    );
+    let on_it = history["turns"].as_array().unwrap().iter();
+    assert_eq!(on_it.filter(|t| t["task"] == 1).count(), 2, "{history}");
 }

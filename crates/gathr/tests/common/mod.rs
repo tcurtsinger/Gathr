@@ -30,6 +30,7 @@ impl Drop for TempDir {
 pub struct TestService {
     pub child: Child,
     pub info: ServiceInfo,
+    data: PathBuf,
 }
 
 impl TestService {
@@ -62,7 +63,8 @@ impl TestService {
             if let Ok(info) = ServiceInfo::read(&DataDir::new(data))
                 && info.pid == child.id()
             {
-                return TestService { child, info };
+                let data = data.to_path_buf();
+                return TestService { child, info, data };
             }
             if Instant::now() > deadline || matches!(child.try_wait(), Ok(Some(_))) {
                 let _ = child.kill();
@@ -173,9 +175,62 @@ impl Drop for TestService {
     fn drop(&mut self) {
         if let Ok(None) = self.child.try_wait() {
             let _ = http::call(self.info.port, &self.info.token, "POST", "/api/shutdown");
+            if std::thread::panicking() {
+                // A failing test isn't held up by a service that won't stop.
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while matches!(self.child.try_wait(), Ok(None)) && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(50));
+                }
+                let _ = self.child.kill();
+            }
             let _ = self.child.wait();
         }
+        if std::thread::panicking() {
+            keep_failure(&self.data);
+        }
     }
+}
+
+/// A failed test's evidence: the service's last 50 events on stderr, and its data folder copied to
+/// `GATHR_TEST_KEEP` (CI keeps that folder) under the test's name.
+fn keep_failure(data: &Path) {
+    let last = "SELECT time, name, phase, ref, duration_us, status, attrs FROM event_log \
+                ORDER BY ts DESC, id DESC LIMIT 50";
+    let events = Command::new(env!("CARGO_BIN_EXE_gathr"))
+        .arg("--data")
+        .arg(data)
+        .args(["diag", "query", last])
+        .output();
+    if let Ok(out) = events {
+        eprintln!("the service's last 50 events, newest first:");
+        eprintln!("{}", String::from_utf8_lossy(&out.stdout));
+    }
+    let Some(keep) = std::env::var_os("GATHR_TEST_KEEP") else {
+        return;
+    };
+    let test = std::thread::current()
+        .name()
+        .unwrap_or("test")
+        .replace("::", "-");
+    let to = Path::new(&keep).join(format!("{test}-{}", gathr::ids::span_id()));
+    match copy_dir(data, &to) {
+        Ok(()) => eprintln!("its data folder is kept in {}", to.display()),
+        Err(e) => eprintln!("keeping its data folder failed: {e}"),
+    }
+}
+
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn gathrd(data: &Path) -> Command {
@@ -363,7 +418,8 @@ pub fn mcp(port: u16, token: &str, method: &str, params: Value, name: Option<&st
     if let Some(name) = name {
         headers.push(("Mcp-Name", name));
     }
-    http::post(port, "/mcp", &headers, &body.to_string()).unwrap()
+    http::post(port, "/mcp", &headers, &body.to_string())
+        .unwrap_or_else(|e| panic!("{method} {name:?}: {e}"))
 }
 
 pub fn call_tool(port: u16, token: &str, tool: &str, arguments: Value) -> Value {
@@ -394,4 +450,45 @@ pub fn project_chat(service: &TestService, folder: &Path, members: Value) -> Str
     );
     assert_eq!(chat.status, 200, "{}", chat.body);
     chat.json()["id"].as_str().unwrap().to_string()
+}
+
+/// A signed-in chat with a Supervisor (Lead) and a member (Ann): the service, the chat, the lead.
+pub fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService, String, String) {
+    let mut env = vec![
+        ("GATHR_REPLAY", replay),
+        ("GATHR_REPLAY_HOLD", Path::new("")),
+        ("GATHR_REPLAY_ENV", Path::new("")),
+    ];
+    let (go, tokens) = (data.join("go"), data.join("env.jsonl"));
+    env[1].1 = &go;
+    env[2].1 = &tokens;
+    env.extend_from_slice(more);
+    let service = TestService::with_engine(data, &env);
+    let account = service.add_account("Team");
+    sign_in_account(data, &account);
+    let agent = |name: &str| {
+        let made = service.send(
+            "POST",
+            "/api/agents",
+            json!({ "name": name, "account": account }),
+        );
+        assert_eq!(made.status, 200, "{}", made.body);
+        made.json()["id"].as_str().unwrap().to_string()
+    };
+    let (lead, ann) = (agent("Lead"), agent("Ann"));
+    let members =
+        json!([{ "agent": lead, "role": "supervisor" }, { "agent": ann, "role": "member" }]);
+    let made = service.send("POST", "/api/chats", json!({ "members": members }));
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+    (service, chat, lead)
+}
+
+/// The token of the first engine the replay engine started, from `GATHR_REPLAY_ENV`.
+pub fn first_token(data: &Path) -> String {
+    until(10, "the engine's token", || {
+        let text = std::fs::read_to_string(data.join("env.jsonl")).ok()?;
+        let line: Value = serde_json::from_str(text.lines().next()?).ok()?;
+        line["GATHR_AGENT_TOKEN"].as_str().map(String::from)
+    })
 }

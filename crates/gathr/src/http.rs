@@ -3,7 +3,7 @@
 
 use std::io::{self, Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// A response: its status code, header lines and body.
 #[derive(Debug)]
@@ -78,8 +78,17 @@ fn exchange(
     head.push_str("\r\n");
     head.push_str(body);
     stream.write_all(head.as_bytes())?;
-    let mut raw = String::new();
-    stream.read_to_string(&mut raw)?;
+    let started = Instant::now();
+    let mut bytes = Vec::new();
+    // A timeout says which request it was and how far the answer got: a stuck request's only trace.
+    stream.read_to_end(&mut bytes).map_err(|e| {
+        let (ms, n) = (started.elapsed().as_millis(), bytes.len());
+        io::Error::new(
+            e.kind(),
+            format!("{method} {path}: {e} after {ms} ms, {n} bytes in"),
+        )
+    })?;
+    let raw = String::from_utf8_lossy(&bytes);
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let status = head.split(' ').nth(1).and_then(|s| s.parse().ok());
     let status = status.ok_or_else(|| {

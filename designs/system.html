@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="components.css">
 <link rel="stylesheet" href="../ui/src/components/help.css"><link rel="stylesheet" href="../ui/src/components/switch.css">
 <script src="system.js" defer></script>
+<link rel="stylesheet" href="archive-stale/reference.css">
+<script src="archive-stale/reference.js" defer></script>
 <link rel="stylesheet" href="team-reference.css">
 <script src="team-reference.js" defer></script>
 </head>
@@ -21,7 +23,7 @@
 <aside class="ds-navigation" data-id="navigation" aria-label="Sections">
 <a href="#colors">Colours</a><a href="#controls">Controls</a><a href="#type">Type and space</a>
 <a href="#workspace">Workspace</a><a href="#conversation">Conversation</a><a href="#recovery">Recovery</a>
-<a href="#team-message">Team messages</a>
+<a href="#team-message">Team messages</a><a href="#archive-stale">Archive and stale</a>
 <small>Static reference. Actions use invented local data.</small>
 </aside>
 <main class="ds-content">
@@ -199,6 +201,42 @@ The keyboard shortcuts are unchanged.</p>
 </form>
 </div>
 </section>
+<section class="ds-section" id="archive-stale" data-id="archive-stale">
+<h2>Archive and stale</h2>
+<p class="ds-note">Selected: folded Archived group. Local sample data, no service.
+<a href="archive-stale/v3.html">Open the selected reference</a>. The separate flyout is retired.</p>
+<div class="ds-two">
+<div class="ds-workspace ds-archive-nav" data-id="archive-sidebar-sample">
+<h3>Chats</h3>
+<div class="ds-archive-row" id="archive-active-row">
+<span title="Launch checklist">Launch checklist</span>
+<button class="ds-button" data-icon id="archive-menu-open" popovertarget="archive-menu" aria-label="More for Launch checklist" data-id="archive-menu-open">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<details class="ds-archive-fold" data-id="archived-fold" id="archive-fold">
+<summary>Archived<span class="ds-role" id="archive-sample-count">3</span></summary>
+<button class="ds-archive-chat" data-id="archived-chat-1">Sidebar exploration</button>
+<button class="ds-archive-chat" data-id="archived-chat-2">First-run copy</button>
+<button class="ds-archive-chat" data-id="archived-chat-3" title="Conversation layout and navigation review for the upcoming desktop release">
+Conversation layout and navigation review for the upcoming desktop release</button>
+</details>
+</div>
+<div class="ds-workspace ds-archive-tasks" data-id="stale-tasks-sample">
+<h3>Tasks</h3><h4>Questions</h4><div class="ds-archive-task">Pick the release headline
+<small>For you · Launch checklist</small></div>
+<h4>Stale</h4><div class="ds-archive-task">Choose the keyboard shortcuts
+<small>For you · Keyboard navigation</small><small>Idle 4 days</small></div>
+<div class="ds-archive-task">Check the release build
+<small>Ellis · Launch checklist</small><small>Idle 12 days · Waiting on CI</small></div>
+</div>
+</div>
+<div class="ds-workspace" data-id="archived-composer-sample"><div class="ds-archive-readonly" data-id="archived-readonly">Archived
+<button class="ds-button" id="archive-restore" data-id="archive-restore">Restore</button></div>
+</div>
+<p class="ds-note">Human questions stay open until answered or explicitly cancelled. Only eligible agent tasks cancel automatically.</p>
+<button class="ds-button" data-variant="outline" id="archive-general-open" data-id="archive-general-open">General</button>
+<p class="ds-role" role="status" id="archive-sample-status" data-id="archive-sample-status"></p>
+</section>
 <p class="ds-status" id="status" role="status" data-id="status"></p>
 </main>
 </div>
@@ -240,7 +278,18 @@ The keyboard shortcuts are unchanged.</p>
 <h3 id="settings-heading">General</h3>
 <div data-settings="General"><div class="ds-setting-row"><div id="startup-label">Open at login<small id="startup-scope">This computer</small></div>
 <button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="startup-label"
-aria-describedby="startup-scope" id="startup"><span></span></button></div></div>
+aria-describedby="startup-scope" id="startup"><span></span></button></div><div class="ds-setting-row" data-id="stale-days-setting">
+<span class="ds-archive-setting-label"><label for="system-stale-days">Stale after</label>
+<button class="help-button" type="button" popovertarget="stale-days-help" aria-label="About stale days" id="stale-days-help-open" data-id="stale-days-help-open"><span>?</span></button></span>
+<span class="ds-archive-days"><input class="ds-field" id="system-stale-days" type="number" min="1" max="365" step="1" value="3" aria-describedby="system-stale-unit">
+<small id="system-stale-unit">days</small></span></div>
+<div class="ds-setting-row" data-id="cancel-days-setting">
+<span class="ds-archive-setting-label"><label for="system-cancel-days">Cancel after</label>
+<button class="help-button" type="button" popovertarget="cancel-days-help" aria-label="About cancel days" id="cancel-days-help-open" data-id="cancel-days-help-open"><span>?</span></button></span>
+<span class="ds-archive-days"><input class="ds-field" id="system-cancel-days" type="number" min="1" max="365" step="1" value="7" aria-describedby="system-cancel-unit">
+<small id="system-cancel-unit">days stale</small></span></div>
+<p class="ds-archive-invalid" id="system-days-invalid" hidden role="alert">Enter whole days from 1 to 365.</p>
+</div>
 <div data-settings="Engines" hidden><div class="ds-setting-row"><span>No accounts</span>
 <button class="ds-button" data-variant="primary" id="add-account">Add</button></div></div>
 <div data-settings="Agents" hidden><form class="ds-settings-form" id="agent-form">
@@ -255,5 +304,18 @@ aria-describedby="startup-scope" id="startup"><span></span></button></div></div>
 Engine unavailable
 Reference recorded</pre></details></div>
 </div></div></dialog>
+<div class="ds-archive-menu" popover="auto" id="archive-menu" role="menu" aria-label="Chat actions" data-id="archive-menu">
+<button role="menuitem" class="ds-button" id="archive-pause">Pause</button><hr>
+<button role="menuitem" class="ds-button" data-confirm="Archive" data-id="archive-action">Archive</button><hr>
+<button role="menuitem" class="ds-button ds-archive-delete" data-confirm="Delete" data-id="delete-action">Delete</button></div>
+<dialog class="ds-dialog ds-archive-confirm" id="archive-confirm" aria-labelledby="archive-confirm-title" data-id="archive-confirm">
+<h2 id="archive-confirm-title" data-id="archive-confirm-title"></h2>
+<footer><button class="ds-button" id="archive-confirm-cancel" data-id="archive-confirm-cancel">Cancel</button>
+<button class="ds-button" id="archive-confirm-go" data-id="archive-confirm-go">Archive</button></footer></dialog>
+<section id="stale-days-help" popover="auto" class="help-panel" data-id="stale-days-help">
+<p>Mark tasks stale after this many days without progress. Turns, messages, answers and fired waits count as progress.</p></section>
+<section id="cancel-days-help" popover="auto" class="help-panel" data-id="cancel-days-help">
+<p>Cancel eligible agent tasks this many days after they become stale. Open work keeps them open.
+Your questions stay open until you answer or cancel them. Both counts accept 1 to 365 whole days.</p></section>
 </body>
 </html>

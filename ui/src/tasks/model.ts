@@ -37,3 +37,9 @@ export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   if (task.form === 'done') return { task: task.number, done: true, ...notes };
   return { task: task.number, pick: draft.values, ...notes };
 }
+
+/** How long nothing has moved a stale task (F11): "Idle 4 days". */
+export function idle(sinceUs: number, now = Date.now()): string {
+  const days = Math.max(1, Math.floor((now - sinceUs / 1000) / 86_400_000));
+  return `Idle ${days} ${days === 1 ? 'day' : 'days'}`;
+}

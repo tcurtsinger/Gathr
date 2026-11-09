@@ -17,7 +17,7 @@ pub fn set(
     trace: &str,
 ) -> Result<(), Error> {
     let chat: String = tx.query_row(
-        "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4 WHERE number = ?1
+        "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL WHERE number = ?1
          RETURNING chat_id",
         params![task, state.as_str(), reason, now_us()],
         |r| r.get(0),
@@ -29,6 +29,14 @@ pub fn set(
         _ => event.ok(),
     };
     event.attr("gathr.task.reason", reason).insert(tx)?;
+    if state == State::Cancelled {
+        let why = reason.unwrap_or("no reason given");
+        tx.execute(
+            "UPDATE turns SET stop_why = ?2
+             WHERE task = ?1 AND status IN ('queued', 'waiting_sign_in', 'running')",
+            params![task, format!("its task #{task} was cancelled: {why}")],
+        )?;
+    }
     Ok(())
 }
 
@@ -44,7 +52,8 @@ pub fn state_of(conn: &Connection, task: i64) -> Result<Option<State>, Error> {
 pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     let mut t = conn.query_row(
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
-                blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts
+                blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
+                stale_ts
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -74,6 +83,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 request: r.get(18)?,
                 answer: json(r, 19)?,
                 created_us: r.get(20)?,
+                stale_us: r.get(21)?,
             })
         },
     )?;

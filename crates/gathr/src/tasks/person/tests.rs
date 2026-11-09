@@ -30,6 +30,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         request: None,
         answer: None,
         created_us: 0,
+        stale_us: None,
     }
 }
 

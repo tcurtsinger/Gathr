@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod ended;
 mod given;
 mod holds;
 mod process;
@@ -92,6 +93,8 @@ struct Running {
     /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
     push_allowed: bool,
     stopping: bool,
+    /// Why Gathr stopped it, when Gathr did: the stopped turn says so.
+    stop_why: Option<String>,
     signed_out: bool,
     /// Tools it has started: a turn cut off after one never runs again from its ask (F10).
     tools_started: u32,
@@ -221,7 +224,10 @@ pub async fn run(
                 task.mark_holds().await;
                 task.try_next().await;
             }
-            _ = stall_look.tick(), if task.turn.is_some() => task.check_stall(),
+            _ = stall_look.tick(), if task.turn.is_some() => {
+                task.check_stall();
+                task.check_task().await;
+            }
         }
     }
 }
@@ -297,6 +303,7 @@ impl Task {
                 self.stop_now(scope, target).await;
                 let _ = done.send(());
             }
+            Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
         }
@@ -666,6 +673,7 @@ impl Task {
             pushes: HashMap::new(),
             push_allowed: false,
             stopping: false,
+            stop_why: None,
             signed_out: false,
             tools_started: 0,
             limited: false,

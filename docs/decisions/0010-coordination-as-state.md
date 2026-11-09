@@ -67,12 +67,14 @@ Transitions and who makes them:
 |---|---|---|
 | (new) | `waiting` or `ready` | the giver (`task --for`), the Supervisor for a plan's hand-out |
 | `waiting` | `ready` | the service, when every `after` task is `done` |
-| `waiting` | `blocked` | the service, when an `after` task fails, stops or is cancelled; the giver is told |
+| `waiting` | `blocked` | the service, when an `after` task fails or stops; the giver is told |
+| `waiting`, `blocked` | `cancelled` | the service, at once, when the `after` task or the task it's blocked on is cancelled (F11) |
 | `ready` | `working` | the service, through the gate |
 | `working` | `done`, `held`, `blocked`, `ready` | the owner's turn ending: what it said with `finish_task` (`done`, `left`, `blocked`), applied once the turn has ended; with nothing said, `done` if nothing is open, else `held` |
 | `held` | `done` or `ready` | the service, when what it held on ends |
 | `working` | `failed`, `stopped` | the service, from the turn's outcome |
-| `failed`, `stopped`, `blocked` | `ready` | the person, or the giver (`task restart`) |
+| `failed`, `stopped`, `blocked`, `cancelled` | `ready` | the person, or the giver (`task restart`) |
+| any open, stale | `cancelled` | the service, after the stale and cancel days (F11) |
 | any open | `cancelled` | the person, or the giver |
 
 Rules:
@@ -92,9 +94,19 @@ Rules:
 - A decision for the person is a `person` task with its choices, the Supervisor's pick first, and why. A design pick is one too, with its pages as files, so every pick waiting on the person is on their Tasks list (G70).
 - A plan card that's built, sent back or replaced stops counting as waiting on the person.
 
-## Turns
+## Stale and archive (F11)
 
-A turn is one run of an agent's engine on one conversation's session.
+- Archiving or deleting a chat ends its work in one step: in one transaction and one event (`gathr.chat.archive`), its open tasks are cancelled with the reason (the person's too: the person archived it), its waits end, its queued turns stop and its pause goes; then each agent's queue interrupts the turn it runs there and ends its engine's background commands there by the engine's own stop. Nothing starts in an archived chat: the gate drops a turn there, no hear-back is queued there, a send, a new task or a restart there is refused. Unarchiving brings the chat back to the list and starts nothing: cancelled work stays cancelled until someone restarts it.
+- Deleting archives first, closes the chat's engines the gentle way (waiting up to 35 s for them to exit), removes its rows (messages, turns, engine frames, tasks, waits, team, sessions, its events), then its worktrees (each agent's branch stays in the project, with what was committed on it), hooks and task files. One `gathr.chat.delete` event stays.
+- A task that can never go on is cancelled at once, with the reason: one whose `after` task was cancelled, one blocked on a task that was cancelled, and (as before) one whose PR was closed, a review on that PR as well as the work.
+- A turn whose task is cancelled while it runs, however it was cancelled, is interrupted and ends `stopped` with "its task #N was cancelled: <reason>", so nobody finishes work nobody needs (S72). Each running turn looks at its task on the stall timer (every 30 s at most); turned down: telling the turn from each place that cancels, which is five places today and easy to miss in the next.
+- A task nothing has moved (no turn, message, wait or answer on it) for the stale days (3 by default) is marked stale, since its last move. Its chat's Supervisor is told once, in one turn per chat naming each task and whose it is; the person's list groups stale tasks, the person's own among them. A task that moves is stale no more. A `waiting` task whose `after` tasks are still open is never stale: they are.
+- Once it has been stale for the cancel days (7 by default), still without a move, it's cancelled ("stale since <date>"), unless something can still move it: an open wait, its open PR, a queued or running turn, a background command, open work it handed on (a task it's the parent of, a person task filed for its request), or a pause holding it. Those stay flagged. The person's own tasks are never cancelled this way.
+- A cancelled task restarts like a failed, stopped or blocked one, by the person or its giver.
+- Both counts are in Settings > General (1 to 365 days each). The service sweeps with its looks, every 2 minutes.
+
+Turned down: counting the cancel days from the last move (7 days in all), since the plan reads "after 7 days stale", and cancelling stale tasks only after they had been flagged on a sweep, which would make a service that was off for a week cancel nothing until a second sweep. Deleting a chat's worktree branches too: committed work stays reachable in the project.
+ of an agent's engine on one conversation's session.
 
 States: `starting`, `streaming`, `ended`, with an outcome: `ok`, `failed`, `stopped` (the person's Stop or Stop now), `interrupted` (the app or engine went away mid-turn).
 

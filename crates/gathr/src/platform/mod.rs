@@ -42,6 +42,35 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
     None
 }
 
+/// The shell a check runs in, with its environment: `sh`, or on Windows the Git Bash that Claude
+/// Code's Bash tool uses. Git's `bin\bash.exe` only starts `usr\bin\bash.exe`, and killing it
+/// leaves that one running the check: Gathr starts it itself, with what the launcher adds.
+pub fn shell(vars: &env::Vars) -> Option<(PathBuf, env::Vars)> {
+    if !cfg!(windows) {
+        return Some((PathBuf::from("/bin/sh"), vars.clone()));
+    }
+    let at = vars
+        .iter()
+        .position(|(k, _)| k.eq_ignore_ascii_case("PATH"))?;
+    let git = std::env::split_paths(&vars[at].1)
+        .map(|dir| dir.join("git.exe"))
+        .find(|p| p.is_file())?;
+    // git.exe is in Git's cmd, bin or mingw64\bin.
+    let top = git
+        .ancestors()
+        .skip(1)
+        .take(3)
+        .find(|dir| dir.join("usr").join("bin").join("bash.exe").is_file())?;
+    let mut vars = vars.clone();
+    let folders = [top.join("mingw64").join("bin"), top.join("usr").join("bin")];
+    let path = std::env::split_paths(&vars[at].1);
+    vars[at].1 = std::env::join_paths(folders.into_iter().chain(path)).ok()?;
+    if !vars.iter().any(|(k, _)| k.eq_ignore_ascii_case("MSYSTEM")) {
+        vars.push(("MSYSTEM".into(), "MINGW64".into()));
+    }
+    Some((top.join("usr").join("bin").join("bash.exe"), vars))
+}
+
 /// Starts a child with no console window on Windows, never detached (0001); on Unix in its
 /// own process group (0016).
 pub fn no_window(command: &mut std::process::Command) {
@@ -49,6 +78,52 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::windows::process::CommandExt::creation_flags(command, 0x0800_0000); // CREATE_NO_WINDOW
     #[cfg(not(windows))]
     std::os::unix::process::CommandExt::process_group(command, 0);
+}
+
+/// The MSYS process running as the Windows pid `$1`, as `$g`. Only built-ins: the service's PATH
+/// may not have Git's usr\bin.
+const FIND: &str = r#"find() {
+    for p in /proc/[0-9]*; do
+        w=; read -r w 2>/dev/null < "$p/winpid"
+        [ "$w" = "$1" ] && { g=${p#/proc/}; return 0; }
+    done
+    return 1
+};"#;
+
+/// Ends every process in the group of `program`, started with `no_window` as `pid`, which leads
+/// it: what it starts stays in it. Returns once they're gone. On Unix the group's id is `pid`,
+/// no other process's while `pid` isn't waited for. On Windows only an MSYS program (Git Bash) has
+/// a group, whose fork and exec leave children no Windows tree reaches; its id is the program's
+/// MSYS pid, found here through `pid` (no other process's while its handle is held), so only while
+/// the program runs: an MSYS pid is free for another process the moment its own ends.
+pub fn end_group(pid: u32, program: &Path) {
+    let mut command = match msys_bash(program) {
+        Some(bash) => {
+            let mut command = std::process::Command::new(bash);
+            let script = format!(r#"{FIND} find "$1" && kill -s KILL -- "-$g""#);
+            command.args(["-c", &script, "end-group", &pid.to_string()]);
+            command
+        }
+        None if cfg!(windows) => return,
+        None => {
+            let mut command = std::process::Command::new("/bin/kill");
+            command.args(["-KILL", "--", &format!("-{pid}")]);
+            command
+        }
+    };
+    no_window(&mut command);
+    let _ = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+/// Git Bash beside an MSYS program, on Windows.
+fn msys_bash(program: &Path) -> Option<PathBuf> {
+    let bash = program.with_file_name("bash.exe");
+    let msys = cfg!(windows) && program.with_file_name("msys-2.0.dll").is_file();
+    (msys && bash.is_file()).then_some(bash)
 }
 
 /// This computer in Claude Code's release feed, such as `win32-x64`; none where it ships nothing.

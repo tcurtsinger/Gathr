@@ -517,6 +517,17 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     tasks::pr_looked(&mut conn, other, "CLOSED", None, T).unwrap();
     let why = Some("#60 was closed without merging".to_string());
     assert_eq!(state(&conn, other), (State::Cancelled, why));
+    // S72: a review under way on a PR that closes is cancelled too, not only the work task.
+    let under_way = Give {
+        pr: Some(62),
+        what: "Review #62",
+        ..review
+    };
+    let (under_way, _) = tasks::give(&mut conn, &under_way, T).unwrap();
+    tasks::started(&mut conn, under_way.number, T).unwrap();
+    tasks::pr_looked(&mut conn, under_way.number, "CLOSED", None, T).unwrap();
+    let why = Some("#62 was closed without merging".to_string());
+    assert_eq!(state(&conn, under_way.number), (State::Cancelled, why));
 }
 
 #[test]
