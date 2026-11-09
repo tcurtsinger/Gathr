@@ -17,38 +17,44 @@ export interface Run {
 const none: Pauses = { pauses: [], usage: [] };
 
 /**
- * Every pause and usage hold, live: one list for the whole app, as the service keeps it. An action's
- * answer is the list then; when another list came while it was on its way, which of the two is newer
- * can't be told, so it reads the list again. A refusal rejects with its reference.
+ * Every pause and usage hold, live: one list for the whole app, as the service keeps it. A read shows
+ * unless one started after it already shows. An action's answer is the list then; when another list
+ * showed while it was on its way, which of the two is newer can't be told, so it reads the list again.
+ * A refusal rejects with its reference.
  */
 export function usePauses(onFailure: (f: Failure) => void) {
   const [pauses, setPauses] = useState<Pauses>(none);
-  // Counts every newer list, so a read or an answer started before one never overwrites it.
-  const version = useRef(0);
+  // Every read, action and live list takes the next number when it starts.
+  const started = useRef(0);
+  // The number of the list shown, and how many lists have shown.
+  const shown = useRef(0);
+  const changes = useRef(0);
+  const show = useCallback((at: number, list: Pauses) => {
+    shown.current = at;
+    changes.current++;
+    setPauses(list);
+  }, []);
   const load = useCallback(() => {
-    const at = version.current;
-    api.pauses().then((p) => version.current === at && setPauses(p), onFailure);
-  }, [onFailure]);
+    const at = ++started.current;
+    api.pauses().then((p) => at > shown.current && show(at, p), onFailure);
+  }, [onFailure, show]);
   useEffect(() => {
     load();
     return listen((event) => {
-      if (event.type === 'pauses') {
-        version.current++;
-        setPauses({ pauses: event.pauses, usage: event.usage });
-      }
+      if (event.type === 'pauses') show(++started.current, { pauses: event.pauses, usage: event.usage });
       if (event.type === 'lagged') load();
     });
-  }, [load]);
+  }, [load, show]);
 
   const act = useCallback(
     async (action: PauseAction, scope: PauseScope) => {
-      const at = version.current;
+      const at = ++started.current;
+      const before = changes.current;
       const answer = await api[action](scope);
-      if (version.current !== at) return load();
-      version.current++;
-      setPauses(answer);
+      if (changes.current !== before) return load();
+      show(at, answer);
     },
-    [load],
+    [load, show],
   );
 
   return { pauses, act };

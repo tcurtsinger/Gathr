@@ -154,3 +154,50 @@ test('two agents paused at once, with no live updates, both read paused once bot
   await expect.element(summary).toMatchTextContent('Supervisor · Held');
   await expect.element(summary).toMatchTextContent('Member · Paused');
 });
+
+/** The agents the app's list holds paused, and a button that pauses three at once. */
+function PausedAgents() {
+  const { pauses, act } = usePauses(noFailure);
+  const pauseThree = () => {
+    for (const target of ['a', 'b', 'c']) void act('pause', { scope: 'agent', target });
+  };
+  return (
+    <>
+      <button type="button" onClick={pauseThree}>
+        Pause three
+      </button>
+      <output>{pauses.pauses.map((p) => p.target).join(' ') || 'none'}</output>
+    </>
+  );
+}
+
+test('with no live updates, a read that started earlier never replaces a newer one', async () => {
+  const agents = (...targets: string[]): Pauses => ({
+    pauses: targets.flatMap((t) => paused('agent', t).pauses),
+    usage: [],
+  });
+  const answers: ((r: Response) => void)[] = [];
+  const reads: ((r: Response) => void)[] = [];
+  vi.stubGlobal('fetch', (_: string, init?: RequestInit) =>
+    init?.method === 'POST'
+      ? new Promise<Response>((done) => answers.push(done))
+      : new Promise<Response>((done) => reads.push(done)),
+  );
+  const screen = await render(<PausedAgents />);
+  reads[0](json(running));
+  await expect.element(screen.getByText('none')).toBeVisible();
+  await screen.getByRole('button', { name: 'Pause three' }).click();
+  await expect.poll(() => answers.length).toBe(3);
+  answers[0](json(agents('a')));
+  await expect.element(screen.getByText('a', { exact: true })).toBeVisible();
+  // Each later answer finds a list shown since it left, so it reads the list again.
+  answers[1](json(agents('a', 'b')));
+  await expect.poll(() => reads.length).toBe(2);
+  answers[2](json(agents('a', 'b', 'c')));
+  await expect.poll(() => reads.length).toBe(3);
+  reads[2](json(agents('a', 'b', 'c')));
+  await expect.element(screen.getByText('a b c')).toBeVisible();
+  reads[1](json(agents('a', 'b')));
+  await new Promise((r) => setTimeout(r, 50));
+  await expect.element(screen.getByText('a b c')).toBeVisible();
+});
