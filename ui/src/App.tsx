@@ -68,12 +68,24 @@ export function App() {
     () => Promise.all([api.chats().then(setChats), api.archivedChats().then(setArchived)]),
     [],
   );
+  // The open chat, deleted here or in another window, gives way to its neighbour in the sidebar, else New.
+  const lists = useRef({ chats, archived, selected });
+  lists.current = { chats, archived, selected };
+  const leave = useCallback((id: string) => {
+    const { chats, archived, selected } = lists.current;
+    if (id !== selected) return;
+    const gone = [...chats, ...archived].find((c) => c.id === id);
+    const next = gone && neighbour(gone, gone.archived ? archived : chats);
+    setSelected(next?.id ?? null);
+    if (!next) setFresh({});
+  }, []);
   useEffect(() => {
     api.archivedChats().then(setArchived, setFailure);
     return listen((event) => {
+      if (event.type === 'chat' && event.change === 'deleted') leave(event.chat);
       if (event.type === 'chat' || event.type === 'lagged') reloadLists().catch(setFailure);
     });
-  }, [reloadLists]);
+  }, [reloadLists, leave]);
 
   // A new chat is a draft until its first message: then the service makes it, in its project.
   const newChat = useCallback((project?: string) => {
@@ -127,12 +139,9 @@ export function App() {
       });
   };
   const remove = async (c: Chat) => {
-    const next = neighbour(c, c.archived ? archived : chats);
     await api.deleteChat(c.id);
+    leave(c.id);
     await reloadLists().catch(setFailure);
-    if (c.id !== selected) return;
-    if (next) choose(next.id);
-    else newChat();
   };
   const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
   const paneOpen = !!chat?.id && !!person.open[chat.id];

@@ -165,11 +165,15 @@ fn tell_lead(
         return Ok(None);
     };
     let mut lines = Vec::new();
+    let mut asked = false;
     for &n in marked {
         let t = read(tx, n)?;
         let whose = match &t.owner {
             Some(owner) => words::name_of(tx, owner)?,
-            None => "the person".to_string(),
+            None => {
+                asked = true;
+                "the person".to_string()
+            }
         };
         lines.push(format!(
             "- #{n} ({whose}, {}): {}",
@@ -177,13 +181,16 @@ fn tell_lead(
             t.what
         ));
     }
-    let text = format!(
-        "These tasks haven't moved in {} days:\n{}\nFinish, restart or cancel each. One that nothing \
-         can still move is cancelled after {} more days without a move.",
+    let mut text = format!(
+        "These tasks haven't moved in {} days:\n{}\nFinish, restart or cancel each. An agent's task that \
+         nothing can still move is cancelled after {} more days without a move.",
         days.stale,
         lines.join("\n"),
         days.cancel
     );
+    if asked {
+        text.push_str(" The person's questions stay open until they answer or cancel them.");
+    }
     Start::queue(tx, (chat, &lead.agent), (None, None), text).map(Some)
 }
 

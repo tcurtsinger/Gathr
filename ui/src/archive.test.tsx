@@ -6,7 +6,13 @@ import { App } from './App';
 import type { Chat } from './api';
 import type { LiveEvent } from './live';
 
-vi.mock('./live', () => ({ listen: (_: (event: LiveEvent) => void) => () => {} }));
+const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
+vi.mock('./live', () => ({
+  listen: (on: (event: LiveEvent) => void) => {
+    live.add(on);
+    return () => live.delete(on);
+  },
+}));
 afterEach(() => vi.unstubAllGlobals());
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -58,6 +64,20 @@ test('deleting the open chat asks first, then opens the next chat in the sidebar
   await expect.element(confirm).not.toBeInTheDocument();
   // Only the chat it opened: the deleted one's view is gone.
   expect(document.querySelectorAll('main').length).toBe(1);
+  await expect.element(page.getByRole('button', { name: 'Made-up b', exact: true })).not.toBeInTheDocument();
+});
+
+test('the open chat deleted in another window gives way to its neighbour, as a Delete here does', async () => {
+  let active = [chat('a'), chat('b'), chat('c')];
+  service(active, []);
+  await render(<App />);
+  await page.getByRole('button', { name: 'Made-up b', exact: true }).click();
+  await expect.element(heading('Made-up b')).toBeInTheDocument();
+
+  active = active.filter((c) => c.id !== 'b');
+  service(active, []);
+  for (const on of live) on({ type: 'chat', chat: 'b', change: 'deleted' });
+  await expect.element(heading('Made-up c')).toBeInTheDocument();
   await expect.element(page.getByRole('button', { name: 'Made-up b', exact: true })).not.toBeInTheDocument();
 });
 

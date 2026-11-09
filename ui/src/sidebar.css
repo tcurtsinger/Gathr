@@ -138,7 +138,7 @@
 .sidebar .project-new:focus-visible {
   opacity: 1;
 }
-.project-chats .chat-link {
+:is(.project-chats, .archive-group) .chat-link {
   padding-left: 34px;
 }
 .sidebar-foot {

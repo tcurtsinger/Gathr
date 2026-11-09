@@ -192,6 +192,14 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
                     .contains("haven't moved in 3 days")
         })
     });
+    let told = history["messages"].as_array().unwrap().iter().rev();
+    let told = told
+        .filter_map(|m| m["body"].as_str())
+        .find(|b| b.contains("haven't moved"));
+    assert!(
+        told.unwrap().contains("The person's questions stay open"),
+        "the lead isn't told the person's question stays open: {told:?}"
+    );
     let person = service.call("GET", "/api/person-tasks").json();
     assert_eq!(
         person["tasks"][0]["state"], "ready",

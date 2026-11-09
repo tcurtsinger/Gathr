@@ -48,7 +48,14 @@ export function Confirm({ question, verb, danger, opener, onCancel, onConfirm, o
         <Button size="sm" variant="outline" autoFocus disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
-        <Button size="sm" variant={danger ? 'destructive' : 'default'} disabled={busy} onClick={go}>
+        {/* Outlined danger like Settings' Remove (button.danger), not the registry's filled destructive. */}
+        <Button
+          size="sm"
+          variant={danger ? 'outline' : 'default'}
+          className={danger ? 'border-danger-border text-danger hover:bg-danger-surface' : undefined}
+          disabled={busy}
+          onClick={go}
+        >
           {verb}
         </Button>
       </footer>
