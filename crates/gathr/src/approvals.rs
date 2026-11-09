@@ -15,6 +15,11 @@ pub fn ask(tool: &str, input: &Value, boundary: &Path) -> Option<&'static str> {
             (!inside(Path::new(path), boundary)).then_some("it writes outside the agent's worktree")
         }
         "Bash" | "PowerShell" => runs_push(tool, input).then_some("it pushes"),
+        // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
+        // classifier: asked here, the call waits for the person as long as they take.
+        "mcp__gathr__wait" => text("check")
+            .is_some_and(|c| !c.trim().is_empty())
+            .then_some("Gathr runs this check until it exits 0"),
         _ => None,
     }
 }

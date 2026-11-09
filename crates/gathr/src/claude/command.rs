@@ -112,14 +112,15 @@ pub fn mode(approvals: Approvals) -> &'static str {
 }
 
 /// `SETTINGS`, plus, in every mode but Full, Gathr's hook at `hook`, if there is one, before
-/// each file write and command (0029). It asks with the engine's own token, and a hook that fails blocks the call,
-/// so a Gathr that can't answer never lets a push through.
+/// each file write and command, and each `wait` (its check is a command Gathr runs) (0029). It
+/// asks with the engine's own token, and a hook that fails blocks the call, so a Gathr that can't
+/// answer never lets a push through.
 fn settings(approvals: Approvals, hook: Option<&str>) -> String {
     let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
     if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
         let auth = format!("Bearer ${TOKEN_VAR}");
         settings["hooks"] = serde_json::json!({ "PreToolUse": [{
-            "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell",
+            "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell|mcp__gathr__wait",
             "hooks": [{ "type": "http", "url": hook, "timeout": 30, "onFailure": "block",
                 "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] }] }] });
     }

@@ -37,25 +37,18 @@ impl Task {
         }
     }
 
-    /// Saves the turn's status and sends it live. The update is built from what this task holds,
-    /// not from the write: a failed write still names the turn's agent, so Retry goes to it.
+    /// Saves the turn's status, with what it moves, and sends it live. The update is built from
+    /// what this task holds, not from the write: a failed write still names the turn's agent, so
+    /// Retry goes to it.
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
-        let (id, status_owned, why_owned) =
-            (ids.turn.clone(), status.to_string(), why.map(String::from));
-        let saved = self
-            .chats
-            .writer
-            .call(move |conn| store::set_turn(conn, &id, &status_owned, why_owned.as_deref()))
-            .await;
-        if let Some(Err(e)) = saved {
-            self.record(
-                Event::point("gathr.turn.status")
-                    .trace(&ids.trace)
-                    .chat(&ids.chat)
-                    .error("sqlite")
-                    .attr("why", e.to_string()),
-            );
-        }
+        let moved = gathr::tasks::Moved {
+            chat: &ids.chat,
+            turn: &ids.turn,
+            agent: ids.agent.as_deref(),
+            task: ids.task,
+            trace: &ids.trace,
+        };
+        crate::coord::turn_moved(&self.chats, moved, status, why).await;
         let reference = gathr::ids::reference(&ids.trace);
         self.publish(
             &ids.chat,

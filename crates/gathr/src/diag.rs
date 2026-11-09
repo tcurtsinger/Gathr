@@ -25,6 +25,10 @@ pub fn health(data: &DataDir) -> Value {
         Ok((conn, _)) => accounts(data, conn, held),
         Err(_) => Value::Null,
     };
+    let coordination = match &opened {
+        Ok((conn, _)) => coordination(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
+        Err(_) => Value::Null,
+    };
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -39,6 +43,7 @@ pub fn health(data: &DataDir) -> Value {
     json!({
         "service": service_now(data),
         "accounts": accounts,
+        "coordination": coordination,
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
     })
@@ -86,6 +91,22 @@ fn service_now(data: &DataDir) -> Value {
             json!({ "running": false, "why": format!("nothing answers on port {}: {e}", info.port) })
         }
     }
+}
+
+/// Open tasks and waits (0010): each task's state and why, each wait's failing looks.
+fn coordination(conn: &Connection) -> Result<Value, Error> {
+    let tasks = query(
+        conn,
+        "SELECT number AS task, chat_id AS chat, owner, state, reason FROM tasks
+         WHERE state NOT IN ('done', 'cancelled') ORDER BY number",
+    )?;
+    let waits = query(
+        conn,
+        "SELECT id AS wait, chat_id AS chat, agent_id AS agent, task, kind, target, failures,
+                last_error, strftime('%Y-%m-%dT%H:%M:%fZ', until_ts / 1000000.0, 'unixepoch') AS until
+         FROM waits WHERE state = 'open' AND part_of IS NULL ORDER BY created_ts",
+    )?;
+    Ok(json!({ "tasks": tasks["rows"], "waits": waits["rows"] }))
 }
 
 /// Messages waiting to be sent: for a sign-in, or behind a turn under way.

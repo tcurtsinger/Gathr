@@ -54,6 +54,8 @@ pub enum Cmd {
     Retire,
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
+    /// A turn Gathr starts for the agent: a task's, a wake-up or a hear-back (0010).
+    Start(gathr::tasks::Start),
     /// Closes the task's engine if it runs in this account folder, answering once it has exited;
     /// the queue stays.
     Leave {
@@ -282,6 +284,14 @@ impl Chats {
         tokio::spawn(turns::run(self.clone(), agent, rx));
         tasks.insert(key, tx.clone());
         tx
+    }
+
+    /// Queues the turns Gathr starts, each on its agent's task.
+    pub fn start(self: &Arc<Self>, starts: Vec<gathr::tasks::Start>) {
+        for start in starts {
+            let task = self.task(&start.chat, Some(&start.agent));
+            let _ = task.send(Cmd::Start(start));
+        }
     }
 
     /// Picks up turns left waiting when the service last stopped.

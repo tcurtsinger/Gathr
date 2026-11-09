@@ -40,7 +40,11 @@ The previous app listed more than a dozen start paths that each needed their own
 
 A task is work owed by one agent, or by the person.
 
-Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent, kind (`work`, `decision`, `review`, `plan_check`, `person_request`), and for decisions the choices with the giver's pick.
+Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `decision`, `review`, `plan_check`, `person_request`), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
+
+Each turn records the task it works on. Together with `given_in`, that's what puts a member's work under the message that asked for it (the inline thread, F8b), rather than under whatever message came just before.
+
+F5 builds `work` and `review` tasks between agents. Person tasks and decisions come with F9; files and plan checks when a feature needs them.
 
 States:
 
@@ -63,18 +67,25 @@ Transitions and who makes them:
 | `waiting` | `ready` | the service, when every `after` task is `done` |
 | `waiting` | `blocked` | the service, when an `after` task fails, stops or is cancelled; the giver is told |
 | `ready` | `working` | the service, through the gate |
-| `working` | `done`, `held`, `blocked` | the owner's turn ending (`done`, `left`, `blocked`), or the service when the turn ends cleanly with nothing open |
+| `working` | `done`, `held`, `blocked`, `ready` | the owner's turn ending: what it said with `finish_task` (`done`, `left`, `blocked`), applied once the turn has ended; with nothing said, `done` if nothing is open, else `held` |
 | `held` | `done` or `ready` | the service, when what it held on ends |
 | `working` | `failed`, `stopped` | the service, from the turn's outcome |
 | `failed`, `stopped`, `blocked` | `ready` | the person, or the giver (`task restart`) |
 | any open | `cancelled` | the person, or the giver |
 
 Rules:
+- A turn that ends well with something still open (a wait, a task given in its turns that it hasn't heard back on, a work task's PR) holds the task on it, and the reason says on what and whether its owner called it done: "done, waiting on CI on #54" reads apart from stalled work (G75). A wait firing, or the hear-back from the tasks it gave, wakes the owner on the task; its PR merging settles it as `done` without a turn, and its PR closing cancels it (G67).
+- A review is `done` only with the commit it reviewed, and is done when its owner says so: its PR is what it reviewed, not work it still owes. A newer head on that PR marks it out of date until the PR merges or closes (G73).
+- A turn on a task that fails or stops before it runs (no engine, no worktree) settles the task the same way, so its dependants move and it can be restarted.
+- Every turn Gathr starts (a task's, a wake-up, a hear-back) is saved, queued with its ask, in the transaction of the change that calls for it, so a stop right after that commit loses nothing: the next start takes it over. A turn's status is saved in the same transaction as what it moves (its task, its giver's hear-back, waits on its agent), so no stop falls between a turn's end and the round it closes.
+- `blocked` may name an existing task instead of filing another (G52): the task goes `ready` again once that one is `done`.
+- `left` with nothing open starts another turn on the task, with what was left; twice in a row by turns that ran no tool is `blocked`.
+- Giving a task answers with the chat's other open tasks and the project's open PRs, so a fix already under way shows (G74).
 - A task that hasn't started survives a restart unchanged. A task that was working when the app stopped becomes `stopped` with a carry-on note, and its dependants stay `waiting`, not broken.
 - Cancelling is not holding. To keep work from starting, pause (below).
 - `left` twice in a row by turns that changed nothing and left nothing running is `blocked`, not a loop.
 - `left` with an open wait stays `held` on the wait; the task isn't handed straight back.
-- The giver hears back once all the tasks it gave under one ask are settled.
+- The giver hears back once on all the tasks it gave in one turn: when that turn has ended (it's done handing out work) and every one of them is settled. A turn cut off by a restart counts as ended. A task restarted after the hear-back brings another when it settles again.
 - **Only the Supervisor gives the person tasks** ([0013](0013-one-chat-model.md)); in a one-agent chat, that agent. A member who needs the person's input asks the Supervisor: a `person_request` task to the Supervisor with the question, the options, the member's pick and why. The Supervisor checks it (is it really the person's to decide, is it already answered, is the pick sound), then files it for the person, folds it into one it's already asking, or answers it itself. The person's answer goes to the Supervisor, who passes it back to the member. The service refuses a task for the person from anyone else.
 - A decision for the person is a task of kind `decision` with its choices, the Supervisor's pick first, and why. A design is picked on its card, not as a task.
 - A plan card that's built, sent back or replaced stops counting as waiting on the person.
@@ -92,16 +103,18 @@ States: `starting`, `streaming`, `ended`, with an outcome: `ok`, `failed`, `stop
 
 An agent waits instead of looping. Kinds:
 - `agent`: until another agent's turn has ended and nothing it left running still runs;
-- `ci`: until a PR's or commit's checks have all finished (the service looks itself);
-- `check`: a command the service runs every few minutes, exit 0 when it has happened;
+- `ci`: until a PR's or commit's checks have all finished (the service looks itself, through `gh`). A PR is followed to its newest commit and the wake-up says which (G49); a wait on a commit an open PR has moved past ends, saying so (G69);
+- `check`: a command the service runs every few minutes in the agent's folder (Git Bash on Windows, `sh` on macOS), exit 0 when it has happened;
 - `pr`: a built-in check for a PR merged or closed, so nobody writes one by hand;
 - `all`: several of the above, firing once when all are met.
 
-States: `open`, `fired`, then `picked` (the agent's turn started where it waited), `expired` (a day passed; the agent is woken anyway and told), or `cancelled`.
+States: `open`, `fired` (its wake-up turn is queued, which is durable), `expired` (a day passed; the agent is woken anyway and told), or `cancelled`. The parts of an `all` wait are each `met` until the last, when the whole fires once.
 
 Rules:
 - A wait outlasts a restart.
-- A check that errors, or keeps failing in a way that isn't "not yet" (exit codes other than 0 and 1), is shown on the wait and in diagnostics after three tries. The previous app's wait failed silently for two hours.
+- Any exit other than 0 is "not yet" (G69: an exit 2 read as broken). A look that can't run at all (the command or `gh` doesn't start or finish, GitHub refuses) is a failure; three in a row show on the wait, in `gathr diag health` and as a `gathr.wait.failing` event with its reference. The previous app's wait failed silently for two hours.
+- Every call to GitHub is tried once more before it counts as failed (G5).
+- An agent lists its own waits with their ids and ends any of them (G54). A wait on an agent with nothing running or queued in the chat is refused, saying so.
 - A wait fires in the session it was left in.
 - While its scope is paused, a wait doesn't fire; it fires on resume.
 

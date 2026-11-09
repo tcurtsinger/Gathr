@@ -128,8 +128,12 @@ pub fn text(facts: &Facts) -> String {
          what you couldn't verify."
             .to_string(),
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
-        "Use read_chat on the gathr server for earlier messages and other agents' replies missing \
-         from your context. Find it with ToolSearch if needed."
+        "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
+         earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
+         cancel_task and restart_task for tasks; wait and end_wait instead of polling in a loop."
+            .to_string(),
+        "When a turn works on a task, end it with finish_task. Hand work to another agent with \
+         give_task, never by naming it in your reply."
             .to_string(),
         format!(
             "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
