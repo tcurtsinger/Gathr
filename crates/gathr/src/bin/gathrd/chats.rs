@@ -45,10 +45,10 @@ pub enum Cmd {
         input: Value,
         reply: oneshot::Sender<bool>,
     },
-    /// The chat's approvals still waiting for an answer.
-    Approvals {
+    /// The chat's approvals still waiting for an answer, and its reply still streaming.
+    Open {
         chat: String,
-        reply: oneshot::Sender<Vec<Value>>,
+        reply: oneshot::Sender<(Vec<Value>, Option<Value>)>,
     },
     /// The agent was deleted: its waiting turns fail and its engine closes once it's free.
     Retire,
@@ -96,13 +96,18 @@ pub struct Chats {
 }
 
 impl Chats {
-    pub fn new(writer: Writer, data: DataDir, port: u16) -> Arc<Chats> {
+    pub fn new(
+        writer: Writer,
+        data: DataDir,
+        port: u16,
+        live: broadcast::Sender<Value>,
+    ) -> Arc<Chats> {
         Arc::new(Chats {
             writer,
             data,
             port,
             passes: Arc::default(),
-            live: broadcast::channel(4096).0,
+            live,
             gates: Mutex::default(),
             tasks: Mutex::default(),
             holds: Mutex::default(),
@@ -187,13 +192,16 @@ impl Chats {
         answered.await.into_iter().any(|a| a)
     }
 
-    /// The chat's open approvals, for a window that opens it later.
-    pub async fn approvals(&self, chat: &str) -> Vec<Value> {
-        let open = self.ask_all(|reply| Cmd::Approvals {
+    /// The chat's open approvals and its replies still streaming, one per agent at work, for a
+    /// window that opens it later.
+    pub async fn open(&self, chat: &str) -> (Vec<Value>, Vec<Value>) {
+        let open = self.ask_all(|reply| Cmd::Open {
             chat: chat.to_string(),
             reply,
         });
-        open.await.into_iter().flatten().collect()
+        let (approvals, streaming): (Vec<_>, Vec<_>) = open.await.into_iter().unzip();
+        let approvals = approvals.into_iter().flatten().collect();
+        (approvals, streaming.into_iter().flatten().collect())
     }
 
     /// Whether a `git push` from the engine of `caller` may go on: its agent's task asks the

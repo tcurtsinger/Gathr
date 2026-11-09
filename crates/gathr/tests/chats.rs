@@ -424,3 +424,47 @@ fn a_turn_stopped_before_any_reply_lets_the_next_message_start_at_once() {
         started.elapsed()
     );
 }
+
+/// `signed_in`, held after its first words stream and before the whole block arrives.
+fn held_mid_reply(dir: &Path) -> std::path::PathBuf {
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let mut lines: Vec<&str> = frames.lines().collect();
+    let delta = lines.iter().position(|l| l.contains("text_delta")).unwrap();
+    lines.insert(delta + 1, r#"{"dir":"hold"}"#);
+    let path = dir.join("mid-reply.jsonl");
+    std::fs::write(&path, lines.join("\n")).unwrap();
+    path
+}
+
+/// A window that opens the chat mid-reply (a reconnect, a switch back) shows what has streamed so
+/// far, not nothing until the reply ends.
+#[test]
+fn a_chats_history_holds_the_reply_still_streaming() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let replay = held_mid_reply(&data.0);
+    let service = TestService::with_engine(
+        &data.0,
+        &[("GATHR_REPLAY", &replay), ("GATHR_REPLAY_HOLD", &go)],
+    );
+    service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service
+        .send("POST", &path, json!({ "text": "Say hi" }))
+        .json();
+
+    let mid = service.wait_for(&chat, 10, "the streamed words", |h| {
+        h["streaming"][0]["text"] == "Hi!"
+    });
+    assert_eq!(mid["streaming"][0]["turn"], sent["turn"], "{mid}");
+    std::fs::write(&go, "").unwrap();
+    let after = service.wait_for(&chat, 10, "the reply", |h| turn_status(h) == Some("done"));
+    assert_eq!(
+        after["streaming"],
+        json!([]),
+        "a finished reply still streams: {after}"
+    );
+    let last = after["messages"].as_array().unwrap().last().unwrap();
+    assert_eq!(last["body"], "Hi!", "{after}");
+}

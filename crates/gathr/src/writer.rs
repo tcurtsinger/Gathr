@@ -16,14 +16,20 @@ pub struct Writer {
 }
 
 impl Writer {
-    /// Starts the writer thread. It runs until every `Writer` handle is dropped.
-    pub fn start(mut conn: Connection, crash_log: CrashLog) -> Writer {
+    /// Starts the writer thread. It runs until every `Writer` handle is dropped. `after` runs after
+    /// each job, once its writes are committed.
+    pub fn start(
+        mut conn: Connection,
+        crash_log: CrashLog,
+        mut after: impl FnMut(&mut Connection) + Send + 'static,
+    ) -> Writer {
         let (jobs, queue) = mpsc::channel::<Job>();
         std::thread::Builder::new()
             .name("gathr-writer".into())
             .spawn(move || {
                 for job in queue {
                     job(&mut conn);
+                    after(&mut conn);
                 }
             })
             .expect("the writer thread didn't start");

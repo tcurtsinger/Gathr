@@ -150,8 +150,8 @@ impl Task {
                 let Some(turn) = self.turn.as_mut() else {
                     return;
                 };
-                turn.approvals
-                    .insert(request_id.clone(), (tool.clone(), input.clone()));
+                let asked = (tool.clone(), input.clone(), why.clone());
+                turn.approvals.insert(request_id.clone(), asked);
                 let ids = turn.ids.clone();
                 self.publish(
                     &ids.chat,

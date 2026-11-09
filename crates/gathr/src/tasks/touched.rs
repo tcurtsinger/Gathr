@@ -1,0 +1,65 @@
+//! Which chats' tasks or waits a write changed, so the window's Summary follows them live (F8b).
+//! Temporary triggers note each change's chat in the same transaction, so whichever code made the
+//! change, it's noted, and a change rolled back notes nothing.
+
+use rusqlite::Connection;
+
+use crate::Error;
+
+/// Sets the triggers up on the writer's connection; they last as long as it does.
+pub fn watch(conn: &Connection) -> Result<(), Error> {
+    conn.execute_batch(
+        "CREATE TEMP TABLE touched (chat_id TEXT PRIMARY KEY);
+         CREATE TEMP TRIGGER task_added AFTER INSERT ON tasks
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER task_changed AFTER UPDATE ON tasks
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER wait_added AFTER INSERT ON waits
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         -- Not on every look: a look only stamps when it looked.
+         CREATE TEMP TRIGGER wait_changed AFTER UPDATE OF state, line, then_do ON waits
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;",
+    )?;
+    Ok(())
+}
+
+/// The chats changed since the last call, committed; noted no more.
+pub fn take(conn: &Connection) -> Result<Vec<String>, Error> {
+    let mut stmt = conn.prepare_cached("SELECT chat_id FROM temp.touched")?;
+    let chats: Vec<String> = stmt
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    if !chats.is_empty() {
+        conn.execute("DELETE FROM temp.touched", [])?;
+    }
+    Ok(chats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_change_rolled_back_notes_nothing_and_one_committed_notes_its_chat() {
+        let dir = std::env::temp_dir().join(format!("gathr-touched-{}", crate::ids::span_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut conn = crate::db::open(&dir.join("gathr.db")).unwrap();
+        watch(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c1', 'One', 0), ('c2', 'Two', 0)",
+            [],
+        )
+        .unwrap();
+        let add = "INSERT INTO tasks (chat_id, owner, kind, what, state, created_ts, updated_ts)
+                   VALUES (?1, 'a', 'work', 'x', 'ready', 0, 0)";
+        let tx = conn.transaction().unwrap();
+        tx.execute(add, ["c1"]).unwrap();
+        drop(tx);
+        assert_eq!(take(&conn).unwrap(), Vec::<String>::new());
+        conn.execute(add, ["c2"]).unwrap();
+        assert_eq!(take(&conn).unwrap(), ["c2"]);
+        assert_eq!(take(&conn).unwrap(), Vec::<String>::new());
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

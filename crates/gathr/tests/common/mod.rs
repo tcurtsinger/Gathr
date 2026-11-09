@@ -379,3 +379,19 @@ pub fn text(result: &Value) -> String {
         .unwrap_or_default()
         .to_string()
 }
+
+/// A chat in a new project on `folder` with `members`: its id. Each call names its own project.
+pub fn project_chat(service: &TestService, folder: &Path, members: Value) -> String {
+    let name = format!("Project {}", gathr::ids::uuid());
+    let body = serde_json::json!({ "name": name, "folder": folder, "members": members });
+    let made = service.send("POST", "/api/projects", body);
+    assert_eq!(made.status, 200, "{}", made.body);
+    let project = made.json()["id"].as_str().unwrap().to_string();
+    let chat = service.send(
+        "POST",
+        "/api/chats",
+        serde_json::json!({ "project": project }),
+    );
+    assert_eq!(chat.status, 200, "{}", chat.body);
+    chat.json()["id"].as_str().unwrap().to_string()
+}
