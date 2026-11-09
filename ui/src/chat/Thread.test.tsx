@@ -171,10 +171,12 @@ test('the chat fades only at an edge with more of it beyond', async () => {
   await screen.rerender(<View state={{ ...empty, messages: made(40) }} />);
   viewport.scrollTop = viewport.scrollHeight;
   await expect.poll(fades).toBe('above');
-  viewport.scrollTop = viewport.scrollHeight / 2;
-  await expect.poll(fades).toBe('above below');
+  // To the top first: leaving the bottom stops assistant-ui following it, which on WebKit otherwise
+  // brought a jump straight to the middle back down.
   viewport.scrollTop = 0;
   await expect.poll(fades).toBe('below');
+  viewport.scrollTop = viewport.scrollHeight / 2;
+  await expect.poll(fades).toBe('above below');
 });
 
 test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { expect, test } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer } from './Composer';
 import '../theme.css';
@@ -39,11 +39,10 @@ test('keyboard focus shows no ring, on the message box or its buttons (DESIGN.md
   const screen = await render(<Chat running />);
   const input = screen.getByRole('textbox', { name: 'Message' });
   await input.click();
-  // Safari's Tab skips buttons unless the person turns that on, so focus moves by script after a key
-  // press: both engines then show it as keyboard focus.
-  await userEvent.keyboard('{Shift}');
+  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+  await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
   const stop = screen.getByRole('button', { name: 'Stop' }).element() as HTMLElement;
-  stop.focus();
+  expect(document.activeElement).toBe(stop);
   expect(stop.matches(':focus-visible')).toBe(true);
   for (const el of [
     input.element(),
