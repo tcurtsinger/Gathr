@@ -31,6 +31,8 @@ export interface Turn {
   task?: number | null;
   /** A hear-back's: the turn whose tasks it reports on, which its reply links back to. */
   answers?: string | null;
+  /** Queued but held: by a pause, or until its account's usage comes back. */
+  held?: 'pause' | 'usage' | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -39,20 +41,28 @@ export interface Member {
   agent: string;
   name: string;
   role: Role;
-  /** The person paused this agent (0010 Pause, agent scope). */
-  paused?: boolean;
-  /** Its account is out of usage until then (0010 usage holds). */
-  usage_until_us?: number | null;
 }
 
+/** The whole app, or one chat or agent. */
+export type PauseScope = { scope: 'app' } | { scope: 'chat' | 'agent'; target: string };
+
 /**
- * Whether a chat's work runs (0010 Pause): pausing while its running turns end, paused once quiet,
- * stopped after Stop now until Restart.
+ * A pause (0010): pausing while a turn or background command in it still runs, paused once quiet,
+ * stopped after Stop now until Restart (its resume).
  */
-export interface Run {
-  state: 'running' | 'pausing' | 'paused' | 'stopped';
+export interface Pause {
+  scope: 'app' | 'chat' | 'agent';
+  /** The chat's or agent's id; empty for the app. */
+  target: string;
+  state: 'pausing' | 'paused' | 'stopped';
   /** The agent that paused it; null for the person. */
-  by?: string | null;
+  by: string | null;
+}
+
+/** Every pause, and each account out of usage until its reset, with the agents on it. */
+export interface Pauses {
+  pauses: Pause[];
+  usage: { account: string; until_us: number; agents: string[] }[];
 }
 
 export type TaskState =
@@ -143,8 +153,6 @@ export interface Agent {
 
 export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
-export type RunAction = 'pause' | 'resume' | 'restart';
-
 /** A model as the account's engine lists it (0025), in the engine's order. */
 export interface Model {
   id: string;
@@ -165,7 +173,6 @@ export interface History {
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
   streaming?: { turn: string; agent: string | null; text: string }[];
-  run?: Run;
 }
 
 export interface Engine {
@@ -238,9 +245,12 @@ export const api = {
     ),
   send: (chat: string, text: string, agent?: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
-  stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),
-  /** Pause, Resume or Restart: answers the chat's run as it is then. */
-  run: (chat: string, action: RunAction) => call<Run>('POST', `/api/chats/${chat}/${action}`),
+  pauses: () => call<Pauses>('GET', '/api/pauses'),
+  // Each answers every pause as it is then.
+  pause: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses', scope),
+  resume: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses/resume', scope),
+  /** Stop now: ends the scope's turns and the commands they started; carry-ons wait for Restart. */
+  stop: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses/stop', scope),
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),

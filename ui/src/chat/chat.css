@@ -6,6 +6,7 @@
 }
 /* 46px, so it lines up with the workspace's tabstrip (DESIGN.md). */
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;

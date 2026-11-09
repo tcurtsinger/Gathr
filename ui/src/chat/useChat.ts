@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type RunAction } from '../api';
+import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './messages';
@@ -17,8 +17,6 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const [actionFailure, setActionFailure] = useState<SendFailure | null>(null);
   const pending = useRef<LiveEvent[] | null>(null);
   const openedAt = useRef(0);
-  // Live run changes seen: a Pause's answer that arrives after a newer one is dropped.
-  const runSeen = useRef(0);
 
   const load = useCallback(() => {
     pending.current = [];
@@ -27,7 +25,6 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
       ([history, work]) => {
         const held = pending.current ?? [];
         pending.current = null;
-        runSeen.current++;
         setState(fromLoad(history, work, held));
         setLoaded(true);
         setLoadFailure(null);
@@ -73,7 +70,6 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
         return load();
       }
       if (!('chat' in event) || event.chat !== chat) return;
-      if (event.type === 'run') runSeen.current++;
       if (pending.current) return pending.current.push(event);
       queued.push(event);
       frame ||= requestAnimationFrame(flush);
@@ -99,21 +95,11 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
     [chat, onUnsent],
   );
 
-  const stop = useCallback(
-    () => api.stop(chat).catch((e: Failure) => setActionFailure({ id: 'stop', text: '', failure: e })),
-    [chat],
-  );
-
-  // The answer is the run as it is then, so it shows even without the live socket.
-  const changeRun = useCallback(
-    (action: RunAction) => {
-      const seen = runSeen.current;
-      api.run(chat, action).then(
-        (run) => seen === runSeen.current && setState((s) => ({ ...s, run })),
-        (e: Failure) => setActionFailure({ id: action, text: '', failure: e }),
-      );
-    },
-    [chat],
+  // Stop now, Pause, Resume: a refusal shows in the chat, with its reference.
+  const attempt = useCallback(
+    (id: string, action: () => Promise<unknown>) =>
+      action().catch((e: Failure) => setActionFailure({ id, text: '', failure: e })),
+    [],
   );
 
   const approve = useCallback(
@@ -127,5 +113,5 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   );
 
   const failed = actionFailure ? [...unsent, actionFailure] : unsent;
-  return { state, loaded, loadFailure, failed, send, stop, changeRun, approve, reload: load };
+  return { state, loaded, loadFailure, failed, send, attempt, approve, reload: load };
 }

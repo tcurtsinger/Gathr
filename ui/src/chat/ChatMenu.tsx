@@ -6,25 +6,40 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Run, RunAction } from '../api';
+import type { Run } from './pauses';
 
-const label: Record<RunAction, string> = { pause: 'Pause', resume: 'Resume', restart: 'Restart' };
-
-/** The chat header's More menu (the prototype's ChatActions): Pause, Resume once paused, Restart once stopped. */
-export function ChatMenu({ run, onRun }: { run: Run; onRun: (action: RunAction) => void }) {
-  const action: RunAction =
-    run.state === 'running' ? 'pause' : run.state === 'stopped' ? 'restart' : 'resume';
+/**
+ * A More menu (the prototype's ChatActions): Pause; Resume once paused; Restart once stopped. The
+ * chat's header has it, and so does each agent's row in Summary, for that agent alone.
+ */
+export function ChatMenu({
+  state,
+  label = 'More',
+  all = false,
+  onPause,
+  onResume,
+}: {
+  state: Run['state'];
+  label?: string;
+  /** Held by the whole app's pause: Resume resumes everything. */
+  all?: boolean;
+  onPause: () => void;
+  /** Resume, which is Restart after Stop now. */
+  onResume: () => void;
+}) {
+  const running = state === 'running';
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipIconButton tooltip="More">
+        <TooltipIconButton tooltip={label}>
           <MoreHorizontal />
         </TooltipIconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={8}>
-        <DropdownMenuItem onSelect={() => onRun(action)}>
-          {action === 'pause' ? <Pause /> : <Play />}
-          {label[action]}
+        <DropdownMenuItem onSelect={running ? onPause : onResume}>
+          {running ? <Pause /> : <Play />}
+          {running ? 'Pause' : state === 'stopped' ? 'Restart' : 'Resume'}
+          {all && !running && ' all'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

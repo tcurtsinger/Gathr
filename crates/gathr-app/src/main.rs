@@ -82,7 +82,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
                     "gathr.ui.window.hide",
                     Instant::now(),
                     &attrs,
-                    shown.err(),
+                    shown.err().map(|e| e.to_string()),
                 );
             }
         })
@@ -152,7 +152,7 @@ fn reopen(app: &AppHandle, via: &'static str) {
                     "gathr.ui.window.reopen",
                     opened,
                     &serde_json::json!({}),
-                    Some(e),
+                    Some(e.to_string()),
                 );
             }
         }
@@ -161,7 +161,13 @@ fn reopen(app: &AppHandle, via: &'static str) {
             .and_then(|()| window.show())
             .and_then(|()| window.set_focus());
         let attrs = serde_json::json!({ "via": via, "started_service": started });
-        report(&app, "gathr.ui.window.reopen", opened, &attrs, shown.err());
+        report(
+            &app,
+            "gathr.ui.window.reopen",
+            opened,
+            &attrs,
+            shown.err().map(|e| e.to_string()),
+        );
     });
 }
 
@@ -203,17 +209,28 @@ fn window(
 /// the right button; on macOS a click opens the menu, as menu bar items do.
 fn tray(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
+    let pause = MenuItem::with_id(app, "pause", "Pause all", true, None::<&str>)?;
+    let resume = MenuItem::with_id(app, "resume", "Resume all", false, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &pause, &resume, &quit])?;
+    app.manage(PauseItems { pause, resume });
+    show_paused(app);
     let mut builder = TrayIconBuilder::new()
         .tooltip("Gathr")
-        .menu(&Menu::with_items(app, &[&open, &quit])?)
+        .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open" => reopen(app, "tray"),
+            "pause" => pause_all(app, true),
+            "resume" => pause_all(app, false),
             "quit" => app.exit(0),
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
+            // The pause may have changed elsewhere since: read before the menu opens.
+            if matches!(event, TrayIconEvent::Enter { .. }) {
+                show_paused(tray.app_handle());
+            }
             let click = matches!(
                 event,
                 TrayIconEvent::Click {
@@ -233,13 +250,65 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// The tray's Pause all and Resume all, enabled by whether the whole app is paused.
+struct PauseItems {
+    pause: MenuItem<Wry>,
+    resume: MenuItem<Wry>,
+}
+
+/// Pauses or resumes the whole app (0010): running turns finish, nothing new starts on its own.
+fn pause_all(app: &AppHandle, pause: bool) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let since = Instant::now();
+        let Some(info) = app.state::<Service>().info.lock().unwrap().clone() else {
+            return;
+        };
+        let path = if pause {
+            "/api/pauses"
+        } else {
+            "/api/pauses/resume"
+        };
+        let body = serde_json::json!({ "scope": "app" });
+        let failed = match http::send(info.port, &info.token, "POST", path, &body) {
+            Ok(r) if r.status == 200 => None,
+            Ok(r) => Some(format!("{} {}", r.status, r.body)),
+            Err(e) => Some(e.to_string()),
+        };
+        let attrs = serde_json::json!({ "pause": pause });
+        report(&app, "gathr.ui.tray.pause", since, &attrs, failed);
+        show_paused(&app);
+    });
+}
+
+/// Enables Pause all or Resume all by the app's pause, as the service has it now.
+fn show_paused(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(info) = app.state::<Service>().info.lock().unwrap().clone() else {
+            return;
+        };
+        let Ok(answer) = http::call(info.port, &info.token, "GET", "/api/pauses") else {
+            return;
+        };
+        let pauses = answer.json()["pauses"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let paused = pauses.iter().any(|p| p["scope"] == "app");
+        let items = app.state::<PauseItems>();
+        let _ = items.pause.set_enabled(!paused);
+        let _ = items.resume.set_enabled(paused);
+    });
+}
+
 /// What the window did, recorded with the service's own events.
 fn report(
     app: &AppHandle,
     name: &str,
     since: Instant,
     attrs: &serde_json::Value,
-    error: Option<tauri::Error>,
+    error: Option<String>,
 ) {
     let Some(info) = app.state::<Service>().info.lock().unwrap().clone() else {
         return;
@@ -248,7 +317,7 @@ fn report(
         "name": name,
         "duration_ms": since.elapsed().as_millis() as u64,
         "attrs": attrs,
-        "error": error.map(|e| e.to_string()),
+        "error": error,
     });
     let _ = http::send(info.port, &info.token, "POST", "/api/ui/events", &body);
 }

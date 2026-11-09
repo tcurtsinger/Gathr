@@ -9,17 +9,23 @@
   font-size: 12px;
 }
 .summary-open:hover,
-.summary-open[aria-expanded="true"] {
+.summary-open[data-state="open"] {
   background: var(--hover-tint);
   color: var(--foreground);
 }
+.summary-anchor {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
 .summary {
-  position: fixed;
-  inset: auto;
+  z-index: 40;
   width: 320px;
   max-width: calc(100vw - 32px);
-  max-height: min(560px, calc(100dvh - 32px));
-  margin: 0;
+  max-height: min(560px, var(--radix-popover-content-available-height));
   overflow: auto;
   padding: 12px;
   border: 1px solid var(--border);
@@ -34,8 +40,15 @@
   font-weight: 500;
 }
 .summary-agent {
+  position: relative;
   padding: 10px 0;
   font-size: 13px;
+}
+/* The agent's own Pause or Resume, at its row's corner. */
+.summary-agent > button {
+  position: absolute;
+  top: 14px;
+  right: 4px;
 }
 .summary-agent summary {
   display: flex;

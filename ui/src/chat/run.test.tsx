@@ -1,9 +1,10 @@
 // The service is the edge here: fetch answers as it would, and live events arrive when the test says.
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { Run } from '../api';
+import type { Pauses } from '../api';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
+import { usePauses } from './pauses';
 
 const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
 vi.mock('../live', () => ({
@@ -12,24 +13,48 @@ vi.mock('../live', () => ({
     return () => live.delete(listener);
   },
 }));
-afterEach(() => vi.unstubAllGlobals());
-
-const json = (body: unknown) => new Response(JSON.stringify(body));
-const members = [
-  { agent: 'a', name: 'Made-up Lead', role: 'supervisor' },
-  { agent: 'b', name: 'Made-up Member', role: 'member' },
-];
-// The lead's turn waits in the queue; the member has nothing.
-const history = (run: Run) => ({
-  chat: 'c',
-  messages: [],
-  turns: [{ id: 't', status: 'queued', why: null, ref: 'r', agent: 'a' }],
-  approvals: [],
-  members,
-  run,
+afterEach(() => {
+  vi.unstubAllGlobals();
+  live.clear();
 });
 
+const json = (body: unknown) => new Response(JSON.stringify(body));
+const running: Pauses = { pauses: [], usage: [] };
+const paused = (scope: 'app' | 'chat' | 'agent', target = ''): Pauses => ({
+  pauses: [{ scope, target, state: 'paused', by: null }],
+  usage: [],
+});
+// The lead's turn is held by the pause; the member has nothing.
+const history = {
+  chat: 'c',
+  messages: [],
+  turns: [{ id: 't', status: 'queued', held: 'pause', why: 'paused', ref: 'r', agent: 'a' }],
+  approvals: [],
+  members: [
+    { agent: 'a', name: 'Made-up Lead', role: 'supervisor' },
+    { agent: 'b', name: 'Made-up Member', role: 'member' },
+  ],
+};
+
+/** The service as these tests need it; each POST is kept with its body. */
+function service(pauses: Pauses, answer: (path: string) => Promise<Response>) {
+  const posted: { path: string; body: unknown }[] = [];
+  vi.stubGlobal('fetch', (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.startsWith('/api/pauses')) {
+      posted.push({ path, body: JSON.parse(String(init.body)) });
+      return answer(path);
+    }
+    if (path === '/api/pauses') return Promise.resolve(json(pauses));
+    return Promise.resolve(path.endsWith('/tasks') ? json({ tasks: [], waits: [] }) : json(history));
+  });
+  return posted;
+}
+
+const noFailure = () => {};
+
+/** The chat as the app shows it, with the app's one list of pauses. */
 function Chat() {
+  const { pauses, act } = usePauses(noFailure);
   return (
     <ChatView
       chat={{ id: 'c', title: 'Made-up chat' }}
@@ -45,50 +70,54 @@ function Chat() {
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={() => {}}
+      pauses={pauses}
+      onPause={act}
     />
   );
 }
 
-test('a paused chat holds its queued turn, says so, and Resume runs it again', async () => {
-  const asked: string[] = [];
-  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
-    if (init?.method === 'POST' && path.startsWith('/api/chats')) asked.push(path);
-    if (path.endsWith('/resume')) return json({ state: 'running' });
-    return path.endsWith('/tasks') ? json({ tasks: [], waits: [] }) : json(history({ state: 'paused' }));
-  });
+test('a chat the whole app paused holds its turn, says so, and Resume all resumes the app', async () => {
+  const posted = service(paused('app'), async () => json(running));
   const screen = await render(<Chat />);
   await expect.element(screen.getByRole('status').filter({ hasText: 'You paused' })).toBeVisible();
-  // The held turn isn't running, so the composer sends rather than stops.
+  // The held turn isn't under way, so the composer sends rather than stops.
   await expect.element(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   await screen.getByRole('button', { name: 'Summary' }).click();
   await expect.element(screen.getByText('Supervisor · Held')).toBeVisible();
   await expect.element(screen.getByText('Member · Paused')).toBeVisible();
   await screen.getByRole('button', { name: 'Summary' }).click();
 
-  await screen.getByRole('button', { name: 'More' }).click();
-  await screen.getByRole('menuitem', { name: 'Resume' }).click();
+  await screen.getByRole('button', { name: 'More', exact: true }).click();
+  await screen.getByRole('menuitem', { name: 'Resume all' }).click();
   // No live event comes: the answer alone shows the chat running.
   await expect.element(screen.getByText('You paused')).not.toBeInTheDocument();
-  await expect.element(screen.getByRole('button', { name: 'Stop this chat now' })).toBeInTheDocument();
-  expect(asked).toEqual(['/api/chats/c/resume']);
+  expect(posted).toEqual([{ path: '/api/pauses/resume', body: { scope: 'app' } }]);
 });
 
 test('a Pause answer that arrives after a newer live change never undoes it', async () => {
   let release = (_: Response) => {};
-  vi.stubGlobal('fetch', (path: string) => {
-    if (path.endsWith('/pause')) return new Promise<Response>((done) => (release = done));
-    return Promise.resolve(
-      path.endsWith('/tasks') ? json({ tasks: [], waits: [] }) : json(history({ state: 'running' })),
-    );
-  });
-  live.clear();
+  service(running, () => new Promise<Response>((done) => (release = done)));
   const screen = await render(<Chat />);
-  await screen.getByRole('button', { name: 'More' }).click();
+  await screen.getByRole('button', { name: 'More', exact: true }).click();
   await screen.getByRole('menuitem', { name: 'Pause' }).click();
-  for (const listener of live) listener({ type: 'run', chat: 'c', run: { state: 'paused' } });
+  for (const listener of live) listener({ type: 'pauses', ...paused('chat', 'c') });
   await expect.element(screen.getByText('You paused')).toBeVisible();
-  release(json({ state: 'pausing' }));
+  release(json({ pauses: [{ scope: 'chat', target: 'c', state: 'pausing', by: null }], usage: [] }));
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('You paused')).toBeVisible();
   await expect.element(screen.getByText('Pausing…')).not.toBeInTheDocument();
+});
+
+test('an agent paused from its row in Summary pauses that agent alone', async () => {
+  const posted = service(running, async () => json(paused('agent', 'b')));
+  const screen = await render(<Chat />);
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  await expect.element(screen.getByText('Member · Ready')).toBeVisible();
+  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await expect.poll(() => posted.length).toBe(1);
+  await expect.element(screen.getByText('Member · Paused')).toBeVisible();
+  expect(posted).toEqual([{ path: '/api/pauses', body: { scope: 'agent', target: 'b' } }]);
+  // The chat itself still runs.
+  await expect.element(screen.getByText('You paused')).not.toBeInTheDocument();
 });
