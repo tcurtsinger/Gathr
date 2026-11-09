@@ -53,11 +53,14 @@ function collect(version, out) {
   copyFileSync(join(bundle, update), join(out, updateName));
   const signature = readFileSync(join(bundle, `${update}.sig`), "utf8").trim();
 
-  // gathrd and the built UI, as the service unpacks them: both at the archive's top.
+  // gathrd and the built UI, as the service unpacks them: both at the archive's top. The same bytes the
+  // installer puts in: on macOS the bundler signs gathrd again, and a copy that differs from the installed one
+  // reads to the service as a rebuild, which it copies in again and so ends a trial with no rollback.
   const staging = join(out, `.gathrd-${system.target}`);
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging);
-  copyFileSync(join(target, `release/gathrd${exe}`), join(staging, `gathrd${exe}`));
+  const gathrd = windows ? join(target, "release/gathrd.exe") : join(bundle, "macos/Gathr.app/Contents/MacOS/gathrd");
+  copyFileSync(gathrd, join(staging, `gathrd${exe}`));
   cpSync(join(root, "ui/dist"), join(staging, "ui"), { recursive: true });
   const archive = `gathrd-${version}-${system.target}.tar.gz`;
   execFileSync(tar(), ["-czf", join(out, archive), "-C", staging, `gathrd${exe}`, "ui"], { stdio: "inherit" });
