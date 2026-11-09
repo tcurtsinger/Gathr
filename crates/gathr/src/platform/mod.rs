@@ -51,6 +51,76 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
+/// The process group of `program`, started with `no_window` as `pid`: what it starts stays in it,
+/// so `end_group` can end them all. On Unix it's the pid. On Windows only an MSYS program (Git
+/// Bash) has one, whose fork and exec leave children no Windows tree reaches; a process started
+/// from outside MSYS leads its own group, under the MSYS pid read here while it runs.
+pub async fn group_of(pid: Option<u32>, program: &Path) -> Option<u32> {
+    if cfg!(not(windows)) {
+        return pid;
+    }
+    let mut command = std::process::Command::new(msys_bash(program)?);
+    let script = format!(r#"{FIND_GROUP} find "$1" && echo "$g""#);
+    command.args(["-c", &script, "group-of", &pid?.to_string()]);
+    no_window(&mut command);
+    let mut command = tokio::process::Command::from(command);
+    command
+        .stdin(std::process::Stdio::null())
+        .kill_on_drop(true);
+    let found = command.output().await.ok()?;
+    String::from_utf8_lossy(&found.stdout).trim().parse().ok()
+}
+
+/// The MSYS group led by the Windows pid `$1`, as `$g`. Only built-ins: the service's PATH may not
+/// have Git's usr\bin.
+const FIND_GROUP: &str = r#"find() {
+    for p in /proc/[0-9]*; do
+        w=; read -r w 2>/dev/null < "$p/winpid"
+        [ "$w" = "$1" ] && { g=${p#/proc/}; return 0; }
+    done
+    return 1
+};"#;
+
+/// Ends every process in the group of `program`, running as `pid`: `group` from `group_of`, or
+/// found now through `pid`, which must then still run. Returns once they're gone.
+pub fn end_group(group: Option<u32>, pid: u32, program: &Path) {
+    let group = group.map_or(String::new(), |g| g.to_string());
+    let mut command = match msys_bash(program) {
+        Some(bash) => {
+            let mut command = std::process::Command::new(bash);
+            let script = format!(
+                r#"{FIND_GROUP} g=$1; {{ [ -n "$g" ] || find "$2"; }} && kill -s KILL -- "-$g""#
+            );
+            command.args(["-c", &script, "end-group", &group, &pid.to_string()]);
+            command
+        }
+        None if cfg!(windows) => return,
+        None => {
+            let mut command = std::process::Command::new("/bin/kill");
+            let group = if group.is_empty() {
+                pid.to_string()
+            } else {
+                group
+            };
+            command.args(["-KILL", "--", &format!("-{group}")]);
+            command
+        }
+    };
+    no_window(&mut command);
+    let _ = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
+/// Git Bash beside an MSYS program, on Windows.
+fn msys_bash(program: &Path) -> Option<PathBuf> {
+    let bash = program.with_file_name("bash.exe");
+    let msys = cfg!(windows) && program.with_file_name("msys-2.0.dll").is_file();
+    (msys && bash.is_file()).then_some(bash)
+}
+
 /// This computer in Claude Code's release feed, such as `win32-x64`; none where it ships nothing.
 pub fn release_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
