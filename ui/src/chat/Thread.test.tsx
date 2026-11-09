@@ -2,7 +2,7 @@
 // thread as the socket delivers them (the UI's side of the engine-replay tests).
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import { Failure, type Message } from '../api';
+import { type Agent, Failure, type Message, type Turn } from '../api';
 import type { LiveEvent } from '../live';
 import '../theme.css';
 import type { SendFailure } from './messages';
@@ -21,10 +21,18 @@ const none: Actions = {
   approve: () => {},
 };
 
-function View({ state, unsent = [] }: { state: ChatState; unsent?: SendFailure[] }) {
+function View({
+  state,
+  unsent = [],
+  agents = [],
+}: {
+  state: ChatState;
+  unsent?: SendFailure[];
+  agents?: Agent[];
+}) {
   return (
     <div style={{ height: 600, display: 'flex' }}>
-      <Thread state={state} agents={[]} unsent={unsent} running={false} actions={none} empty={false}>
+      <Thread state={state} agents={agents} unsent={unsent} running={false} actions={none} empty={false}>
         <p>Composer</p>
       </Thread>
     </div>
@@ -84,8 +92,67 @@ test('a send that fails says so once, with its reference', async () => {
   expect(screen.getByRole('alert').elements()).toHaveLength(1);
 });
 
-test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {
-  const messages: Message[] = Array.from({ length: 300 }, (_, i) => ({
+const said = (id: string, role: 'user' | 'assistant', body: string): Message => ({
+  id,
+  turn: 't',
+  time: '',
+  role,
+  kind: 'text',
+  body,
+});
+const turn = (status: Turn['status']): Record<string, Turn> => ({
+  t: { id: 't', status, why: null, ref: 'r1', agent: 'a1' },
+});
+const order = () => [...document.querySelectorAll('.user-bubble, .reply-body')].map((e) => e.textContent);
+
+test('a message sent into a running turn keeps the reply before it, and the next reply comes after it', async () => {
+  const before = [
+    said('u1', 'user', 'First ask'),
+    said('r1', 'assistant', 'Hi!'),
+    said('u2', 'user', 'Also this'),
+  ];
+  const running = { ...empty, messages: before, turns: turn('running'), partial: { t: 'Second rep' } };
+  const screen = await render(<View state={running} />);
+  await expect.element(screen.getByText('Second rep')).toBeVisible();
+  expect(order()).toEqual(['First ask', 'Hi!', 'Also this', 'Second rep']);
+
+  const saved = {
+    ...empty,
+    messages: [...before, said('r2', 'assistant', 'Second reply')],
+    turns: turn('done'),
+  };
+  await screen.rerender(<View state={saved} />);
+  await expect.element(screen.getByText('Second reply')).toBeVisible();
+  expect(order()).toEqual(['First ask', 'Hi!', 'Also this', 'Second reply']);
+});
+
+test("a reply shows its agent's name once the agents arrive, and the new one after a rename", async () => {
+  const state = {
+    ...empty,
+    messages: [said('u1', 'user', 'Ask'), said('r1', 'assistant', 'Done.')],
+    turns: turn('done'),
+  };
+  const agent: Agent = { id: 'a1', name: 'Mira', account: 'x', model: null, effort: null, approvals: 'auto' };
+  const screen = await render(<View state={state} />);
+  await expect.element(screen.getByText('Done.')).toBeVisible();
+  await screen.rerender(<View state={state} agents={[agent]} />);
+  await expect.element(screen.getByText('Mira', { exact: true })).toBeVisible();
+  await screen.rerender(<View state={state} agents={[{ ...agent, name: 'Rowan' }]} />);
+  await expect.element(screen.getByText('Rowan', { exact: true })).toBeVisible();
+});
+
+test('a Stop that fails shows its notice alone, with nothing to resend', async () => {
+  const failure = { id: 'stop', text: '', failure: new Failure('Connection failed', 'aborted', null) };
+  const screen = await render(
+    <View state={{ ...empty, messages: [said('u1', 'user', 'Ask')] }} unsent={[failure]} />,
+  );
+  await expect.element(screen.getByText('Connection failed')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Retry' }).query()).toBeNull();
+  expect(document.querySelectorAll('.user-bubble')).toHaveLength(1);
+});
+
+const made = (n: number): Message[] =>
+  Array.from({ length: n }, (_, i) => ({
     id: `m${i}`,
     turn: null,
     time: '',
@@ -93,15 +160,38 @@ test('a long chat draws its newest messages, and older ones as you scroll up, ke
     kind: 'text',
     body: `Made-up message ${i}`,
   }));
+
+test('the chat fades only at an edge with more of it beyond', async () => {
+  const fades = () => ['above', 'below'].filter((e) => viewport.hasAttribute(`data-fade-${e}`)).join(' ');
+  const screen = await render(<View state={{ ...empty, messages: made(1) }} />);
+  const viewport = document.querySelector('.thread-viewport') as HTMLElement;
+  await expect.element(screen.getByText('Made-up message 0', { exact: true })).toBeVisible();
+  expect(fades()).toBe('');
+
+  await screen.rerender(<View state={{ ...empty, messages: made(40) }} />);
+  viewport.scrollTop = viewport.scrollHeight;
+  await expect.poll(fades).toBe('above');
+  viewport.scrollTop = viewport.scrollHeight / 2;
+  await expect.poll(fades).toBe('above below');
+  viewport.scrollTop = 0;
+  await expect.poll(fades).toBe('below');
+});
+
+test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {
+  const messages = made(300);
   const screen = await render(<View state={{ ...empty, messages }} />);
   await expect.element(screen.getByText('Made-up message 299', { exact: true })).toBeInTheDocument();
   expect(screen.getByText('Made-up message 199', { exact: true }).query()).toBeNull();
 
   const viewport = document.querySelector('.thread-viewport') as HTMLElement;
+  // WebKit has no scroll anchoring of its own: without it here too, Edge takes WebKit's path.
+  viewport.style.overflowAnchor = 'none';
   const first = screen.getByText('Made-up message 200', { exact: true });
   viewport.scrollTop = 0;
   const top = first.element().getBoundingClientRect().top;
   await expect.element(screen.getByText('Made-up message 199', { exact: true })).toBeInTheDocument();
+  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   // The message that was at the top stays where it was on screen.
-  await expect.poll(() => Math.abs(first.element().getBoundingClientRect().top - top)).toBeLessThan(2);
+  expect(Math.abs(first.element().getBoundingClientRect().top - top)).toBeLessThan(2);
+  expect(screen.getByText('Made-up message 99', { exact: true }).query()).toBeNull();
 });

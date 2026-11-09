@@ -54,14 +54,49 @@
   background: var(--background);
 }
 .thread-column[data-empty] .thread-footer {
-  position: static;
+  position: relative;
   margin-top: 0;
+}
+/*
+ * Canvas fades where more of the chat lies past the top edge or behind the composer (DESIGN.md).
+ * Both sit inside the scroller's content, so they never cover the scroll bar.
+ */
+.thread-column::before,
+.thread-footer::before {
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+}
+.thread-column::before {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 32px;
+  margin: -24px 0 -8px;
+  background: linear-gradient(to bottom, var(--background), transparent);
+}
+.thread-footer::before {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  height: 48px;
+  background: linear-gradient(to top, var(--background), transparent);
+}
+.thread-viewport[data-fade-above] .thread-column::before,
+.thread-viewport[data-fade-below] .thread-footer::before {
+  opacity: 1;
 }
 .thread-bottom {
   position: absolute;
   top: -48px;
   z-index: 1;
   border-radius: 9999px;
+}
+/* It sits over the text, so hover tints its fill instead of replacing it, as keyboard focus does. */
+.thread-bottom:hover {
+  background-color: var(--background);
+  background-image: linear-gradient(var(--hover-tint), var(--hover-tint));
 }
 .thread-bottom:disabled {
   visibility: hidden;

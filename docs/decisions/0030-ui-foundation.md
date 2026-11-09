@@ -59,7 +59,7 @@ needed: `designs/tokens.css` already self-hosts the font.
 - **Finished replies** parse in one pass (Streamdown's static mode). A reply drawn while streaming stays in streaming mode
   until it's drawn again, so a stream's end never re-parses it whole.
 - **Long chats** draw their newest 100 messages; scrolling near the top adds the next 100 above, keeping the messages on screen
-  in place (`chat/older.ts`). A page search (Ctrl+F) only finds what's drawn.
+  in place (`chat/older.ts`; assistant-ui's viewport keeps them, since WebKit has no scroll anchoring). A page search (Ctrl+F) only finds what's drawn.
 
 ## Timings
 

@@ -20,6 +20,7 @@ import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-ic
 import type { Agent } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { Notice } from '../components/Notice';
+import { useEdges } from './edges';
 import { type Custom, type SendFailure, type TurnNotice, toThread } from './messages';
 import { useOlder } from './older';
 import type { ChatState } from './state';
@@ -58,6 +59,7 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
   const all = useMemo(() => toThread(state, agents, unsent, cache.current), [state, agents, unsent]);
   const viewport = useRef<HTMLDivElement>(null);
   const { messages, onScroll } = useOlder(all, viewport);
+  useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage: (m) => m,
@@ -92,7 +94,7 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
               </div>
               <ThreadPrimitive.ViewportFooter className="thread-footer">
                 <ThreadPrimitive.ScrollToBottom asChild>
-                  <TooltipIconButton tooltip="Scroll to bottom" variant="outline" className="thread-bottom">
+                  <TooltipIconButton tooltip="Scroll to bottom" variant="outline" className="thread-bottom bg-background">
                     <ArrowDown />
                   </TooltipIconButton>
                 </ThreadPrimitive.ScrollToBottom>
@@ -119,9 +121,12 @@ function UserMessage() {
   const actions = useActions();
   return (
     <MessagePrimitive.Root className="user-message">
-      <div className="user-bubble">
-        <MessagePrimitive.Parts />
-      </div>
+      {/* A failed Stop or approval sent no text: only its notice shows, with nothing to resend. */}
+      {unsent?.text !== '' && (
+        <div className="user-bubble">
+          <MessagePrimitive.Parts />
+        </div>
+      )}
       {unsent && (
         <Notice
           danger
@@ -131,9 +136,11 @@ function UserMessage() {
           }
           links={<DiagnosticsLink open={() => actions.diagnostics()} />}
           action={
-            <button type="button" onClick={() => actions.resend(unsent)}>
-              Retry
-            </button>
+            unsent.text && (
+              <button type="button" onClick={() => actions.resend(unsent)}>
+                Retry
+              </button>
+            )
           }
         />
       )}

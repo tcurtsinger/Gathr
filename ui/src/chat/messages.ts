@@ -33,16 +33,20 @@ interface Group {
   key: string;
   turn: string | null;
   msgs: Message[];
+  reply: boolean;
+  /** The turn's last reply: the one its streaming text, notice and approvals go on. */
+  last?: boolean;
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
-const reply = (turn: string) => `a-${turn}`;
 
 /**
- * Gathr's chat as assistant-ui messages: each person's message, then one reply per turn holding its
- * text and tool calls in order, its streaming text last, and its notice and approvals. A reply keeps
- * one id from its first streamed text to its saved messages, so nothing remounts when a stream ends,
- * and a reply whose parts didn't change keeps the same object, so assistant-ui doesn't convert it again.
+ * Gathr's chat as assistant-ui messages: each person's message, then the reply to it holding its
+ * text and tool calls in order. A message sent into a running turn splits that turn's reply in two,
+ * one before it and one after; the last holds the streaming text, the notice and the approvals.
+ * A reply keeps one id from its first streamed text to its saved messages, so nothing remounts when
+ * a stream ends, and a reply whose parts didn't change keeps the same object, so assistant-ui doesn't
+ * convert it again.
  */
 export function toThread(
   state: ChatState,
@@ -50,21 +54,32 @@ export function toThread(
   unsent: SendFailure[],
   cache: Cache,
 ): ThreadMessageLike[] {
+  // The nth reply of a turn is `a-<turn>`, then `a-<turn>-<n>`: history only grows at its end, so n is stable.
+  const counts = new Map<string, number>();
+  const reply = (turn: string): Group => {
+    const n = counts.get(turn) ?? 0;
+    counts.set(turn, n + 1);
+    return { key: n ? `a-${turn}-${n}` : `a-${turn}`, turn, msgs: [], reply: true };
+  };
   const groups: Group[] = [];
   for (const m of state.messages) {
     const prev = groups.at(-1);
-    if (m.role === 'user') groups.push({ key: m.id, turn: m.turn, msgs: [m] });
-    else if (m.turn && prev?.key === reply(m.turn)) prev.msgs.push(m);
-    else groups.push({ key: m.turn ? reply(m.turn) : `a-${m.id}`, turn: m.turn, msgs: [m] });
+    if (m.role === 'user') groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false });
+    else if (m.turn && prev?.reply && prev.turn === m.turn) prev.msgs.push(m);
+    else if (m.turn) groups.push({ ...reply(m.turn), msgs: [m] });
+    else groups.push({ key: `a-${m.id}`, turn: null, msgs: [m], reply: true });
   }
-  // A turn with streaming text, a notice or an approval but nothing saved yet still has its reply,
-  // right after the message that asked for it.
+  // A turn with streaming text, a notice or an approval but no reply since its latest message still
+  // has one, right after that message.
   const waiting = new Set(state.approvals.map((a) => a.turn));
   for (const t of Object.values(state.turns)) {
-    const shows = state.partial[t.id] || noticed.has(t.status) || waiting.has(t.id);
-    if (!shows || groups.some((g) => g.key === reply(t.id))) continue;
     const at = groups.findLastIndex((g) => g.turn === t.id);
-    groups.splice(at < 0 ? groups.length : at + 1, 0, { key: reply(t.id), turn: t.id, msgs: [] });
+    if (at >= 0 && groups[at].reply) {
+      groups[at].last = true;
+      continue;
+    }
+    if (!(state.partial[t.id] || noticed.has(t.status) || waiting.has(t.id))) continue;
+    groups.splice(at < 0 ? groups.length : at + 1, 0, { ...reply(t.id), last: true });
   }
 
   const out = groups.map((group) => cached(cache, group, state, agents));
@@ -77,14 +92,17 @@ export function toThread(
 function cached(cache: Cache, group: Group, state: ChatState, agents: Agent[]) {
   const id = group.turn;
   const turn = id ? state.turns[id] : undefined;
-  const isReply = group.key.startsWith('a-');
-  const partial = isReply && id ? (state.partial[id] ?? '') : '';
-  const approvals = isReply ? state.approvals.filter((a) => a.turn === id) : [];
+  const partial = group.last && id ? (state.partial[id] ?? '') : '';
+  const approvals = group.last ? state.approvals.filter((a) => a.turn === id) : [];
+  const agent = agents.find((a) => a.id === turn?.agent)?.name;
   const parts = group.msgs.map((m) => `${m.id}:${m.kind === 'tool' ? (m.body as ToolBody).status : ''}`);
-  const sig = `${parts}|${partial.length}|${turn?.status}|${turn?.ref}|${approvals.map((a) => a.request)}`;
+  const ending = group.last ? `${turn?.status}|${turn?.ref}` : '';
+  const sig = `${parts}|${partial.length}|${ending}|${approvals.map((a) => a.request)}|${agent}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
-  const value = isReply ? toReply(group, partial, turn, approvals, agents) : toUser(group.msgs[0]);
+  const value = group.reply
+    ? toReply(group, partial, group.last ? turn : undefined, approvals, agent)
+    : toUser(group.msgs[0]);
   cache.set(group.key, { sig, value });
   return value;
 }
@@ -103,7 +121,7 @@ function toReply(
   partial: string,
   turn: Turn | undefined,
   approvals: Approval[],
-  agents: Agent[],
+  agent: string | undefined,
 ): ThreadMessageLike {
   const content: Part[] = group.msgs.map((m) => {
     if (m.kind !== 'tool') return { type: 'text', text: m.body as string };
@@ -122,7 +140,7 @@ function toReply(
   });
   if (partial) content.push({ type: 'text', text: partial });
   const status = turn?.status;
-  const custom: Custom = { agent: agents.find((a) => a.id === turn?.agent)?.name, approvals };
+  const custom: Custom = { agent, approvals };
   if (turn && noticed.has(turn.status)) custom.notice = { turn, replied: content.length > 0 };
   return {
     id: group.key,

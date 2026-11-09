@@ -39,9 +39,12 @@ test('keyboard focus shows no ring, on the message box or its buttons (DESIGN.md
   const screen = await render(<Chat running />);
   const input = screen.getByRole('textbox', { name: 'Message' });
   await input.click();
-  await userEvent.tab();
-  const stop = screen.getByRole('button', { name: 'Stop' }).element();
-  expect(document.activeElement).toBe(stop);
+  // Safari's Tab skips buttons unless the person turns that on, so focus moves by script after a key
+  // press: both engines then show it as keyboard focus.
+  await userEvent.keyboard('{Shift}');
+  const stop = screen.getByRole('button', { name: 'Stop' }).element() as HTMLElement;
+  stop.focus();
+  expect(stop.matches(':focus-visible')).toBe(true);
   for (const el of [
     input.element(),
     input.element().closest('[data-slot="composer-bar"]') as HTMLElement,
