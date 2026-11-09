@@ -52,6 +52,9 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
   `gathr-app` and starts it again with its arguments. macOS replaces `Gathr.app` in place, and the window restarts.
 - **After a hand-over:** when `service.json` names a new process that answers, the window signs in to it with a fresh
   one-time link (`gathr.ui.window.follow`).
+- **A service that dies while the window is open:** after 3 s without an answer the window starts it again through
+  `launch`, as a launch does, so a copy that died on trial rolls back at once (`gathr.ui.window.restart`). A start
+  racing the hand-over's own finds the one that won. A failed restart goes to the crash log.
 - **The key:** made with the Tauri CLI, password-protected, kept only as the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY`
   and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and the owner's password manager. Lost, every installed Gathr is
   reinstalled by hand once.
@@ -87,8 +90,8 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
   updater, so the warning doesn't return.
 - **MSI on Windows:** NSIS installs per user with no administrator prompt.
 - **`rustls` for the window's downloads:** 28 more crates, `ring` among them, against 15 for the system's own TLS.
-- **The window watching the new copy, or a watchdog process:** the next start already runs through one place
-  (`launch`), and a death with nobody starting Gathr needs no rollback until someone does.
+- **A watchdog process:** every start already runs through one place (`launch`), the open window starts a dead
+  service again through it, and with no window open nobody needs Gathr until it's next opened.
 
 ## Not verified
 
