@@ -1,32 +1,48 @@
-import { useState } from 'react';
-import type { Failure } from '../api';
-import type { Draft, PersonTask } from './model';
-import type { Answer } from './TasksTab';
+import { useEffect, useState } from 'react';
+import { api, type Failure, type PersonTask } from '../api';
+import { listen } from '../live';
+import { type Draft, toAnswer } from './model';
+import type { Refusal } from './TasksTab';
 
 /**
- * The person's open questions across chats, with what the person has staged for each and where
+ * The person's open questions across chats, live, with what the person has staged for each and where
  * each chat's Tasks tab stands. Drafts are kept by question, so they survive tabs and chats.
  */
-export function usePersonTasks() {
-  // Filled from the service once its shape lands (Cass, task 1164).
+export function usePersonTasks(onFailure: (f: Failure) => void) {
   const [tasks, setTasks] = useState<PersonTask[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
+  const [selected, setSelected] = useState<Record<string, number>>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
 
-  const send = async (answers: Answer[]): Promise<Failure[]> => {
-    const sent = new Set(answers.map((a) => a.task.id));
-    setTasks((list) => list.filter((t) => !sent.has(t.id)));
-    return [];
+  useEffect(() => {
+    const load = () => api.personTasks().then(setTasks, onFailure);
+    load();
+    return listen((event) => {
+      if (event.type === 'person_tasks') setTasks(event.tasks);
+      if (event.type === 'lagged') load();
+    });
+  }, [onFailure]);
+
+  const send = async (ready: PersonTask[]): Promise<Refusal[]> => {
+    try {
+      const { answered, refused } = await api.answer(ready.map((t) => toAnswer(t, drafts[t.number])));
+      setTasks((list) => list.filter((t) => !answered.includes(t.number)));
+      setDrafts((all) =>
+        Object.fromEntries(Object.entries(all).filter(([n]) => !answered.includes(Number(n)))),
+      );
+      return refused;
+    } catch (e) {
+      const f = e as Failure;
+      return ready.map((t) => ({ task: t.number, why: f.why ?? f.error, ref: f.ref }));
+    }
   };
 
   return {
     tasks,
-    setTasks,
     drafts,
-    draft: (id: string, d: Draft) => setDrafts((all) => ({ ...all, [id]: d })),
+    draft: (task: number, d: Draft) => setDrafts((all) => ({ ...all, [task]: d })),
     selected,
-    select: (chat: string, id: string) => setSelected((s) => ({ ...s, [chat]: id })),
+    select: (chat: string, task: number) => setSelected((s) => ({ ...s, [chat]: task })),
     open,
     setOpen: (chat: string, shown: boolean) => setOpen((o) => ({ ...o, [chat]: shown })),
     send,

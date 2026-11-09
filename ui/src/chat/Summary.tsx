@@ -16,7 +16,9 @@ export function Summary({ state }: { state: ChatState }) {
   const panel = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
   const members = [...state.members].sort((a, b) => rank(a) - rank(b));
-  const name = (agent: string) => state.members.find((m) => m.agent === agent)?.name ?? 'an agent';
+  // A null owner is the person: a question the Supervisor put to them.
+  const name = (agent: string | null) =>
+    agent === null ? 'you' : (state.members.find((m) => m.agent === agent)?.name ?? 'an agent');
 
   // 8px below the chat's header and 8px in from its corner, kept on screen.
   const place = () => {
@@ -82,7 +84,7 @@ function rank(m: Member) {
 }
 
 /** Working, waiting (and for whom, by name), or ready, from the service's records only. */
-function doing(m: Member, state: ChatState, name: (agent: string) => string): string {
+function doing(m: Member, state: ChatState, name: (agent: string | null) => string): string {
   if (Object.values(state.turns).some((t) => t.agent === m.agent && t.status === 'running')) return 'Working';
   const mine = state.tasks.filter((t) => t.owner === m.agent && open(t));
   const after = mine.flatMap((t) => t.after);

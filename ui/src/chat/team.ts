@@ -43,7 +43,8 @@ export function team(state: ChatState, names: Map<string, string>): Team {
   };
   const threads = new Map<string, Task[]>();
   for (const t of [...state.tasks].sort((a, b) => a.number - b.number)) {
-    if (!t.given_in || !state.turns[t.given_in]) continue;
+    // A question for the person (owner null) has no work to fold: Summary and the Tasks tab show it.
+    if (!t.owner || !t.given_in || !state.turns[t.given_in]) continue;
     const root = rootOf(t.given_in) ?? t.given_in;
     threads.set(root, [...(threads.get(root) ?? []), t]);
   }
@@ -86,6 +87,7 @@ export function describe(
 ): string {
   const states = new Map<string, Task['state']>();
   for (const t of tasks) {
+    if (!t.owner) continue;
     const was = states.get(t.owner);
     if (was === undefined || order.indexOf(t.state) < order.indexOf(was)) states.set(t.owner, t.state);
   }

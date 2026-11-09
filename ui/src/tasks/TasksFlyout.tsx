@@ -2,15 +2,21 @@ import { ListTodo, X } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
-import type { PersonTask } from './model';
+import type { PersonTask } from '../api';
 import './flyout.css';
+
+interface Props {
+  tasks: PersonTask[];
+  name: (agent: string | null) => string;
+  onOpen: (task: PersonTask) => void;
+}
 
 /**
  * The person's open questions across every chat (DESIGN.md "Navigation and workspace"): the
  * prototype's Radix flyout beside navigation, so its own tooltips draw above it. Picking one opens
  * its chat's Tasks tab at that question.
  */
-export function TasksFlyout({ tasks, onOpen }: { tasks: PersonTask[]; onOpen: (task: PersonTask) => void }) {
+export function TasksFlyout({ tasks, name, onOpen }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -50,16 +56,16 @@ export function TasksFlyout({ tasks, onOpen }: { tasks: PersonTask[]; onOpen: (t
             {tasks.map((t) => (
               <button
                 type="button"
-                key={t.id}
+                key={t.number}
                 className="flyout-task"
                 onClick={() => {
                   setOpen(false);
                   onOpen(t);
                 }}
               >
-                <span>{t.title}</span>
+                <span>{t.what}</span>
                 <small>
-                  {t.agent} · {t.chatTitle}
+                  {name(t.giver)} · {t.chat_title}
                 </small>
               </button>
             ))}

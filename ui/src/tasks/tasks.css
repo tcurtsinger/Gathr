@@ -35,6 +35,17 @@
   color: var(--muted-foreground);
   font-size: 12px;
 }
+.tasks-why {
+  margin: -12px 0 28px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.tasks-meta a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .tasks-answer {
   display: flex;
   flex-direction: column;

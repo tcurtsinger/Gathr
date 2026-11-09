@@ -52,21 +52,43 @@ export type TaskState =
   | 'stopped'
   | 'cancelled';
 
-/** A task an agent gave another (0010). */
+/** A task an agent gave another, or the person (0010). */
 export interface Task {
   number: number;
   chat: string;
   /** The agent who gave it; null when the person did. */
   giver: string | null;
-  owner: string;
+  /** The agent who owns it; null for the person's own. */
+  owner: string | null;
   /** The turn that gave it. */
   given_in: string | null;
-  kind: 'work' | 'review';
+  /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
+  kind: 'work' | 'review' | 'person' | 'person_request';
   what: string;
   state: TaskState;
   reason: string | null;
   /** Tasks it waits for before it starts. */
   after: number[];
+}
+
+/** A question for the person (F9): the form says how it's answered; the first choice is the asker's pick. */
+export interface PersonTask extends Task {
+  chat_title: string;
+  /** The member it was asked for; null when the Supervisor asked for itself. */
+  for_agent: string | null;
+  why: string | null;
+  form: 'choice' | 'choices' | 'yesno' | 'done' | 'text';
+  choices: { label: string; detail?: string }[];
+  files: { name: string; size: number }[];
+  created_us: number;
+}
+
+export interface PersonAnswer {
+  task: number;
+  pick?: string[];
+  yes?: boolean;
+  done?: boolean;
+  text?: string;
 }
 
 /** What an agent waits on (0010): another agent, CI, a PR or a check. */
@@ -190,6 +212,13 @@ export const api = {
     call<Project>('POST', '/api/projects', project),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
+  personTasks: () => call<{ tasks: PersonTask[] }>('GET', '/api/person-tasks').then((t) => t.tasks),
+  answer: (answers: PersonAnswer[]) =>
+    call<{ answered: number[]; refused: { task: number; why: string; ref: string | null }[] }>(
+      'POST',
+      '/api/person-tasks/answer',
+      { answers },
+    ),
   send: (chat: string, text: string, agent?: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
   stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),

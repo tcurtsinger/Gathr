@@ -16,17 +16,72 @@
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
-.workspace-tabs > [role="tab"] {
+.workspace-tablist {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.workspace-tab {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  max-width: 180px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.workspace-tab[data-selected="true"] {
+  border-color: var(--border);
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.workspace-tab:hover {
+  background: var(--hover-tint);
+}
+.workspace-tab > [role="tab"] {
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 30px;
+  min-width: 0;
+  height: 100%;
   padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--secondary);
-  color: var(--foreground);
-  font-size: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.workspace-tab > [role="tab"] > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.workspace-tab:has(.workspace-tab-close) > [role="tab"] {
+  padding-right: 26px;
+}
+.workspace-tab-close {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+.workspace-tab-close:hover {
+  background: var(--hover-tint);
+}
+.workspace-tab-close svg {
+  width: 11px;
+  height: 11px;
 }
 .workspace-tabs svg {
   width: 14px;
@@ -36,7 +91,7 @@
 }
 .workspace-toggle {
   position: relative;
-  margin-left: auto;
+  flex: none;
 }
 .attention {
   width: 6px;
@@ -56,4 +111,13 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+.workspace-view[hidden] {
+  display: none;
+}
+.workspace-view > iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: var(--background);
 }

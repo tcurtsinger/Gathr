@@ -1,31 +1,42 @@
 import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { Draft, PersonTask } from './model';
-import { TasksTab } from './TasksTab';
+import type { PersonTask } from '../api';
+import { type Draft, toAnswer } from './model';
+import { type Refusal, TasksTab } from './TasksTab';
 import '../theme.css';
 
-const ask = (id: string, title: string, answer: PersonTask['answer'], labels: string[] = []): PersonTask => ({
-  id,
+const ask = (number: number, what: string, form: PersonTask['form'], labels: string[] = []): PersonTask => ({
+  number,
   chat: 'c1',
-  chatTitle: 'Reconnect',
-  agent: 'Mira',
-  title,
-  answer,
-  options: labels.map((label) => ({ id: label, label })),
+  chat_title: 'Reconnect',
+  giver: 'mira',
+  owner: null,
+  given_in: 't1',
+  kind: 'person',
+  what,
+  state: 'ready',
+  reason: null,
+  after: [],
+  for_agent: null,
+  why: null,
+  form,
+  choices: labels.map((label) => ({ label })),
+  files: [],
+  created_us: 0,
 });
 
 const tasks = [
-  ask('1', 'Keep the partial reply?', 'one', ['Keep it', 'Start fresh']),
-  ask('2', 'Which cases fail?', 'many', ['Partial', 'Repeated', 'Expired']),
-  ask('3', 'What should the notice say?', 'text'),
+  ask(1, 'Keep the partial reply?', 'choice', ['Keep it', 'Start fresh']),
+  ask(2, 'Which cases fail?', 'choices', ['Partial', 'Repeated', 'Expired']),
+  ask(3, 'What should the notice say?', 'text'),
 ];
 
-/** The tab as the app holds it: drafts live outside it, and Send settles what it was given. */
-function Tab() {
+/** The tab as the app holds it: drafts live outside it, and Send settles what the service takes. */
+function Tab({ refuse = [] }: { refuse?: Refusal[] }) {
   const [open, setOpen] = useState(tasks);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [selected, setSelected] = useState<number | null>(null);
+  const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [sent, setSent] = useState('');
   return (
     <>
@@ -34,12 +45,15 @@ function Tab() {
         selected={selected}
         onSelect={setSelected}
         drafts={drafts}
-        onDraft={(id, d) => setDrafts((all) => ({ ...all, [id]: d }))}
-        onOpenChat={() => {}}
-        onSend={async (answers) => {
-          setSent(answers.map((a) => `${a.task.id}:${a.draft.values.join('+')}/${a.draft.notes}`).join(' '));
-          setOpen((list) => list.filter((t) => !answers.some((a) => a.task.id === t.id)));
-          return [];
+        onDraft={(n, d) => setDrafts((all) => ({ ...all, [n]: d }))}
+        name={() => 'Mira'}
+        onOpenFile={() => {}}
+        onReference={() => {}}
+        onSend={async (ready) => {
+          setSent(JSON.stringify(ready.map((t) => toAnswer(t, drafts[t.number]))));
+          const taken = ready.filter((t) => !refuse.some((r) => r.task === t.number));
+          setOpen((list) => list.filter((t) => !taken.includes(t)));
+          return refuse;
         }}
       />
       <output aria-label="Sent">{sent}</output>
@@ -47,15 +61,15 @@ function Tab() {
   );
 }
 
-test('Back and Next keep drafts, and Send answers only the ready tasks', async () => {
+test('Back and Next keep drafts, and Send answers only the ready questions', async () => {
   const screen = await render(<Tab />);
-  await screen.getByRole('button', { name: 'Start fresh' }).click();
+  await screen.getByRole('button', { name: /Start fresh/ }).click();
   await screen.getByRole('button', { name: 'Next' }).click();
   // Notes alone don't answer a pick: this one stays open.
   await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('not sure yet');
   await screen.getByRole('button', { name: 'Back' }).click();
   await expect
-    .element(screen.getByRole('button', { name: 'Start fresh' }))
+    .element(screen.getByRole('button', { name: /Start fresh/ }))
     .toHaveAttribute('aria-pressed', 'true');
   await screen.getByRole('button', { name: 'Next' }).click();
   await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
@@ -63,7 +77,20 @@ test('Back and Next keep drafts, and Send answers only the ready tasks', async (
   await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
   await expect.element(screen.getByText('2 Done')).toBeVisible();
   await screen.getByRole('button', { name: 'Send' }).click();
-  await expect.element(screen.getByLabelText('Sent')).toHaveTextContent('1:Start fresh/ 3:Reconnecting/');
+  await expect
+    .element(screen.getByLabelText('Sent'))
+    .toHaveTextContent('[{"task":1,"pick":["Start fresh"]},{"task":3,"text":"Reconnecting"}]');
   await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
   await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
+});
+
+test('Send shows the first refused question, still open, with why', async () => {
+  const screen = await render(<Tab refuse={[{ task: 2, why: '#2 was cancelled', ref: 'r-1' }]} />);
+  await screen.getByRole('button', { name: 'Next' }).click();
+  await screen.getByRole('checkbox', { name: /Partial/ }).click();
+  await screen.getByRole('button', { name: 'Next' }).click();
+  await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
+  await screen.getByRole('button', { name: 'Send' }).click();
+  await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
+  await expect.element(screen.getByText('Answer failed: #2 was cancelled')).toBeVisible();
 });

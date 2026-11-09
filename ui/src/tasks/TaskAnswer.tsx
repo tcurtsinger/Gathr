@@ -1,6 +1,7 @@
 import { type ElicitationField, ElicitationForm } from '@/components/assistant-ui/elements/elicitation-form';
 import { OptionList } from '@/components/assistant-ui/elements/option-list';
-import type { Draft, PersonTask } from './model';
+import type { PersonTask } from '../api';
+import { type Draft, options } from './model';
 
 /** Picks stage the answer; nothing is confirmed here. A pick also takes optional notes. */
 export function TaskAnswer({
@@ -12,7 +13,7 @@ export function TaskAnswer({
   draft: Draft;
   onDraft: (d: Draft) => void;
 }) {
-  const text = task.answer === 'text';
+  const text = task.form === 'text';
   const field: ElicitationField = text
     ? {
         name: 'answer',
@@ -29,8 +30,8 @@ export function TaskAnswer({
         <OptionList
           presentation="inline"
           aria-label="Your answer"
-          options={task.options}
-          selectionMode={task.answer === 'many' ? 'multiple' : 'single'}
+          options={options(task)}
+          selectionMode={task.form === 'choices' || task.form === 'done' ? 'multiple' : 'single'}
           value={draft.values}
           onValueChange={(values) => onDraft({ ...draft, values })}
         />
