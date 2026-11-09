@@ -47,7 +47,7 @@ export interface Member {
 export type PauseScope = { scope: 'app' } | { scope: 'chat' | 'agent'; target: string };
 
 /**
- * A pause (0010): pausing while a turn or background command in it still runs, paused once quiet,
+ * A pause (0010): pausing while a turn, background command or wait's check in it still runs, paused once quiet,
  * stopped after Stop now until Restart (its resume).
  */
 export interface Pause {
