@@ -63,16 +63,16 @@ needed: `designs/tokens.css` already self-hosts the font.
 
 ## Timings
 
-Edge, 1440 × 900, production builds on the same service and data (`pia-format`: 500 messages with 147 tool calls, a
+Edge, 1440 × 900, production builds on the same service and data, measured 2026-11-09 (`pia-format`: 500 messages with 147 tool calls, a
 20,000-word answer, 50 tool calls in a turn), 10 rounds. Budgets from `slice-2b.md`.
 
 | | `main` | This | Budget |
 |---|---|---|---|
-| Cold start to the newest chat drawn | 135 ms | see PR | 300 ms |
-| Switch to the 500-message chat | 71 ms | see PR | 200 ms |
-| Switch to the 20,000-word answer | 34 ms | see PR | 100 ms |
-| Enter to the reply's first text | 111 ms | see PR | 150 ms |
-| Worst frame while a 20,000-word reply streams | 72.8 ms | see PR | 50 ms |
+| Cold start to the newest chat drawn (median of 10, max) | 134 (148) ms | 201 (233) ms | 300 ms |
+| Switch to the 500-message chat (median, max) | 74 (79) ms | 69 (85) ms | 200 ms |
+| Switch to the 20,000-word answer | 35 (37) ms | 43 (48) ms | 100 ms |
+| Enter to the reply's first text | 123 ms | 107 ms | 150 ms |
+| Worst frame while a 20,000-word reply streams | 60.6 ms | 6.2 ms | 50 ms |
 
 ## Turned down
 

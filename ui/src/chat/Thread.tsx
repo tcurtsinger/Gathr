@@ -84,9 +84,9 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
       <ActionsContext value={stable}>
         <ThreadPrimitive.Root className="thread">
           <ThreadPrimitive.Viewport ref={viewport} className="thread-viewport" onScroll={onScroll}>
-            <div className="thread-column">
+            <div className="thread-column" data-empty={empty || undefined}>
               {header}
-              {empty && <p className="empty">No messages yet</p>}
+              {empty && <h2 className="welcome">What are we working on?</h2>}
               <div className="thread-messages">
                 <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
               </div>
