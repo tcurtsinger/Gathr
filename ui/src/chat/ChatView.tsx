@@ -1,10 +1,11 @@
 import { Folder } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import type { Agent, Chat, Member, Project } from '../api';
+import type { Agent, Chat, Member, Project, Run } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
+import { ChatMenu } from './ChatMenu';
 import type { SendFailure } from './messages';
 import { Summary } from './Summary';
 import { running } from './state';
@@ -40,7 +41,7 @@ interface Props {
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { projects, onProject, onNewProject, onStart, headerEnd } = props;
-  const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
+  const { state, loaded, loadFailure, failed, send, stop, changeRun, approve, reload } = useChat(
     chat.id,
     unsent,
     onUnsent,
@@ -94,6 +95,7 @@ export function ChatView(props: Props) {
       <header className="topbar">
         <h1>{chat.title}</h1>
         {state.members.length > 1 && <Summary state={state} />}
+        {!fresh && <ChatMenu run={state.run} onRun={changeRun} />}
         {headerEnd}
       </header>
       <Thread
@@ -103,6 +105,7 @@ export function ChatView(props: Props) {
         running={!!turn}
         actions={actions}
         empty={loaded && state.messages.length === 0 && failed.length === 0}
+        after={<RunLine run={state.run} members={state.members} />}
         header={
           loadFailure && (
             <Notice
@@ -157,6 +160,17 @@ export function ChatView(props: Props) {
         />
       </Thread>
     </main>
+  );
+}
+
+/** The quiet line after the latest content while the chat isn't running (the prototype's run note). */
+function RunLine({ run, members }: { run: Run; members: Member[] }) {
+  if (run.state === 'running') return null;
+  const who = run.by ? (members.find((m) => m.agent === run.by)?.name ?? 'An agent') : 'You';
+  return (
+    <p className="run-line" role="status">
+      {run.state === 'pausing' ? 'Pausing…' : `${who} ${run.state}`}
+    </p>
   );
 }
 

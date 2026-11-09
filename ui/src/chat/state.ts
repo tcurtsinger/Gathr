@@ -1,4 +1,4 @@
-import type { History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
+import type { History, Member, Message, Run, Task, ToolBody, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -16,6 +16,7 @@ export interface ChatState {
   members: Member[];
   tasks: Task[];
   waits: Wait[];
+  run: Run;
 }
 
 export const empty: ChatState = {
@@ -26,6 +27,7 @@ export const empty: ChatState = {
   members: [],
   tasks: [],
   waits: [],
+  run: { state: 'running' },
 };
 
 export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
@@ -41,6 +43,7 @@ export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wai
     members: history.members ?? [],
     tasks: work?.tasks ?? [],
     waits: work?.waits ?? [],
+    run: history.run ?? empty.run,
   };
 }
 
@@ -113,6 +116,8 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, tasks: event.tasks, waits: event.waits };
     case 'members':
       return { ...state, members: event.members };
+    case 'run':
+      return { ...state, run: event.run };
     default:
       return state;
   }
@@ -122,9 +127,11 @@ export function answered(state: ChatState, request: string): ChatState {
   return { ...state, approvals: state.approvals.filter((a) => a.request !== request) };
 }
 
-/** A turn still under way, if any: Stop applies to the chat's turns. */
+/** A turn still under way, if any: Stop applies to the chat's turns. A paused chat's queued turns
+ * wait for Resume, so only one already running counts. */
 export function running(state: ChatState): Turn | undefined {
-  return Object.values(state.turns).find((t) => t.status === 'running' || t.status === 'queued');
+  const held = state.run.state !== 'running';
+  return Object.values(state.turns).find((t) => t.status === 'running' || (!held && t.status === 'queued'));
 }
 
 function without(record: Record<string, string>, key: string): Record<string, string> {

@@ -89,6 +89,11 @@
       "sha256": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433"
     },
     {
+      "path": "components/ui/dropdown-menu.tsx",
+      "url": "https://ui.shadcn.com/r/styles/new-york-v4/dropdown-menu.json",
+      "sha256": "d954efb735f13734751207ad22cb0cddd7f6ec53c59d16675d103dae08cb61fb"
+    },
+    {
       "path": "lib/utils.ts",
       "url": null,
       "sha256": "a8950be0d3981383f2897a00a5a58913ae927d96e51557d915a76e81fbef4f30",

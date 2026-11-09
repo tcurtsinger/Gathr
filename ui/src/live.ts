@@ -1,4 +1,4 @@
-import type { Member, Message, PersonTask, Task, ToolBody, TurnStatus, Wait } from './api';
+import type { Member, Message, PersonTask, Run, Task, ToolBody, TurnStatus, Wait } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
@@ -26,6 +26,8 @@ export type LiveEvent =
   | { type: 'person_tasks'; tasks: PersonTask[] }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
+  // The chat was paused, resumed, stopped or restarted, or its pause went quiet.
+  | { type: 'run'; chat: string; run: Run }
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
   // An agent was added or changed: reload agents.

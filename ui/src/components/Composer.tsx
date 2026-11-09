@@ -6,6 +6,7 @@ import {
   ComposerToolbar,
   Composer as Frame,
 } from '@/components/assistant-ui/elements/composer';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import './composer.css';
 
 interface Props {
@@ -23,6 +24,8 @@ interface Props {
 export function Composer({ draft, onDraft, onSend, onStop, inputRef, tools }: Props) {
   const canSend = draft.trim().length > 0;
   const stopping = !!onStop && !canSend;
+  // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
+  const label = stopping ? 'Stop this chat now' : 'Send';
   const keyDown = (e: KeyboardEvent) => {
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
     e.preventDefault();
@@ -45,13 +48,20 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, tools }: Pr
           <ComposerActions />
           <ComposerActions>
             {tools}
-            <ComposerSend
-              aria-label={stopping ? 'Stop' : 'Send'}
-              streaming={stopping}
-              idle={!canSend}
-              disabled={!canSend && !stopping}
-              onClick={stopping ? onStop : onSend}
-            />
+            <TooltipProvider delayDuration={0}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <ComposerSend
+                    aria-label={label}
+                    streaming={stopping}
+                    idle={!canSend}
+                    disabled={!canSend && !stopping}
+                    onClick={stopping ? onStop : onSend}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>{label}</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </ComposerActions>
         </ComposerToolbar>
       </ComposerBar>

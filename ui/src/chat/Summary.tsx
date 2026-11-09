@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import type { Member, Task, Wait } from '../api';
 import type { ChatState } from './state';
-import { list, roleName } from './team';
+import { clock, list, roleName } from './team';
 import './summary.css';
 
 const open = (t: Task) => !['done', 'blocked', 'failed', 'stopped', 'cancelled'].includes(t.state);
@@ -83,10 +83,18 @@ function rank(m: Member) {
   return m.role === 'supervisor' ? 0 : 1;
 }
 
-/** Working, waiting (and for whom, by name), or ready, from the service's records only. */
-function doing(m: Member, state: ChatState, name: (agent: string | null) => string): string {
-  if (Object.values(state.turns).some((t) => t.agent === m.agent && t.status === 'running')) return 'Working';
+/**
+ * Working; out of usage; stopped; paused, or held when work waits for Resume; waiting (and for whom, by
+ * name); or ready. From the service's records only.
+ */
+export function doing(m: Member, state: ChatState, name: (agent: string | null) => string): string {
+  const turns = Object.values(state.turns).filter((t) => t.agent === m.agent);
+  if (turns.some((t) => t.status === 'running')) return 'Working';
+  if (m.usage_until_us) return `Out of usage until ${clock(new Date(m.usage_until_us / 1000).toISOString())}`;
+  if (state.run.state === 'stopped') return 'Stopped';
   const mine = state.tasks.filter((t) => t.owner === m.agent && open(t));
+  if (m.paused || state.run.state !== 'running')
+    return mine.length || turns.some((t) => t.status === 'queued') ? 'Held' : 'Paused';
   const after = mine.flatMap((t) => t.after);
   const on = [
     ...state.waits.filter((w) => w.agent === m.agent && w.state === 'open').map((w) => waitName(w, name)),
@@ -94,9 +102,7 @@ function doing(m: Member, state: ChatState, name: (agent: string | null) => stri
     ...state.tasks.filter((t) => t.giver === m.agent && open(t)).map((t) => name(t.owner)),
   ];
   if (on.length) return `Waiting for ${list([...new Set(on)])}`;
-  return mine.length || Object.values(state.turns).some((t) => t.agent === m.agent && t.status === 'queued')
-    ? 'Waiting'
-    : 'Ready';
+  return mine.length || turns.some((t) => t.status === 'queued') ? 'Waiting' : 'Ready';
 }
 
 /** A wait in a few words, as the service names it (tasks/words.rs `wait_name`). */
