@@ -41,11 +41,46 @@ pub async fn run(
     env: &Vars,
     limit: Duration,
 ) -> Result<Ran, String> {
+    started(program, args, dir, env, limit, false).await
+}
+
+/// Runs `script` in `shell` as `run` does, with the shell kept until what it printed is read. A
+/// script dropped before then (Archive, cancel, its limit) takes its process group with it, found
+/// through that live shell: an MSYS pid is another process's once its own has ended (1216).
+pub async fn script(
+    shell: &Path,
+    script: &str,
+    dir: &Path,
+    env: &Vars,
+    limit: Duration,
+) -> Result<Ran, String> {
+    let name = shell.file_stem().unwrap_or_default().to_string_lossy();
+    let args = ["-c", HOLD, &name, script];
+    started(shell, &args, dir, env, limit, true).await
+}
+
+/// The script runs in a subshell, so its own `exit` can't end the shell, which then waits for the
+/// end of its input: the service closes it once the script's output is read.
+const HOLD: &str = r#"(eval "$1") </dev/null; s=$?; exec >&- 2>&-; read -r _; exit $s"#;
+
+async fn started(
+    program: &Path,
+    args: &[&str],
+    dir: &Path,
+    env: &Vars,
+    limit: Duration,
+    held: bool,
+) -> Result<Ran, String> {
     let name = program.file_stem().unwrap_or_default().to_string_lossy();
     let what = format!("{name} {}", args.first().unwrap_or(&""));
     let pipes = std::io::pipe().and_then(|out| Ok((out, std::io::pipe()?)));
     let ((stdout, out_end), (stderr, err_end)) =
         pipes.map_err(|e| format!("{name} didn't start: {e}"))?;
+    let hold = held.then(std::io::pipe).transpose();
+    let (input, hold) = match hold.map_err(|e| format!("{name} didn't start: {e}"))? {
+        Some((input, hold)) => (Stdio::from(input), Some(hold)),
+        None => (Stdio::null(), None),
+    };
     let mut command = std::process::Command::new(program);
     command
         .args(args)
@@ -55,7 +90,7 @@ pub async fn run(
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never")
         .env("GH_PROMPT_DISABLED", "1")
-        .stdin(Stdio::null())
+        .stdin(input)
         .stdout(out_end)
         .stderr(err_end);
     crate::platform::no_window(&mut command);
@@ -63,28 +98,23 @@ pub async fn run(
     let child = tokio::process::Command::from(command).spawn();
     let child = child.map_err(|e| format!("{name} didn't start: {e}"))?;
     let (stdout, stderr) = (read_all(stdout), read_all(stderr));
-    let group = crate::platform::group_of(child.id(), program);
     let mut running = Running {
         child,
-        group: None,
+        hold,
         program,
         done: false,
     };
-    let (child, found) = (&mut running.child, &mut running.group);
+    let (child, hold) = (&mut running.child, &mut running.hold);
+    // Waited for only once its output ends: on Unix a program not yet waited for keeps its pid,
+    // and with it its group's id, from any other process.
     let waited = async {
-        let (out, err, status) = tokio::join!(stdout, stderr, child.wait());
+        let (out, err) = tokio::join!(stdout, stderr);
+        hold.take();
+        let status = child.wait().await?;
         let read = |got: Result<std::io::Result<Vec<u8>>, oneshot::error::RecvError>| {
             got.map_err(std::io::Error::other).and_then(|read| read)
         };
-        std::io::Result::Ok((status?, read(out)?, read(err)?))
-    };
-    tokio::pin!(waited, group);
-    let waited = async {
-        tokio::select! {
-            ran = &mut waited => return ran,
-            group = &mut group => *found = group,
-        }
-        waited.await
+        std::io::Result::Ok((status, read(out)?, read(err)?))
     };
     let (status, out, err) = tokio::time::timeout(limit, waited)
         .await
@@ -112,11 +142,11 @@ fn read_all(mut pipe: std::io::PipeReader) -> oneshot::Receiver<std::io::Result<
 
 /// A program dropped while it runs (past its limit, or its wait ended) is ended with what it
 /// started: a child left behind keeps the output pipe open, and on Windows the service can't exit
-/// until that child does. Once its group is known the program is killed first, so it stops at
-/// once; before that, its group is found through it, so it's killed last.
+/// until that child does. Its group is ended first, through the program itself, then the program:
+/// `hold` (a script's shell) goes only after both.
 struct Running<'a> {
     child: tokio::process::Child,
-    group: Option<u32>,
+    hold: Option<std::io::PipeWriter>,
     program: &'a Path,
     done: bool,
 }
@@ -126,11 +156,8 @@ impl Drop for Running<'_> {
         if self.done {
             return;
         }
-        if self.group.is_some() {
-            let _ = self.child.start_kill();
-        }
         if let Some(pid) = self.child.id() {
-            crate::platform::end_group(self.group, pid, self.program);
+            crate::platform::end_group(pid, self.program);
         }
         let _ = self.child.start_kill();
     }

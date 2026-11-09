@@ -303,7 +303,7 @@ async fn moved_past(
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
     let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
-    let ran = run(&shell, &["-c", command], dir, &vars, LIMIT).await?;
+    let ran = gathr::run::script(&shell, command, dir, &vars, LIMIT).await?;
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
     }

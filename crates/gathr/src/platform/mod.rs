@@ -80,29 +80,9 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
-/// The process group of `program`, started with `no_window` as `pid`: what it starts stays in it,
-/// so `end_group` can end them all. On Unix it's the pid. On Windows only an MSYS program (Git
-/// Bash) has one, whose fork and exec leave children no Windows tree reaches; a process started
-/// from outside MSYS leads its own group, under the MSYS pid read here while it runs.
-pub async fn group_of(pid: Option<u32>, program: &Path) -> Option<u32> {
-    if cfg!(not(windows)) {
-        return pid;
-    }
-    let mut command = std::process::Command::new(msys_bash(program)?);
-    let script = format!(r#"{FIND_GROUP} find "$1" && echo "$g""#);
-    command.args(["-c", &script, "group-of", &pid?.to_string()]);
-    no_window(&mut command);
-    let mut command = tokio::process::Command::from(command);
-    command
-        .stdin(std::process::Stdio::null())
-        .kill_on_drop(true);
-    let found = command.output().await.ok()?;
-    String::from_utf8_lossy(&found.stdout).trim().parse().ok()
-}
-
-/// The MSYS group led by the Windows pid `$1`, as `$g`. Only built-ins: the service's PATH may not
-/// have Git's usr\bin.
-const FIND_GROUP: &str = r#"find() {
+/// The MSYS process running as the Windows pid `$1`, as `$g`. Only built-ins: the service's PATH
+/// may not have Git's usr\bin.
+const FIND: &str = r#"find() {
     for p in /proc/[0-9]*; do
         w=; read -r w 2>/dev/null < "$p/winpid"
         [ "$w" = "$1" ] && { g=${p#/proc/}; return 0; }
@@ -110,28 +90,24 @@ const FIND_GROUP: &str = r#"find() {
     return 1
 };"#;
 
-/// Ends every process in the group of `program`, running as `pid`: `group` from `group_of`, or
-/// found now through `pid`, which must then still run. Returns once they're gone.
-pub fn end_group(group: Option<u32>, pid: u32, program: &Path) {
-    let group = group.map_or(String::new(), |g| g.to_string());
+/// Ends every process in the group of `program`, started with `no_window` as `pid`, which leads
+/// it: what it starts stays in it. Returns once they're gone. On Unix the group's id is `pid`,
+/// no other process's while `pid` isn't waited for. On Windows only an MSYS program (Git Bash) has
+/// a group, whose fork and exec leave children no Windows tree reaches; its id is the program's
+/// MSYS pid, found here through `pid` (no other process's while its handle is held), so only while
+/// the program runs: an MSYS pid is free for another process the moment its own ends.
+pub fn end_group(pid: u32, program: &Path) {
     let mut command = match msys_bash(program) {
         Some(bash) => {
             let mut command = std::process::Command::new(bash);
-            let script = format!(
-                r#"{FIND_GROUP} g=$1; {{ [ -n "$g" ] || find "$2"; }} && kill -s KILL -- "-$g""#
-            );
-            command.args(["-c", &script, "end-group", &group, &pid.to_string()]);
+            let script = format!(r#"{FIND} find "$1" && kill -s KILL -- "-$g""#);
+            command.args(["-c", &script, "end-group", &pid.to_string()]);
             command
         }
         None if cfg!(windows) => return,
         None => {
             let mut command = std::process::Command::new("/bin/kill");
-            let group = if group.is_empty() {
-                pid.to_string()
-            } else {
-                group
-            };
-            command.args(["-KILL", "--", &format!("-{group}")]);
+            command.args(["-KILL", "--", &format!("-{pid}")]);
             command
         }
     };
