@@ -12,6 +12,7 @@ mod models;
 mod pauses;
 mod projects;
 mod routes;
+mod serve;
 mod sign_in;
 mod startup;
 mod team;
@@ -162,9 +163,7 @@ async fn serve(
         stop_state.stopping.send_replace(true);
         let _ = stopped_tx.send(reason);
     };
-    axum::serve(listener, api::router(state.clone()))
-        .with_graceful_shutdown(stopping)
-        .await?;
+    serve::serve(listener, api::router(state.clone()), stopping).await;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
     sign_ins.cancel_all().await;

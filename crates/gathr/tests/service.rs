@@ -224,3 +224,29 @@ fn dev_window_without_app(dir: &TempDir, port: u16) -> (std::path::PathBuf, Stri
     );
     (data, said)
 }
+
+/// With all its runtime threads on one CPU, the default HTTP/1 connection's watch for a client
+/// hanging up made Windows flood the I/O driver, and a request sat for up to 30 s (1209). A runner
+/// short of CPU is the same: every request still answers at once.
+#[cfg(windows)]
+#[test]
+fn requests_answer_at_once_with_the_service_on_one_cpu() {
+    let dir = TempDir::new();
+    let service = TestService::start(&dir.0);
+    let pin = format!(
+        "(Get-Process -Id {}).ProcessorAffinity = 1",
+        service.child.id()
+    );
+    let pinned = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-Command", &pin])
+        .status()
+        .unwrap();
+    assert!(pinned.success(), "the service wasn't pinned to one CPU");
+    for n in 1..=30 {
+        let started = Instant::now();
+        let listed = service.call("GET", "/api/chats");
+        assert_eq!(listed.status, 200, "{}", listed.body);
+        let took = started.elapsed();
+        assert!(took < Duration::from_secs(2), "request {n} took {took:?}");
+    }
+}
