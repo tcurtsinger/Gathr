@@ -414,7 +414,7 @@ async fn sign_out(
     }
 }
 
-const STOPPING: &str = "service stopped during sign out";
+const STOPPING: &str = "The service stopped before sign out finished";
 
 /// The account folder's renewal gate, or why it wasn't passed. Signing out never runs while an
 /// engine on it renews the login: that renewal would save over the sign-out.

@@ -231,7 +231,7 @@ export function App() {
               />
             </div>
           ) : (
-            <p className="empty">No chats</p>
+            <p className="empty">No chats yet</p>
           )}
         </main>
       )}

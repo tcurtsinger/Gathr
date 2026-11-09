@@ -232,7 +232,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new Failure('Connection failed', 'service unavailable', null);
+    throw new Failure('Connection failed', 'The service did not respond. Try again.', null);
   }
   const answer = await response.json().catch(() => null);
   if (!response.ok || answer === null) {

@@ -45,7 +45,9 @@ pub fn days(conn: &Connection) -> Result<Days, Error> {
 
 pub fn set_days(conn: &Connection, days: Days) -> Result<(), Error> {
     if !(1..=MOST).contains(&days.stale) || !(1..=MOST).contains(&days.cancel) {
-        return Err(Error::Refused(format!("days must be 1 to {MOST}")));
+        return Err(Error::Refused(format!(
+            "Enter a number of days from 1 to {MOST}"
+        )));
     }
     for (key, value) in [("stale_days", days.stale), ("cancel_days", days.cancel)] {
         conn.execute(
@@ -171,22 +173,35 @@ fn tell_lead(
         let whose = match &t.owner {
             Some(owner) => {
                 has_agent = true;
-                format!("{}, {}", words::name_of(tx, owner)?, t.state.as_str())
+                format!(
+                    "assigned to {}, {}",
+                    words::name_of(tx, owner)?,
+                    t.state.as_str()
+                )
             }
-            None => "person".to_string(),
+            None => "for the person".to_string(),
         };
         lines.push(format!("#{n} {} ({whose})", t.what));
     }
+    let action = if marked.len() == 1 {
+        "Finish, restart or cancel it"
+    } else {
+        "Finish, restart or cancel them"
+    };
+    let day = if days.stale == 1 { "day" } else { "days" };
     let mut text = format!(
-        "Stale {} d: {}. Finish, restart or cancel.",
+        "No progress in {} {day}: {}. {action}",
         days.stale,
         lines.join("\n")
     );
     if has_agent {
+        let day = if days.cancel == 1 { "day" } else { "days" };
         text.push_str(&format!(
-            " Agent tasks auto-cancel after {} d more idle unless active or paused.",
+            "; agent tasks auto-cancel after {} more {day} without progress unless work is ongoing or paused.",
             days.cancel
         ));
+    } else {
+        text.push('.');
     }
     Start::queue(tx, (chat, &lead.agent), (None, None), text).map(Some)
 }

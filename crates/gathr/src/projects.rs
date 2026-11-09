@@ -41,7 +41,9 @@ pub fn create(
         Err(rusqlite::Error::SqliteFailure(e, _))
             if e.extended_code == rusqlite::ffi::SQLITE_CONSTRAINT_UNIQUE =>
         {
-            return Err(Error::Refused("project name already used".into()));
+            return Err(Error::Refused(
+                "Another project has that name. Use a different name.".into(),
+            ));
         }
         other => other?,
     };

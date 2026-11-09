@@ -131,10 +131,14 @@ type Fields = {
 };
 
 const modes: [Approvals, string, string][] = [
-  ['ask', 'Ask', 'Ask for required permissions.'],
-  ['edits', 'Edits', 'Allow worktree edits. Ask for other required permissions.'],
-  ['auto', 'Auto', 'Engine checks actions. Ask for pushes and file-tool writes outside the worktree.'],
-  ['full', 'Full', 'Allow without asking.'],
+  ['ask', 'Ask', 'Ask before actions that need permission'],
+  ['edits', 'Edits', 'Allow file edits in the worktree. Ask before other actions that need permission.'],
+  [
+    'auto',
+    'Auto',
+    'The engine checks actions. Pushes and file tools writing outside the worktree need approval.',
+  ],
+  ['full', 'Full', 'Allow actions without asking'],
 ];
 
 /** One Account picker (it implies the engine), then the account's models and their efforts. */
@@ -304,7 +308,7 @@ function AgentForm(props: FormProps) {
                 </Fragment>
               ))}
             </dl>
-            <p>Auto: shell commands can run outside the worktree.</p>
+            <p>Shell commands can run outside the worktree in Auto mode</p>
           </Help>
         </span>
         <select
