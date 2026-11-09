@@ -86,11 +86,17 @@ export function GathrLine({ custom }: { custom: Custom }) {
 }
 
 /** Under the lead's last word on a round: the link back to its thread, and who agreed. */
-export function LastWord({ back, agreed }: { back: string; agreed: string[] }) {
+export function LastWord({ back, agreed }: { back: { root: string; done: boolean }; agreed: string[] }) {
   const folding = useContext(FoldingContext);
+  // A disclosure, as it opens the thread: assistant-ui stops following the bottom for it.
   return (
     <div className="last-word">
-      <button type="button" className="link thread-link" onClick={() => folding.reveal(back)}>
+      <button
+        type="button"
+        className="link thread-link"
+        aria-expanded={folding.chosen.get(back.root) ?? !back.done}
+        onClick={() => folding.reveal(back.root)}
+      >
         View team thread
       </button>
       {agreed.map((name) => (

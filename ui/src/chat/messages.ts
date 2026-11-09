@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Agent, Failure, Message, Role, ToolBody, Turn } from '../api';
+import type { Agent, Failure, Message, Role, Task, ToolBody, Turn } from '../api';
 import type { Approval, ChatState } from './state';
 import { describe, finished, type Team, team } from './team';
 
@@ -48,7 +48,7 @@ export type Custom = {
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
   assignment?: { from?: string; to?: string; what: string };
   /** The lead's last word on a round: its thread, and the reviewers who agreed. */
-  back?: string;
+  back?: { root: string; done: boolean };
   agreed?: string[];
 };
 
@@ -130,7 +130,7 @@ export function toThread(
   };
   place(-1);
   main.forEach((g, i) => {
-    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, roundOf(g.turn), crew) : {}));
+    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, roundOf(g.turn), state, crew) : {}));
     place(i);
   });
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
@@ -173,12 +173,18 @@ function grouped(state: ChatState): Group[] {
 }
 
 /** On the lead's last word of a round: the link back to its thread and the reviewers who agreed. */
-function lastWord(g: Group, back: string | undefined, crew: Team): Custom {
+function lastWord(g: Group, back: string | undefined, state: ChatState, crew: Team): Custom {
   if (!back || !g.reply) return {};
   const reviews = (crew.threads.get(back) ?? []).filter((t) => t.kind === 'review' && t.state === 'done');
   const agreed = [...new Set(reviews.map((t) => crew.name(t.owner) ?? ''))].filter(Boolean);
-  return { back, agreed };
+  return {
+    back: { root: back, done: roundOver(state.turns[g.turn ?? ''], crew.threads.get(back) ?? []) },
+    agreed,
+  };
 }
+
+const roundOver = (final: Turn | undefined, tasks: Task[]) =>
+  finished(final) && tasks.every((t) => settled.has(t.state));
 
 function head(
   cache: Cache,
@@ -189,7 +195,7 @@ function head(
   final: Turn | undefined,
 ): ThreadMessageLike {
   const tasks = crew.threads.get(root) ?? [];
-  const done = finished(final) && tasks.every((t) => settled.has(t.state));
+  const done = roundOver(final, tasks);
   // A reply that began after the lead's word began came late.
   const began = (turn: string | null | undefined) =>
     Date.parse(state.messages.find((m) => m.turn === turn)?.time ?? '');

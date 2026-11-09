@@ -139,7 +139,10 @@ test("the lead's last word links back, folds the thread, and shows who agreed; a
   state.messages.push(said('back', 'assistant', 'All done'));
   let all = view(state);
   expect(all.some((m) => m.id?.startsWith('back-gathr'))).toBe(false);
-  expect(custom(all.at(-1) as ThreadMessageLike)).toMatchObject({ back: 'ask', agreed: ['Sol'] });
+  expect(custom(all.at(-1) as ThreadMessageLike)).toMatchObject({
+    back: { root: 'ask', done: true },
+    agreed: ['Sol'],
+  });
   const head = custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head;
   expect(head).toMatchObject({ done: true, text: 'Rowan, Kit and Sol done' });
   expect(ids(unfolded(all, new Map()))).not.toContain('a-rowan');
@@ -173,6 +176,20 @@ test("the lead's word mid-round links back but doesn't fold the thread while wor
   state.messages.push(said('woke', 'gathr', 'Your wait on CI on #12 ended'));
   state.messages.push(said('woke', 'assistant', 'CI passed; Kit is still on it'));
   const all = view(state);
-  expect(custom(all.find((m) => m.id === 'a-woke') as ThreadMessageLike).back).toBe('ask');
+  expect(custom(all.find((m) => m.id === 'a-woke') as ThreadMessageLike).back?.root).toBe('ask');
   expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.done).toBe(false);
+});
+
+test('a member hearing back on a task it gave stays in the thread, not the main line', () => {
+  const state = round();
+  state.turns.sub = turn('sub', 'lane', { task: 3, answers: 'rowan' });
+  state.tasks.push(task(3, 'lane', 'rowan', { giver: 'rowan' }));
+  state.messages.push(said('sub', 'assistant', 'Sub-task done'));
+  state.turns.heard = turn('heard', 'rowan', { answers: 'rowan' });
+  state.messages.push(said('heard', 'gathr', 'The task you gave is settled'));
+  state.messages.push(said('heard', 'assistant', 'Lane finished it; my part is done too'));
+  const all = view(state);
+  const heard = custom(all.find((m) => m.id === 'a-heard') as ThreadMessageLike);
+  expect(heard).toMatchObject({ thread: 'ask' });
+  expect(heard.back).toBeUndefined();
 });

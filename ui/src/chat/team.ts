@@ -29,7 +29,15 @@ export function team(state: ChatState, names: Map<string, string>): Team {
     if (roots.has(turn)) return roots.get(turn);
     roots.set(turn, undefined); // a loop of links ends here
     const above = givenIn(turn);
-    const root = above && state.turns[above] ? (rootOf(above) ?? above) : undefined;
+    // A turn on no task that answers one inside a thread (a member hearing back, or woken) stays
+    // in that thread; one that answers a main-line turn is the lead's own word, on the main line.
+    const answers = state.turns[turn]?.answers;
+    const root =
+      above && state.turns[above]
+        ? (rootOf(above) ?? above)
+        : answers && state.turns[turn]?.task == null
+          ? rootOf(answers)
+          : undefined;
     roots.set(turn, root);
     return root;
   };
