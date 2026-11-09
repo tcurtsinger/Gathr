@@ -94,6 +94,56 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
     assert_eq!(names, [json!("Personal"), json!("Équipe")]);
 }
 
+/// SQLite reports every rule a save breaks alike, so only the name rule may read as a taken name.
+#[test]
+fn a_save_that_fails_for_another_reason_says_why_and_not_that_the_name_is_taken() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(&data.0, &[]);
+    let work = service.add_account("Work");
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    for table in ["accounts", "agents"] {
+        let trigger = format!(
+            "CREATE TRIGGER no_{table} BEFORE INSERT ON {table} BEGIN SELECT RAISE(ABORT, 'forced'); END"
+        );
+        db.execute(&trigger, []).unwrap();
+    }
+    let rename = "CREATE TRIGGER no_rename BEFORE UPDATE ON accounts BEGIN SELECT RAISE(ABORT, 'forced'); END";
+    db.execute(rename, []).unwrap();
+
+    let saves = [
+        (
+            "POST",
+            "/api/accounts".to_string(),
+            json!({ "engine": "claude", "name": "Home" }),
+            "Add failed",
+        ),
+        (
+            "PATCH",
+            format!("/api/accounts/{work}"),
+            json!({ "name": "Home" }),
+            "Rename failed",
+        ),
+        (
+            "POST",
+            "/api/agents".to_string(),
+            json!({ "name": "Orin", "account": work }),
+            "Add failed",
+        ),
+    ];
+    for (method, path, body, error) in saves {
+        let failed = service.send(method, &path, body);
+        assert_eq!(failed.status, 500, "{method} {path}: {}", failed.body);
+        let answer = failed.json();
+        assert_eq!(answer["error"], error, "{method} {path}: {answer}");
+        assert!(
+            !answer["why"].as_str().unwrap().contains("has that name"),
+            "{method} {path}: {answer}"
+        );
+        let (ok, trace) = gathr(&data.0, &["diag", "trace", answer["ref"].as_str().unwrap()]);
+        assert!(ok && trace.to_string().contains("forced"), "{trace}");
+    }
+}
+
 #[test]
 fn signing_one_account_in_and_out_leaves_the_other_as_it_was() {
     let data = TempDir::new();
