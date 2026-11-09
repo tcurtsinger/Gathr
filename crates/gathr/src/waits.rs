@@ -276,7 +276,13 @@ pub fn looked(
 /// What one wait waited on has happened: a part is `met`, and its wait fires once every part is.
 pub fn met(conn: &mut Connection, id: &str, line: &str, trace: &str) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
-    let wait = read(&tx, id)?;
+    let starts = met_in(&tx, id, line, trace)?;
+    tx.commit()?;
+    Ok(starts)
+}
+
+fn met_in(tx: &Transaction, id: &str, line: &str, trace: &str) -> Result<Vec<Start>, Error> {
+    let wait = read(tx, id)?;
     if !matches!(wait.state.as_str(), "open") {
         return Ok(Vec::new());
     }
@@ -285,13 +291,13 @@ pub fn met(conn: &mut Connection, id: &str, line: &str, trace: &str) -> Result<V
             r.get(0)
         })?;
     let starts = match part_of {
-        None => fire(&tx, &wait, "fired", line, trace)?,
+        None => fire(tx, &wait, "fired", line, trace)?,
         Some(whole) => {
             tx.execute(
                 "UPDATE waits SET state = 'met', line = ?2, ended_ts = ?3 WHERE id = ?1",
                 params![id, line, now_us()],
             )?;
-            let whole = read(&tx, &whole)?;
+            let whole = read(tx, &whole)?;
             match whole.parts.iter().all(|p| p.state == "met") {
                 true => {
                     let lines: Vec<&str> = whole
@@ -299,13 +305,12 @@ pub fn met(conn: &mut Connection, id: &str, line: &str, trace: &str) -> Result<V
                         .iter()
                         .filter_map(|p| p.line.as_deref())
                         .collect();
-                    fire(&tx, &whole, "fired", &lines.join("; "), trace)?
+                    fire(tx, &whole, "fired", &lines.join("; "), trace)?
                 }
                 false => Vec::new(),
             }
         }
     };
-    tx.commit()?;
     Ok(starts)
 }
 
@@ -313,6 +318,18 @@ pub fn met(conn: &mut Connection, id: &str, line: &str, trace: &str) -> Result<V
 /// queued in the chat, saying how its last turn ended.
 pub fn agent_free(
     conn: &mut Connection,
+    chat: &str,
+    agent: &str,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let starts = agent_free_in(&tx, chat, agent, trace)?;
+    tx.commit()?;
+    Ok(starts)
+}
+
+pub(crate) fn agent_free_in(
+    conn: &Transaction,
     chat: &str,
     agent: &str,
     trace: &str,
@@ -343,7 +360,7 @@ pub fn agent_free(
     let mut starts = Vec::new();
     for id in open {
         let line = format!("{name} is done here: its last turn {how}");
-        starts.extend(met(conn, &id, &line, trace)?);
+        starts.extend(met_in(conn, &id, &line, trace)?);
     }
     Ok(starts)
 }

@@ -190,6 +190,44 @@ fn a_giving_turn_cut_off_by_a_stop_still_brings_its_hear_back() {
 }
 
 #[test]
+fn a_stop_between_a_giving_turns_end_and_its_round_still_brings_its_hear_back() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (lead_task, _) = give(&mut conn, "lead", &[], None);
+    tasks::started(&mut conn, lead_task, T).unwrap();
+    turn(&conn, "lead-turn", "lead", Some(lead_task), "running");
+    let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
+    work(&mut conn, a, Some(Finish::Done), 1);
+    // The service stops after the turn's end is written, before its round runs.
+    conn.execute_batch(
+        "CREATE TEMP TRIGGER stop BEFORE UPDATE ON tasks BEGIN SELECT RAISE(ABORT, 'stopped'); END;",
+    )
+    .unwrap();
+    let moved = tasks::Moved {
+        chat: "c",
+        turn: "lead-turn",
+        agent: Some("lead"),
+        task: Some(lead_task),
+        trace: T,
+    };
+    assert!(tasks::turn_moved(&mut conn, &moved, "done", None).is_err());
+    drop(conn);
+    let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
+    tasks::recover(&mut conn).unwrap();
+    let waiting = gathr::store::take_over(&conn).unwrap();
+    let to_lead: Vec<&str> = waiting
+        .iter()
+        .filter(|w| w.agent.as_deref() == Some("lead"))
+        .map(|w| w.text.as_str())
+        .collect();
+    let heard = format!("#{a} Ann");
+    assert!(
+        to_lead.iter().any(|t| t.contains(&heard)),
+        "no hear-back taken over: {to_lead:?}"
+    );
+}
+
+#[test]
 fn a_finish_applies_when_the_turn_ends_and_only_the_owner_gives_one() {
     let dir = TempDir::new();
     let mut conn = team(&dir);

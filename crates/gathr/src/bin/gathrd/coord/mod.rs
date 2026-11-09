@@ -5,8 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gathr::event::Event;
-use gathr::tasks::{self, Outcome, Start};
-use gathr::waits;
+use gathr::tasks::{self, Moved, Start};
 
 use crate::chats::Chats;
 
@@ -18,22 +17,9 @@ pub use api::routes;
 /// How often waits are looked at, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).
 const EVERY: Duration = Duration::from_secs(120);
 
-/// A turn whose status changed.
-pub struct Moved<'a> {
-    pub chat: &'a str,
-    pub turn: &'a str,
-    pub agent: Option<&'a str>,
-    pub task: Option<i64>,
-    pub trace: &'a str,
-}
-
-/// A turn started or ended: its task moves, waits on its agent may fire, and what follows is
-/// queued.
+/// Saves a turn's status with what it moves (its task, its giver's hear-back, waits on its agent),
+/// in one transaction, and starts the turns that calls for.
 pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Option<&str>) {
-    let ended = matches!(status, "done" | "failed" | "stopped");
-    if status != "running" && !ended {
-        return;
-    }
     let (chat, turn, agent, task, trace) = (
         m.chat.to_string(),
         m.turn.to_string(),
@@ -41,33 +27,18 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
         m.task,
         m.trace.to_string(),
     );
-    let (status, why) = (status.to_string(), why.unwrap_or(status).to_string());
+    let (status, why) = (status.to_string(), why.map(String::from));
     let work = move |conn: &mut rusqlite::Connection| {
-        let mut starts = Vec::new();
-        if let Some(task) = task {
-            match status.as_str() {
-                "running" => tasks::started(conn, task, &trace)?,
-                "done" => {
-                    let tools: i64 = conn.query_row(
-                        "SELECT count(*) FROM messages WHERE turn_id = ?1 AND kind = 'tool'",
-                        [&turn],
-                        |r| r.get(0),
-                    )?;
-                    starts.extend(tasks::ended(conn, task, Outcome::Ok { tools }, &trace)?);
-                }
-                "failed" => starts.extend(tasks::ended(conn, task, Outcome::Failed(why), &trace)?),
-                _ => starts.extend(tasks::ended(conn, task, Outcome::Stopped(why), &trace)?),
-            }
-        }
-        if status != "running" {
-            starts.extend(tasks::turn_ended(conn, &turn, &trace)?);
-        }
-        if let (true, Some(agent)) = (status != "running", agent) {
-            starts.extend(waits::agent_free(conn, &chat, &agent, &trace)?);
-        }
-        Ok(starts)
+        let m = Moved {
+            chat: &chat,
+            turn: &turn,
+            agent: agent.as_deref(),
+            task,
+            trace: &trace,
+        };
+        tasks::turn_moved(conn, &m, &status, why.as_deref())
     };
-    apply(chats, "gathr.task.turn", m.trace, work).await;
+    apply(chats, "gathr.turn.status", m.trace, work).await;
 }
 
 /// At start, before the turns left waiting are taken over: tasks cut off by the stop are stopped.

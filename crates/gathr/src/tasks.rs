@@ -298,14 +298,16 @@ pub fn may_start(conn: &Connection, task: i64) -> Result<Option<String>, Error> 
 
 /// A turn on the task has started: it's `working`.
 pub fn started(conn: &mut Connection, task: i64, trace: &str) -> Result<(), Error> {
-    let tx = conn.transaction()?;
-    let Some(was) = state_of(&tx, task)? else {
+    in_tx(conn, |tx| started_in(tx, task, trace))
+}
+
+fn started_in(tx: &Transaction, task: i64, trace: &str) -> Result<(), Error> {
+    let Some(was) = state_of(tx, task)? else {
         return Ok(());
     };
     if !was.settled() || matches!(was, State::Blocked | State::Failed | State::Stopped) {
-        set(&tx, task, State::Working, None, trace)?;
+        set(tx, task, State::Working, None, trace)?;
     }
-    tx.commit()?;
     Ok(())
 }
 
@@ -360,8 +362,16 @@ pub fn ended(
     outcome: Outcome,
     trace: &str,
 ) -> Result<Vec<Start>, Error> {
-    let tx = conn.transaction()?;
-    let Some(t) = read(&tx, task).optional_task()? else {
+    in_tx(conn, |tx| ended_in(tx, task, outcome, trace))
+}
+
+fn ended_in(
+    tx: &Transaction,
+    task: i64,
+    outcome: Outcome,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let Some(t) = read(tx, task).optional_task()? else {
         return Ok(Vec::new());
     };
     let (finish, note): (Option<String>, Option<String>) = tx.query_row(
@@ -380,24 +390,81 @@ pub fn ended(
     if t.state == State::Working || before_it_ran {
         let finish = finish.as_deref().and_then(Finish::named);
         match outcome {
-            Outcome::Failed(why) => set(&tx, task, State::Failed, Some(&why), trace)?,
-            Outcome::Stopped(why) => set(&tx, task, State::Stopped, Some(&why), trace)?,
+            Outcome::Failed(why) => set(tx, task, State::Failed, Some(&why), trace)?,
+            Outcome::Stopped(why) => set(tx, task, State::Stopped, Some(&why), trace)?,
             Outcome::Ok { tools } => {
-                starts.extend(held::settle(&tx, &t, finish, note, tools, trace)?);
+                starts.extend(held::settle(tx, &t, finish, note, tools, trace)?);
             }
         }
-        starts.extend(cascade(&tx, task, trace)?);
+        starts.extend(cascade(tx, task, trace)?);
     }
-    tx.commit()?;
     Ok(starts)
 }
 
 /// A turn has ended: the agents who gave tasks in it hear back, once each is settled.
 pub fn turn_ended(conn: &mut Connection, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
+    in_tx(conn, |tx| held::hear_backs(tx, turn, trace))
+}
+
+/// A turn whose status changed.
+pub struct Moved<'a> {
+    pub chat: &'a str,
+    pub turn: &'a str,
+    pub agent: Option<&'a str>,
+    pub task: Option<i64>,
+    pub trace: &'a str,
+}
+
+/// Saves a turn's status with what it does, in one transaction: its task moves, its giver hears
+/// back, and waits on its agent may fire. A stop can't fall between an end and the round it closes.
+pub fn turn_moved(
+    conn: &mut Connection,
+    m: &Moved,
+    status: &str,
+    why: Option<&str>,
+) -> Result<Vec<Start>, Error> {
+    in_tx(conn, |tx| {
+        crate::store::set_turn(tx, m.turn, status, why)?;
+        let mut starts = Vec::new();
+        let outcome = match status {
+            "running" => {
+                if let Some(task) = m.task {
+                    started_in(tx, task, m.trace)?;
+                }
+                return Ok(starts);
+            }
+            "done" => {
+                let tools: i64 = tx.query_row(
+                    "SELECT count(*) FROM messages WHERE turn_id = ?1 AND kind = 'tool'",
+                    [m.turn],
+                    |r| r.get(0),
+                )?;
+                Outcome::Ok { tools }
+            }
+            "failed" => Outcome::Failed(why.unwrap_or(status).to_string()),
+            "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
+            _ => return Ok(starts),
+        };
+        if let Some(task) = m.task {
+            starts.extend(ended_in(tx, task, outcome, m.trace)?);
+        }
+        starts.extend(held::hear_backs(tx, m.turn, m.trace)?);
+        if let Some(agent) = m.agent {
+            starts.extend(crate::waits::agent_free_in(tx, m.chat, agent, m.trace)?);
+        }
+        Ok(starts)
+    })
+}
+
+/// Runs `f` in a transaction, committed when it succeeds.
+fn in_tx<R>(
+    conn: &mut Connection,
+    f: impl FnOnce(&Transaction) -> Result<R, Error>,
+) -> Result<R, Error> {
     let tx = conn.transaction()?;
-    let starts = held::hear_backs(&tx, turn, trace)?;
+    let r = f(&tx)?;
     tx.commit()?;
-    Ok(starts)
+    Ok(r)
 }
 
 /// Cancels an open task, by its giver or the person (`by` none); its open waits end.
