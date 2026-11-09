@@ -99,10 +99,10 @@ impl Refused {
     pub fn why(&self) -> &'static str {
         match self {
             Refused::Name(name) => name.why(),
-            Refused::Taken => "another agent has that name",
+            Refused::Taken => "agent name already used",
             Refused::Unknown => "no such agent",
             Refused::NoAccount => "no such account",
-            Refused::Removing => "the account is being removed",
+            Refused::Removing => "account removal in progress",
         }
     }
 }

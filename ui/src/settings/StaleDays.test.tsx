@@ -26,17 +26,17 @@ test('a day count saves when the edit is committed; an invalid or refused one st
 
   await userEvent.fill(cancel, '0');
   await userEvent.keyboard('{Enter}');
-  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).toBeVisible();
+  await expect.element(screen.getByText('Use whole days: 1 to 365.')).toBeVisible();
   await expect.element(cancel).toHaveValue(0);
   await userEvent.fill(cancel, '366');
   await userEvent.keyboard('{Enter}');
-  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).toBeVisible();
+  await expect.element(screen.getByText('Use whole days: 1 to 365.')).toBeVisible();
   await expect.element(cancel).toHaveValue(366);
   expect(sent).toEqual([]);
 
   await userEvent.fill(cancel, '10');
   await userEvent.tab();
-  await expect.element(screen.getByText('Enter whole days from 1 to 365.')).not.toBeInTheDocument();
+  await expect.element(screen.getByText('Use whole days: 1 to 365.')).not.toBeInTheDocument();
   await expect.poll(() => sent).toEqual([{ cancel_days: 10 }]);
   await expect.element(cancel).toHaveValue(10);
 

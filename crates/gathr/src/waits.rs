@@ -393,9 +393,8 @@ pub fn expire(conn: &mut Connection, now: i64, trace: &str) -> Result<Vec<Start>
         let failing = wait
             .last_error
             .as_ref()
-            .map_or(String::new(), |e| format!(" (its last look failed: {e})"));
-        let line =
-            format!("{what} still hasn't happened, a day after you started waiting{failing}");
+            .map_or(String::new(), |e| format!(" (last check failed: {e})"));
+        let line = format!("Wait expired (24 h): {what}{failing}");
         starts.extend(fire(&tx, &wait, "expired", &line, trace)?);
         tx.commit()?;
     }
@@ -470,8 +469,7 @@ fn fire(
         .attr("gen_ai.agent.id", wait.agent.clone())
         .insert(tx)?;
     let text = format!(
-        "(A wake-up you asked for: {line}. What you said you'd do then: {}. Check where things \
-         stand, then carry on, or say plainly why you can't.)",
+        "Wake: {line}. Next: {}. Check status, then continue or report the blocker.",
         wait.then_do.trim_end_matches('.')
     );
     let at = (wait.chat.as_str(), wait.agent.as_str());

@@ -75,7 +75,7 @@ async fn change(
             s.writer.record(event.ok());
             return Ok(Json(json!({ "on": on })));
         }
-        Ok(_) => "the system kept its earlier setting".to_string(),
+        Ok(_) => "system rejected the change".to_string(),
         Err(why) => why,
     };
     s.writer

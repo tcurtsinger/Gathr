@@ -104,7 +104,7 @@ const known: Record<string, [string, string]> = {
   'gathr.chat.send': ['Sent', 'Send'],
   'gathr.engine.start': ['Engine started', 'Engine start'],
   'gathr.turn.first_token': ['First text', 'First text'],
-  'gathr.turn.steer': ['Message sent into the turn', 'Message into the turn'],
+  'gathr.turn.steer': ['Message sent to turn', 'Send to turn'],
   'gathr.turn.read': ['Message read', 'Message read'],
   'gathr.api.request': ['Request', 'Request'],
   'gathr.engine.sign_in': ['Signed in', 'Sign in'],

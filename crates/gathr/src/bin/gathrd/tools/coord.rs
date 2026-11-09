@@ -83,9 +83,7 @@ pub struct Nothing {}
 #[tool_router(router = coord_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Give one of this chat's agents a task. It starts when its `after` tasks \
-                          are done; you hear back once every task you gave in this turn is \
-                          settled. The answer lists open tasks and PRs, so a duplicate shows."
+        description = "Assign a chat member. Starts after `after` tasks finish. Wakes you when all tasks given this turn settle. Returns open tasks and PRs; check for duplicates."
     )]
     async fn give_task(
         &self,
@@ -149,9 +147,8 @@ impl Tools {
     }
 
     #[tool(
-        description = "Say how your task stands: done, left (part is left) or blocked. It \
-                          applies when this turn ends; a task with a wait or PR still open is \
-                          held on it, and settles when it ends."
+        description = "Set task outcome: done, left (remaining work), or blocked. Applies at turn end. \
+                       Open waits or PRs hold settlement until they end."
     )]
     async fn finish_task(
         &self,
@@ -180,7 +177,7 @@ impl Tools {
                 };
                 let t = tasks::finish(c, &agent, task, how, &said)?;
                 Ok((
-                    format!("Task #{}: {} when this turn ends.", t.number, ask.how),
+                    format!("Task #{}: {} at turn end.", t.number, ask.how),
                     Vec::new(),
                 ))
             })
@@ -188,7 +185,7 @@ impl Tools {
         Ok(self.answer(&caller, "finish_task", started, finished).await)
     }
 
-    #[tool(description = "Cancel a task you gave: nobody is to do it any more. Its waits end.")]
+    #[tool(description = "Cancel a task you gave and end its waits.")]
     async fn cancel_task(
         &self,
         Parameters(ask): Parameters<TaskNumber>,
@@ -201,13 +198,13 @@ impl Tools {
             .db(move |c| {
                 let why = ask.why.as_deref().unwrap_or("cancelled by its giver");
                 let starts = tasks::cancel(c, by.as_deref(), ask.task, why, &trace)?;
-                Ok((format!("Task #{} is cancelled.", ask.task), starts))
+                Ok((format!("Task #{} cancelled.", ask.task), starts))
             })
             .await;
         Ok(self.answer(&caller, "cancel_task", started, done).await)
     }
 
-    #[tool(description = "Start a task you gave again after it failed, stopped or was blocked.")]
+    #[tool(description = "Restart your failed, stopped, blocked or cancelled task.")]
     async fn restart_task(
         &self,
         Parameters(ask): Parameters<TaskNumber>,
@@ -219,7 +216,7 @@ impl Tools {
         let done = self
             .db(move |c| {
                 let starts = tasks::restart(c, by.as_deref(), ask.task, &trace)?;
-                Ok((format!("Task #{} starts again.", ask.task), starts))
+                Ok((format!("Task #{} restarted.", ask.task), starts))
             })
             .await;
         Ok(self.answer(&caller, "restart_task", started, done).await)
@@ -250,10 +247,7 @@ impl Tools {
                     if w.state == "open" {
                         let parts = w.parts.len() as i64;
                         let name = tasks::wait_name(c, &w.kind, w.target.as_deref(), parts)?;
-                        lines.push(format!(
-                            "Your wait {}: on {name}, then: {}",
-                            w.id, w.then_do
-                        ));
+                        lines.push(format!("Wait {}: {name}. Next: {}", w.id, w.then_do));
                     }
                 }
                 Ok((lines.join("\n"), Vec::new()))
@@ -263,9 +257,8 @@ impl Tools {
     }
 
     #[tool(
-        description = "Wait instead of looping: Gathr wakes you here, on your task, when an \
-                          agent is done, CI finishes, a PR merges or closes, or a check exits 0. \
-                          Give several to wait for all of them. After a day you're woken anyway."
+        description = "Wait for an agent, CI, PR merge/close or check exit 0. Multiple conditions require all. \
+                       Wakes you here on your task when met, or after 24 h. Use instead of polling."
     )]
     async fn wait(
         &self,

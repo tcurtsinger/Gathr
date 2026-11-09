@@ -232,12 +232,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    throw new Failure('Connection failed', 'the service did not answer', null);
+    throw new Failure('Connection failed', 'service unavailable', null);
   }
   const answer = await response.json().catch(() => null);
   if (!response.ok || answer === null) {
-    const why =
-      answer?.why ?? (answer === null ? `the answer to ${path} wasn't JSON (${response.status})` : null);
+    const why = answer?.why ?? (answer === null ? `${path}: invalid JSON (HTTP ${response.status})` : null);
     throw new Failure(answer?.error ?? 'Request failed', why, answer?.ref ?? null);
   }
   return answer as T;
