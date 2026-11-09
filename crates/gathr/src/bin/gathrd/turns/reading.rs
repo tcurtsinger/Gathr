@@ -360,7 +360,7 @@ impl Task {
             .writer
             .call(move |conn| {
                 conn.query_row(
-                    "SELECT body FROM messages WHERE turn_id = ?1 AND role = 'user' ORDER BY ts LIMIT 1",
+                    "SELECT body FROM messages WHERE turn_id = ?1 AND role IN ('user', 'gathr') ORDER BY ts LIMIT 1",
                     [turn],
                     |r| r.get::<_, String>(0),
                 )

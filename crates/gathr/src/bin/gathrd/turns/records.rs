@@ -56,6 +56,14 @@ impl Task {
                     .attr("why", e.to_string()),
             );
         }
+        let moved = crate::coord::Moved {
+            chat: &ids.chat,
+            turn: &ids.turn,
+            agent: ids.agent.as_deref(),
+            task: ids.task,
+            trace: &ids.trace,
+        };
+        crate::coord::turn_moved(&self.chats, moved, status, why).await;
         let reference = gathr::ids::reference(&ids.trace);
         self.publish(
             &ids.chat,

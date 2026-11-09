@@ -1,0 +1,540 @@
+//! Tasks' and waits' transitions (0010) on a real database: who may make each, what each starts,
+//! and what a task is held on.
+
+mod common;
+
+use common::TempDir;
+use gathr::Error;
+use gathr::tasks::{self, Finish, Give, Kind, Outcome, Said, Start, State};
+use gathr::waits::{self, Leave, Part};
+use rusqlite::{Connection, params};
+
+const T: &str = "test-trace";
+
+/// A chat with a Supervisor (`lead`) and two members (`ann`, `bo`).
+fn team(dir: &TempDir) -> Connection {
+    let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+             ('lead', 'Lead', 'lead', 'acc', 1), ('ann', 'Ann', 'ann', 'acc', 1),
+             ('bo', 'Bo', 'bo', 'acc', 1);
+         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1), ('other', 'Other', 1);
+         INSERT INTO chat_members VALUES ('c', 'lead', 'supervisor', 1), ('c', 'ann', 'member', 1),
+             ('c', 'bo', 'member', 1), ('other', 'lead', 'supervisor', 1),
+             ('other', 'ann', 'member', 1);",
+    )
+    .unwrap();
+    conn
+}
+
+/// A turn of `agent`'s in chat `c`, on `task`, with `status`.
+fn turn(conn: &Connection, id: &str, agent: &str, task: Option<i64>, status: &str) {
+    gathr::store::add_turn(conn, "c", id, T, (Some(agent), task)).unwrap();
+    conn.execute(
+        "UPDATE turns SET status = ?2 WHERE id = ?1",
+        params![id, status],
+    )
+    .unwrap();
+}
+
+fn give(
+    conn: &mut Connection,
+    owner: &str,
+    after: &[i64],
+    given_in: Option<&str>,
+) -> (i64, Vec<Start>) {
+    let g = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner,
+        given_in,
+        parent: None,
+        kind: Kind::Work,
+        what: "Fix the build",
+        why: Some("CI is red"),
+        after,
+        pr: None,
+    };
+    let (task, starts) = tasks::give(conn, &g, T).unwrap();
+    (task.number, starts)
+}
+
+fn state(conn: &Connection, task: i64) -> (State, Option<String>) {
+    let t = tasks::get(conn, task).unwrap().unwrap();
+    (t.state, t.reason)
+}
+
+/// Runs one turn on the task: started, the owner's finish if any, then ended well.
+fn work(conn: &mut Connection, task: i64, finish: Option<Finish>, tools: i64) -> Vec<Start> {
+    tasks::started(conn, task, T).unwrap();
+    let owner = tasks::get(conn, task).unwrap().unwrap().owner;
+    if let Some(how) = finish {
+        tasks::finish(conn, &owner, task, how, &Said::default()).unwrap();
+    }
+    tasks::ended(conn, task, Outcome::Ok { tools }, T).unwrap()
+}
+
+fn refusal(result: Result<impl std::fmt::Debug, Error>) -> String {
+    match result {
+        Err(Error::Refused(why)) => why,
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_task_waits_for_its_after_tasks_then_starts_its_owners_turn() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (first, starts) = give(&mut conn, "ann", &[], None);
+    assert_eq!(state(&conn, first).0, State::Ready);
+    assert_eq!(starts.len(), 1, "{starts:?}");
+    assert_eq!(
+        (starts[0].agent.as_str(), starts[0].task),
+        ("ann", Some(first))
+    );
+    assert!(
+        starts[0]
+            .text
+            .starts_with(&format!("Task #{first} from Lead: Fix the build"))
+    );
+    let (second, starts) = give(&mut conn, "bo", &[first], None);
+    assert_eq!(state(&conn, second).0, State::Waiting);
+    assert!(
+        starts.is_empty(),
+        "a waiting task starts nothing: {starts:?}"
+    );
+    assert_eq!(
+        tasks::may_start(&conn, second).unwrap().as_deref(),
+        Some(format!("task #{second} still waits on its `after` tasks").as_str())
+    );
+    let starts = work(&mut conn, first, Some(Finish::Done), 3);
+    assert_eq!(state(&conn, first).0, State::Done);
+    assert_eq!(state(&conn, second).0, State::Ready);
+    let bo: Vec<_> = starts.iter().filter(|s| s.agent == "bo").collect();
+    assert_eq!(bo.len(), 1, "{starts:?}");
+    assert_eq!(bo[0].task, Some(second));
+}
+
+#[test]
+fn an_after_task_that_fails_blocks_its_dependant() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (first, _) = give(&mut conn, "ann", &[], None);
+    let (second, _) = give(&mut conn, "bo", &[first], None);
+    tasks::started(&mut conn, first, T).unwrap();
+    let why = "the engine exited".to_string();
+    tasks::ended(&mut conn, first, Outcome::Failed(why.clone()), T).unwrap();
+    assert_eq!(state(&conn, first), (State::Failed, Some(why)));
+    assert_eq!(
+        state(&conn, second),
+        (State::Blocked, Some(format!("#{first} is failed")))
+    );
+}
+
+#[test]
+fn a_finish_applies_when_the_turn_ends_and_only_the_owner_gives_one() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    let early = tasks::finish(&mut conn, "ann", task, Finish::Done, &Said::default());
+    assert_eq!(
+        refusal(early),
+        format!("task #{task} is ready, not being worked on")
+    );
+    tasks::started(&mut conn, task, T).unwrap();
+    let theirs = tasks::finish(&mut conn, "bo", task, Finish::Done, &Said::default());
+    assert_eq!(refusal(theirs), format!("task #{task} isn't yours"));
+    let said = Said {
+        note: Some("needs the lead's call on naming"),
+        ..Said::default()
+    };
+    tasks::finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
+    assert_eq!(
+        state(&conn, task).0,
+        State::Working,
+        "not before the turn ends"
+    );
+    tasks::ended(&mut conn, task, Outcome::Ok { tools: 2 }, T).unwrap();
+    let reason = Some("needs the lead's call on naming".to_string());
+    assert_eq!(state(&conn, task), (State::Blocked, reason));
+}
+
+#[test]
+fn a_turn_that_ends_with_work_open_holds_its_task_and_says_on_what() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (lead_task, _) = give(&mut conn, "lead", &[], None);
+    tasks::started(&mut conn, lead_task, T).unwrap();
+    turn(&conn, "lead-turn", "lead", Some(lead_task), "running");
+    let (handed, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
+    let wait = Leave {
+        chat: "c",
+        agent: "lead",
+        task: Some(lead_task),
+        left_in: Some("lead-turn"),
+        cwd: None,
+        then_do: "merge it",
+        parts: vec![Part {
+            kind: "ci".into(),
+            target: "#54".into(),
+            repo: None,
+        }],
+    };
+    waits::leave(&mut conn, &wait, T).unwrap();
+    tasks::ended(&mut conn, lead_task, Outcome::Ok { tools: 4 }, T).unwrap();
+    let why = format!("done, waiting on CI on #54, #{handed} (Ann)");
+    assert_eq!(state(&conn, lead_task), (State::Held, Some(why)));
+    // With nothing open, the same end is done.
+    let (plain, _) = give(&mut conn, "bo", &[], None);
+    work(&mut conn, plain, None, 1);
+    assert_eq!(state(&conn, plain).0, State::Done);
+}
+
+#[test]
+fn the_giver_hears_back_once_every_task_from_one_turn_is_settled() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (lead_task, _) = give(&mut conn, "lead", &[], None);
+    tasks::started(&mut conn, lead_task, T).unwrap();
+    turn(&conn, "lead-turn", "lead", Some(lead_task), "done");
+    let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
+    let (b, _) = give(&mut conn, "bo", &[], Some("lead-turn"));
+    tasks::ended(&mut conn, lead_task, Outcome::Ok { tools: 1 }, T).unwrap();
+    assert_eq!(state(&conn, lead_task).0, State::Held);
+    let starts = work(&mut conn, a, Some(Finish::Done), 1);
+    assert!(starts.iter().all(|s| s.agent != "lead"), "{starts:?}");
+    let starts = tasks::cancel(&mut conn, Some("lead"), b, "not needed", T).unwrap();
+    let back: Vec<_> = starts.iter().filter(|s| s.agent == "lead").collect();
+    assert_eq!(back.len(), 1, "one hear-back: {starts:?}");
+    assert_eq!(back[0].task, Some(lead_task), "on the lead's own task");
+    assert!(
+        back[0]
+            .text
+            .contains(&format!("#{a} Ann, Fix the build: done"))
+    );
+    assert!(
+        back[0]
+            .text
+            .contains(&format!("#{b} Bo, Fix the build: cancelled: not needed"))
+    );
+}
+
+#[test]
+fn left_twice_by_turns_that_did_nothing_is_blocked() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    let starts = work(&mut conn, task, Some(Finish::Left), 5);
+    assert_eq!(
+        state(&conn, task).0,
+        State::Ready,
+        "work done: another turn"
+    );
+    assert!(starts[0].text.contains("Carry on: you left part of it"));
+    work(&mut conn, task, Some(Finish::Left), 0);
+    assert_eq!(state(&conn, task).0, State::Ready);
+    let starts = work(&mut conn, task, Some(Finish::Left), 0);
+    assert!(starts.is_empty(), "{starts:?}");
+    assert_eq!(state(&conn, task).0, State::Blocked);
+}
+
+#[test]
+fn a_task_blocked_on_an_existing_task_carries_on_when_it_is_done() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (fix, _) = give(&mut conn, "bo", &[], None);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    tasks::started(&mut conn, task, T).unwrap();
+    let said = Said {
+        on_task: Some(fix),
+        ..Said::default()
+    };
+    tasks::finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
+    tasks::ended(&mut conn, task, Outcome::Ok { tools: 1 }, T).unwrap();
+    assert_eq!(state(&conn, task).0, State::Blocked);
+    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    assert_eq!(state(&conn, task).0, State::Ready);
+    let ann: Vec<_> = starts.iter().filter(|s| s.agent == "ann").collect();
+    assert!(
+        ann[0]
+            .text
+            .contains(&format!("#{fix}, which it was blocked on, is done"))
+    );
+}
+
+#[test]
+fn a_restart_stops_working_tasks_and_a_restart_by_the_giver_carries_on() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    let (after, _) = give(&mut conn, "bo", &[task], None);
+    tasks::started(&mut conn, task, T).unwrap();
+    assert_eq!(tasks::recover(&mut conn).unwrap(), 1);
+    let stopped = Some("Gathr stopped during its turn".to_string());
+    assert_eq!(state(&conn, task), (State::Stopped, stopped));
+    assert_eq!(
+        state(&conn, after).0,
+        State::Waiting,
+        "its dependant isn't broken"
+    );
+    let refused = tasks::restart(&mut conn, Some("bo"), task, T);
+    assert_eq!(
+        refusal(refused),
+        format!("only task #{task}'s giver or the person may restart it")
+    );
+    let starts = tasks::restart(&mut conn, Some("lead"), task, T).unwrap();
+    assert!(
+        starts[0]
+            .text
+            .contains("Carry on: Gathr stopped during its turn")
+    );
+    assert_eq!(state(&conn, task).0, State::Ready);
+}
+
+#[test]
+fn a_cancelled_tasks_queued_turn_never_starts_and_its_waits_end() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    turn(&conn, "bo-turn", "bo", None, "running");
+    let wait = Leave {
+        chat: "c",
+        agent: "ann",
+        task: Some(task),
+        left_in: None,
+        cwd: None,
+        then_do: "carry on",
+        parts: vec![Part {
+            kind: "agent".into(),
+            target: "bo".into(),
+            repo: None,
+        }],
+    };
+    let left = waits::leave(&mut conn, &wait, T).unwrap();
+    tasks::cancel(&mut conn, None, task, "the person dropped it", T).unwrap();
+    assert_eq!(
+        tasks::may_start(&conn, task).unwrap().as_deref(),
+        Some(format!("task #{task} is cancelled").as_str())
+    );
+    assert_eq!(waits::read(&conn, &left.id).unwrap().state, "cancelled");
+}
+
+#[test]
+fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let review = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "bo",
+        given_in: None,
+        parent: None,
+        kind: Kind::Review,
+        what: "Review #54",
+        why: None,
+        after: &[],
+        pr: Some(54),
+    };
+    let (task, _) = tasks::give(&mut conn, &review, T).unwrap();
+    tasks::started(&mut conn, task.number, T).unwrap();
+    let done = tasks::finish(&mut conn, "bo", task.number, Finish::Done, &Said::default());
+    assert_eq!(
+        refusal(done),
+        "a review is done with the commit it reviewed"
+    );
+    let said = Said {
+        commit: Some("abc1234"),
+        ..Said::default()
+    };
+    tasks::finish(&mut conn, "bo", task.number, Finish::Done, &said).unwrap();
+    tasks::ended(&mut conn, task.number, Outcome::Ok { tools: 3 }, T).unwrap();
+    let held = Some("done, waiting on #54 to merge".to_string());
+    assert_eq!(state(&conn, task.number), (State::Held, held), "G75");
+    tasks::pr_looked(&mut conn, task.number, "OPEN", Some("def5678aaaa"), T).unwrap();
+    assert!(
+        tasks::get(&conn, task.number).unwrap().unwrap().outdated,
+        "G73"
+    );
+    tasks::pr_looked(&mut conn, task.number, "MERGED", Some("def5678aaaa"), T).unwrap();
+    assert_eq!(
+        state(&conn, task.number),
+        (State::Done, Some("#54 merged".into()))
+    );
+    let (other, _) = give(&mut conn, "ann", &[], None);
+    conn.execute("UPDATE tasks SET pr = 60 WHERE number = ?1", [other])
+        .unwrap();
+    tasks::pr_looked(&mut conn, other, "CLOSED", None, T).unwrap();
+    let why = Some("#60 was closed without merging".to_string());
+    assert_eq!(state(&conn, other), (State::Cancelled, why));
+}
+
+#[test]
+fn a_task_is_refused_with_why() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let mut g = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "nobody",
+        given_in: None,
+        parent: None,
+        kind: Kind::Work,
+        what: "Fix it",
+        why: None,
+        after: &[],
+        pr: None,
+    };
+    let outsider = refusal(tasks::give(&mut conn, &g, T));
+    assert_eq!(
+        outsider,
+        "that agent isn't in this chat: its agents are Lead, Ann, Bo"
+    );
+    g.owner = "ann";
+    let long = "x".repeat(201);
+    g.what = &long;
+    assert_eq!(
+        refusal(tasks::give(&mut conn, &g, T)),
+        "`what` is one line of 1 to 200 characters"
+    );
+    g.what = "Fix it";
+    g.chat = "other";
+    let (elsewhere, _) = tasks::give(&mut conn, &g, T).unwrap();
+    g.chat = "c";
+    let after = [elsewhere.number];
+    g.after = &after;
+    let missing = refusal(tasks::give(&mut conn, &g, T));
+    assert_eq!(
+        missing,
+        format!("there's no task #{} in this chat", elsewhere.number)
+    );
+}
+
+fn wait_on(conn: &mut Connection, parts: Vec<Part>) -> Result<waits::Wait, Error> {
+    let leave = Leave {
+        chat: "c",
+        agent: "lead",
+        task: None,
+        left_in: None,
+        cwd: None,
+        then_do: "merge",
+        parts,
+    };
+    waits::leave(conn, &leave, T)
+}
+
+fn part(kind: &str, target: &str) -> Part {
+    Part {
+        kind: kind.into(),
+        target: target.into(),
+        repo: None,
+    }
+}
+
+#[test]
+fn an_all_wait_fires_once_when_every_part_is_met() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let all = wait_on(&mut conn, vec![part("ci", "#54"), part("pr", "55")]).unwrap();
+    assert_eq!((all.kind.as_str(), all.parts.len()), ("all", 2));
+    let first = waits::met(
+        &mut conn,
+        &all.parts[0].id,
+        "CI on #54 finished: 4 passed",
+        T,
+    )
+    .unwrap();
+    assert!(first.is_empty(), "{first:?}");
+    let fired = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
+    assert_eq!(fired.len(), 1, "{fired:?}");
+    assert!(
+        fired[0]
+            .text
+            .contains("CI on #54 finished: 4 passed; #55 was merged")
+    );
+    assert!(fired[0].text.contains("What you said you'd do then: merge"));
+    let again = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
+    assert!(again.is_empty(), "fires once");
+    assert_eq!(waits::read(&conn, &all.id).unwrap().state, "fired");
+}
+
+#[test]
+fn an_agent_wait_fires_when_that_agent_has_nothing_left_in_the_chat() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let idle = wait_on(&mut conn, vec![part("agent", "ann")]);
+    assert_eq!(
+        refusal(idle),
+        "Ann has nothing running or queued in this chat"
+    );
+    turn(&conn, "t1", "ann", None, "running");
+    turn(&conn, "t2", "ann", None, "queued");
+    wait_on(&mut conn, vec![part("agent", "ann")]).unwrap();
+    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    let early = waits::agent_free(&mut conn, "c", "ann", T).unwrap();
+    assert!(
+        early.is_empty(),
+        "a queued turn is still Ann's work: {early:?}"
+    );
+    gathr::store::set_turn(&conn, "t2", "failed", Some("boom")).unwrap();
+    let woken = waits::agent_free(&mut conn, "c", "ann", T).unwrap();
+    assert_eq!(woken.len(), 1);
+    assert!(
+        woken[0]
+            .text
+            .contains("Ann is done here: its last turn failed")
+    );
+}
+
+#[test]
+fn a_wait_a_day_old_wakes_its_agent_anyway() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();
+    waits::looked(&conn, &wait.id, None, Some("bash didn't start")).unwrap();
+    let now = gathr::ids::now_us();
+    assert!(waits::expire(&mut conn, now, T).unwrap().is_empty());
+    let woken = waits::expire(&mut conn, now + waits::WAIT_FOR_US, T).unwrap();
+    assert_eq!(woken.len(), 1);
+    assert!(woken[0].text.contains(
+        "a check still hasn't happened, a day after you started waiting (its last look failed: \
+         bash didn't start)"
+    ));
+    assert_eq!(waits::read(&conn, &wait.id).unwrap().state, "expired");
+}
+
+#[test]
+fn an_agent_ends_only_its_own_waits() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let wait = wait_on(&mut conn, vec![part("pr", "54")]).unwrap();
+    let again = wait_on(&mut conn, vec![part("pr", "54")]).unwrap();
+    assert_eq!(again.id, wait.id, "the same wait, said again");
+    let theirs = waits::end(&mut conn, "c", "ann", &wait.id, T);
+    assert_eq!(
+        refusal(theirs),
+        format!("wait {} isn't yours in this chat", wait.id)
+    );
+    assert_eq!(waits::in_chat(&conn, "c", Some("lead")).unwrap().len(), 1);
+    waits::end(&mut conn, "c", "lead", &wait.id, T).unwrap();
+    assert_eq!(waits::read(&conn, &wait.id).unwrap().state, "cancelled");
+    assert_eq!(
+        refusal(wait_on(&mut conn, vec![part("ci", "main")])),
+        "a CI wait takes a PR's number or a commit's id, not \"main\""
+    );
+}
+
+#[test]
+fn a_wait_on_an_agent_doing_your_task_is_refused_since_the_hear_back_covers_it() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (task, _) = give(&mut conn, "ann", &[], None);
+    turn(&conn, "t1", "ann", Some(task), "queued");
+    let doubled = wait_on(&mut conn, vec![part("agent", "ann")]);
+    assert_eq!(
+        refusal(doubled),
+        format!(
+            "Ann is on your task #{task}: you hear back when it's settled, so don't wait on Ann"
+        )
+    );
+}

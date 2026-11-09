@@ -60,7 +60,7 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .query_map([chat], message_row)?
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
-        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position
+        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task
          FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -74,6 +74,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "ended": r.get::<_, Option<i64>>(5)?.map(crate::ids::utc),
                 "agent": r.get::<_, Option<String>>(6)?,
                 "position": r.get::<_, Option<i64>>(7)?,
+                // The task the turn works on: its work sits under the turn that gave it.
+                "task": r.get::<_, Option<i64>>(8)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -166,19 +168,20 @@ pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Er
     message(conn, id)
 }
 
-/// A new turn, run as `agent`, or on the oldest account when it's sent to none.
+/// A new turn, run as `agent`, or on the oldest account when it's sent to none; on `task` when it
+/// works on one (0010).
 pub fn add_turn(
     conn: &Connection,
     chat: &str,
     id: &str,
     trace: &str,
-    agent: Option<&str>,
+    (agent, task): (Option<&str>, Option<i64>),
 ) -> Result<(), Error> {
     conn.prepare_cached(
-        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id)
-         VALUES (?1, ?2, ?3, 'queued', ?4, ?5)",
+        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6)",
     )?
-    .execute(params![id, chat, trace, now_us(), agent])?;
+    .execute(params![id, chat, trace, now_us(), agent, task])?;
     Ok(())
 }
 
@@ -206,6 +209,7 @@ pub struct Waiting {
     pub status: String,
     pub text: String,
     pub agent: Option<String>,
+    pub task: Option<i64>,
 }
 
 /// Turns that were waiting when the service last stopped, oldest first. Turns that were
@@ -218,8 +222,9 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     )?;
     let mut stmt = conn.prepare(
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
-                (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role = 'user' ORDER BY ts LIMIT 1),
-                t.agent_id
+                (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
+                 ORDER BY ts LIMIT 1),
+                t.agent_id, t.task
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -230,6 +235,7 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             status: r.get(3)?,
             text: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
             agent: r.get(5)?,
+            task: r.get(6)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)

@@ -1,0 +1,627 @@
+//! Tasks: work an agent owes in a chat, with named states and fixed transitions
+//! (docs/decisions/0010-coordination-as-state.md). Each change and its event commit in one
+//! transaction; the turns it calls for come back as [`Start`]s for the service to queue.
+
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use serde::Serialize;
+
+use crate::Error;
+use crate::event::Event;
+use crate::ids::now_us;
+
+mod held;
+mod records;
+mod words;
+
+use records::{OptionalTask, read, set, state_of};
+
+pub use words::{name_of, wait_name};
+
+/// The longest `what`: one line, read at a glance.
+pub const WHAT_MOST: usize = 200;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum State {
+    Waiting,
+    Ready,
+    Working,
+    Held,
+    Done,
+    Blocked,
+    Failed,
+    Stopped,
+    Cancelled,
+}
+
+const STATES: [(State, &str); 9] = [
+    (State::Waiting, "waiting"),
+    (State::Ready, "ready"),
+    (State::Working, "working"),
+    (State::Held, "held"),
+    (State::Done, "done"),
+    (State::Blocked, "blocked"),
+    (State::Failed, "failed"),
+    (State::Stopped, "stopped"),
+    (State::Cancelled, "cancelled"),
+];
+
+/// The states nobody is on: the giver hears back once all its tasks from one turn are in one.
+pub const SETTLED: &str = "('done', 'blocked', 'failed', 'stopped', 'cancelled')";
+
+impl State {
+    pub fn as_str(self) -> &'static str {
+        STATES
+            .iter()
+            .find(|(s, _)| *s == self)
+            .map_or("", |(_, n)| n)
+    }
+
+    fn named(text: &str) -> State {
+        STATES
+            .iter()
+            .find(|(_, n)| *n == text)
+            .map_or(State::Waiting, |(s, _)| *s)
+    }
+
+    pub fn settled(self) -> bool {
+        !matches!(
+            self,
+            State::Waiting | State::Ready | State::Working | State::Held
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Work,
+    Review,
+}
+
+impl Kind {
+    pub fn named(text: &str) -> Option<Kind> {
+        match text {
+            "work" => Some(Kind::Work),
+            "review" => Some(Kind::Review),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Kind::Work => "work",
+            Kind::Review => "review",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Task {
+    pub number: i64,
+    pub chat: String,
+    /// The agent who gave it; none when the person did.
+    pub giver: Option<String>,
+    pub owner: String,
+    /// The turn that gave it: its owner's work sits under that turn's message.
+    pub given_in: Option<String>,
+    pub parent: Option<i64>,
+    pub kind: Kind,
+    pub what: String,
+    pub why: Option<String>,
+    pub state: State,
+    pub reason: Option<String>,
+    pub after: Vec<i64>,
+    pub blocked_on: Option<i64>,
+    pub pr: Option<i64>,
+    pub reviewed: Option<String>,
+    pub outdated: bool,
+}
+
+/// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
+/// works on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Start {
+    pub chat: String,
+    pub agent: String,
+    pub task: Option<i64>,
+    pub text: String,
+}
+
+/// A new task.
+pub struct Give<'a> {
+    pub chat: &'a str,
+    pub giver: Option<&'a str>,
+    pub owner: &'a str,
+    pub given_in: Option<&'a str>,
+    pub parent: Option<i64>,
+    pub kind: Kind,
+    pub what: &'a str,
+    pub why: Option<&'a str>,
+    pub after: &'a [i64],
+    pub pr: Option<i64>,
+}
+
+/// How a turn on a task ended.
+pub enum Outcome {
+    /// It ended well, having run this many tools.
+    Ok {
+        tools: i64,
+    },
+    Failed(String),
+    Stopped(String),
+}
+
+/// What an owner says of its task as its turn ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Finish {
+    Done,
+    Left,
+    Blocked,
+}
+
+impl Finish {
+    pub fn named(text: &str) -> Option<Finish> {
+        match text {
+            "done" => Some(Finish::Done),
+            "left" => Some(Finish::Left),
+            "blocked" => Some(Finish::Blocked),
+            _ => None,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Finish::Done => "done",
+            Finish::Left => "left",
+            Finish::Blocked => "blocked",
+        }
+    }
+}
+
+/// The owner's finish, with what goes with it.
+#[derive(Default)]
+pub struct Said<'a> {
+    pub note: Option<&'a str>,
+    pub on_task: Option<i64>,
+    pub pr: Option<i64>,
+    pub commit: Option<&'a str>,
+}
+
+fn refused(why: impl Into<String>) -> Error {
+    Error::Refused(why.into())
+}
+
+/// Gives a task: `waiting` while its `after` tasks aren't all done, else `ready` with its turn.
+pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
+    let what = g.what.trim();
+    if what.is_empty() || what.contains('\n') || what.chars().count() > WHAT_MOST {
+        return Err(refused(format!(
+            "`what` is one line of 1 to {WHAT_MOST} characters"
+        )));
+    }
+    let tx = conn.transaction()?;
+    in_team(&tx, g.chat, g.owner)?;
+    for &n in g.after.iter().chain(&g.parent) {
+        let chat: Option<String> = tx
+            .query_row("SELECT chat_id FROM tasks WHERE number = ?1", [n], |r| {
+                r.get(0)
+            })
+            .optional()?;
+        if chat.as_deref() != Some(g.chat) {
+            return Err(refused(format!("there's no task #{n} in this chat")));
+        }
+    }
+    let now = now_us();
+    tx.execute(
+        "INSERT INTO tasks (chat_id, giver, owner, given_in, parent, kind, what, why, state, pr,
+                            created_ts, updated_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10)",
+        params![
+            g.chat,
+            g.giver,
+            g.owner,
+            g.given_in,
+            g.parent,
+            g.kind.as_str(),
+            what,
+            g.why.map(str::trim).filter(|w| !w.is_empty()),
+            g.pr,
+            now
+        ],
+    )?;
+    let number = tx.last_insert_rowid();
+    for after in g.after {
+        tx.execute(
+            "INSERT OR IGNORE INTO task_after (task, after_task) VALUES (?1, ?2)",
+            [number, *after],
+        )?;
+    }
+    let mut starts = Vec::new();
+    if waiting_on(&tx, number)?.is_empty() {
+        starts.push(ready(&tx, number, None)?);
+    }
+    let task = read(&tx, number)?;
+    let event = Event::point("gathr.task.give").trace(trace).chat(g.chat);
+    event
+        .task(number)
+        .ok()
+        .attr("gathr.task.giver", g.giver)
+        .attr("gathr.task.owner", g.owner)
+        .attr("gathr.task.state", task.state.as_str())
+        .attr("gathr.task.given_in", g.given_in)
+        .insert(&tx)?;
+    tx.commit()?;
+    Ok((task, starts))
+}
+
+/// Whether a turn Gathr queued on `task` may start (0010's gate): `None`, or why it won't run.
+pub fn may_start(conn: &Connection, task: i64) -> Result<Option<String>, Error> {
+    let state = state_of(conn, task)?;
+    Ok(match state {
+        None => Some(format!("task #{task} is gone")),
+        Some(State::Done | State::Cancelled) => Some(format!(
+            "task #{task} is {}",
+            state.map_or("", |s| s.as_str())
+        )),
+        Some(State::Waiting) => Some(format!("task #{task} still waits on its `after` tasks")),
+        Some(_) => None,
+    })
+}
+
+/// A turn on the task has started: it's `working`.
+pub fn started(conn: &mut Connection, task: i64, trace: &str) -> Result<(), Error> {
+    let tx = conn.transaction()?;
+    let Some(was) = state_of(&tx, task)? else {
+        return Ok(());
+    };
+    if !was.settled() || matches!(was, State::Blocked | State::Failed | State::Stopped) {
+        set(&tx, task, State::Working, None, trace)?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
+/// The owner says how its task stands, applied when its turn has ended. A review's done names
+/// the commit reviewed (G73).
+pub fn finish(
+    conn: &mut Connection,
+    agent: &str,
+    task: i64,
+    how: Finish,
+    said: &Said,
+) -> Result<Task, Error> {
+    let tx = conn.transaction()?;
+    let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
+    if t.owner != agent {
+        return Err(refused(format!("task #{task} isn't yours")));
+    }
+    if t.state != State::Working {
+        let state = t.state.as_str();
+        return Err(refused(format!(
+            "task #{task} is {state}, not being worked on"
+        )));
+    }
+    if let Some(on) = said.on_task {
+        let found = state_of(&tx, on)?;
+        if found.is_none() || on == task {
+            return Err(refused(format!(
+                "there's no other task #{on} to be blocked on"
+            )));
+        }
+    }
+    let commit = said.commit.map(str::trim).filter(|c| !c.is_empty());
+    if how == Finish::Done && t.kind == Kind::Review && commit.is_none() {
+        return Err(refused("a review is done with the commit it reviewed"));
+    }
+    tx.execute(
+        "UPDATE tasks SET finish = ?2, finish_note = ?3, blocked_on = COALESCE(?4, blocked_on),
+                          pr = COALESCE(?5, pr), reviewed = COALESCE(?6, reviewed),
+                          outdated = CASE WHEN ?6 IS NULL THEN outdated ELSE 0 END
+         WHERE number = ?1",
+        params![task, how.as_str(), said.note, said.on_task, said.pr, commit],
+    )?;
+    let task = read(&tx, task)?;
+    tx.commit()?;
+    Ok(task)
+}
+
+/// A turn on the task has ended: its owner's finish applies, else the service settles it (0010).
+pub fn ended(
+    conn: &mut Connection,
+    task: i64,
+    outcome: Outcome,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let Some(t) = read(&tx, task).optional_task()? else {
+        return Ok(Vec::new());
+    };
+    let (finish, note): (Option<String>, Option<String>) = tx.query_row(
+        "SELECT finish, finish_note FROM tasks WHERE number = ?1",
+        [task],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    tx.execute(
+        "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
+        [task],
+    )?;
+    let mut starts = Vec::new();
+    // Cancelled or settled while the turn ran: it stays so, and nothing follows twice.
+    if t.state == State::Working {
+        let finish = finish.as_deref().and_then(Finish::named);
+        match outcome {
+            Outcome::Failed(why) => set(&tx, task, State::Failed, Some(&why), trace)?,
+            Outcome::Stopped(why) => set(&tx, task, State::Stopped, Some(&why), trace)?,
+            Outcome::Ok { tools } => {
+                starts.extend(held::settle(&tx, &t, finish, note, tools, trace)?);
+            }
+        }
+        starts.extend(cascade(&tx, task, trace)?);
+    }
+    tx.commit()?;
+    Ok(starts)
+}
+
+/// Cancels an open task, by its giver or the person (`by` none); its open waits end.
+pub fn cancel(
+    conn: &mut Connection,
+    by: Option<&str>,
+    task: i64,
+    why: &str,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
+    may_change(&t, by, "cancel")?;
+    if t.state.settled() && t.state != State::Blocked {
+        let state = t.state.as_str();
+        return Err(refused(format!("task #{task} is already {state}")));
+    }
+    set(&tx, task, State::Cancelled, Some(why), trace)?;
+    tx.execute(
+        "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = 'its task was cancelled'
+         WHERE task = ?1 AND state IN ('open', 'met')",
+        params![task, now_us()],
+    )?;
+    let starts = cascade(&tx, task, trace)?;
+    tx.commit()?;
+    Ok(starts)
+}
+
+/// Starts a failed, stopped or blocked task again, by its giver or the person.
+pub fn restart(
+    conn: &mut Connection,
+    by: Option<&str>,
+    task: i64,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
+    may_change(&t, by, "restart")?;
+    if !matches!(t.state, State::Failed | State::Stopped | State::Blocked) {
+        let state = t.state.as_str();
+        return Err(refused(format!(
+            "task #{task} is {state}: only a failed, stopped or blocked task restarts"
+        )));
+    }
+    let carry = match t.state {
+        State::Stopped | State::Failed => t.reason.clone(),
+        _ => None,
+    };
+    let starts = match waiting_on(&tx, task)?.is_empty() {
+        true => vec![ready(&tx, task, carry.as_deref())?],
+        false => {
+            set(&tx, task, State::Waiting, None, trace)?;
+            Vec::new()
+        }
+    };
+    tx.execute(
+        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL WHERE number = ?1",
+        [task],
+    )?;
+    tx.commit()?;
+    Ok(starts)
+}
+
+/// The service started: tasks whose turn was cut off by the stop are `stopped`, with why, for a
+/// restart that carries on (0010). Their dependants stay `waiting`.
+pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
+    let tx = conn.transaction()?;
+    let working: Vec<i64> = {
+        let mut stmt = tx.prepare("SELECT number FROM tasks WHERE state = 'working'")?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let trace = crate::ids::trace_id();
+    for &task in &working {
+        let why = "Gathr stopped during its turn";
+        set(&tx, task, State::Stopped, Some(why), &trace)?;
+    }
+    tx.commit()?;
+    Ok(working.len())
+}
+
+/// A task's PR has been looked at: merged settles it, closed cancels it (G67, G44); a review
+/// whose PR moved past its commit is out of date (G73).
+pub fn pr_looked(
+    conn: &mut Connection,
+    task: i64,
+    pr_state: &str,
+    head: Option<&str>,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let t = read(&tx, task)?;
+    if let (Some(reviewed), Some(head)) = (&t.reviewed, head) {
+        let past = !head.starts_with(reviewed.as_str()) && !reviewed.starts_with(head);
+        tx.execute(
+            "UPDATE tasks SET outdated = ?2 WHERE number = ?1",
+            params![task, past],
+        )?;
+    }
+    let pr = t.pr.unwrap_or_default();
+    let mut starts = Vec::new();
+    if !t.state.settled() || t.state == State::Blocked {
+        match pr_state.to_ascii_uppercase().as_str() {
+            "MERGED" => {
+                set(
+                    &tx,
+                    task,
+                    State::Done,
+                    Some(&format!("#{pr} merged")),
+                    trace,
+                )?;
+                end_waits(&tx, task, "its PR merged")?;
+                starts = cascade(&tx, task, trace)?;
+            }
+            "CLOSED" => {
+                let why = format!("#{pr} was closed without merging");
+                set(&tx, task, State::Cancelled, Some(&why), trace)?;
+                end_waits(&tx, task, "its PR was closed")?;
+                starts = cascade(&tx, task, trace)?;
+            }
+            _ => {}
+        }
+    }
+    tx.commit()?;
+    Ok(starts)
+}
+
+/// Open tasks with a PR, for the service to look at: number, chat, owner and PR.
+pub fn with_prs(conn: &Connection) -> Result<Vec<(i64, String, String, i64)>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT number, chat_id, owner, pr FROM tasks
+         WHERE pr IS NOT NULL AND state NOT IN ('done', 'cancelled')",
+    )?;
+    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// The chat's tasks, newest first.
+pub fn list(conn: &Connection, chat: &str) -> Result<Vec<Task>, Error> {
+    let numbers: Vec<i64> = {
+        let sql = "SELECT number FROM tasks WHERE chat_id = ?1 ORDER BY number DESC";
+        let mut stmt = conn.prepare_cached(sql)?;
+        let rows = stmt.query_map([chat], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    numbers.into_iter().map(|n| read(conn, n)).collect()
+}
+
+pub fn get(conn: &Connection, task: i64) -> Result<Option<Task>, Error> {
+    read(conn, task).optional_task()
+}
+
+/// Who may cancel or restart: the giver, or the person (`by` none).
+fn may_change(t: &Task, by: Option<&str>, what: &str) -> Result<(), Error> {
+    match by.is_none() || by == t.giver.as_deref() {
+        true => Ok(()),
+        false => Err(refused(format!(
+            "only task #{}'s giver or the person may {what} it",
+            t.number
+        ))),
+    }
+}
+
+fn in_team(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
+    let members = crate::team::members(conn, chat)?;
+    if members.iter().any(|m| m.agent == agent) {
+        return Ok(());
+    }
+    let names: Vec<String> = members.into_iter().map(|m| m.name).collect();
+    Err(refused(match names.is_empty() {
+        true => "tasks are given in a chat with a team".to_string(),
+        false => format!(
+            "that agent isn't in this chat: its agents are {}",
+            names.join(", ")
+        ),
+    }))
+}
+
+/// The task's `after` tasks not done yet.
+fn waiting_on(conn: &Connection, task: i64) -> Result<Vec<i64>, Error> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT a.after_task FROM task_after a JOIN tasks t ON t.number = a.after_task
+         WHERE a.task = ?1 AND t.state != 'done'",
+    )?;
+    let rows = stmt.query_map([task], |r| r.get(0))?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Makes the task `ready`, with the turn that starts it.
+fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Error> {
+    set(tx, task, State::Ready, None, &crate::ids::trace_id())?;
+    let t = read(tx, task)?;
+    let giver = match &t.giver {
+        Some(id) => words::name_of(tx, id)?,
+        None => "the person".to_string(),
+    };
+    Ok(Start {
+        chat: t.chat.clone(),
+        agent: t.owner.clone(),
+        task: Some(task),
+        text: words::brief(&t, &giver, carry),
+    })
+}
+
+/// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
+/// the giver's hear-back once all it gave in that turn are settled.
+fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
+    let Some(state) = state_of(tx, task)? else {
+        return Ok(Vec::new());
+    };
+    let mut starts = Vec::new();
+    if !state.settled() {
+        return Ok(starts);
+    }
+    let dependants: Vec<i64> = {
+        let mut stmt = tx.prepare_cached(
+            "SELECT t.number FROM task_after a JOIN tasks t ON t.number = a.task
+             WHERE a.after_task = ?1 AND t.state = 'waiting'",
+        )?;
+        let rows = stmt.query_map([task], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for dependant in dependants {
+        match state {
+            State::Done if waiting_on(tx, dependant)?.is_empty() => {
+                starts.push(ready(tx, dependant, None)?)
+            }
+            State::Done => {}
+            _ => {
+                let why = format!("#{task} is {}", state.as_str());
+                set(tx, dependant, State::Blocked, Some(&why), trace)?;
+                starts.extend(cascade(tx, dependant, trace)?);
+            }
+        }
+    }
+    if state == State::Done {
+        let on_it: Vec<i64> = {
+            let mut stmt = tx.prepare_cached(
+                "SELECT number FROM tasks WHERE blocked_on = ?1 AND state = 'blocked'",
+            )?;
+            let rows = stmt.query_map([task], |r| r.get(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        for blocked in on_it {
+            tx.execute(
+                "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
+                [blocked],
+            )?;
+            let carry = format!("#{task}, which it was blocked on, is done");
+            starts.push(ready(tx, blocked, Some(&carry))?);
+        }
+    }
+    starts.extend(held::hear_back(tx, task)?);
+    Ok(starts)
+}
+
+fn end_waits(tx: &Transaction, task: i64, why: &str) -> Result<(), Error> {
+    tx.execute(
+        "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = ?3
+         WHERE task = ?1 AND state IN ('open', 'met')",
+        params![task, now_us(), why],
+    )?;
+    Ok(())
+}

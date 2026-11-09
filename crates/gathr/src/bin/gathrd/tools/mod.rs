@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 pub mod briefing;
+mod coord;
 mod hook;
 mod server;
 
@@ -21,12 +22,25 @@ pub struct Caller {
     /// The folder the engine runs in: its worktree in a project's chat. Gathr asks before a
     /// write outside it (0029).
     pub cwd: PathBuf,
-    turn: Arc<Mutex<Option<String>>>,
+    turn: Arc<Mutex<Option<OnTurn>>>,
+}
+
+/// The engine's turn: its trace, its id and the task it works on.
+#[derive(Clone)]
+pub struct OnTurn {
+    pub trace: String,
+    pub turn: String,
+    pub task: Option<i64>,
 }
 
 impl Caller {
     /// The trace of the engine's turn, or of the last one it ran.
     pub fn trace(&self) -> Option<String> {
+        self.on().map(|on| on.trace)
+    }
+
+    /// The engine's turn, or the last one it ran.
+    pub fn on(&self) -> Option<OnTurn> {
         self.turn.lock().expect("never poisoned").clone()
     }
 }
@@ -47,7 +61,7 @@ pub struct Pass {
     pub token: String,
     pub briefing: PathBuf,
     pub briefing_chars: usize,
-    turn: Arc<Mutex<Option<String>>>,
+    turn: Arc<Mutex<Option<OnTurn>>>,
     passes: Arc<Passes>,
 }
 
@@ -83,9 +97,10 @@ impl Pass {
         })
     }
 
-    /// The engine's turn from now, so its tool calls are recorded on that turn's trace.
-    pub fn on_turn(&self, trace: &str) {
-        *self.turn.lock().expect("never poisoned") = Some(trace.to_string());
+    /// The engine's turn from now, so its tool calls are recorded on that turn's trace, and a task
+    /// it gives was given in that turn.
+    pub fn on_turn(&self, on: OnTurn) {
+        *self.turn.lock().expect("never poisoned") = Some(on);
     }
 }
 

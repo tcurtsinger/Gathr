@@ -5,6 +5,7 @@ mod accounts;
 mod agents;
 mod api;
 mod chats;
+mod coord;
 mod logs;
 mod models;
 mod routes;
@@ -137,7 +138,9 @@ async fn serve(
     );
     writer.record(health_event(data, port, early_lines));
     chats.pick_account().await;
+    coord::recover(&chats).await;
     chats.take_over().await;
+    tokio::spawn(coord::run(chats.clone()));
     tokio::spawn(updates::run(updates.clone()));
 
     let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();
