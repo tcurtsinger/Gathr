@@ -19,5 +19,8 @@ export function useOlder<T>(all: T[], viewport: RefObject<HTMLElement | null>) {
     setShown((n) => Math.max(n, shown + PAGE));
   };
 
-  return { messages: all.length > shown ? all.slice(-shown) : all, onScroll };
+  /** Draws everything from the item at `index` on, for a link to a message further up. */
+  const reach = (index: number) => setShown((n) => Math.max(n, all.length - index));
+
+  return { messages: all.length > shown ? all.slice(-shown) : all, onScroll, reach };
 }

@@ -1,4 +1,4 @@
-import type { History, Message, ToolBody, Turn } from '../api';
+import type { History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -7,20 +7,41 @@ export interface Approval {
   tool: string;
 }
 
-/** One chat as the window shows it: saved messages, turns, and text still streaming. */
+/** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
 export interface ChatState {
   messages: Message[];
   turns: Record<string, Turn>;
   partial: Record<string, string>;
   approvals: Approval[];
+  members: Member[];
+  tasks: Task[];
+  waits: Wait[];
 }
 
-export const empty: ChatState = { messages: [], turns: {}, partial: {}, approvals: [] };
+export const empty: ChatState = {
+  messages: [],
+  turns: {},
+  partial: {},
+  approvals: [],
+  members: [],
+  tasks: [],
+  waits: [],
+};
 
-export function fromHistory(history: History): ChatState {
+export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
   const approvals = history.approvals.map((a) => ({ turn: a.turn, request: a.request_id, tool: a.tool }));
-  return { ...empty, messages: history.messages, turns, approvals };
+  const partial = Object.fromEntries((history.partial ?? []).map((p) => [p.turn, p.text]));
+  return {
+    ...empty,
+    messages: history.messages,
+    turns,
+    partial,
+    approvals,
+    members: history.members ?? [],
+    tasks: work?.tasks ?? [],
+    waits: work?.waits ?? [],
+  };
 }
 
 /** Applies one live event for this chat. Events for other chats never reach here. */
@@ -53,6 +74,9 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         why: event.why ?? before?.why ?? null,
         ref: event.ref ?? before?.ref ?? '',
         agent: event.agent,
+        created: event.created ?? before?.created,
+        task: event.task ?? before?.task,
+        answers: event.answers ?? before?.answers,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
@@ -62,6 +86,10 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       const approval = { turn: event.turn, request: event.request_id, tool: event.tool };
       return { ...state, approvals: [...state.approvals, approval] };
     }
+    case 'task':
+      return { ...state, tasks: upsert(state.tasks, event.task, (t) => t.number === event.task.number) };
+    case 'wait':
+      return { ...state, waits: upsert(state.waits, event.wait, (w) => w.id === event.wait.id) };
     default:
       return state;
   }
@@ -71,9 +99,14 @@ export function answered(state: ChatState, request: string): ChatState {
   return { ...state, approvals: state.approvals.filter((a) => a.request !== request) };
 }
 
-/** The turn still under way, if any: Stop applies to it. */
+/** A turn still under way, if any: Stop applies to the chat's turns. */
 export function running(state: ChatState): Turn | undefined {
   return Object.values(state.turns).find((t) => t.status === 'running' || t.status === 'queued');
+}
+
+function upsert<T>(list: T[], item: T, same: (x: T) => boolean): T[] {
+  const at = list.findIndex(same);
+  return at < 0 ? [...list, item] : list.with(at, item);
 }
 
 function without(record: Record<string, string>, key: string): Record<string, string> {

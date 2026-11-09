@@ -5,10 +5,15 @@ import {
   ComposerModelItem,
   ComposerModelTrigger,
 } from '@/components/assistant-ui/elements/composer';
-import type { Agent } from '../api';
+/** An agent the message can go to; `meta` is its role in the chat. */
+export interface Recipient {
+  id: string;
+  name: string;
+  meta?: string;
+}
 
 interface Props {
-  agents: Agent[];
+  agents: Recipient[];
   selected: string;
   onSelect: (agent: string) => void;
   /** Opens Settings > Agents at the selected agent. */
@@ -22,7 +27,10 @@ const moves: Record<string, (at: number, n: number) => number> = {
   End: (_, n) => n - 1,
 };
 
-/** Who the next message goes to. It never changes the agent's model or effort (0026). */
+/**
+ * Who the next message goes to: the same as @naming it (0028). It never changes the agent's model or
+ * effort (0026).
+ */
 export function AgentPicker({ agents, selected, onSelect, onEdit }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -97,7 +105,7 @@ export function AgentPicker({ agents, selected, onSelect, onEdit }: Props) {
             key={a.id}
             role="option"
             aria-selected={a.id === selected}
-            entry={{ name: a.name, meta: '' }}
+            entry={{ name: a.name, meta: a.meta ?? '' }}
             selected={a.id === selected}
             onClick={() => choose(() => onSelect(a.id))}
           />

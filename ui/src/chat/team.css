@@ -1,0 +1,151 @@
+/* Team messages: the inline thread under a hand-off (DESIGN.md, designs/team-reference.css). */
+.speaker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.speaker-role,
+.speaker time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.speaker time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.team-head {
+  margin-bottom: -12px;
+  border-top: 1px solid var(--border);
+}
+.team-head[data-closed] {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+}
+.team-head > button {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 12px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 12px;
+  text-align: left;
+  scroll-margin-block: 24px;
+}
+.team-head > button:hover {
+  background: var(--hover-tint);
+}
+.team-head strong {
+  font-weight: 500;
+}
+.team-head-chevron {
+  align-self: center;
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms;
+}
+.team-head > button[aria-expanded="true"] .team-head-chevron {
+  transform: rotate(90deg);
+}
+.team-head-state {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+
+/* Replies hang on one neutral hairline, unbroken across the gaps between them. */
+.in-thread {
+  position: relative;
+  margin-left: 18px;
+}
+.reply.in-thread,
+.user-message.in-thread,
+.in-thread.assignment,
+.in-thread.gathr-line {
+  padding-left: 20px;
+}
+.in-thread::before {
+  content: "";
+  position: absolute;
+  top: -24px;
+  bottom: 0;
+  left: 0;
+  border-left: 1px solid var(--border);
+}
+.in-thread.thread-first::before {
+  top: 0;
+}
+.in-thread.thread-end {
+  padding-bottom: 20px;
+}
+.in-thread.thread-end::after {
+  content: "";
+  position: absolute;
+  right: -8px;
+  bottom: 0;
+  left: -18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.assignment {
+  margin-bottom: -12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.gathr-line {
+  display: flex;
+  gap: 8px;
+  padding: 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: pre-line;
+}
+.gathr-name {
+  color: var(--foreground);
+  font-weight: 500;
+}
+
+.last-word {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.thread-link {
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.reaction svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.5;
+}
+
+@media (max-width: 600px) {
+  .speaker {
+    flex-wrap: wrap;
+  }
+  .reply.in-thread {
+    padding-left: 12px;
+  }
+  .team-head-state {
+    flex-basis: 100%;
+    margin-left: 20px;
+  }
+}

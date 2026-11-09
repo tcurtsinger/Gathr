@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, Chat } from '../api';
+import type { Agent, Chat, Member } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
-import { AgentPicker } from './AgentPicker';
+import { AgentPicker, type Recipient } from './AgentPicker';
 import type { SendFailure } from './messages';
+import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread } from './Thread';
+import { roleName } from './team';
 import { type Unsent, useChat } from './useChat';
 import './chat.css';
 
@@ -36,9 +38,12 @@ export function ChatView(props: Props) {
   const turn = running(state);
   const input = useRef<HTMLTextAreaElement>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  // The one picked here, else the agent of the chat's last turn, else the first; a removed one is skipped.
+  const recipients = recipientsOf(state.members, agents, !!chat.project);
+  // The one picked here, else the chat's Supervisor, else the agent of its last turn, else the first;
+  // a removed one is skipped.
+  const lead = state.members.find((m) => m.role === 'supervisor')?.agent;
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
-  const agent = [picked, last].find((id) => agents.some((a) => a.id === id)) ?? agents[0]?.id;
+  const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   useFirstTokenReport(state.partial);
 
@@ -71,6 +76,7 @@ export function ChatView(props: Props) {
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
         <h1>{chat.title}</h1>
+        {state.members.length > 1 && <Summary state={state} />}
       </header>
       <Thread
         state={state}
@@ -105,7 +111,7 @@ export function ChatView(props: Props) {
           tools={
             agent && (
               <AgentPicker
-                agents={agents}
+                agents={recipients}
                 selected={agent}
                 onSelect={setPicked}
                 onEdit={() => onEditAgent(agent)}
@@ -116,6 +122,23 @@ export function ChatView(props: Props) {
       </Thread>
     </main>
   );
+}
+
+const MOST = 5;
+
+/**
+ * Who a message can go to (0028): the chat's Supervisor by name first, then its other agents. A chat
+ * without a project can also take any other agent, up to five: sending to one adds it.
+ */
+function recipientsOf(members: Member[], agents: Agent[], project: boolean): Recipient[] {
+  const sorted = [...members].sort(
+    (a, b) => Number(b.role === 'supervisor') - Number(a.role === 'supervisor'),
+  );
+  const inChat = sorted
+    .filter((m) => agents.some((a) => a.id === m.agent))
+    .map((m) => ({ id: m.agent, name: m.name, meta: members.length > 1 ? roleName[m.role] : undefined }));
+  if (project || members.length >= MOST) return inChat;
+  return [...inChat, ...agents.filter((a) => !members.some((m) => m.agent === a.id))];
 }
 
 /** Reports when each turn's first streamed text is drawn, to set against the service's

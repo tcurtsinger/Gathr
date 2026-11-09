@@ -1,0 +1,65 @@
+/* Summary: the prototype's popover from the chat header (DESIGN.md, designs/system-reference.css). */
+.summary-open {
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.summary-open:hover,
+.summary-open[aria-expanded="true"] {
+  background: var(--hover-tint);
+  color: var(--foreground);
+}
+.summary {
+  position: fixed;
+  inset: auto;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: min(560px, calc(100dvh - 32px));
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--popover);
+  color: var(--foreground);
+  box-shadow: 0 10px 24px #0003;
+}
+.summary h3 {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.summary-agent {
+  padding: 10px 0;
+  font-size: 13px;
+}
+.summary-agent summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  list-style: none;
+  cursor: pointer;
+}
+.summary-agent summary::-webkit-details-marker {
+  display: none;
+}
+.summary-agent summary:hover {
+  background: var(--hover-tint);
+}
+.summary-agent small {
+  padding-left: 34px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.summary-agent ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}

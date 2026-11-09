@@ -13,7 +13,8 @@ export interface Message {
   id: string;
   turn: string | null;
   time: string;
-  role: 'user' | 'assistant';
+  /** `gathr`: what Gathr told an agent (a task, a wake-up, a hear-back), never the agent's own words. */
+  role: 'user' | 'assistant' | 'gathr';
   kind: string;
   body: string | ToolBody;
 }
@@ -25,11 +26,71 @@ export interface Turn {
   ref: string;
   /** The agent it was sent to; null for a turn sent to no agent. */
   agent: string | null;
+  created?: string;
+  /** The task it works on: its reply sits in the thread under the turn that gave the task. */
+  task?: number | null;
+  /** A hear-back's: the turn whose tasks it reports on, which its reply links back to. */
+  answers?: string | null;
+}
+
+export type Role = 'supervisor' | 'reviewer' | 'member';
+
+export interface Member {
+  agent: string;
+  name: string;
+  role: Role;
+}
+
+export type TaskState =
+  | 'waiting'
+  | 'ready'
+  | 'working'
+  | 'held'
+  | 'done'
+  | 'blocked'
+  | 'failed'
+  | 'stopped'
+  | 'cancelled';
+
+/** A task an agent gave another (0010). */
+export interface Task {
+  number: number;
+  chat: string;
+  /** The agent who gave it; null when the person did. */
+  giver: string | null;
+  owner: string;
+  /** The turn that gave it. */
+  given_in: string | null;
+  kind: 'work' | 'review';
+  what: string;
+  state: TaskState;
+  reason: string | null;
+  /** Tasks it waits for before it starts. */
+  after: number[];
+}
+
+/** What an agent waits on (0010): another agent, CI, a PR or a check. */
+export interface Wait {
+  id: string;
+  agent: string;
+  task: number | null;
+  kind: string;
+  target: string | null;
+  state: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  folder: string;
+  team: { agent: string; role: Role }[];
 }
 
 export interface Chat {
   id: string;
   title: string;
+  /** Its project's id; none for a plain chat. */
+  project?: string | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -61,6 +122,10 @@ export interface History {
   turns: Turn[];
   /** Questions the engine asked that nobody has answered yet. */
   approvals: { turn: string; request_id: string; tool: string }[];
+  /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
+  members: Member[];
+  /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
+  partial?: { turn: string; text: string }[];
 }
 
 export interface Engine {
@@ -120,6 +185,7 @@ export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
   createChat: () => call<Chat>('POST', '/api/chats', {}),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
+  tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   send: (chat: string, text: string, agent?: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
   stop: (chat: string) => call<unknown>('POST', `/api/chats/${chat}/stop`),

@@ -7,7 +7,7 @@ import {
   useExternalStoreRuntime,
 } from '@assistant-ui/react';
 import { ArrowDown } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useMemo, useRef } from 'react';
+import { createContext, type ReactNode, useContext, useMemo, useRef, useState } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolFallback } from '@/components/assistant-ui/elements/tool-fallback.aui';
@@ -17,6 +17,7 @@ import {
   ToolGroupTrigger,
 } from '@/components/assistant-ui/elements/tool-group.aui';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { cn } from '@/lib/utils';
 import type { Agent } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { Notice } from '../components/Notice';
@@ -24,6 +25,19 @@ import { useEdges } from './edges';
 import { type Custom, type SendFailure, type TurnNotice, toThread } from './messages';
 import { useOlder } from './older';
 import type { ChatState } from './state';
+import {
+  type Folding,
+  FoldingContext,
+  GathrLine,
+  headId,
+  LastWord,
+  remember,
+  rememberedFolds,
+  TeamHead,
+  threaded,
+  unfolded,
+} from './TeamParts';
+import { clock, roleName } from './team';
 import './thread.css';
 
 /** What a reply's notices and approvals can do. Stable for a chat, so replies don't redraw for it. */
@@ -57,8 +71,25 @@ interface Props {
 export function Thread({ state, agents, unsent, running, actions, header, empty, children }: Props) {
   const cache = useRef(new Map());
   const all = useMemo(() => toThread(state, agents, unsent, cache.current), [state, agents, unsent]);
+  const [chosen, setChosen] = useState(rememberedFolds);
+  // A folded thread's replies aren't mounted at all, so a long round costs nothing until opened.
+  const shown = useMemo(() => unfolded(all, chosen), [all, chosen]);
   const viewport = useRef<HTMLDivElement>(null);
-  const { messages, onScroll } = useOlder(all, viewport);
+  const { messages, onScroll, reach } = useOlder(shown, viewport);
+  const folding: Folding = {
+    chosen,
+    set: (root, open) => setChosen(remember(root, open)),
+    reveal: (root) => {
+      setChosen(remember(root, true));
+      reach(shown.findIndex((m) => m.id === `t-${root}`));
+      // After the thread and anything above it are drawn.
+      requestAnimationFrame(() => {
+        const disclosure = document.getElementById(headId(root));
+        disclosure?.focus({ preventScroll: true });
+        disclosure?.scrollIntoView({ block: 'start' });
+      });
+    },
+  };
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
@@ -84,29 +115,31 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
-        <ThreadPrimitive.Root className="thread">
-          <ThreadPrimitive.Viewport ref={viewport} className="thread-viewport" onScroll={onScroll}>
-            <div className="thread-column" data-empty={empty || undefined}>
-              {header}
-              {empty && <h2 className="welcome">What are we working on?</h2>}
-              <div className="thread-messages">
-                <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+        <FoldingContext value={folding}>
+          <ThreadPrimitive.Root className="thread">
+            <ThreadPrimitive.Viewport ref={viewport} className="thread-viewport" onScroll={onScroll}>
+              <div className="thread-column" data-empty={empty || undefined}>
+                {header}
+                {empty && <h2 className="welcome">What are we working on?</h2>}
+                <div className="thread-messages">
+                  <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                </div>
+                <ThreadPrimitive.ViewportFooter className="thread-footer">
+                  <ThreadPrimitive.ScrollToBottom asChild>
+                    <TooltipIconButton
+                      tooltip="Scroll to bottom"
+                      variant="outline"
+                      className="thread-bottom bg-background"
+                    >
+                      <ArrowDown />
+                    </TooltipIconButton>
+                  </ThreadPrimitive.ScrollToBottom>
+                  {children}
+                </ThreadPrimitive.ViewportFooter>
               </div>
-              <ThreadPrimitive.ViewportFooter className="thread-footer">
-                <ThreadPrimitive.ScrollToBottom asChild>
-                  <TooltipIconButton
-                    tooltip="Scroll to bottom"
-                    variant="outline"
-                    className="thread-bottom bg-background"
-                  >
-                    <ArrowDown />
-                  </TooltipIconButton>
-                </ThreadPrimitive.ScrollToBottom>
-                {children}
-              </ThreadPrimitive.ViewportFooter>
-            </div>
-          </ThreadPrimitive.Viewport>
-        </ThreadPrimitive.Root>
+            </ThreadPrimitive.Viewport>
+          </ThreadPrimitive.Root>
+        </FoldingContext>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );
@@ -114,17 +147,24 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
 
 function ThreadMessage() {
   const role = useAuiState((s) => s.message.role);
-  return role === 'user' ? <UserMessage /> : <AssistantMessage />;
+  return role === 'user' ? <UserMessage /> : role === 'system' ? <SystemItem /> : <AssistantMessage />;
 }
 
 const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
 
+/** Gathr's own items: a team thread's disclosure, or what Gathr told an agent. */
+function SystemItem() {
+  const own = useAuiState(custom);
+  return own.head ? <TeamHead head={own.head} /> : <GathrLine custom={own} />;
+}
+
 function UserMessage() {
-  const { unsent } = useAuiState(custom);
+  const own = useAuiState(custom);
+  const { unsent } = own;
   const actions = useActions();
   return (
-    <MessagePrimitive.Root className="user-message">
+    <MessagePrimitive.Root className={cn('user-message', threaded(own))}>
       {/* A failed Stop or approval sent no text: only its notice shows, with nothing to resend. */}
       {unsent?.text !== '' && (
         <div className="user-bubble">
@@ -155,12 +195,20 @@ function UserMessage() {
 const groupBy = groupPartByType({ 'tool-call': ['group-tool'] });
 
 function AssistantMessage() {
-  const { agent, notice, approvals } = useAuiState(custom);
+  const own = useAuiState(custom);
+  const { agent, role, time, notice, approvals, back, agreed } = own;
   const actions = useActions();
   return (
-    <MessagePrimitive.Root className="reply">
+    <MessagePrimitive.Root className={cn('reply', threaded(own))}>
       {agent && (
-        <SpeakerIdentity className="mb-2" turns={[{ id: 'author', kind: 'agent', name: agent, text: '' }]} />
+        <header className="speaker">
+          <SpeakerIdentity
+            className="w-auto"
+            turns={[{ id: 'author', kind: 'agent', name: agent, text: '' }]}
+          />
+          {role && <span className="speaker-role">{roleName[role]}</span>}
+          {time && <time dateTime={time}>{clock(time)}</time>}
+        </header>
       )}
       <div className="reply-body">
         <MessagePrimitive.GroupedParts groupBy={groupBy}>
@@ -195,6 +243,7 @@ function AssistantMessage() {
         />
       ))}
       {notice && <ReplyNotice notice={notice} actions={actions} />}
+      {back && <LastWord back={back} agreed={agreed ?? []} />}
     </MessagePrimitive.Root>
   );
 }

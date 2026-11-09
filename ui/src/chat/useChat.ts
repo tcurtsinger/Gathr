@@ -21,11 +21,11 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const load = useCallback(() => {
     pending.current = [];
     openedAt.current = performance.now();
-    api.history(chat).then(
-      (history) => {
+    Promise.all([api.history(chat), api.tasks(chat)]).then(
+      ([history, work]) => {
         const held = pending.current ?? [];
         pending.current = null;
-        setState(held.reduce(apply, fromHistory(history)));
+        setState(held.reduce(apply, fromHistory(history, work)));
         setLoaded(true);
         setLoadFailure(null);
         timeToPaint('gathr.ui.chat_open', openedAt.current, { messages: history.messages.length });
