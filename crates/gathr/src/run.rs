@@ -1,11 +1,12 @@
 //! The one way the service runs a short program and reads what it printed: git, gh and a wait's
 //! check. Never asks for a password, has no window, and is stopped past its time limit.
 
+use std::io::Read;
 use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::sync::oneshot;
 
 use crate::platform::env::Vars;
 
@@ -40,6 +41,11 @@ pub async fn run(
     env: &Vars,
     limit: Duration,
 ) -> Result<Ran, String> {
+    let name = program.file_stem().unwrap_or_default().to_string_lossy();
+    let what = format!("{name} {}", args.first().unwrap_or(&""));
+    let pipes = std::io::pipe().and_then(|out| Ok((out, std::io::pipe()?)));
+    let ((stdout, out_end), (stderr, err_end)) =
+        pipes.map_err(|e| format!("{name} didn't start: {e}"))?;
     let mut command = std::process::Command::new(program);
     command
         .args(args)
@@ -50,15 +56,13 @@ pub async fn run(
         .env("GCM_INTERACTIVE", "never")
         .env("GH_PROMPT_DISABLED", "1")
         .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stdout(out_end)
+        .stderr(err_end);
     crate::platform::no_window(&mut command);
-    let name = program.file_stem().unwrap_or_default().to_string_lossy();
-    let what = format!("{name} {}", args.first().unwrap_or(&""));
-    let mut child = tokio::process::Command::from(command)
-        .spawn()
-        .map_err(|e| format!("{name} didn't start: {e}"))?;
-    let (mut stdout, mut stderr) = (child.stdout.take(), child.stderr.take());
+    // The command goes with this statement, and with it the service's ends of the pipes.
+    let child = tokio::process::Command::from(command).spawn();
+    let child = child.map_err(|e| format!("{name} didn't start: {e}"))?;
+    let (stdout, stderr) = (read_all(stdout), read_all(stderr));
     let group = crate::platform::group_of(child.id(), program);
     let mut running = Running {
         child,
@@ -68,13 +72,11 @@ pub async fn run(
     };
     let (child, found) = (&mut running.child, &mut running.group);
     let waited = async {
-        let (mut out, mut err) = (Vec::new(), Vec::new());
-        let (read_out, read_err, status) = tokio::join!(
-            read_all(&mut stdout, &mut out),
-            read_all(&mut stderr, &mut err),
-            child.wait()
-        );
-        read_out.and(read_err).and(status).map(|s| (s, out, err))
+        let (out, err, status) = tokio::join!(stdout, stderr, child.wait());
+        let read = |got: Result<std::io::Result<Vec<u8>>, oneshot::error::RecvError>| {
+            got.map_err(std::io::Error::other).and_then(|read| read)
+        };
+        std::io::Result::Ok((status?, read(out)?, read(err)?))
     };
     tokio::pin!(waited, group);
     let waited = async {
@@ -96,14 +98,16 @@ pub async fn run(
     })
 }
 
-async fn read_all(
-    pipe: &mut Option<impl AsyncRead + Unpin>,
-    to: &mut Vec<u8>,
-) -> std::io::Result<()> {
-    match pipe {
-        Some(pipe) => pipe.read_to_end(to).await.map(|_| ()),
-        None => Ok(()),
-    }
+/// All a pipe gives until every end that writes to it is closed, read on a thread of its own: never
+/// the runtime's blocking threads, which it waits for when it ends. On Windows, Git Bash ended while
+/// it forks leaves the fork's child holding the pipe for 300 s, out of any kill's reach (1214).
+fn read_all(mut pipe: std::io::PipeReader) -> oneshot::Receiver<std::io::Result<Vec<u8>>> {
+    let (read, got) = oneshot::channel();
+    std::thread::spawn(move || {
+        let mut all = Vec::new();
+        let _ = read.send(pipe.read_to_end(&mut all).map(|_| all));
+    });
+    got
 }
 
 /// A program dropped while it runs (past its limit, or its wait ended) is ended with what it

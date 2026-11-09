@@ -8,7 +8,10 @@ use std::time::Duration;
 
 use gathr::event::Event;
 use gathr::ids::{now_us, trace_id};
-use gathr::platform::env::{self, Vars};
+use gathr::platform::{
+    self,
+    env::{self, Vars},
+};
 use gathr::run::run;
 use gathr::waits::ci::{self, Seen, Target};
 use gathr::waits::{self, Wait};
@@ -299,7 +302,7 @@ async fn moved_past(
 /// A check's command: exit 0 is met; any other exit is "not yet" (G69); one that can't run or
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
-    let (shell, vars) = shell(vars).ok_or("Git Bash wasn't found beside git")?;
+    let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
     let ran = run(&shell, &["-c", command], dir, &vars, LIMIT).await?;
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
@@ -309,35 +312,6 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
         true => "your check came back yes".to_string(),
         false => format!("your check came back yes and printed \"{printed}\""),
     }))
-}
-
-/// The shell a check runs in, with its environment: `sh`, or on Windows the Git Bash that Claude
-/// Code's Bash tool uses. Git's `bin\bash.exe` only starts `usr\bin\bash.exe`, and killing it
-/// leaves that one running the check: Gathr starts it itself, with what the launcher adds.
-fn shell(vars: &Vars) -> Option<(PathBuf, Vars)> {
-    if !cfg!(windows) {
-        return Some((PathBuf::from("/bin/sh"), vars.clone()));
-    }
-    let at = vars
-        .iter()
-        .position(|(k, _)| k.eq_ignore_ascii_case("PATH"))?;
-    let git = std::env::split_paths(&vars[at].1)
-        .map(|dir| dir.join("git.exe"))
-        .find(|p| p.is_file())?;
-    // git.exe is in Git's cmd, bin or mingw64\bin.
-    let top = git
-        .ancestors()
-        .skip(1)
-        .take(3)
-        .find(|dir| dir.join("usr").join("bin").join("bash.exe").is_file())?;
-    let mut vars = vars.clone();
-    let folders = [top.join("mingw64").join("bin"), top.join("usr").join("bin")];
-    let path = std::env::split_paths(&vars[at].1);
-    vars[at].1 = std::env::join_paths(folders.into_iter().chain(path)).ok()?;
-    if !vars.iter().any(|(k, _)| k.eq_ignore_ascii_case("MSYSTEM")) {
-        vars.push(("MSYSTEM".into(), "MINGW64".into()));
-    }
-    Some((top.join("usr").join("bin").join("bash.exe"), vars))
 }
 
 fn pr_view<'a>(number: &'a str, fields: &'a str, repo: Option<&'a str>) -> Vec<&'a str> {
