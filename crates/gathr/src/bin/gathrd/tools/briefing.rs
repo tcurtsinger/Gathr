@@ -124,17 +124,15 @@ pub fn text(facts: &Facts) -> String {
     }
     lines.extend([
         "Follow the project's AGENTS.md and CLAUDE.md when present.".to_string(),
-        "Check facts in code, current docs or a live run before stating or relying on them. Say \
-         what you couldn't verify."
-            .to_string(),
+        "Verify facts in code, current docs or a live run. Report unverified claims.".to_string(),
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
          cancel_task and restart_task for tasks; wait and end_wait instead of polling in a loop; \
          ask_person for anything you need from the person."
             .to_string(),
-        "When a turn works on a task, end it with finish_task. Hand work to another agent with \
-         give_task, and ask the person with ask_person, never by naming it in your reply."
+        "Task turns require finish_task. Delegate with give_task; request input with ask_person. \
+         Chat text alone does neither."
             .to_string(),
         format!(
             "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",

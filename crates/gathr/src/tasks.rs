@@ -392,7 +392,7 @@ pub fn finish(
     }
     let commit = said.commit.map(str::trim).filter(|c| !c.is_empty());
     if how == Finish::Done && t.kind == Kind::Review && commit.is_none() {
-        return Err(refused("a review is done with the commit it reviewed"));
+        return Err(refused("reviewed commit required to finish a review"));
     }
     tx.execute(
         "UPDATE tasks SET finish = ?2, finish_note = ?3, blocked_on = COALESCE(?4, blocked_on),
@@ -556,7 +556,7 @@ pub fn restart(
     if !t.state.settled() || t.state == State::Done {
         let state = t.state.as_str();
         return Err(refused(format!(
-            "task #{task} is {state}: only a failed, stopped, blocked or cancelled task restarts"
+            "task #{task}: cannot restart {state}; requires failed, stopped, blocked or cancelled"
         )));
     }
     let carry = match t.state {
@@ -610,7 +610,7 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     };
     for task in holding {
         if held::open_on(&tx, task)?.is_empty() {
-            let carry = "Gathr stopped while your background command ran, which ended it";
+            let carry = "Gathr stopped; background command ended";
             ready(&tx, task, Some(carry))?;
         }
     }
@@ -638,7 +638,7 @@ pub fn engine_gone(
     let mut starts = Vec::new();
     for task in held_on {
         if state_of(&tx, task)? == Some(State::Held) && held::open_on(&tx, task)?.is_empty() {
-            let carry = "your engine closed while your background command ran, which ended it";
+            let carry = "engine closed; background command ended";
             starts.push(ready(&tx, task, Some(carry))?);
         }
     }
@@ -832,11 +832,11 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                     "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
                     [blocked],
                 )?;
-                let carry = format!("#{task}, which it was blocked on, is done");
+                let carry = format!("blocker #{task} done");
                 starts.push(ready(tx, blocked, Some(&carry))?);
             }
             State::Cancelled => {
-                let why = format!("#{task}, which it was blocked on, was cancelled");
+                let why = format!("blocker #{task} cancelled");
                 starts.extend(cancel_in(tx, blocked, &why, trace)?);
             }
             _ => {}

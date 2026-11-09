@@ -45,7 +45,7 @@ pub fn days(conn: &Connection) -> Result<Days, Error> {
 
 pub fn set_days(conn: &Connection, days: Days) -> Result<(), Error> {
     if !(1..=MOST).contains(&days.stale) || !(1..=MOST).contains(&days.cancel) {
-        return Err(Error::Refused(format!("each count of days is 1 to {MOST}")));
+        return Err(Error::Refused(format!("days must be 1 to {MOST}")));
     }
     for (key, value) in [("stale_days", days.stale), ("cancel_days", days.cancel)] {
         conn.execute(
@@ -165,31 +165,28 @@ fn tell_lead(
         return Ok(None);
     };
     let mut lines = Vec::new();
-    let mut asked = false;
+    let mut has_agent = false;
     for &n in marked {
         let t = read(tx, n)?;
         let whose = match &t.owner {
-            Some(owner) => words::name_of(tx, owner)?,
-            None => {
-                asked = true;
-                "the person".to_string()
+            Some(owner) => {
+                has_agent = true;
+                format!("{}, {}", words::name_of(tx, owner)?, t.state.as_str())
             }
+            None => "person".to_string(),
         };
-        lines.push(format!(
-            "- #{n} ({whose}, {}): {}",
-            t.state.as_str(),
-            t.what
-        ));
+        lines.push(format!("#{n} {} ({whose})", t.what));
     }
     let mut text = format!(
-        "These tasks haven't moved in {} days:\n{}\nFinish, restart or cancel each. An agent's task that \
-         nothing can still move is cancelled after {} more days without a move.",
+        "Stale {} d: {}. Finish, restart or cancel.",
         days.stale,
-        lines.join("\n"),
-        days.cancel
+        lines.join("\n")
     );
-    if asked {
-        text.push_str(" The person's questions stay open until they answer or cancel them.");
+    if has_agent {
+        text.push_str(&format!(
+            " Agent tasks auto-cancel after {} d more idle unless active or paused.",
+            days.cancel
+        ));
     }
     Start::queue(tx, (chat, &lead.agent), (None, None), text).map(Some)
 }

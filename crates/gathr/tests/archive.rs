@@ -258,20 +258,16 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
     let history = service.wait_for(&chat, 10, "the Supervisor told", |h| {
         let messages = h["messages"].as_array().unwrap();
         messages.iter().any(|m| {
-            m["role"] == "gathr"
-                && m["body"]
-                    .as_str()
-                    .unwrap_or("")
-                    .contains("haven't moved in 3 days")
+            m["role"] == "gathr" && m["body"].as_str().unwrap_or("").contains("Stale 3 d:")
         })
     });
     let told = history["messages"].as_array().unwrap().iter().rev();
     let told = told
         .filter_map(|m| m["body"].as_str())
-        .find(|b| b.contains("haven't moved"));
+        .find(|b| b.contains("Stale 3 d:"));
     assert!(
-        told.unwrap().contains("The person's questions stay open"),
-        "the lead isn't told the person's question stays open: {told:?}"
+        !told.unwrap().contains("auto-cancel"),
+        "person-only stale notice must omit auto-cancel policy: {told:?}"
     );
     let person = service.call("GET", "/api/person-tasks").json();
     assert_eq!(

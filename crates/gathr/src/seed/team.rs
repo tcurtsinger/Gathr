@@ -19,8 +19,7 @@ const TEAM: [(&str, &str); 5] = [
     ("Ivo", "reviewer"),
 ];
 const ROUNDS: usize = 20;
-const FINISH: &str =
-    "Finish with finish_task: done, left (say what's left) or blocked (on whom, or which task).";
+const FINISH: &str = "Use finish_task: done, left (remaining work), or blocked (agent or task).";
 
 /// A task as the seed gives it: its number, owner's place in `TEAM` and what it asks.
 struct Given {
@@ -202,8 +201,8 @@ impl Seeder<'_> {
     ) -> Result<(), Error> {
         let turn = self.team_turn(chat, &team[0], (None, Some(given_in)), place)?;
         let mut lines = vec![match given.len() {
-            1 => "The task you gave is settled:".to_string(),
-            n => format!("The {n} tasks you gave together are settled:"),
+            1 => "Task settled:".to_string(),
+            n => format!("{n} tasks settled:"),
         }];
         for g in given {
             lines.push(format!(
@@ -211,7 +210,7 @@ impl Seeder<'_> {
                 g.number, TEAM[g.who].0, g.what
             ));
         }
-        lines.push("Their replies are in the chat (read_chat). Carry on from here.".into());
+        lines.push("Read replies with read_chat, then continue.".into());
         self.message(&turn, "gathr", "text", &lines.join("\n"))?;
         let words = 50 + self.next() % 150;
         self.answer(&turn, words as usize)

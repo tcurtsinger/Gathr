@@ -294,7 +294,13 @@ purposeful transitions, never animate a simulated service result into truth.
 
 - Capitalize Gathr. Keep one component for each repeated pattern.
 - Use the prototype's real components with Gathr adapters and real state.
-- Keep copy terse, action labels as verbs and detail behind Help/disclosure.
+- Use terse, technical copy throughout: labels, accessible names, errors and Gathr-authored chat messages.
+- Buttons and menu items are verbs. Status is a short phrase. Errors name the failed operation; keep references and recovery actions.
+- Omit narration, repeated context and policy unrelated to the item. Tooltips and Help stay terse.
+- Agent messages retain task numbers, owners, outcomes and the next tool action, including required arguments.
+- Stale notices use "Stale 3 d: #72 Approve the wording? (person). Finish, restart or cancel."
+  Agent tasks include owner and state; only a list containing agent tasks adds their auto-cancel policy.
+  Person tasks never auto-cancel. Multiple tasks use one row each and one shared instruction.
 - Keep screenshots and fixture data invented; never port personal content.
 - Do not replace accepted architecture, membership, safety or lifecycle policy
   with a prototype callback. Conflicts go to the decision/plan, not into styling.

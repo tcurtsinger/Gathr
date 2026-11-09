@@ -288,7 +288,7 @@ async fn moved_past(
         if !head.is_empty() && !head.starts_with(commit) {
             let short = |c: &str| c.get(..7).unwrap_or(c).to_string();
             return Ok(Some(format!(
-                "#{} moved past {} to {}: this wait was for an older commit, so wait on #{}'s CI",
+                "#{}: {} superseded by {}. Wait on #{}'s CI.",
                 pr["number"],
                 short(commit),
                 short(head),
@@ -309,8 +309,8 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
     }
     let printed: String = ran.out.chars().take(PRINTED_MOST).collect();
     Ok(Look::Met(match printed.is_empty() {
-        true => "your check came back yes".to_string(),
-        false => format!("your check came back yes and printed \"{printed}\""),
+        true => "Check passed".to_string(),
+        false => format!("Check passed: \"{printed}\""),
     }))
 }
 

@@ -361,15 +361,13 @@ pub(super) fn heard(
 /// to do with it.
 pub(super) fn request_lines(t: &Task, member: &str) -> Vec<String> {
     let mut lines = vec![format!(
-        "{member} needs the person's answer. Only you give the person tasks, so check it first: \
-         is it the person's to decide, is it already answered, is the pick sound."
+        "{member} requests input. Check owner, prior answers and recommendation before ask_person."
     )];
     lines.extend(form_lines(t));
     lines.push(format!(
-        "Then file it with ask_person (for_task {n}; leave `what` out to send it as it is), fold it \
-         into a question the person already has (finish_task blocked, on_task that one), or answer \
-         it yourself (finish_task done, the answer in note). Once the person answers, finish #{n} \
-         done with the answer in note: that passes it back to {member}.",
+        "File: ask_person for_task {n} (omit `what` to forward unchanged). Existing question: \
+         finish_task blocked, on_task its number. Answer directly: finish_task done, note the answer. \
+         After the person answers, finish #{n} done with the answer in note for {member}.",
         n = t.number
     ));
     lines
@@ -378,7 +376,7 @@ pub(super) fn request_lines(t: &Task, member: &str) -> Vec<String> {
 fn form_lines(t: &Task) -> Vec<String> {
     let mut lines = Vec::new();
     if let Some(form) = t.form {
-        lines.push(format!("Answered with: {}", form.needs()));
+        lines.push(format!("Answer: {}", form.needs()));
     }
     for (i, c) in t.choices.iter().enumerate() {
         let mine = if i == 0 { " (their pick)" } else { "" };
@@ -396,7 +394,7 @@ fn form_lines(t: &Task) -> Vec<String> {
 }
 
 fn heard_words(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
-    let mut lines = vec!["From the person:".to_string()];
+    let mut lines = vec!["Person answered:".to_string()];
     for t in settled {
         let how = match (t.state, &t.reason) {
             (State::Done, Some(line)) => line.clone(),
@@ -412,12 +410,11 @@ fn heard_words(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
             None => "the member".to_string(),
         };
         lines.push(format!(
-            "#{} was for #{r} from {asker}: finish #{r} done with the answer in note, so it \
-             reaches {asker}.",
+            "#{} answers {asker}'s #{r}. Use finish_task done on #{r}, answer in note.",
             t.number
         ));
     }
-    lines.push("Carry on from here.".to_string());
+    lines.push("Continue.".to_string());
     Ok(lines.join("\n"))
 }
 
@@ -441,7 +438,7 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
         (Some(p), None) => Ok(p),
         (None, Some(words)) => Ok(words.to_string()),
         (None, None) => Err(refused(format!(
-            "#{} is answered with {}, or words",
+            "#{} requires {}, or text",
             t.number,
             form.needs()
         ))),
@@ -451,9 +448,7 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
 fn check_choices(form: Form, choices: &[Choice]) -> Result<(), Error> {
     let picks = matches!(form, Form::Choice | Form::Choices);
     if picks && choices.len() < 2 {
-        return Err(refused(
-            "a choice needs at least 2 choices, your pick first",
-        ));
+        return Err(refused("at least 2 choices required; recommendation first"));
     }
     if !picks && !choices.is_empty() {
         return Err(refused(format!(
@@ -468,11 +463,11 @@ fn check_choices(form: Form, choices: &[Choice]) -> Result<(), Error> {
         let label = c.label.trim();
         if label.is_empty() || label.chars().count() > LABEL_MOST || label != c.label {
             return Err(refused(format!(
-                "a choice's label is 1 to {LABEL_MOST} characters, with no space around it"
+                "choice label: 1 to {LABEL_MOST} characters, no surrounding whitespace"
             )));
         }
         if choices[..i].iter().any(|o| o.label == c.label) {
-            return Err(refused(format!("the choice {label} is there twice")));
+            return Err(refused(format!("duplicate choice: {label}")));
         }
     }
     Ok(())

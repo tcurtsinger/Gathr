@@ -149,7 +149,7 @@ test("the lead's last word links back and folds the thread, with no agreement re
   state.turns.sol = turn('sol', 'sol', { task: 3 });
   state.messages.push(said('sol', 'assistant', 'No findings'));
   state.turns.back = turn('back', 'mira', { answers: 'ask' });
-  state.messages.push(said('back', 'gathr', 'The 3 tasks you gave together are settled'));
+  state.messages.push(said('back', 'gathr', '3 tasks settled'));
   state.messages.push(said('back', 'assistant', 'All done'));
   let all = view(state);
   expect(all.some((m) => m.id?.startsWith('back-gathr'))).toBe(false);
@@ -211,7 +211,7 @@ test('a member hearing back on a task it gave stays in the thread, not the main 
   state.tasks.push(task(3, 'lane', 'rowan', { giver: 'rowan' }));
   state.messages.push(said('sub', 'assistant', 'Sub-task done'));
   state.turns.heard = turn('heard', 'rowan', { answers: 'rowan' });
-  state.messages.push(said('heard', 'gathr', 'The task you gave is settled'));
+  state.messages.push(said('heard', 'gathr', 'Task settled'));
   state.messages.push(said('heard', 'assistant', 'Lane finished it; my part is done too'));
   const all = view(state);
   const heard = custom(all.find((m) => m.id === 'a-heard') as ThreadMessageLike);

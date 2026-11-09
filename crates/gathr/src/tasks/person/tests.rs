@@ -88,16 +88,16 @@ fn each_form_takes_its_own_answer_or_words_and_refuses_the_rest() {
         (said(words("neither"), &one), "neither"),
         (
             said(pick(&["A", "B"]), &one),
-            "refused: #7 is answered with one of its choices, or words",
+            "refused: #7 requires one of its choices, or text",
         ),
         (said(pick(&["Z"]), &any), "refused: #7 has no choice Z"),
         (
             said(words("   "), &yesno),
-            "refused: #7 is answered with yes or no, or words",
+            "refused: #7 requires yes or no, or text",
         ),
         (
             said(Answer::default(), &done),
-            "refused: #7 is answered with done, or words",
+            "refused: #7 requires done, or text",
         ),
     ];
     for (got, expected) in cases {
@@ -124,15 +124,12 @@ fn choices_come_with_a_choice_form_two_or_more_each_once() {
     };
     assert_eq!(
         refused(Form::Choice, &["A"]),
-        "a choice needs at least 2 choices, your pick first"
+        "at least 2 choices required; recommendation first"
     );
     assert_eq!(
         refused(Form::Yesno, &["A", "B"]),
         "choices go with form choice or choices, not yesno"
     );
-    assert_eq!(
-        refused(Form::Choices, &["A", "A"]),
-        "the choice A is there twice"
-    );
-    assert!(refused(Form::Choice, &["A", " B"]).starts_with("a choice's label is 1 to 80"));
+    assert_eq!(refused(Form::Choices, &["A", "A"]), "duplicate choice: A");
+    assert!(refused(Form::Choice, &["A", " B"]).starts_with("choice label: 1 to 80"));
 }

@@ -23,12 +23,9 @@ impl fmt::Display for Error {
             Error::Db(e) => write!(f, "{e}"),
             Error::Io(e) => write!(f, "{e}"),
             Error::NewerDatabase { found, known } => {
-                write!(
-                    f,
-                    "the database is schema {found}, newer than this build's {known}"
-                )
+                write!(f, "schema {found} requires a newer build's {known}")
             }
-            Error::AlreadyRunning => write!(f, "another gathrd is running on this data folder"),
+            Error::AlreadyRunning => write!(f, "data folder in use by gathrd"),
             Error::Refused(why) | Error::Other(why) => write!(f, "{why}"),
         }
     }

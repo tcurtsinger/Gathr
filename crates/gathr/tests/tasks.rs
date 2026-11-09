@@ -167,12 +167,7 @@ fn what_a_change_starts_is_saved_with_it_so_a_stop_right_after_loses_nothing() {
     assert!(ann.text.starts_with(&format!("Task #{task} from Lead")));
     let lead = waiting.iter().find(|w| w.agent.as_deref() == Some("lead"));
     let lead = lead.expect("the wake-up is taken over");
-    assert!(
-        lead.text
-            .starts_with("(A wake-up you asked for: your check"),
-        "{}",
-        lead.text
-    );
+    assert!(lead.text.starts_with("Wake: your check"), "{}", lead.text);
 }
 
 #[test]
@@ -359,7 +354,7 @@ fn left_twice_by_turns_that_did_nothing_is_blocked() {
         State::Ready,
         "work done: another turn"
     );
-    assert!(starts[0].text.contains("Carry on: you left part of it"));
+    assert!(starts[0].text.contains("Resume: work remains"));
     work(&mut conn, task, Some(Finish::Left), 0);
     assert_eq!(state(&conn, task).0, State::Ready);
     let starts = work(&mut conn, task, Some(Finish::Left), 0);
@@ -384,11 +379,7 @@ fn a_task_blocked_on_an_existing_task_carries_on_when_it_is_done() {
     let starts = work(&mut conn, fix, Some(Finish::Done), 2);
     assert_eq!(state(&conn, task).0, State::Ready);
     let ann: Vec<_> = starts.iter().filter(|s| s.agent == "ann").collect();
-    assert!(
-        ann[0]
-            .text
-            .contains(&format!("#{fix}, which it was blocked on, is done"))
-    );
+    assert!(ann[0].text.contains(&format!("blocker #{fix} done")));
 }
 
 #[test]
@@ -415,7 +406,7 @@ fn a_restart_stops_working_tasks_and_a_restart_by_the_giver_carries_on() {
     assert!(
         starts[0]
             .text
-            .contains("Carry on: Gathr stopped during its turn")
+            .contains("Resume: Gathr stopped during its turn")
     );
     assert_eq!(state(&conn, task).0, State::Ready);
 }
@@ -467,10 +458,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     let (task, _) = tasks::give(&mut conn, &review, T).unwrap();
     tasks::started(&mut conn, task.number, T).unwrap();
     let done = tasks::finish(&mut conn, "bo", task.number, Finish::Done, &Said::default());
-    assert_eq!(
-        refusal(done),
-        "a review is done with the commit it reviewed"
-    );
+    assert_eq!(refusal(done), "reviewed commit required to finish a review");
     let said = Said {
         commit: Some("abc1234"),
         ..Said::default()
@@ -613,7 +601,7 @@ fn an_all_wait_fires_once_when_every_part_is_met() {
             .text
             .contains("CI on #54 finished: 4 passed; #55 was merged")
     );
-    assert!(fired[0].text.contains("What you said you'd do then: merge"));
+    assert!(fired[0].text.contains("Next: merge"));
     let again = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
     assert!(again.is_empty(), "fires once");
     assert_eq!(waits::read(&conn, &all.id).unwrap().state, "fired");
@@ -658,7 +646,7 @@ fn a_wait_a_day_old_wakes_its_agent_anyway() {
     let woken = waits::expire(&mut conn, now + waits::WAIT_FOR_US, T).unwrap();
     assert_eq!(woken.len(), 1);
     assert!(woken[0].text.contains(
-        "a check still hasn't happened, a day after you started waiting (its last look failed: \
+        "Wait expired (24 h): a check (last check failed: \
          bash didn't start)"
     ));
     assert_eq!(waits::read(&conn, &wait.id).unwrap().state, "expired");
