@@ -118,7 +118,13 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
             reference={
               failure.ref ? { ref: failure.ref, open: () => onReference(failure.ref as string) } : undefined
             }
-            links={failure.why && <span className="muted">{failure.why}</span>}
+            links={
+              failure.why && (
+                <span className="muted new-project-why" title={failure.why}>
+                  {failure.why}
+                </span>
+              )
+            }
           />
         )}
         <footer className="agent-actions">

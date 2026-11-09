@@ -18,3 +18,10 @@
   margin-left: 6px;
   color: var(--muted);
 }
+/* The service's why can carry a tool's whole output: two lines here, all of it on hover and in the reference. */
+.new-project-why {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}

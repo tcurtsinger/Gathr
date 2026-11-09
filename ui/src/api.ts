@@ -185,7 +185,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
   createChat: (project?: string) => call<Chat>('POST', '/api/chats', project ? { project } : {}),
-  projects: () => call<Project[]>('GET', '/api/projects'),
+  projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),

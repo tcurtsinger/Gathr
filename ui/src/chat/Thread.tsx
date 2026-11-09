@@ -90,7 +90,8 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
         // After the thread and anything above it are drawn.
         requestAnimationFrame(() => {
           const disclosure = document.getElementById(headId(root));
-          disclosure?.focus({ preventScroll: true });
+          // Shown as keyboard focus (the quiet highlight) even when the link was clicked.
+          disclosure?.focus({ preventScroll: true, focusVisible: true });
           disclosure?.scrollIntoView({ block: 'start' });
         });
       },

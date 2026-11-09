@@ -156,6 +156,16 @@ test("the lead's last word links back, folds the thread, and shows who agreed; a
     /^Lane replied at \d\d:\d\d · Rowan, Kit and Sol done$/,
   );
   expect(all.at(-1)?.id).toBe('a-back');
+
+  // The late reply settles the round again, so the lead hears back once more: still late, one link.
+  state.turns.again = turn('again', 'mira', { answers: 'ask' });
+  state.messages.push(said('again', 'assistant', 'Lane is right'));
+  all = view(state);
+  expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.text).toMatch(
+    /^Lane replied at/,
+  );
+  expect(custom(all.find((m) => m.id === 'a-back') as ThreadMessageLike).back).toBeUndefined();
+  expect(custom(all.find((m) => m.id === 'a-again') as ThreadMessageLike).back?.root).toBe('ask');
 });
 
 test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {

@@ -101,11 +101,19 @@ export function toThread(
     const root = answers ? (crew.rootOf(answers) ?? answers) : undefined;
     return root && roots.has(root) ? root : undefined;
   };
+  // A round's first word, and its newest: a reply that came late brings the lead back with another.
+  const firsts = new Map<string, Turn>();
   const finals = new Map<string, Turn>();
   for (const turn of Object.values(state.turns)) {
     const root = crew.rootOf(turn.id) ? undefined : roundOf(turn.id);
-    if (root) finals.set(root, turn);
+    if (!root) continue;
+    if (!firsts.has(root)) firsts.set(root, turn);
+    finals.set(root, turn);
   }
+  const newest = (turn: string | null) => {
+    const root = roundOf(turn);
+    return root && finals.get(root)?.id === turn ? root : undefined;
+  };
   // What Gathr told the lead about its round reads as the link on its word, not as words of their own.
   const lines = main.filter((g) => !(g.gathr && roundOf(g.turn)));
   main.length = 0;
@@ -121,7 +129,7 @@ export function toThread(
   const place = (i: number) => {
     for (const root of places.get(i) ?? []) {
       const members = threaded.get(root) ?? [];
-      out.push(head(cache, root, members, state, crew, finals.get(root)));
+      out.push(head(cache, root, members, state, crew, firsts.get(root), finals.get(root)));
       members.forEach((g, n) => {
         const ends = { first: n === 0, end: n === members.length - 1 };
         out.push(cached(cache, g, state, crew, { thread: root, ...ends }));
@@ -130,7 +138,7 @@ export function toThread(
   };
   place(-1);
   main.forEach((g, i) => {
-    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, roundOf(g.turn), state, crew) : {}));
+    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, newest(g.turn), state, crew) : {}));
     place(i);
   });
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
@@ -192,14 +200,15 @@ function head(
   members: Group[],
   state: ChatState,
   crew: Team,
+  first: Turn | undefined,
   final: Turn | undefined,
 ): ThreadMessageLike {
   const tasks = crew.threads.get(root) ?? [];
   const done = roundOver(final, tasks);
-  // A reply that began after the lead's word began came late.
+  // A reply that began after the lead's first word on the round began came late.
   const began = (turn: string | null | undefined) =>
     Date.parse(state.messages.find((m) => m.turn === turn)?.time ?? '');
-  const after = began(final?.id);
+  const after = began(first?.id);
   const late = members
     .filter((g) => g.reply && began(g.turn) > after)
     .map((g) => ({ agent: state.turns[g.turn as string]?.agent ?? '', time: g.msgs[0]?.time ?? '' }))
