@@ -51,17 +51,17 @@ pub fn refused(team: &[(String, Role)]) -> Option<&'static str> {
     agents.sort_unstable();
     agents.dedup();
     if team.is_empty() || team.len() > MOST {
-        Some("chat requires 1 to 5 agents")
+        Some("A chat needs 1 to 5 agents")
     } else if agents.len() < team.len() {
-        Some("duplicate chat member")
+        Some("An agent can join a chat only once")
     } else if count(Role::Supervisor) > 1 {
-        Some("duplicate Supervisor")
+        Some("A chat can have only 1 Supervisor")
     } else if team.len() > 1 && count(Role::Supervisor) == 0 {
-        Some("team requires a Supervisor")
+        Some("A team needs a Supervisor")
     } else if count(Role::Reviewer) > 1 {
-        Some("duplicate Reviewer")
+        Some("A chat can have only 1 Reviewer")
     } else if team.len() == 1 && count(Role::Reviewer) == 1 {
-        Some("Reviewer requires another member")
+        Some("A Reviewer needs another agent in the chat")
     } else {
         None
     }

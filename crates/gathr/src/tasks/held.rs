@@ -112,12 +112,12 @@ pub fn settle(
     let lefts = if tools == 0 { lefts + 1 } else { 0 };
     idle(lefts)?;
     if lefts >= IDLE_LEFTS {
-        let why = "left twice without progress or open work";
+        let why = "2 turns left this task unfinished without progress or open work";
         set(tx, task, State::Blocked, Some(why), trace)?;
         return Ok(Vec::new());
     }
     let carry = match &note {
-        Some(left) => format!("remaining: {left}"),
+        Some(left) => format!("you left this work: {left}"),
         None => "work remains".to_string(),
     };
     Ok(vec![ready(tx, task, Some(&carry))?])

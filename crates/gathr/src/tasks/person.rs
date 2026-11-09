@@ -361,13 +361,14 @@ pub(super) fn heard(
 /// to do with it.
 pub(super) fn request_lines(t: &Task, member: &str) -> Vec<String> {
     let mut lines = vec![format!(
-        "{member} requests input. Check owner, prior answers and recommendation before ask_person."
+        "{member} needs the person's answer. Check it's the person's call, not already answered, and the pick is sound."
     )];
     lines.extend(form_lines(t));
     lines.push(format!(
-        "File: ask_person for_task {n} (omit `what` to forward unchanged). Existing question: \
-         finish_task blocked, on_task its number. Answer directly: finish_task done, note the answer. \
-         After the person answers, finish #{n} done with the answer in note for {member}.",
+        "Use ask_person with for_task {n} to file it; omit `what` to forward it unchanged. If an existing question \
+            covers it, use finish_task blocked with on_task set to that question. To answer it yourself, use \
+            finish_task done with the answer in note. When the person answers, finish #{n} done with their answer in \
+            note to pass it back to {member}.",
         n = t.number
     ));
     lines
@@ -394,7 +395,7 @@ fn form_lines(t: &Task) -> Vec<String> {
 }
 
 fn heard_words(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
-    let mut lines = vec!["Person answered:".to_string()];
+    let mut lines = vec!["The person answered:".to_string()];
     for t in settled {
         let how = match (t.state, &t.reason) {
             (State::Done, Some(line)) => line.clone(),
@@ -410,7 +411,7 @@ fn heard_words(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
             None => "the member".to_string(),
         };
         lines.push(format!(
-            "#{} answers {asker}'s #{r}. Use finish_task done on #{r}, answer in note.",
+            "#{} answers the request from {asker}. Use finish_task to mark #{r} done and put the answer in note.",
             t.number
         ));
     }
@@ -438,7 +439,7 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
         (Some(p), None) => Ok(p),
         (None, Some(words)) => Ok(words.to_string()),
         (None, None) => Err(refused(format!(
-            "#{} requires {}, or text",
+            "Answer #{} with {}, or enter text",
             t.number,
             form.needs()
         ))),
@@ -448,7 +449,9 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
 fn check_choices(form: Form, choices: &[Choice]) -> Result<(), Error> {
     let picks = matches!(form, Form::Choice | Form::Choices);
     if picks && choices.len() < 2 {
-        return Err(refused("at least 2 choices required; recommendation first"));
+        return Err(refused(
+            "Offer at least 2 choices, with your recommendation first",
+        ));
     }
     if !picks && !choices.is_empty() {
         return Err(refused(format!(
@@ -463,11 +466,13 @@ fn check_choices(form: Form, choices: &[Choice]) -> Result<(), Error> {
         let label = c.label.trim();
         if label.is_empty() || label.chars().count() > LABEL_MOST || label != c.label {
             return Err(refused(format!(
-                "choice label: 1 to {LABEL_MOST} characters, no surrounding whitespace"
+                "Choice labels need 1 to {LABEL_MOST} characters, with no leading or trailing spaces"
             )));
         }
         if choices[..i].iter().any(|o| o.label == c.label) {
-            return Err(refused(format!("duplicate choice: {label}")));
+            return Err(refused(format!(
+                "The choice {label} appears more than once"
+            )));
         }
     }
     Ok(())

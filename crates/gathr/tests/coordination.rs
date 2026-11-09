@@ -190,7 +190,10 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
     let ask = json!({ "what": "Which notice?", "files": ["notice.md"],
                       "choices": [{ "label": "Short" }, { "label": "Long" }] });
     let asked = text(&call_tool(port, &lead_token, "ask_person", ask));
-    assert!(asked.starts_with("Task #1 filed."), "{asked}");
+    assert!(
+        asked.starts_with("Task #1 is on the person's Tasks list."),
+        "{asked}"
+    );
     let outside = data.0.join("env.jsonl").display().to_string();
     let escape = json!({ "what": "Read this", "files": [outside] });
     let refused = text(&call_tool(port, &lead_token, "ask_person", escape));
@@ -203,7 +206,7 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
     let need = json!({ "what": "Ship it today?", "form": "yesno" });
     let routed = text(&call_tool(port, &ann_token, "ask_person", need));
     assert!(
-        routed.starts_with("Lead (Supervisor): request #3."),
+        routed.starts_with("Lead will review request #3 as the Supervisor"),
         "{routed}"
     );
     let open = team.service.call("GET", "/api/person-tasks").json();
@@ -256,7 +259,7 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
         let m = messages.iter().find(|m| {
             m["body"]
                 .as_str()
-                .is_some_and(|b| b.starts_with("Person answered:"))
+                .is_some_and(|b| b.starts_with("The person answered:"))
         })?;
         m["body"].as_str().map(String::from)
     };
@@ -325,7 +328,7 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
         .unwrap()
         .to_string();
     assert!(
-        woken.starts_with("Wake: Check passed. Next: merge it."),
+        woken.starts_with("Your wait ended: Check passed. You planned to do this: merge it."),
         "{woken}"
     );
 }

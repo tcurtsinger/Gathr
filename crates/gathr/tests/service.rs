@@ -83,7 +83,10 @@ fn a_second_service_on_the_same_folder_exits() {
     assert!(!second.success());
     let (_, health) = gathr(&dir.0, &["diag", "health"]);
     let lines = health["crash_log"]["last_lines"].to_string();
-    assert!(lines.contains("data folder in use by gathrd"), "{health}");
+    assert!(
+        lines.contains("Gathr is already using this data folder"),
+        "{health}"
+    );
 }
 
 /// So a copy of a stopped data folder is whole in `gathr.db` (hand check 10 replaces that file).

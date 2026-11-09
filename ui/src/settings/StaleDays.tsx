@@ -9,13 +9,13 @@ const rows = [
     key: 'stale_days',
     label: 'Stale after',
     unit: 'days',
-    help: 'Days without progress. Turns, messages, answers and fired waits reset the timer.',
+    help: 'Turns, messages, answers and waits count as progress',
   },
   {
     key: 'cancel_days',
-    label: 'Cancel after',
-    unit: 'days stale',
-    help: 'Days stale before auto-cancel. Active work keeps agent tasks open. Your questions never auto-cancel.',
+    label: 'Auto-cancel after',
+    unit: 'days',
+    help: 'Counts from when an agent task becomes stale. Ongoing or paused work keeps it open.',
   },
 ] as const;
 
@@ -97,7 +97,7 @@ export function StaleDays({ onReference }: { onReference: (ref: string) => void 
         ))}
       {invalid && (
         <p className="setting-invalid" role="alert">
-          Use whole days: 1 to 365.
+          Enter a whole number from 1 to 365
         </p>
       )}
     </>

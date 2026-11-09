@@ -42,7 +42,7 @@ fn health_distinguishes_a_newer_database_from_this_builds_schema() {
     assert_eq!(
         health["database"]["why"],
         format!(
-            "schema 99 exceeds build schema {}; update Gathr",
+            "This database uses schema 99; this build supports schema {}. Update Gathr.",
             gathr::db::SCHEMA_VERSION
         ),
         "{health}"

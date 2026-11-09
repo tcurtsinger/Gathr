@@ -288,7 +288,7 @@ async fn moved_past(
         if !head.is_empty() && !head.starts_with(commit) {
             let short = |c: &str| c.get(..7).unwrap_or(c).to_string();
             return Ok(Some(format!(
-                "#{}: {} superseded by {}. Wait on #{}'s CI.",
+                "PR #{} moved from commit {} to {}. Wait on #{}'s CI instead.",
                 pr["number"],
                 short(commit),
                 short(head),

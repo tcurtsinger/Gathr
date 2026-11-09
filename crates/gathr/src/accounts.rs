@@ -45,10 +45,10 @@ impl Refused {
     pub fn why(&self) -> &'static str {
         match self {
             Refused::Blank => "the name is blank",
-            Refused::TooLong => "name exceeds 80 characters",
-            Refused::Taken => "account name already used",
+            Refused::TooLong => "The name must be 80 characters or fewer",
+            Refused::Taken => "Another account has that name. Use a different name.",
             Refused::Unknown => "no such account",
-            Refused::Engine => "unsupported engine; use Claude Code",
+            Refused::Engine => "Gathr currently supports Claude Code accounts only",
         }
     }
 }
