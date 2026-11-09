@@ -155,6 +155,29 @@ test('two agents paused at once, with no live updates, both read paused once bot
   await expect.element(summary).toMatchTextContent('Member · Paused');
 });
 
+test('two agents paused at once, reaching the service in reverse order with no live updates, both read paused', async () => {
+  const answers: ((r: Response) => void)[] = [];
+  service(running, () => new Promise<Response>((done) => answers.push(done)));
+  const screen = await render(<Chat />);
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Lead' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await expect.poll(() => answers.length).toBe(2);
+  // The member's pause reached the service first, so its answer lists the member alone.
+  answers[1](json(paused('agent', 'b')));
+  await expect.element(summary).toMatchTextContent('Member · Paused');
+  const both: Pauses = {
+    pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
+    usage: [],
+  };
+  listed = both;
+  answers[0](json(both));
+  await expect.element(summary).toMatchTextContent('Supervisor · Held');
+  await expect.element(summary).toMatchTextContent('Member · Paused');
+});
+
 /** The agents the app's list holds paused, and a button that pauses three at once. */
 function PausedAgents() {
   const { pauses, act } = usePauses(noFailure);
@@ -171,7 +194,7 @@ function PausedAgents() {
   );
 }
 
-test('with no live updates, a read that started earlier never replaces a newer one', async () => {
+test('with no live updates, an answer to an older action never replaces the newest one', async () => {
   const agents = (...targets: string[]): Pauses => ({
     pauses: targets.flatMap((t) => paused('agent', t).pauses),
     usage: [],
@@ -188,16 +211,10 @@ test('with no live updates, a read that started earlier never replaces a newer o
   await expect.element(screen.getByText('none')).toBeVisible();
   await screen.getByRole('button', { name: 'Pause three' }).click();
   await expect.poll(() => answers.length).toBe(3);
-  answers[0](json(agents('a')));
-  await expect.element(screen.getByText('a', { exact: true })).toBeVisible();
-  // Each later answer finds a list shown since it left, so it reads the list again.
-  answers[1](json(agents('a', 'b')));
-  await expect.poll(() => reads.length).toBe(2);
   answers[2](json(agents('a', 'b', 'c')));
-  await expect.poll(() => reads.length).toBe(3);
-  reads[2](json(agents('a', 'b', 'c')));
   await expect.element(screen.getByText('a b c')).toBeVisible();
-  reads[1](json(agents('a', 'b')));
+  answers[0](json(agents('a')));
+  answers[1](json(agents('a', 'b')));
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('a b c')).toBeVisible();
 });
