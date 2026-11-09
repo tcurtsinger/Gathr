@@ -285,6 +285,55 @@ fn a_release_that_dies_on_trial_rolls_back_though_its_copy_differs_from_the_inst
     dies_on_trial(false, true);
 }
 
+/// The window updated first, so the installed `gathrd` is newer than the folder's copy: it's taken
+/// in on trial with the database kept, so a crash after moving the schema on rolls both back.
+#[test]
+fn a_newer_installed_copy_that_dies_after_moving_the_database_on_rolls_back_with_it() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let chat = {
+        let service = TestService::start_program(&old, &data, &[]);
+        let made = service.send("POST", "/api/chats", json!({}));
+        assert_eq!(made.status, 200, "{}", made.body);
+        made.json()["id"].as_str().unwrap().to_string()
+    };
+    let _next = Successor(data.clone());
+    let new = open(&dir.0, &data);
+    assert_eq!(get(&new, "/api/app")["version"], VERSION);
+    common::kill(&new.pid.to_string());
+    until_free(&data, "the new copy to die");
+    let db = rusqlite::Connection::open(DataDir::new(&data).db()).unwrap();
+    db.pragma_update(None, "user_version", 99).unwrap();
+    drop(db);
+
+    let back = open(&dir.0, &data);
+    assert_eq!(get(&back, "/api/app")["version"], "0.0.1");
+    let kept = http::call(back.port, &back.token, "GET", &format!("/api/chats/{chat}")).unwrap();
+    assert_eq!(kept.status, 200, "{}", kept.body);
+}
+
+/// The window started the new copy after the old service let go of the folder and before that
+/// service handed over: the hand-over finds it running and leaves its trial alone.
+#[test]
+fn a_hand_over_that_finds_the_new_copy_already_started_leaves_its_trial() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    seed_copy(&data, "0.0.1");
+    let folder = DataDir::new(&data);
+    let _next = Successor(data.clone());
+    let installed = Path::new(env!("CARGO_BIN_EXE_gathrd"));
+    let first = gathr::launch::find_or_start(&folder, installed).unwrap();
+    assert!(first.started);
+    assert_eq!(current(&data)["trial_running"], true);
+
+    let late = gathr::launch::hand_over(&folder).unwrap();
+    assert_eq!(late.info.pid, first.info.pid);
+    let now = current(&data);
+    assert_eq!(now["version"], VERSION, "{now}");
+    assert_eq!(now["refused"], json!([]), "{now}");
+}
+
 /// A release whose program says the right version but isn't a service (the command line packed
 /// as `gathrd`): its start fails, and the copy before comes back with the database as it was.
 #[test]

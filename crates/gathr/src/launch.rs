@@ -2,6 +2,7 @@
 //! folder, else a `gathrd` they start, which outlives them.
 
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -63,10 +64,17 @@ pub fn hand_over(data: &DataDir) -> Result<Found, Error> {
 
 fn start_current(data: &DataDir, env: Env) -> Result<Found, Error> {
     let copies = Copies::new(data);
-    if copies.died_on_trial()
-        && let Some(previous) = copies.roll_back("exited on trial")?
-    {
-        return start(data, &previous, env);
+    let died = locked(data, || {
+        if copies.died_on_trial() {
+            copies.roll_back("exited on trial")
+        } else {
+            Ok(None)
+        }
+    })?;
+    match died {
+        Locked::Running(found) => return Ok(found),
+        Locked::Done(Some(previous)) => return start(data, &previous, env),
+        Locked::Done(None) => {}
     }
     let Some(program) = copies.program() else {
         let why = format!("{} names no copy of gathrd", copies.root().display());
@@ -76,10 +84,35 @@ fn start_current(data: &DataDir, env: Env) -> Result<Found, Error> {
         Ok(found) => return Ok(found),
         Err(e) => e,
     };
-    match copies.roll_back(&failed.to_string())? {
-        Some(previous) => start(data, &previous, env),
-        None => Err(failed),
+    match locked(data, || copies.roll_back(&failed.to_string()))? {
+        Locked::Running(found) => Ok(found),
+        Locked::Done(Some(previous)) => start(data, &previous, env),
+        Locked::Done(None) => Err(failed),
     }
+}
+
+enum Locked<T> {
+    Done(T),
+    Running(Found),
+}
+
+/// Runs `change` holding the folder's lock, so a service another start just began (on trial and
+/// running) is never taken for one that died; while one holds the lock, it's the one found.
+fn locked<T>(data: &DataDir, change: impl FnOnce() -> io::Result<T>) -> Result<Locked<T>, Error> {
+    let lock = match data.take_lock() {
+        Ok(lock) => lock,
+        Err(Error::AlreadyRunning) => {
+            let info = running(data)?;
+            return Ok(Locked::Running(Found {
+                info,
+                started: false,
+            }));
+        }
+        Err(e) => return Err(e),
+    };
+    let done = change()?;
+    drop(lock);
+    Ok(Locked::Done(done))
 }
 
 fn start(data: &DataDir, gathrd: &Path, env: Env) -> Result<Found, Error> {

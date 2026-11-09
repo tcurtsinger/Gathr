@@ -141,6 +141,9 @@ impl Copies {
         let (installed_is, ours) = (parse_version(VERSION), parse_version(&usable.version));
         let refused = usable.refused.iter().any(|r| r == VERSION);
         if installed_is > ours && !refused {
+            if self.db.is_file() {
+                std::fs::copy(&self.db, self.kept_db(VERSION))?;
+            }
             let mut next = self.take_files(installed)?;
             next.previous = Some(usable.version.clone());
             next.trial = true;
