@@ -1,6 +1,7 @@
 // Live events recorded from a real gathrd on Claude Code's recorded frames, replayed into the
 // thread as the socket delivers them (the UI's side of the engine-replay tests).
 import { expect, test } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { type Agent, Failure, type Message, type Turn } from '../api';
 import type { LiveEvent } from '../live';
@@ -171,12 +172,12 @@ test('the chat fades only at an edge with more of it beyond', async () => {
   await screen.rerender(<View state={{ ...empty, messages: made(40) }} />);
   viewport.scrollTop = viewport.scrollHeight;
   await expect.poll(fades).toBe('above');
-  // To the top first: leaving the bottom stops assistant-ui following it, which on WebKit otherwise
-  // brought a jump straight to the middle back down.
-  viewport.scrollTop = 0;
-  await expect.poll(fades).toBe('below');
-  viewport.scrollTop = viewport.scrollHeight / 2;
+  // The wheel, as a person scrolls: it stops assistant-ui following the bottom. A scrollTop jump didn't
+  // on WebKit, where the newly drawn messages' resize came before the scroll and it followed back down.
+  await userEvent.wheel(viewport, { delta: { y: -600 } });
   await expect.poll(fades).toBe('above below');
+  await userEvent.wheel(viewport, { delta: { y: -100_000 } });
+  await expect.poll(fades).toBe('below');
 });
 
 test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {
