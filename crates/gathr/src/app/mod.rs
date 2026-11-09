@@ -90,6 +90,18 @@ impl Copies {
         self.root.join(format!("gathr.db.before-{version}"))
     }
 
+    /// Keeps the database as it is before `version` starts. Through SQLite, not a file copy: a
+    /// service that died without its checkpoint left its last writes in the WAL beside it.
+    fn keep_db(&self, version: &str) -> io::Result<()> {
+        let kept = self.kept_db(version);
+        let _ = std::fs::remove_file(&kept);
+        let into = kept.to_string_lossy().into_owned();
+        rusqlite::Connection::open(&self.db)
+            .and_then(|conn| conn.execute("VACUUM INTO ?1", [into]))
+            .map(drop)
+            .map_err(io::Error::other)
+    }
+
     pub fn current(&self) -> Option<Current> {
         serde_json::from_slice(&std::fs::read(self.current_file()).ok()?).ok()
     }
@@ -142,7 +154,7 @@ impl Copies {
         let refused = usable.refused.iter().any(|r| r == VERSION);
         if installed_is > ours && !refused {
             if self.db.is_file() {
-                std::fs::copy(&self.db, self.kept_db(VERSION))?;
+                self.keep_db(VERSION)?;
             }
             let mut next = self.take_files(installed)?;
             next.previous = Some(usable.version.clone());
@@ -205,7 +217,7 @@ impl Copies {
             // A build that runs from elsewhere (as `VERSION`) keeps itself to go back to.
             self.take_files(&std::env::current_exe()?)?;
         }
-        std::fs::copy(&self.db, self.kept_db(version))?;
+        self.keep_db(version)?;
         self.write(&Current {
             version: version.to_string(),
             previous: Some(running),

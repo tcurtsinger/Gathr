@@ -32,7 +32,9 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
   look tries again (`gathr.app.hold`, `busy`).
 - **Trial:** a new copy is on trial from the switch until it finishes a turn or runs 10 minutes (`gathr.app.trial`,
   `by` `turn` or `time`). Until then the copy before it and the database as it was before the update are kept. Its
-  first start records `gathr.app.switch`.
+  first start records `gathr.app.switch`. The kept database is a SQLite snapshot (`VACUUM INTO`), not a file copy, so
+  it has what a service that died without its checkpoint left in the WAL. A start marks its trial running before it
+  writes `service.json`, so whoever waits for that file never finds a copy on trial that isn't marked yet.
 - **Rollback:** a copy on trial that exits or doesn't write `service.json` within 60 s is ended and the copy before is
   started. One that started and then died is found by the next start (the window, `gathr open`): it never stopped
   cleanly, so that start goes back first. A clean stop on trial (Quit) isn't a death: the next start tries it again.

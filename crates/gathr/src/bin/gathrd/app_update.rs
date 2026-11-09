@@ -11,7 +11,7 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::app::{Copies, TRIAL, release};
+use gathr::app::{Copies, Started, TRIAL, release};
 use gathr::event::Event;
 use gathr::fetch::{Failure, failed, parse_version};
 use gathr::pauses::{self, Pause};
@@ -137,10 +137,11 @@ impl AppUpdates {
         self.handing_over.lock().expect("never poisoned").clone()
     }
 
-    /// Records what the start found in `current.json`: an update that started, or a rollback from
-    /// one that didn't; a copy on trial is watched until it passes.
-    pub fn started(self: &Arc<Self>) {
-        let started = match self.copies.started() {
+    /// Records what the start found in `current.json` (`Copies::started`, read before the service
+    /// said it was up): an update that started, or a rollback from one that didn't; a copy on trial
+    /// is watched until it passes.
+    pub fn started(self: &Arc<Self>, found: std::io::Result<Started>) {
+        let started = match found {
             Ok(started) => started,
             Err(e) => {
                 let event = Event::point("gathr.app.start").error("disk");

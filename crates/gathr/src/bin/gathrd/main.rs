@@ -127,6 +127,9 @@ async fn serve(
     let listener = bind(data, port).await?;
     let port = listener.local_addr()?.port();
     let token = ids::token();
+    // A copy on trial is marked running before it says it's up: a start that finds it up then
+    // never takes it for one that died, and one that dies from here on rolls back.
+    let started = Copies::new(data).started();
     ServiceInfo {
         port,
         token: token.clone(),
@@ -172,7 +175,7 @@ async fn serve(
     chats.take_over().await;
     tokio::spawn(coord::run(chats.clone()));
     tokio::spawn(updates::run(updates.clone()));
-    app.started();
+    app.started(started);
     tokio::spawn(app_update::run(app.clone()));
 
     let (stopped_tx, stopped_rx) = tokio::sync::oneshot::channel();

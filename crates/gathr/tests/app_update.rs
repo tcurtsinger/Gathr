@@ -286,7 +286,9 @@ fn a_release_that_dies_on_trial_rolls_back_though_its_copy_differs_from_the_inst
 }
 
 /// The window updated first, so the installed `gathrd` is newer than the folder's copy: it's taken
-/// in on trial with the database kept, so a crash after moving the schema on rolls both back.
+/// in on trial with the database kept, so a crash after moving the schema on rolls both back. The
+/// old service died without its checkpoint, so its last write is still in the WAL: the kept copy
+/// has it too.
 #[test]
 fn a_newer_installed_copy_that_dies_after_moving_the_database_on_rolls_back_with_it() {
     let dir = TempDir::new();
@@ -296,8 +298,17 @@ fn a_newer_installed_copy_that_dies_after_moving_the_database_on_rolls_back_with
         let service = TestService::start_program(&old, &data, &[]);
         let made = service.send("POST", "/api/chats", json!({}));
         assert_eq!(made.status, 200, "{}", made.body);
+        common::kill(&service.info.pid.to_string());
+        until_free(&data, "the old service to die");
         made.json()["id"].as_str().unwrap().to_string()
     };
+    let wal = DataDir::new(&data).db().with_extension("db-wal");
+    let in_wal = std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0);
+    assert!(
+        in_wal > 0,
+        "the old service's writes are still in {}",
+        wal.display()
+    );
     let _next = Successor(data.clone());
     let new = open(&dir.0, &data);
     assert_eq!(get(&new, "/api/app")["version"], VERSION);
