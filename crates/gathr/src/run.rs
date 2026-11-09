@@ -51,13 +51,25 @@ pub async fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::platform::no_window(&mut command);
+    let mut command = tokio::process::Command::from(command);
+    command.kill_on_drop(true);
     let name = program.file_stem().unwrap_or_default().to_string_lossy();
     let what = format!("{name} {}", args.first().unwrap_or(&""));
-    let child = tokio::process::Command::from(command)
+    let child = command
         .spawn()
         .map_err(|e| format!("{name} didn't start: {e}"))?;
-    let mut running = Running(child.id(), program);
-    let out = tokio::time::timeout(limit, child.wait_with_output())
+    let mut running = Running(None, program);
+    let group = crate::platform::group_of(child.id(), program);
+    let waited = async {
+        let wait = child.wait_with_output();
+        tokio::pin!(wait, group);
+        tokio::select! {
+            out = &mut wait => return out,
+            found = &mut group => running.0 = found,
+        }
+        wait.await
+    };
+    let out = tokio::time::timeout(limit, waited)
         .await
         .map_err(|_| format!("{what} didn't finish in {} s", limit.as_secs()))?
         .map_err(|e| format!("{name} wasn't waited for: {e}"))?;
@@ -69,15 +81,15 @@ pub async fn run(
     })
 }
 
-/// A program still running when its run is dropped (past its limit, or its wait ended) is ended
-/// with everything it started: a child left behind keeps the output pipe open, and on Windows the
-/// service can't exit until that child does.
+/// A program dropped while it runs (past its limit, or its wait ended) is killed at once, and
+/// then what it started: a child left behind keeps the output pipe open, and on Windows the
+/// service can't exit until that child does. Holds the program's process group once it's known.
 struct Running<'a>(Option<u32>, &'a Path);
 
 impl Drop for Running<'_> {
     fn drop(&mut self) {
-        if let Some(pid) = self.0 {
-            crate::platform::end_tree(pid, self.1);
+        if let Some(group) = self.0 {
+            crate::platform::end_group(group, self.1);
         }
     }
 }
