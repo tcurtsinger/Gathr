@@ -40,8 +40,32 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
 
 ## The window
 
-Pia's part: Tauri's updater, signed with the updater's own key (GitHub secrets), installs at once when the window is
-hidden in the tray, else when it's next hidden; only the window restarts. Its own section follows in the F7 PR.
+- **Tauri's updater** (`tauri-plugin-updater`, from Rust only, TLS through the system's own `native-tls`): a release
+  build checks `latest.json` at start, every hour, and right after the service hands over (both come from one
+  release); a debug build never checks. The update's minisign signature is checked against the public key in
+  `tauri.conf.json` before anything installs. Events: `gathr.ui.update.check` (a refused update names its version and
+  carries its reference) and `gathr.ui.update.install`.
+- **When it restarts** (the owner's pick, 2026-11-09): at once if the window is hidden in the tray, else when it's next
+  hidden; meanwhile the tray menu has Restart to update. A window hidden before starts hidden again. Its exit for an
+  update never stops the service.
+- **Installing:** Windows runs the new NSIS installer quietly (`/S /UPDATE /R`), which checks only for a running
+  `gathr-app` and starts it again with its arguments. macOS replaces `Gathr.app` in place, and the window restarts.
+- **After a hand-over:** when `service.json` names a new process that answers, the window signs in to it with a fresh
+  one-time link (`gathr.ui.window.follow`).
+- **The key:** made with the Tauri CLI, password-protected, kept only as the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY`
+  and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` and the owner's password manager. Lost, every installed Gathr is
+  reinstalled by hand once.
+
+## Releases
+
+- **One per merge:** `.github/workflows/release.yml` runs once CI passes on a push to `main`, as `0.1.<run>` (written
+  into `Cargo.toml` in CI only), and publishes `v0.1.<run>` with `gh`: the Windows NSIS installer (per user,
+  unsigned), the Mac `.dmg` (Apple Silicon, ad-hoc signed), the window's update with `latest.json`, and each system's
+  archive with `gathrd.json`. Every step is `scripts/release.mjs`, so a local build runs the same ones.
+- **Before merge:** a PR that changes the release files builds them unpublished, both feeds built in as
+  `127.0.0.1:47199`, so an update can be tried installed on either system.
+- **Layout:** Windows installs `gathr-app.exe`, `gathrd.exe` and `ui/` side by side; macOS puts `gathrd` in
+  `Contents/MacOS` beside the window and `ui/` in `Contents/Resources` (a folder in `MacOS` breaks the signature).
 
 ## Turned down
 
@@ -58,6 +82,11 @@ hidden in the tray, else when it's next hidden; only the window restarts. Its ow
   written since is never replaced by the older copy.
 - **Always putting the database copy back on a rollback:** it would drop what the person wrote on the new copy (up to
   10 minutes) even when the copy before can read the database as it is.
+- **Restarting the window at once while it's shown:** a chat in view reloads and a draft may be lost.
+- **Paid OS code signing:** SmartScreen and Gatekeeper warn once, at the first install; updates come through the
+  updater, so the warning doesn't return.
+- **MSI on Windows:** NSIS installs per user with no administrator prompt.
+- **`rustls` for the window's downloads:** 28 more crates, `ring` among them, against 15 for the system's own TLS.
 - **The window watching the new copy, or a watchdog process:** the next start already runs through one place
   (`launch`), and a death with nobody starting Gathr needs no rollback until someone does.
 
