@@ -133,14 +133,39 @@ Tools are collapsed where they happened. MessageActions serve hover and keyboard
 focus. Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
-**Team-message layout: pending the owner's pick.** The prototype's default agent
-message arrangement is not selected. Compare a request to the Supervisor, its
-hand-offs to two members, their replies, tool runs, a long reply and the
-Supervisor's wrap-up. Preserve 0028's turn-start
-order; concurrent output never interleaves. The user request remains visible when
-the exchange collapses. A chosen arrangement must expose every agent's identity
-and retain the place and draft while opening a turn's context. Do not treat any
-option as permission to change routing or coordination state.
+### Team messages: inline thread with Summary
+
+The main conversation holds the person's messages, the Supervisor's hand-offs
+and final words. A hand-off has one collapsible team thread below it. Replies
+belong to the message that gave their task, never to the nearest previous message.
+Messages nobody answers have no thread. A direct @member exchange stays in the
+main conversation. See [0015](docs/decisions/0015-chat-design.md).
+
+The disclosure names who replied, who is working and who is waiting. Open while
+work runs; fold when the Supervisor finishes, unless the person has opened or
+closed it themselves. Retain that manual choice. Opening grows the conversation
+in the page: no inner scroll box, height cap or separately scrolling reply list.
+Indent replies with one neutral hairline; keep names, initials and normal-font
+roles on every reply. Tools fold where they happened. Preserve 0028's turn-start
+order within each thread; concurrent text never interleaves. Wide code and tables
+may scroll horizontally. Thread disclosure and tool disclosure are separate.
+
+A late reply updates its original thread in place, including the collapsed
+summary. The Supervisor's next word arrives at the current bottom of the chat,
+after any intervening conversation, with a link back to the hand-off. That link
+opens the thread and moves keyboard focus to its disclosure. Updates alone never
+move the reader's viewport or reopen a manually folded thread. Keep the draft,
+recipient and reading position when toggling a thread or Summary. A reviewer's
+agreement is a named reaction on the final word; a question remains a reply.
+
+Summary stays available from the chat header for a quick glance at every agent's
+role, actual state, named wait and assignments. It is the prototype's floating
+popover, not a new workspace tab or permanent team pane. Opening an agent reveals
+its tasks. Escape/outside click dismisses it; Escape returns focus to Summary.
+
+These are selected presentation rules, not existing service capabilities. F5 must
+record each task's originating turn and each turn's task before F8b groups replies.
+Never infer those links or completion from prose, @mentions or arrival time.
 
 ### Navigation and workspace
 
@@ -154,9 +179,9 @@ Workspace has a permanent Home tab, then Tasks, Changes, Terminal, Files, Web an
 canonical document tabs as opened. Plus returns to Home. Each chat retains its
 tabs, selection and tool state; canonical paths reuse a tab, terminals may have
 several instances. Close other tabs retains Home and Recents. Arrow keys,
-Home/End and Delete operate tabs. Moving 0015's Team tab into Summary is a
-prototype difference for the integration decision to resolve. This document
-records its appearance, not an unapproved change to the accepted workflow.
+Home/End and Delete operate tabs. Summary replaces 0015's earlier Team tab, as
+recorded in its accepted inline-thread refinement. Other tab workflows remain
+governed by their decisions.
 
 Agents show their initials beside their name, replacing the shared robot icon.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
@@ -236,5 +261,9 @@ purposeful transitions, never animate a simulated service result into truth.
 Run `node designs/check.cjs`. Open `designs/system.html` at 1440 and 1024px,
 dark and light (`#light` or Switch theme). Exercise composer, tool disclosure,
 tabs, Summary, Settings categories, Help, Switch, Escape and keyboard focus.
+Run `node designs/check-team.cjs` after the UI dependencies are available. It
+checks running, finished and late replies, manual folding, keyboard links and
+Summary at both sizes and themes. An optional output folder saves screenshots;
+keep evidence outside the repo.
 The old selected pages are retired as layout authority; see designs/README.md.
 No engine, account sign-in, real command or Settings service connects to this page.

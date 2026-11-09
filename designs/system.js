@@ -89,14 +89,14 @@ one(".ds-composer").onsubmit = (event) => {
 	const bubble = document.createElement("div");
 	bubble.className = "ds-user-message";
 	bubble.textContent = input.value;
-	one("#sent-messages").append(bubble);
+	one("#team-sent-messages").append(bubble);
 	input.value = "";
 	one("#message-send").disabled = true;
 	notify("Sent locally");
 	input.focus();
 };
 one("#new-message").onclick = () => {
-	one("#sent-messages").replaceChildren();
+	one("#team-sent-messages").replaceChildren();
 	one("#message").value = "";
 	one("#message-send").disabled = true;
 	one("#message").focus();
