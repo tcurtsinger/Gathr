@@ -73,10 +73,12 @@ pub async fn create(
 
 #[derive(Deserialize)]
 pub struct Change {
-    members: Vec<Seat>,
+    members: Option<Vec<Seat>>,
+    project: Option<String>,
 }
 
-/// Replaces the chat's agents; the project folder stays as it was made (0013).
+/// Replaces the chat's agents, or puts a chat with no messages yet in a project, copying its
+/// folder and team. Once a chat has messages its folder stays as it was (0013).
 pub async fn change(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -85,7 +87,12 @@ pub async fn change(
 ) -> Answer {
     const ERROR: &str = "Save failed";
     crate::routes::known(&s, &t, &chat).await?;
-    let seats = checked(&s, &t, body.members, ERROR).await?;
+    let members = match (body.members, body.project) {
+        (Some(members), None) => members,
+        (None, Some(project)) => return put_in(&s, &t, &chat, &project).await,
+        _ => return Err(bad(&t, ERROR, "send members or a project")),
+    };
+    let seats = checked(&s, &t, members, ERROR).await?;
     let (id, saved) = (chat.clone(), seats.clone());
     let changed = s
         .writer
@@ -97,6 +104,38 @@ pub async fn change(
     let members = written(&t, changed, ERROR)?;
     changed_to(&s, &t, &chat, &seats, &members);
     Ok(Json(json!({ "chat": chat, "members": members })))
+}
+
+/// Not one transaction, but safe to send again: the chat has no turns until it's sent to.
+async fn put_in(s: &State, t: &Trace, chat: &str, project: &str) -> Answer {
+    const ERROR: &str = "Save failed";
+    let p = crate::projects::find(s, t, project, ERROR).await?;
+    let seats: Vec<(String, Role)> = p
+        .members
+        .iter()
+        .map(|m| (m.agent.clone(), m.role))
+        .collect();
+    let (id, saved, at) = (
+        chat.to_string(),
+        seats.clone(),
+        (p.id.clone(), p.folder.clone()),
+    );
+    let done = s
+        .writer
+        .call(move |conn| {
+            store::put_in_project(conn, &id, (&at.0, &at.1))?;
+            team::set_members(conn, &id, &saved)?;
+            team::members(conn, &id)
+        })
+        .await;
+    if let Some(Err(gathr::Error::Refused(why))) = &done {
+        return Err(fail(StatusCode::CONFLICT, ERROR, why, &t.0));
+    }
+    let members = written(t, done, ERROR)?;
+    changed_to(s, t, chat, &seats, &members);
+    Ok(Json(
+        json!({ "chat": chat, "project": p.id, "folder": p.folder, "members": members }),
+    ))
 }
 
 /// A send added an agent: the change is recorded and goes out live.

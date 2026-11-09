@@ -87,7 +87,7 @@ fn a_new_chat_in_a_project_copies_its_folder_and_team_and_nothing_else() {
         assert_eq!(answer.status, status, "{what}: {}", answer.body);
         assert!(answer.json()["ref"].is_string(), "{what}: {}", answer.body);
     }
-    let listed = service.call("GET", "/api/projects").json();
+    let listed = service.call("GET", "/api/projects").json()["projects"].clone();
     assert_eq!(listed.as_array().unwrap().len(), 1, "{listed}");
     assert_eq!(listed[0]["name"], "Gathr");
     assert_eq!(
@@ -111,7 +111,7 @@ fn a_new_chat_in_a_project_copies_its_folder_and_team_and_nothing_else() {
     let grown = json!({ "members": [member(orin, "supervisor"), member(vale, "reviewer"), member(pia, "member")] });
     let answer = service.send("PATCH", &format!("/api/chats/{chat}"), grown);
     assert_eq!(answer.status, 200, "{}", answer.body);
-    let listed = service.call("GET", "/api/projects").json();
+    let listed = service.call("GET", "/api/projects").json()["projects"].clone();
     assert_eq!(
         listed[0]["members"].as_array().unwrap().len(),
         2,
@@ -154,6 +154,27 @@ fn a_new_chat_in_a_project_copies_its_folder_and_team_and_nothing_else() {
         grouped, 2,
         "the sidebar groups both chats under the project: {chats}"
     );
+
+    // "New" makes the chat at once, so a project is picked for an empty chat after it's made.
+    let empty = service.new_chat();
+    let path = format!("/api/chats/{empty}");
+    let picked = service.send("PATCH", &path, json!({ "project": id }));
+    assert_eq!(picked.status, 200, "{}", picked.body);
+    let history = service.call("GET", &path).json();
+    assert_eq!(history["project"], id.as_str(), "{history}");
+    assert!(history["folder"].is_string(), "{history}");
+    assert_eq!(
+        roles(&history["members"]),
+        [pair(orin, "supervisor"), pair(vale, "reviewer")]
+    );
+    let talked = service.send(
+        "PATCH",
+        &format!("/api/chats/{chat}"),
+        json!({ "project": id }),
+    );
+    assert_eq!(talked.status, 409, "a chat with messages: {}", talked.body);
+    let nowhere = service.send("PATCH", &path, json!({ "project": "nope" }));
+    assert_eq!(nowhere.status, 404, "{}", nowhere.body);
 
     // In a project the team is the project's: an agent outside it isn't added by a send.
     let outsider = json!({ "text": "Hello", "agent": pia });
