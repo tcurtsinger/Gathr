@@ -28,14 +28,16 @@ interface Props {
   /** The first message names the chat (the service does it), so the list shows the name. */
   onNamed: () => void;
   projects: Project[];
-  /** Puts this chat, still empty, in a project. */
+  /** A new chat's project, picked before its first message; '' for none. */
   onProject: (project: string) => void;
   onNewProject: () => void;
+  /** Sends a new chat's first message: the service makes the chat then. */
+  onStart: (text: string, agent?: string) => void;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
-  const { projects, onProject, onNewProject } = props;
+  const { projects, onProject, onNewProject, onStart } = props;
   const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -44,27 +46,22 @@ export function ChatView(props: Props) {
   const turn = running(state);
   const input = useRef<HTMLTextAreaElement>(null);
   const [picked, setPicked] = useState<string | null>(null);
-  const recipients = recipientsOf(state.members, agents, !!chat.project);
+  // A new chat isn't made yet: its team is its project's, if it has one.
+  const fresh = !chat.id;
+  const members = fresh ? (projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
+  const recipients = recipientsOf(members, agents, !!chat.project);
   // The one picked here, else the chat's Supervisor, else the agent of its last turn, else the first;
   // a removed one is skipped.
-  const lead = state.members.find((m) => m.role === 'supervisor')?.agent;
+  const lead = members.find((m) => m.role === 'supervisor')?.agent;
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
   const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   useFirstTokenReport(state.partial);
-  // A project brings its team: the chat's agents come from the service again.
-  const project = useRef(chat.project);
-  useEffect(() => {
-    if (project.current === chat.project) return;
-    project.current = chat.project;
-    reload();
-  }, [chat.project, reload]);
-  const fresh = loaded && state.messages.length === 0 && !chat.project;
-
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
     const first = state.messages.length === 0;
     onDraft('');
+    if (fresh) return onStart(draft, agent);
     send(draft, agent).then(() => first && onNamed());
   };
 
@@ -78,7 +75,11 @@ export function ChatView(props: Props) {
       const turn = state.turns[t];
       if (asked && turn) send(asked.body as string, turn.agent ?? undefined);
     },
-    resend: (f) => send(f.text, f.agent, f),
+    resend: (f) => {
+      if (!fresh) return send(f.text, f.agent, f);
+      onUnsent((list) => list.filter((x) => x.id !== f.id));
+      onStart(f.text, f.agent);
+    },
     carryOn: () => {
       onDraft('Continue');
       input.current?.focus();
@@ -121,7 +122,7 @@ export function ChatView(props: Props) {
             <Folder aria-hidden="true" />
             <select
               aria-label="Project"
-              value=""
+              value={chat.project ?? ''}
               onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
             >
               <option value="">No project</option>

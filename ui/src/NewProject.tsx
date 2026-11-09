@@ -40,7 +40,7 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
             ? ('reviewer' as const)
             : ('member' as const),
     }));
-    api.addProject({ name: name.trim(), folder: folder.trim(), team: roles }).then((project) => {
+    api.addProject({ name: name.trim(), folder: folder.trim(), members: roles }).then((project) => {
       setName('');
       setFolder('');
       setTeam([]);

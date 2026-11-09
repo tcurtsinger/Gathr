@@ -66,6 +66,7 @@ interface Group {
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
+const settled = new Set(['done', 'blocked', 'failed', 'stopped', 'cancelled']);
 
 /**
  * Gathr's chat as assistant-ui messages: each person's message, then the reply to it holding its
@@ -89,18 +90,28 @@ export function toThread(
   const main: Group[] = [];
   const threaded = new Map<string, Group[]>();
   for (const g of groups) {
-    // A hear-back reads as the link on the lead's last word, not as words of its own.
-    if (g.gathr && g.turn && state.turns[g.turn]?.answers) continue;
     const root = g.turn ? crew.rootOf(g.turn) : undefined;
     if (root) threaded.set(root, [...(threaded.get(root) ?? []), g]);
     else main.push(g);
   }
+  const roots = new Set([...crew.threads.keys(), ...threaded.keys()]);
+  // The lead's word on a round: a main-line turn Gathr started that answers the turn with a thread.
+  const roundOf = (turn: string | null) => {
+    const answers = turn ? state.turns[turn]?.answers : undefined;
+    const root = answers ? (crew.rootOf(answers) ?? answers) : undefined;
+    return root && roots.has(root) ? root : undefined;
+  };
   const finals = new Map<string, Turn>();
   for (const turn of Object.values(state.turns)) {
-    if (turn.answers) finals.set(crew.rootOf(turn.answers) ?? turn.answers, turn);
+    const root = crew.rootOf(turn.id) ? undefined : roundOf(turn.id);
+    if (root) finals.set(root, turn);
   }
+  // What Gathr told the lead about its round reads as the link on its word, not as words of their own.
+  const lines = main.filter((g) => !(g.gathr && roundOf(g.turn)));
+  main.length = 0;
+  main.push(...lines);
   const places = new Map<number, string[]>();
-  for (const root of new Set([...crew.threads.keys(), ...threaded.keys()])) {
+  for (const root of roots) {
     const at = main.findLastIndex((g) => g.turn === root);
     const i = at < 0 ? main.length - 1 : at;
     places.set(i, [...(places.get(i) ?? []), root]);
@@ -119,7 +130,7 @@ export function toThread(
   };
   place(-1);
   main.forEach((g, i) => {
-    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, state, crew) : {}));
+    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, roundOf(g.turn), crew) : {}));
     place(i);
   });
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
@@ -162,10 +173,8 @@ function grouped(state: ChatState): Group[] {
 }
 
 /** On the lead's last word of a round: the link back to its thread and the reviewers who agreed. */
-function lastWord(g: Group, state: ChatState, crew: Team): Custom {
-  const answers = g.turn ? state.turns[g.turn]?.answers : undefined;
-  if (!answers) return {};
-  const back = crew.rootOf(answers) ?? answers;
+function lastWord(g: Group, back: string | undefined, crew: Team): Custom {
+  if (!back || !g.reply) return {};
   const reviews = (crew.threads.get(back) ?? []).filter((t) => t.kind === 'review' && t.state === 'done');
   const agreed = [...new Set(reviews.map((t) => crew.name(t.owner) ?? ''))].filter(Boolean);
   return { back, agreed };
@@ -179,13 +188,17 @@ function head(
   crew: Team,
   final: Turn | undefined,
 ): ThreadMessageLike {
-  const done = finished(final);
-  const after = final?.created ? Date.parse(final.created) : Number.NaN;
+  const tasks = crew.threads.get(root) ?? [];
+  const done = finished(final) && tasks.every((t) => settled.has(t.state));
+  // A reply that began after the lead's word began came late.
+  const began = (turn: string | null | undefined) =>
+    Date.parse(state.messages.find((m) => m.turn === turn)?.time ?? '');
+  const after = began(final?.id);
   const late = members
-    .filter((g) => g.reply && g.turn && Date.parse(state.turns[g.turn]?.created ?? '') > after)
+    .filter((g) => g.reply && began(g.turn) > after)
     .map((g) => ({ agent: state.turns[g.turn as string]?.agent ?? '', time: g.msgs[0]?.time ?? '' }))
     .filter((l, i, all) => l.agent && all.findLastIndex((x) => x.agent === l.agent) === i);
-  const text = describe(crew.threads.get(root) ?? [], late, crew.name);
+  const text = describe(tasks, late, crew.name);
   const key = `t-${root}`;
   const alone = members.length === 0;
   const sig = `${text}|${done}|${alone}`;

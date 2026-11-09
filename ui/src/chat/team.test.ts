@@ -166,3 +166,13 @@ test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {
   expect(custom(wake).gathr).toBe('Your wait on CI on #12 ended');
   expect(all.find((m) => m.id === 'a-woke')?.content).toEqual([{ type: 'text', text: 'CI passed' }]);
 });
+
+test("the lead's word mid-round links back but doesn't fold the thread while work is open", () => {
+  const state = round();
+  state.turns.woke = turn('woke', 'mira', { answers: 'ask' });
+  state.messages.push(said('woke', 'gathr', 'Your wait on CI on #12 ended'));
+  state.messages.push(said('woke', 'assistant', 'CI passed; Kit is still on it'));
+  const all = view(state);
+  expect(custom(all.find((m) => m.id === 'a-woke') as ThreadMessageLike).back).toBe('ask');
+  expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.done).toBe(false);
+});

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
@@ -42,13 +42,42 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
     setState(empty);
     setLoaded(false);
     setActionFailure(null);
+    // A new chat the service hasn't made yet has nothing to load.
+    if (!chat) return setLoaded(true);
     load();
-    return listen((event) => {
-      if (event.type === 'lagged') return load();
+    // Each socket message is its own task, so five replies streaming at once would draw the chat
+    // many times a frame: what arrives before the next frame is drawn once.
+    let queued: LiveEvent[] = [];
+    let frame = 0;
+    const flush = () => {
+      // A reply that ends redraws all of itself, so replies that end together end a frame apart.
+      let ended = false;
+      const cut = queued.findIndex((e) => {
+        if (e.type !== 'turn' || e.status === 'running' || e.status === 'queued') return false;
+        if (ended) return true;
+        ended = true;
+        return false;
+      });
+      const events = cut < 0 ? queued : queued.slice(0, cut);
+      queued = cut < 0 ? [] : queued.slice(cut);
+      frame = queued.length ? requestAnimationFrame(flush) : 0;
+      // Interruptible: a long redraw yields to the next frame instead of holding it.
+      startTransition(() => setState((s) => events.reduce(apply, s)));
+    };
+    const stop = listen((event) => {
+      if (event.type === 'lagged') {
+        queued = [];
+        return load();
+      }
       if (!('chat' in event) || event.chat !== chat) return;
-      if (pending.current) pending.current.push(event);
-      else setState((s) => apply(s, event));
+      if (pending.current) return pending.current.push(event);
+      queued.push(event);
+      frame ||= requestAnimationFrame(flush);
     });
+    return () => {
+      stop();
+      cancelAnimationFrame(frame);
+    };
   }, [chat, load]);
 
   const send = useCallback(

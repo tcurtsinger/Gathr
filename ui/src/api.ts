@@ -83,7 +83,7 @@ export interface Project {
   id: string;
   name: string;
   folder: string;
-  team: { agent: string; role: Role }[];
+  members: Member[];
 }
 
 export interface Chat {
@@ -91,6 +91,7 @@ export interface Chat {
   title: string;
   /** Its project's id; none for a plain chat. */
   project?: string | null;
+  folder?: string | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -125,7 +126,7 @@ export interface History {
   /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
-  partial?: { turn: string; text: string }[];
+  streaming?: { turn: string; agent: string | null; text: string }[];
 }
 
 export interface Engine {
@@ -184,10 +185,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
   createChat: (project?: string) => call<Chat>('POST', '/api/chats', project ? { project } : {}),
-  /** Puts a chat nobody has written in yet in a project, with its folder and team. */
-  moveChat: (chat: string, project: string) => call<Chat>('PATCH', `/api/chats/${chat}`, { project }),
-  projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
-  addProject: (project: Omit<Project, 'id'>) => call<Project>('POST', '/api/projects', project),
+  projects: () => call<Project[]>('GET', '/api/projects'),
+  addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
+    call<Project>('POST', '/api/projects', project),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   send: (chat: string, text: string, agent?: string) =>

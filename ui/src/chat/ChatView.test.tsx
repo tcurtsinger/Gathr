@@ -32,6 +32,7 @@ function TwoChats() {
         projects={[]}
         onProject={() => {}}
         onNewProject={() => {}}
+        onStart={() => {}}
       />
     </>
   );
@@ -84,6 +85,7 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
       projects={[]}
       onProject={() => {}}
       onNewProject={() => {}}
+      onStart={() => {}}
     />,
   );
   const picker = screen.getByRole('combobox', { name: 'Agent' });
@@ -130,6 +132,7 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       projects={[]}
       onProject={() => {}}
       onNewProject={() => {}}
+      onStart={() => {}}
     />,
   );
   await screen.getByRole('combobox', { name: 'Agent' }).click();
@@ -172,6 +175,7 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
       projects={[]}
       onProject={() => {}}
       onNewProject={() => {}}
+      onStart={() => {}}
     />
   );
   const screen = await render(view('p'));
@@ -194,4 +198,41 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
     .poll(names)
     .toEqual(['Made-up A' + 'Supervisor', 'Made-up B' + 'Member', 'Made-up C', 'Edit agent']);
   vi.unstubAllGlobals();
+});
+
+test('a new chat is made with its first message, in its project, to its Supervisor', async () => {
+  const started: unknown[] = [];
+  const made = (id: string) => ({
+    id,
+    name: `Made-up ${id.toUpperCase()}`,
+    account: 'a',
+    model: null,
+    effort: null,
+    approvals: 'auto' as const,
+  });
+  const members = [
+    { agent: 'b', name: 'Made-up B', role: 'member' as const },
+    { agent: 'a', name: 'Made-up A', role: 'supervisor' as const },
+  ];
+  const screen = await render(
+    <ChatView
+      chat={{ id: '', title: 'New chat', project: 'p' }}
+      agents={[made('a'), made('b'), made('c')]}
+      onEditAgent={() => {}}
+      draft="Made-up first ask"
+      onDraft={() => {}}
+      unsent={[]}
+      onUnsent={() => {}}
+      openSettings={() => {}}
+      onNamed={() => {}}
+      projects={[{ id: 'p', name: 'Made-up project', folder: 'x', members }]}
+      onProject={() => {}}
+      onNewProject={() => {}}
+      onStart={(text, agent) => started.push({ text, agent })}
+    />,
+  );
+  await expect.element(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('p');
+  await expect.element(screen.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up A');
+  await screen.getByRole('button', { name: 'Send' }).click();
+  expect(started).toEqual([{ text: 'Made-up first ask', agent: 'a' }]);
 });

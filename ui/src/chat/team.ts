@@ -19,8 +19,10 @@ export interface Team {
 export function team(state: ChatState, names: Map<string, string>): Team {
   const tasks = new Map(state.tasks.map((t) => [t.number, t]));
   const givenIn = (turn: string) => {
-    const n = state.turns[turn]?.task;
-    return n == null ? undefined : (tasks.get(n)?.given_in ?? undefined);
+    // A turn on a task answers the turn that gave it; the task says so too, once loaded.
+    const t = state.turns[turn];
+    if (t?.task == null) return undefined;
+    return tasks.get(t.task)?.given_in ?? t.answers ?? undefined;
   };
   const roots = new Map<string, string | undefined>();
   const rootOf = (turn: string): string | undefined => {

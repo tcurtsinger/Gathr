@@ -1,4 +1,4 @@
-import type { Message, Task, ToolBody, TurnStatus, Wait } from './api';
+import type { Member, Message, Task, ToolBody, TurnStatus, Wait } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
@@ -14,15 +14,15 @@ export type LiveEvent =
       agent: string | null;
       why?: string | null;
       ref?: string;
-      created?: string;
       task?: number | null;
       answers?: string | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
-  // A task given, or its state changed; a wait opened or ended.
-  | { type: 'task'; chat: string; task: Task }
-  | { type: 'wait'; chat: string; wait: Wait }
+  // The chat's tasks and waits, whole, after any change to them.
+  | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[] }
+  // The chat's team changed: an agent joined, or a PATCH.
+  | { type: 'members'; chat: string; members: Member[] }
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
   // An agent was added or changed: reload agents.

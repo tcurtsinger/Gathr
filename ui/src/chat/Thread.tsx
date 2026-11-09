@@ -76,20 +76,27 @@ export function Thread({ state, agents, unsent, running, actions, header, empty,
   const shown = useMemo(() => unfolded(all, chosen), [all, chosen]);
   const viewport = useRef<HTMLDivElement>(null);
   const { messages, onScroll, reach } = useOlder(shown, viewport);
-  const folding: Folding = {
-    chosen,
-    set: (root, open) => setChosen(remember(root, open)),
-    reveal: (root) => {
-      setChosen(remember(root, true));
-      reach(shown.findIndex((m) => m.id === `t-${root}`));
-      // After the thread and anything above it are drawn.
-      requestAnimationFrame(() => {
-        const disclosure = document.getElementById(headId(root));
-        disclosure?.focus({ preventScroll: true });
-        disclosure?.scrollIntoView({ block: 'start' });
-      });
-    },
-  };
+  // A new context value makes React search every drawn block for its readers, so it changes only with
+  // a fold, never with each streamed word.
+  const now = useRef({ shown, reach });
+  now.current = { shown, reach };
+  const folding = useMemo<Folding>(
+    () => ({
+      chosen,
+      set: (root, open) => setChosen(remember(root, open)),
+      reveal: (root) => {
+        setChosen(remember(root, true));
+        now.current.reach(now.current.shown.findIndex((m) => m.id === `t-${root}`));
+        // After the thread and anything above it are drawn.
+        requestAnimationFrame(() => {
+          const disclosure = document.getElementById(headId(root));
+          disclosure?.focus({ preventScroll: true });
+          disclosure?.scrollIntoView({ block: 'start' });
+        });
+      },
+    }),
+    [chosen],
+  );
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,

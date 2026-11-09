@@ -15,6 +15,7 @@ export function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
+  const [fresh, setFresh] = useState<{ project?: string } | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
@@ -43,19 +44,31 @@ export function App() {
     api.projects().then(setProjects, setFailure);
   }, []);
 
+  // A new chat is a draft until its first message: then the service makes it, in its project.
   const newChat = useCallback((project?: string) => {
-    api.createChat(project).then((chat) => {
-      setChats((list) => [chat, ...list]);
-      setSelected(chat.id);
-    }, setFailure);
+    setFresh({ project });
+    setSelected(null);
   }, []);
+  const keep = (chat: string, f: SendFailure) =>
+    setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
+  const start = (text: string, agent?: string) => {
+    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, failure: e });
+    api.createChat(fresh?.project).then(
+      (made) => {
+        setChats((list) => [made, ...list]);
+        setFresh(null);
+        setSelected(made.id);
+        api.send(made.id, text, agent).then(
+          () => api.chats().then(setChats, setFailure),
+          (e: Failure) => keep(made.id, failed(e)),
+        );
+      },
+      (e: Failure) => keep('', failed(e)),
+    );
+  };
 
-  const chat = chats.find((c) => c.id === selected);
-  // A chat nobody has written in yet takes a project's folder and team.
-  const moveChat = (id: string, project: string) =>
-    api.moveChat(id, project).then((moved) => {
-      setChats((list) => list.map((c) => (c.id === id ? { ...c, ...moved } : c)));
-    }, setFailure);
+  const chat =
+    chats.find((c) => c.id === selected) ?? (fresh && { id: '', title: 'New chat', project: fresh.project });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
   const openReference = (reference: string) =>
@@ -76,13 +89,14 @@ export function App() {
         onSelect={(id) => {
           if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
           setSelected(id);
+          setFresh(null);
         }}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
       />
       {chat ? (
         <ChatView
-          key={chat.id}
+          key={chat.id || 'new'}
           chat={chat}
           agents={agents}
           onEditAgent={(agent) =>
@@ -98,7 +112,8 @@ export function App() {
           openSettings={openSettings}
           onNamed={() => api.chats().then(setChats, setFailure)}
           projects={projects}
-          onProject={(project) => moveChat(chat.id, project)}
+          onProject={(project) => setFresh({ project })}
+          onStart={start}
           onNewProject={() => setNewProject(true)}
         />
       ) : (
@@ -124,7 +139,7 @@ export function App() {
         onCreated={(project) => {
           setProjects((list) => [...list, project]);
           setNewProject(false);
-          if (chat) moveChat(chat.id, project.id);
+          if (fresh) setFresh({ project: project.id });
         }}
         onReference={openReference}
       />
