@@ -45,8 +45,8 @@ pub async fn run(
 }
 
 /// Runs `script` in `shell` as `run` does, with the shell kept until what it printed is read. A
-/// script dropped before then (Archive, cancel, its limit) takes its process group with it, found
-/// through that live shell: an MSYS pid is another process's once its own has ended (1216).
+/// script dropped before then (Archive, cancel, its limit) takes everything it started with it,
+/// even what it left running after its own shell ended (1216).
 pub async fn script(
     shell: &Path,
     script: &str,
@@ -93,15 +93,13 @@ async fn started(
         .stdin(input)
         .stdout(out_end)
         .stderr(err_end);
-    crate::platform::no_window(&mut command);
     // The command goes with this statement, and with it the service's ends of the pipes.
-    let child = tokio::process::Command::from(command).spawn();
+    let child = crate::platform::ending_together(command.into()).spawn();
     let child = child.map_err(|e| format!("{name} didn't start: {e}"))?;
     let (stdout, stderr) = (read_all(stdout), read_all(stderr));
     let mut running = Running {
         child,
         hold,
-        program,
         done: false,
     };
     let (child, hold) = (&mut running.child, &mut running.hold);
@@ -140,25 +138,19 @@ fn read_all(mut pipe: std::io::PipeReader) -> oneshot::Receiver<std::io::Result<
     got
 }
 
-/// A program dropped while it runs (past its limit, or its wait ended) is ended with what it
-/// started: a child left behind keeps the output pipe open, and on Windows the service can't exit
-/// until that child does. Its group is ended first, through the program itself, then the program:
-/// `hold` (a script's shell) goes only after both.
-struct Running<'a> {
-    child: tokio::process::Child,
+/// A program dropped while it runs (past its limit, or its wait ended) is ended with everything it
+/// started (`platform::ending_together`): a child left behind would keep the output pipe open.
+/// `hold` (a script's shell) goes only after them.
+struct Running {
+    child: Box<dyn process_wrap::tokio::ChildWrapper>,
     hold: Option<std::io::PipeWriter>,
-    program: &'a Path,
     done: bool,
 }
 
-impl Drop for Running<'_> {
+impl Drop for Running {
     fn drop(&mut self) {
-        if self.done {
-            return;
+        if !self.done {
+            let _ = self.child.start_kill();
         }
-        if let Some(pid) = self.child.id() {
-            crate::platform::end_group(pid, self.program);
-        }
-        let _ = self.child.start_kill();
     }
 }
