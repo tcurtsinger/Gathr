@@ -173,6 +173,107 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     assert!(back.contains("#1 Ann, Write the notes: done"), "{back}");
 }
 
+/// The engine's working folder for the `n`th start.
+fn cwd(data: &Path, n: usize) -> std::path::PathBuf {
+    let text = std::fs::read_to_string(data.join("env.jsonl")).unwrap();
+    let line: Value = serde_json::from_str(text.lines().nth(n).unwrap()).unwrap();
+    line["cwd"].as_str().unwrap().into()
+}
+
+#[test]
+fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_reference() {
+    let data = TempDir::new();
+    let team = team(&data.0, &twice(&data.0));
+    let port = team.service.info.port;
+    let lead_token = lead_turn(&team, &data.0, 0);
+    std::fs::write(cwd(&data.0, 0).join("notice.md"), "# Notice\n").unwrap();
+    let ask = json!({ "what": "Which notice?", "files": ["notice.md"],
+                      "choices": [{ "label": "Short" }, { "label": "Long" }] });
+    let asked = text(&call_tool(port, &lead_token, "ask_person", ask));
+    assert!(
+        asked.starts_with("Task #1 is on the person's Tasks list"),
+        "{asked}"
+    );
+    let outside = data.0.join("env.jsonl").display().to_string();
+    let escape = json!({ "what": "Read this", "files": [outside] });
+    let refused = text(&call_tool(port, &lead_token, "ask_person", escape));
+    assert!(refused.contains("isn't a file in your folder"), "{refused}");
+
+    // Ann's ask reaches the lead first, never the person's list.
+    let gave = json!({ "to": "Ann", "what": "Word the banner" });
+    text(&call_tool(port, &lead_token, "give_task", gave));
+    let ann_token = token(&data.0, 1);
+    let need = json!({ "what": "Ship it today?", "form": "yesno" });
+    let routed = text(&call_tool(port, &ann_token, "ask_person", need));
+    assert!(
+        routed.starts_with("It went to Lead (Supervisor) as task #3"),
+        "{routed}"
+    );
+    let open = team.service.call("GET", "/api/person-tasks").json();
+    let numbers: Vec<&Value> = open["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| &t["number"])
+        .collect();
+    assert_eq!(numbers, [&json!(1)], "{open}");
+    assert_eq!(open["tasks"][0]["chat_title"], "Plan it", "{open}");
+    let file = team.service.call("GET", "/api/tasks/1/files/0");
+    assert_eq!((file.status, file.body.as_str()), (200, "# Notice\n"));
+    let headers = file.headers.to_lowercase();
+    assert!(
+        headers.contains("content-security-policy: sandbox"),
+        "{headers}"
+    );
+
+    // One Send: the person's own is answered, the lead's request is refused with a reference.
+    let mut live = team.service.live();
+    let answers =
+        json!({ "answers": [{ "task": 1, "pick": ["Long"] }, { "task": 3, "text": "yes" }] });
+    let sent = team
+        .service
+        .send("POST", "/api/person-tasks/answer", answers);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let sent = sent.json();
+    assert_eq!(sent["answered"][0]["reason"], "Long", "{sent}");
+    assert_eq!(
+        sent["refused"][0]["why"], "#3 isn't yours to answer",
+        "{sent}"
+    );
+    let reference = sent["refused"][0]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{trace}");
+    assert!(
+        trace.to_string().contains("#3 isn't yours to answer"),
+        "{trace}"
+    );
+    let listed = std::iter::from_fn(|| Some(common::next_live(&mut live)))
+        .find(|u| u["type"] == "person_tasks")
+        .unwrap();
+    assert_eq!(listed["tasks"], json!([]), "{listed}");
+
+    // The lead hears the answer once its turn ends, under the turn that asked.
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let said = |h: &Value| -> Option<String> {
+        let messages = h["messages"].as_array()?;
+        let m = messages.iter().find(|m| {
+            m["body"]
+                .as_str()
+                .is_some_and(|b| b.starts_with("From the person:"))
+        })?;
+        m["body"].as_str().map(String::from)
+    };
+    let history = team
+        .service
+        .wait_for(&team.chat, 20, "the answer's hear-back", |h| {
+            said(h).is_some()
+        });
+    assert!(
+        said(&history).unwrap().contains("- #1 Which notice?: Long"),
+        "{history}"
+    );
+}
+
 #[test]
 fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
     let data = TempDir::new();

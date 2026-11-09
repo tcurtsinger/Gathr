@@ -68,7 +68,7 @@ fn state(conn: &Connection, task: i64) -> (State, Option<String>) {
 /// Runs one turn on the task: started, the owner's finish if any, then ended well.
 fn work(conn: &mut Connection, task: i64, finish: Option<Finish>, tools: i64) -> Vec<Start> {
     tasks::started(conn, task, T).unwrap();
-    let owner = tasks::get(conn, task).unwrap().unwrap().owner;
+    let owner = tasks::get(conn, task).unwrap().unwrap().owner.unwrap();
     if let Some(how) = finish {
         tasks::finish(conn, &owner, task, how, &Said::default()).unwrap();
     }

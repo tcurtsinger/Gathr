@@ -72,7 +72,7 @@ impl Seeder<'_> {
     }
 
     /// The five agents on a made-up account; a later run reuses them, as names are unique.
-    fn team(&mut self) -> Result<Vec<String>, Error> {
+    pub(super) fn team(&mut self) -> Result<Vec<String>, Error> {
         let account = "Seed team";
         self.conn.execute(
             "INSERT OR IGNORE INTO accounts (id, engine, name, name_key, created_ts)
@@ -101,7 +101,7 @@ impl Seeder<'_> {
     }
 
     /// A finished turn for `agent` at the next place, with what it works on and the turn it answers.
-    fn team_turn(
+    pub(super) fn team_turn(
         &mut self,
         chat: &str,
         agent: &str,

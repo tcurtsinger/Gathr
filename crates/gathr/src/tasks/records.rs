@@ -2,6 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
+use super::person::Form;
 use super::{Kind, State, Task};
 use crate::Error;
 use crate::event::Event;
@@ -43,7 +44,7 @@ pub fn state_of(conn: &Connection, task: i64) -> Result<Option<State>, Error> {
 pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     let mut t = conn.query_row(
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
-                blocked_on, pr, reviewed, outdated
+                blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -64,6 +65,15 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 pr: r.get(12)?,
                 reviewed: r.get(13)?,
                 outdated: r.get(14)?,
+                form: r
+                    .get::<_, Option<String>>(15)?
+                    .as_deref()
+                    .and_then(Form::named),
+                choices: json(r, 16)?.unwrap_or_default(),
+                files: json(r, 17)?.unwrap_or_default(),
+                request: r.get(18)?,
+                answer: json(r, 19)?,
+                created_us: r.get(20)?,
             })
         },
     )?;
@@ -73,6 +83,15 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
         .query_map([task], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
     Ok(t)
+}
+
+/// A JSON column, read as `T`; none when it's empty.
+fn json<T: serde::de::DeserializeOwned>(
+    r: &rusqlite::Row,
+    i: usize,
+) -> rusqlite::Result<Option<T>> {
+    let text: Option<String> = r.get(i)?;
+    Ok(text.and_then(|t| serde_json::from_str(&t).ok()))
 }
 
 pub trait OptionalTask {

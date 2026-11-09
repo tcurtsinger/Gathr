@@ -113,9 +113,14 @@ fn swap(s: &State, code: &str, trace: &str) -> Response {
     (StatusCode::SEE_OTHER, headers).into_response()
 }
 
-fn content_type(file: &Path) -> &'static str {
+pub fn content_type(file: &Path) -> &'static str {
     match file.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "html" => "text/html; charset=utf-8",
+        "md" => "text/markdown; charset=utf-8",
+        "txt" => "text/plain; charset=utf-8",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "pdf" => "application/pdf",
         "js" => "text/javascript",
         "css" => "text/css",
         "svg" => "image/svg+xml",

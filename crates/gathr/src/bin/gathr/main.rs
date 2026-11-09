@@ -153,7 +153,7 @@ pub fn run_seed(data: &DataDir) -> Result<Value, Error> {
         other => other,
     })?;
     let started = std::time::Instant::now();
-    let made = seed::seed(&mut db::open(&data.db())?)?;
+    let made = seed::seed(&mut db::open(&data.db())?, &data.path().join("task-files"))?;
     Ok(json!({ "seeded": made, "ms": started.elapsed().as_millis() as u64 }))
 }
 

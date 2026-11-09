@@ -10,13 +10,14 @@ use crate::event::Event;
 use crate::ids::now_us;
 
 mod held;
+pub mod person;
 mod records;
 pub mod touched;
 mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
-pub use words::{name_of, wait_name};
+pub use words::{name_of, owner_name, wait_name};
 
 /// The longest `what`: one line, read at a glance.
 pub const WHAT_MOST: usize = 200;
@@ -78,6 +79,11 @@ impl State {
 pub enum Kind {
     Work,
     Review,
+    /// The person's: only the chat's Supervisor gives one.
+    Person,
+    /// A member's need for the person's answer, owned by the Supervisor, who checks it first.
+    #[serde(rename = "person_request")]
+    PersonRequest,
 }
 
 impl Kind {
@@ -85,6 +91,8 @@ impl Kind {
         match text {
             "work" => Some(Kind::Work),
             "review" => Some(Kind::Review),
+            "person" => Some(Kind::Person),
+            "person_request" => Some(Kind::PersonRequest),
             _ => None,
         }
     }
@@ -93,6 +101,8 @@ impl Kind {
         match self {
             Kind::Work => "work",
             Kind::Review => "review",
+            Kind::Person => "person",
+            Kind::PersonRequest => "person_request",
         }
     }
 }
@@ -103,7 +113,8 @@ pub struct Task {
     pub chat: String,
     /// The agent who gave it; none when the person did.
     pub giver: Option<String>,
-    pub owner: String,
+    /// The agent who does it; none when it's the person's.
+    pub owner: Option<String>,
     /// The turn that gave it: its owner's work sits under that turn's message.
     pub given_in: Option<String>,
     pub parent: Option<i64>,
@@ -117,6 +128,15 @@ pub struct Task {
     pub pr: Option<i64>,
     pub reviewed: Option<String>,
     pub outdated: bool,
+    /// How the person answers it (a person task or a request for one).
+    pub form: Option<person::Form>,
+    pub choices: Vec<person::Choice>,
+    pub files: Vec<person::File>,
+    /// The member's request a person task was filed for.
+    pub request: Option<i64>,
+    /// The person's answer, as sent.
+    pub answer: Option<serde_json::Value>,
+    pub created_us: i64,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -326,7 +346,7 @@ pub fn finish(
 ) -> Result<Task, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    if t.owner != agent {
+    if t.owner.as_deref() != Some(agent) {
         return Err(refused(format!("task #{task} isn't yours")));
     }
     if t.state != State::Working {
@@ -492,7 +512,10 @@ pub fn cancel(
          WHERE task = ?1 AND state IN ('open', 'met')",
         params![task, now_us()],
     )?;
-    let starts = cascade(&tx, task, trace)?;
+    let mut starts = cascade(&tx, task, trace)?;
+    if t.kind == Kind::Person {
+        starts.extend(person::heard(&tx, &[task], by, trace)?);
+    }
     tx.commit()?;
     Ok(starts)
 }
@@ -619,7 +642,7 @@ pub fn pr_looked(
 pub fn with_prs(conn: &Connection) -> Result<Vec<(i64, String, String, i64)>, Error> {
     let mut stmt = conn.prepare(
         "SELECT number, chat_id, owner, pr FROM tasks
-         WHERE pr IS NOT NULL AND pr_closed = 0
+         WHERE pr IS NOT NULL AND pr_closed = 0 AND owner IS NOT NULL
          AND (state NOT IN ('done', 'cancelled') OR (state = 'done' AND kind = 'review'))",
     )?;
     let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
@@ -681,13 +704,18 @@ fn waiting_on(conn: &Connection, task: i64) -> Result<Vec<i64>, Error> {
 fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Error> {
     set(tx, task, State::Ready, None, &crate::ids::trace_id())?;
     let t = read(tx, task)?;
+    let owner = t.owner.as_deref().ok_or_else(|| {
+        refused(format!(
+            "task #{task} is the person's: it has no turn to start"
+        ))
+    })?;
     let giver = match &t.giver {
         Some(id) => words::name_of(tx, id)?,
         None => "the person".to_string(),
     };
     let text = words::brief(&t, &giver, carry);
     let on = (Some(task), t.given_in.as_deref());
-    Start::queue(tx, (&t.chat, &t.owner), on, text)
+    Start::queue(tx, (&t.chat, owner), on, text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
