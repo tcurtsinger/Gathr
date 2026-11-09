@@ -30,6 +30,26 @@ fn health_explains_a_database_that_wont_open() {
 }
 
 #[test]
+fn health_distinguishes_a_newer_database_from_this_builds_schema() {
+    let dir = TempDir::new();
+    rusqlite::Connection::open(dir.0.join("gathr.db"))
+        .unwrap()
+        .pragma_update(None, "user_version", 99)
+        .unwrap();
+    let (ok, health) = gathr(&dir.0, &["diag", "health"]);
+    assert!(ok, "{health}");
+    assert_eq!(health["database"]["opened"], false, "{health}");
+    assert_eq!(
+        health["database"]["why"],
+        format!(
+            "schema 99 exceeds build schema {}; update Gathr",
+            gathr::db::SCHEMA_VERSION
+        ),
+        "{health}"
+    );
+}
+
+#[test]
 fn the_next_good_start_moves_the_crash_log_into_the_record() {
     let dir = TempDir::new();
     std::fs::write(dir.0.join("gathr.db"), "not a database").unwrap();
