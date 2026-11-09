@@ -5,6 +5,8 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
+use tokio::io::{AsyncRead, AsyncReadExt};
+
 use crate::platform::env::Vars;
 
 /// How a program ended: its exit code (none when a signal ended it) and what it printed.
@@ -51,45 +53,81 @@ pub async fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     crate::platform::no_window(&mut command);
-    let mut command = tokio::process::Command::from(command);
-    command.kill_on_drop(true);
     let name = program.file_stem().unwrap_or_default().to_string_lossy();
     let what = format!("{name} {}", args.first().unwrap_or(&""));
-    let child = command
+    let mut child = tokio::process::Command::from(command)
         .spawn()
         .map_err(|e| format!("{name} didn't start: {e}"))?;
-    let mut running = Running(None, program);
+    let (mut stdout, mut stderr) = (child.stdout.take(), child.stderr.take());
     let group = crate::platform::group_of(child.id(), program);
-    let waited = async {
-        let wait = child.wait_with_output();
-        tokio::pin!(wait, group);
-        tokio::select! {
-            out = &mut wait => return out,
-            found = &mut group => running.0 = found,
-        }
-        wait.await
+    let mut running = Running {
+        child,
+        group: None,
+        program,
+        done: false,
     };
-    let out = tokio::time::timeout(limit, waited)
+    let (child, found) = (&mut running.child, &mut running.group);
+    let waited = async {
+        let (mut out, mut err) = (Vec::new(), Vec::new());
+        let (read_out, read_err, status) = tokio::join!(
+            read_all(&mut stdout, &mut out),
+            read_all(&mut stderr, &mut err),
+            child.wait()
+        );
+        read_out.and(read_err).and(status).map(|s| (s, out, err))
+    };
+    tokio::pin!(waited, group);
+    let waited = async {
+        tokio::select! {
+            ran = &mut waited => return ran,
+            group = &mut group => *found = group,
+        }
+        waited.await
+    };
+    let (status, out, err) = tokio::time::timeout(limit, waited)
         .await
         .map_err(|_| format!("{what} didn't finish in {} s", limit.as_secs()))?
         .map_err(|e| format!("{name} wasn't waited for: {e}"))?;
-    running.0 = None;
+    running.done = true;
     Ok(Ran {
-        code: out.status.code(),
-        out: String::from_utf8_lossy(&out.stdout).trim().to_string(),
-        err: String::from_utf8_lossy(&out.stderr).to_string(),
+        code: status.code(),
+        out: String::from_utf8_lossy(&out).trim().to_string(),
+        err: String::from_utf8_lossy(&err).to_string(),
     })
 }
 
-/// A program dropped while it runs (past its limit, or its wait ended) is killed at once, and
-/// then what it started: a child left behind keeps the output pipe open, and on Windows the
-/// service can't exit until that child does. Holds the program's process group once it's known.
-struct Running<'a>(Option<u32>, &'a Path);
+async fn read_all(
+    pipe: &mut Option<impl AsyncRead + Unpin>,
+    to: &mut Vec<u8>,
+) -> std::io::Result<()> {
+    match pipe {
+        Some(pipe) => pipe.read_to_end(to).await.map(|_| ()),
+        None => Ok(()),
+    }
+}
+
+/// A program dropped while it runs (past its limit, or its wait ended) is ended with what it
+/// started: a child left behind keeps the output pipe open, and on Windows the service can't exit
+/// until that child does. Once its group is known the program is killed first, so it stops at
+/// once; before that, its group is found through it, so it's killed last.
+struct Running<'a> {
+    child: tokio::process::Child,
+    group: Option<u32>,
+    program: &'a Path,
+    done: bool,
+}
 
 impl Drop for Running<'_> {
     fn drop(&mut self) {
-        if let Some(group) = self.0 {
-            crate::platform::end_group(group, self.1);
+        if self.done {
+            return;
         }
+        if self.group.is_some() {
+            let _ = self.child.start_kill();
+        }
+        if let Some(pid) = self.child.id() {
+            crate::platform::end_group(self.group, pid, self.program);
+        }
+        let _ = self.child.start_kill();
     }
 }
