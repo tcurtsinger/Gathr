@@ -46,8 +46,8 @@ pub struct ChoiceIn {
 #[tool_router(router = person_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Request input or action. Files a person task; member requests go to the Supervisor \
-                       for review first. The answer wakes you here."
+        description = "Ask the person for input or action. In a team, only the Supervisor gives them tasks; \
+                       member requests go to the Supervisor for review. The answer wakes you here."
     )]
     async fn ask_person(
         &self,
@@ -122,9 +122,9 @@ impl Tools {
                 };
                 let (task, starts) = person::ask(c, a, &trace)?;
                 let said = match &task.owner {
-                    None => format!("Task #{} filed. Answer wakes you here.", task.number),
+                    None => format!("Task #{} is on the person's Tasks list. Their answer wakes you here.", task.number),
                     Some(lead) => format!(
-                        "{} (Supervisor): request #{}. They review and return the answer.",
+                        "{} will review request #{} as the Supervisor and pass the answer back to you.",
                         tasks::name_of(c, lead)?,
                         task.number
                     ),

@@ -20,23 +20,23 @@ test('a day count saves when the edit is committed; an invalid or refused one st
     return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7, ...body }));
   });
   const screen = await render(<StaleDays onReference={() => {}} />);
-  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  const cancel = screen.getByRole('spinbutton', { name: 'Auto-cancel after' });
   await expect.element(cancel).toHaveValue(7);
-  await expect.element(cancel).toHaveAccessibleDescription('days stale');
+  await expect.element(cancel).toHaveAccessibleDescription('days');
 
   await userEvent.fill(cancel, '0');
   await userEvent.keyboard('{Enter}');
-  await expect.element(screen.getByText('Use whole days: 1 to 365.')).toBeVisible();
+  await expect.element(screen.getByText('Enter a whole number from 1 to 365')).toBeVisible();
   await expect.element(cancel).toHaveValue(0);
   await userEvent.fill(cancel, '366');
   await userEvent.keyboard('{Enter}');
-  await expect.element(screen.getByText('Use whole days: 1 to 365.')).toBeVisible();
+  await expect.element(screen.getByText('Enter a whole number from 1 to 365')).toBeVisible();
   await expect.element(cancel).toHaveValue(366);
   expect(sent).toEqual([]);
 
   await userEvent.fill(cancel, '10');
   await userEvent.tab();
-  await expect.element(screen.getByText('Use whole days: 1 to 365.')).not.toBeInTheDocument();
+  await expect.element(screen.getByText('Enter a whole number from 1 to 365')).not.toBeInTheDocument();
   await expect.poll(() => sent).toEqual([{ cancel_days: 10 }]);
   await expect.element(cancel).toHaveValue(10);
 
@@ -60,7 +60,7 @@ test("an older save's late answer keeps the newer value, saved or still being ty
     return answer;
   });
   const screen = await render(<StaleDays onReference={() => {}} />);
-  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  const cancel = screen.getByRole('spinbutton', { name: 'Auto-cancel after' });
   await expect.element(cancel).toHaveValue(7);
   await userEvent.fill(cancel, '6');
   await userEvent.keyboard('{Enter}');
@@ -99,7 +99,7 @@ test('going back to the saved value while a save is out saves it again; a late r
     return settings(days);
   });
   const screen = await render(<StaleDays onReference={() => {}} />);
-  const cancel = screen.getByRole('spinbutton', { name: 'Cancel after' });
+  const cancel = screen.getByRole('spinbutton', { name: 'Auto-cancel after' });
   await expect.element(cancel).toHaveValue(7);
 
   await userEvent.fill(cancel, '6');

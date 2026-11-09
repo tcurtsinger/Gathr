@@ -25,10 +25,10 @@ impl fmt::Display for Error {
             Error::NewerDatabase { found, known } => {
                 write!(
                     f,
-                    "schema {found} exceeds build schema {known}; update Gathr"
+                    "This database uses schema {found}; this build supports schema {known}. Update Gathr."
                 )
             }
-            Error::AlreadyRunning => write!(f, "data folder in use by gathrd"),
+            Error::AlreadyRunning => write!(f, "Gathr is already using this data folder"),
             Error::Refused(why) | Error::Other(why) => write!(f, "{why}"),
         }
     }

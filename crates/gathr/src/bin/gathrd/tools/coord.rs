@@ -83,7 +83,8 @@ pub struct Nothing {}
 #[tool_router(router = coord_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Assign a chat member. Starts after `after` tasks finish. Wakes you when all tasks given this turn settle. Returns open tasks and PRs; check for duplicates."
+        description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back when every task you gave \
+            this turn is settled. Check the returned tasks and PRs for duplicates."
     )]
     async fn give_task(
         &self,
@@ -147,8 +148,7 @@ impl Tools {
     }
 
     #[tool(
-        description = "Set task outcome: done, left (remaining work), or blocked. Applies at turn end. \
-                       Open waits or PRs hold settlement until they end."
+        description = "Mark your task done, left or blocked when this turn ends. Say what is left or what blocks it. A task with open waits or PRs stays held until they end."
     )]
     async fn finish_task(
         &self,
@@ -177,7 +177,10 @@ impl Tools {
                 };
                 let t = tasks::finish(c, &agent, task, how, &said)?;
                 Ok((
-                    format!("Task #{}: {} at turn end.", t.number, ask.how),
+                    format!(
+                        "Task #{} will be marked {} when this turn ends.",
+                        t.number, ask.how
+                    ),
                     Vec::new(),
                 ))
             })
@@ -198,7 +201,7 @@ impl Tools {
             .db(move |c| {
                 let why = ask.why.as_deref().unwrap_or("cancelled by its giver");
                 let starts = tasks::cancel(c, by.as_deref(), ask.task, why, &trace)?;
-                Ok((format!("Task #{} cancelled.", ask.task), starts))
+                Ok((format!("Task #{} was cancelled.", ask.task), starts))
             })
             .await;
         Ok(self.answer(&caller, "cancel_task", started, done).await)
@@ -216,7 +219,7 @@ impl Tools {
         let done = self
             .db(move |c| {
                 let starts = tasks::restart(c, by.as_deref(), ask.task, &trace)?;
-                Ok((format!("Task #{} restarted.", ask.task), starts))
+                Ok((format!("Task #{} was restarted.", ask.task), starts))
             })
             .await;
         Ok(self.answer(&caller, "restart_task", started, done).await)
@@ -257,8 +260,8 @@ impl Tools {
     }
 
     #[tool(
-        description = "Wait for an agent, CI, PR merge/close or check exit 0. Multiple conditions require all. \
-                       Wakes you here on your task when met, or after 24 h. Use instead of polling."
+        description = "Wait for an agent, CI, a PR to merge or close, or a check to exit 0. All conditions must be met. Gathr \
+            wakes you here on your task when they are met, or after 24 hours. Use this instead of polling."
     )]
     async fn wait(
         &self,

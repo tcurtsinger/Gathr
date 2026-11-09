@@ -103,7 +103,7 @@ pub async fn ensure(
             LOCAL_LIMIT,
         )
         .await
-        .map_err(|_| "project requires an initial commit".to_string())?,
+        .map_err(|_| "The project needs a commit before it can create a worktree".to_string())?,
     };
     // A worktree folder deleted by hand stays registered until pruned, and blocks its branch.
     git(env, project, &["worktree", "prune"], LOCAL_LIMIT).await?;

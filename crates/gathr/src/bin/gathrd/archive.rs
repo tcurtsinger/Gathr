@@ -116,7 +116,7 @@ async fn delete_chat(
     let project = project.as_str().map(PathBuf::from);
     let mut left = remove_files(&s, &chat, project, files).await;
     if exited.is_err() {
-        left.insert(0, "engine or wait check still running".into());
+        left.insert(0, "An engine or wait check is still running".into());
     }
     let mut event = Event::point("gathr.chat.files")
         .trace(&t.0)

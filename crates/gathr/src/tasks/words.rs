@@ -33,13 +33,18 @@ pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
         lines.extend(super::person::request_lines(t, giver));
     }
     if let Some(carry) = carry {
-        lines.push(format!("Resume: {carry}. Check completed work first."));
+        lines.push(format!(
+            "Continue from here: {carry}. Check what is already done before repeating work."
+        ));
     }
     if t.kind == Kind::Review {
-        lines.push("Review: finish done with the reviewed commit.".to_string());
+        lines.push(
+            "For a review, include the commit you reviewed when you finish the task.".to_string(),
+        );
     }
     lines.push(
-        "Use finish_task: done, left (remaining work), or blocked (agent or task).".to_string(),
+        "Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it."
+            .to_string(),
     );
     lines.join("\n")
 }
@@ -47,8 +52,8 @@ pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
 /// What became of each task the giver gave in one turn.
 pub fn hear_back(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
     let mut lines = vec![match settled.len() {
-        1 => "Task settled:".to_string(),
-        n => format!("{n} tasks settled:"),
+        1 => "The task you gave is settled:".to_string(),
+        n => format!("The {n} tasks you gave are settled:"),
     }];
     for t in settled {
         let how = match (t.state, &t.reason) {

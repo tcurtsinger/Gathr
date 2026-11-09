@@ -199,7 +199,7 @@ pub fn one_time_link(info: &ServiceInfo) -> Result<String, Error> {
     match answer.json()["code"].as_str() {
         Some(code) => Ok(format!("http://127.0.0.1:{}/?once={code}", info.port)),
         None => Err(Error::Other(format!(
-            "no service sign-in code ({}): {}",
+            "The service returned no sign-in code ({}): {}",
             answer.status, answer.body
         ))),
     }

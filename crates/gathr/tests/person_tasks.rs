@@ -99,7 +99,7 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
     assert_eq!(request.form, Some(Form::Choice));
     let brief = &starts[0].text;
     assert_eq!(starts[0].agent, "lead");
-    assert!(brief.contains("Ann requests input"), "{brief}");
+    assert!(brief.contains("Ann needs the person's answer"), "{brief}");
     assert!(brief.contains("1. Reconnecting… (their pick)"), "{brief}");
     assert!(
         person::open(&conn, None).unwrap().is_empty(),
@@ -161,10 +161,9 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
     assert!(back.text.contains(&format!(
         "- #{n} What should the reconnect notice say?: Connection lost"
     )));
-    assert!(
-        back.text
-            .contains(&format!("Use finish_task done on #{r}, answer in note."))
-    );
+    assert!(back.text.contains(&format!(
+        "Use finish_task to mark #{r} done and put the answer in note."
+    )));
 
     // The lead passes it back: Ann hears it on her task, under the turn she asked in.
     conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-1'", [])
@@ -222,7 +221,7 @@ fn each_answer_in_a_send_is_answered_or_refused_on_its_own() {
         sent.refused,
         [(
             second.number,
-            format!("#{} requires done, or text", second.number)
+            format!("Answer #{} with done, or enter text", second.number)
         )]
     );
     assert_eq!(sent.starts.len(), 1, "one hear-back for one Send");

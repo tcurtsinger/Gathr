@@ -240,9 +240,9 @@ Tasks tab at its title, giver, owner, state and reason, with Cancel and Restart.
 Restart follows the service's eligibility; a waiting task is not restartable
 just because it is stale. Agent tasks never receive a human answer form.
 
-General has Stale after (days) and Cancel after (days stale), defaults 3 and 7.
+General has Stale after (days) and Auto-cancel after (days), defaults 3 and 7.
 Both accept 1 to 365 whole days and save on Enter or blur. Retain invalid input
-with "Enter whole days from 1 to 365."; retain a refused edit with its reference.
+with "Enter a whole number from 1 to 365"; retain a refused edit with its reference.
 Help explains progress and the open work that prevents automatic cancellation.
 The person's questions stay open until answered or explicitly cancelled.
 With the defaults, an eligible agent task cancels after 10 days without progress.
@@ -290,17 +290,20 @@ behavior. Icon buttons have accessible names. Dialogs trap focus; Escape closes
 the top layer and returns focus. Reduced motion removes movement. Keep registry hover/press feedback and
 purposeful transitions, never animate a simulated service result into truth.
 
+## Copy
+
+Gathr is an AI developer tool. Use Enable / Disable for settings actions and Enabled / Disabled for their states. Preserve technical terms users configure or troubleshoot, such as model, endpoint, tool call, and JSON. Use JetBrains’ Writing Short and Clear to remove repeated context, filler, and explanations of obvious controls. For notifications, include the affected item, what happened, and the next action. Include a workflow rule only when it changes what the user needs to do about that item. Gathr’s terminology takes precedence over examples in external guides.
+
+References: [JetBrains: Writing Short and Clear](https://plugins.jetbrains.com/docs/intellij/writing-short.html), [Paste: Word list](https://paste-dsys.com/foundations/content/word-list/), [Paste: Alert composition notes](https://paste-dsys.com/components/alert/#composition-notes).
+
 ## Do's and Don'ts
 
 - Capitalize Gathr. Keep one component for each repeated pattern.
 - Use the prototype's real components with Gathr adapters and real state.
-- Use terse, technical copy throughout: labels, accessible names, errors and Gathr-authored chat messages.
-- Buttons and menu items are verbs. Status is a short phrase. Errors name the failed operation; keep references and recovery actions.
-- Omit narration, repeated context and policy unrelated to the item. Tooltips and Help stay terse.
-- Agent messages retain task numbers, owners, outcomes and the next tool action, including required arguments.
-- Stale notices use "Stale 3 d: #72 Approve the wording? (person). Finish, restart or cancel."
-  Agent tasks include owner and state; only a list containing agent tasks adds their auto-cancel policy.
-  Person tasks never auto-cancel. Multiple tasks use one row each and one shared instruction.
+- Preserve identifiers, references, recovery steps and the tool arguments an agent needs.
+- Stale notices use "No progress in 3 days: #72 Approve the wording? (for the person). Finish, restart or cancel it."
+  Agent tasks name the agent and state. Only a list with agent tasks explains when those tasks are cancelled automatically.
+  Questions for the person stay open. Multiple tasks use one row each and one shared instruction.
 - Keep screenshots and fixture data invented; never port personal content.
 - Do not replace accepted architecture, membership, safety or lifecycle policy
   with a prototype callback. Conflicts go to the decision/plan, not into styling.

@@ -41,7 +41,7 @@ function Programs({ onReference }: { onReference: (ref: string) => void }) {
   const status = checking
     ? 'Checking'
     : copy?.state === 'off'
-      ? 'Updates off'
+      ? 'Updates disabled'
       : copy?.checked && copy.version && !copy.failed
         ? 'Up to date'
         : '';

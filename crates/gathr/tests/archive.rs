@@ -258,13 +258,17 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
     let history = service.wait_for(&chat, 10, "the Supervisor told", |h| {
         let messages = h["messages"].as_array().unwrap();
         messages.iter().any(|m| {
-            m["role"] == "gathr" && m["body"].as_str().unwrap_or("").contains("Stale 3 d:")
+            m["role"] == "gathr"
+                && m["body"]
+                    .as_str()
+                    .unwrap_or("")
+                    .contains("No progress in 3 days:")
         })
     });
     let told = history["messages"].as_array().unwrap().iter().rev();
     let told = told
         .filter_map(|m| m["body"].as_str())
-        .find(|b| b.contains("Stale 3 d:"));
+        .find(|b| b.contains("No progress in 3 days:"));
     assert!(
         !told.unwrap().contains("auto-cancel"),
         "person-only stale notice must omit auto-cancel policy: {told:?}"

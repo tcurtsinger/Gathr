@@ -233,7 +233,7 @@ Conversation layout and navigation review for the upcoming desktop release</butt
 <div class="ds-workspace" data-id="archived-composer-sample"><div class="ds-archive-readonly" data-id="archived-readonly">Archived
 <button class="ds-button" id="archive-restore" data-id="archive-restore">Restore</button></div>
 </div>
-<p class="ds-note">Person tasks never auto-cancel. Eligible agent tasks do.</p>
+<p class="ds-note">Your questions stay open until you answer or cancel them. Only inactive agent tasks are cancelled automatically.</p>
 <button class="ds-button" data-variant="outline" id="archive-general-open" data-id="archive-general-open">General</button>
 <p class="ds-role" role="status" id="archive-sample-status" data-id="archive-sample-status"></p>
 </section>
@@ -264,9 +264,9 @@ Conversation layout and navigation review for the upcoming desktop release</butt
 <ul><li id="summary-sol-task">Review after replay checks</li></ul></details>
 </div>
 <section id="help" popover class="help-panel" data-id="help"><h4>Approvals</h4>
-<dl><dt>Ask</dt><dd>Ask for required permissions.</dd><dt>Edits</dt><dd>Allow worktree edits. Ask for other required permissions.</dd>
-<dt>Auto</dt><dd>Engine checks actions. Ask for pushes and file-tool writes outside the worktree.</dd>
-<dt>Full</dt><dd>Allow without asking.</dd></dl></section>
+<dl><dt>Ask</dt><dd>Ask before actions that need permission</dd><dt>Edits</dt><dd>Allow file edits in the worktree. Ask before other actions that need permission.</dd>
+<dt>Auto</dt><dd>The engine checks actions. Pushes and file tools writing outside the worktree need approval.</dd>
+<dt>Full</dt><dd>Allow actions without asking</dd></dl></section>
 <dialog class="ds-dialog" id="settings" aria-labelledby="settings-title" data-id="settings">
 <header class="ds-dialog-header"><h2 id="settings-title">Settings</h2><button class="ds-button" id="settings-close">Close</button></header>
 <div class="ds-settings"><nav aria-label="Settings categories">
@@ -284,11 +284,11 @@ aria-describedby="startup-scope" id="startup"><span></span></button></div><div c
 <span class="ds-archive-days"><input class="ds-field" id="system-stale-days" type="number" min="1" max="365" step="1" value="3" aria-describedby="system-stale-unit">
 <small id="system-stale-unit">days</small></span></div>
 <div class="ds-setting-row" data-id="cancel-days-setting">
-<span class="ds-archive-setting-label"><label for="system-cancel-days">Cancel after</label>
+<span class="ds-archive-setting-label"><label for="system-cancel-days">Auto-cancel after</label>
 <button class="help-button" type="button" popovertarget="cancel-days-help" aria-label="About cancel days" id="cancel-days-help-open" data-id="cancel-days-help-open"><span>?</span></button></span>
 <span class="ds-archive-days"><input class="ds-field" id="system-cancel-days" type="number" min="1" max="365" step="1" value="7" aria-describedby="system-cancel-unit">
-<small id="system-cancel-unit">days stale</small></span></div>
-<p class="ds-archive-invalid" id="system-days-invalid" hidden role="alert">Use whole days: 1 to 365.</p>
+<small id="system-cancel-unit">days</small></span></div>
+<p class="ds-archive-invalid" id="system-days-invalid" hidden role="alert">Enter a whole number from 1 to 365</p>
 </div>
 <div data-settings="Engines" hidden><div class="ds-setting-row"><span>No accounts</span>
 <button class="ds-button" data-variant="primary" id="add-account">Add</button></div></div>
@@ -313,8 +313,8 @@ Reference recorded</pre></details></div>
 <footer><button class="ds-button" id="archive-confirm-cancel" data-id="archive-confirm-cancel">Cancel</button>
 <button class="ds-button" id="archive-confirm-go" data-id="archive-confirm-go">Archive</button></footer></dialog>
 <section id="stale-days-help" popover="auto" class="help-panel" data-id="stale-days-help">
-<p>Days without progress. Turns, messages, answers and fired waits reset the timer.</p></section>
+<p>Turns, messages, answers and waits count as progress</p></section>
 <section id="cancel-days-help" popover="auto" class="help-panel" data-id="cancel-days-help">
-<p>Days stale before auto-cancel. Active work keeps agent tasks open. Your questions never auto-cancel.</p></section>
+<p>Counts from when an agent task becomes stale. Ongoing or paused work keeps it open.</p></section>
 </body>
 </html>

@@ -97,7 +97,7 @@ fn a_task_nothing_moves_for_the_stale_days_is_marked_once_and_its_supervisor_tol
     );
     assert!(
         told.text
-            .contains("Agent tasks auto-cancel after 7 d more idle unless active or paused."),
+            .contains("agent tasks auto-cancel after 7 more days without progress unless work is ongoing or paused."),
         "agent stale notice must retain conditional auto-cancel policy: {}",
         told.text
     );
@@ -240,9 +240,9 @@ fn a_stale_task_something_can_still_move_is_only_flagged() {
     let mixed = sweep(&mut conn, 5 * DAY, &[]);
     let notice = &mixed.starts[0].text;
     assert!(
-        notice.contains(&format!("#{person} Pick a name (person)"))
+        notice.contains(&format!("#{person} Pick a name (for the person)"))
             && notice
-                .contains("Agent tasks auto-cancel after 7 d more idle unless active or paused."),
+                .contains("agent tasks auto-cancel after 7 more days without progress unless work is ongoing or paused."),
         "mixed notice must identify the person and scope auto-cancel to agents: {notice}"
     );
     for n in [waiting, with_pr, queued, person] {
@@ -369,7 +369,12 @@ fn archiving_a_chat_cancels_a_task_in_another_chat_blocked_on_one_of_its_tasks()
     let t = task(&conn, there);
     assert_eq!(
         (t.state, t.reason),
-        (State::Cancelled, Some(format!("blocker #{here} cancelled")))
+        (
+            State::Cancelled,
+            Some(format!(
+                "The task blocking this one, #{here}, was cancelled"
+            ))
+        )
     );
 }
 
