@@ -4,6 +4,7 @@
 pub mod accounts;
 pub mod agents;
 pub mod approvals;
+pub mod background;
 pub mod claude;
 pub mod crash_log;
 pub mod data;
@@ -14,6 +15,7 @@ pub mod event;
 pub mod http;
 pub mod ids;
 pub mod launch;
+pub mod pauses;
 pub mod platform;
 pub mod projects;
 pub mod redact;

@@ -20,6 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::chats::{Chats, Cmd, Failed};
 
 mod given;
+mod holds;
 mod process;
 mod pushes;
 mod reading;
@@ -44,12 +45,16 @@ struct Ids {
     task: Option<i64>,
     /// The turn it answers, when Gathr started it (F8b).
     answers: Option<String>,
+    /// The person wrote its ask: a pause never holds it (0010).
+    person: bool,
 }
 
 #[derive(Clone)]
 struct Queued {
     ids: Ids,
     text: String,
+    /// What holds it back, as saved: `pause` or `usage`.
+    held: Option<&'static str>,
 }
 
 /// Who the engine runs as and where: the agent, its account's folder, model, effort (0026) and
@@ -88,6 +93,13 @@ struct Running {
     push_allowed: bool,
     stopping: bool,
     signed_out: bool,
+    /// Tools it has started: a turn cut off after one never runs again from its ask (F10).
+    tools_started: u32,
+    /// The engine said the account is out of usage during it.
+    limited: bool,
+    /// When it last showed progress, and whether it was flagged for showing none.
+    progress_at: Instant,
+    stalled: bool,
     /// The account's renewal gate, held until the provider first answers (0016).
     gate: login::Hold,
 }
@@ -122,6 +134,14 @@ struct Task {
     /// The agent was deleted: its engine closes as soon as it's free.
     retired: bool,
     times: process::Times,
+    /// When the account's usage hold ends, while the next turn waits on it.
+    usage_wait: Option<Instant>,
+    usage_until_us: Option<i64>,
+    /// Commands the engine runs in the background: it isn't idle while any do.
+    background: usize,
+    /// The turn (and task) of the last background command that ended: the engine's next turn of
+    /// its own carries on from it.
+    woke_from: Option<(String, Option<i64>)>,
 }
 
 pub async fn run(
@@ -147,15 +167,22 @@ pub async fn run(
         idle_since: Instant::now(),
         retired: false,
         times: process::Times::from_env(),
+        usage_wait: None,
+        usage_until_us: None,
+        background: 0,
+        woke_from: None,
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
     let mut sign_in_poll = tokio::time::interval(SIGN_IN_POLL);
     sign_in_poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut stall_look = tokio::time::interval((task.times.stall / 4).min(Duration::from_secs(30)));
+    stall_look.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         let free = task.turn.is_none() && task.closing.is_none();
-        let waiting = free && !task.queue.is_empty();
-        let idle = free && task.engine.is_some() && task.queue.is_empty();
+        // A usage hold has its own timer: polling it would only ask again.
+        let waiting = free && !task.queue.is_empty() && task.usage_wait.is_none();
+        let idle = free && task.engine.is_some() && task.queue.is_empty() && task.background == 0;
         let idle_at = match task.retired {
             true => tokio::time::Instant::now(),
             false => tokio::time::Instant::from_std(task.idle_since + task.times.idle_close),
@@ -165,6 +192,7 @@ pub async fn run(
             false => "it was idle",
         };
         let hold_after = task.times.hold_after;
+        let usage_at = task.usage_wait.map(tokio::time::Instant::from_std);
         tokio::select! {
             command = commands.recv() => match command {
                 Some(Cmd::Close { done }) => {
@@ -188,6 +216,12 @@ pub async fn run(
             },
             _ = tokio::time::sleep_until(idle_at), if idle => task.close(idle_why).await,
             _ = sign_in_poll.tick(), if waiting => task.try_next().await,
+            _ = tokio::time::sleep_until(usage_at.unwrap_or_else(tokio::time::Instant::now)), if usage_at.is_some() => {
+                task.usage_wait = None;
+                task.mark_holds().await;
+                task.try_next().await;
+            }
+            _ = stall_look.tick(), if task.turn.is_some() => task.check_stall(),
         }
     }
 }
@@ -239,12 +273,30 @@ impl Task {
                     agent: w.agent,
                     task: w.task,
                     answers: w.answers,
+                    person: w.person,
                 };
-                self.queue.push_back(Queued { ids, text: w.text });
+                self.queue.push_back(Queued {
+                    ids,
+                    text: w.text,
+                    held: None,
+                });
+                self.mark_holds().await;
                 self.try_next().await;
             }
             Cmd::Start(start) => self.given(start).await,
             Cmd::Leave { folder, done } => self.leave(&folder, done).await,
+            Cmd::Kick => {
+                self.mark_holds().await;
+                self.try_next().await;
+            }
+            Cmd::StopNow {
+                scope,
+                target,
+                done,
+            } => {
+                self.stop_now(scope, target).await;
+                let _ = done.send(());
+            }
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
         }
@@ -284,8 +336,13 @@ impl Task {
             agent,
             task: None,
             answers: None,
+            person: true,
         };
-        let queued = Queued { ids, text };
+        let queued = Queued {
+            ids,
+            text,
+            held: None,
+        };
         let row = queued.ids.clone();
         let added = self
             .chats
@@ -330,7 +387,13 @@ impl Task {
     /// failed.
     async fn enqueue(&mut self, queued: &Queued) -> Result<&'static str, String> {
         let ids = &queued.ids;
-        if self.turn.is_some() || self.closing.is_some() || !self.queue.is_empty() {
+        if self.paused(ids) {
+            self.queue.push_back(queued.clone());
+            self.mark_holds().await;
+            return Ok("held");
+        }
+        let ahead = self.queue.iter().any(|q| !self.paused(&q.ids));
+        if self.turn.is_some() || self.closing.is_some() || ahead {
             self.queue.push_back(queued.clone());
             self.set_turn(ids, "queued", None).await;
             self.trace_hold(ids);
@@ -346,16 +409,16 @@ impl Task {
     /// Starts the turns waiting, in order, while nothing runs or closes.
     async fn try_next(&mut self) {
         while self.turn.is_none() && self.closing.is_none() {
-            let Some(next) = self.queue.front().cloned() else {
+            // The first turn no pause holds: a paused chat's turns never hold another chat's.
+            let Some(next) = self.queue.iter().find(|q| !self.paused(&q.ids)).cloned() else {
                 return;
             };
+            let taken = |q: &Queued| q.ids.turn != next.ids.turn;
             match self.start(&next).await {
-                Ok("running" | "dropped") => {
-                    self.queue.pop_front();
-                }
+                Ok("running" | "dropped") => self.queue.retain(taken),
                 Ok(_) => return,
                 Err(why) => {
-                    self.queue.pop_front();
+                    self.queue.retain(taken);
                     self.set_turn(&next.ids, "failed", Some(&why)).await;
                 }
             }
@@ -402,6 +465,10 @@ impl Task {
         let Some(assigned) = assigned else {
             return Ok(self.hold_back(next, "waiting_sign_in").await);
         };
+        if self.usage_held(&assigned.account).await {
+            self.hold_on_usage(next).await;
+            return Ok("queued");
+        }
         if self.login(&assigned.folder).await == Login::SignedOut {
             return Ok(self.hold_back(next, "waiting_sign_in").await);
         }
@@ -423,7 +490,7 @@ impl Task {
 
     /// Keeps the turn first in the queue, with `status`.
     async fn hold_back(&mut self, next: &Queued, status: &'static str) -> &'static str {
-        let first = self.queue.front().map(|q| &q.ids.turn) != Some(&next.ids.turn);
+        let first = !self.queue.iter().any(|q| q.ids.turn == next.ids.turn);
         if first {
             self.queue.push_front(next.clone());
         }
@@ -454,6 +521,7 @@ impl Task {
                 agent: self.agent.clone(),
                 task: None,
                 answers: None,
+                person: true,
             };
             let row = ids.clone();
             let saved = self
@@ -482,6 +550,7 @@ impl Task {
                 Queued {
                     ids: ids.clone(),
                     text,
+                    held: None,
                 },
             );
             self.set_turn(&ids, "queued", None).await;
@@ -598,6 +667,10 @@ impl Task {
             push_allowed: false,
             stopping: false,
             signed_out: false,
+            tools_started: 0,
+            limited: false,
+            progress_at: Instant::now(),
+            stalled: false,
             gate,
         });
     }
@@ -614,6 +687,7 @@ impl Task {
             agent: self.agent.clone(),
             task: None,
             answers: None,
+            person: true,
         };
         let (row, id) = (ids.clone(), message.to_string());
         let saved = self
@@ -670,13 +744,16 @@ impl Task {
             self.set_turn(&queued.ids, "stopped", None).await;
             stopped.push(queued.ids.turn);
         }
-        let Some(running) = self
+        stopped.extend(self.interrupt(chat).await);
+        stopped
+    }
+
+    /// Interrupts the chat's turn if it's this task's running one: its id.
+    async fn interrupt(&mut self, chat: &str) -> Option<String> {
+        let running = self
             .turn
             .as_mut()
-            .filter(|t| !t.stopping && t.ids.chat == chat)
-        else {
-            return stopped;
-        };
+            .filter(|t| !t.stopping && t.ids.chat == chat)?;
         running.stopping = true;
         let ids = running.ids.clone();
         // Shown at once; the turn's row and end event follow when the engine says it ended.
@@ -695,8 +772,7 @@ impl Task {
                 .attr("why", e.to_string());
             self.record(event);
         }
-        stopped.push(ids.turn);
-        stopped
+        Some(ids.turn)
     }
 
     async fn approve(&mut self, chat: &str, request_id: &str, allow: bool) -> bool {
