@@ -124,6 +124,39 @@ async function check() {
 				await page.waitForFunction(() => !document.querySelector("#summary").matches(":popover-open"));
 				assert(await trigger.evaluate((node) => node === document.activeElement), `${label}: Escape returns Summary focus`);
 				assert.equal(await recipient.inputValue(), "Lane");
+				// Exercise growth with the trigger mid-window, where the initial panel barely fits.
+				await summary.locator("details").evaluateAll((nodes) => nodes.forEach((node) => { node.open = false; }));
+				await trigger.evaluate((node) => window.scrollBy(0, node.closest("header").getBoundingClientRect().bottom - 449));
+				await trigger.click();
+				async function assertSummaryFits(state) {
+					await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+					const bounds = await summary.evaluate((node) => {
+						const rect = node.getBoundingClientRect();
+						return { top: rect.top, bottom: rect.bottom, height: innerHeight };
+					});
+					assert(bounds.top >= 16 && bounds.bottom <= bounds.height - 16,
+						`${label} ${state}: Summary must fit inside viewport; got ${JSON.stringify(bounds)}`);
+				}
+				const agents = summary.locator(".ds-agent > summary");
+				for (let agent = 0; agent < await agents.count(); agent++) {
+					await agents.nth(agent).click();
+					await assertSummaryFits(`expanded agent ${agent + 1}`);
+					if (agent === 0) await shot(`summary-mira-expanded-${label}`);
+				}
+				await page.locator("#summary-sol-task").scrollIntoViewIfNeeded();
+				await shot(`summary-expanded-${label}`);
+				await page.setViewportSize({ width, height: 600 });
+				await assertSummaryFits("short window");
+				await page.locator("#summary-sol-task").scrollIntoViewIfNeeded();
+				const lastTask = await page.locator("#summary-sol-task").boundingBox();
+				assert(lastTask.y >= 16 && lastTask.y + lastTask.height <= 584, `${label}: last assignment remains reachable`);
+				await shot(`summary-short-${label}`);
+				for (let agent = await agents.count() - 1; agent >= 0; agent--) {
+					await agents.nth(agent).click();
+					await assertSummaryFits(`collapsed agent ${agent + 1}`);
+				}
+				await page.keyboard.press("Escape");
+				await page.setViewportSize({ width, height: 900 });
 				for (const target of [trigger, toggle, page.locator("#thread-back")]) {
 					if (!(await target.isVisible())) continue;
 					await target.hover();

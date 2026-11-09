@@ -54,8 +54,9 @@
 		if (!summary.matches(":popover-open")) return;
 		const at = anchor.id === "team-summary-open"
 			? document.querySelector("#team-header").getBoundingClientRect() : anchor.getBoundingClientRect();
-		summary.style.left = `${Math.max(16, Math.min(at.right - summary.offsetWidth - 8, innerWidth - summary.offsetWidth - 16))}px`;
-		summary.style.top = `${Math.max(16, Math.min(at.bottom + 8, innerHeight - summary.offsetHeight - 16))}px`;
+		const size = summary.getBoundingClientRect();
+		summary.style.left = `${Math.max(16, Math.min(at.right - size.width - 8, innerWidth - size.width - 16))}px`;
+		summary.style.top = `${Math.max(16, Math.min(at.bottom + 8, innerHeight - size.height - 16))}px`;
 	}
 	for (const trigger of triggers) {
 		trigger.setAttribute("aria-expanded", "false");
@@ -67,6 +68,7 @@
 		}
 		placeSummary();
 	});
+	new ResizeObserver(placeSummary).observe(summary);
 	window.addEventListener("resize", placeSummary);
 	window.addEventListener("scroll", placeSummary, { passive: true });
 })();
