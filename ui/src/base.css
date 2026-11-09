@@ -1,7 +1,9 @@
 /* Gathr's own element styles, in Tailwind's base layer (theme.css). Registry controls carry data-slot
    and keep their own classes, so these skip them. */
+/* The registry's bare `border` class expects this colour (shadcn's base); Tailwind 4 would use the text colour. */
 * {
   box-sizing: border-box;
+  border-color: var(--border);
   scrollbar-color: var(--control) transparent;
   scrollbar-width: thin;
   accent-color: var(--accent);
