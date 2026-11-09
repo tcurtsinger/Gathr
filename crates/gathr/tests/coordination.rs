@@ -336,6 +336,38 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
     );
 }
 
+/// On Windows a check's child that outlived it kept its output pipe open, and the service didn't
+/// exit until that child did: 290 s in CI.
+#[test]
+fn shutdown_ends_a_running_check_with_everything_it_started_and_does_not_wait_for_them() {
+    let data = TempDir::new();
+    let dir = data.0.to_string_lossy().replace('\\', "/");
+    let check = format!("touch '{dir}/started'; (sleep 8; touch '{dir}/late') & wait");
+    let team = team(&data.0, &held_recording(&data.0));
+    let lead_token = lead_turn(&team, &data.0, 0);
+    std::fs::write(data.0.join("go"), "").unwrap();
+    team.service
+        .wait_for(&team.chat, 20, "the lead's turn", |h| {
+            h["turns"][0]["status"] == "done"
+        });
+    let ask = json!({ "check": check, "then": "go on" });
+    let left = text(&call_tool(team.service.info.port, &lead_token, "wait", ask));
+    assert!(left.starts_with("Waiting ("), "{left}");
+    until(20, "the check running", || {
+        data.0.join("started").exists().then_some(())
+    });
+
+    let asked = std::time::Instant::now();
+    team.service.stop();
+    let took = asked.elapsed();
+    assert!(took.as_secs() < 5, "the service took {took:?} to stop");
+    std::thread::sleep(std::time::Duration::from_secs(10) - took);
+    assert!(
+        !data.0.join("late").exists(),
+        "what the check started was ended with it"
+    );
+}
+
 #[test]
 fn a_wait_whose_looks_keep_failing_is_found_from_its_reference() {
     let data = TempDir::new();

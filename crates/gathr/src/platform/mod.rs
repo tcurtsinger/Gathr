@@ -51,6 +51,51 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
+/// Ends `program`, started with `no_window` as `pid`, with everything it started, and returns once
+/// they're gone. On Unix that's its process group. On Windows it's the tree of processes below it,
+/// read before it's killed; but an MSYS program's fork and exec leave children whose Windows
+/// parent is gone, so for one (Git Bash) its own `kill` ends its process group first.
+pub fn end_tree(pid: u32, program: &Path) {
+    #[cfg(windows)]
+    {
+        let msys = program.with_file_name("msys-2.0.dll").is_file();
+        let bash = program.with_file_name("bash.exe");
+        if msys && bash.is_file() {
+            // A process started from outside MSYS leads its own group, under its MSYS pid. Only
+            // built-ins: the service's PATH may not have Git's usr\bin.
+            let group = r#"for p in /proc/[0-9]*; do
+                w=; read -r w 2>/dev/null < "$p/winpid"
+                [ "$w" = "$1" ] && { kill -s KILL -- "-${p#/proc/}"; exit; }
+            done; exit 1"#;
+            let mut command = std::process::Command::new(bash);
+            command.args(["-c", group, "end-tree", &pid.to_string()]);
+            quietly(command);
+        }
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        let mut command =
+            std::process::Command::new(PathBuf::from(root).join(r"System32\taskkill.exe"));
+        command.args(["/T", "/F", "/PID", &pid.to_string()]);
+        quietly(command);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = program;
+        let mut command = std::process::Command::new("/bin/kill");
+        command.args(["-KILL", "--", &format!("-{pid}")]);
+        quietly(command);
+    }
+}
+
+/// Runs a command to its end with no input, output or window.
+fn quietly(mut command: std::process::Command) {
+    no_window(&mut command);
+    let _ = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
 /// This computer in Claude Code's release feed, such as `win32-x64`; none where it ships nothing.
 pub fn release_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {

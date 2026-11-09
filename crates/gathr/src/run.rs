@@ -2,6 +2,7 @@
 //! check. Never asks for a password, has no window, and is stopped past its time limit.
 
 use std::path::Path;
+use std::process::Stdio;
 use std::time::Duration;
 
 use crate::platform::env::Vars;
@@ -46,19 +47,37 @@ pub async fn run(
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "never")
         .env("GH_PROMPT_DISABLED", "1")
-        .stdin(std::process::Stdio::null());
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     crate::platform::no_window(&mut command);
-    let mut command = tokio::process::Command::from(command);
-    command.kill_on_drop(true);
     let name = program.file_stem().unwrap_or_default().to_string_lossy();
     let what = format!("{name} {}", args.first().unwrap_or(&""));
-    let out = tokio::time::timeout(limit, command.output())
+    let child = tokio::process::Command::from(command)
+        .spawn()
+        .map_err(|e| format!("{name} didn't start: {e}"))?;
+    let mut running = Running(child.id(), program);
+    let out = tokio::time::timeout(limit, child.wait_with_output())
         .await
         .map_err(|_| format!("{what} didn't finish in {} s", limit.as_secs()))?
-        .map_err(|e| format!("{name} didn't start: {e}"))?;
+        .map_err(|e| format!("{name} wasn't waited for: {e}"))?;
+    running.0 = None;
     Ok(Ran {
         code: out.status.code(),
         out: String::from_utf8_lossy(&out.stdout).trim().to_string(),
         err: String::from_utf8_lossy(&out.stderr).to_string(),
     })
+}
+
+/// A program still running when its run is dropped (past its limit, or its wait ended) is ended
+/// with everything it started: a child left behind keeps the output pipe open, and on Windows the
+/// service can't exit until that child does.
+struct Running<'a>(Option<u32>, &'a Path);
+
+impl Drop for Running<'_> {
+    fn drop(&mut self) {
+        if let Some(pid) = self.0 {
+            crate::platform::end_tree(pid, self.1);
+        }
+    }
 }
