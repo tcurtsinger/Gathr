@@ -39,7 +39,7 @@
   padding: 14px 0 24px;
 }
 .sidebar .navbutton,
-.sidebar .chatrow {
+.sidebar .chat-link {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -52,6 +52,38 @@
 }
 .sidebar :is(.navbutton, .chatrow):hover {
   background: color-mix(in oklab, var(--foreground) 5%, transparent);
+}
+/* A chat's row: its link and, on hover, keyboard focus or while it's open, its More (archive-stale/v1). */
+.sidebar .chatrow {
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+}
+.sidebar .chat-link {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar .chat-link:hover {
+  background: transparent;
+}
+.sidebar .row-more {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  opacity: 0;
+}
+.chatrow:is(:hover, :focus-within, [data-current]) .row-more,
+.row-more[data-state="open"] {
+  opacity: 1;
+}
+.archive-group {
+  margin-top: 24px;
+}
+.sidebar-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 .navbutton svg {
   width: 16px;
@@ -71,7 +103,7 @@
   white-space: nowrap;
   mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent 100%);
 }
-.sidebar .chatrow[aria-current] {
+.sidebar .chatrow[data-current] {
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
 }
 .chatlist h2 {
@@ -106,7 +138,7 @@
 .sidebar .project-new:focus-visible {
   opacity: 1;
 }
-.project-chats .chatrow {
+.project-chats .chat-link {
   padding-left: 34px;
 }
 .sidebar-foot {

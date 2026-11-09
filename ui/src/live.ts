@@ -1,4 +1,4 @@
-import type { Member, Message, Pauses, PersonTask, Task, ToolBody, TurnStatus, Wait } from './api';
+import type { Member, Message, Pauses, PersonTask, StaleTask, Task, ToolBody, TurnStatus, Wait } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
@@ -24,7 +24,9 @@ export type LiveEvent =
   // The chat's tasks and waits, whole, after any change to them.
   | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[] }
   // The person's open questions across chats, whole, after any change to any task.
-  | { type: 'person_tasks'; tasks: PersonTask[] }
+  | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
+  // A chat was archived, restored (unarchived) or deleted.
+  | { type: 'chat'; chat: string; change: 'archived' | 'unarchived' | 'deleted' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.

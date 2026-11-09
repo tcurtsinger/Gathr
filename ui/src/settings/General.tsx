@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { Switch } from '../components/Switch';
+import { StaleDays } from './StaleDays';
 
 /** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
 export function General({ onReference }: { onReference: (ref: string) => void }) {
@@ -79,6 +80,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
           />
         </div>
       )}
+      <StaleDays onReference={onReference} />
     </section>
   );
 }

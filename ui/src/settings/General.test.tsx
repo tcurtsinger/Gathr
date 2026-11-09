@@ -6,7 +6,8 @@ import { General } from './General';
 
 /** Answers GET /api/startup with `on`; each PUT takes the next answer in `puts`. */
 function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
-  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
     if (init?.method !== 'PUT') return new Response(JSON.stringify({ on }));
     sent.push(JSON.parse(String(init.body)));
     const next = puts.shift();
@@ -69,7 +70,8 @@ test('a read on focus that answers after a save never undoes the save', async ()
 test('a read on focus that fails while a save is pending leaves no failure once the save succeeds', async () => {
   let release = () => {};
   let holdPut = false;
-  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
     if (init?.method !== 'PUT') {
       if (!holdPut) return new Response(JSON.stringify({ on: false }));
       const body = { error: 'Open at login failed', why: 'made-up read failure', ref: 'made-up-read-ref' };

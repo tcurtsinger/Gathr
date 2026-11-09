@@ -3,6 +3,7 @@ import { type Agent, api, type Chat, type Failure, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
+import { Confirm } from './components/Confirm';
 import { Notice } from './components/Notice';
 import { listen } from './live';
 import { NewProject } from './NewProject';
@@ -17,6 +18,11 @@ import './app.css';
 
 export function App() {
   const [chats, setChats] = useState<Chat[]>([]);
+  const [archived, setArchived] = useState<Chat[]>([]);
+  // Archive and Delete ask first; the question stays until the service has done it.
+  const [asking, setAsking] = useState<{ verb: 'Archive' | 'Delete'; chat: Chat } | null>(null);
+  // Restore asks nothing: a failure shows on the archived chat, opened if it wasn't.
+  const [restoreFailure, setRestoreFailure] = useState<{ chat: string; failure: Failure } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
@@ -53,6 +59,18 @@ export function App() {
     api.projects().then(setProjects, setFailure);
   }, []);
 
+  // Archived, restored or deleted here or in another window: both lists as the service has them.
+  const reloadLists = useCallback(
+    () => Promise.all([api.chats().then(setChats), api.archivedChats().then(setArchived)]),
+    [],
+  );
+  useEffect(() => {
+    api.archivedChats().then(setArchived, setFailure);
+    return listen((event) => {
+      if (event.type === 'chat' || event.type === 'lagged') reloadLists().catch(setFailure);
+    });
+  }, [reloadLists]);
+
   // A new chat is a draft until its first message: then the service makes it, in its project.
   const newChat = useCallback((project?: string) => {
     setFresh({ project });
@@ -83,13 +101,34 @@ export function App() {
   };
 
   const chat =
-    chats.find((c) => c.id === selected) ?? (fresh && { id: '', title: 'New chat', project: fresh.project });
+    [...chats, ...archived].find((c) => c.id === selected) ??
+    (fresh && { id: '', title: 'New chat', project: fresh.project });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
   const choose = (id: string) => {
     if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
     setSelected(id);
     setFresh(null);
+  };
+  // An archived chat stays open, read only; a deleted one gives way to its neighbour in the sidebar.
+  const archive = (c: Chat) => api.archive(c.id).then(reloadLists);
+  const restore = (c: Chat) => {
+    setRestoreFailure(null);
+    api
+      .unarchive(c.id)
+      .then(reloadLists)
+      .catch((f: Failure) => {
+        choose(c.id);
+        setRestoreFailure({ chat: c.id, failure: f });
+      });
+  };
+  const remove = async (c: Chat) => {
+    const next = neighbour(c, c.archived ? archived : chats);
+    await api.deleteChat(c.id);
+    await reloadLists().catch(setFailure);
+    if (c.id !== selected) return;
+    if (next) choose(next.id);
+    else newChat();
   };
   const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
   const paneOpen = !!chat?.id && !!person.open[chat.id];
@@ -110,7 +149,11 @@ export function App() {
     <div className="app">
       <Sidebar
         chats={chats}
+        archived={archived}
         projects={projects}
+        onArchive={(c) => setAsking({ verb: 'Archive', chat: c })}
+        onDelete={(c) => setAsking({ verb: 'Delete', chat: c })}
+        onRestore={restore}
         selected={selected}
         onSelect={choose}
         onNew={newChat}
@@ -118,6 +161,7 @@ export function App() {
         actions={
           <TasksFlyout
             tasks={person.tasks}
+            stale={person.stale}
             name={name}
             onOpen={(t) => {
               choose(t.chat);
@@ -151,6 +195,11 @@ export function App() {
           onNewProject={() => setNewProject(true)}
           pauses={pauses.pauses}
           onPause={pauses.act}
+          onArchive={() => setAsking({ verb: 'Archive', chat })}
+          onDelete={() => setAsking({ verb: 'Delete', chat })}
+          onRestore={() => restore(chat)}
+          restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
+          onReference={openReference}
           headerEnd={
             chat.id &&
             !paneOpen && (
@@ -204,6 +253,8 @@ export function App() {
               }}
               onSend={person.send}
               onReference={openReference}
+              stale={person.stale.filter((t) => t.chat === chat.id)}
+              onSettle={(t, action) => person.settle(t.number, action)}
             />
           }
         />
@@ -220,6 +271,19 @@ export function App() {
         }}
         onReference={openReference}
       />
+      {asking && (
+        <Confirm
+          key={asking.chat.id}
+          question={`${asking.verb} ${asking.chat.title}?`}
+          verb={asking.verb}
+          danger={asking.verb === 'Delete'}
+          onCancel={() => setAsking(null)}
+          onConfirm={() =>
+            (asking.verb === 'Archive' ? archive : remove)(asking.chat).then(() => setAsking(null))
+          }
+          onReference={openReference}
+        />
+      )}
       <SettingsPanel
         target={settings}
         onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}
@@ -228,4 +292,11 @@ export function App() {
       />
     </div>
   );
+}
+
+/** The chat after it in its sidebar group (its project, plain chats, or Archived), else the one before. */
+function neighbour(chat: Chat, list: Chat[]): Chat | undefined {
+  const group = chat.archived ? list : list.filter((c) => (c.project ?? '') === (chat.project ?? ''));
+  const at = group.findIndex((c) => c.id === chat.id);
+  return group[at + 1] ?? group[at - 1];
 }

@@ -76,10 +76,12 @@ export function Summary({ state, pauses, run, onPause }: Props) {
                   </ul>
                 </details>
                 <ChatMenu
-                  state={own.paused ? 'paused' : 'running'}
                   label={`More for ${m.name}`}
-                  onPause={() => onPause('pause', agent)}
-                  onResume={() => onPause('resume', agent)}
+                  pause={{
+                    state: own.paused ? 'paused' : 'running',
+                    onPause: () => onPause('pause', agent),
+                    onResume: () => onPause('resume', agent),
+                  }}
                 />
               </div>
             );

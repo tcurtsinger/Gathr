@@ -1,6 +1,7 @@
 import { Folder } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import type { Agent, Chat, Member, PauseScope, Pauses, Project } from '../api';
+import { Button } from '@/components/ui/button';
+import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
@@ -40,11 +41,19 @@ interface Props {
   /** Every pause, and what the person can do to one (the app keeps them for every chat). */
   pauses: Pauses;
   onPause: (action: PauseAction, scope: PauseScope) => Promise<void>;
+  /** Archive and Delete ask first (the app's Confirm); Restore doesn't, and never restarts its work. */
+  onArchive?: () => void;
+  onDelete?: () => void;
+  onRestore?: () => void;
+  restoreFailure?: Failure;
+  onReference?: (ref: string) => void;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
+  const archived = !!chat.archived;
+  const { onRestore, restoreFailure } = props;
   const { state, loaded, loadFailure, failed, send, attempt, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -101,13 +110,20 @@ export function ChatView(props: Props) {
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
         <h1>{chat.title}</h1>
+        {archived && <small className="topbar-state">Archived</small>}
         {state.members.length > 1 && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
         {!fresh && (
           <ChatMenu
-            state={run.state}
-            all={run.scope?.scope === 'app'}
-            onPause={() => act('pause', thisChat)}
-            onResume={() => act('resume', run.scope ?? thisChat)}
+            pause={{
+              state: run.state,
+              all: run.scope?.scope === 'app',
+              onPause: () => act('pause', thisChat),
+              onResume: () => act('resume', run.scope ?? thisChat),
+            }}
+            archived={archived}
+            onArchive={props.onArchive}
+            onRestore={onRestore}
+            onDelete={props.onDelete}
           />
         )}
         {headerEnd}
@@ -119,7 +135,7 @@ export function ChatView(props: Props) {
         running={!!turn}
         actions={actions}
         empty={loaded && state.messages.length === 0 && failed.length === 0}
-        after={<RunLine run={run} members={state.members} />}
+        after={!archived && <RunLine run={run} members={state.members} />}
         header={
           loadFailure && (
             <Notice
@@ -155,23 +171,46 @@ export function ChatView(props: Props) {
             </select>
           </label>
         )}
-        <Composer
-          draft={draft}
-          onDraft={onDraft}
-          onSend={sendDraft}
-          onStop={turn ? () => act('stop', thisChat) : undefined}
-          inputRef={input}
-          tools={
-            agent && (
-              <AgentPicker
-                agents={recipients}
-                selected={agent}
-                onSelect={setPicked}
-                onEdit={() => onEditAgent(agent)}
+        {archived ? (
+          <>
+            {restoreFailure && (
+              <Notice
+                danger
+                title={restoreFailure.error}
+                reference={
+                  restoreFailure.ref && props.onReference
+                    ? { ref: restoreFailure.ref, open: props.onReference }
+                    : undefined
+                }
+                links={restoreFailure.why && <span className="muted">{restoreFailure.why}</span>}
               />
-            )
-          }
-        />
+            )}
+            <div className="archived-line">
+              Archived
+              <Button size="sm" variant="outline" onClick={onRestore}>
+                Restore
+              </Button>
+            </div>
+          </>
+        ) : (
+          <Composer
+            draft={draft}
+            onDraft={onDraft}
+            onSend={sendDraft}
+            onStop={turn ? () => act('stop', thisChat) : undefined}
+            inputRef={input}
+            tools={
+              agent && (
+                <AgentPicker
+                  agents={recipients}
+                  selected={agent}
+                  onSelect={setPicked}
+                  onEdit={() => onEditAgent(agent)}
+                />
+              )
+            }
+          />
+        )}
       </Thread>
     </main>
   );

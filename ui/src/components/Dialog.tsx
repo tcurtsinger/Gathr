@@ -9,11 +9,13 @@ interface Props {
   /** Where focus goes back to on close; by default, what had it when the dialog opened. */
   opener?: HTMLElement | null;
   className?: string;
+  /** No Close in the header: a confirm, answered by its own buttons or Escape. */
+  bare?: boolean;
   children: ReactNode;
 }
 
 /** Gathr's one modal: centred over the current screen, its title and Close on top. Escape closes it. */
-export function Dialog({ open, title, onClose, opener, className, children }: Props) {
+export function Dialog({ open, title, onClose, opener, className, bare, children }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const back = useRef<HTMLElement | null>(null);
   const titled = useId();
@@ -47,9 +49,11 @@ export function Dialog({ open, title, onClose, opener, className, children }: Pr
         <>
           <header className="dialog-header">
             <h2 id={titled}>{title}</h2>
-            <button type="button" onClick={onClose}>
-              Close
-            </button>
+            {!bare && (
+              <button type="button" onClick={onClose}>
+                Close
+              </button>
+            )}
           </header>
           {children}
         </>

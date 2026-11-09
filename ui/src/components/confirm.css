@@ -11,3 +11,23 @@
 .confirm button {
   border: 1px solid var(--control);
 }
+/* The modal confirm (Confirm.tsx): the question wraps, Cancel and the verb below it. */
+.confirm-dialog {
+  width: min(420px, calc(100vw - 40px));
+}
+.confirm-dialog .dialog-header {
+  padding: 20px 24px 12px;
+  border: 0;
+}
+.confirm-dialog .dialog-header h2 {
+  overflow-wrap: anywhere;
+}
+.confirm-dialog .notice {
+  margin: 0 24px;
+}
+.confirm-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px 24px;
+}
