@@ -76,13 +76,14 @@ for (const match of system.matchAll(/aria-(?:controls|labelledby|describedby)="(
 	for (const id of match[1].split(" ")) assert(systemIds.includes(id), "reference exists: " + id);
 }
 new vm.Script(fs.readFileSync(path.join(__dirname, "system.js"), "utf8"));
+new vm.Script(fs.readFileSync(path.join(__dirname, "team-reference.js"), "utf8"));
 assert(tokens.includes("--muted: var(--muted-foreground)"), "legacy muted is readable text");
 assert(tokens.includes("--accent: var(--attention)"), "legacy accent remains text");
 assert(
 	tokens.includes("--background: #181818") && tokens.includes("--card: #202020"),
 	"prototype dark surfaces",
 );
-assert(design.includes("Team-message layout: pending"), "no unselected agent arrangement");
+assert(design.includes("Team messages: inline thread with Summary"), "selected team arrangement");
 assert(design.includes("There is no Everyone option"), "one named recipient, no fan-out");
 assert(
 	design.includes("1024 by 760px") && design.includes("200px category rail"),
