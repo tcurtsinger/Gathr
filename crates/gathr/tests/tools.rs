@@ -106,6 +106,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         .filter_map(|t| t["name"].as_str())
         .collect();
     let all = [
+        "ask_person",
         "cancel_task",
         "end_wait",
         "finish_task",

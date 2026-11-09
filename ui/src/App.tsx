@@ -8,6 +8,10 @@ import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
+import { TasksFlyout } from './tasks/TasksFlyout';
+import { TasksTab } from './tasks/TasksTab';
+import { usePersonTasks } from './tasks/usePersonTasks';
+import { type FileTab, fileId, Workspace, WorkspaceOpener } from './tasks/Workspace';
 import './app.css';
 
 export function App() {
@@ -22,6 +26,9 @@ export function App() {
   const drafts = useRef(new Map<string, string>());
   const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
+  const person = usePersonTasks(setFailure);
+  // Each chat's workspace: the files opened from its questions, and the tab shown.
+  const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
 
   useEffect(() => {
     const started = performance.now();
@@ -77,6 +84,17 @@ export function App() {
     chats.find((c) => c.id === selected) ?? (fresh && { id: '', title: 'New chat', project: fresh.project });
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
+  const choose = (id: string) => {
+    if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
+    setSelected(id);
+    setFresh(null);
+  };
+  const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
+  const paneOpen = !!chat?.id && !!person.open[chat.id];
+  const tabsOf = (c: string) => tabs[c] ?? { files: [], selected: 'tasks' };
+  const setTab = (c: string, change: (t: { files: FileTab[]; selected: string }) => Partial<typeof t>) =>
+    setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
+  const name = (agent: string | null) => agents.find((a) => a.id === agent)?.name ?? 'An agent';
   const openReference = (reference: string) =>
     setSettings((s) => ({
       page: 'diagnostics',
@@ -92,13 +110,21 @@ export function App() {
         chats={chats}
         projects={projects}
         selected={selected}
-        onSelect={(id) => {
-          if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
-          setSelected(id);
-          setFresh(null);
-        }}
+        onSelect={choose}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
+        actions={
+          <TasksFlyout
+            tasks={person.tasks}
+            name={name}
+            onOpen={(t) => {
+              choose(t.chat);
+              person.select(t.chat, t.number);
+              person.setOpen(t.chat, true);
+              setTab(t.chat, () => ({ selected: 'tasks' }));
+            }}
+          />
+        }
       />
       {chat ? (
         <ChatView
@@ -121,6 +147,12 @@ export function App() {
           onProject={(project) => setFresh({ project })}
           onStart={start}
           onNewProject={() => setNewProject(true)}
+          headerEnd={
+            chat.id &&
+            !paneOpen && (
+              <WorkspaceOpener waiting={chatTasks.length > 0} onOpen={() => person.setOpen(chat.id, true)} />
+            )
+          }
         />
       ) : (
         <main className="chat">
@@ -136,6 +168,41 @@ export function App() {
             <p className="empty">No chats yet</p>
           )}
         </main>
+      )}
+      {chat?.id && paneOpen && (
+        <Workspace
+          waiting={chatTasks.length > 0}
+          files={tabsOf(chat.id).files}
+          selected={tabsOf(chat.id).selected}
+          onSelect={(id) => setTab(chat.id, () => ({ selected: id }))}
+          onCloseFile={(id) =>
+            setTab(chat.id, (t) => ({
+              files: t.files.filter((f) => fileId(f) !== id),
+              selected: t.selected === id ? 'tasks' : t.selected,
+            }))
+          }
+          onClose={() => person.setOpen(chat.id, false)}
+          tasks={
+            <TasksTab
+              key={chat.id}
+              tasks={chatTasks}
+              selected={person.selected[chat.id] ?? null}
+              onSelect={(n) => person.select(chat.id, n)}
+              drafts={person.drafts}
+              onDraft={person.draft}
+              name={name}
+              onOpenFile={(task, index) => {
+                const file = { task: task.number, index, name: task.files[index].name };
+                setTab(chat.id, (t) => ({
+                  files: t.files.some((f) => fileId(f) === fileId(file)) ? t.files : [...t.files, file],
+                  selected: fileId(file),
+                }));
+              }}
+              onSend={person.send}
+              onReference={openReference}
+            />
+          }
+        />
       )}
       <NewProject
         open={newProject}

@@ -50,19 +50,33 @@ pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::E
     Ok(json!({ "tasks": tasks, "waits": waits }))
 }
 
+/// The person's open tasks, as `GET /api/person-tasks` answers and the live socket sends.
+pub fn person_listed(
+    conn: &rusqlite::Connection,
+    chat: Option<&str>,
+) -> Result<Value, gathr::Error> {
+    Ok(json!({ "tasks": tasks::person::open(conn, chat)? }))
+}
+
 /// Runs after each write: every chat whose tasks or waits it changed goes out live, whole, for
-/// the window's Summary (F8b).
+/// the window's Summary (F8b), then the person's list across chats for the Tasks badge (F9).
 pub fn live_tasks(
     live: broadcast::Sender<Value>,
 ) -> impl FnMut(&mut rusqlite::Connection) + Send + 'static {
     move |conn| {
         let sent = tasks::touched::take(conn).and_then(|chats| {
-            for chat in chats.iter().filter(|_| live.receiver_count() > 0) {
+            if chats.is_empty() || live.receiver_count() == 0 {
+                return Ok(());
+            }
+            for chat in &chats {
                 let mut update = listed(conn, chat)?;
                 update["type"] = json!("tasks");
                 update["chat"] = json!(chat);
                 let _ = live.send(update);
             }
+            let mut update = person_listed(conn, None)?;
+            update["type"] = json!("person_tasks");
+            let _ = live.send(update);
             Ok(())
         });
         if let Err(e) = sent {

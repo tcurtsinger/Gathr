@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 pub mod briefing;
 mod coord;
 mod hook;
+mod person;
 mod server;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};

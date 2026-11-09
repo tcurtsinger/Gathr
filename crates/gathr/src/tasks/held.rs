@@ -37,8 +37,11 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
     ))?;
     let rows = given.query_map([task], |r| Ok((r.get::<_, i64>(0)?, r.get(1)?)))?;
     for row in rows {
-        let (number, owner): (i64, String) = row?;
-        open.push(format!("#{number} ({})", words::name_of(conn, &owner)?));
+        let (number, owner): (i64, Option<String>) = row?;
+        open.push(format!(
+            "#{number} ({})",
+            words::owner_name(conn, owner.as_deref())?
+        ));
     }
     // A review's PR is what it reviewed, not work its owner still owes.
     let pr: Option<Option<i64>> = conn
@@ -135,7 +138,7 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     let givers: Vec<String> = {
         let mut stmt = tx.prepare_cached(
             "SELECT DISTINCT giver FROM tasks WHERE given_in = ?1 AND giver IS NOT NULL
-             AND heard = 0",
+             AND heard = 0 AND owner IS NOT NULL",
         )?;
         let rows = stmt.query_map([turn], |r| r.get(0))?;
         rows.collect::<Result<_, _>>()?
@@ -144,7 +147,9 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     for giver in givers {
         let group: Vec<i64> = {
             let mut stmt = tx.prepare_cached(
-                "SELECT number FROM tasks WHERE given_in = ?1 AND giver = ?2 ORDER BY number",
+                // The person's answers come back as they're sent (person::heard), not with these.
+                "SELECT number FROM tasks WHERE given_in = ?1 AND giver = ?2 AND owner IS NOT NULL
+                 ORDER BY number",
             )?;
             let rows = stmt.query_map(params![turn, giver], |r| r.get(0))?;
             rows.collect::<Result<_, _>>()?
@@ -157,7 +162,7 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
             continue;
         }
         tx.execute(
-            "UPDATE tasks SET heard = 1 WHERE given_in = ?1 AND giver = ?2",
+            "UPDATE tasks SET heard = 1 WHERE given_in = ?1 AND giver = ?2 AND owner IS NOT NULL",
             params![turn, giver],
         )?;
         Event::point("gathr.task.hear_back")

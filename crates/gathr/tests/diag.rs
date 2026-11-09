@@ -119,7 +119,7 @@ fn seed_makes_a_five_agent_team_chat_whose_rounds_link_up() {
     let query = |sql: &str| gathr(&dir.0, &["diag", "query", sql]).1["rows"].clone();
     let team = query(
         "SELECT chat_id, group_concat(role) AS roles, count(*) AS n FROM chat_members
-         GROUP BY chat_id ORDER BY chat_id",
+         GROUP BY chat_id HAVING n = 5 ORDER BY chat_id",
     );
     assert_eq!(team.as_array().unwrap().len(), 2, "{team}");
     for chat in team.as_array().unwrap() {
@@ -145,11 +145,14 @@ fn seed_makes_a_five_agent_team_chat_whose_rounds_link_up() {
     );
     let given_by_lead = "SELECT count(*) AS n FROM tasks k JOIN turns u ON u.id = k.given_in
                          JOIN chat_members m ON m.chat_id = k.chat_id AND m.agent_id = u.agent_id
-                         WHERE k.chat_id = ?chat AND m.role = 'supervisor'";
-    let tasks = one("SELECT count(*) AS n FROM tasks WHERE chat_id = ?chat");
+                         WHERE k.chat_id = ?chat AND m.role = 'supervisor' AND k.kind IN ('work', 'review')";
+    let tasks =
+        one("SELECT count(*) AS n FROM tasks WHERE chat_id = ?chat AND kind IN ('work', 'review')");
     assert!(tasks.as_i64() > Some(20), "{tasks}");
     assert_eq!(one(given_by_lead), tasks, "every task is the lead's");
-    let rounds = one("SELECT count(DISTINCT given_in) AS n FROM tasks WHERE chat_id = ?chat");
+    let rounds = one(
+        "SELECT count(DISTINCT given_in) AS n FROM tasks WHERE chat_id = ?chat AND kind IN ('work', 'review')",
+    );
     let hear_backs = "SELECT count(DISTINCT u.answers) AS n FROM turns u
                       JOIN messages g ON g.turn_id = u.id AND g.role = 'gathr'
                       WHERE u.chat_id = ?chat AND u.task IS NULL AND u.answers IS NOT NULL";
@@ -164,6 +167,31 @@ fn seed_makes_a_five_agent_team_chat_whose_rounds_link_up() {
         one(late).as_i64() > Some(0),
         "a reply after the lead's last word"
     );
+}
+
+/// F9's proof data: the person's open questions across two chats, one of each form, with files.
+#[test]
+fn seed_asks_the_person_one_of_each_form_across_two_chats() {
+    let dir = TempDir::new();
+    let (ok, seeded) = gathr(&dir.0, &["seed"]);
+    assert!(ok, "{seeded}");
+    let query = |sql: &str| gathr(&dir.0, &["diag", "query", sql]).1["rows"].clone();
+    let open = query(
+        "SELECT count(*) AS n, count(DISTINCT chat_id) AS chats, count(DISTINCT form) AS forms,
+                count(files) AS with_files, count(request) AS for_members
+         FROM tasks WHERE kind = 'person' AND state = 'ready'",
+    );
+    let open = &open[0];
+    let counts =
+        ["n", "chats", "forms", "with_files", "for_members"].map(|k| open[k].as_i64().unwrap());
+    assert_eq!(counts, [6, 2, 5, 3, 1], "{open}");
+    let files = query("SELECT files FROM tasks WHERE files IS NOT NULL");
+    for row in files.as_array().unwrap() {
+        let list: serde_json::Value = serde_json::from_str(row["files"].as_str().unwrap()).unwrap();
+        let path = list[0]["path"].as_str().unwrap();
+        assert!(std::path::Path::new(path).starts_with(&dir.0), "{path}");
+        assert!(std::path::Path::new(path).is_file(), "{path}");
+    }
 }
 
 #[test]

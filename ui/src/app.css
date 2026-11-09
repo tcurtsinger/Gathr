@@ -1,6 +1,6 @@
 .app {
   display: grid;
-  grid-template-columns: 246px minmax(0, 1fr);
+  grid-template-columns: 246px minmax(0, 1fr) auto;
   height: 100dvh;
 }
 .app > .chat .empty {
@@ -14,6 +14,6 @@
 }
 @media (max-width: 759px) {
   .app {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: 190px minmax(0, 1fr) auto;
   }
 }

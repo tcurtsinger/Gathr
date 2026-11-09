@@ -1,5 +1,5 @@
 import { Folder } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import type { Agent, Chat, Member, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
@@ -33,11 +33,13 @@ interface Props {
   onNewProject: () => void;
   /** Sends a new chat's first message: the service makes the chat then. */
   onStart: (text: string, agent?: string) => void;
+  /** At the header's end: the workspace's opener. */
+  headerEnd?: ReactNode;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
-  const { projects, onProject, onNewProject, onStart } = props;
+  const { projects, onProject, onNewProject, onStart, headerEnd } = props;
   const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -92,6 +94,7 @@ export function ChatView(props: Props) {
       <header className="topbar">
         <h1>{chat.title}</h1>
         {state.members.length > 1 && <Summary state={state} />}
+        {headerEnd}
       </header>
       <Thread
         state={state}

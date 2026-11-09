@@ -1,0 +1,78 @@
+/* The Tasks flyout beside navigation: the prototype's NavigationFlyout (DESIGN.md). */
+.nav-count {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+/* Just right of navigation, 40px down; the sidebar is its containing block. */
+.flyout-anchor {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.flyout {
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100vw - 32px));
+  height: calc(100dvh - 56px);
+  max-height: var(--radix-popover-content-available-height);
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: 0 12px 32px #0003;
+}
+.flyout > header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 8px 12px 8px 16px;
+}
+.flyout h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.flyout-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 12px;
+}
+.flyout-task {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+}
+.flyout-task:hover {
+  background: var(--hover-tint);
+}
+.flyout-task > span {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.flyout-task > small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+}
+.flyout-empty {
+  margin: 0;
+  padding: 10px 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
