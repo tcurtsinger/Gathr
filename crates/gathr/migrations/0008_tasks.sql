@@ -23,9 +23,14 @@ CREATE TABLE tasks (
     blocked_on INTEGER REFERENCES tasks (number),
     -- Its pull request: merged settles it, closed cancels it (G67, G44).
     pr INTEGER,
+    -- Its PR merged or closed: looked at no more (a done review's PR is followed for G73).
+    pr_closed INTEGER NOT NULL DEFAULT 0,
     -- A review's commit (G73), and whether its PR has moved past it.
     reviewed TEXT,
     outdated INTEGER NOT NULL DEFAULT 0,
+    -- Its giver has heard back on it: once the turn that gave it has ended and every task given
+    -- in that turn is settled.
+    heard INTEGER NOT NULL DEFAULT 0,
     -- `left` by turns that changed nothing in a row (0010: twice is blocked).
     idle_lefts INTEGER NOT NULL DEFAULT 0,
     created_ts INTEGER NOT NULL,

@@ -137,7 +137,11 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
     let target = wait.target.as_deref().unwrap_or_default();
     let repo = wait.repo.as_deref();
     match wait.kind.as_str() {
-        "check" => check(target, &dir, vars).await,
+        // In the agent's own folder only, never the service's.
+        "check" => match &wait.cwd {
+            Some(cwd) => check(target, Path::new(cwd), vars).await,
+            None => Err("a check runs in its agent's folder, and this wait has none".into()),
+        },
         "pr" => {
             let answer = gh(&pr_view(target, "state", repo), &dir, vars).await?;
             Ok(match json_text(&answer, "state").as_str() {

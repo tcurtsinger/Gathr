@@ -183,8 +183,14 @@ fn checked(conn: &Connection, l: &Leave, part: &Part) -> Result<(), Error> {
                 )));
             }
         }
-        "check" if !target.is_empty() => {}
-        "check" => return Err(refused("a check wait needs its command")),
+        "check" if target.is_empty() => return Err(refused("a check wait needs its command")),
+        // Never the service's own folder: a check runs where its agent works.
+        "check" if l.cwd.is_none() => {
+            return Err(refused(
+                "a check runs in its agent's folder, and this wait has none",
+            ));
+        }
+        "check" => {}
         other => {
             return Err(refused(format!(
                 "{other} isn't a wait: agent, ci, pr or check"
@@ -448,12 +454,8 @@ fn fire(
          stand, then carry on, or say plainly why you can't.)",
         wait.then_do.trim_end_matches('.')
     );
-    Ok(vec![Start {
-        chat: wait.chat.clone(),
-        agent: wait.agent.clone(),
-        task: wait.task,
-        text,
-    }])
+    let at = (wait.chat.as_str(), wait.agent.as_str());
+    Ok(vec![Start::queue(tx, at, wait.task, text)?])
 }
 
 fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<String>, Error> {

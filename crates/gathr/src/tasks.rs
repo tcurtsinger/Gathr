@@ -119,13 +119,40 @@ pub struct Task {
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
-/// works on.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// works on. It's saved, queued with Gathr's message as its ask, in the transaction of the change
+/// that calls for it: a stop right after that commit loses nothing, as the next start takes it over.
+#[derive(Debug, Clone, PartialEq)]
 pub struct Start {
     pub chat: String,
     pub agent: String,
     pub task: Option<i64>,
     pub text: String,
+    pub turn: String,
+    pub trace: String,
+    /// Gathr's message, as the live socket sends it.
+    pub message: serde_json::Value,
+}
+
+impl Start {
+    pub(crate) fn queue(
+        conn: &Connection,
+        (chat, agent): (&str, &str),
+        task: Option<i64>,
+        text: String,
+    ) -> Result<Start, Error> {
+        let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
+        crate::store::add_turn(conn, chat, &turn, &trace, (Some(agent), task))?;
+        let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", &text)?;
+        Ok(Start {
+            chat: chat.to_string(),
+            agent: agent.to_string(),
+            task,
+            text,
+            turn,
+            trace,
+            message,
+        })
+    }
 }
 
 /// A new task.
@@ -347,8 +374,10 @@ pub fn ended(
         [task],
     )?;
     let mut starts = Vec::new();
-    // Cancelled or settled while the turn ran: it stays so, and nothing follows twice.
-    if t.state == State::Working {
+    // Cancelled or settled while the turn ran: it stays so, and nothing follows twice. A turn that
+    // failed or stopped before it ran (no engine, no worktree) leaves the task ready: it settles too.
+    let before_it_ran = t.state == State::Ready && !matches!(outcome, Outcome::Ok { .. });
+    if t.state == State::Working || before_it_ran {
         let finish = finish.as_deref().and_then(Finish::named);
         match outcome {
             Outcome::Failed(why) => set(&tx, task, State::Failed, Some(&why), trace)?,
@@ -359,6 +388,14 @@ pub fn ended(
         }
         starts.extend(cascade(&tx, task, trace)?);
     }
+    tx.commit()?;
+    Ok(starts)
+}
+
+/// A turn has ended: the agents who gave tasks in it hear back, once each is settled.
+pub fn turn_ended(conn: &mut Connection, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let starts = held::hear_backs(&tx, turn, trace)?;
     tx.commit()?;
     Ok(starts)
 }
@@ -417,7 +454,7 @@ pub fn restart(
         }
     };
     tx.execute(
-        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL WHERE number = ?1",
+        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL, heard = 0 WHERE number = ?1",
         [task],
     )?;
     tx.commit()?;
@@ -425,7 +462,8 @@ pub fn restart(
 }
 
 /// The service started: tasks whose turn was cut off by the stop are `stopped`, with why, for a
-/// restart that carries on (0010). Their dependants stay `waiting`.
+/// restart that carries on (0010). Their dependants stay `waiting`. A cut-off turn that gave tasks
+/// ends here, so its giver's hear-back is queued for the start to take over.
 pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     let tx = conn.transaction()?;
     let working: Vec<i64> = {
@@ -433,10 +471,23 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
         let rows = stmt.query_map([], |r| r.get(0))?;
         rows.collect::<Result<_, _>>()?
     };
+    let giving: Vec<String> = {
+        let mut stmt = tx.prepare(
+            "SELECT DISTINCT u.id FROM turns u JOIN tasks t ON t.given_in = u.id
+             WHERE u.status = 'running'",
+        )?;
+        let rows = stmt.query_map([], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
     let trace = crate::ids::trace_id();
     for &task in &working {
         let why = "Gathr stopped during its turn";
         set(&tx, task, State::Stopped, Some(why), &trace)?;
+    }
+    for turn in &giving {
+        let why = Some("the service stopped during this turn");
+        crate::store::set_turn(&tx, turn, "failed", why)?;
+        held::hear_backs(&tx, turn, &trace)?;
     }
     tx.commit()?;
     Ok(working.len())
@@ -461,9 +512,13 @@ pub fn pr_looked(
         )?;
     }
     let pr = t.pr.unwrap_or_default();
+    let pr_state = pr_state.to_ascii_uppercase();
+    if matches!(pr_state.as_str(), "MERGED" | "CLOSED") {
+        tx.execute("UPDATE tasks SET pr_closed = 1 WHERE number = ?1", [task])?;
+    }
     let mut starts = Vec::new();
     if !t.state.settled() || t.state == State::Blocked {
-        match pr_state.to_ascii_uppercase().as_str() {
+        match pr_state.as_str() {
             "MERGED" => {
                 set(
                     &tx,
@@ -488,11 +543,13 @@ pub fn pr_looked(
     Ok(starts)
 }
 
-/// Open tasks with a PR, for the service to look at: number, chat, owner and PR.
+/// Tasks whose open PR the service looks at: open tasks, and done reviews while their PR may move
+/// past the commit reviewed (G73). Number, chat, owner and PR.
 pub fn with_prs(conn: &Connection) -> Result<Vec<(i64, String, String, i64)>, Error> {
     let mut stmt = conn.prepare(
         "SELECT number, chat_id, owner, pr FROM tasks
-         WHERE pr IS NOT NULL AND state NOT IN ('done', 'cancelled')",
+         WHERE pr IS NOT NULL AND pr_closed = 0
+         AND (state NOT IN ('done', 'cancelled') OR (state = 'done' AND kind = 'review'))",
     )?;
     let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -557,12 +614,8 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
         Some(id) => words::name_of(tx, id)?,
         None => "the person".to_string(),
     };
-    Ok(Start {
-        chat: t.chat.clone(),
-        agent: t.owner.clone(),
-        task: Some(task),
-        text: words::brief(&t, &giver, carry),
-    })
+    let text = words::brief(&t, &giver, carry);
+    Start::queue(tx, (&t.chat, &t.owner), Some(task), text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
@@ -613,7 +666,14 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
             starts.push(ready(tx, blocked, Some(&carry))?);
         }
     }
-    starts.extend(held::hear_back(tx, task)?);
+    let given_in: Option<String> = tx.query_row(
+        "SELECT given_in FROM tasks WHERE number = ?1",
+        [task],
+        |r| r.get(0),
+    )?;
+    if let Some(turn) = given_in {
+        starts.extend(held::hear_backs(tx, &turn, trace)?);
+    }
     Ok(starts)
 }
 

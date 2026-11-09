@@ -59,6 +59,9 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
                 _ => starts.extend(tasks::ended(conn, task, Outcome::Stopped(why), &trace)?),
             }
         }
+        if status != "running" {
+            starts.extend(tasks::turn_ended(conn, &turn, &trace)?);
+        }
         if let (true, Some(agent)) = (status != "running", agent) {
             starts.extend(waits::agent_free(conn, &chat, &agent, &trace)?);
         }

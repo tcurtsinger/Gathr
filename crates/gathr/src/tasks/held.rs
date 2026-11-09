@@ -4,6 +4,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::{Finish, Start, State, Task, ready, set, words};
 use crate::Error;
+use crate::event::Event;
 
 /// `left` twice in a row by turns that ran no tool and left nothing open is `blocked` (0010).
 const IDLE_LEFTS: i64 = 2;
@@ -28,9 +29,10 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
         let (kind, target, parts) = row?;
         open.push(words::wait_name(conn, &kind, target.as_deref(), parts)?);
     }
+    // Settled isn't enough: the giver isn't done before it has heard back on them.
     let mut given = conn.prepare_cached(&format!(
         "SELECT c.number, c.owner FROM tasks c JOIN turns t ON t.id = c.given_in
-         WHERE t.task = ?1 AND c.state NOT IN {} ORDER BY c.number",
+         WHERE t.task = ?1 AND (c.state NOT IN {} OR c.heard = 0) ORDER BY c.number",
         super::SETTLED
     ))?;
     let rows = given.query_map([task], |r| Ok((r.get::<_, i64>(0)?, r.get(1)?)))?;
@@ -38,11 +40,15 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
         let (number, owner): (i64, String) = row?;
         open.push(format!("#{number} ({})", words::name_of(conn, &owner)?));
     }
-    let pr: Option<i64> =
-        conn.query_row("SELECT pr FROM tasks WHERE number = ?1", [task], |r| {
-            r.get(0)
-        })?;
-    if let Some(pr) = pr {
+    // A review's PR is what it reviewed, not work its owner still owes.
+    let pr: Option<Option<i64>> = conn
+        .query_row(
+            "SELECT pr FROM tasks WHERE number = ?1 AND kind = 'work'",
+            [task],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if let Some(pr) = pr.flatten() {
         open.push(format!("#{pr} to merge"));
     }
     Ok(open)
@@ -107,44 +113,63 @@ pub fn settle(
     Ok(vec![ready(tx, task, Some(&carry))?])
 }
 
-/// The giver's turn once every task it gave in the same turn is settled: what became of each,
-/// on the giver's own task from that turn while it's still open.
-pub fn hear_back(tx: &Transaction, task: i64) -> Result<Vec<Start>, Error> {
-    let (giver, given_in, chat): (Option<String>, Option<String>, String) = tx.query_row(
-        "SELECT giver, given_in, chat_id FROM tasks WHERE number = ?1",
-        [task],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-    )?;
-    let (Some(giver), Some(given_in)) = (giver, given_in) else {
-        return Ok(Vec::new());
-    };
-    let group: Vec<i64> = {
-        let mut stmt = tx.prepare_cached(
-            "SELECT number FROM tasks WHERE given_in = ?1 AND giver = ?2 ORDER BY number",
-        )?;
-        let rows = stmt.query_map(params![given_in, giver], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    let mut settled = Vec::new();
-    for number in group {
-        let t = super::read(tx, number)?;
-        if !t.state.settled() {
-            return Ok(Vec::new());
-        }
-        settled.push(t);
-    }
-    let own: Option<Option<i64>> = tx
+/// The hear-backs on the tasks given in `turn`, one per giver: once, when that turn has ended (so
+/// the giver is done handing out work) and every task it gave there is settled. Each says what
+/// became of every task, on the giver's own task from that turn while it's still open. A task
+/// restarted after its hear-back makes its group heard again when it settles.
+pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
+    let found: Option<(String, String, Option<i64>)> = tx
         .query_row(
-            "SELECT t.number FROM turns u LEFT JOIN tasks t ON t.number = u.task
-             AND t.state NOT IN ('done', 'cancelled') WHERE u.id = ?1",
-            [&given_in],
-            |r| r.get(0),
+            "SELECT u.chat_id, u.status, t.number FROM turns u LEFT JOIN tasks t
+             ON t.number = u.task AND t.state NOT IN ('done', 'cancelled') WHERE u.id = ?1",
+            [turn],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
-    Ok(vec![Start {
-        chat,
-        agent: giver,
-        task: own.flatten(),
-        text: words::hear_back(tx, &settled)?,
-    }])
+    let Some((chat, status, own)) = found else {
+        return Ok(Vec::new());
+    };
+    if !matches!(status.as_str(), "done" | "failed" | "stopped") {
+        return Ok(Vec::new());
+    }
+    let givers: Vec<String> = {
+        let mut stmt = tx.prepare_cached(
+            "SELECT DISTINCT giver FROM tasks WHERE given_in = ?1 AND giver IS NOT NULL
+             AND heard = 0",
+        )?;
+        let rows = stmt.query_map([turn], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut starts = Vec::new();
+    for giver in givers {
+        let group: Vec<i64> = {
+            let mut stmt = tx.prepare_cached(
+                "SELECT number FROM tasks WHERE given_in = ?1 AND giver = ?2 ORDER BY number",
+            )?;
+            let rows = stmt.query_map(params![turn, giver], |r| r.get(0))?;
+            rows.collect::<Result<_, _>>()?
+        };
+        let settled = group
+            .into_iter()
+            .map(|n| super::read(tx, n))
+            .collect::<Result<Vec<_>, _>>()?;
+        if settled.iter().any(|t| !t.state.settled()) {
+            continue;
+        }
+        tx.execute(
+            "UPDATE tasks SET heard = 1 WHERE given_in = ?1 AND giver = ?2",
+            params![turn, giver],
+        )?;
+        Event::point("gathr.task.hear_back")
+            .trace(trace)
+            .chat(&chat)
+            .ok()
+            .attr("gathr.turn.id", turn)
+            .attr("gen_ai.agent.id", giver.as_str())
+            .attr("gathr.task.count", settled.len())
+            .insert(tx)?;
+        let text = words::hear_back(tx, &settled)?;
+        starts.push(Start::queue(tx, (&chat, &giver), own, text)?);
+    }
+    Ok(starts)
 }

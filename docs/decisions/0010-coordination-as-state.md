@@ -74,8 +74,10 @@ Transitions and who makes them:
 | any open | `cancelled` | the person, or the giver |
 
 Rules:
-- A turn that ends well with something still open (a wait, a task given in its turns, its PR) holds the task on it, and the reason says on what and whether its owner called it done: "done, waiting on CI on #54" reads apart from stalled work (G75). A wait firing, or the hear-back from the tasks it gave, wakes the owner on the task; its PR merging settles it as `done` without a turn, and its PR closing cancels it (G67).
-- A review is `done` only with the commit it reviewed; a newer head on its PR marks it out of date (G73).
+- A turn that ends well with something still open (a wait, a task given in its turns that it hasn't heard back on, a work task's PR) holds the task on it, and the reason says on what and whether its owner called it done: "done, waiting on CI on #54" reads apart from stalled work (G75). A wait firing, or the hear-back from the tasks it gave, wakes the owner on the task; its PR merging settles it as `done` without a turn, and its PR closing cancels it (G67).
+- A review is `done` only with the commit it reviewed, and is done when its owner says so: its PR is what it reviewed, not work it still owes. A newer head on that PR marks it out of date until the PR merges or closes (G73).
+- A turn on a task that fails or stops before it runs (no engine, no worktree) settles the task the same way, so its dependants move and it can be restarted.
+- Every turn Gathr starts (a task's, a wake-up, a hear-back) is saved, queued with its ask, in the transaction of the change that calls for it, so a stop right after that commit loses nothing: the next start takes it over.
 - `blocked` may name an existing task instead of filing another (G52): the task goes `ready` again once that one is `done`.
 - `left` with nothing open starts another turn on the task, with what was left; twice in a row by turns that ran no tool is `blocked`.
 - Giving a task answers with the chat's other open tasks and the project's open PRs, so a fix already under way shows (G74).
@@ -83,7 +85,7 @@ Rules:
 - Cancelling is not holding. To keep work from starting, pause (below).
 - `left` twice in a row by turns that changed nothing and left nothing running is `blocked`, not a loop.
 - `left` with an open wait stays `held` on the wait; the task isn't handed straight back.
-- The giver hears back once all the tasks it gave under one ask are settled.
+- The giver hears back once on all the tasks it gave in one turn: when that turn has ended (it's done handing out work) and every one of them is settled. A turn cut off by a restart counts as ended. A task restarted after the hear-back brings another when it settles again.
 - **Only the Supervisor gives the person tasks** ([0013](0013-one-chat-model.md)); in a one-agent chat, that agent. A member who needs the person's input asks the Supervisor: a `person_request` task to the Supervisor with the question, the options, the member's pick and why. The Supervisor checks it (is it really the person's to decide, is it already answered, is the pick sound), then files it for the person, folds it into one it's already asking, or answers it itself. The person's answer goes to the Supervisor, who passes it back to the member. The service refuses a task for the person from anyone else.
 - A decision for the person is a task of kind `decision` with its choices, the Supervisor's pick first, and why. A design is picked on its card, not as a task.
 - A plan card that's built, sent back or replaced stops counting as waiting on the person.

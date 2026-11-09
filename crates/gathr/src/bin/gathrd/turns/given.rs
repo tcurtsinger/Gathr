@@ -1,10 +1,9 @@
 //! Turns Gathr starts for an agent (0010): a task's, a wake-up or a hear-back. Its ask is Gathr's
 //! message, never the person's, and it queues behind what the agent is doing, never steered into a
-//! turn under way. Every start passes the gate.
+//! turn under way. Every start passes the gate. Both are saved already, with the change that
+//! called for them.
 
 use gathr::event::Event;
-use gathr::ids::{now_us, trace_id, ulid};
-use gathr::store;
 use gathr::tasks::Start;
 use serde_json::json;
 
@@ -14,20 +13,11 @@ impl Task {
     pub(super) async fn given(&mut self, start: Start) {
         let ids = Ids {
             chat: start.chat,
-            turn: ulid(now_us()),
-            trace: trace_id(),
+            turn: start.turn,
+            trace: start.trace,
             agent: Some(start.agent),
             task: start.task,
         };
-        let row = ids.clone();
-        let added = self
-            .chats
-            .writer
-            .call(move |conn| {
-                let at = (row.agent.as_deref(), row.task);
-                store::add_turn(conn, &row.chat, &row.turn, &row.trace, at)
-            })
-            .await;
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
             .chat(&ids.chat);
@@ -35,11 +25,7 @@ impl Task {
             Some(task) => event.task(task),
             None => event,
         };
-        if let Some(Err(e)) = added {
-            self.record(event.error("sqlite").attr("why", e.to_string()));
-            return;
-        }
-        let message = self.db_message(&ids, "gathr", "text", &start.text).await;
+        let message = start.message;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             event
