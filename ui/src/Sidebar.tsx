@@ -16,8 +16,8 @@ interface Props {
   onSettings: (opener: HTMLElement) => void;
   /** Under New: the Tasks flyout. */
   actions?: ReactNode;
-  onArchive: (chat: Chat) => void;
-  onDelete: (chat: Chat) => void;
+  onArchive: (chat: Chat, opener: HTMLElement | null) => void;
+  onDelete: (chat: Chat, opener: HTMLElement | null) => void;
   onRestore: (chat: Chat) => void;
 }
 
@@ -42,9 +42,9 @@ export function Sidebar(props: Props) {
         label={`More for ${c.title}`}
         className="row-more"
         archived={!!c.archived}
-        onArchive={() => props.onArchive(c)}
+        onArchive={(opener) => props.onArchive(c, opener)}
         onRestore={() => props.onRestore(c)}
-        onDelete={() => props.onDelete(c)}
+        onDelete={(opener) => props.onDelete(c, opener)}
       />
     </div>
   );
@@ -117,7 +117,12 @@ export function Sidebar(props: Props) {
             type="button"
             className="navbutton"
             aria-expanded={archiveOpen}
-            onClick={() => setArchiveOpen(!archiveOpen)}
+            onClick={(e) => {
+              setArchiveOpen(!archiveOpen);
+              // At the foot of a long list, opening it would show nothing new without this.
+              const group = e.currentTarget.parentElement;
+              if (!archiveOpen) requestAnimationFrame(() => group?.scrollIntoView({ block: 'nearest' }));
+            }}
           >
             {archiveOpen ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
             Archived

@@ -1,5 +1,5 @@
 import { Archive, ArchiveRestore, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
-import { Fragment, type ReactElement } from 'react';
+import { Fragment, type ReactElement, useRef } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import {
   DropdownMenu,
@@ -23,9 +23,10 @@ interface Props {
   };
   /** An archived chat offers Restore where a listed one offers Archive (F11). */
   archived?: boolean;
-  onArchive?: () => void;
+  /** Each gets the menu's button, for a confirm to give focus back to. */
+  onArchive?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
-  onDelete?: () => void;
+  onDelete?: (opener: HTMLElement | null) => void;
   className?: string;
 }
 
@@ -44,6 +45,7 @@ export function ChatMenu({
   className,
 }: Props) {
   const running = pause?.state === 'running';
+  const trigger = useRef<HTMLButtonElement>(null);
   const items: [string, ReactElement][] = [];
   if (pause && !archived)
     items.push([
@@ -65,7 +67,7 @@ export function ChatMenu({
   if (!archived && onArchive)
     items.push([
       'archive',
-      <DropdownMenuItem key="archive" onSelect={onArchive}>
+      <DropdownMenuItem key="archive" onSelect={() => onArchive(trigger.current)}>
         <Archive />
         Archive
       </DropdownMenuItem>,
@@ -73,7 +75,7 @@ export function ChatMenu({
   if (onDelete)
     items.push([
       'delete',
-      <DropdownMenuItem key="delete" variant="destructive" onSelect={onDelete}>
+      <DropdownMenuItem key="delete" variant="destructive" onSelect={() => onDelete(trigger.current)}>
         <Trash2 />
         Delete
       </DropdownMenuItem>,
@@ -81,7 +83,7 @@ export function ChatMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipIconButton tooltip={label} className={className}>
+        <TooltipIconButton ref={trigger} tooltip={label} className={className}>
           <MoreHorizontal />
         </TooltipIconButton>
       </DropdownMenuTrigger>

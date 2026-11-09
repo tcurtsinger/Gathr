@@ -47,7 +47,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.settingrow button {
+.settingrow button:not(.help-button) {
   border: 1px solid var(--control);
 }
 /* Who a setting applies to, beside its control. */

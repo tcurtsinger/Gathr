@@ -42,8 +42,8 @@ interface Props {
   pauses: Pauses;
   onPause: (action: PauseAction, scope: PauseScope) => Promise<void>;
   /** Archive and Delete ask first (the app's Confirm); Restore doesn't, and never restarts its work. */
-  onArchive?: () => void;
-  onDelete?: () => void;
+  onArchive?: (opener: HTMLElement | null) => void;
+  onDelete?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;

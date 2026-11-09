@@ -56,10 +56,12 @@ test('deleting the open chat asks first, then opens the next chat in the sidebar
 
   await expect.element(heading('Made-up c')).toBeInTheDocument();
   await expect.element(confirm).not.toBeInTheDocument();
+  // Only the chat it opened: the deleted one's view is gone.
+  expect(document.querySelectorAll('main').length).toBe(1);
   await expect.element(page.getByRole('button', { name: 'Made-up b', exact: true })).not.toBeInTheDocument();
 });
 
-test('a refused Archive keeps the question open with its reference, and the chat stays', async () => {
+test('a refused Archive keeps the question open with its reference; Cancel gives focus back to the menu', async () => {
   service([chat('a')], [], (path) => (path.endsWith('/archive') ? refusal('Archive failed') : undefined));
   await render(<App />);
   await page.getByRole('button', { name: 'More for Made-up a' }).click();
@@ -71,6 +73,7 @@ test('a refused Archive keeps the question open with its reference, and the chat
   await expect.element(confirm.getByRole('button', { name: 'Reference made-up-ref' })).toBeVisible();
   await confirm.getByRole('button', { name: 'Cancel' }).click();
   await expect.element(confirm).not.toBeInTheDocument();
+  await expect.element(page.getByRole('button', { name: 'More for Made-up a' })).toHaveFocus();
   await expect.element(page.getByRole('button', { name: 'Made-up a', exact: true })).toBeVisible();
 });
 

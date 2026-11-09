@@ -20,7 +20,11 @@ export function App() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [archived, setArchived] = useState<Chat[]>([]);
   // Archive and Delete ask first; the question stays until the service has done it.
-  const [asking, setAsking] = useState<{ verb: 'Archive' | 'Delete'; chat: Chat } | null>(null);
+  const [asking, setAsking] = useState<{
+    verb: 'Archive' | 'Delete';
+    chat: Chat;
+    opener: HTMLElement | null;
+  } | null>(null);
   // Restore asks nothing: a failure shows on the archived chat, opened if it wasn't.
   const [restoreFailure, setRestoreFailure] = useState<{ chat: string; failure: Failure } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -151,8 +155,8 @@ export function App() {
         chats={chats}
         archived={archived}
         projects={projects}
-        onArchive={(c) => setAsking({ verb: 'Archive', chat: c })}
-        onDelete={(c) => setAsking({ verb: 'Delete', chat: c })}
+        onArchive={(c, opener) => setAsking({ verb: 'Archive', chat: c, opener })}
+        onDelete={(c, opener) => setAsking({ verb: 'Delete', chat: c, opener })}
         onRestore={restore}
         selected={selected}
         onSelect={choose}
@@ -195,8 +199,8 @@ export function App() {
           onNewProject={() => setNewProject(true)}
           pauses={pauses.pauses}
           onPause={pauses.act}
-          onArchive={() => setAsking({ verb: 'Archive', chat })}
-          onDelete={() => setAsking({ verb: 'Delete', chat })}
+          onArchive={(opener) => setAsking({ verb: 'Archive', chat, opener })}
+          onDelete={(opener) => setAsking({ verb: 'Delete', chat, opener })}
           onRestore={() => restore(chat)}
           restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
           onReference={openReference}
@@ -273,10 +277,11 @@ export function App() {
       />
       {asking && (
         <Confirm
-          key={asking.chat.id}
+          key={`confirm-${asking.chat.id}`}
           question={`${asking.verb} ${asking.chat.title}?`}
           verb={asking.verb}
           danger={asking.verb === 'Delete'}
+          opener={asking.opener}
           onCancel={() => setAsking(null)}
           onConfirm={() =>
             (asking.verb === 'Archive' ? archive : remove)(asking.chat).then(() => setAsking(null))

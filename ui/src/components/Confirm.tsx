@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
 import { Dialog } from './Dialog';
@@ -10,6 +10,8 @@ interface Props {
   question: string;
   verb: string;
   danger?: boolean;
+  /** Gets focus back once the question goes, if it's still on the page. */
+  opener?: HTMLElement | null;
   onCancel: () => void;
   /** Settles when the service has done it; a failure keeps the question open with its reference. */
   onConfirm: () => Promise<unknown>;
@@ -17,8 +19,9 @@ interface Props {
 }
 
 /** A question, Cancel and the verb, over the current screen (a variant of the one Dialog). Cancel has focus. */
-export function Confirm({ question, verb, danger, onCancel, onConfirm, onReference }: Props) {
+export function Confirm({ question, verb, danger, opener, onCancel, onConfirm, onReference }: Props) {
   const [busy, setBusy] = useState(false);
+  useEffect(() => () => opener?.focus(), [opener]);
   const [failure, setFailure] = useState<Failure | null>(null);
   const go = () => {
     setBusy(true);
