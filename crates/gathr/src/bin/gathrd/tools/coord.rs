@@ -338,7 +338,7 @@ type Done = (String, Vec<Start>);
 
 impl Tools {
     /// Runs a change on the database: its answer, or why it was refused or failed.
-    async fn db<T: Send + 'static>(
+    pub(super) async fn db<T: Send + 'static>(
         &self,
         work: impl FnOnce(&mut Connection) -> Result<T, Error> + Send + 'static,
     ) -> Result<T, String> {
@@ -350,7 +350,7 @@ impl Tools {
     }
 
     /// Queues what the change starts, and answers.
-    async fn answer(
+    pub(super) async fn answer(
         &self,
         caller: &Caller,
         tool: &str,
@@ -387,7 +387,7 @@ fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, Erro
 }
 
 fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
-    let owner = tasks::name_of(conn, &t.owner)?;
+    let owner = tasks::owner_name(conn, t.owner.as_deref())?;
     let reason = t
         .reason
         .as_ref()

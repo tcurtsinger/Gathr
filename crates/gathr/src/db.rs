@@ -17,6 +17,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0007_approvals.sql"),
     include_str!("../migrations/0008_tasks.sql"),
     include_str!("../migrations/0009_projects.sql"),
+    include_str!("../migrations/0010_person_tasks.sql"),
 ];
 
 /// The schema version this build writes.
@@ -67,13 +68,30 @@ fn migrate(conn: &mut Connection) -> Result<(), Error> {
             known: SCHEMA_VERSION,
         });
     }
-    for (number, sql) in (1..).zip(MIGRATIONS).skip(current as usize) {
-        let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        tx.execute_batch(sql)?;
-        tx.pragma_update(None, "user_version", number)?;
-        tx.commit()?;
-    }
-    Ok(())
+    // A migration that rebuilds a table other tables point at drops it first, which foreign keys
+    // refuse even deferred; so they're off while migrating, as SQLite's own procedure says, and each
+    // migration is checked before it commits.
+    conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+    let migrated = (|| {
+        for (number, sql) in (1..).zip(MIGRATIONS).skip(current as usize) {
+            let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+            tx.execute_batch(sql)?;
+            let broken: i64 =
+                tx.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                    r.get(0)
+                })?;
+            if broken > 0 {
+                return Err(Error::Refused(format!(
+                    "migration {number} leaves {broken} broken references"
+                )));
+            }
+            tx.pragma_update(None, "user_version", number)?;
+            tx.commit()?;
+        }
+        Ok(())
+    })();
+    conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+    migrated
 }
 
 #[cfg(test)]
@@ -167,6 +185,47 @@ mod tests {
         assert_eq!(session("no-agent", Some("cass")), None);
         assert_eq!(session("by-agent", Some("vale")), None);
         assert_eq!(session("no-agent", Some("pia")), None);
+    }
+
+    /// 0010 rebuilds `tasks`, which other tables point at: every task, its links and waits stay.
+    #[test]
+    fn tasks_and_what_points_at_them_outlast_the_person_tasks_rebuild() {
+        let path = temp_db("person-tasks");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        for sql in &MIGRATIONS[..9] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 9;
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reviewed, created_ts,
+                                updated_ts)
+                 VALUES (1, 'c', 'lead', 'ann', 'work', 'one', 'done', NULL, 1, 1),
+                        (2, 'c', 'lead', 'bo', 'review', 'two', 'held', 'abc123', 2, 2);
+             INSERT INTO task_after VALUES (2, 1);
+             INSERT INTO waits (id, chat_id, agent_id, task, kind, then_do, state, until_ts, created_ts)
+                 VALUES ('w', 'c', 'bo', 2, 'pr', 'merge', 'open', 9, 2);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let kept: (i64, i64, i64, String) = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM tasks), (SELECT count(*) FROM task_after),
+                        (SELECT count(*) FROM waits WHERE task = 2),
+                        (SELECT reviewed FROM tasks WHERE number = 2)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, (2, 1, 1, "abc123".to_string()));
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(broken, 0);
     }
 
     #[test]

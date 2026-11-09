@@ -40,11 +40,13 @@ The previous app listed more than a dozen start paths that each needed their own
 
 A task is work owed by one agent, or by the person.
 
-Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `decision`, `review`, `plan_check`, `person_request`), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
+Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `review`, `person`, `person_request`, `plan_check`), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
 
 Each turn records the task it works on. Together with `given_in`, that's what puts a member's work under the message that asked for it (the inline thread, F8b), rather than under whatever message came just before.
 
-F5 builds `work` and `review` tasks between agents. Person tasks and decisions come with F9; files and plan checks when a feature needs them.
+F5 builds `work` and `review` tasks between agents. F9 adds the person's (`person`, owner none) and a member's request for one (`person_request`), each with how it's answered (`done`, `yesno`, `choice`, `choices`, `text`), its choices with the asker's pick first, and files copied when it was given. Plan checks come when a feature needs them.
+
+F9 folds the planned `decision` kind into `person`: a to-do for the person isn't a decision, and one kind keeps one list; the form says how it's answered. Turned down: a kind per form, which would split the person's list and the rules on it five ways.
 
 States:
 
@@ -86,8 +88,8 @@ Rules:
 - `left` twice in a row by turns that changed nothing and left nothing running is `blocked`, not a loop.
 - `left` with an open wait stays `held` on the wait; the task isn't handed straight back.
 - The giver hears back once on all the tasks it gave in one turn: when that turn has ended (it's done handing out work) and every one of them is settled. A turn cut off by a restart counts as ended. A task restarted after the hear-back brings another when it settles again.
-- **Only the Supervisor gives the person tasks** ([0013](0013-one-chat-model.md)); in a one-agent chat, that agent. A member who needs the person's input asks the Supervisor: a `person_request` task to the Supervisor with the question, the options, the member's pick and why. The Supervisor checks it (is it really the person's to decide, is it already answered, is the pick sound), then files it for the person, folds it into one it's already asking, or answers it itself. The person's answer goes to the Supervisor, who passes it back to the member. The service refuses a task for the person from anyone else.
-- A decision for the person is a task of kind `decision` with its choices, the Supervisor's pick first, and why. A design is picked on its card, not as a task.
+- **Only the Supervisor gives the person tasks** ([0013](0013-one-chat-model.md)); in a one-agent chat, that agent. A member who needs the person's input asks the Supervisor: a `person_request` task to the Supervisor with the question, the options, the member's pick and why. The Supervisor checks it (is it really the person's to decide, is it already answered, is the pick sound), then files it for the person, folds it into one it's already asking, or answers it itself. The person's answer goes to the Supervisor, who passes it back to the member. A member never files one: Gathr's one tool for asking the person (`ask_person`) turns a member's ask into a `person_request` for the Supervisor, so no prompt has to teach the rule (turned down: refusing the member and making it ask again). The person answers several at once (the pager's Send); each answer is taken or refused on its own, so one that's wrong stays open with its reference while the rest go, and each asker hears back once on what that Send answered.
+- A decision for the person is a `person` task with its choices, the Supervisor's pick first, and why. A design pick is one too, with its pages as files, so every pick waiting on the person is on their Tasks list (G70).
 - A plan card that's built, sent back or replaced stops counting as waiting on the person.
 
 ## Turns

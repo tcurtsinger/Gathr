@@ -33,7 +33,7 @@ pub fn service(chats: Arc<Chats>) -> StreamableHttpService<Tools, LocalSessionMa
     let tools = move || {
         Ok(Tools {
             chats: chats.clone(),
-            tool_router: Tools::tool_router() + Tools::coord_router(),
+            tool_router: Tools::tool_router() + Tools::coord_router() + Tools::person_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)

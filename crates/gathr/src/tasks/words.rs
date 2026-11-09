@@ -15,11 +15,22 @@ pub fn name_of(conn: &Connection, agent: &str) -> Result<String, Error> {
     Ok(name.unwrap_or_else(|| "a deleted agent".to_string()))
 }
 
+/// A task's owner by name: none is the person.
+pub fn owner_name(conn: &Connection, owner: Option<&str>) -> Result<String, Error> {
+    match owner {
+        Some(agent) => name_of(conn, agent),
+        None => Ok("the person".to_string()),
+    }
+}
+
 /// The ask of a task's turn: what, why, a carry-on when it ran before, and how to finish it.
 pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
     let mut lines = vec![format!("Task #{} from {giver}: {}", t.number, t.what)];
     if let Some(why) = &t.why {
         lines.push(format!("Why: {why}"));
+    }
+    if t.kind == Kind::PersonRequest {
+        lines.extend(super::person::request_lines(t, giver));
     }
     if let Some(carry) = carry {
         lines.push(format!(
@@ -48,7 +59,7 @@ pub fn hear_back(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
             (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
             (state, None) => state.as_str().to_string(),
         };
-        let owner = name_of(conn, &t.owner)?;
+        let owner = owner_name(conn, t.owner.as_deref())?;
         lines.push(format!("- #{} {owner}, {}: {how}", t.number, t.what));
     }
     lines.push("Their replies are in the chat (read_chat). Carry on from here.".to_string());
