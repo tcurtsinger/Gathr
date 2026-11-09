@@ -183,7 +183,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 
 export const api = {
   chats: () => call<Chat[]>('GET', '/api/chats'),
-  createChat: () => call<Chat>('POST', '/api/chats', {}),
+  createChat: (project?: string) => call<Chat>('POST', '/api/chats', project ? { project } : {}),
+  /** Puts a chat nobody has written in yet in a project, with its folder and team. */
+  moveChat: (chat: string, project: string) => call<Chat>('PATCH', `/api/chats/${chat}`, { project }),
+  projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
+  addProject: (project: Omit<Project, 'id'>) => call<Project>('POST', '/api/projects', project),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   send: (chat: string, text: string, agent?: string) =>

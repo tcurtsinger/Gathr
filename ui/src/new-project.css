@@ -1,0 +1,19 @@
+/* New project: the one dialog (components/Dialog.tsx), with Settings > Agents' fields. */
+.new-project {
+  width: min(480px, calc(100vw - 32px));
+}
+.new-project form {
+  display: grid;
+  gap: 16px;
+  padding: 20px 24px 24px;
+  overflow: auto;
+}
+.new-project-agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.new-project legend small {
+  margin-left: 6px;
+  color: var(--muted);
+}

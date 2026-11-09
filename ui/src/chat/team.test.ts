@@ -87,7 +87,7 @@ function round(): ChatState {
 
 const view = (state: ChatState) => toThread(state, agents, [], new Map());
 const custom = (m: ThreadMessageLike) => (m.metadata?.custom ?? {}) as Custom;
-const ids = (all: ThreadMessageLike[]) => all.map((m) => m.id);
+const ids = (all: ThreadMessageLike[]) => all.map((m) => m.id ?? '');
 
 test("members' work sits under the message that gave it, not where it fell in time", () => {
   const all = view(round());
@@ -110,7 +110,7 @@ test("members' work sits under the message that gave it, not where it fell in ti
   expect(byId('a-rowan')).toMatchObject({ thread: 'ask', agent: 'Rowan', role: 'member' });
   expect(byId('a-direct').thread).toBeUndefined();
   // Gathr's message that started a task is its assignment line, never an agent's reply.
-  const assignment = all.find((m) => m.id.startsWith('rowan-gathr')) as ThreadMessageLike;
+  const assignment = all.find((m) => m.id?.startsWith('rowan-gathr')) as ThreadMessageLike;
   expect(assignment.role).toBe('system');
   expect(custom(assignment)).toMatchObject({
     thread: 'ask',
@@ -138,7 +138,7 @@ test("the lead's last word links back, folds the thread, and shows who agreed; a
   state.messages.push(said('back', 'gathr', 'The 3 tasks you gave together are settled'));
   state.messages.push(said('back', 'assistant', 'All done'));
   let all = view(state);
-  expect(all.some((m) => m.id.startsWith('back-gathr'))).toBe(false);
+  expect(all.some((m) => m.id?.startsWith('back-gathr'))).toBe(false);
   expect(custom(all.at(-1) as ThreadMessageLike)).toMatchObject({ back: 'ask', agreed: ['Sol'] });
   const head = custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head;
   expect(head).toMatchObject({ done: true, text: 'Rowan, Kit and Sol done' });
@@ -161,7 +161,7 @@ test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {
   state.messages.push(said('woke', 'gathr', 'Your wait on CI on #12 ended'));
   state.messages.push(said('woke', 'assistant', 'CI passed'));
   const all = view(state);
-  const wake = all.find((m) => m.id.startsWith('woke-gathr')) as ThreadMessageLike;
+  const wake = all.find((m) => m.id?.startsWith('woke-gathr')) as ThreadMessageLike;
   expect(wake.role).toBe('system');
   expect(custom(wake).gathr).toBe('Your wait on CI on #12 ended');
   expect(all.find((m) => m.id === 'a-woke')?.content).toEqual([{ type: 'text', text: 'CI passed' }]);

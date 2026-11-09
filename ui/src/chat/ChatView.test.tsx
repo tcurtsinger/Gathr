@@ -29,6 +29,9 @@ function TwoChats() {
         onUnsent={(update) => setUnsent((u) => ({ ...u, [open]: update(u[open] ?? []) }))}
         openSettings={() => {}}
         onNamed={() => {}}
+        projects={[]}
+        onProject={() => {}}
+        onNewProject={() => {}}
       />
     </>
   );
@@ -78,6 +81,9 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
       onUnsent={() => {}}
       openSettings={() => {}}
       onNamed={() => {}}
+      projects={[]}
+      onProject={() => {}}
+      onNewProject={() => {}}
     />,
   );
   const picker = screen.getByRole('combobox', { name: 'Agent' });
@@ -121,11 +127,71 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       onUnsent={() => {}}
       openSettings={() => {}}
       onNamed={() => {}}
+      projects={[]}
+      onProject={() => {}}
+      onNewProject={() => {}}
     />,
   );
   await screen.getByRole('combobox', { name: 'Agent' }).click();
   await screen.getByRole('option', { name: 'Made-up B' }).click();
   await screen.getByRole('button', { name: 'Retry' }).click();
   await expect.poll(() => sent).toEqual([{ text: 'Made-up ask', agent: 'a' }]);
+  vi.unstubAllGlobals();
+});
+
+test('a team chat sends to its Supervisor by name unless another agent is picked; a plain one can take more', async () => {
+  const sent: unknown[] = [];
+  const members = [
+    { agent: 'b', name: 'Made-up B', role: 'member' },
+    { agent: 'a', name: 'Made-up A', role: 'supervisor' },
+  ];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.endsWith('/messages')) sent.push(JSON.parse(String(init.body)));
+    const turns = [{ id: 't', status: 'done', why: null, ref: 'r', agent: 'b' }];
+    return new Response(JSON.stringify({ chat: 'c', messages: [], turns, approvals: [], members }));
+  });
+  const made = (id: string) => ({
+    id,
+    name: `Made-up ${id.toUpperCase()}`,
+    account: 'a',
+    model: null,
+    effort: null,
+    approvals: 'auto' as const,
+  });
+  const view = (project?: string) => (
+    <ChatView
+      chat={{ id: 'c', title: 'Made-up chat', project }}
+      agents={[made('a'), made('b'), made('c')]}
+      onEditAgent={() => {}}
+      draft="Made-up question"
+      onDraft={() => {}}
+      unsent={[]}
+      onUnsent={() => {}}
+      openSettings={() => {}}
+      onNamed={() => {}}
+      projects={[]}
+      onProject={() => {}}
+      onNewProject={() => {}}
+    />
+  );
+  const screen = await render(view('p'));
+  const picker = screen.getByRole('combobox', { name: 'Agent' });
+  await expect.element(picker).toHaveTextContent('Made-up A');
+  await picker.click();
+  // Each option is the agent's name, then its role in the chat.
+  const names = async () =>
+    (await screen.getByRole('listbox', { name: 'Agents' }).getByRole('option').all()).map(
+      (o) => o.element().textContent,
+    );
+  await expect.poll(names).toEqual(['Made-up A' + 'Supervisor', 'Made-up B' + 'Member', 'Edit agent']);
+  await screen.getByRole('option', { name: /^Made-up B/ }).click();
+  await screen.getByRole('button', { name: 'Send' }).click();
+  await expect.poll(() => sent).toEqual([{ text: 'Made-up question', agent: 'b' }]);
+
+  await screen.rerender(view());
+  await screen.getByRole('combobox', { name: 'Agent' }).click();
+  await expect
+    .poll(names)
+    .toEqual(['Made-up A' + 'Supervisor', 'Made-up B' + 'Member', 'Made-up C', 'Edit agent']);
   vi.unstubAllGlobals();
 });

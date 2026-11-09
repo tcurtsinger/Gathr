@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type Agent, api, type Chat, type Failure } from './api';
+import { type Agent, api, type Chat, type Failure, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { Notice } from './components/Notice';
 import { listen } from './live';
+import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
@@ -12,6 +13,8 @@ import './app.css';
 export function App() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [newProject, setNewProject] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
@@ -36,14 +39,23 @@ export function App() {
     });
   }, []);
 
-  const newChat = useCallback(() => {
-    api.createChat().then((chat) => {
+  useEffect(() => {
+    api.projects().then(setProjects, setFailure);
+  }, []);
+
+  const newChat = useCallback((project?: string) => {
+    api.createChat(project).then((chat) => {
       setChats((list) => [chat, ...list]);
       setSelected(chat.id);
     }, setFailure);
   }, []);
 
   const chat = chats.find((c) => c.id === selected);
+  // A chat nobody has written in yet takes a project's folder and team.
+  const moveChat = (id: string, project: string) =>
+    api.moveChat(id, project).then((moved) => {
+      setChats((list) => list.map((c) => (c.id === id ? { ...c, ...moved } : c)));
+    }, setFailure);
   const openSettings = (page: Page, turn?: string, opener = document.activeElement as HTMLElement) =>
     setSettings({ page, chat: chat?.id, title: chat?.title, turn, opener });
   const openReference = (reference: string) =>
@@ -59,6 +71,7 @@ export function App() {
     <div className="app">
       <Sidebar
         chats={chats}
+        projects={projects}
         selected={selected}
         onSelect={(id) => {
           if (id !== selected) report({ name: 'gathr.ui.chat_switch', attrs: { from: selected, to: id } });
@@ -84,6 +97,9 @@ export function App() {
           onUnsent={(update) => setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) }))}
           openSettings={openSettings}
           onNamed={() => api.chats().then(setChats, setFailure)}
+          projects={projects}
+          onProject={(project) => moveChat(chat.id, project)}
+          onNewProject={() => setNewProject(true)}
         />
       ) : (
         <main className="chat">
@@ -100,6 +116,18 @@ export function App() {
           )}
         </main>
       )}
+      <NewProject
+        open={newProject}
+        agents={agents}
+        projects={projects}
+        onClose={() => setNewProject(false)}
+        onCreated={(project) => {
+          setProjects((list) => [...list, project]);
+          setNewProject(false);
+          if (chat) moveChat(chat.id, project.id);
+        }}
+        onReference={openReference}
+      />
       <SettingsPanel
         target={settings}
         onPage={(page) => setSettings((s) => s && { ...s, page, turn: undefined, reference: undefined })}

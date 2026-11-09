@@ -1,5 +1,6 @@
+import { Folder } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Agent, Chat, Member } from '../api';
+import type { Agent, Chat, Member, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { Notice } from '../components/Notice';
 import { report } from '../report';
@@ -26,10 +27,15 @@ interface Props {
   onUnsent: Unsent;
   /** The first message names the chat (the service does it), so the list shows the name. */
   onNamed: () => void;
+  projects: Project[];
+  /** Puts this chat, still empty, in a project. */
+  onProject: (project: string) => void;
+  onNewProject: () => void;
 }
 
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
+  const { projects, onProject, onNewProject } = props;
   const { state, loaded, loadFailure, failed, send, stop, approve, reload } = useChat(
     chat.id,
     unsent,
@@ -46,6 +52,14 @@ export function ChatView(props: Props) {
   const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   useFirstTokenReport(state.partial);
+  // A project brings its team: the chat's agents come from the service again.
+  const project = useRef(chat.project);
+  useEffect(() => {
+    if (project.current === chat.project) return;
+    project.current = chat.project;
+    reload();
+  }, [chat.project, reload]);
+  const fresh = loaded && state.messages.length === 0 && !chat.project;
 
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
@@ -102,6 +116,24 @@ export function ChatView(props: Props) {
           )
         }
       >
+        {fresh && (
+          <label className="project-pick">
+            <Folder aria-hidden="true" />
+            <select
+              aria-label="Project"
+              value=""
+              onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
+            >
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+              <option value="new">New project</option>
+            </select>
+          </label>
+        )}
         <Composer
           draft={draft}
           onDraft={onDraft}

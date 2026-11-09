@@ -73,6 +73,41 @@
 .sidebar .chatrow[aria-current] {
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
 }
+.chatlist h2 {
+  margin: 0;
+  padding: 12px 8px 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 500;
+}
+.chatlist section + section {
+  margin-top: 12px;
+}
+.project-row {
+  display: flex;
+  align-items: center;
+}
+.project-row .navbutton span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sidebar .project-new {
+  width: 34px;
+  flex: none;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+}
+.project-row:hover .project-new,
+.sidebar .project-new:focus-visible {
+  opacity: 1;
+}
+.project-chats .chatrow {
+  padding-left: 34px;
+}
 .sidebar-foot {
   margin-top: 9px;
   padding-top: 9px;
