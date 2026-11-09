@@ -1,6 +1,7 @@
-# Archive and stale: unselected design options
+# Archive and stale: selected folded group
 
-Open v1.html or v2.html locally. Use Switch theme, or append #light. Preview
+Open v3.html locally. The v1 folded group is selected; v3 records the confirmed
+Idle wording and 1-to-365 range. v2 is retired. Use Switch theme or #light. Preview
 controls use sample data only. They make no service, engine or network calls;
 Reset reloads the fixture. Nothing is saved beyond the open page.
 
@@ -25,11 +26,12 @@ Existing Gathr shell
     Cancel after: 7 days since marked stale
 ```
 
-Recommend v1: it adds no destination and follows the sidebar's existing folds.
-v2 keeps long archived lists in a separate scrolling surface and shows their
-project. The owner chooses before either becomes the F11 reference.
+Selected: v1, the folded group. It adds no destination and follows the existing
+sidebar folds. v3 refines that layout with the confirmed copy and service range.
+v2, the separate Archived flyout, is retired and must not be built. The original
+v1/v2 pages and their preview.js snapshot remain unchanged for comparison.
 
-### Design contract common to both
+### Selected design contract
 
 - This is a refinement in Operate mode: variance 2, motion 2, density 5.
   Desktop use in daylight and at night keeps both existing themes. No new tokens.
@@ -61,13 +63,12 @@ project. The owner chooses before either becomes the F11 reference.
   draft and reading position alone. The fixture uses its first active chat
   after deletion; production should preserve sidebar adjacency as above.
 - v1's Archived group starts folded and uses the chat-list scroll region. Keep
-  its fold while the window is open. v2 reuses the 340px flyout, its Close,
-  collision handling, Escape/outside-click dismissal and independent scrolling.
+  its fold while the window is open. There is no separate archive flyout.
 - Tasks keeps its existing count: open human questions, including stale human
   questions once. Agent tasks do not inflate it. Questions is the non-stale group;
   Stale follows it, expanded. Its own count includes all of its visible rows.
   Source says "For you" for human questions and the assignee for agent tasks.
-  Show the chat and time since marked stale, plus a real hold/state for an agent.
+  Show the chat and time since last progress as "Idle 4 days", plus a real hold/state for an agent.
 - Picking a stale human question opens the existing exact-question pager, keeping
   Back/Next/Send and per-question drafts. The fixture shows one text answer to
   demonstrate this state, not a replacement for F9's full form set or batching.
@@ -80,10 +81,10 @@ project. The owner chooses before either becomes the F11 reference.
 - Stale does not mean abandoned: CI, reviews, open waits and running commands
   can keep work open. Never invent an expiry countdown for those. Human questions
   remain answerable until answered or explicitly cancelled by the person.
-- In General, reuse settingrow and number inputs. Both are whole days, at least
-  1, with defaults 3 and 7. The second unit is "days stale", not total idle days.
+- In General, reuse settingrow and number inputs. Both are whole days, from
+  1 to 365, with defaults 3 and 7. The second unit is "days stale", not total idle days.
   The ? detail explains progress and exceptions. Save on a committed edit;
-  retain invalid input with "Enter whole days, at least 1.". Referenced save
+  retain invalid input with "Enter whole days from 1 to 365.". Referenced save
   failures keep the edit visible. No helper paragraph under either setting.
 - Reference geometry: 246px sidebar; 34px chat rows; 46px header; 32px pill
   text actions; menu 4px padding / 32px rows / quiet border; flyout 340px;
@@ -96,13 +97,20 @@ project. The owner chooses before either becomes the F11 reference.
 
 ### Selection and production handoff
 
-These pages are proposals, not a selected design-system change. After the pick,
-record the chosen pattern in DESIGN.md and system.html and carry the design
-files into the one F11 PR. Do not start a separate production or design-system PR.
+The folded group is selected and recorded in DESIGN.md, system.html and 0015.
+Carry these design files into the one F11 PR. Do not build the retired flyout
+or start a separate production or design-system PR. The v3 adapter only refines
+the accepted wording and range; the original proposal snapshot is frozen.
 Use service state for stale eligibility, task permissions and all archive effects.
 The approved slice-2 rules, not fixture timers, are the behavior authority.
 
 ## Evidence
+
+- Selected-reference check: system.html and v3 at 1440/1024 in dark/light,
+  compact confirm geometry, keyboard menu focus, Escape, Help, 365/366 range
+  handling, Idle copy, long-title truncation and 63 archived rows. Eight page/size/
+  theme combinations passed with no page errors. Shared Help checks also passed
+  at both desktop widths and at 900px and 600px heights, in both themes.
 
 - Before: now.html models Sidebar, TasksFlyout and General as of the F10 main,
   using invented content. It is a focused reference, not a running app capture.
@@ -122,7 +130,7 @@ The approved slice-2 rules, not fixture timers, are the behavior authority.
 After installing the UI's documented dependencies, from the repository root:
 
 ```text
-node designs/archive-stale/check.cjs <absolute evidence folder outside the repo>
+node designs/archive-stale/check-selected.cjs <absolute evidence folder outside the repo>
 ```
 
 ## Merge Danger

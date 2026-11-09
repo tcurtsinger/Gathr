@@ -191,3 +191,8 @@ The assistant-ui prototype is the visual reference; Settings keeps 0023's layout
 Team messages use 0015's inline thread with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
 manual folding, Summary (expanded assignments and short windows), keyboard links and draft retention in both sizes and themes (uses the UI dependencies).
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
+
+Archive and stale uses `designs/archive-stale/v3.html`, refining the selected folded group from v1.
+`node designs/archive-stale/check-selected.cjs <absolute evidence folder outside the repo>` checks it and
+`system.html` at 1440 and 1024px in both themes, including confirms, Help, Idle labels and day limits.
+The original v1/v2 proposals stay unchanged; the v2 archive flyout is retired.

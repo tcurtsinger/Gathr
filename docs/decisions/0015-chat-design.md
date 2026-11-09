@@ -43,3 +43,14 @@ The inline-thread refinement replaces that Team-panel choice. Rejected: every re
 (long replies bury the conclusion), member tabs (hide parallel work), a side-panel thread (competes with Tasks and Files),
 and simultaneous agent panes (too little reading height at five agents). The side panel and agent panes were compared
 with inline threads at 1440 and 1024px, light and dark, with running, finished and history fixtures.
+
+### Accepted archive refinement, 2026-11-09
+
+Put archived chats in a folded Archived group after active chats, with a count.
+This follows the sidebar's existing folds and adds no destination. Restore
+returns the chat to its original project without restarting its cancelled work.
+Turned down: an Archived button above Settings opening a separate navigation
+flyout. Its independently scrolling history was useful for long lists but added
+a destination and another transient surface. The folded group is the selected
+layout from archive-stale/v1; v3 records its confirmed copy and day-count range.
+DESIGN.md and system.html carry the shared presentation; 0010 owns the effects.
