@@ -1,16 +1,18 @@
 //! Archiving and deleting a chat (F11, 0010). Archiving ends the chat's work in one transaction and
 //! one event: its open tasks are cancelled with why, its waits end, its queued turns stop and its
-//! pause goes. The service interrupts a turn still running. Deleting archives first, then removes
-//! the chat's rows; its files are the service's to remove.
+//! pause goes, and a task elsewhere that can't go on without one of them is cancelled too. The
+//! service interrupts a turn still running. Deleting takes an archived chat and removes its rows;
+//! its files are the service's to remove.
 
 use std::path::PathBuf;
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
+use crate::tasks::Start;
 
 /// When the chat was archived; none while it's in the list. Refused when there's no such chat.
 pub fn archived(conn: &Connection, chat: &str) -> Result<Option<i64>, Error> {
@@ -37,6 +39,9 @@ pub struct Ended {
     pub waits: usize,
     /// Queued turns stopped, by id.
     pub turns: Vec<String>,
+    /// Turns in other chats on what followed: a task there blocked on, or after, one ended here.
+    #[serde(skip)]
+    pub starts: Vec<Start>,
 }
 
 pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, Error> {
@@ -63,8 +68,9 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
 }
 
 /// Every open task cancelled (the person's too: they archived it), with no hear-backs, as nothing
-/// starts in the chat any more; open waits ended; queued turns stopped; its pause gone.
-fn end_work(conn: &Connection, chat: &str, now: i64, trace: &str) -> Result<Ended, Error> {
+/// starts in the chat any more, while a task in another chat that can't go on without one is
+/// cancelled too; open waits ended; queued turns stopped; its pause gone.
+fn end_work(conn: &Transaction, chat: &str, now: i64, trace: &str) -> Result<Ended, Error> {
     const WHY: &str = "its chat was archived";
     let open: Vec<i64> = {
         let mut stmt = conn.prepare(
@@ -76,6 +82,12 @@ fn end_work(conn: &Connection, chat: &str, now: i64, trace: &str) -> Result<Ende
     for &task in &open {
         crate::tasks::cancelled_with(conn, task, WHY, trace)?;
     }
+    // Once all are cancelled, so what follows moves only tasks in other chats.
+    let mut starts = Vec::new();
+    for &task in &open {
+        starts.extend(crate::tasks::followed(conn, task, trace)?);
+    }
+    starts.retain(|s| s.chat != chat);
     let waits = conn.execute(
         "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = ?3
          WHERE chat_id = ?1 AND state IN ('open', 'met')",
@@ -97,6 +109,7 @@ fn end_work(conn: &Connection, chat: &str, now: i64, trace: &str) -> Result<Ende
         tasks: open.len(),
         waits,
         turns,
+        starts,
     })
 }
 
@@ -112,13 +125,12 @@ pub fn unarchive(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), E
     Ok(())
 }
 
-/// Removes the chat's rows, archiving it first if it isn't: its messages, turns and engine frames,
-/// tasks and waits, team, sessions and events. Answers the folders of its tasks' files.
+/// Removes an archived chat's rows: its messages, turns and engine frames, tasks and waits, team,
+/// sessions and events. Answers the folders of its tasks' files.
 pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<PathBuf>, Error> {
     let tx = conn.transaction()?;
-    let now = now_us();
     if archived(&tx, chat)?.is_none() {
-        end_work(&tx, chat, now, trace)?;
+        return Err(Error::Refused("archive it first".into()));
     }
     let files = task_files(&tx, chat)?;
     let of_tasks = "(SELECT number FROM tasks WHERE chat_id = ?1)";

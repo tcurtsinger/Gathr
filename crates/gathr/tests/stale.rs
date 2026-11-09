@@ -1,6 +1,6 @@
-//! The stale rules (F11, 0010) on a real database, with the clock passed in: a task nothing moves is
-//! marked stale and its Supervisor told, then cancelled unless something can still move it, and a
-//! task that can never go on is cancelled at once.
+//! The stale and cancel rules (F11, 0010) on a real database, with the clock passed in: a task
+//! nothing moves is marked stale and its Supervisor told, then cancelled unless something can still
+//! move it, and a task that can never go on is cancelled at once, in any chat.
 
 mod common;
 
@@ -240,6 +240,93 @@ fn a_task_whose_after_task_or_blocker_is_cancelled_is_cancelled_at_once() {
         (State::Cancelled, Some(format!("#{first} was cancelled")))
     );
     assert_eq!(task(&conn, blocked).state, State::Cancelled);
+}
+
+/// The task's turn runs and ends so.
+fn run(conn: &mut Connection, n: i64, outcome: tasks::Outcome) {
+    tasks::started(conn, n, T).unwrap();
+    tasks::ended(conn, n, outcome, T).unwrap();
+}
+
+#[test]
+fn a_dependant_already_blocked_is_cancelled_when_another_of_its_after_tasks_is() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (failed, open) = (
+        idle_task(&mut conn, &[], DAY),
+        idle_task(&mut conn, &[], DAY),
+    );
+    let both = idle_task(&mut conn, &[failed, open], DAY);
+    run(&mut conn, failed, tasks::Outcome::Failed("it broke".into()));
+    assert_eq!(
+        task(&conn, both).state,
+        State::Blocked,
+        "blocked by #{failed}"
+    );
+    tasks::cancel(&mut conn, None, open, "not needed", T).unwrap();
+    assert_eq!(
+        (task(&conn, both).state, task(&conn, both).reason),
+        (State::Cancelled, Some(format!("#{open} was cancelled")))
+    );
+}
+
+#[test]
+fn a_failed_or_stopped_task_can_be_cancelled() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (failed, stopped) = (
+        idle_task(&mut conn, &[], DAY),
+        idle_task(&mut conn, &[], DAY),
+    );
+    run(&mut conn, failed, tasks::Outcome::Failed("it broke".into()));
+    run(
+        &mut conn,
+        stopped,
+        tasks::Outcome::Stopped("stopped".into()),
+    );
+    for n in [failed, stopped] {
+        tasks::cancel(&mut conn, None, n, "not needed", T).unwrap();
+        assert_eq!(task(&conn, n).state, State::Cancelled, "#{n}");
+    }
+}
+
+#[test]
+fn archiving_a_chat_cancels_a_task_in_another_chat_blocked_on_one_of_its_tasks() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c2', 'Other', 1);
+         INSERT INTO chat_members VALUES ('c2', 'lead', 'supervisor', 1), ('c2', 'ann', 'member', 1);",
+    )
+    .unwrap();
+    let here = idle_task(&mut conn, &[], DAY);
+    let g = Give {
+        chat: "c2",
+        giver: Some("lead"),
+        owner: "ann",
+        given_in: None,
+        parent: None,
+        kind: Kind::Work,
+        what: "Ship it",
+        why: None,
+        after: &[],
+        pr: None,
+    };
+    let there = tasks::give(&mut conn, &g, T).unwrap().0.number;
+    conn.execute(
+        "UPDATE tasks SET state = 'blocked', blocked_on = ?1 WHERE number = ?2",
+        [here, there],
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", T).unwrap();
+    let t = task(&conn, there);
+    assert_eq!(
+        (t.state, t.reason),
+        (
+            State::Cancelled,
+            Some(format!("#{here}, which it was blocked on, was cancelled"))
+        )
+    );
 }
 
 #[test]

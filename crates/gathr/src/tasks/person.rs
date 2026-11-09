@@ -115,6 +115,7 @@ pub struct Answer {
 /// agent); from anyone else it's a `person_request` to the Supervisor, with its turn.
 pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Start>), Error> {
     let tx = conn.transaction()?;
+    crate::archive::refuse_archived(&tx, a.chat)?;
     let lead = lead_of(&tx, a.chat, a.giver)?;
     let from = match a.request {
         Some(r) => Some(request_for(&tx, a.chat, a.giver, r)?),

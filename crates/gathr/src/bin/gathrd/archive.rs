@@ -4,7 +4,7 @@
 //! worktrees and files.
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::Router;
@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 use crate::api::{State, Trace};
 use crate::routes::{Answer, db, known};
 
-/// How long a delete waits for the chat's engines to exit before removing what it can.
+/// How long a delete waits for the chat's engines and wait checks to end before removing what it can.
 const EXIT_WAIT: Duration = Duration::from_secs(35);
 
 pub fn routes() -> Router<Arc<State>> {
@@ -35,15 +35,28 @@ async fn archive_chat(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    let (id, trace) = (chat.clone(), t.0.clone());
-    let Json(ended) = db(&s, &t, "Archive failed", move |c| {
-        Ok(json!(archive::archive(c, &id, &trace)?))
+    let Json(ended) = archive_now(&s, &t, &chat, "Archive failed").await?;
+    Ok(Json(json!({ "archived": true, "ended": ended })))
+}
+
+/// Archives the chat: ends its work, starts what follows in other chats and tells every window.
+async fn archive_now(s: &Arc<State>, t: &Trace, chat: &str, error: &'static str) -> Answer {
+    let (id, trace) = (chat.to_string(), t.0.clone());
+    let follows = Arc::new(Mutex::new(Vec::new()));
+    let found = follows.clone();
+    let ended = db(s, t, error, move |c| {
+        let mut ended = archive::archive(c, &id, &trace)?;
+        *found.lock().expect("never poisoned") = std::mem::take(&mut ended.starts);
+        Ok(json!(ended))
     })
     .await?;
-    s.chats.end_chat(&chat, false).await;
+    s.chats.start(std::mem::take(
+        &mut *follows.lock().expect("never poisoned"),
+    ));
+    s.chats.end_chat(chat, false).await;
     s.chats.pauses_changed().await;
-    announce(&s, &chat, "archived");
-    Ok(Json(json!({ "archived": true, "ended": ended })))
+    announce(s, chat, "archived");
+    Ok(ended)
 }
 
 async fn unarchive_chat(
@@ -67,11 +80,16 @@ async fn delete_chat(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    let (id, trace) = (chat.clone(), t.0.clone());
+    let id = chat.clone();
+    let Json(archived) = db(&s, &t, "Delete failed", move |c| {
+        Ok(json!(archive::archived(c, &id)?.is_some()))
+    })
+    .await?;
+    if archived != json!(true) {
+        let _ = archive_now(&s, &t, &chat, "Delete failed").await?;
+    }
+    let id = chat.clone();
     let Json(project) = db(&s, &t, "Delete failed", move |c| {
-        if archive::archived(c, &id)?.is_none() {
-            archive::archive(c, &id, &trace)?;
-        }
         let project: Option<String> = c
             .query_row("SELECT project FROM chats WHERE id = ?1", [&id], |r| {
                 r.get(0)
@@ -81,7 +99,12 @@ async fn delete_chat(
         Ok(json!(project))
     })
     .await?;
-    let exited = tokio::time::timeout(EXIT_WAIT, s.chats.end_chat(&chat, true)).await;
+    // Nothing may still run in its worktrees when they're removed.
+    let ended = async {
+        s.chats.end_chat(&chat, true).await;
+        s.chats.checks_ended(&chat).await;
+    };
+    let exited = tokio::time::timeout(EXIT_WAIT, ended).await;
     s.chats.pauses_changed().await;
     let (id, trace) = (chat.clone(), t.0.clone());
     let Json(files) = db(&s, &t, "Delete failed", move |c| {
@@ -92,7 +115,7 @@ async fn delete_chat(
     let project = project.as_str().map(PathBuf::from);
     let mut left = remove_files(&s, &chat, project, files).await;
     if exited.is_err() {
-        left.insert(0, "an engine in it hadn't exited".into());
+        left.insert(0, "an engine or wait check in it hadn't ended".into());
     }
     let mut event = Event::point("gathr.chat.files")
         .trace(&t.0)

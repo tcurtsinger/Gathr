@@ -36,7 +36,7 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
     let after = json!({ "to": "Ann", "what": "Review notes", "after": [1] });
     text(&call_tool(port, &lead, "give_task", after));
     let check = json!({ "check": "exit 1", "then": "merge it" });
-    let left = text(&call_tool(port, &lead, "wait", check));
+    let left = text(&call_tool(port, &lead, "wait", check.clone()));
     assert!(left.starts_with("Waiting ("), "{left}");
 
     let archived = service.call("POST", &format!("/api/chats/{chat}/archive"));
@@ -47,6 +47,15 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
         (Some(2), Some(1)),
         "{ended}"
     );
+    // Its engine still runs, so its token works: nothing new may start in the chat.
+    let asked = json!({ "what": "Pick a name", "form": "done" });
+    for (tool, arguments) in [("ask_person", asked), ("wait", check)] {
+        let late = text(&call_tool(port, &lead, tool, arguments));
+        assert!(
+            late.starts_with(&format!("{tool} failed: the chat is archived")),
+            "{late}"
+        );
+    }
     // The held stand-in takes an interrupt only once it streams: released, each turn reads its stop.
     std::fs::write(data.0.join("go"), "").unwrap();
     let history = service.wait_for(&chat, 10, "every turn ended", |h| {
@@ -106,6 +115,59 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
     assert_eq!(back.status, 200, "{}", back.body);
     assert!(listed(&service, "").contains(&chat));
     assert!(listed(&service, "?archived=true").is_empty());
+}
+
+#[test]
+fn archiving_ends_a_wait_check_that_runs_and_one_not_started_yet() {
+    let data = TempDir::new();
+    let fast = [("GATHR_WAIT_EVERY_MS", Path::new("100"))];
+    let (service, chat, _) = team(&data.0, &common::held_recording(&data.0), &fast);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Plan it" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let (port, lead) = (service.info.port, first_token(&data.0));
+    // Paused while both are left, so one look finds both.
+    let scope = json!({ "scope": "chat", "target": chat });
+    assert_eq!(
+        service.send("POST", "/api/pauses", scope.clone()).status,
+        200
+    );
+    let dir = data.0.to_string_lossy().replace('\\', "/");
+    let first = format!(
+        "touch '{dir}/started'; while [ ! -f '{dir}/release' ]; do sleep 0.1; done; touch '{dir}/first-ran'; exit 1"
+    );
+    let second = format!("touch '{dir}/second-ran'; exit 1");
+    for (check, then) in [(first, "one"), (second, "two")] {
+        let left = text(&call_tool(
+            port,
+            &lead,
+            "wait",
+            json!({ "check": check, "then": then }),
+        ));
+        assert!(left.starts_with("Waiting ("), "{left}");
+    }
+    let resumed = service.send("POST", "/api/pauses/resume", scope);
+    assert_eq!(resumed.status, 200, "{}", resumed.body);
+    until(20, "the first check running", || {
+        data.0.join("started").exists().then_some(())
+    });
+
+    let archived = service.call("POST", &format!("/api/chats/{chat}/archive"));
+    assert_eq!(archived.status, 200, "{}", archived.body);
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::fs::write(data.0.join("release"), "").unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    assert!(
+        !data.0.join("first-ran").exists(),
+        "the running check was ended"
+    );
+    assert!(
+        !data.0.join("second-ran").exists(),
+        "the next check never ran"
+    );
 }
 
 #[test]

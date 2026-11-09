@@ -395,4 +395,29 @@ impl Task {
             "quiet_ms": quiet_ms, "ref": reference }),
         );
     }
+
+    /// A turn whose task was cancelled stops and says why (S72): looked at on the stall timer, so
+    /// every way a task is cancelled (its PR closed, its giver, the person, the stale rules) is
+    /// covered in one place. The cancel is kept on the turn, so a restart since doesn't hide it.
+    pub(super) async fn check_task(&mut self) {
+        let Some((turn, chat)) = self
+            .turn
+            .as_ref()
+            .filter(|t| !t.stopping && t.ids.task.is_some())
+            .map(|t| (t.ids.turn.clone(), t.ids.chat.clone()))
+        else {
+            return;
+        };
+        let read = self
+            .chats
+            .writer
+            .call(move |c| gathr::tasks::stop_why(c, &turn));
+        let Some(Ok(Some(why))) = read.await else {
+            return;
+        };
+        if let Some(turn) = self.turn.as_mut() {
+            turn.stop_why = Some(why);
+        }
+        self.interrupt(&chat).await;
+    }
 }

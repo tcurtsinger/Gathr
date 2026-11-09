@@ -374,6 +374,17 @@ impl Chats {
         }
     }
 
+    /// Returns once no wait check runs in the chat: one whose wait ended is killed within a look.
+    pub async fn checks_ended(&self, chat: &str) {
+        let running = || {
+            let checking = self.checking.lock().expect("never poisoned");
+            checking.iter().any(|(c, _)| c == chat)
+        };
+        while running() {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+    }
+
     /// Reads the pauses again after a change, lets every queue look at what it holds, and says
     /// where things stand.
     pub async fn pauses_changed(&self) {
