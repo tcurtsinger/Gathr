@@ -109,7 +109,7 @@ function doing(
 ): string {
   const turns = Object.values(state.turns).filter((t) => t.agent === m.agent);
   if (turns.some((t) => t.status === 'running')) return 'Working';
-  if (own.usageUntil) return `Out of usage until ${clock(new Date(own.usageUntil / 1000).toISOString())}`;
+  if (own.usageUntil) return `Usage limit until ${clock(new Date(own.usageUntil / 1000).toISOString())}`;
   if (run.state === 'stopped') return 'Stopped';
   const mine = state.tasks.filter((t) => t.owner === m.agent && open(t));
   const queued = turns.some((t) => t.status === 'queued');

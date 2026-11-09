@@ -58,10 +58,8 @@ pub struct ReadChat {
 #[tool_router]
 impl Tools {
     #[tool(
-        description = "This chat's messages, oldest first, each with its id and who wrote it (the \
-                       person or an agent's name). Use it for what isn't in your conversation: \
-                       what was said before you joined, or other agents' replies. Long messages \
-                       come back cut; ask for one by its id to read all of it."
+        description = "Read chat history and other agents' replies, oldest first, with ids and authors. \
+                       Long messages are truncated; request a message id for its full text."
     )]
     async fn read_chat(
         &self,

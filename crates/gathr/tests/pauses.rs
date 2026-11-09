@@ -124,10 +124,7 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     let said = said
         .map(|m| m["body"].as_str().unwrap())
         .unwrap_or_default();
-    assert!(
-        said.starts_with("The person stopped your turn with Stop now."),
-        "{said}"
-    );
+    assert!(said.starts_with("Stop now ended your turn."), "{said}");
     pause(&service, "/api/pauses/resume", &chat);
     let history = service.wait_for(&chat, 20, "the carry-on after Restart", |h| {
         h["turns"][1]["status"] == "done"

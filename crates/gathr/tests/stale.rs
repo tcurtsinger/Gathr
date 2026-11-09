@@ -95,10 +95,50 @@ fn a_task_nothing_moves_for_the_stale_days_is_marked_once_and_its_supervisor_tol
         "the Supervisor reads which task and whose: {}",
         told.text
     );
+    assert!(
+        told.text
+            .contains("Agent tasks auto-cancel after 7 d more idle unless active or paused."),
+        "agent stale notice must retain conditional auto-cancel policy: {}",
+        told.text
+    );
     let again = sweep(&mut conn, 4 * DAY + 2, &[]);
     assert!(
         again.marked.is_empty() && again.starts.is_empty(),
         "told once"
+    );
+}
+
+#[test]
+fn person_only_stale_notice_omits_agent_auto_cancel_policy() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let (person, _) = tasks::person::ask(
+        &mut conn,
+        tasks::person::Ask {
+            chat: "c",
+            giver: "lead",
+            given_in: None,
+            parent: None,
+            what: Some("Approve the wording?"),
+            why: None,
+            form: None,
+            choices: Vec::new(),
+            files: Vec::new(),
+            request: None,
+        },
+        T,
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE tasks SET updated_ts = ?1, created_ts = ?1 WHERE number = ?2",
+        params![DAY, person.number],
+    )
+    .unwrap();
+    let swept = sweep(&mut conn, 4 * DAY + 1, &[]);
+    let notice = &swept.starts[0].text;
+    assert!(
+        !notice.contains("cancelled after") && !notice.contains("auto-cancel"),
+        "person-only notice must omit agent auto-cancel policy: {notice}"
     );
 }
 
@@ -197,7 +237,14 @@ fn a_stale_task_something_can_still_move_is_only_flagged() {
         quiet_us: None,
         stopped: false,
     }];
-    sweep(&mut conn, 5 * DAY, &[]);
+    let mixed = sweep(&mut conn, 5 * DAY, &[]);
+    let notice = &mixed.starts[0].text;
+    assert!(
+        notice.contains(&format!("#{person} Pick a name (person)"))
+            && notice
+                .contains("Agent tasks auto-cancel after 7 d more idle unless active or paused."),
+        "mixed notice must identify the person and scope auto-cancel to agents: {notice}"
+    );
     for n in [waiting, with_pr, queued, person] {
         assert!(task(&conn, n).stale_us.is_some(), "#{n} is flagged");
     }
@@ -322,10 +369,7 @@ fn archiving_a_chat_cancels_a_task_in_another_chat_blocked_on_one_of_its_tasks()
     let t = task(&conn, there);
     assert_eq!(
         (t.state, t.reason),
-        (
-            State::Cancelled,
-            Some(format!("#{here}, which it was blocked on, was cancelled"))
-        )
+        (State::Cancelled, Some(format!("blocker #{here} cancelled")))
     );
 }
 

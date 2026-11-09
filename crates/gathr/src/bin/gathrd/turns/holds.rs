@@ -17,8 +17,7 @@ use serde_json::json;
 use super::{Ids, Task};
 
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
-const CHECK_FIRST: &str =
-    "Check what already happened before doing any of it again, then carry on.";
+const CHECK_FIRST: &str = "Check completed work, then continue.";
 
 impl Task {
     /// What holds the queued turn from starting: a pause (0010) or an update (0032), never the
@@ -164,8 +163,7 @@ impl Task {
             return true;
         }
         self.set_turn(ids, "stopped", Some(why)).await;
-        let said =
-            format!("The account's usage limit cut your last turn off partway. {CHECK_FIRST}");
+        let said = format!("Usage limit interrupted your turn. {CHECK_FIRST}");
         self.carry_on(ids, said).await;
         true
     }
@@ -258,7 +256,7 @@ impl Task {
             (true, n) => format!("your turn and {n} background command(s)"),
             (false, n) => format!("{n} background command(s) of yours"),
         };
-        let said = format!("The person stopped {ended} with Stop now. {CHECK_FIRST}");
+        let said = format!("Stop now ended {ended}. {CHECK_FIRST}");
         self.carry_on(&ids, said).await;
         self.record(
             Event::point("gathr.pause.stop_now")
