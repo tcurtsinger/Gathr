@@ -51,20 +51,22 @@ pub fn run(app: &AppHandle) {
 /// Whether an update was downloaded and checked; failures are recorded and tried again later.
 fn fetched(app: &AppHandle) -> bool {
     let since = Instant::now();
+    let mut offered = None;
     let found = tauri::async_runtime::block_on(async {
         let Some(update) = app.updater()?.check().await? else {
             return Ok(None);
         };
+        offered = Some(update.version.clone());
         let bytes = update.download(|_, _| {}, || {}).await?;
         Ok::<_, tauri_plugin_updater::Error>(Some((update, bytes)))
     });
     let current = app.package_info().version.to_string();
-    let (version, size, error) = match &found {
-        Ok(Some((update, bytes))) => (Some(update.version.clone()), bytes.len(), None),
-        Ok(None) => (None, 0, None),
-        Err(e) => (None, 0, Some(e.to_string())),
+    let (size, error) = match &found {
+        Ok(Some((_, bytes))) => (bytes.len(), None),
+        Ok(None) => (0, None),
+        Err(e) => (0, Some(e.to_string())),
     };
-    let attrs = serde_json::json!({ "current": current, "version": version, "bytes": size });
+    let attrs = serde_json::json!({ "current": current, "version": offered, "bytes": size });
     report(app, "gathr.ui.update.check", since, &attrs, error);
     let Ok(Some(ready)) = found else {
         return false;
