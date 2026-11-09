@@ -36,10 +36,12 @@ async fn archive_chat(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let Json(ended) = archive_now(&s, &t, &chat, "Archive failed").await?;
+    announce(&s, &chat, "archived");
     Ok(Json(json!({ "archived": true, "ended": ended })))
 }
 
-/// Archives the chat: ends its work, starts what follows in other chats and tells every window.
+/// Archives the chat: ends its work and starts what follows in other chats. Windows are told by the
+/// caller: a delete tells them only "deleted", so an open chat never passes through Archived.
 async fn archive_now(s: &Arc<State>, t: &Trace, chat: &str, error: &'static str) -> Answer {
     let (id, trace) = (chat.to_string(), t.0.clone());
     let follows = Arc::new(Mutex::new(Vec::new()));
@@ -55,7 +57,6 @@ async fn archive_now(s: &Arc<State>, t: &Trace, chat: &str, error: &'static str)
     ));
     s.chats.end_chat(chat, false).await;
     s.chats.pauses_changed().await;
-    announce(s, chat, "archived");
     Ok(ended)
 }
 

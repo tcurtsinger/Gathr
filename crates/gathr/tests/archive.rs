@@ -194,9 +194,20 @@ fn deleting_a_project_chat_removes_its_rows_and_worktrees_and_keeps_its_branches
         "the lead's worktree was made"
     );
 
+    let mut live = service.live();
     let deleted = service.call("DELETE", &format!("/api/chats/{chat}"));
     assert_eq!(deleted.status, 200, "{}", deleted.body);
     assert_eq!(deleted.json()["left"], json!([]), "{}", deleted.body);
+    // Windows hear only "deleted": an "archived" first moves the open chat to Archived, and the
+    // window then picks its neighbour there.
+    let mut changes = Vec::new();
+    while changes.last() != Some(&json!("deleted")) {
+        let update = common::next_live(&mut live);
+        if update["type"] == "chat" {
+            changes.push(update["change"].clone());
+        }
+    }
+    assert_eq!(changes, [json!("deleted")]);
     assert_eq!(
         service.call("GET", &format!("/api/chats/{chat}")).status,
         404
