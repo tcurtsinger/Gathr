@@ -1,13 +1,19 @@
 .app {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  grid-template-columns: 246px minmax(0, 1fr);
   height: 100dvh;
 }
 .app > .chat .empty {
   margin: auto;
 }
-@media (max-width: 1150px) {
+.app > .chat .reading {
+  width: 100%;
+  max-width: 44rem;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+@media (max-width: 759px) {
   .app {
-    grid-template-columns: 205px minmax(0, 1fr);
+    grid-template-columns: 190px minmax(0, 1fr);
   }
 }

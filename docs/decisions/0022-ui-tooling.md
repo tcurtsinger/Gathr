@@ -14,7 +14,7 @@ Status: proposed. Date: 2026-11-07. Follows [0012](0012-ui-shell.md), which leav
 
 Versions are the npm `latest` on the date above. The lockfile pins them.
 
-- **No component or state library** (0012 asks for this choice): React's own state and the design system's CSS in plain files beside each component are enough for the first slice, and each shared component exists once in `ui/src/components`. Revisit when a screen needs state shared across the app beyond one chat.
+- **No component or state library** (0012 asks for this choice; the component part is amended by [0030](0030-ui-foundation.md): assistant-ui's registry components for the chat): React's own state and the design system's CSS in plain files beside each component are enough for the first slice, and each shared component exists once in `ui/src/components`. Revisit when a screen needs state shared across the app beyond one chat.
 - **Where:** the UI is its own npm package in `ui/`. Nothing in the repo root changes for people working only on the service.
 - **Vite** uses the settings in Tauri's [Vite guide](https://v2.tauri.app/start/frontend/vite/): `clearScreen: false`, a fixed dev port with `strictPort: true`, and `envPrefix: ['VITE_', 'TAURI_ENV_*']`. The build target stays Vite's default until the oldest supported macOS is decided (see "Checked, and not yet").
 - **Biome** lints and formats TypeScript, TSX and CSS with its recommended rules, which include the React hook rules. No ESLint, no Prettier.

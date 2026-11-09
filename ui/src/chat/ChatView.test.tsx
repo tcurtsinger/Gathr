@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { ChatView } from './ChatView';
-import type { SendFailure } from './rows';
+import type { SendFailure } from './messages';
 
 /** Two chats and what the app keeps for each while another is open. */
 function TwoChats() {
@@ -81,10 +81,11 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
     />,
   );
   const picker = screen.getByRole('combobox', { name: 'Agent' });
-  await expect.element(picker).toHaveValue('b');
-  await picker.selectOptions('Edit agent');
+  await expect.element(picker).toHaveTextContent('Made-up B');
+  await picker.click();
+  await screen.getByRole('option', { name: 'Edit agent' }).click();
   expect(edited).toEqual(['b']);
-  await expect.element(picker).toHaveValue('b');
+  await expect.element(picker).toHaveTextContent('Made-up B');
   await screen.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => sent).toEqual([{ text: 'Made-up question', agent: 'b' }]);
   vi.unstubAllGlobals();
@@ -122,7 +123,8 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       onNamed={() => {}}
     />,
   );
-  await screen.getByRole('combobox', { name: 'Agent' }).selectOptions('Made-up B');
+  await screen.getByRole('combobox', { name: 'Agent' }).click();
+  await screen.getByRole('option', { name: 'Made-up B' }).click();
   await screen.getByRole('button', { name: 'Retry' }).click();
   await expect.poll(() => sent).toEqual([{ text: 'Made-up ask', agent: 'a' }]);
   vi.unstubAllGlobals();

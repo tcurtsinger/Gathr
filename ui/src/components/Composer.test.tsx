@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { expect, test } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer } from './Composer';
-// The app's own focus rule, which outlined the text area.
-import '../base.css';
+import '../theme.css';
 
 /** The composer as a chat holds it: sending clears the draft and lists what was sent. */
 function Chat({ running = false }: { running?: boolean }) {
@@ -36,13 +35,27 @@ test('Enter sends the draft and Shift+Enter starts a new line', async () => {
   await expect.element(screen.getByRole('textbox', { name: 'Message' })).toHaveValue('');
 });
 
-test('focus outlines the rounded message box, not the text area inside it', async () => {
-  const screen = await render(<Chat />);
+test('keyboard focus shows no ring, on the message box or its buttons (DESIGN.md)', async () => {
+  const screen = await render(<Chat running />);
   const input = screen.getByRole('textbox', { name: 'Message' });
   await input.click();
-  const box = input.element().closest('.composer') as HTMLElement;
-  expect(getComputedStyle(box).outlineStyle).toBe('solid');
-  expect(getComputedStyle(input.element()).outlineStyle).toBe('none');
+  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+  await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
+  const stop = screen.getByRole('button', { name: 'Stop' }).element() as HTMLElement;
+  expect(document.activeElement).toBe(stop);
+  expect(stop.matches(':focus-visible')).toBe(true);
+  for (const el of [
+    input.element(),
+    input.element().closest('[data-slot="composer-bar"]') as HTMLElement,
+    stop,
+  ]) {
+    expect(getComputedStyle(el).outlineStyle).toBe('none');
+    // A ring is a box-shadow in a colour that shows; a cleared one is fully transparent.
+    const colours = getComputedStyle(el).boxShadow.match(/(rgba?|oklch|oklab|lab)\([^)]*\)/g) ?? [];
+    expect(colours.filter((c) => c !== 'rgba(0, 0, 0, 0)')).toEqual([]);
+  }
+  // It gets the hover highlight instead, over its own background.
+  expect(getComputedStyle(stop).backgroundImage).toContain('gradient');
 });
 
 test('while a turn runs the button stops it, and typing turns it back into Send', async () => {

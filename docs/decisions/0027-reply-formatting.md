@@ -1,6 +1,6 @@
 # 0027. Reply formatting: react-markdown with remark-gfm, re-parsing only the end while streaming
 
-Status: accepted. Date: 2026-11-07. Chosen by the lead from the frontend's options.
+Status: accepted, renderer replaced by [0030](0030-ui-foundation.md) (Streamdown); raw HTML as text and unsafe links dropped still hold. Date: 2026-11-07. Chosen by the lead from the frontend's options.
 
 ## Choice
 

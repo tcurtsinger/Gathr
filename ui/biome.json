@@ -19,5 +19,13 @@
     "rules": {
       "preset": "recommended"
     }
+  },
+  "files": {
+    "includes": ["**", "!src/registry"]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   }
 }

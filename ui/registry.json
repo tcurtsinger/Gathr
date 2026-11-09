@@ -1,0 +1,90 @@
+{
+  "files": [
+    {
+      "path": "components/assistant-ui/elements/approval-card.tsx",
+      "url": "https://r.assistant-ui.com/elements-approval-card.json",
+      "sha256": "a6b9797c48a965d629af628b8e8a9a4102ce9c6d7b2ca2f9ead75676223dcdef"
+    },
+    {
+      "path": "components/assistant-ui/elements/collapsible-root.tsx",
+      "url": "https://r.assistant-ui.com/elements-collapsible-root.json",
+      "sha256": "ebea1fff3af62e619a63680227b3c4b89cec449fac059f5fcd6695cc128f38b8"
+    },
+    {
+      "path": "components/assistant-ui/elements/composer.tsx",
+      "url": "https://r.assistant-ui.com/elements-composer.json",
+      "sha256": "397fb48354d73ae3eb2e51fc4872601eb8cc863e981520a4a7de65865db65308"
+    },
+    {
+      "path": "components/assistant-ui/elements/receipt-focus.ts",
+      "url": "https://r.assistant-ui.com/elements-receipt-focus.json",
+      "sha256": "0be780a30c042bbb41b6c0621d76ef8506ebe92011ebf36cd5d9e77fb7fd6ec0"
+    },
+    {
+      "path": "components/assistant-ui/elements/speaker-identity.tsx",
+      "url": "https://r.assistant-ui.com/elements-speaker-identity.json",
+      "sha256": "7d2ce0fd3a5c02ca8f49b970e598dbebeb9a096a478c9285f387c5356f3be91f",
+      "adapted": "c4cde7699a779bbc22ff0b42dea566ac11703cd04a9a857ba338a555a8d5b82f",
+      "why": "The prototype's centring (avatar and name on one row), and Gathr's agent identity: initials on a neutral round avatar instead of the shared robot icon (DESIGN.md)."
+    },
+    {
+      "path": "components/assistant-ui/elements/surfaces.tsx",
+      "url": "https://r.assistant-ui.com/elements-surfaces.json",
+      "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa"
+    },
+    {
+      "path": "components/assistant-ui/elements/tool-fallback.aui.tsx",
+      "url": "https://r.assistant-ui.com/tool-fallback.json",
+      "sha256": "31720ad79fe332a5999cc1873108da740e63c05f4b8f322bde75f8d495cbf853"
+    },
+    {
+      "path": "components/assistant-ui/elements/tool-group.aui.tsx",
+      "url": "https://r.assistant-ui.com/tool-group.json",
+      "sha256": "757caf28ee232d4f500c8af7d6837fe7d6d2b144774a6a0bcdaff8c0c517bd9e"
+    },
+    {
+      "path": "components/assistant-ui/elements/tooltip-icon-button.tsx",
+      "url": "https://r.assistant-ui.com/tooltip-icon-button.json",
+      "sha256": "1ec2af97d22c34c955588c866aba5ddbfc579b1fd9218f68f75010b10e5a7868"
+    },
+    {
+      "path": "components/assistant-ui/utils/range.ts",
+      "url": "https://r.assistant-ui.com/elements-range.json",
+      "sha256": "3506d5f07865c042a4ef9b96904f687d19372a14e7dfccf946749860a3606182"
+    },
+    {
+      "path": "components/assistant-ui/utils/useIsomorphicLayoutEffect.ts",
+      "url": "https://r.assistant-ui.com/elements-receipt-focus.json",
+      "sha256": "8db117d730e640655e5099e086af4e00d545c283839d9ef5885ca93419d51893"
+    },
+    {
+      "path": "components/ui/button.tsx",
+      "url": "https://ui.shadcn.com/r/styles/new-york-v4/button.json",
+      "sha256": "79dd6f75f8136394442202d6b8b922fb269eaad0a5dba579397c9d5b41f893bb",
+      "adapted": "1672bc883ba724f0eaaf7a73b6ece94c83f2cfdf3c16cc80caddaa9701dff4fd",
+      "why": "User-approved shared task-card action styling: reuse upstream inkButton/ghostButton recipes with 32px pill actions; preserve variants and icon/row sizing."
+    },
+    {
+      "path": "components/ui/textarea.tsx",
+      "url": "https://ui.shadcn.com/r/styles/new-york-v4/textarea.json",
+      "sha256": "5cafcfeeee29534f449387a16b585f5923d2faab1a0cdc50a874416b175f59ce"
+    },
+    {
+      "path": "components/ui/tooltip.tsx",
+      "url": "https://ui.shadcn.com/r/styles/new-york-v4/tooltip.json",
+      "sha256": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433"
+    },
+    {
+      "path": "lib/utils.ts",
+      "url": null,
+      "sha256": "a8950be0d3981383f2897a00a5a58913ae927d96e51557d915a76e81fbef4f30",
+      "why": "shadcn's @/lib/utils, as the cn package the registry files import it through."
+    },
+    {
+      "path": "registry.css",
+      "url": null,
+      "sha256": "26530427a082fb27260941741a37194a33235d39a6988e540859b25319f77b8f",
+      "why": "The css records of tool-group and tool-fallback (and surfaces' tw-shimmer import), as the registry publishes them."
+    }
+  ]
+}

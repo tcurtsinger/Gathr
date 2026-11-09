@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type Agent, api, type Chat, type Failure } from './api';
 import { ChatView } from './chat/ChatView';
-import type { SendFailure } from './chat/rows';
+import type { SendFailure } from './chat/messages';
 import { Notice } from './components/Notice';
 import { listen } from './live';
 import { report, timeToPaint } from './report';
