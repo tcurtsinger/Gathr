@@ -377,3 +377,42 @@ fn a_wait_whose_looks_keep_failing_is_found_from_its_reference() {
     );
     std::fs::write(data.0.join("go"), "").unwrap();
 }
+
+/// S72: a task cancelled while its turn runs (its PR closed, or its giver or the person cancelled
+/// it) stops that turn, which says why, instead of finishing work nobody needs.
+#[test]
+fn a_turn_whose_task_is_cancelled_stops_and_says_why() {
+    let data = TempDir::new();
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("200"))];
+    let (service, chat, _) = common::team(&data.0, &held_recording(&data.0), &stall);
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Plan it" }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let lead = common::first_token(&data.0);
+    let ask = json!({ "to": "Ann", "what": "Review #7", "kind": "review", "pr": 7 });
+    let given = text(&call_tool(service.info.port, &lead, "give_task", ask));
+    assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
+    service.wait_for(&chat, 10, "Ann's review running", |h| {
+        h["turns"][1]["task"] == 1 && h["turns"][1]["status"] == "running"
+    });
+
+    let why = json!({ "why": "#7 was closed without merging" });
+    let cancelled = service.send("POST", "/api/tasks/1/cancel", why);
+    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.turn.stop'";
+    until(10, "the review's turn to be stopped", || {
+        let (_, rows) = gathr(&data.0, &["diag", "query", sql]);
+        (rows["rows"][0]["n"] == 1).then_some(())
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "both turns ended", |h| {
+        h["turns"][0]["status"] == "done" && h["turns"][1]["status"] == "stopped"
+    });
+    assert_eq!(
+        history["turns"][1]["why"], "its task #1 was cancelled: #7 was closed without merging",
+        "{history}"
+    );
+}

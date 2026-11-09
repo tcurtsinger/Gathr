@@ -334,12 +334,16 @@ impl Task {
             _ if end.ok => "done",
             _ => "failed",
         };
-        let why = (status == "failed").then(|| {
-            end.message
-                .clone()
-                .or(end.reason.clone())
-                .unwrap_or_else(|| end.subtype.clone())
-        });
+        let why = match status {
+            "failed" => Some(
+                end.message
+                    .clone()
+                    .or(end.reason.clone())
+                    .unwrap_or_else(|| end.subtype.clone()),
+            ),
+            "stopped" => turn.stop_why.clone(),
+            _ => None,
+        };
         let mut event = Event::point("invoke_agent claude")
             .trace(&turn.ids.trace)
             .chat(&turn.ids.chat)
