@@ -62,14 +62,16 @@ jobs:
       - run: node scripts/release.mjs stamp ${{ env.VERSION }}
       - run: npx vite build
         working-directory: ui
-      - run: cargo build --release -p gathr --bin gathrd
-      - run: node scripts/release.mjs sidecar
+      # Both feeds: the service's built in (0032), the window's as a config.
       - name: point a PR's build at a local feed
         if: github.event_name == 'pull_request'
         shell: bash
-        run: >-
+        run: |
+          echo "GATHR_APP_FEED=http://127.0.0.1:47199" >> "$GITHUB_ENV"
           echo '{"plugins": {"updater": {"endpoints": ["http://127.0.0.1:47199/latest.json"],
-          "dangerousInsecureTransportProtocol": true}}}' > "$RUNNER_TEMP/local-feed.json"
+            "dangerousInsecureTransportProtocol": true}}}' > "$RUNNER_TEMP/local-feed.json"
+      - run: cargo build --release -p gathr --bin gathrd
+      - run: node scripts/release.mjs sidecar
       - name: installers
         shell: bash
         env:

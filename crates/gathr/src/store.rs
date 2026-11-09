@@ -282,6 +282,11 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
          WHERE status = 'running'",
         [now_us()],
     )?;
+    // An update held these until the service before stopped: nothing holds them now (0032).
+    conn.execute(
+        "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
+        [],
+    )?;
     let mut stmt = conn.prepare(
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
                 (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')

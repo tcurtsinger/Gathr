@@ -9,7 +9,7 @@ mod update;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::{http, launch, platform};
@@ -107,6 +107,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
                 report(app.handle(), "gathr.ui.window.open", opened, &attrs, None);
             }
             update::run(app.handle());
+            follow_service(app.handle());
             Ok(())
         })
         .build(context)
@@ -181,6 +182,40 @@ fn reopen(app: &AppHandle, via: &'static str) {
             &attrs,
             shown.err().map(|e| e.to_string()),
         );
+    });
+}
+
+/// After the service hands over to its update (0032), the new one has its own process and token:
+/// once it answers, the window signs in to it with a fresh one-time link.
+fn follow_service(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            let service = app.state::<Service>();
+            let known = service.info.lock().unwrap().as_ref().map(|i| i.pid);
+            let Ok(now) = ServiceInfo::read(&service.data) else {
+                continue;
+            };
+            if known.is_none_or(|pid| pid == now.pid)
+                || !http::call(now.port, &now.token, "GET", "/health")
+                    .is_ok_and(|r| r.status == 200)
+            {
+                continue;
+            }
+            let since = Instant::now();
+            let loaded = launch::one_time_link(&now).and_then(|url| {
+                let window = app.get_webview_window("main");
+                let window = window.ok_or_else(|| gathr::Error::Other("no window".into()))?;
+                window
+                    .navigate(parse(&url))
+                    .map_err(|e| gathr::Error::Other(e.to_string()))
+            });
+            let attrs = serde_json::json!({ "from_pid": known, "pid": now.pid });
+            *service.info.lock().unwrap() = Some(now);
+            let error = loaded.err().map(|e| e.to_string());
+            report(&app, "gathr.ui.window.follow", since, &attrs, error);
+        }
     });
 }
 

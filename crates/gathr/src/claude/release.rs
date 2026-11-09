@@ -1,11 +1,10 @@
 //! Claude Code's release feed, as its own installer reads it, through the system's curl (0025).
 
 use std::path::Path;
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::sync::atomic::AtomicBool;
 
-use sha2::{Digest, Sha256};
+use crate::fetch::{self, Redirects};
+pub use crate::fetch::{parse_version, sha256};
 
 /// Claude Code's own release feed.
 const CLAUDE_RELEASES: &str = "https://downloads.claude.ai/claude-code-releases";
@@ -27,14 +26,12 @@ pub fn feed() -> Option<String> {
 #[derive(Debug, PartialEq)]
 pub struct Release {
     pub version: String,
-    pub url: String,
-    pub sha256: String,
-    pub size: u64,
+    pub file: fetch::File,
 }
 
 /// The feed's latest version, `x.y.z`.
 pub fn latest(feed: &str, stop: &AtomicBool) -> Result<String, String> {
-    let text = fetch(&format!("{feed}/latest"), stop)?;
+    let text = fetch::fetch(&format!("{feed}/latest"), Redirects::Refused, stop)?;
     let version = text.trim();
     match parse_version(version) {
         Some(_) => Ok(version.to_string()),
@@ -50,7 +47,8 @@ pub fn release(
     binary: &str,
     stop: &AtomicBool,
 ) -> Result<Release, String> {
-    let text = fetch(&format!("{feed}/{version}/manifest.json"), stop)?;
+    let url = format!("{feed}/{version}/manifest.json");
+    let text = fetch::fetch(&url, Redirects::Refused, stop)?;
     let manifest: serde_json::Value =
         serde_json::from_str(&text).map_err(|e| format!("its manifest isn't JSON: {e}"))?;
     from_manifest(&manifest, feed, version, target, binary)
@@ -75,7 +73,7 @@ fn from_manifest(
     if entry["binary"] != binary {
         return Err(format!("its manifest has no {binary} for {target}"));
     }
-    if sha256.len() != 64 || !sha256.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !fetch::is_sha256(sha256) {
         return Err(format!(
             "its manifest's SHA-256 for {target} isn't 64 hex characters"
         ));
@@ -87,138 +85,21 @@ fn from_manifest(
     }
     Ok(Release {
         version: version.to_string(),
-        url: format!("{feed}/{version}/{target}/{binary}"),
-        sha256: sha256.to_ascii_lowercase(),
-        size,
+        file: fetch::File {
+            url: format!("{feed}/{version}/{target}/{binary}"),
+            sha256: sha256.to_ascii_lowercase(),
+            size,
+        },
     })
 }
 
-/// Downloads the release to `to` and checks its size and SHA-256. `Err((kind, why))`, where
-/// kind is `download` or `checksum`.
-/// Ends early, with curl killed, once `stop` is set.
+/// Downloads the release to `to` and checks its size and SHA-256 (`fetch::download`).
 pub fn download(
     release: &Release,
     to: &Path,
     stop: &AtomicBool,
 ) -> Result<(), (&'static str, String)> {
-    // No total time limit: a slow link may take a while. A stalled one stops within a minute.
-    let mut command = curl(&[
-        "--max-filesize",
-        &release.size.to_string(),
-        "--speed-limit",
-        "1024",
-    ]);
-    command
-        .args(["--speed-time", "60", "--output"])
-        .arg(to)
-        .arg(&release.url);
-    run_until(command, stop).map_err(|why| ("download", why))?;
-    let size = std::fs::metadata(to).map(|m| m.len()).unwrap_or(0);
-    if size != release.size {
-        let why = format!(
-            "{} is {size} bytes; its manifest says {}",
-            release.url, release.size
-        );
-        return Err(("checksum", why));
-    }
-    let sha = sha256_file(to).map_err(|e| ("download", format!("it wasn't read back: {e}")))?;
-    if sha != release.sha256 {
-        let why = format!("its SHA-256 is {sha}; its manifest says {}", release.sha256);
-        return Err(("checksum", why));
-    }
-    Ok(())
-}
-
-/// Lowercase hex SHA-256.
-pub fn sha256(bytes: &[u8]) -> String {
-    hex(&Sha256::digest(bytes))
-}
-
-fn sha256_file(path: &Path) -> std::io::Result<String> {
-    let mut hasher = Sha256::new();
-    let mut file = std::fs::File::open(path)?;
-    let mut buffer = vec![0; 1 << 20];
-    loop {
-        match std::io::Read::read(&mut file, &mut buffer)? {
-            0 => return Ok(hex(&hasher.finalize())),
-            n => hasher.update(&buffer[..n]),
-        }
-    }
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
-}
-
-/// `x.y.z` as numbers, so 2.1.99 sorts before 2.1.100.
-pub fn parse_version(version: &str) -> Option<[u32; 3]> {
-    let parts: Vec<u32> = version
-        .split('.')
-        .map(|p| p.parse().ok())
-        .collect::<Option<_>>()?;
-    parts.try_into().ok()
-}
-
-/// A small text file from the feed, within 30 s or until `stop` is set.
-fn fetch(url: &str, stop: &AtomicBool) -> Result<String, String> {
-    let mut command = curl(&["--max-time", "30", "--max-filesize", "1048576"]);
-    command.arg(url);
-    run_until(command, stop)
-}
-
-/// curl, failing on any HTTP error and never following a redirect away from the feed.
-fn curl(limits: &[&str]) -> Command {
-    let mut command = Command::new(crate::platform::curl());
-    command
-        .args([
-            "--fail",
-            "--silent",
-            "--show-error",
-            "--connect-timeout",
-            "15",
-        ])
-        .args(limits)
-        .stdin(Stdio::null());
-    crate::platform::no_window(&mut command);
-    command
-}
-
-/// curl's output to its end, or curl killed once `stop` is set; its error line if it fails.
-fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, String> {
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("curl didn't start: {e}"))?;
-    // Read on threads so a full pipe never holds curl up while this loop waits for it.
-    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
-        std::thread::spawn(move || {
-            let mut text = String::new();
-            if let Some(mut pipe) = pipe {
-                let _ = pipe.read_to_string(&mut text);
-            }
-            text
-        })
-    };
-    let stdout = read(child.stdout.take().map(|p| Box::new(p) as _));
-    let stderr = read(child.stderr.take().map(|p| Box::new(p) as _));
-    let status = loop {
-        if stop.load(Ordering::Relaxed) {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err("the service stopped".into());
-        }
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
-            Err(e) => return Err(format!("curl wasn't waited for: {e}")),
-        }
-    };
-    let (out, error) = (stdout.join(), stderr.join());
-    if status.success() {
-        return Ok(out.unwrap_or_default());
-    }
-    Err(format!("{} ({status})", error.unwrap_or_default().trim()))
+    fetch::download(&release.file, to, Redirects::Refused, stop)
 }
 
 #[cfg(test)]
@@ -237,8 +118,8 @@ mod tests {
             from_manifest(m, "https://f", "2.1.319", "win32-x64", "claude.exe")
         };
         let good = read(&manifest("2.1.319", "claude.exe", &sha, 344_807_072)).unwrap();
-        assert_eq!(good.url, "https://f/2.1.319/win32-x64/claude.exe");
-        assert_eq!(good.sha256, "ab".repeat(32));
+        assert_eq!(good.file.url, "https://f/2.1.319/win32-x64/claude.exe");
+        assert_eq!(good.file.sha256, "ab".repeat(32));
         let bad = [
             manifest("2.1.318", "claude.exe", &sha, 1),
             manifest("2.1.319", "claude", &sha, 1),
@@ -250,12 +131,5 @@ mod tests {
         for m in bad {
             assert!(read(&m).is_err(), "accepted {m}");
         }
-    }
-
-    #[test]
-    fn versions_compare_by_number() {
-        assert!(parse_version("2.1.100") > parse_version("2.1.99"));
-        assert_eq!(parse_version("2.1"), None);
-        assert_eq!(parse_version("2.1.x"), None);
     }
 }

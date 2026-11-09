@@ -2,6 +2,8 @@
 // Each test file uses part of this module.
 #![allow(dead_code)]
 
+pub mod feed;
+
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
 use std::time::{Duration, Instant};
@@ -41,6 +43,16 @@ impl TestService {
     /// Starts it with extra environment variables, such as the replay engine's.
     pub fn start_with(data: &Path, env: &[(&str, &Path)]) -> TestService {
         let mut command = gathrd(data);
+        for (name, value) in env {
+            command.env(name, value);
+        }
+        Self::spawn(command, data)
+    }
+
+    /// Starts `program`, a copy of `gathrd`, with extra environment variables.
+    pub fn start_program(program: &Path, data: &Path, env: &[(&str, &Path)]) -> TestService {
+        let mut command = Command::new(program);
+        command.arg("--data").arg(data).arg("--port").arg("0");
         for (name, value) in env {
             command.env(name, value);
         }

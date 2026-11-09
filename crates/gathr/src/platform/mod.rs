@@ -80,52 +80,23 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
-/// The MSYS process running as the Windows pid `$1`, as `$g`. Only built-ins: the service's PATH
-/// may not have Git's usr\bin.
-const FIND: &str = r#"find() {
-    for p in /proc/[0-9]*; do
-        w=; read -r w 2>/dev/null < "$p/winpid"
-        [ "$w" = "$1" ] && { g=${p#/proc/}; return 0; }
-    done
-    return 1
-};"#;
-
-/// Ends every process in the group of `program`, started with `no_window` as `pid`, which leads
-/// it: what it starts stays in it. Returns once they're gone. On Unix the group's id is `pid`,
-/// no other process's while `pid` isn't waited for. On Windows only an MSYS program (Git Bash) has
-/// a group, whose fork and exec leave children no Windows tree reaches; its id is the program's
-/// MSYS pid, found here through `pid` (no other process's while its handle is held), so only while
-/// the program runs: an MSYS pid is free for another process the moment its own ends.
-pub fn end_group(pid: u32, program: &Path) {
-    let mut command = match msys_bash(program) {
-        Some(bash) => {
-            let mut command = std::process::Command::new(bash);
-            let script = format!(r#"{FIND} find "$1" && kill -s KILL -- "-$g""#);
-            command.args(["-c", &script, "end-group", &pid.to_string()]);
-            command
-        }
-        None if cfg!(windows) => return,
-        None => {
-            let mut command = std::process::Command::new("/bin/kill");
-            command.args(["-KILL", "--", &format!("-{pid}")]);
-            command
-        }
-    };
-    no_window(&mut command);
-    let _ = command
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+/// Starts a short program so that ending it ends everything it started (1219): in a Job Object on
+/// Windows, which takes in each child as it's created, even one Git Bash was starting when it was
+/// ended, before MSYS or any process tree lists it; in its own process group on Unix, whose id stays
+/// the program's until it's waited for. Engines never start this way: they close the gentle way.
+pub fn ending_together(command: tokio::process::Command) -> process_wrap::tokio::CommandWrap {
+    let mut wrapped = process_wrap::tokio::CommandWrap::from(command);
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Threading::CREATE_NO_WINDOW;
+        wrapped
+            .wrap(process_wrap::tokio::CreationFlags(CREATE_NO_WINDOW))
+            .wrap(process_wrap::tokio::JobObject);
+    }
+    #[cfg(unix)]
+    wrapped.wrap(process_wrap::tokio::ProcessGroup::leader());
+    wrapped
 }
-
-/// Git Bash beside an MSYS program, on Windows.
-fn msys_bash(program: &Path) -> Option<PathBuf> {
-    let bash = program.with_file_name("bash.exe");
-    let msys = cfg!(windows) && program.with_file_name("msys-2.0.dll").is_file();
-    (msys && bash.is_file()).then_some(bash)
-}
-
 /// This computer in Claude Code's release feed, such as `win32-x64`; none where it ships nothing.
 pub fn release_target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
@@ -145,6 +116,15 @@ pub fn curl() -> PathBuf {
         return PathBuf::from(root).join(r"System32\curl.exe");
     }
     PathBuf::from("/usr/bin/curl")
+}
+
+/// The system's own tar (bsdtar on both), by its full path, for Gathr's release archives (0032).
+pub fn tar() -> PathBuf {
+    if cfg!(windows) {
+        let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+        return PathBuf::from(root).join(r"System32\tar.exe");
+    }
+    PathBuf::from("/usr/bin/tar")
 }
 
 /// Lets a downloaded program run: mode 0755 on Unix. Windows needs nothing.

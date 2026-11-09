@@ -114,6 +114,8 @@ pub struct Chats {
     pauses: Mutex<Vec<Pause>>,
     /// Wait checks running now: each one's chat and agent. A pause stays `pausing` while one runs.
     checking: Mutex<Vec<(String, String)>>,
+    /// The version Gathr is updating to: the turns Gathr queued wait while it's set (0032).
+    updating: Mutex<Option<String>>,
 }
 
 impl Chats {
@@ -137,6 +139,7 @@ impl Chats {
             picking: tokio::sync::Mutex::default(),
             pauses: Mutex::default(),
             checking: Mutex::default(),
+            updating: Mutex::default(),
         })
     }
 
@@ -348,6 +351,17 @@ impl Chats {
     /// The pauses in force now.
     pub fn pauses(&self) -> Vec<Pause> {
         self.pauses.lock().expect("never poisoned").clone()
+    }
+
+    /// The version Gathr is updating to, while the turns it queued wait for it.
+    pub fn updating(&self) -> Option<String> {
+        self.updating.lock().expect("never poisoned").clone()
+    }
+
+    /// Holds the turns Gathr queued for an update to `version`, or lets them go (`None`).
+    pub async fn set_updating(&self, version: Option<String>) {
+        *self.updating.lock().expect("never poisoned") = version;
+        self.pauses_changed().await;
     }
 
     /// The wait checks running now.

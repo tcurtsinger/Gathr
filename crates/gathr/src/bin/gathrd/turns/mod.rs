@@ -394,12 +394,12 @@ impl Task {
     /// failed.
     async fn enqueue(&mut self, queued: &Queued) -> Result<&'static str, String> {
         let ids = &queued.ids;
-        if self.paused(ids) {
+        if self.holder(ids).is_some() {
             self.queue.push_back(queued.clone());
             self.mark_holds().await;
             return Ok("held");
         }
-        let ahead = self.queue.iter().any(|q| !self.paused(&q.ids));
+        let ahead = self.queue.iter().any(|q| self.holder(&q.ids).is_none());
         if self.turn.is_some() || self.closing.is_some() || ahead {
             self.queue.push_back(queued.clone());
             self.set_turn(ids, "queued", None).await;
@@ -417,7 +417,12 @@ impl Task {
     async fn try_next(&mut self) {
         while self.turn.is_none() && self.closing.is_none() {
             // The first turn no pause holds: a paused chat's turns never hold another chat's.
-            let Some(next) = self.queue.iter().find(|q| !self.paused(&q.ids)).cloned() else {
+            let Some(next) = self
+                .queue
+                .iter()
+                .find(|q| self.holder(&q.ids).is_none())
+                .cloned()
+            else {
                 return;
             };
             let taken = |q: &Queued| q.ids.turn != next.ids.turn;
