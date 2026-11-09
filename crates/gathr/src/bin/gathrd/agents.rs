@@ -149,15 +149,19 @@ async fn remove(
     let gone = agent.id.clone();
     let removed = s
         .writer
-        .call(move |conn| match gathr::team::a_chat_of(conn, &gone)? {
-            Some(chat) => Ok(Err(chat)),
-            None => agents::remove(conn, &gone).map(Ok),
+        .call(move |conn| {
+            if let Some(chat) = gathr::team::a_chat_of(conn, &gone)? {
+                return Ok(Err(format!("the agent is in the chat \"{chat}\"")));
+            }
+            match gathr::projects::a_project_of(conn, &gone)? {
+                Some(project) => Ok(Err(format!("the agent is in the project \"{project}\""))),
+                None => agents::remove(conn, &gone).map(Ok),
+            }
         })
         .await;
     match removed {
         Some(Ok(Ok(_))) => s.chats.retire(&agent.id),
-        Some(Ok(Err(chat))) => {
-            let why = format!("the agent is in the chat \"{chat}\"");
+        Some(Ok(Err(why))) => {
             return Err(fail(StatusCode::CONFLICT, ERROR, &why, &t.0));
         }
         Some(Err(e)) => {

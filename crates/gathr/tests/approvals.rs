@@ -234,6 +234,8 @@ fn open_push(service: &TestService, chat: &str) -> (String, String) {
         h["approvals"].as_array().is_some_and(|a| !a.is_empty())
     });
     let open = &history["approvals"][0];
+    // A window opened after the ask shows the card as the live socket did, with its reason if any.
+    assert!(open.get("why").is_some(), "{open}");
     let request = open["request_id"].as_str().unwrap().to_string();
     (request, open["tool"].as_str().unwrap().to_string())
 }
@@ -269,10 +271,8 @@ fn every_push_from_a_worktree_waits_for_the_persons_answer_however_it_is_run() {
     );
     let rook = made.json()["id"].as_str().unwrap().to_string();
     let members = json!([{ "agent": rook, "role": "supervisor" }]);
-    let body = json!({ "members": members, "project": project_dir });
-    let chat = service.send("POST", "/api/chats", body);
-    assert_eq!(chat.status, 200, "{}", chat.body);
-    let chat = chat.json()["id"].as_str().unwrap().to_string();
+    let chat = common::project_chat(&service, &project_dir, members);
+
     let path = format!("/api/chats/{chat}/messages");
     let sent = service.send("POST", &path, json!({ "text": "Ship it", "agent": rook }));
     let reference = sent.json()["ref"].as_str().unwrap().to_string();
@@ -398,11 +398,8 @@ fn a_push_the_person_allowed_as_a_command_asks_no_twice() {
     );
     let rook = made.json()["id"].as_str().unwrap().to_string();
     let members = json!([{ "agent": rook, "role": "supervisor" }]);
-    let body = json!({ "members": members, "project": project_dir });
-    let chat = service.send("POST", "/api/chats", body).json()["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let chat = common::project_chat(&service, &project_dir, members);
+
     let path = format!("/api/chats/{chat}/messages");
     service.send("POST", &path, json!({ "text": "Ship it", "agent": rook }));
     let (request, tool) = open_push(&service, &chat);

@@ -17,7 +17,7 @@ pub enum Role {
 }
 
 impl Role {
-    fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Role::Supervisor => "supervisor",
             Role::Reviewer => "reviewer",
@@ -120,6 +120,72 @@ pub fn a_chat_of(conn: &Connection, agent: &str) -> Result<Option<String>, Error
             |r| r.get(0),
         )
         .optional()?)
+}
+
+/// Where a message goes: its agent, and the chat's agents when sending it added one.
+pub struct Routed {
+    pub agent: Option<String>,
+    pub joined: Option<Vec<Member>>,
+}
+
+/// Who a message goes to (0028). In a chat with no project, an agent picked from outside the chat
+/// joins it (F8b): the chat's agent until then leads as its Supervisor, the new one is a member. A
+/// chat with one agent so far keeps no list. The `Err` is why the message can't go.
+pub fn route(
+    conn: &mut Connection,
+    chat: &str,
+    sent_to: Option<&str>,
+    text: &str,
+) -> Result<Result<Routed, &'static str>, Error> {
+    use rusqlite::OptionalExtension;
+    let team = members(conn, chat)?;
+    let plain: bool = conn.query_row(
+        "SELECT project IS NULL FROM chats WHERE id = ?1",
+        [chat],
+        |r| r.get(0),
+    )?;
+    let joins = sent_to.filter(|agent| plain && !team.iter().any(|m| m.agent == *agent));
+    let Some(agent) = joins else {
+        let agent = addressee(&team, sent_to, text);
+        return Ok(agent.map(|agent| Routed {
+            agent,
+            joined: None,
+        }));
+    };
+    let mut seats: Vec<(String, Role)> = team.iter().map(|m| (m.agent.clone(), m.role)).collect();
+    if seats.is_empty() {
+        // The agent the chat has run on so far, if it still exists.
+        let first: Option<String> = conn
+            .query_row(
+                "SELECT t.agent_id FROM turns t JOIN agents a ON a.id = t.agent_id
+                 WHERE t.chat_id = ?1 ORDER BY t.created_ts DESC LIMIT 1",
+                [chat],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match first.filter(|first| first != agent) {
+            Some(first) => seats.push((first, Role::Member)),
+            None => {
+                return Ok(Ok(Routed {
+                    agent: Some(agent.into()),
+                    joined: None,
+                }));
+            }
+        }
+    }
+    seats.push((agent.to_string(), Role::Member));
+    if !seats.iter().any(|(_, role)| *role == Role::Supervisor) {
+        seats[0].1 = Role::Supervisor;
+    }
+    if let Some(why) = refused(&seats) {
+        return Ok(Err(why));
+    }
+    set_members(conn, chat, &seats)?;
+    let joined = members(conn, chat)?;
+    Ok(Ok(Routed {
+        agent: Some(agent.into()),
+        joined: Some(joined),
+    }))
 }
 
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one

@@ -15,6 +15,7 @@ pub mod http;
 pub mod ids;
 pub mod launch;
 pub mod platform;
+pub mod projects;
 pub mod redact;
 pub mod run;
 pub mod seed;

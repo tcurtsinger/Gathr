@@ -44,6 +44,8 @@ pub struct Wait {
     pub chat: String,
     pub agent: String,
     pub task: Option<i64>,
+    /// The turn that left it: a wake-up answers that turn (the inline thread).
+    pub left_in: Option<String>,
     pub kind: String,
     pub target: Option<String>,
     pub repo: Option<String>,
@@ -472,7 +474,8 @@ fn fire(
         wait.then_do.trim_end_matches('.')
     );
     let at = (wait.chat.as_str(), wait.agent.as_str());
-    Ok(vec![Start::queue(tx, at, wait.task, text)?])
+    let on = (wait.task, wait.left_in.as_deref());
+    Ok(vec![Start::queue(tx, at, on, text)?])
 }
 
 fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<String>, Error> {
@@ -484,7 +487,7 @@ fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<Str
 pub fn read(conn: &Connection, id: &str) -> Result<Wait, Error> {
     let mut wait = conn.query_row(
         "SELECT id, chat_id, agent_id, task, kind, target, repo, cwd, then_do, state, line, head,
-                head_ts, failures, last_error, created_ts
+                head_ts, failures, last_error, created_ts, left_in
          FROM waits WHERE id = ?1",
         [id],
         |r| {
@@ -505,6 +508,7 @@ pub fn read(conn: &Connection, id: &str) -> Result<Wait, Error> {
                 failures: r.get(13)?,
                 last_error: r.get(14)?,
                 created_ts: r.get(15)?,
+                left_in: r.get(16)?,
                 parts: Vec::new(),
             })
         },

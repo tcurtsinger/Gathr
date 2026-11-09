@@ -30,7 +30,7 @@ fn team(dir: &TempDir) -> Connection {
 
 /// A turn of `agent`'s in chat `c`, on `task`, with `status`.
 fn turn(conn: &Connection, id: &str, agent: &str, task: Option<i64>, status: &str) {
-    gathr::store::add_turn(conn, "c", id, T, (Some(agent), task)).unwrap();
+    gathr::store::add_turn(conn, "c", id, T, (Some(agent), task, None)).unwrap();
     conn.execute(
         "UPDATE turns SET status = ?2 WHERE id = ?1",
         params![id, status],

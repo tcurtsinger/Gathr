@@ -6,6 +6,8 @@ use std::time::Duration;
 
 use gathr::event::Event;
 use gathr::tasks::{self, Moved, Start};
+use serde_json::{Value, json};
+use tokio::sync::broadcast;
 
 use crate::chats::Chats;
 
@@ -39,6 +41,35 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
         tasks::turn_moved(conn, &m, &status, why.as_deref())
     };
     apply(chats, "gathr.turn.status", m.trace, work).await;
+}
+
+/// A chat's tasks and waits, as `GET /api/chats/<id>/tasks` answers and the live socket sends.
+pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::Error> {
+    let tasks = tasks::list(conn, chat)?;
+    let waits = gathr::waits::in_chat(conn, chat, None)?;
+    Ok(json!({ "tasks": tasks, "waits": waits }))
+}
+
+/// Runs after each write: every chat whose tasks or waits it changed goes out live, whole, for
+/// the window's Summary (F8b).
+pub fn live_tasks(
+    live: broadcast::Sender<Value>,
+) -> impl FnMut(&mut rusqlite::Connection) + Send + 'static {
+    move |conn| {
+        let sent = tasks::touched::take(conn).and_then(|chats| {
+            for chat in chats.iter().filter(|_| live.receiver_count() > 0) {
+                let mut update = listed(conn, chat)?;
+                update["type"] = json!("tasks");
+                update["chat"] = json!(chat);
+                let _ = live.send(update);
+            }
+            Ok(())
+        });
+        if let Err(e) = sent {
+            let event = Event::point("gathr.task.live").error("sqlite");
+            let _ = event.attr("why", e.to_string()).insert(conn);
+        }
+    }
 }
 
 /// At start, before the turns left waiting are taken over: tasks cut off by the stop are stopped.

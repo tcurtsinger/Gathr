@@ -58,13 +58,35 @@ async fn history(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    let open = s.chats.approvals(&chat).await;
+    let (approvals, streaming) = s.chats.open(&chat).await;
     let id = chat.clone();
     let Json(mut history) =
         db(&s, &t, "Chat failed", move |conn| store::history(conn, &id)).await?;
-    history["approvals"] = json!(open);
+    history["approvals"] = json!(approvals);
+    history["streaming"] = json!(still_streaming(&history, streaming));
     crate::team::with_folders(&s, &chat, &mut history);
     Ok(Json(history))
+}
+
+/// The replies still streaming whose text isn't in `history` yet: a block saved between the two
+/// reads shows once, as its message.
+fn still_streaming(history: &Value, streaming: Vec<Value>) -> Vec<Value> {
+    let messages = history["messages"]
+        .as_array()
+        .map_or(&[][..], Vec::as_slice);
+    let replies = |turn: &Value| {
+        let of_turn = |m: &&Value| m["turn"] == *turn && m["role"] == "assistant";
+        messages.iter().filter(of_turn).count()
+    };
+    let unsaved = streaming
+        .into_iter()
+        .filter(|s| s["saved"].as_i64() == Some(replies(&s["turn"]) as i64));
+    unsaved
+        .map(|mut s| {
+            s.as_object_mut().map(|o| o.remove("saved"));
+            s
+        })
+        .collect()
 }
 
 #[derive(Deserialize)]
@@ -262,7 +284,8 @@ async fn forward(mut socket: WebSocket, mut events: tokio::sync::broadcast::Rece
     }
 }
 
-/// Who the message goes to among the chat's agents (0028).
+/// Who the message goes to among the chat's agents (0028), adding the one picked in a chat with no
+/// project (F8b).
 async fn addressee(
     s: &State,
     t: &Trace,
@@ -270,13 +293,13 @@ async fn addressee(
     sent_to: Option<String>,
     text: &str,
 ) -> Result<Option<String>, Fail> {
-    let id = chat.to_string();
-    let members = s
+    let (id, text) = (chat.to_string(), text.to_string());
+    let routed = s
         .writer
-        .call(move |conn| gathr::team::members(conn, &id))
+        .call(move |conn| gathr::team::route(conn, &id, sent_to.as_deref(), &text))
         .await;
-    let members = match members {
-        Some(Ok(members)) => members,
+    let routed = match routed {
+        Some(Ok(routed)) => routed,
         Some(Err(e)) => {
             return Err(fail(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -295,8 +318,11 @@ async fn addressee(
             ));
         }
     };
-    gathr::team::addressee(&members, sent_to.as_deref(), text)
-        .map_err(|why| fail(StatusCode::BAD_REQUEST, "Send failed", why, &t.0))
+    let routed = routed.map_err(|why| fail(StatusCode::BAD_REQUEST, "Send failed", why, &t.0))?;
+    if let Some(members) = routed.joined {
+        crate::team::changed(s, t, chat, members);
+    }
+    Ok(routed.agent)
 }
 
 pub async fn known(s: &State, t: &Trace, chat: &str) -> Result<(), Fail> {

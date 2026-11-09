@@ -104,6 +104,7 @@ fn tasks(team: &Team) -> Value {
 fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_back() {
     let data = TempDir::new();
     let team = team(&data.0, &twice(&data.0));
+    let mut live = team.service.live();
     let lead_token = lead_turn(&team, &data.0, 0);
     let port = team.service.info.port;
     let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
@@ -136,6 +137,21 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     assert_eq!(task["state"], "done", "{listed}");
     assert_eq!(task["given_in"], giving["id"], "the thread link: {listed}");
     assert_eq!(heard["agent"], team.lead.as_str());
+    assert_eq!(
+        owned["answers"], giving["id"],
+        "Ann's reply's thread: {history}"
+    );
+    assert_eq!(
+        heard["answers"], giving["id"],
+        "the hear-back's thread: {history}"
+    );
+    // Summary follows the task live, in the shape `GET /api/chats/<id>/tasks` answers.
+    let states: Vec<Value> = std::iter::from_fn(|| Some(common::next_live(&mut live)))
+        .filter(|u| u["type"] == "tasks" && u["chat"] == team.chat.as_str())
+        .map(|u| u["tasks"][0]["state"].clone())
+        .take_while(|state| state != "done")
+        .collect();
+    assert_eq!(states.first(), Some(&json!("ready")), "{states:?}");
     let said: Vec<&Value> = history["messages"]
         .as_array()
         .unwrap()
@@ -196,6 +212,11 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
             .as_array()
             .is_some_and(|t| t.len() == 2 && t[1]["status"] == "done")
     });
+    let turns = &history["turns"];
+    assert_eq!(
+        turns[1]["answers"], turns[0]["id"],
+        "the wake-up's thread: {history}"
+    );
     let woken = history["messages"]
         .as_array()
         .unwrap()

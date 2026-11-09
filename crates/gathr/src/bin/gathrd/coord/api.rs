@@ -7,8 +7,8 @@ use axum::Json;
 use axum::Router;
 use axum::extract::{Extension, Path, State as Extract};
 use axum::routing::{get, post};
+use gathr::tasks;
 use gathr::tasks::Start;
-use gathr::{tasks, waits};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -28,12 +28,7 @@ async fn list(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
-    db(&s, &t, "Tasks failed", move |c| {
-        let tasks = tasks::list(c, &chat)?;
-        let waits = waits::in_chat(c, &chat, None)?;
-        Ok(json!({ "tasks": tasks, "waits": waits }))
-    })
-    .await
+    db(&s, &t, "Tasks failed", move |c| super::listed(c, &chat)).await
 }
 
 #[derive(Deserialize)]

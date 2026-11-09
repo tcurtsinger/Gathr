@@ -1,6 +1,5 @@
 //! A chat's agents, roles and project folder through the API (0013, 0028), until F8's screens.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Json;
@@ -25,7 +24,8 @@ pub struct Seat {
 #[derive(Deserialize)]
 pub struct NewChat {
     title: Option<String>,
-    project: Option<PathBuf>,
+    /// The project it's made in: its folder and team are copied (F8b).
+    project: Option<String>,
     members: Option<Vec<Seat>>,
 }
 
@@ -35,26 +35,29 @@ pub async fn create(
     Json(body): Json<NewChat>,
 ) -> Answer {
     const ERROR: &str = "New chat failed";
-    let seats = match body.members {
-        Some(seats) => Some(checked(&s, &t, seats, ERROR).await?),
-        None if body.project.is_some() => {
-            return Err(bad(
-                &t,
-                ERROR,
-                "a chat with a project folder needs its agents",
-            ));
-        }
+    let in_project = match body.project {
+        Some(id) => Some(crate::projects::find(&s, &t, &id, ERROR).await?),
         None => None,
     };
-    let project = match body.project {
-        Some(dir) => Some(project(&t, &dir, ERROR).await?),
-        None => None,
+    let seats = match (&in_project, body.members) {
+        (Some(p), _) => Some(
+            p.members
+                .iter()
+                .map(|m| (m.agent.clone(), m.role))
+                .collect(),
+        ),
+        (None, Some(seats)) => Some(checked(&s, &t, seats, ERROR).await?),
+        (None, None) => None,
     };
     let title = body.title.unwrap_or_else(|| store::UNTITLED.into());
     let made = s
         .writer
         .call(move |conn| {
-            let chat = store::create_chat(conn, &title, project.as_deref())?;
+            let at = in_project
+                .as_ref()
+                .map(|p| (p.id.as_str(), p.folder.as_str()));
+            let at = (at.map(|a| a.0), at.map(|a| a.1));
+            let chat = store::create_chat(conn, &title, at)?;
             if let Some(seats) = &seats {
                 team::set_members(conn, chat["id"].as_str().unwrap_or_default(), seats)?;
             }
@@ -92,8 +95,26 @@ pub async fn change(
         })
         .await;
     let members = written(&t, changed, ERROR)?;
-    record(&s, &t, &chat, &seats);
+    changed_to(&s, &t, &chat, &seats, &members);
     Ok(Json(json!({ "chat": chat, "members": members })))
+}
+
+/// A send added an agent: the change is recorded and goes out live.
+pub fn changed(s: &State, t: &Trace, chat: &str, members: Vec<team::Member>) {
+    let seats: Vec<(String, Role)> = members.iter().map(|m| (m.agent.clone(), m.role)).collect();
+    changed_to(s, t, chat, &seats, &members);
+}
+
+fn changed_to(
+    s: &State,
+    t: &Trace,
+    chat: &str,
+    seats: &[(String, Role)],
+    members: &[team::Member],
+) {
+    record(s, t, chat, seats);
+    s.chats
+        .publish(json!({ "type": "members", "chat": chat, "members": members }));
 }
 
 /// Each member's worktree folder, once it has one.
@@ -111,7 +132,7 @@ pub fn with_folders(s: &State, chat: &str, history: &mut Value) {
 }
 
 /// The seats as roles, once the rules hold and every agent exists.
-async fn checked(
+pub async fn checked(
     s: &State,
     t: &Trace,
     seats: Vec<Seat>,
@@ -147,7 +168,11 @@ async fn checked(
 }
 
 /// The project's top folder: it must be a git repository.
-async fn project(t: &Trace, dir: &std::path::Path, error: &'static str) -> Result<String, Fail> {
+pub async fn project(
+    t: &Trace,
+    dir: &std::path::Path,
+    error: &'static str,
+) -> Result<String, Fail> {
     if !dir.is_absolute() {
         return Err(bad(t, error, "the project folder is a full path"));
     }
@@ -175,11 +200,11 @@ fn record(s: &State, t: &Trace, chat: &str, seats: &[(String, Role)]) {
     s.writer.record(event.attr("members", Value::Array(team)));
 }
 
-fn bad(t: &Trace, error: &'static str, why: &str) -> Fail {
+pub fn bad(t: &Trace, error: &'static str, why: &str) -> Fail {
     fail(StatusCode::BAD_REQUEST, error, why, &t.0)
 }
 
-fn written<T>(
+pub fn written<T>(
     t: &Trace,
     done: Option<Result<T, gathr::Error>>,
     error: &'static str,

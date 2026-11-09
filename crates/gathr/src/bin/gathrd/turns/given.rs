@@ -17,6 +17,7 @@ impl Task {
             trace: start.trace,
             agent: Some(start.agent),
             task: start.task,
+            answers: start.answers,
         };
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
