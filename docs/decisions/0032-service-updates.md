@@ -10,7 +10,9 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
   to start, the one before it, whether the current one is still on trial, and the releases refused here.
 - **The first copy:** the window (and `gathr open`) copies the installed `gathrd` and its UI in when the folder has no
   usable copy, when the installed one is newer (the window updated), or when it's the same version built again (a
-  check on a fresh build). A newer one starts on trial. The UI is beside `gathrd`, or in a macOS bundle's `Resources`.
+  check on a fresh build, or macOS signing the bundle's again). A newer one starts on trial. The same version copied
+  in again keeps its trial as it was, so a copy that died on trial still rolls back; clearing it was turned down, as a
+  rebuild during a trial would hide that crash. The UI is beside `gathrd`, or in a macOS bundle's `Resources`.
 - **The feed:** each GitHub Release carries `gathrd.json`: `{"version": "x.y.z", "platforms": {"<target>": {"file",
   "sha256", "size"}}}`, where target is `win32-x64`, `darwin-arm64` (as Claude Code's feed names them), and the file
   a `.tar.gz` holding `gathrd(.exe)` and `ui/`. Read from `releases/latest/download`, following GitHub's redirects

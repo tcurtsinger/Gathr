@@ -127,7 +127,9 @@ impl Copies {
 
     /// Copies an installed `gathrd`, with its built UI, into the folder when the folder has no
     /// usable copy, when the installed one is newer (the window updated), or when it's this same
-    /// version built again (a check on a fresh build). A newer one starts on trial.
+    /// version built again (a check on a fresh build, or macOS signing the bundle's own). A newer
+    /// one starts on trial; the same version again stays as it was, on trial or not, so a copy that
+    /// died on trial still rolls back.
     pub fn adopt(&self, installed: &Path) -> io::Result<()> {
         let current = self.current();
         let usable = current.as_ref().filter(|c| self.path(&c.version).is_file());
@@ -146,7 +148,8 @@ impl Copies {
             return self.write(&next);
         }
         if usable.version == VERSION && !same_file(installed, &self.path(VERSION))? {
-            return self.take(installed, usable.previous.clone(), usable.refused.clone());
+            self.take_files(installed)?;
+            return self.write(usable);
         }
         Ok(())
     }

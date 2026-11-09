@@ -217,8 +217,10 @@ fn until_free(data: &Path, what: &str) {
 
 /// The new copy starts, then dies before it finishes a turn: the next start goes back to the copy
 /// before. `migrated`: it had moved the database on, so the database from before the update comes
-/// back too; otherwise what was written on the new copy stays.
-fn dies_on_trial(migrated: bool) {
+/// back too; otherwise what was written on the new copy stays. `resigned`: the folder's copy differs
+/// from the installed program of the same version (macOS signs the bundle's again), so the start
+/// copies the installed one in again: still on trial.
+fn dies_on_trial(migrated: bool, resigned: bool) {
     let dir = TempDir::new();
     let data = dir.0.join("data");
     let old = seed_copy(&data, "0.0.1");
@@ -251,6 +253,11 @@ fn dies_on_trial(migrated: bool) {
         let db = rusqlite::Connection::open(DataDir::new(&data).db()).unwrap();
         db.pragma_update(None, "user_version", 99).unwrap();
     }
+    if resigned {
+        let copy = data.join("app").join(VERSION).join(program_name());
+        let mut file = std::fs::OpenOptions::new().append(true).open(copy).unwrap();
+        std::io::Write::write_all(&mut file, b"signed again").unwrap();
+    }
     let back = open(&dir.0, &data);
     let app = get(&back, "/api/app");
     assert_eq!(app["version"], "0.0.1", "{app}");
@@ -265,12 +272,17 @@ fn dies_on_trial(migrated: bool) {
 
 #[test]
 fn a_release_that_dies_before_its_first_turn_rolls_back_and_keeps_what_it_wrote() {
-    dies_on_trial(false);
+    dies_on_trial(false, false);
 }
 
 #[test]
 fn a_release_that_dies_after_moving_the_database_on_rolls_back_with_the_database_before() {
-    dies_on_trial(true);
+    dies_on_trial(true, false);
+}
+
+#[test]
+fn a_release_that_dies_on_trial_rolls_back_though_its_copy_differs_from_the_installed_one() {
+    dies_on_trial(false, true);
 }
 
 /// A release whose program says the right version but isn't a service (the command line packed
