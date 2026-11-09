@@ -74,6 +74,9 @@ struct Running {
     sent_us: i64,
     /// Text streamed since the last whole block: what a stopped turn keeps.
     partial: String,
+    /// `partial`'s length in UTF-16 units, as the window counts it: each delta says where it starts,
+    /// so a window that read `partial` in a chat's history skips what that already held.
+    partial_units: usize,
     streamed: bool,
     /// Tool calls under way: their message, name and start.
     tools: HashMap<String, (String, String, i64)>,
@@ -587,6 +590,7 @@ impl Task {
             span,
             sent_us: now_us(),
             partial: String::new(),
+            partial_units: 0,
             streamed: false,
             tools: HashMap::new(),
             approvals: HashMap::new(),

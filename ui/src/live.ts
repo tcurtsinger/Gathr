@@ -2,7 +2,8 @@ import type { Member, Message, Task, ToolBody, TurnStatus, Wait } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
-  | { type: 'delta'; chat: string; turn: string; text: string }
+  // `at`: where the text starts in the turn's unsaved reply, in UTF-16 units.
+  | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody }
   // `agent`: the agent the turn was sent to, null for none.

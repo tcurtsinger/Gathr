@@ -125,22 +125,6 @@
   border-radius: 8px;
   font-size: 12px;
 }
-.reaction {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 9999px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-}
-.reaction svg {
-  width: 14px;
-  height: 14px;
-  stroke-width: 1.5;
-}
-
 @media (max-width: 600px) {
   .speaker {
     flex-wrap: wrap;

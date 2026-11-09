@@ -47,9 +47,8 @@ export type Custom = {
   gathr?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
   assignment?: { from?: string; to?: string; what: string };
-  /** The lead's last word on a round: its thread, and the reviewers who agreed. */
+  /** The lead's last word on a round: its thread. */
   back?: { root: string; done: boolean };
-  agreed?: string[];
 };
 
 type Part = Exclude<ThreadMessageLike['content'], string>[number];
@@ -94,6 +93,10 @@ export function toThread(
     if (root) threaded.set(root, [...(threaded.get(root) ?? []), g]);
     else main.push(g);
   }
+  // Replies streaming at once save in the order they finish: a thread keeps its turns' order, as a reload does.
+  const order = new Map(Object.keys(state.turns).map((id, i) => [id, i]));
+  for (const list of threaded.values())
+    list.sort((a, b) => (order.get(a.turn ?? '') ?? 0) - (order.get(b.turn ?? '') ?? 0));
   const roots = new Set([...crew.threads.keys(), ...threaded.keys()]);
   // The lead's word on a round: a main-line turn Gathr started that answers the turn with a thread.
   const roundOf = (turn: string | null) => {
@@ -180,15 +183,13 @@ function grouped(state: ChatState): Group[] {
   return groups;
 }
 
-/** On the lead's last word of a round: the link back to its thread and the reviewers who agreed. */
+/**
+ * On the lead's last word of a round: the link back to its thread. No reviewer's agreement: a review
+ * done says what it reviewed, not whether it approved, and the service records no verdict yet.
+ */
 function lastWord(g: Group, back: string | undefined, state: ChatState, crew: Team): Custom {
   if (!back || !g.reply) return {};
-  const reviews = (crew.threads.get(back) ?? []).filter((t) => t.kind === 'review' && t.state === 'done');
-  const agreed = [...new Set(reviews.map((t) => crew.name(t.owner) ?? ''))].filter(Boolean);
-  return {
-    back: { root: back, done: roundOver(state.turns[g.turn ?? ''], crew.threads.get(back) ?? []) },
-    agreed,
-  };
+  return { back: { root: back, done: roundOver(state.turns[g.turn ?? ''], crew.threads.get(back) ?? []) } };
 }
 
 const roundOver = (final: Turn | undefined, tasks: Task[]) =>

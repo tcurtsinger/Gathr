@@ -119,6 +119,20 @@ test("members' work sits under the message that gave it, not where it fell in ti
   });
 });
 
+test("replies that finish out of order keep their turns' order in the thread, as a reload shows them", () => {
+  const state = round();
+  // Rowan's turn started first; Kit's reply was saved first.
+  const rowan = state.messages.filter((m) => m.turn === 'rowan');
+  state.messages = [...state.messages.filter((m) => m.turn !== 'rowan'), ...rowan];
+  const order = ids(view(state)).filter((id) => /^(rowan|kit)-gathr|^a-(rowan|kit)$/.test(id));
+  expect(order.map((id) => id.replace(/-gathr-\d+$/, '-gathr'))).toEqual([
+    'rowan-gathr',
+    'a-rowan',
+    'kit-gathr',
+    'a-kit',
+  ]);
+});
+
 test('a task a member gave sits in the same thread, and a turn nobody gave a task to has none', () => {
   const state = round();
   state.turns.sub = turn('sub', 'lane', { task: 3 });
@@ -129,7 +143,7 @@ test('a task a member gave sits in the same thread, and a turn nobody gave a tas
   expect(all.filter((m) => custom(m).head)).toHaveLength(1);
 });
 
-test("the lead's last word links back, folds the thread, and shows who agreed; a late reply says so in place", () => {
+test("the lead's last word links back and folds the thread, with no agreement read into a review; a late reply says so in place", () => {
   const state = round();
   state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(3, 'sol', 'ask', { kind: 'review' })];
   state.turns.sol = turn('sol', 'sol', { task: 3 });
@@ -141,8 +155,9 @@ test("the lead's last word links back, folds the thread, and shows who agreed; a
   expect(all.some((m) => m.id?.startsWith('back-gathr'))).toBe(false);
   expect(custom(all.at(-1) as ThreadMessageLike)).toMatchObject({
     back: { root: 'ask', done: true },
-    agreed: ['Sol'],
   });
+  // Done is what it reviewed, not a verdict: it may have asked for changes.
+  expect(custom(all.at(-1) as ThreadMessageLike)).not.toHaveProperty('agreed');
   const head = custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head;
   expect(head).toMatchObject({ done: true, text: 'Rowan, Kit and Sol done' });
   expect(ids(unfolded(all, new Map()))).not.toContain('a-rowan');

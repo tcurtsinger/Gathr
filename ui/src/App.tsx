@@ -51,13 +51,19 @@ export function App() {
   }, []);
   const keep = (chat: string, f: SendFailure) =>
     setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
+  const current = useRef(fresh);
+  current.current = fresh;
   const start = (text: string, agent?: string) => {
     const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, failure: e });
-    api.createChat(fresh?.project).then(
+    const draft = fresh;
+    api.createChat(draft?.project).then(
       (made) => {
         setChats((list) => [made, ...list]);
-        setFresh(null);
-        setSelected(made.id);
+        // Only while the person is still on this draft: another chat, or a newer draft, stays open.
+        if (current.current === draft) {
+          setFresh(null);
+          setSelected(made.id);
+        }
         api.send(made.id, text, agent).then(
           () => api.chats().then(setChats, setFailure),
           (e: Failure) => keep(made.id, failed(e)),

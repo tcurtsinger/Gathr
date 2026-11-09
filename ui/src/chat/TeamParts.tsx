@@ -1,5 +1,5 @@
 import { MessagePrimitive, type ThreadMessageLike } from '@assistant-ui/react';
-import { ChevronRight, ThumbsUp } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { createContext, useContext } from 'react';
 import { cn } from '@/lib/utils';
 import type { Custom, ThreadHead } from './messages';
@@ -85,8 +85,8 @@ export function GathrLine({ custom }: { custom: Custom }) {
   );
 }
 
-/** Under the lead's last word on a round: the link back to its thread, and who agreed. */
-export function LastWord({ back, agreed }: { back: { root: string; done: boolean }; agreed: string[] }) {
+/** Under the lead's last word on a round: the link back to its thread. */
+export function LastWord({ back }: { back: { root: string; done: boolean } }) {
   const folding = useContext(FoldingContext);
   // A disclosure, as it opens the thread: assistant-ui stops following the bottom for it.
   return (
@@ -99,18 +99,6 @@ export function LastWord({ back, agreed }: { back: { root: string; done: boolean
       >
         View team thread
       </button>
-      {agreed.map((name) => (
-        <span
-          key={name}
-          className="reaction"
-          role="img"
-          aria-label={`${name} agrees`}
-          title={`${name} agrees`}
-        >
-          <ThumbsUp aria-hidden />
-          {name}
-        </span>
-      ))}
     </div>
   );
 }

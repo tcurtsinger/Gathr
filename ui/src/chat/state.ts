@@ -44,11 +44,29 @@ export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wai
   };
 }
 
+/**
+ * A chat as loaded, with the live events that arrived while it loaded. The history may already hold
+ * some of them: deltas before a block it has saved are dropped, and the rest skip what its unsaved
+ * text holds (each delta says where it starts).
+ */
+export function fromLoad(
+  history: History,
+  work: { tasks: Task[]; waits: Wait[] },
+  held: LiveEvent[],
+): ChatState {
+  const saved = new Set(history.messages.map((m) => m.id));
+  const last = held.findLastIndex((e) => e.type === 'message' && saved.has(e.message.id));
+  return held.filter((e, i) => i > last || e.type !== 'delta').reduce(apply, fromHistory(history, work));
+}
+
 /** Applies one live event for this chat. Events for other chats never reach here. */
 export function apply(state: ChatState, event: LiveEvent): ChatState {
   switch (event.type) {
     case 'delta': {
-      const text = (state.partial[event.turn] ?? '') + event.text;
+      const was = state.partial[event.turn] ?? '';
+      const at = event.at ?? was.length;
+      if (at + event.text.length <= was.length) return state;
+      const text = was + event.text.slice(Math.max(0, was.length - at));
       return { ...state, partial: { ...state.partial, [event.turn]: text } };
     }
     case 'message': {

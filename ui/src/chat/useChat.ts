@@ -3,7 +3,7 @@ import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './messages';
-import { answered, apply, type ChatState, empty, fromHistory } from './state';
+import { answered, apply, type ChatState, empty, fromLoad } from './state';
 
 /** Changes the chat's messages that never reached the service; the app keeps them across switches. */
 export type Unsent = (update: (list: SendFailure[]) => SendFailure[]) => void;
@@ -25,7 +25,7 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
       ([history, work]) => {
         const held = pending.current ?? [];
         pending.current = null;
-        setState(held.reduce(apply, fromHistory(history, work)));
+        setState(fromLoad(history, work, held));
         setLoaded(true);
         setLoadFailure(null);
         timeToPaint('gathr.ui.chat_open', openedAt.current, { messages: history.messages.length });

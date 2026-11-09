@@ -204,7 +204,7 @@ const groupBy = groupPartByType({ 'tool-call': ['group-tool'] });
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, role, time, notice, approvals, back, agreed } = own;
+  const { agent, role, time, notice, approvals, back } = own;
   const actions = useActions();
   return (
     <MessagePrimitive.Root className={cn('reply', threaded(own))}>
@@ -251,7 +251,7 @@ function AssistantMessage() {
         />
       ))}
       {notice && <ReplyNotice notice={notice} actions={actions} />}
-      {back && <LastWord back={back} agreed={agreed ?? []} />}
+      {back && <LastWord back={back} />}
     </MessagePrimitive.Root>
   );
 }
