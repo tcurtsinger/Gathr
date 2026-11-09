@@ -3,8 +3,8 @@
 //!
 //! Two agents in one folder step on each other: one's half-made change is in the other's tests.
 //! So each agent in a project chat works in a worktree of its own, on a branch of its own, made
-//! the first time it needs one, from the project's remote default branch fetched then. Nothing
-//! here removes one: work left in it is the agent's, kept until someone takes it.
+//! the first time it needs one, from the project's remote default branch fetched then. Only deleting
+//! the chat removes one (F11), and its branch stays in the project with what was committed on it.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -137,6 +137,43 @@ pub async fn ensure(
 /// Where Gathr's git hooks for an agent's worktree are written.
 pub fn hooks_folder(data: &Path, chat: &str, agent: &str) -> PathBuf {
     data.join("hooks").join(chat).join(agent)
+}
+
+/// Removes the chat's worktrees of `project` under `chat_folder` (each agent's, F11), with what
+/// wasn't committed in them; their branches stay. Fails only when a folder is left behind.
+pub async fn remove_chat(
+    project: Option<&Path>,
+    chat_folder: &Path,
+    env: &Vars,
+) -> Result<(), String> {
+    let project = project.filter(|p| p.is_dir());
+    let folders = std::fs::read_dir(chat_folder)
+        .into_iter()
+        .flatten()
+        .flatten();
+    for folder in folders.map(|e| e.path()).filter(|p| p.is_dir()) {
+        if let Some(project) = project {
+            // Unregistered by git if it can; the folder goes below either way.
+            let path = folder.to_string_lossy();
+            let _ = git(
+                env,
+                project,
+                &["worktree", "remove", "--force", &path],
+                LOCAL_LIMIT,
+            )
+            .await;
+        }
+    }
+    let removed = match std::fs::remove_dir_all(chat_folder) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(format!("{} wasn't deleted: {e}", chat_folder.display()))
+        }
+        _ => Ok(()),
+    };
+    if let Some(project) = project {
+        let _ = git(env, project, &["worktree", "prune"], LOCAL_LIMIT).await;
+    }
+    removed
 }
 
 const HOOK: &str = include_str!("git-hook.sh");

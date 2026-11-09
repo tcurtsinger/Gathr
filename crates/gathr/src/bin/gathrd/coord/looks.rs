@@ -28,6 +28,14 @@ enum Look {
     NotYet { head: Option<(String, i64)> },
 }
 
+/// A day for the stale rules (F11): `GATHR_STALE_DAY_MS` shortens it, in dev and tests only.
+fn day_us() -> i64 {
+    let ms = std::env::var("GATHR_STALE_DAY_MS")
+        .ok()
+        .and_then(|ms| ms.parse::<i64>().ok());
+    ms.map_or(86_400_000_000, |ms| ms * 1000)
+}
+
 pub async fn once(chats: &Arc<Chats>) {
     let trace = trace_id();
     let now = now_us();
@@ -43,6 +51,11 @@ pub async fn once(chats: &Arc<Chats>) {
             starts.extend(waits::agent_free(c, &chat, &agent, &t)?);
         }
         Ok(starts)
+    })
+    .await;
+    let (t, paused, day) = (trace.clone(), chats.pauses(), day_us());
+    apply(chats, "gathr.task.stale", &trace, move |c| {
+        Ok(tasks::stale::sweep(c, now, day, &paused, &t)?.starts)
     })
     .await;
     let found = chats.writer.call(|c| waits::to_look_at(c)).await;

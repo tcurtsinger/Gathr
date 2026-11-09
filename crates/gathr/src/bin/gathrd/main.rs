@@ -4,6 +4,7 @@
 mod accounts;
 mod agents;
 mod api;
+mod archive;
 mod chats;
 mod coord;
 mod logs;

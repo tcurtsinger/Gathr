@@ -7,40 +7,11 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{TempDir, TestService, call_tool, gathr, recording, sign_in_account, text, until};
+use common::{
+    TempDir, TestService, call_tool, first_token as token, gathr, recording, sign_in_account, team,
+    text, until,
+};
 use serde_json::{Value, json};
-
-/// A signed-in chat with a Supervisor (Lead) and a member (Ann): the service, the chat, the lead.
-fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService, String, String) {
-    let mut env = vec![
-        ("GATHR_REPLAY", replay),
-        ("GATHR_REPLAY_HOLD", Path::new("")),
-        ("GATHR_REPLAY_ENV", Path::new("")),
-    ];
-    let (go, tokens) = (data.join("go"), data.join("env.jsonl"));
-    env[1].1 = &go;
-    env[2].1 = &tokens;
-    env.extend_from_slice(more);
-    let service = TestService::with_engine(data, &env);
-    let account = service.add_account("Team");
-    sign_in_account(data, &account);
-    let agent = |name: &str| {
-        let made = service.send(
-            "POST",
-            "/api/agents",
-            json!({ "name": name, "account": account }),
-        );
-        assert_eq!(made.status, 200, "{}", made.body);
-        made.json()["id"].as_str().unwrap().to_string()
-    };
-    let (lead, ann) = (agent("Lead"), agent("Ann"));
-    let members =
-        json!([{ "agent": lead, "role": "supervisor" }, { "agent": ann, "role": "member" }]);
-    let made = service.send("POST", "/api/chats", json!({ "members": members }));
-    assert_eq!(made.status, 200, "{}", made.body);
-    let chat = made.json()["id"].as_str().unwrap().to_string();
-    (service, chat, lead)
-}
 
 /// Recordings played one after the other by the same engine, one turn each.
 fn joined(dir: &Path, name: &str, parts: &[PathBuf]) -> PathBuf {
@@ -71,14 +42,6 @@ fn pause(service: &TestService, path: &str, chat: &str) -> Value {
     let paused = service.send("POST", path, json!({ "scope": "chat", "target": chat }));
     assert_eq!(paused.status, 200, "{}", paused.body);
     paused.json()
-}
-
-fn token(data: &Path) -> String {
-    until(10, "the engine's token", || {
-        let text = std::fs::read_to_string(data.join("env.jsonl")).ok()?;
-        let line: Value = serde_json::from_str(text.lines().next()?).ok()?;
-        line["GATHR_AGENT_TOKEN"].as_str().map(String::from)
-    })
 }
 
 #[test]

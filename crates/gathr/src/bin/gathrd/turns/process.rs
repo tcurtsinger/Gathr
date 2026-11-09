@@ -53,7 +53,7 @@ pub struct Closing {
     /// Its token and briefing: they end when it has exited, not when it's asked to.
     pass: Option<Pass>,
     pub folder: PathBuf,
-    chat: String,
+    pub chat: String,
     why: String,
     since: Instant,
     held: bool,
