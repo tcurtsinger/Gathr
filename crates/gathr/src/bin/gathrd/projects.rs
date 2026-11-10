@@ -53,6 +53,8 @@ async fn create(
     let event = Event::point("gathr.project.create").trace(&t.0).ok();
     s.writer
         .record(event.attr("gathr.project.id", made["id"].clone()));
+    let created = json!({ "type": "project", "project": made["id"], "change": "created" });
+    s.chats.publish(created);
     Ok(made)
 }
 

@@ -241,6 +241,32 @@ fn picking_another_agent_in_a_plain_chat_adds_it_under_the_first_as_supervisor()
     assert_eq!(rows["rows"][0]["n"], 4, "each join is recorded: {rows}");
 }
 
+/// A window open before them hears of both, so its sidebar shows them (the round's "No chats yet").
+#[test]
+fn a_project_and_a_chat_made_elsewhere_reach_every_open_window() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+    let mut live = service.live();
+
+    let body =
+        json!({ "name": "Gathr", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let made = service.send("POST", "/api/projects", body);
+    assert_eq!(made.status, 200, "{}", made.body);
+    let project = made.json()["id"].clone();
+    let chat = service.send("POST", "/api/chats", json!({ "project": project }));
+    assert_eq!(chat.status, 200, "{}", chat.body);
+
+    let heard = [common::next_live(&mut live), common::next_live(&mut live)];
+    let expected = [
+        json!({ "type": "project", "project": project, "change": "created" }),
+        json!({ "type": "chat", "chat": chat.json()["id"], "change": "created" }),
+    ];
+    assert_eq!(heard, expected);
+}
+
 #[test]
 fn a_project_that_fails_to_save_is_found_from_its_reference() {
     let data = TempDir::new();

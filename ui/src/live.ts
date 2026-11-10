@@ -25,8 +25,9 @@ export type LiveEvent =
   | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[] }
   // The person's open questions across chats, whole, after any change to any task.
   | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
-  // A chat was archived, restored (unarchived) or deleted.
-  | { type: 'chat'; chat: string; change: 'archived' | 'unarchived' | 'deleted' }
+  // A chat was made, archived, restored (unarchived) or deleted.
+  | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
+  | { type: 'project'; project: string; change: 'created' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.
