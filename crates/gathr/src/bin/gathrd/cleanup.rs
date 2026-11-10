@@ -1,5 +1,6 @@
 //! Gathr removes what it made for agents' work (0034): an engine's temporary files once it has
-//! closed, a chat's worktrees and folders once it's archived or deleted; branches stay.
+//! closed, a chat's worktrees once it's archived (Restore checks them out again from their
+//! branches, which stay), and all of its folders once it's deleted.
 //! Never a folder a running engine or wait check uses, nor, while the chat is only archived, a
 //! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
 //! again at the next sweep, which runs with the service's looks (0010).
@@ -17,6 +18,15 @@ use crate::chats::Chats;
 /// One sweep at a time, and none while an engine's folders are made: an archive's and the looks'
 /// would remove the same folder at once, and a sweep could remove a folder made again meanwhile.
 static SWEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Held while one folder's removal is decided and done, and by Restore: a chat restored while a
+/// sweep reads its worktree keeps it, as the sweep reads again whether it goes once it holds this.
+static REMOVING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Holds removals off while a chat is restored.
+pub async fn restoring() -> tokio::sync::MutexGuard<'static, ()> {
+    REMOVING.lock().await
+}
 
 /// Holds sweeps off while an engine's folders are made, until its token says it uses them.
 pub async fn hold() -> tokio::sync::MutexGuard<'static, ()> {
@@ -69,7 +79,16 @@ pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {
                 .attr("path", clean.path.display().to_string())
                 .attr("kind", clean.kind.clone())
         };
-        let removed = remove(chats, &clean, &env).await;
+        let mut removed = blocked(chats, &clean, &env).await;
+        let _removing = REMOVING.lock().await;
+        match still_due(chats, &clean.path).await {
+            Ok(false) => continue,
+            Ok(true) => {}
+            Err(why) => removed = Err(("left", why)),
+        }
+        if removed.is_ok() {
+            removed = delete(&clean, &env).await;
+        }
         let (path, kept) = (clean.path.clone(), clean.chat_kept);
         if let Err((kind, why)) = removed {
             if clean.skipped.as_deref() != Some(kind) {
@@ -93,8 +112,25 @@ pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {
     left
 }
 
-/// Removes one folder, or why not: the error kind and the reason.
-async fn remove(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'static str, String)> {
+/// Whether the folder still goes, read again under `REMOVING`.
+async fn still_due(chats: &Chats, path: &Path) -> Result<bool, String> {
+    let at = path.to_path_buf();
+    match chats
+        .writer
+        .call(move |conn| folders::still_due(conn, &at))
+        .await
+    {
+        Some(Ok(due)) => Ok(due),
+        Some(Err(e)) => Err(format!("{} wasn't checked again: {e}", path.display())),
+        None => Err(format!(
+            "{} wasn't checked again: the database didn't answer",
+            path.display()
+        )),
+    }
+}
+
+/// Why one folder can't go yet: the error kind and the reason.
+async fn blocked(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'static str, String)> {
     let path = &clean.path;
     let checked = clean.kind != "scratch"
         && (chats.checking().into_iter())
@@ -106,6 +142,28 @@ async fn remove(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'stati
         );
         return Err(("in_use", why));
     }
+    if clean.kind != "worktree" || !clean.chat_kept || !path.exists() {
+        return Ok(());
+    }
+    match worktree::changed(path, env).await {
+        Ok(false) => Ok(()),
+        Ok(true) => Err((
+            "changes",
+            format!(
+                "{} has changes not committed: it stays until they're committed or the chat is deleted",
+                path.display()
+            ),
+        )),
+        Err(e) => Err((
+            "changes",
+            format!("{}'s changes weren't read: {e}", path.display()),
+        )),
+    }
+}
+
+/// Removes one folder, or why not.
+async fn delete(clean: &Clean, env: &Vars) -> Result<(), (&'static str, String)> {
+    let path = &clean.path;
     if clean.kind != "worktree" {
         return match std::fs::remove_dir_all(path) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
@@ -113,19 +171,6 @@ async fn remove(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'stati
             }
             _ => Ok(()),
         };
-    }
-    if clean.chat_kept && path.exists() {
-        let why = match worktree::changed(path, env).await {
-            Ok(false) => None,
-            Ok(true) => Some(format!(
-                "{} has changes not committed: it stays until they're committed or the chat is deleted",
-                path.display()
-            )),
-            Err(e) => Some(format!("{}'s changes weren't read: {e}", path.display())),
-        };
-        if let Some(why) = why {
-            return Err(("changes", why));
-        }
     }
     let project = clean.project.as_deref().map(Path::new);
     worktree::remove(project, path, env)

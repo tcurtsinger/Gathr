@@ -1,7 +1,8 @@
 //! Archive, unarchive and delete a chat (F11, 0010). Archiving ends the chat's work in one step:
 //! the database part in one transaction and event, then every agent's queue stops what it ran there.
 //! Deleting archives first, closes the chat's engines the gentle way, removes its rows, then its
-//! worktrees and files. Either way the chat's folders in the agent folder go (0034), as `cleanup`
+//! worktrees and files. Archiving removes the chat's worktrees in the agent folder, which a
+//! restored chat checks out again; deleting removes all its folders there (0034), as `cleanup`
 //! removes them: an engine still running in one keeps it until a later sweep.
 
 use std::path::PathBuf;
@@ -71,6 +72,7 @@ async fn unarchive_chat(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let (id, trace) = (chat.clone(), t.0.clone());
+    let _removing = crate::cleanup::restoring().await;
     let _ = db(&s, &t, "Unarchive failed", move |c| {
         archive::unarchive(c, &id, &trace).map(|()| Value::Null)
     })

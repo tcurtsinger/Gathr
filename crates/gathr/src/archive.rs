@@ -55,7 +55,7 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
         params![chat, now],
     )?;
     let ended = end_work(&tx, chat, now, trace)?;
-    let folders = crate::folders::due(&tx, chat)?;
+    let folders = crate::folders::due(&tx, chat, false)?;
     Event::point("gathr.chat.archive")
         .trace(trace)
         .chat(chat)
@@ -136,7 +136,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         return Err(Error::Refused("archive it first".into()));
     }
     let files = task_files(&tx, chat)?;
-    crate::folders::due(&tx, chat)?;
+    crate::folders::due(&tx, chat, true)?;
     let of_tasks = "(SELECT number FROM tasks WHERE chat_id = ?1)";
     let of_turns = "(SELECT id FROM turns WHERE chat_id = ?1)";
     for sql in [

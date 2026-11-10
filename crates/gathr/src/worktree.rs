@@ -5,7 +5,8 @@
 //! So each agent in a project chat works in a worktree of its own, on a branch of its own, made
 //! the first time it needs one, from the project's remote default branch fetched then, in the
 //! agent's own folder (0034). Archiving or deleting the chat removes it (F11, 0034), and its branch
-//! stays in the project with what was committed on it.
+//! stays in the project with what was committed on it: a restored chat's next turn checks it out
+//! again.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

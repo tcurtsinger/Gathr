@@ -7,7 +7,7 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::{TempDir, TestService, gathr, git, held_recording, hook, nth, sign_in_account, until};
-use gathr::folders::beside;
+use gathr::folders::{beside, real};
 use serde_json::{Value, json};
 
 /// A signed-in service whose engines hold after the message arrives until `go` exists, their
@@ -166,7 +166,7 @@ fn started() -> Started {
     send(&service, &chat, &agent);
     let started = nth(&data.0.join("env.jsonl"), 0);
     let args = serde_json::from_value(nth(&data.0.join("args.jsonl"), 0)).unwrap();
-    let project_folder = beside(&data.0).join("CON_");
+    let project_folder = real(&beside(&data.0)).join("CON_");
     Started {
         own: project_folder.join("Pia- UI"),
         shared: project_folder.join("Shared"),
@@ -256,7 +256,7 @@ fn an_engines_temp_folder_lasts_as_long_as_the_engine() {
     let started = nth(&data.0.join("env.jsonl"), 0);
     let temp = PathBuf::from(started["TEMP"][0].as_str().unwrap());
     let part = chat[chat.len() - 6..].to_lowercase();
-    let own = beside(&data.0).join("Chats").join("Ann");
+    let own = real(&beside(&data.0)).join("Chats").join("Ann");
     assert_eq!(
         temp,
         own.join("temp").join(format!("chat-{part}")),
@@ -271,10 +271,19 @@ fn an_engines_temp_folder_lasts_as_long_as_the_engine() {
     assert!(own.join(&part).is_dir(), "the chat's own folder stays");
 }
 
+/// Waits until the engine that started as `started` has closed: its temp folder is gone.
+fn engine_closed(started: &Value) {
+    let temp = PathBuf::from(started["TEMP"][0].as_str().unwrap());
+    until(20, "the engine closed", || (!temp.exists()).then_some(()));
+}
+
 #[test]
 fn archiving_removes_a_worktree_once_nothing_runs_in_it_and_nothing_is_left_uncommitted() {
     let s = started();
     let worktree = PathBuf::from(s.started["cwd"].as_str().unwrap());
+    std::fs::write(worktree.join("kept.md"), "committed").unwrap();
+    git(&worktree, &["add", "kept.md"]);
+    git(&worktree, &["commit", "-q", "-m", "kept"]);
     let notes = worktree.join("notes.md");
     std::fs::write(&notes, "not committed").unwrap();
     let archived = s
@@ -293,4 +302,166 @@ fn archiving_removes_a_worktree_once_nothing_runs_in_it_and_nothing_is_left_unco
     let branches = git(&repo, &["branch", "--list", "gathr/*"]);
     assert!(!branches.is_empty(), "its branch stays");
     removal_traced(&s.data.0, &skip);
+
+    // Restore brings it back: the next turn checks the branch out again where it was.
+    let path = format!("/api/chats/{}/unarchive", s.chat);
+    let restored = s.service.call("POST", &path);
+    assert_eq!(restored.status, 200, "{}", restored.body);
+    send(&s.service, &s.chat, &s.agent);
+    let again = nth(&s.data.0.join("env.jsonl"), 1);
+    assert_eq!(again["cwd"], s.started["cwd"], "{again}");
+    assert!(worktree.join("kept.md").is_file(), "the branch's commits");
+    assert_eq!(git(&worktree, &["log", "-1", "--format=%s"]), "kept");
+}
+
+#[test]
+fn a_chats_own_folder_outside_a_project_stays_until_the_chat_is_deleted() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0);
+    let ann = agent(&service, &account, "Ann");
+    let chat = service.new_chat();
+    send(&service, &chat, &ann);
+    let started = nth(&data.0.join("env.jsonl"), 0);
+    let cwd = PathBuf::from(started["cwd"].as_str().unwrap());
+    let output = cwd.join("user-output.md");
+    std::fs::write(&output, "what the person asked for").unwrap();
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&chat, 20, "the turn", |h| h["turns"][0]["status"] == "done");
+    engine_closed(&started);
+    let archived = service.call("POST", &format!("/api/chats/{chat}/archive"));
+    assert_eq!(archived.status, 200, "{}", archived.body);
+    // Ten looks: a sweep that would remove it has run by then.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    assert!(output.is_file(), "archived, nothing Restore needs goes");
+    let restored = service.call("POST", &format!("/api/chats/{chat}/unarchive"));
+    assert_eq!(restored.status, 200, "{}", restored.body);
+    assert!(output.is_file(), "restored with its output");
+    let deleted = service.call("DELETE", &format!("/api/chats/{chat}"));
+    assert_eq!(deleted.status, 200, "{}", deleted.body);
+    assert_eq!(deleted.json()["left"], json!([]), "{}", deleted.body);
+    assert!(!cwd.exists(), "a delete removes it");
+}
+
+/// `git status` in `worktree` waits, once it has started, until `release` exists: a slow
+/// `core.fsmonitor` hook. Answers the file that says it started.
+fn slow_status(worktree: &Path, release: &Path) -> PathBuf {
+    let dir = release.parent().unwrap();
+    let (entered, hook) = (dir.join("status-entered"), dir.join("fsmonitor.sh"));
+    let posix = |p: &Path| p.display().to_string().replace('\\', "/");
+    let script = format!(
+        "#!/bin/sh\nprintf entered > '{}'\nwhile [ ! -f '{}' ]; do sleep 0.05; done\n{}\n",
+        posix(&entered),
+        posix(release),
+        r"printf 'token\000/\000'"
+    );
+    std::fs::write(&hook, script).unwrap();
+    let hook = posix(&hook);
+    git(worktree, &["config", "--worktree", "core.fsmonitor", &hook]);
+    let version = ["config", "--worktree", "core.fsmonitorHookVersion", "2"];
+    git(worktree, &version);
+    entered
+}
+
+#[test]
+fn a_chat_restored_while_a_sweep_reads_its_worktree_keeps_it() {
+    let s = started();
+    let worktree = PathBuf::from(s.started["cwd"].as_str().unwrap());
+    std::fs::write(s.data.0.join("go"), "").unwrap();
+    s.service.wait_for(&s.chat, 20, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    engine_closed(&s.started);
+    let release = s.data.0.join("release");
+    let entered = slow_status(&worktree, &release);
+    let archived = s
+        .service
+        .call("POST", &format!("/api/chats/{}/archive", s.chat));
+    assert_eq!(archived.status, 200, "{}", archived.body);
+    until(20, "the sweep reading the worktree", || {
+        entered.exists().then_some(())
+    });
+    let path = format!("/api/chats/{}/unarchive", s.chat);
+    let restored = s.service.call("POST", &path);
+    assert_eq!(restored.status, 200, "{}", restored.body);
+    std::fs::write(&release, "").unwrap();
+    // A new engine starts only once no sweep runs: by then the sweep has decided.
+    send(&s.service, &s.chat, &s.agent);
+    nth(&s.data.0.join("env.jsonl"), 1);
+    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.cleanup.remove'
+               AND json_extract(attrs, '$.kind') = 'worktree'";
+    let (ok, found) = gathr(&s.data.0, &["diag", "query", sql]);
+    assert!(ok, "{found}");
+    let removed = &found["rows"][0]["n"];
+    assert_eq!(removed, 0, "a restored chat's worktree was removed");
+}
+
+/// A link at `link` to the folder `to`: a junction on Windows (no admin needed), else a symlink.
+fn link(to: &Path, link: &Path) {
+    #[cfg(windows)]
+    {
+        let made = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link)
+            .arg(to)
+            .output()
+            .unwrap();
+        assert!(made.status.success(), "mklink: {made:?}");
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(to, link).unwrap();
+}
+
+#[test]
+fn a_shared_folder_that_leads_into_the_data_folder_is_never_written_through() {
+    let s = started();
+    let token = s.started["GATHR_AGENT_TOKEN"].as_str().unwrap();
+    let port = s.service.info.port;
+    let write = |token: &str, path: PathBuf| {
+        let answer = hook(port, token, "Write", json!({ "file_path": path }));
+        assert_eq!(answer.status, 200, "{}", answer.body);
+        answer.json()["hookSpecificOutput"]["permissionDecision"].clone()
+    };
+    // Shared becomes a link into the data folder while the engine runs.
+    std::fs::remove_dir(&s.shared).unwrap();
+    link(&s.data.0, &s.shared);
+    assert_eq!(
+        write(token, s.shared.join("gathr.db")),
+        "ask",
+        "through the link"
+    );
+    assert_eq!(
+        write(token, s.data.0.join("gathr.db")),
+        "ask",
+        "the database itself"
+    );
+    assert_eq!(
+        write(token, s.own.join("notes.md")),
+        Value::Null,
+        "its own folder"
+    );
+
+    // The next engine isn't given it at all, and the refusal has a reference.
+    std::fs::write(s.data.0.join("go"), "").unwrap();
+    s.service.wait_for(&s.chat, 20, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    engine_closed(&s.started);
+    send(&s.service, &s.chat, &s.agent);
+    let again = nth(&s.data.0.join("env.jsonl"), 1);
+    let args: Vec<Value> = serde_json::from_value(nth(&s.data.0.join("args.jsonl"), 1)).unwrap();
+    let added: Vec<&str> = (args.iter().filter_map(Value::as_str))
+        .filter(|a| a.starts_with("--add-dir="))
+        .collect();
+    let own = format!("--add-dir={}", s.own.display());
+    assert_eq!(added, [own.as_str()], "only its own folder");
+    let sql = "SELECT ref FROM event_log WHERE name = 'gathr.folder.refused'";
+    let reference = until(20, "the refusal recorded", || {
+        let (ok, found) = gathr(&s.data.0, &["diag", "query", sql]);
+        assert!(ok, "{found}");
+        found["rows"][0]["ref"].as_str().map(String::from)
+    });
+    let trace = traced(&s.data.0, &reference);
+    assert!(trace.contains("Shared"), "{trace}");
+    let token = again["GATHR_AGENT_TOKEN"].as_str().unwrap();
+    assert_eq!(write(token, s.shared.join("gathr.db")), "ask", "{again}");
 }

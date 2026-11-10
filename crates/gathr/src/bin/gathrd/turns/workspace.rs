@@ -21,6 +21,8 @@ pub(super) struct Workspace {
     pub env: Fresh,
     /// The agent's own folder and its project's Shared; none for a turn to no agent.
     pub place: Option<Place>,
+    /// Of those, the ones it writes in without asking: never one that leads into the data folder.
+    pub beside: Vec<PathBuf>,
     /// Where its temporary files go (TEMP, TMP, TMPDIR).
     pub scratch: Option<PathBuf>,
 }
@@ -87,6 +89,7 @@ impl Task {
                 project: None,
                 env: fresh,
                 place: None,
+                beside: Vec::new(),
                 scratch: None,
             });
         };
@@ -118,6 +121,16 @@ impl Task {
         let made = [(cwd.as_path(), kind), (&scratch, "scratch")];
         let project = found.project.as_deref();
         self.record_made(&made, (&chat, &agent), project).await?;
+        let refused = |dir: &Path| self.leads_into_data(dir, (&chat, &agent), trace);
+        if let Some(dir) = [&cwd, &scratch].into_iter().find(|dir| refused(dir)) {
+            let why = "it leads into Gathr's data folder";
+            return Err(format!("{} wasn't used: {why}", dir.display()));
+        }
+        let beside = [&found.place.agent, &found.place.shared]
+            .into_iter()
+            .filter(|dir| !refused(dir))
+            .cloned()
+            .collect();
         let mut dirs = vec![&found.place.agent, &found.place.shared, &scratch];
         if project.is_none() {
             dirs.push(&cwd);
@@ -136,8 +149,27 @@ impl Task {
             project: found.project,
             env: fresh,
             place: Some(found.place),
+            beside,
             scratch: Some(scratch),
         })
+    }
+
+    /// Whether `dir` holds Gathr's data folder or leads into it through a link: never given to an
+    /// agent (0034). Recorded with the turn's reference when it does.
+    fn leads_into_data(&self, dir: &Path, (chat, agent): (&str, &str), trace: &str) -> bool {
+        let data = self.chats.data.path();
+        if !gathr::approvals::into_data(dir, data) {
+            return false;
+        }
+        let event = Event::point("gathr.folder.refused")
+            .trace(trace)
+            .chat(chat)
+            .error("in_data")
+            .attr("gen_ai.agent.id", agent.to_string())
+            .attr("path", dir.display().to_string())
+            .attr("why", "it leads into Gathr's data folder");
+        self.record(event);
+        true
     }
 
     /// Records each folder before it's made, so Gathr removes it later (0034).

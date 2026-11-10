@@ -131,7 +131,7 @@ pub fn text(facts: &Facts) -> String {
             "Your own folder is \"{}\": keep test data, builds and notes there. The team's shared \
              folder is \"{}\": put plans, reviews and evidence for others there. You can write in \
              both without asking. Gathr deletes your TEMP folder when it closes your session, and \
-             your worktree after the chat is archived.",
+             a worktree once the chat is archived, keeping its branch and anything not committed.",
             own.display(),
             shared.display()
         ));

@@ -52,6 +52,39 @@ pub fn beside(data: &Path) -> PathBuf {
     data.with_file_name(format!("{name}-agents"))
 }
 
+/// `path` as the disk names it, links followed as far as it exists and the rest as written: the
+/// one name the engine, its sandbox and Gathr's own checks all see (macOS's `/var` is
+/// `/private/var`). Without Windows' `\\?\` prefix, which not every tool reads in TEMP or a
+/// working folder.
+pub fn real(path: &Path) -> PathBuf {
+    for base in path.ancestors() {
+        if let Ok(found) = std::fs::canonicalize(base) {
+            let found = plain(found);
+            return match path.strip_prefix(base) {
+                Ok(rest) if !rest.as_os_str().is_empty() => found.join(rest),
+                _ => found,
+            };
+        }
+    }
+    path.to_path_buf()
+}
+
+#[cfg(windows)]
+fn plain(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    let plain = match text.strip_prefix(r"\\?\") {
+        Some(share) if share.starts_with(r"UNC\") => format!(r"\\{}", &share[4..]),
+        Some(disk) => disk.to_string(),
+        None => return path,
+    };
+    PathBuf::from(plain)
+}
+
+#[cfg(not(windows))]
+fn plain(path: PathBuf) -> PathBuf {
+    path
+}
+
 /// Why `root` can't be the agent folder, or `Ok` once it's made and written to. Blocks on the disk.
 pub fn usable(root: &Path, data: &Path) -> Result<(), String> {
     if root.as_os_str().is_empty() {
@@ -139,7 +172,7 @@ pub struct Place {
 /// Where `agent` works in `chat`, naming the project and agent in the agent folder the first time.
 /// A chat with no project keeps its work in `Chats`, as a project would.
 pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<Place, Error> {
-    let root = root(conn, data)?;
+    let root = real(&root(conn, data)?);
     let project: Option<String> = conn
         .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
             r.get(0)
@@ -266,13 +299,32 @@ pub fn engine_closed(conn: &Connection, chat: &str, agent: &str) -> Result<usize
     )?)
 }
 
-/// The chat's folders go: it was archived or deleted. How many.
-pub fn due(conn: &Connection, chat: &str) -> Result<usize, Error> {
+/// The chat's folders go: all of them once it's `deleted`. Archived, only what Restore brings
+/// back: its worktrees, which its next turn checks out again from their branches. A folder
+/// outside a project has nothing to make it again from, so it stays until a delete. How many.
+pub fn due(conn: &Connection, chat: &str, deleted: bool) -> Result<usize, Error> {
     Ok(conn.execute(
         "UPDATE agent_folders SET due_ts = ?2
-         WHERE chat_id = ?1 AND removed_ts IS NULL AND due_ts IS NULL",
-        params![chat, crate::ids::now_us()],
+         WHERE chat_id = ?1 AND removed_ts IS NULL AND due_ts IS NULL
+           AND (?3 OR kind = 'worktree')",
+        params![chat, crate::ids::now_us(), deleted],
     )?)
+}
+
+/// Whether the folder still goes, read again right before it's removed: its chat may have been
+/// restored, or its engine started again, since the sweep found it.
+pub fn still_due(conn: &Connection, path: &Path) -> Result<bool, Error> {
+    let due = conn
+        .query_row(
+            "SELECT 1 FROM agent_folders f LEFT JOIN chats c ON c.id = f.chat_id
+             WHERE f.path = ?1 AND f.removed_ts IS NULL AND f.due_ts IS NOT NULL
+               AND (f.kind = 'scratch' OR c.id IS NULL
+                 OR (f.kind = 'worktree' AND c.archived_ts IS NOT NULL))",
+            [path.to_string_lossy()],
+            |_| Ok(()),
+        )
+        .optional()?;
+    Ok(due.is_some())
 }
 
 /// The chat is back: what's still there stays.
@@ -358,6 +410,17 @@ pub fn removed(conn: &Connection, path: &Path, chat_kept: bool) -> Result<(), Er
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_folder_is_named_as_the_disk_names_it_even_before_it_exists() {
+        let temp = std::env::temp_dir();
+        let made = std::fs::canonicalize(&temp).unwrap();
+        let made = made.to_string_lossy();
+        let made = PathBuf::from(made.strip_prefix(r"\\?\").unwrap_or(&made));
+        let later = Path::new("gathr-not-made-yet").join("Ann");
+        assert_eq!(real(&temp.join(&later)), made.join(&later));
+        assert_eq!(real(&temp), made, "no separator added");
+    }
 
     #[test]
     fn a_name_becomes_one_folder_that_windows_and_macos_both_take() {

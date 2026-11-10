@@ -1,7 +1,7 @@
 //! Gathr's own asks, on top of the agent's mode (0029): before a push, and before a file tool
 //! writes outside the agent's folders: the one its engine runs in, its own folder and its
-//! project's Shared (0034). Claude Code asks Gathr through a hook before each such tool, whatever
-//! its mode or a project's rules would allow.
+//! project's Shared (0034), or into Gathr's data folder whatever those say. Claude Code asks Gathr
+//! through a hook before each such tool, whatever its mode or a project's rules would allow.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -9,12 +9,19 @@ use serde_json::Value;
 
 /// Why Gathr asks the person before this tool call, or `None` to leave it to the agent's mode.
 /// `folders` are where it writes without asking, the engine's own first: a relative path is in it.
-pub fn ask(tool: &str, input: &Value, folders: &[PathBuf]) -> Option<&'static str> {
+/// `data` is Gathr's data folder, never written without asking, though a link in a folder leads
+/// there: only the engine's own folder, when Gathr made it there before the agent folder (0034).
+pub fn ask(tool: &str, input: &Value, folders: &[PathBuf], data: &Path) -> Option<&'static str> {
     let text = |key: &str| input.get(key).and_then(Value::as_str);
     match tool {
         "Write" | "Edit" | "NotebookEdit" => {
             let path = text("file_path").or_else(|| text("notebook_path"))?;
-            let path = folders.first()?.join(path);
+            let own = folders.first()?;
+            let path = own.join(path);
+            let old_own = written_in(own, data) && inside(&path, own);
+            if reaches(&path, data) && !old_own {
+                return Some("it writes in Gathr's data folder");
+            }
             let inside_one = folders.iter().any(|folder| inside(&path, folder));
             (!inside_one).then_some("it writes outside the agent's folders")
         }
@@ -35,24 +42,51 @@ pub fn runs_push(tool: &str, input: &Value) -> bool {
     matches!(tool, "Bash" | "PowerShell") && command.is_some_and(pushes)
 }
 
-/// Whether either folder holds the other, as the disk resolves them.
+/// Whether either folder holds the other, either way the disk may resolve them.
 pub fn overlaps(a: &Path, b: &Path) -> bool {
-    inside(a, b) || inside(b, a)
+    reaches(a, b) || reaches(b, a)
 }
 
 /// Whether `path`, relative to `boundary` when it isn't absolute, is in `boundary` as the disk
 /// resolves both: links (symlinks, junctions) followed. Windows works out `..` by the text
-/// before following a link and macOS after, so the path must be inside both ways. Case is
-/// folded: both systems' disks ignore it by default.
+/// before following a link and macOS after, so the path must be inside both ways.
 fn inside(path: &Path, boundary: &Path) -> bool {
-    let fold = |p: &Path| PathBuf::from(p.to_string_lossy().to_lowercase());
+    resolved(path, boundary).iter().all(|&inside| inside)
+}
+
+/// Whether `folder` holds the data folder or leads into it through a link, when Gathr didn't make
+/// it there itself (a chat's folder from before the agent folder, 0034).
+pub fn into_data(folder: &Path, data: &Path) -> bool {
+    overlaps(folder, data) && !written_in(folder, data)
+}
+
+/// Whether `path` may land in `boundary`, either way `..` is worked out.
+fn reaches(path: &Path, boundary: &Path) -> bool {
+    resolved(path, boundary).iter().any(|&inside| inside)
+}
+
+/// Whether `path` is in `boundary` with `..` worked out after following links and before. Case is
+/// folded: both systems' disks ignore it by default.
+fn resolved(path: &Path, boundary: &Path) -> [bool; 2] {
     let Some(base) = real(boundary).map(|b| fold(&b)) else {
-        return false;
+        return [false; 2];
     };
     let path = boundary.join(path);
-    [real(&path), real(&lexical(&path))]
-        .into_iter()
-        .all(|p| p.is_some_and(|p| fold(&p).starts_with(&base)))
+    [real(&path), real(&lexical(&path))].map(|p| p.is_some_and(|p| fold(&p).starts_with(&base)))
+}
+
+/// Whether `path` is in `boundary` as written, links not followed.
+fn written_in(path: &Path, boundary: &Path) -> bool {
+    let full = |p: &Path| {
+        fold(&lexical(
+            &std::path::absolute(p).unwrap_or_else(|_| p.into()),
+        ))
+    };
+    full(path).starts_with(full(boundary))
+}
+
+fn fold(path: &Path) -> PathBuf {
+    PathBuf::from(path.to_string_lossy().to_lowercase())
 }
 
 /// The path with each part that exists resolved by the disk, links followed, and the rest as
@@ -120,7 +154,7 @@ mod tests {
     fn a_write_outside_the_worktree_asks_and_one_inside_does_not() {
         let tree = at(&["work", "trees", "pia-ui"]);
         let folders = [tree.clone()];
-        let write = |path: PathBuf| ask("Write", &json!({ "file_path": path }), &folders);
+        let write = |path: PathBuf| ask("Write", &json!({ "file_path": path }), &folders, &data());
         assert_eq!(write(at(&["work", "trees", "pia-ui", "src", "a.rs"])), None);
         assert_eq!(
             write(at(&["WORK", "trees", "Pia-UI", "b.rs"])),
@@ -147,9 +181,18 @@ mod tests {
             "another checkout"
         );
         let notebook = json!({ "notebook_path": at(&["elsewhere", "n.ipynb"]) });
-        assert_eq!(ask("NotebookEdit", &notebook, &folders), outside);
+        assert_eq!(ask("NotebookEdit", &notebook, &folders, &data()), outside);
         let read = json!({ "file_path": at(&["elsewhere", "x"]) });
-        assert_eq!(ask("Read", &read, &folders), None, "reads never ask");
+        assert_eq!(
+            ask("Read", &read, &folders, &data()),
+            None,
+            "reads never ask"
+        );
+    }
+
+    /// A data folder none of the other paths are in.
+    fn data() -> PathBuf {
+        at(&["gathr-data"])
     }
 
     /// A link at `link` to the folder `to`: a junction on Windows (no admin needed), else a
@@ -183,6 +226,7 @@ mod tests {
                 "Write",
                 &json!({ "file_path": path }),
                 &[tree.to_path_buf()],
+                &data(),
             )
         };
         let asks = Some("it writes outside the agent's folders");
@@ -208,6 +252,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn the_data_folder_asks_whatever_the_folders_say() {
+        let root = std::env::temp_dir().join(format!("gathr-data-{}", crate::ids::span_id()));
+        let (data, own) = (root.join("data"), root.join("agents").join("Pia"));
+        std::fs::create_dir_all(&data).unwrap();
+        std::fs::create_dir_all(&own).unwrap();
+        let shared = root.join("agents").join("Shared");
+        link(&data, &shared);
+        let folders = [own.join("tree"), own.clone(), shared.clone()];
+        let write = |path: PathBuf, folders: &[PathBuf]| {
+            ask("Write", &json!({ "file_path": path }), folders, &data)
+        };
+        let asks = Some("it writes in Gathr's data folder");
+        assert_eq!(
+            write(shared.join("gathr.db"), &folders),
+            asks,
+            "through Shared"
+        );
+        assert_eq!(write(data.join("gathr.db"), &folders), asks, "the database");
+        let climbs = own.join("..").join("..").join("data").join("gathr.db");
+        assert_eq!(write(climbs, &folders), asks, "climbs into it");
+        assert_eq!(
+            write(own.join("notes.md"), &folders),
+            None,
+            "its own folder"
+        );
+        // A chat's folder Gathr made in the data folder before the agent folder.
+        let old = [data.join("chats").join("c1")];
+        assert_eq!(write(old[0].join("a.md"), &old), None, "its own old folder");
+        assert_eq!(
+            write(data.join("gathr.db"), &old),
+            asks,
+            "the rest of the data folder"
+        );
+        assert!(
+            super::overlaps(&shared, &data.join("accounts")),
+            "a link above it"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[cfg(windows)]
     #[test]
     fn claude_codes_forward_slashes_on_windows_are_the_same_path() {
@@ -217,6 +302,7 @@ mod tests {
                 "Write",
                 &json!({ "file_path": path }),
                 &[tree.to_path_buf()],
+                &data(),
             )
         };
         assert_eq!(write("X:/work/tree/a.rs"), None);
@@ -226,7 +312,7 @@ mod tests {
     fn a_push_asks_however_it_is_written() {
         let tree = at(&["w"]);
         let folders = [tree];
-        let run = |command: &str| ask("Bash", &json!({ "command": command }), &folders);
+        let run = |command: &str| ask("Bash", &json!({ "command": command }), &folders, &data());
         for push in [
             "git push",
             "git push origin main",
@@ -246,7 +332,12 @@ mod tests {
         ] {
             assert_eq!(run(not), None, "{not}");
         }
-        let ps = ask("PowerShell", &json!({ "command": "git push" }), &folders);
+        let ps = ask(
+            "PowerShell",
+            &json!({ "command": "git push" }),
+            &folders,
+            &data(),
+        );
         assert_eq!(ps, Some("it pushes"));
     }
 }

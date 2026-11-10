@@ -152,11 +152,7 @@ impl Task {
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
         // Beside the folder it runs in: its own folder and Shared, where it writes without asking.
-        let beside: Vec<PathBuf> = place
-            .place
-            .iter()
-            .flat_map(|p| [p.agent.clone(), p.shared.clone()])
-            .collect();
+        let beside = place.beside;
         let worktree = place.project.map(|project| (cwd.clone(), project));
         let given = Place {
             cwd: cwd.clone(),
@@ -205,6 +201,7 @@ impl Task {
         );
         env.push((command::PUSH_VAR.into(), push.into()));
         let started = Instant::now();
+        let ours = place.place.as_ref();
         match Engine::start(program, &args, env, &cwd) {
             Ok((engine, lines)) => {
                 self.pass = Some(pass);
@@ -226,11 +223,11 @@ impl Task {
                         .attr("gathr.folder.scratch", shown(place.scratch.as_deref()))
                         .attr(
                             "gathr.folder.agent",
-                            shown(beside.first().map(PathBuf::as_path)),
+                            passed(&beside, ours.map(|p| &p.agent)),
                         )
                         .attr(
                             "gathr.folder.shared",
-                            shown(beside.get(1).map(PathBuf::as_path)),
+                            passed(&beside, ours.map(|p| &p.shared)),
                         )
                         .attr("gathr.env.from", env_from)
                         .attr("gathr.env.why", env_why),
@@ -579,4 +576,9 @@ impl Task {
 
 fn shown(path: Option<&Path>) -> Option<String> {
     path.map(|p| p.display().to_string())
+}
+
+/// One of the agent's folders, if it was given to the engine.
+fn passed(beside: &[PathBuf], dir: Option<&PathBuf>) -> Option<String> {
+    shown(dir.filter(|d| beside.contains(d)).map(PathBuf::as_path))
 }

@@ -34,22 +34,34 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   else; Claude Code gets `--add-dir=<own>` and `--add-dir=<Shared>`; Codex gets both as its
   sandbox's writable roots (`config.sandbox_workspace_write.writable_roots` on `thread/start` and
   `thread/resume`). Gathr's data folder (logins, database, engine copies) is never one of them, and
-  the setting refuses a folder that holds it.
+  the setting refuses a folder that holds it. Whatever those folders say, the hook asks before a
+  write that lands in the data folder, links followed, so a link made later in Shared or the
+  agent's own folder never opens it; only an engine's own folder from before (`<data>/chats`,
+  `<data>/worktrees`) stays writable there. A Shared or own folder that holds the data folder or
+  leads into it through a link isn't passed to the engine at all (`gathr.folder.refused`, with the
+  turn's reference), and a turn whose worktree or temp folder would land there fails.
+- **One name for each folder:** Gathr resolves the agent folder as the disk names it (links
+  followed, macOS's `/var` as `/private/var`, without Windows' `\\?\` prefix) before it makes
+  anything in it, so the engine, its sandbox and Gathr's own checks all see the same paths.
 - **Temporary files per engine:** one folder per agent per chat, `<Agent>/temp/chat-<chat>`, set as
   the engine's `TEMP`, `TMP` and `TMPDIR` when it starts. It lives as long as that engine: every
   task and message the engine runs in the chat shares it, and nothing restarts an engine to change
   it.
-- **Gathr cleans up, never the agents:** an engine's temporary files go once it has closed (idle
-  close, a move to another chat, account or model, archive, delete; at shutdown, at the next start's
-  first sweep); a chat's worktrees, folders and temporary files once it's archived or deleted. Branches
-  stay. A sweep runs with the service's looks (every 2 minutes, 0010), and at once on archive and
-  delete. It never removes a folder a running engine works or keeps its temporary files in, or one a
-  wait check runs in, and while a chat is only archived, never a worktree with changes not
-  committed. Each such folder is skipped with an error event (`gathr.cleanup.skip`: `in_use`,
-  `changes`, or `left` when the disk refuses), recorded once per reason with the reference its
-  removal later shares (`gathr.cleanup.remove`), and tried again at the next sweep. Restoring an
-  archived chat keeps what's still there; a removed worktree is made again from its branch at the
-  agent's next turn.
+- **Gathr cleans up, never the agents; Archive removes only what Restore brings back:** an
+  engine's temporary files go once it has closed (idle close, a move to another chat, account or
+  model, archive, delete; at shutdown, at the next start's first sweep). Archiving removes a chat's
+  worktrees: their branches stay, and a restored chat's next turn checks each out again where it
+  was, with what was committed on it. A chat's folder outside a project has no branch to come back
+  from, so it stays until the chat is deleted; deleting removes everything. A sweep runs with the
+  service's looks (every 2 minutes, 0010), and at once on archive and delete. It never removes a
+  folder a running engine works or keeps its temporary files in, or one a wait check runs in, and
+  while a chat is only archived, never a worktree with changes not committed (files git ignores
+  aren't changes: they go with it). Each such folder is skipped with an error event
+  (`gathr.cleanup.skip`: `in_use`, `changes`, or `left` when the disk refuses), recorded once per
+  reason with the reference its removal later shares (`gathr.cleanup.remove`), and tried again at
+  the next sweep. Restore waits for a removal already under way, and each removal reads again,
+  right before it starts, whether its chat is still archived: a chat restored while a sweep looks
+  at it keeps what's there.
 
 ## Why
 
@@ -83,6 +95,12 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   switch would close and start the engine again, losing its prompt cache and background commands.
 - **Removing an archived chat's worktree with changes not committed:** archiving is undoable,
   deleting work isn't. Delete removes it, as before.
+- **Removing a chat's folder outside a project on archive:** nothing could bring it back on
+  Restore, and it holds what the person asked for.
+- **Keeping every worktree until Delete:** a worktree with nothing uncommitted comes back whole
+  from its branch, and archived chats' worktrees (with their builds) would fill the disk.
+- **Restore waiting for a whole sweep:** a sweep waits on `git status` for each worktree, which
+  can be slow; Restore waits only for one folder's removal.
 - **`~/Gathr` as the default for every data folder:** a window opened with `--data <test folder>` and
   no agent folder set would put that folder's agents in the person's real one.
 - **A `GATHR_*` variable naming the default for tests and dev:** an installed Gathr never reads

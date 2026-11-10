@@ -59,7 +59,12 @@ async fn pre_tool_use(
     Json(input): Json<Value>,
 ) -> Json<Value> {
     let tool = input["tool_name"].as_str().unwrap_or("");
-    let Some(why) = gathr::approvals::ask(tool, &input["tool_input"], &caller.folders) else {
+    let Some(why) = gathr::approvals::ask(
+        tool,
+        &input["tool_input"],
+        &caller.folders,
+        s.chats.data.path(),
+    ) else {
         // Empty: the agent's mode decides.
         return Json(json!({}));
     };
