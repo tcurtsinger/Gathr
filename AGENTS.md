@@ -12,7 +12,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **Tests where they earn it, not one per function.** Test behaviour that can go wrong: logic with branches, parsers and protocols (an engine driver against replayed raw frames), coordination state and its transitions, logins, security and data that could be lost, and every bug fixed (its test first). Don't test what can't really break: plain glue, getters, constants, what the type system already guarantees, or a layout a screenshot proves. One test per behaviour, through the real code where it's cheap, not mocks of our own code. A test that can't fail is deleted. Tests are written test first, at the seams the plan names: read [docs/testing.md](docs/testing.md) before the first test of a change.
 - **Tests:** CI is the gate. The author runs the tests the change touches once before pushing; the reviewer reads and doesn't rerun suites.
 - **Review once, when it's ready.** The code reviewer reviews every PR. The author answers each note; a second look only for a fix that changes behaviour. Minor notes are fixed in passing or dropped, never a round of their own. A docs-only PR merges without review rounds unless something in it is wrong.
-- **The lead merges** once the notes are answered and CI is green, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <full head commit SHA>`. Nobody turns on auto-merge. A PR must be up to date with `main` before it merges (`gh pr update-branch <n>`, then CI on the new head). Check `main` is green before opening the next PR.
+- **The reviewer merges** once their review (or second look) is clean, the notes are answered and CI is green on the head they reviewed, with a merge commit: `gh pr merge --merge --delete-branch --match-head-commit <full head commit SHA>`. Nobody turns on auto-merge. A PR must be up to date with `main` before it merges (`gh pr update-branch <n>`, then CI on the new head; a head that only brings in `main` needs no new review). A docs-only PR is merged by its author on green CI. When the lead says PRs must land in an order, the reviewer keeps it. After a merge, the merger brings the owner's main checkout up to date (below). Check `main` is green before opening the next PR.
 - **Clean up after yourself:** once your PR is merged or closed, remove your worktree and branch.
 - **Keep this file current:** when a step here changes, or you learn one, change this file in the same PR.
 
@@ -184,7 +184,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 - A check the owner does by hand says how to make every test file, what to type and where to click.
 - **No assumptions.** A fact you state or build on (how a tool, API, engine or library behaves, what a file says, what a number is) is checked first: in the code, the current docs, the source, or by running it. What you remember from training can be out of date: Claude Code reading `AGENTS.md` changed a month before we assumed it didn't. What can't be checked is said plainly as not verified, never written as fact.
 - Ask before you guess: when you're about to build on something you haven't checked and can't check in a few minutes, or the same thing failed twice, ask the teammate who knows that area.
-- Reviews: every PR goes to Vale. The lead merges as above. The owner doesn't need to install anything until there's an app to run.
+- Reviews: every PR goes to Vale, who merges it as above. The owner doesn't need to install anything until there's an app to run.
 
 ### Friction
 
