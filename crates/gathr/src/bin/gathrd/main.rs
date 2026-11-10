@@ -180,8 +180,8 @@ async fn serve(
     chats.pauses_changed().await;
     chats.take_over().await;
     tokio::spawn(coord::run(chats.clone()));
-    tokio::spawn(updates::run(updates.clone()));
-    tokio::spawn(updates::run(codex_updates.clone()));
+    tokio::spawn(updates::run(updates.clone(), chats.clone()));
+    tokio::spawn(updates::run(codex_updates.clone(), chats.clone()));
     app.started(started);
     tokio::spawn(app_update::run(app.clone()));
 

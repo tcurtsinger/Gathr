@@ -54,7 +54,7 @@ struct Ids {
 struct Queued {
     ids: Ids,
     text: String,
-    /// What holds it back, as saved: `pause` or `usage`.
+    /// What holds it back: a pause, usage, or the missing engine (`claude` or `codex`).
     held: Option<&'static str>,
 }
 
@@ -470,6 +470,37 @@ impl Task {
             };
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
+        }
+        let kind = if assigned.as_ref().is_some_and(|a| a.engine == "codex") {
+            "codex"
+        } else {
+            "claude"
+        };
+        let (copy, override_var) = if kind == "codex" {
+            (
+                gathr::codex::copies::storage(&self.chats.data).program(),
+                gathr::codex::command::PATH_VAR,
+            )
+        } else {
+            (self.chats.copy(), gathr::claude::command::PATH_VAR)
+        };
+        // A first download holds the saved turn. A dev/test override that is wrong still fails.
+        if self.engine.is_none()
+            && copy.is_none()
+            && std::env::var_os(override_var).is_none_or(|p| p.is_empty())
+        {
+            self.hold_back(next, "queued").await;
+            if let Some(queued) = self.queue.iter_mut().find(|q| q.ids.turn == next.ids.turn) {
+                queued.held = Some(kind);
+            }
+            self.save_held(&next.ids, Some(kind)).await;
+            return Ok("queued");
+        }
+        if next.held.is_some_and(|h| matches!(h, "claude" | "codex")) {
+            if let Some(queued) = self.queue.iter_mut().find(|q| q.ids.turn == next.ids.turn) {
+                queued.held = None;
+            }
+            self.save_held(&next.ids, None).await;
         }
         // A wrong path fails the send at once, signed in or not (hand check 8).
         let program = match self.engine {

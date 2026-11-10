@@ -105,7 +105,7 @@ impl Updates {
 }
 
 /// Checks at start, then every 24 hours or when asked, until the service stops.
-pub async fn run(updates: std::sync::Arc<Updates>) {
+pub async fn run(updates: std::sync::Arc<Updates>, chats: std::sync::Arc<crate::chats::Chats>) {
     let Some(feed) = updates.feed() else {
         return;
     };
@@ -114,6 +114,7 @@ pub async fn run(updates: std::sync::Arc<Updates>) {
         let check = updates.clone();
         let feed = feed.clone();
         let _ = tokio::task::spawn_blocking(move || check.check(&feed)).await;
+        chats.retry_waiting();
         tokio::select! {
             _ = tokio::time::sleep(DAY) => {}
             _ = updates.wake.notified() => {}

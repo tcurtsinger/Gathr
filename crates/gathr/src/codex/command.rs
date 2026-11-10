@@ -85,7 +85,7 @@ fn keep(name: &OsString) -> bool {
     !(name.starts_with("OPENAI_") || name.starts_with("CODEX_"))
 }
 
-/// The engine's path: `GATHR_CODEX_PATH`, else Gathr's own copy (0025), else `codex` on the PATH.
+/// The engine's path: the dev/test override, else Gathr's own copy (0025). Never the person's PATH.
 pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {
     let set = std::env::var_os(PATH_VAR).filter(|p| !p.is_empty());
     if let Some(path) = set.map(PathBuf::from) {
@@ -97,8 +97,7 @@ pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {
     if let Some(copy) = copy {
         return Ok(copy);
     }
-    crate::platform::find_on_path("codex")
-        .ok_or_else(|| "Codex isn't installed yet, and codex isn't on the PATH".to_string())
+    Err("Codex is downloading".to_string())
 }
 
 /// The oldest Codex the switches and frames above were proven on.

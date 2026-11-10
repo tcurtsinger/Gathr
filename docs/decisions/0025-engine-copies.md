@@ -1,6 +1,6 @@
 # 0025: Gathr keeps its own engine copies, and updates them
 
-Status: accepted (owner, 2026-11-07). Claude Code is built; Codex follows when its driver lands.
+Status: accepted (owner, 2026-11-07; no borrowing confirmed 2026-11-09, task 1284). Both engines are implemented.
 
 ## The choice
 
@@ -9,8 +9,11 @@ The person never installs Claude Code or Codex, and their own installs are never
 
 - **Where:** `<data>/engines/claude/<version>/claude(.exe)`. `current.json` names the copy in use
   and the one before it.
-- **Which engine a chat runs:** Gathr's copy, else `claude` on the PATH. Settings has no path
-  (0026); `GATHR_CLAUDE_PATH` overrides both in dev and tests only.
+- **Which engine a chat runs:** only Gathr's checked copy, including its known-good fallback.
+  Neither Claude Code nor Codex is ever borrowed from the person's PATH. A first download keeps
+  the turn queued across restarts and says "Claude Code is downloading" or "Codex is downloading".
+  When the checked copy arrives, the saved turn starts without another Send. Settings has no
+  path (0026); explicit `GATHR_CLAUDE_PATH` and `GATHR_CODEX_PATH` overrides remain for dev/tests.
 - **When:** at service start, then every 24 hours, and on `POST /api/engines/claude/update`.
 - **From where:** Claude Code's own release feed, the one its installer reads:
   `https://downloads.claude.ai/claude-code-releases/latest` (a bare version) and
@@ -40,7 +43,7 @@ The person never installs Claude Code or Codex, and their own installs are never
 - **Dev and tests download nothing** unless `GATHR_CLAUDE_RELEASES` names a feed: debug builds have
   no default feed, so a dev service never pulls 345 MB unasked. Release builds use Claude's.
 
-## Codex, when its driver lands
+## Codex (0033)
 
 The same layout under `<data>/engines/codex`, the same checks and switching.
 - **Feed:** npm's per-platform tag, `registry.npmjs.org/@openai%2fcodex/<platform>` (for example
@@ -65,7 +68,7 @@ has run, and a chat's engine never sends `initialize` today).
 ## Turned down
 
 - **Using the person's own Claude Code (as before).** It can be missing, too old, or updated by its
-  own updater in the middle of the person's day. Kept as the override.
+  own updater in the middle of the person's day. No installed fallback; an explicit dev/test override remains.
 - **Copies built into Gathr's installer.** Each Gathr release would carry 2 × 345 MB per platform
   and go stale between releases.
 - **Letting Claude Code's own updater manage Gathr's copy.** It writes under the person's home
@@ -88,4 +91,5 @@ has run, and a chat's engine never sends `initialize` today).
 - A real update from one Claude Code release to the next on macOS (the Windows one was run).
 - Whether separate Claude Code config folders on macOS share one Keychain entry.
 - Codex is implemented in 0033. Its owned 0.167.0 package passed installation and a signed-out
-  app-server/config/model probe on Windows; signed-in use and macOS remain to verify.
+  app-server/config/model probe on Windows. A signed-in two-agent team used Gathr tools and completed
+  a task and its hear-back. macOS remains to verify.

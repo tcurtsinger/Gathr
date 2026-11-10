@@ -218,3 +218,22 @@ test('with no live updates, an answer to an older action never replaces the newe
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('a b c')).toBeVisible();
 });
+
+test('a turn waiting for Gathrs own engine says what is downloading', async () => {
+  const waiting = {
+    ...history,
+    turns: [{ ...history.turns[0], held: 'codex', why: 'Codex is downloading' }],
+  };
+  vi.stubGlobal('fetch', (path: string) =>
+    Promise.resolve(
+      json(path === '/api/pauses' ? running : path.endsWith('/tasks') ? { tasks: [], waits: [] } : waiting),
+    ),
+  );
+  const screen = await render(<Chat />);
+  await expect.element(screen.getByText('Codex is downloading', { exact: true })).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Retry', exact: true })).not.toBeInTheDocument();
+  // Completion clears the notice in the same reply slot.
+  for (const listener of live)
+    listener({ type: 'turn', chat: 'c', turn: 't', status: 'done', ref: 'r', agent: 'a' });
+  await expect.element(screen.getByText('Codex is downloading', { exact: true })).not.toBeInTheDocument();
+});

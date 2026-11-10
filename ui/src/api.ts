@@ -31,8 +31,8 @@ export interface Turn {
   task?: number | null;
   /** A hear-back's: the turn whose tasks it reports on, which its reply links back to. */
   answers?: string | null;
-  /** Queued but held: by a pause, or until its account's usage comes back. */
-  held?: 'pause' | 'usage' | null;
+  /** Queued but held by a pause, usage, an app update or its first engine download. */
+  held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -170,6 +170,8 @@ export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
 /** A model as the account's engine lists it (0025), in the engine's order. */
 export interface Model {
+  /** Exact model currently selected by an alias or the engine default. */
+  resolved?: string | null;
   id: string;
   name: string;
   /** A family alias that always runs that family's newest model (0025). */

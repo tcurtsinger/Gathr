@@ -125,7 +125,7 @@ fn codex_models_include_every_page_and_default_efforts() {
     assert_eq!(listed["version"], "0.166.0", "wrong engine: {listed}");
     assert_eq!(
         listed["models"].as_array().unwrap().len(),
-        10,
+        14,
         "missing pagination or default row: {listed}"
     );
     assert_eq!(listed["models"][0]["id"], "default");
@@ -138,7 +138,9 @@ fn codex_models_include_every_page_and_default_efforts() {
             .as_array()
             .unwrap()
             .iter()
-            .all(|m| m["latest"] == false)
+            .any(|m| m["id"] == "latest:sol"
+                && m["resolved"] == "gpt-6.1-sol"
+                && m["latest"] == true)
     );
     let agent = service.send(
         "POST",

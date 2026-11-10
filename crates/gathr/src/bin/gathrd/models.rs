@@ -307,22 +307,6 @@ async fn codex_list(client: &mut gathr::codex::client::Client) -> Result<Value, 
             return Err("Codex repeated a model-list cursor".into());
         }
     }
-    let row = |m: &Value| {
-        json!({
-            "id":m["model"], "resolved":m["model"], "latest":false,
-            "name":m["displayName"], "description":m["description"],
-            "efforts":m["supportedReasoningEfforts"].as_array().into_iter().flatten()
-                .filter_map(|e| e["reasoningEffort"].as_str()).collect::<Vec<_>>(),
-        })
-    };
-    let default = all
-        .iter()
-        .find(|m| m["isDefault"] == true)
-        .ok_or("Codex returned no default model")?;
-    let mut first = row(default);
-    first["id"] = "default".into();
-    first["name"] = "Engine default".into();
-    let mut models = vec![first];
-    models.extend(all.iter().map(row));
+    let models = gathr::codex::models::listed(&all)?;
     Ok(json!({"version":client.version, "models":models}))
 }

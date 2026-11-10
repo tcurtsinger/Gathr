@@ -30,6 +30,7 @@ export const scrub = (f) => {
   // Codex: the computer's name and install id, and the account's plan and usage.
   if (f?.method === 'remoteControl/status/changed') Object.assign(f.params, { serverName: 'computer', installationId: 'install-test' });
   if (f?.method === 'account/rateLimits/updated') f.params.rateLimits = { limitId: 'codex', primary: { usedPercent: 10, resetsAt: 1900000000 } };
+  if (f?.method === 'account/updated' && f.params?.planType) f.params.planType = 'plus';
   if (f?.result?.account) f.result.account = { type: 'chatgpt', email: 'someone@example.com', planType: 'plus' };
   return f;
 };
@@ -37,7 +38,10 @@ export const scrub = (f) => {
 const main = (src, dst, data) => {
   if (!src || !dst || !data) throw new Error('usage: scrub-frames.mjs <export.jsonl> <out.jsonl> <data folder>');
   const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const forms = (p) => [p, p.replaceAll('\\', '/'), p.replace(/[:\\/]/g, '-')];
+  const forms = (p) => {
+    const path = p.replace(/[\\/]+/g, '/');
+    return [path.replaceAll('/', '\\\\'), path.replaceAll('/', '\\'), path, p.replace(/[:\\/]/g, '-')];
+  };
   const swaps = [
     ...forms(data).map((f) => [new RegExp(escape(f), 'gi'), 'gathr-test-data']),
     ...forms(os.homedir()).map((f) => [new RegExp(escape(f), 'gi'), 'home']),

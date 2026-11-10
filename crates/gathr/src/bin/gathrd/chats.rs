@@ -405,6 +405,12 @@ impl Chats {
         if let Some(Ok(saved)) = self.writer.call(|c| gathr::pauses::list(c)).await {
             *self.pauses.lock().expect("never poisoned") = saved;
         }
+        self.retry_waiting();
+        self.settle_pauses(true).await;
+    }
+
+    /// Lets queued turns try again after a pause changes or an engine copy arrives.
+    pub fn retry_waiting(&self) {
         let tasks: Vec<_> = self
             .tasks
             .lock()
@@ -415,7 +421,6 @@ impl Chats {
         for task in tasks {
             let _ = task.send(Cmd::Kick);
         }
-        self.settle_pauses(true).await;
     }
 
     /// A pause in which nothing runs any more becomes `paused`, said once, and one a turn runs in

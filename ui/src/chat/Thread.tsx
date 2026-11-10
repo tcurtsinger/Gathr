@@ -283,6 +283,13 @@ function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions
       />
     );
   }
+  if (turn.held === 'claude' || turn.held === 'codex') {
+    return (
+      <Notice
+        title={turn.why ?? (turn.held === 'codex' ? 'Codex is downloading' : 'Claude Code is downloading')}
+      />
+    );
+  }
   if (turn.status === 'waiting_sign_in') {
     return (
       <Notice

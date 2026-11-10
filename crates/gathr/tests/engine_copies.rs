@@ -268,3 +268,23 @@ fn a_chat_moves_to_a_new_copy_at_its_next_turn() {
         "{closed:?}"
     );
 }
+
+#[test]
+fn a_waiting_turn_starts_when_gathrs_first_copy_arrives() {
+    let (data, feed) = (TempDir::new(), Feed::start());
+    let service = service_on(&data.0, &feed);
+    checked(&service);
+    let chat = service.new_chat();
+    send(&service, &chat);
+    let held = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(held["turns"][0]["held"], "claude", "{held}");
+    feed.publish("2.1.400", &engine_bytes(), None);
+    let installed = check_now(&service);
+    assert_eq!(installed["version"], "2.1.400", "{installed}");
+    turn_done(&service, &chat);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert!(
+        history["turns"][0]["held"].is_null(),
+        "engine wait survived completion: {history}"
+    );
+}

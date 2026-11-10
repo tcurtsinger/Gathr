@@ -196,3 +196,19 @@ test('a change of approvals enables Save and is saved', async () => {
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => sent.at(-1)?.body).toMatchObject({ approvals: 'ask' });
 });
+
+test('Codex family Latest keeps its display name and a new agent follows the default family', async () => {
+  const models = [
+    { ...model('default', 'Engine default'), resolved: 'gpt-6.1-sol' },
+    { ...model('latest:astra', 'Astra Latest'), latest: true, resolved: 'gpt-6-astra' },
+    { ...model('latest:sol', 'Sol Latest'), latest: true, resolved: 'gpt-6.1-sol' },
+    { ...model('gpt-6.1-sol', 'GPT-6.1-Sol'), resolved: 'gpt-6.1-sol' },
+  ];
+  service([], () => new Response(JSON.stringify({ models })));
+  const screen = await render(<Agents onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Add', exact: true }).click();
+  await expect
+    .element(screen.getByRole('button', { name: 'Sol Latest', exact: true }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect.element(screen.getByRole('button', { name: 'Astra Latest', exact: true })).toBeVisible();
+});

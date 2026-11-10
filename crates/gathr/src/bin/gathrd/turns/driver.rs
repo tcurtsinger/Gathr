@@ -43,6 +43,6 @@ impl Driver {
         }
     }
     pub fn failed_start(frames: &[Frame]) -> bool {
-        frames.iter().any(|f| matches!(f, Frame::EngineError { kind, .. } if kind == "initialize" || kind == "thread" || kind == "engine_version"))
+        frames.iter().any(|f| matches!(f, Frame::EngineError { kind, .. } if kind == "initialize" || kind == "thread" || kind == "engine_version" || kind == "models"))
     }
 }

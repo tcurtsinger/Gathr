@@ -74,8 +74,15 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   `GATHR_CODEX_PATH` overrides it in dev and tests only.
 - **Models (C4):** `model/list` on the account's app-server, all pages, hidden ones left out. Each
   model's `supportedReasoningEfforts` are its efforts and `defaultReasoningEffort` its default;
-  efforts stay open strings. Codex has no family alias like `opus`, so it has no Latest until the
-  owner picks how one is chosen (C4's open question).
+  efforts stay open strings. Codex reports no native family aliases. The owner chose Gathr-owned
+  Family Latest rows (task 1291): parse `gpt-<numeric version>-<lowercase family>`, compare numeric
+  components, and leave unfamiliar shapes exact. IDs are `latest:<family>`; names are Sol Latest,
+  Terra Latest, Luna Latest, Astra Latest for today's account. Each inherits the chosen model's
+  efforts. Numeric ties use the exact ID for deterministic ordering. No model release list is kept.
+  Before opening or resuming a thread on a Latest agent, the driver reads every `model/list`
+  page in that account and sends the resolved exact model to Codex. Missing families fail with a
+  reference, never silently switch to the engine default. A new engine copy closes the old session
+  between turns, so a new catalog moves the family without editing the agent.
 - **The replay engine** plays a Codex recording too: it answers each request it reads with the
   recording's next frames, so the same tests run both engines without a login.
 
@@ -132,7 +139,7 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
 - `config/read` returned all nine switches exactly as given. The Windows sandbox returned
   `ready`. `model/list` returned nine visible models signed out, with `gpt-6.1-sol` the default.
 - The model picker includes a synthetic `default` row, using the actual default model's efforts;
-  no new Latest alias is invented. Every model-list page is read.
+  Family Latest rows follow the owner's rule above. Every model-list page is read.
 - The owner selected browser-first design A. Sign-in starts the browser; Open sign-in page is
   the fallback, and Use a device code is secondary. Device failures retain `device: true` for Retry.
   Claude's waiting sign-in has `paste: true`; Codex has `paste: false`.
@@ -143,9 +150,20 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
   device failure and reference tracing, replacing/cancelling a sign-in, paged models and effort
   validation. Driver checks cover a message and Stop arriving before the thread opens.
 
+- A real signed-in two-agent team completed three turns in 33 seconds: the Supervisor called
+  `read_chat`, `list_tasks` and `give_task`; the member finished with `finish_task`; its hear-back
+  woke the Supervisor. First text was 5.85 seconds. A refused `finish_task` from the Supervisor,
+  which had no task of its own, remained a tool error and did not fail the turn. The public
+  `codex_signed_in.jsonl` recording covers streaming, tools, refusal and token totals.
+- The signed-in 0.167.0 catalog reports eight exact models; the signed-out list has one extra,
+  `gpt-5.5`. Engine default resolves to `gpt-6.1-sol`. A test uses the saved signed-in catalog
+  to check all four Family Latest rows.
+- Gathr never borrows either engine from PATH. A missing checked copy holds the saved turn with
+  a downloading notice; replay checks cover persistence and release when the first copy arrives.
+
 ## Not verified
 
-- A signed-in turn, approvals, Stop and Gathr's tools from Codex: they need a ChatGPT sign-in.
+- Live Codex approvals and Stop (protocol replay covers their mappings).
 - That the agent's own shell tool passes `GATHR_AGENT_TOKEN` the way `command/exec` did (the docs'
   `shell_environment_policy` wording on names with `TOKEN` is unclear).
 - macOS.

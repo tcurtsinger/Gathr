@@ -24,6 +24,7 @@ pub struct Opening {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Asked {
     Initialize,
+    Models,
     Thread,
     Turn,
     Steer,
@@ -36,6 +37,8 @@ pub struct Session {
     next: u64,
     asked: HashMap<u64, Asked>,
     opening: Option<Opening>,
+    models: Vec<Value>,
+    cursors: std::collections::HashSet<String>,
     thread: Option<String>,
     turn: Option<String>,
     starting: bool,
@@ -165,8 +168,20 @@ impl Session {
                         self.version = Some(version);
                         read.send
                             .push(json!({ "method": "initialized", "params": {} }));
-                        if let Some(line) = self.open_thread() {
-                            read.send.push(line);
+                        if self
+                            .opening
+                            .as_ref()
+                            .and_then(|o| o.model.as_deref())
+                            .is_some_and(|m| m.starts_with(super::models::LATEST))
+                        {
+                            let request = self.request(
+                                Asked::Models,
+                                "model/list",
+                                json!({"includeHidden":false}),
+                            );
+                            read.send.push(request);
+                        } else {
+                            read.send.extend(self.open_thread());
                         }
                     }
                     Err(why) => read.frames.push(Frame::EngineError {
@@ -175,6 +190,13 @@ impl Session {
                     }),
                 }
             }
+            (Some(Asked::Models), None) => match self.model_page(result) {
+                Ok(next) => read.send.extend(next),
+                Err(message) => read.frames.push(Frame::EngineError {
+                    kind: "models".into(),
+                    message,
+                }),
+            },
             (Some(Asked::Thread), None) => {
                 let thread = result["thread"]["id"].as_str().unwrap_or("").to_string();
                 self.thread = Some(thread.clone());
@@ -202,7 +224,10 @@ impl Session {
                 }
                 self.flush_held(read);
             }
-            (Some(asked @ (Asked::Initialize | Asked::Thread | Asked::Turn)), Some(error)) => {
+            (
+                Some(asked @ (Asked::Initialize | Asked::Models | Asked::Thread | Asked::Turn)),
+                Some(error),
+            ) => {
                 read.frames.push(Frame::EngineError {
                     kind: format!("{asked:?}").to_lowercase(),
                     message: error["message"].as_str().unwrap_or("").to_string(),
@@ -224,6 +249,35 @@ impl Session {
         for text in std::mem::take(&mut self.held) {
             read.send.extend(self.user(&text));
         }
+    }
+
+    fn model_page(&mut self, page: &Value) -> Result<Option<Value>, String> {
+        let data = page["data"]
+            .as_array()
+            .ok_or("Codex returned no model list")?;
+        self.models.extend(data.iter().cloned());
+        if !page["nextCursor"].is_null() {
+            let cursor = page["nextCursor"]
+                .as_str()
+                .ok_or("Codex returned an invalid model cursor")?;
+            if !self.cursors.insert(cursor.to_string()) {
+                return Err("Codex repeated a model-list cursor".into());
+            }
+            return Ok(Some(self.request(
+                Asked::Models,
+                "model/list",
+                json!({"cursor":cursor,"includeHidden":false}),
+            )));
+        }
+        let rows = super::models::listed(&std::mem::take(&mut self.models))?;
+        let opening = self.opening.as_mut().ok_or("Codex has no thread to open")?;
+        let model = rows
+            .iter()
+            .find(|r| r["id"].as_str() == opening.model.as_deref())
+            .and_then(|r| r["resolved"].as_str())
+            .ok_or("the account no longer offers this model family")?;
+        opening.model = Some(model.to_string());
+        Ok(self.open_thread())
     }
 
     fn open_thread(&mut self) -> Option<Value> {
@@ -527,6 +581,50 @@ mod tests {
     }
 
     #[test]
+    fn a_real_signed_in_turn_streams_tools_refusals_and_usage() {
+        let (session, frames, _) = played("codex_signed_in", opening());
+        assert_eq!(session.version.as_deref(), Some("0.167.0"));
+        assert!(frames.contains(&Frame::Text("Assigned task #1 to Moss.".into())));
+        let tools: Vec<_> = frames
+            .iter()
+            .filter_map(|f| match f {
+                Frame::ToolStart { name, .. } => Some(name.as_str()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            tools,
+            [
+                "mcp__gathr__list_tasks",
+                "mcp__gathr__read_chat",
+                "mcp__gathr__give_task",
+                "mcp__gathr__finish_task"
+            ]
+        );
+        let completed: Vec<_> = frames
+            .iter()
+            .filter_map(|f| match f {
+                Frame::ToolEnd { ok, .. } => Some(*ok),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            completed,
+            [true, true, true, false],
+            "tool refusal lost: {frames:?}"
+        );
+        let Some(Frame::TurnEnd(end)) = frames.last() else {
+            panic!("no end: {frames:?}")
+        };
+        assert!(end.ok, "a refused tool failed the whole turn: {end:?}");
+        assert_eq!(
+            (end.usage.input, end.usage.cache_read, end.usage.output),
+            (4578, 74624, 222)
+        );
+        assert_eq!(end.duration_ms, Some(18713));
+    }
+
+    #[test]
     fn a_message_before_the_thread_opens_is_held_then_sent_as_a_turn() {
         let (mut session, _) = Session::open(opening());
         assert!(session.user("first").is_none());
@@ -627,5 +725,32 @@ mod start_tests {
             "Stop never ended: {:?}",
             read.frames
         );
+    }
+}
+
+#[cfg(test)]
+mod latest_tests {
+    use super::*;
+    #[test]
+    fn a_family_latest_resolves_from_all_pages_before_opening_the_thread() {
+        let (mut session, _) = Session::open(Opening {
+            model: Some("latest:sol".into()),
+            ..Opening::default()
+        });
+        session.user("hello");
+        let read = session.read(&json!({"id":1,"result":{"userAgent":"gathr/0.167.0 (test)"}}));
+        assert_eq!(
+            read.send[1]["method"], "model/list",
+            "latest was sent straight to Codex: {read:?}"
+        );
+        let read = session.read(&json!({"id":2,"result":{"data":[{"model":"gpt-6-sol","isDefault":true}],"nextCursor":"next"}}));
+        assert_eq!(read.send[0]["params"]["cursor"], "next");
+        let read = session
+            .read(&json!({"id":3,"result":{"data":[{"model":"gpt-6.1-sol"}],"nextCursor":null}}));
+        assert_eq!(read.send[0]["method"], "thread/start");
+        assert_eq!(read.send[0]["params"]["model"], "gpt-6.1-sol");
+        let read = session.read(&json!({"id":4,"result":{"thread":{"id":"thread"}}}));
+        assert_eq!(read.send[0]["method"], "turn/start");
+        assert_eq!(read.send[0]["params"]["input"][0]["text"], "hello");
     }
 }

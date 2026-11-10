@@ -4,4 +4,5 @@ pub mod client;
 pub mod command;
 pub mod copies;
 pub mod login;
+pub mod models;
 pub mod rpc;
