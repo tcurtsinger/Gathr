@@ -72,11 +72,9 @@ impl Task {
                 .error("sqlite");
             self.record(event.attr("why", e.to_string()));
         }
-        self.publish(
-            &ids.chat,
-            json!({ "type": "turn", "turn": ids.turn, "status": "queued", "held": held, "why": why,
-                "agent": ids.agent, "task": ids.task, "answers": ids.answers }),
-        );
+        let update = json!({ "type": "turn", "turn": ids.turn, "status": "queued", "held": held,
+            "why": why, "agent": ids.agent, "task": ids.task, "answers": ids.answers });
+        self.publish_turn(ids, update).await;
     }
 
     fn usage_words(&self) -> Option<String> {
