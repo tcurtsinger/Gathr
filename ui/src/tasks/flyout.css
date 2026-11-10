@@ -2,7 +2,7 @@
 .nav-count {
   margin-left: auto;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 /* Just right of navigation, 40px down; the sidebar is its containing block. */
@@ -37,7 +37,7 @@
 }
 .flyout h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 500;
 }
 .flyout-body h3 {
@@ -45,7 +45,7 @@
   margin: 0;
   padding: 14px 8px 4px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .flyout-body {
@@ -71,17 +71,17 @@
   background: var(--hover-tint);
 }
 .flyout-task > span {
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 .flyout-task > small {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .flyout-empty {
   margin: 0;
   padding: 10px 8px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }

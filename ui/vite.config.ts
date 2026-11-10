@@ -33,6 +33,7 @@ export default defineConfig({
         test: {
           name: 'ui',
           include: ['src/**/*.test.{ts,tsx}'],
+          setupFiles: ['src/fonts.setup.ts'],
           browser: {
             enabled: true,
             headless: true,
