@@ -52,7 +52,7 @@
   border: 1px solid transparent;
   border-radius: 7px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 .workspace-tab[data-selected="true"] {
   border-color: var(--border);

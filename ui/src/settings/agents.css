@@ -42,7 +42,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 .agent-label {
   display: flex;
@@ -56,7 +56,7 @@
 .agent-field input,
 .agent-field select {
   width: 100%;
-  font-size: 14px;
+  font-size: 15px;
 }
 .agent-field input::placeholder {
   color: var(--muted);
@@ -79,7 +79,7 @@
   display: block;
   width: 100%;
   border-radius: 0;
-  font-size: 14px;
+  font-size: 15px;
   text-align: left;
 }
 .model-results [aria-pressed="true"] {
@@ -98,7 +98,7 @@
 }
 .agent-actions [role="status"] {
   margin-right: auto;
-  font-size: 13px;
+  font-size: 14px;
 }
 @media (max-width: 767px) {
   .settings-page > .agents {

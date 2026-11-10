@@ -73,8 +73,7 @@ In message headers, the name and role share a flex wrapper with baseline
 alignment and an 8px gap. The avatar stays vertically centred against that
 wrapper. Message text keeps its 34px indent. Do not centre the smaller role
 against the name. The [typography check page](designs/typography/v1.html) shows
-the split, workspace, plan bar and Summary at the new scale. Production sizing
-and header markup follow in the typography UI feature.
+the split, workspace, plan bar and Summary at the new scale.
 
 ## Layout
 

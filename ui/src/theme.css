@@ -39,6 +39,26 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* Gathr's type scale (DESIGN.md Typography): base weight 450, and every text size from 11 to 15px one
+   step up. The registry files stay as published, so their sizes step up here: the named ones in the
+   theme, the literal ones in the utilities layer after Tailwind's own, so the cascade is unchanged. */
+@theme {
+  --font-weight-normal: 450;
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+}
+@layer utilities {
+  .text-\[11px\] {
+    font-size: 12px;
+  }
+  .text-\[13px\] {
+    font-size: 14px;
+  }
+  .text-\[15px\] {
+    font-size: 16px;
+  }
+}
+
 /* No focus rings anywhere (DESIGN.md). Most registry rings name their colour in the class, not --ring,
    so the ring colour is cleared here. Unlayered, this wins over Tailwind's layered utilities. */
 :focus-visible {

@@ -68,7 +68,7 @@
 }
 .plan-title strong {
   flex: none;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 .plan-title span {
@@ -77,7 +77,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 /* A long round narrows its segments rather than pushing done/total out of the row. */
 .plan-segments {
@@ -110,7 +110,7 @@
   flex: none;
   min-width: 30px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }

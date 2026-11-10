@@ -3,7 +3,6 @@
 import type { ComponentProps } from "react";
 import { BotIcon, UserIcon, WrenchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { mono } from "./surfaces";
 
 export type SpeakerKind = "user" | "agent" | "subagent" | "tool";
 
@@ -62,10 +61,10 @@ export function SpeakerIdentity({
             )}
           </span>
 
-            <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-1.5 self-center">
+            <span className="col-start-2 row-start-1 flex min-w-0 flex-wrap items-baseline gap-x-2 self-center">
               <span className="text-[13px] font-medium">{turn.name}</span>
               {turn.detail && (
-                <span className={cn(mono, "text-muted-foreground")}>
+                <span className="text-[11px] text-muted-foreground">
                   {turn.detail}
                 </span>
               )}

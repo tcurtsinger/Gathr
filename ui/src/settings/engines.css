@@ -4,7 +4,7 @@
 .pathfield label {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .pathline {
   display: flex;
@@ -15,7 +15,7 @@
 }
 .field-error {
   color: var(--danger);
-  font-size: 13px;
+  font-size: 14px;
 }
 .account-heading {
   display: flex;
@@ -53,7 +53,7 @@
 }
 .account-row small {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .account-actions {
   display: flex;
@@ -75,13 +75,13 @@
 }
 .account-form h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 .account-form label {
   display: grid;
   gap: 6px;
-  font-size: 13px;
+  font-size: 14px;
 }
 .account-form-actions {
   display: flex;
@@ -93,7 +93,7 @@
 }
 .settings-page .engine-list h3 {
   margin: 0 0 8px;
-  font-size: 15px;
+  font-size: 16px;
 }
 @media (max-width: 767px) {
   .account-row {
@@ -104,7 +104,7 @@
   display: inline-block;
   margin-top: 8px;
   color: var(--accent);
-  font-size: 13px;
+  font-size: 14px;
 }
 .signin-panel {
   display: grid;
@@ -115,7 +115,7 @@
   margin: 0;
 }
 .signin-panel p.muted {
-  font-size: 13px;
+  font-size: 14px;
 }
 .signin-actions {
   display: flex;

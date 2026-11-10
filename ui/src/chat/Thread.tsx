@@ -189,9 +189,16 @@ function AssistantMessage() {
         <header className="speaker">
           <SpeakerIdentity
             className="w-auto"
-            turns={[{ id: 'author', kind: 'agent', name: agent, text: '' }]}
+            turns={[
+              {
+                id: 'author',
+                kind: 'agent',
+                name: agent,
+                detail: role ? roleName[role] : undefined,
+                text: '',
+              },
+            ]}
           />
-          {role && <span className="speaker-role">{roleName[role]}</span>}
           {fresh && <i className="attention" role="img" aria-label="New" />}
           {time && <time dateTime={time}>{clock(time)}</time>}
         </header>
