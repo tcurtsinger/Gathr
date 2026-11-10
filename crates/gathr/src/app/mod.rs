@@ -215,7 +215,7 @@ impl Copies {
                 if folder.exists() {
                     std::fs::remove_dir_all(&folder)?;
                 }
-                std::fs::rename(&staging, folder)
+                platform::move_folder(&staging, &folder)
             });
         if copied.is_err() {
             let _ = std::fs::remove_dir_all(&staging);
