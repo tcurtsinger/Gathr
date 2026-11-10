@@ -40,8 +40,9 @@ pub enum Cmd {
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
-    /// A `git push` from the agent's worktree, waiting for its answer (0029).
-    AskPush {
+    /// A service action (push or Codex wait check), waiting for its answer (0029).
+    AskService {
+        kind: &'static str,
         chat: String,
         input: Value,
         reply: oneshot::Sender<bool>,
@@ -233,6 +234,16 @@ impl Chats {
     /// Whether a `git push` from the engine of `caller` may go on: its agent's task asks the
     /// person and answers once they have. No task running for it: no.
     pub async fn ask_push(&self, caller: &crate::tools::Caller, input: Value) -> bool {
+        self.ask_service(caller, input, "push").await
+    }
+
+    /// A service-side action, approved on the engine's active turn before it can be saved/run.
+    pub async fn ask_service(
+        &self,
+        caller: &crate::tools::Caller,
+        input: Value,
+        kind: &'static str,
+    ) -> bool {
         let key = match &caller.agent {
             Some(agent) => format!("agent:{agent}"),
             None => format!("chat:{}", caller.chat),
@@ -245,7 +256,15 @@ impl Chats {
             .cloned();
         let (reply, answer) = oneshot::channel();
         let chat = caller.chat.clone();
-        let asked = task.is_some_and(|t| t.send(Cmd::AskPush { chat, input, reply }).is_ok());
+        let asked = task.is_some_and(|t| {
+            t.send(Cmd::AskService {
+                kind,
+                chat,
+                input,
+                reply,
+            })
+            .is_ok()
+        });
         asked && answer.await.unwrap_or(false)
     }
 
@@ -405,6 +424,12 @@ impl Chats {
         if let Some(Ok(saved)) = self.writer.call(|c| gathr::pauses::list(c)).await {
             *self.pauses.lock().expect("never poisoned") = saved;
         }
+        self.retry_waiting();
+        self.settle_pauses(true).await;
+    }
+
+    /// Lets queued turns try again after a pause changes or an engine copy arrives.
+    pub fn retry_waiting(&self) {
         let tasks: Vec<_> = self
             .tasks
             .lock()
@@ -415,7 +440,6 @@ impl Chats {
         for task in tasks {
             let _ = task.send(Cmd::Kick);
         }
-        self.settle_pauses(true).await;
     }
 
     /// A pause in which nothing runs any more becomes `paused`, said once, and one a turn runs in
@@ -473,6 +497,9 @@ impl Chats {
     /// `claude auth status` (0016).
     pub async fn login_status(&self, folder: &Path) -> (Login, Option<i64>) {
         let folder = folder.to_path_buf();
+        if folder.file_name().is_some_and(|n| n == "codex") {
+            return (gathr::codex::login::status(&folder), None);
+        }
         let (copy, now_ms) = (self.copy(), gathr::ids::now_us() / 1000);
         tokio::task::spawn_blocking(move || login::status(&folder, copy, now_ms))
             .await

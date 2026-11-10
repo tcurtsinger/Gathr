@@ -43,7 +43,10 @@ fn a_pasted_code_signs_the_account_in() {
 
     let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
     assert_eq!(engine["login"], "signed_out", "{engine}");
-    assert_eq!(engine["sign_in"], json!({ "state": "waiting", "url": url }));
+    assert_eq!(
+        engine["sign_in"],
+        json!({ "state": "waiting", "url": url, "paste": true })
+    );
 
     let code = json!({ "code": "made-up-code#made-up-state" });
     let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);

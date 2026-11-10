@@ -1,0 +1,138 @@
+{
+  "models": [
+    {
+      "description": "Latest workhorse model for coding and everyday work.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "default",
+      "latest": false,
+      "name": "Engine default",
+      "resolved": "gpt-6.1-sol"
+    },
+    {
+      "description": "Latest workhorse model for coding and everyday work.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-6.1-sol",
+      "latest": false,
+      "name": "GPT-6.1-Sol",
+      "resolved": "gpt-6.1-sol"
+    },
+    {
+      "description": "Frontier intelligence for the most demanding work.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-6-astra",
+      "latest": false,
+      "name": "GPT-6-Astra",
+      "resolved": "gpt-6-astra"
+    },
+    {
+      "description": "GPT-6.1 Terra Codex model.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-6.1-terra",
+      "latest": false,
+      "name": "GPT-6.1 Terra",
+      "resolved": "gpt-6.1-terra"
+    },
+    {
+      "description": "Previous generation workhorse model.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-6-sol",
+      "latest": false,
+      "name": "GPT-6-Sol",
+      "resolved": "gpt-6-sol"
+    },
+    {
+      "description": "Fast and affordable model for easier tasks.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "id": "gpt-6-luna",
+      "latest": false,
+      "name": "GPT-6-Luna",
+      "resolved": "gpt-6-luna"
+    },
+    {
+      "description": "Older generation workhorse model.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-5.6-sol",
+      "latest": false,
+      "name": "GPT-5.6-Sol",
+      "resolved": "gpt-5.6-sol"
+    },
+    {
+      "description": "Older balanced model for straightforward work.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ],
+      "id": "gpt-5.6-terra",
+      "latest": false,
+      "name": "GPT-5.6-Terra",
+      "resolved": "gpt-5.6-terra"
+    },
+    {
+      "description": "Older fast and efficient model.",
+      "efforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "id": "gpt-5.6-luna",
+      "latest": false,
+      "name": "GPT-5.6-Luna",
+      "resolved": "gpt-5.6-luna"
+    }
+  ],
+  "version": "0.167.0"
+}

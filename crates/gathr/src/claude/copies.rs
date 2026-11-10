@@ -43,12 +43,18 @@ use crate::fetch::failed;
 
 pub struct Copies {
     root: PathBuf,
+    relative: PathBuf,
 }
 
 impl Copies {
     pub fn new(data: &DataDir) -> Copies {
+        Self::for_engine(data, "claude", PathBuf::from(Self::binary()))
+    }
+
+    pub(crate) fn for_engine(data: &DataDir, engine: &str, relative: PathBuf) -> Copies {
         Copies {
-            root: data.path().join("engines").join("claude"),
+            root: data.path().join("engines").join(engine),
+            relative,
         }
     }
 
@@ -60,8 +66,12 @@ impl Copies {
         }
     }
 
-    fn path(&self, version: &str) -> PathBuf {
-        self.root.join(version).join(Self::binary())
+    pub(crate) fn path(&self, version: &str) -> PathBuf {
+        self.root.join(version).join(&self.relative)
+    }
+
+    pub(crate) fn root(&self) -> &Path {
+        &self.root
     }
 
     fn current_file(&self) -> PathBuf {
@@ -153,12 +163,15 @@ impl Copies {
     /// Names the copy in `current.json` by a rename, so a start reads the old copy or the new
     /// one, never half of one.
     fn switch(&self, found: &Release, from: Option<String>) -> Result<(), Failure> {
-        let disk = |e: std::io::Error| failed("disk")(e.to_string());
-        let current = Current {
+        self.activate(Current {
             version: found.version.clone(),
             sha256: found.file.sha256.clone(),
             previous: from,
-        };
+        })
+    }
+
+    pub(crate) fn activate(&self, current: Current) -> Result<(), Failure> {
+        let disk = |e: std::io::Error| failed("disk")(e.to_string());
         let next = self.root.join("current.json.next");
         crate::platform::write_private(
             &next,

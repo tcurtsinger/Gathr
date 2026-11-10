@@ -221,8 +221,7 @@ fn keep(name: &OsString) -> bool {
 /// forced failure. Settings has no path (0026).
 pub const PATH_VAR: &str = "GATHR_CLAUDE_PATH";
 
-/// The engine's path: `GATHR_CLAUDE_PATH`, else Gathr's own copy (0025), else `claude` on the
-/// PATH.
+/// The engine's path: the dev/test override, else Gathr's own copy (0025). Never the person's PATH.
 pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {
     let set = std::env::var_os(PATH_VAR).filter(|p| !p.is_empty());
     if let Some(path) = set.map(PathBuf::from) {
@@ -237,8 +236,7 @@ pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {
     if let Some(copy) = copy {
         return Ok(copy);
     }
-    crate::platform::find_on_path("claude")
-        .ok_or_else(|| "Claude Code isn't installed yet, and claude isn't on the PATH".to_string())
+    Err("Claude Code is downloading".to_string())
 }
 
 /// The oldest Claude Code all the switches above were proven on (0024). Its changelog has

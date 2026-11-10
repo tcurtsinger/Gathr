@@ -87,7 +87,7 @@ pub struct TurnEnd {
 }
 
 /// Token totals for the turn as the engine reports them, never estimated.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Usage {
     pub input: i64,
     pub output: i64,

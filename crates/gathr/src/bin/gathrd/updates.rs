@@ -16,6 +16,7 @@ use tokio::sync::Notify;
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 
 pub struct Updates {
+    engine: &'static str,
     data: DataDir,
     writer: Writer,
     shown: Mutex<Shown>,
@@ -33,12 +34,33 @@ struct Shown {
 
 impl Updates {
     pub fn new(data: DataDir, writer: Writer) -> Updates {
+        Self::for_engine(data, writer, "claude")
+    }
+
+    pub fn for_engine(data: DataDir, writer: Writer, engine: &'static str) -> Updates {
         Updates {
+            engine,
             data,
             writer,
             shown: Mutex::default(),
             wake: Notify::new(),
             stop: AtomicBool::new(false),
+        }
+    }
+
+    fn feed(&self) -> Option<String> {
+        if self.engine == "codex" {
+            gathr::codex::copies::feed()
+        } else {
+            copies::feed()
+        }
+    }
+
+    fn copies(&self) -> Copies {
+        if self.engine == "codex" {
+            gathr::codex::copies::storage(&self.data)
+        } else {
+            Copies::new(&self.data)
         }
     }
 
@@ -50,9 +72,9 @@ impl Updates {
 
     /// The copy in use and the last check, for Settings.
     pub fn view(&self) -> Value {
-        let current = Copies::new(&self.data).current();
+        let current = self.copies().current();
         let shown = self.shown();
-        let state = match (copies::feed(), shown.checking) {
+        let state = match (self.feed(), shown.checking) {
             (None, _) => "off",
             (_, true) => "checking",
             _ => "idle",
@@ -68,7 +90,7 @@ impl Updates {
 
     /// Starts a check now; it shows as checking from this moment.
     pub fn check_now(&self) -> bool {
-        if copies::feed().is_none() {
+        if self.feed().is_none() {
             return false;
         }
         self.shown().checking = true;
@@ -83,8 +105,8 @@ impl Updates {
 }
 
 /// Checks at start, then every 24 hours or when asked, until the service stops.
-pub async fn run(updates: std::sync::Arc<Updates>) {
-    let Some(feed) = copies::feed() else {
+pub async fn run(updates: std::sync::Arc<Updates>, chats: std::sync::Arc<crate::chats::Chats>) {
+    let Some(feed) = updates.feed() else {
         return;
     };
     loop {
@@ -92,6 +114,7 @@ pub async fn run(updates: std::sync::Arc<Updates>) {
         let check = updates.clone();
         let feed = feed.clone();
         let _ = tokio::task::spawn_blocking(move || check.check(&feed)).await;
+        chats.retry_waiting();
         tokio::select! {
             _ = tokio::time::sleep(DAY) => {}
             _ = updates.wake.notified() => {}
@@ -103,10 +126,14 @@ impl Updates {
     /// One check, recorded as one `gathr.engine.update` event.
     fn check(&self, feed: &str) {
         let (trace, began) = (ids::trace_id(), Instant::now());
-        let result = Copies::new(&self.data).update(feed, &self.stop);
+        let result = if self.engine == "codex" {
+            gathr::codex::copies::update(&self.data, feed, &self.stop)
+        } else {
+            self.copies().update(feed, &self.stop)
+        };
         let mut event = Event::point("gathr.engine.update")
             .trace(&trace)
-            .attr("engine", "claude");
+            .attr("engine", self.engine);
         event.duration_us = Some(began.elapsed().as_micros() as i64);
         let failed = match result {
             Ok(Updated::UpToDate(version)) => {

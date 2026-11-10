@@ -106,3 +106,26 @@
   color: var(--accent);
   font-size: 13px;
 }
+.signin-panel {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+.signin-panel p {
+  margin: 0;
+}
+.signin-panel p.muted {
+  font-size: 13px;
+}
+.signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.device-code {
+  font-family: ui-monospace, monospace;
+  font-size: 24px;
+  letter-spacing: 2px;
+  color: var(--text);
+}

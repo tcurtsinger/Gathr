@@ -219,8 +219,12 @@ async fn let_go(s: &State, trace: &str, account: &Account) -> Result<(), String>
 async fn sign_out(s: &State, folder: &std::path::Path) -> Result<login::Hold, String> {
     let gate = pass_gate(s, folder).await?;
     if s.chats.login_status(folder).await.0 != login::Login::SignedOut {
-        let program = command::find(s.chats.copy())?;
-        log_out_held(s, &program, folder).await?;
+        if folder.file_name().is_some_and(|n| n == "codex") {
+            crate::sign_in::codex_log_out(s, folder).await?;
+        } else {
+            let program = command::find(s.chats.copy())?;
+            log_out_held(s, &program, folder).await?;
+        }
     }
     Ok(gate)
 }

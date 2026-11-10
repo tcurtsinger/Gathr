@@ -39,7 +39,8 @@ impl Task {
         let mut changed = Vec::new();
         for (at, queued) in self.queue.iter().enumerate() {
             let on_usage = (usage && queued.held == Some("usage")).then_some("usage");
-            let held = self.holder(&queued.ids).or(on_usage);
+            let engine = queued.held.filter(|h| matches!(*h, "claude" | "codex"));
+            let held = self.holder(&queued.ids).or(on_usage).or(engine);
             if held != queued.held {
                 changed.push((at, held));
             }
@@ -54,6 +55,8 @@ impl Task {
     pub(super) async fn save_held(&self, ids: &Ids, held: Option<&'static str>) {
         let why = match held {
             Some("pause") => Some("paused".to_string()),
+            Some("claude") => Some("Claude Code is downloading".to_string()),
+            Some("codex") => Some("Codex is downloading".to_string()),
             Some("update") => self.chats.updating().map(|v| format!("updating to {v}")),
             Some(_) => self.usage_words(),
             None => None,

@@ -7,7 +7,6 @@ use std::time::{Duration, Instant};
 
 use gathr::claude::command::{self, Session};
 use gathr::claude::engine::{Closed, Engine};
-use gathr::claude::frames;
 use gathr::event::Event;
 use gathr::ids::now_us;
 use gathr::redact::redact;
@@ -73,8 +72,13 @@ pub async fn closing(closing: &mut Option<Closing>, hold_after: Duration) -> Opt
 
 impl Task {
     /// Claude Code's path, found at every start so a new copy applies at once.
-    pub(super) async fn find_engine(&self, trace: &str) -> Result<PathBuf, String> {
-        let program = command::find(self.chats.copy()).inspect_err(|why| {
+    pub(super) async fn find_engine(&self, kind: &str, trace: &str) -> Result<PathBuf, String> {
+        let found = if kind == "codex" {
+            gathr::codex::command::find(gathr::codex::copies::storage(&self.chats.data).program())
+        } else {
+            command::find(self.chats.copy())
+        };
+        let program = found.inspect_err(|why| {
             self.record(
                 Event::point("gathr.engine.start")
                     .trace(trace)
@@ -82,6 +86,9 @@ impl Task {
                     .attr("why", why.clone()),
             );
         })?;
+        if kind == "codex" {
+            return Ok(program);
+        }
         // An engine too old for the switches it's given fails here by its version, not later
         // with whatever it prints about an unknown switch.
         let path = program.clone();
@@ -131,6 +138,7 @@ impl Task {
             self.chats.port,
             crate::tools::HOOK_PATH
         );
+        let codex = assigned.engine == "codex";
         let mut args = match &session {
             Some(id) => command::args(Session::Resume(id), given, Some(&hook)),
             None => command::args(Session::New(&new_id), given, Some(&hook)),
@@ -145,9 +153,32 @@ impl Task {
         let worktree = place.project.map(|project| (cwd.clone(), project));
         let pass = self.pass_for(&assigned, worktree, &cwd, trace).await?;
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
-        args.extend(command::given(&url, &pass.briefing));
+        let first = if codex {
+            args = gathr::codex::command::args(Some(&url));
+            let opening = gathr::codex::rpc::Opening {
+                resume: session.clone(),
+                cwd: cwd.display().to_string(),
+                model: assigned.model.clone(),
+                effort: assigned.effort.clone(),
+                policy: gathr::codex::command::policy(assigned.approvals),
+                instructions: Some(
+                    std::fs::read_to_string(&pass.briefing).map_err(|e| e.to_string())?,
+                ),
+            };
+            let (driver, first) = super::driver::Driver::codex(opening);
+            self.driver = driver;
+            Some(first)
+        } else {
+            self.driver = Default::default();
+            args.extend(command::given(&url, &pass.briefing));
+            None
+        };
         let (env_from, env_why) = (place.env.from, place.env.why);
-        let mut env = command::env(place.env.vars.into_iter(), folder);
+        let mut env = if codex {
+            gathr::codex::command::env(place.env.vars.into_iter(), folder)
+        } else {
+            command::env(place.env.vars.into_iter(), folder)
+        };
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
         let push = format!(
             "http://127.0.0.1:{}{}",
@@ -183,10 +214,17 @@ impl Task {
                 self.lines = Some(lines);
                 self.last_stderr = None;
                 self.idle_since = started;
+                if let Some(first) = first {
+                    self.write(&first, None).await.map_err(|e| e.to_string())?;
+                }
                 Ok(())
             }
             Err(e) => {
-                let why = format!("Claude Code didn't start from {}: {e}", program.display());
+                let why = format!(
+                    "{} didn't start from {}: {e}",
+                    if codex { "Codex" } else { "Claude Code" },
+                    program.display()
+                );
                 let event = Event::point("gathr.engine.start")
                     .trace(trace)
                     .chat(&assigned.chat)
@@ -241,11 +279,14 @@ impl Task {
     pub(super) fn copy_moved(&self) -> Option<String> {
         let running = self.program.as_ref().filter(|_| self.engine.is_some())?;
         let copies = self.chats.data.path().join("engines");
-        let current = self
-            .chats
-            .copy()
-            .filter(|c| running.starts_with(&copies) && c != running)?;
-        let version = current.parent()?.file_name()?;
+        let current = if self.engine_name() == "codex" {
+            gathr::codex::copies::storage(&self.chats.data).program()
+        } else {
+            self.chats.copy()
+        };
+        let current = current.filter(|c| running.starts_with(&copies) && c != running)?;
+        let version = current.strip_prefix(copies).ok()?.components().nth(1)?;
+        let version = version.as_os_str();
         Some(version.to_string_lossy().into_owned())
     }
 
@@ -256,8 +297,10 @@ impl Task {
             return;
         };
         self.lines = None;
-        if self.turn.as_ref().is_some_and(|t| !t.stopping) {
-            let _ = engine.write(&frames::interrupt("close")).await;
+        if self.turn.as_ref().is_some_and(|t| !t.stopping)
+            && let Some(request) = self.driver.interrupt("close")
+        {
+            let _ = engine.write(&request).await;
         }
         self.keep_what_was_shown().await;
         self.requeue_unread().await;
@@ -314,7 +357,7 @@ impl Task {
             false => waiting.iter().for_each(|ids| self.trace_hold(ids)),
         }
         let since = now_us() - self.times.hold_after.as_micros() as i64;
-        let hold = json!({ "why": "Claude Code hasn't exited", "pid": pid, "since_us": since });
+        let hold = json!({ "why": format!("{} hasn't exited", self.engine_label()), "pid": pid, "since_us": since });
         self.show_hold(&chat, Some(hold));
     }
 
@@ -334,7 +377,10 @@ impl Task {
             .attr("process.pid", closing.map(|c| c.engine.pid))
             .attr(
                 "why",
-                format!("Claude Code hasn't exited since its close: {why}"),
+                format!(
+                    "{} hasn't exited since its close: {why}",
+                    self.engine_label()
+                ),
             )
             .attr("gen_ai.agent.id", self.agent.clone())
     }
@@ -411,7 +457,10 @@ impl Task {
             return self.try_next().await;
         };
         let code = code.map_or("none".into(), |c| c.to_string());
-        let mut why = format!("Claude Code exited during the turn (exit code {code})");
+        let mut why = format!(
+            "{} exited during the turn (exit code {code})",
+            self.engine_label()
+        );
         if let Some(line) = last_stderr {
             why = format!("{why}: {}", redact(line.trim()));
         }
@@ -426,6 +475,17 @@ impl Task {
         self.try_next().await;
     }
 
+    pub(super) async fn write_user(
+        &mut self,
+        text: &str,
+        turn: Option<&str>,
+    ) -> std::io::Result<()> {
+        match self.driver.user(text) {
+            Some(frame) => self.write(&frame, turn).await,
+            None => Ok(()),
+        }
+    }
+
     pub(super) async fn write(
         &mut self,
         frame: &serde_json::Value,
@@ -434,7 +494,7 @@ impl Task {
         let engine = self
             .engine
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("Claude Code isn't running"))?;
+            .ok_or_else(|| std::io::Error::other("The engine isn't running"))?;
         let pid = engine.pid;
         engine.write(frame).await?;
         self.raw(turn, pid, "in", &frame.to_string()).await;

@@ -31,8 +31,8 @@ export interface Turn {
   task?: number | null;
   /** A hear-back's: the turn whose tasks it reports on, which its reply links back to. */
   answers?: string | null;
-  /** Queued but held: by a pause, or until its account's usage comes back. */
-  held?: 'pause' | 'usage' | null;
+  /** Queued but held by a pause, usage, an app update or its first engine download. */
+  held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -170,6 +170,8 @@ export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
 /** A model as the account's engine lists it (0025), in the engine's order. */
 export interface Model {
+  /** Exact model currently selected by an alias or the engine default. */
+  resolved?: string | null;
   id: string;
   name: string;
   /** A family alias that always runs that family's newest model (0025). */
@@ -183,7 +185,7 @@ export interface History {
   messages: Message[];
   turns: Turn[];
   /** Questions the engine asked that nobody has answered yet. */
-  approvals: { turn: string; request_id: string; tool: string }[];
+  approvals: { turn: string; request_id: string; tool: string; input?: unknown }[];
   /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
@@ -208,8 +210,14 @@ export interface Account {
   engine: string;
   login: string;
   expires: string | null;
-  /** A sign-in from Settings: waiting (with its page once there is one), or failed with why and a reference. */
-  sign_in: { state: 'waiting'; url?: string } | { state: 'failed'; why: string; ref: string } | null;
+  /**
+   * A sign-in from Settings: waiting (with its page once there is one, `paste` when the engine takes
+   * the code that page gives, `user_code` for a device code), or failed with why and a reference.
+   */
+  sign_in:
+    | { state: 'waiting'; url?: string; paste?: boolean; user_code?: string }
+    | { state: 'failed'; why: string; ref: string; device?: boolean }
+    | null;
 }
 
 /** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
@@ -278,15 +286,17 @@ export const api = {
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
-  engine: () => call<Engine>('GET', '/api/engines/claude'),
-  checkEngine: () => call<unknown>('POST', '/api/engines/claude/update'),
+  engine: (engine: string) => call<Engine>('GET', `/api/engines/${engine}`),
+  checkEngine: (engine: string) => call<unknown>('POST', `/api/engines/${engine}/update`),
   accounts: () => call<{ accounts: Account[] }>('GET', '/api/accounts').then((a) => a.accounts),
   addAccount: (engine: string, name: string) => call<Account>('POST', '/api/accounts', { engine, name }),
   renameAccount: (account: string, name: string) =>
     call<Account>('PATCH', `/api/accounts/${account}`, { name }),
   removeAccount: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}`),
   signOut: (account: string) => call<unknown>('POST', `/api/accounts/${account}/sign-out`),
-  signIn: (account: string) => call<{ url: string }>('POST', `/api/accounts/${account}/sign-in`),
+  /** With `device`, a device code instead of the browser page (0033). */
+  signIn: (account: string, device?: boolean) =>
+    call<unknown>('POST', `/api/accounts/${account}/sign-in`, device ? { device } : undefined),
   signInCode: (account: string, code: string) =>
     call<unknown>('POST', `/api/accounts/${account}/sign-in/code`, { code }),
   cancelSignIn: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}/sign-in`),

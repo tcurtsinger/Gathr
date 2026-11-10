@@ -65,6 +65,8 @@ interface Group {
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
+const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
+const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
 const settled = new Set(['done', 'blocked', 'failed', 'stopped', 'cancelled']);
 
 /**
@@ -177,7 +179,7 @@ function grouped(state: ChatState): Group[] {
       groups[at].last = true;
       continue;
     }
-    if (!(state.partial[t.id] || noticed.has(t.status) || waiting.has(t.id))) continue;
+    if (!(state.partial[t.id] || hasNotice(t) || waiting.has(t.id))) continue;
     groups.splice(at < 0 ? groups.length : at + 1, 0, { ...reply(t.id), last: true });
   }
   return groups;
@@ -239,7 +241,7 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team, extra:
   const agent = crew.name(turn?.agent);
   const role = crew.role(turn?.agent);
   const parts = group.msgs.map((m) => `${m.id}:${m.kind === 'tool' ? (m.body as ToolBody).status : ''}`);
-  const ending = group.last ? `${turn?.status}|${turn?.ref}` : '';
+  const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
   const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(extra)}`;
   const sig = `${parts}|${partial.length}|${ending}|${approvals.map((a) => a.request)}|${who}`;
@@ -312,13 +314,13 @@ function toReply(
   if (partial) content.push({ type: 'text', text: partial });
   const status = turn?.status;
   const custom: Custom = { ...extra, approvals };
-  if (turn && noticed.has(turn.status)) custom.notice = { turn, replied: content.length > 0 };
+  if (turn && hasNotice(turn)) custom.notice = { turn, replied: content.length > 0 };
   return {
     id: group.key,
     role: 'assistant',
     content,
     status:
-      status === 'running' || status === 'queued'
+      status === 'running' || (status === 'queued' && !(turn && engineWait(turn)))
         ? { type: 'running' }
         : status === 'failed'
           ? { type: 'incomplete', reason: 'error' }

@@ -5,6 +5,7 @@ export interface Approval {
   turn: string;
   request: string;
   tool: string;
+  input?: unknown;
 }
 
 /** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
@@ -30,7 +31,12 @@ export const empty: ChatState = {
 
 export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
-  const approvals = history.approvals.map((a) => ({ turn: a.turn, request: a.request_id, tool: a.tool }));
+  const approvals = history.approvals.map((a) => ({
+    turn: a.turn,
+    request: a.request_id,
+    tool: a.tool,
+    input: a.input,
+  }));
   const partial = Object.fromEntries((history.streaming ?? []).map((p) => [p.turn, p.text]));
   return {
     ...empty,
@@ -107,7 +113,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, turns: { ...state.turns, [event.turn]: turn }, approvals };
     }
     case 'approval': {
-      const approval = { turn: event.turn, request: event.request_id, tool: event.tool };
+      const approval = { turn: event.turn, request: event.request_id, tool: event.tool, input: event.input };
       return { ...state, approvals: [...state.approvals, approval] };
     }
     case 'tasks':

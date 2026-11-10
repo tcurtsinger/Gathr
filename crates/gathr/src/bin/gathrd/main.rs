@@ -140,11 +140,17 @@ async fn serve(
     let _ = std::fs::remove_dir_all(data.path().join("briefings"));
     let chats = chats::Chats::new(writer.clone(), data.clone(), port, live);
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
+    let codex_updates = Arc::new(updates::Updates::for_engine(
+        data.clone(),
+        writer.clone(),
+        "codex",
+    ));
     let app = Arc::new(app_update::AppUpdates::new(chats.clone()));
     let sign_ins = Arc::new(sign_in::SignIns::default());
     let state = Arc::new(api::State {
         chats: chats.clone(),
         updates: updates.clone(),
+        codex_updates: codex_updates.clone(),
         app: app.clone(),
         sign_ins: sign_ins.clone(),
         models: Default::default(),
@@ -174,7 +180,8 @@ async fn serve(
     chats.pauses_changed().await;
     chats.take_over().await;
     tokio::spawn(coord::run(chats.clone()));
-    tokio::spawn(updates::run(updates.clone()));
+    tokio::spawn(updates::run(updates.clone(), chats.clone()));
+    tokio::spawn(updates::run(codex_updates.clone(), chats.clone()));
     app.started(started);
     tokio::spawn(app_update::run(app.clone()));
 
@@ -193,6 +200,7 @@ async fn serve(
     serve::serve(listener, api::router(state.clone()), stopping).await;
     let reason = stopped_rx.await.unwrap_or("the server ended");
     updates.stop();
+    codex_updates.stop();
     app.stop();
     app.stopped();
     sign_ins.cancel_all().await;
