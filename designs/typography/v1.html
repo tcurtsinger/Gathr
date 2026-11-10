@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gathr typography: Hanken Grotesk</title>
+<link rel="stylesheet" href="../tokens.css"><link rel="stylesheet" href="../components.css">
+<link rel="stylesheet" href="../../ui/src/components/help.css"><link rel="stylesheet" href="../../ui/src/components/switch.css">
+<script src="../system.js" defer></script>
+<link rel="stylesheet" href="../archive-stale/reference.css">
+<script src="../archive-stale/reference.js" defer></script>
+<link rel="stylesheet" href="../team-reference.css">
+<script src="../team-reference.js" defer></script>
+<link rel="stylesheet" href="reference.css"><script src="reference.js" defer></script>
+</head>
+<body class="system-page typography-preview">
+<header class="ds-header" data-id="header">
+<h1 data-id="title">Hanken Grotesk</h1><span>450 · 15px · Local fixtures</span>
+<nav aria-label="Preview controls">
+<button class="ds-button" data-id="theme" id="theme">Switch theme</button>
+<button class="ds-button" data-id="settings-open" id="settings-open">Settings</button>
+</nav>
+</header>
+<div class="ds-layout">
+<aside
+class="ds-navigation"
+data-id="navigation"
+aria-label="Projects and chats">
+<strong>Gathr</strong>
+<a
+href="#team-message">New</a>
+<a
+href="#type-workspace">Tasks <span>2</span>
+</a>
+<small>Projects</small>
+<strong>Gathr</strong>
+<a
+href="#team-message"
+aria-current="page"
+title="Reconnect streaming">Reconnect streaming</a>
+<a
+href="#team-message"
+title="Replay interruptions and keyboard shortcuts">Replay interruptions and keyboard shortcuts</a>
+<a
+href="#team-message"
+title="Review stopped-state behaviour with saved drafts">Review stopped-state behaviour with saved drafts</a>
+<details>
+<summary>Archived <span>0</span>
+</summary>
+</details>
+<small>Static typography reference.</small>
+</aside>
+<main class="ds-content">
+<section class="ds-section" id="colors" data-id="colors">
+<h2>Colours</h2>
+<div class="ds-swatches">
+<div class="ds-swatch" data-id="color-background"><i style="background:var(--background)"></i><code>--background</code></div>
+<div class="ds-swatch" data-id="color-card"><i style="background:var(--card)"></i><code>--card</code></div>
+<div class="ds-swatch" data-id="color-foreground"><i style="background:var(--foreground)"></i><code>--foreground</code></div>
+<div class="ds-swatch" data-id="color-muted"><i style="background:var(--muted-foreground)"></i><code>--muted-foreground</code></div>
+</div>
+<p class="ds-note">Neutral surfaces. Foreground actions. Blue for attention.</p>
+</section>
+<section class="ds-section" id="controls" data-id="controls">
+<h2>Controls</h2>
+<p class="ds-note">No focus rings. Keyboard focus uses the hover highlight.</p>
+<div class="ds-row" data-source="components/ui/button.tsx">
+<button class="ds-button" data-variant="primary" data-id="primary" id="preview-save">Save</button>
+<button class="ds-button" data-variant="outline" data-id="outline" id="preview-cancel">Cancel</button>
+<button class="ds-button" data-id="summary-open" id="summary-open" popovertarget="summary">Summary</button>
+<button class="ds-button" disabled data-id="disabled">Send</button>
+<button class="help-button" type="button" popovertarget="help" aria-label="About approvals" aria-expanded="false" data-id="help-open"><span>?</span></button>
+<label for="sample-field" class="ds-mono">Name</label><input class="ds-field" id="sample-field" value="Replay repair" data-id="input">
+</div>
+</section>
+<section class="ds-section ds-two" id="type" data-id="type-space">
+<div><h2>Typography</h2><p class="ds-type-large">What are we working on?</p>
+<p>Hanken Grotesk Variable. One continuous conversation.</p><p class="ds-mono">Metadata · 12px · ui-monospace</p></div>
+<div><h2>Spacing</h2><div class="ds-space" aria-label="4, 8, 16, 24 and 32 pixels">
+<span style="height:24px">4</span><span style="height:32px">8</span><span style="height:48px">16</span>
+<span style="height:64px">24</span><span style="height:80px">32</span></div></div>
+</section>
+<section class="ds-section" id="workspace" data-id="workspace">
+<h2>Workspace</h2>
+<div class="ds-workspace">
+<div class="ds-tabstrip" role="tablist" aria-label="Workspace tabs">
+<button class="ds-tab" role="tab" id="tab-home" aria-controls="pane-home" aria-selected="true" data-id="tab-home">Home</button>
+<button class="ds-tab" role="tab" id="tab-tasks" aria-controls="pane-tasks" aria-selected="false" tabindex="-1" data-id="tab-tasks">Tasks</button>
+<button class="ds-tab" role="tab" id="tab-files" aria-controls="pane-files" aria-selected="false" tabindex="-1" data-id="tab-files">Files</button>
+</div>
+<div class="ds-tool-content" id="pane-home" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+<ul><li>Tasks</li><li>Changes</li><li>Terminal</li><li>Files</li><li>Web</li></ul></div>
+<div class="ds-tool-content" id="pane-tasks" role="tabpanel" aria-labelledby="tab-tasks" tabindex="0" hidden>
+<h3>Keep the partial reply?</h3><p class="ds-role">Supervisor · Reconnect repair</p>
+<label class="ds-row"><input type="radio" name="answer" value="keep">Keep it</label>
+<label class="ds-row"><input type="radio" name="answer" value="restart">Start again</label>
+<button class="ds-button" data-variant="primary" id="answer-send">Send</button></div>
+<div class="ds-tool-content" id="pane-files" role="tabpanel" aria-labelledby="tab-files" tabindex="0" hidden>
+<ul><li>src/reconnect.rs</li><li>reconnect-repair.md</li><li>replay.jsonl</li></ul></div>
+</div>
+</section>
+<section class="ds-section" id="conversation" data-id="conversation">
+<h2>Conversation</h2>
+<div class="ds-composer-example">
+<div class="ds-user-message" data-id="user-message">Keep one continuous reply.</div>
+<details class="ds-tool-disclosure" data-id="tool-disclosure"><summary>2 files · 3 checks</summary>
+<pre>Read src/reconnect.rs
+Checked partial tool result
+Checked repeated event
+Checked request deadline</pre></details>
+</div>
+</section>
+<section class="ds-section" id="recovery" data-id="recovery">
+<h2>Recovery</h2>
+<div class="ds-notice" data-id="send-failed"><strong>Send failed</strong><code>ref: sample-01</code>
+<button class="ds-button" id="diagnostics-open">Diagnostics</button><button class="ds-button" id="retry">Retry</button></div>
+</section>
+<section class="ds-section" id="team-message" data-id="team-message">
+<h2>Team messages</h2>
+<p class="ds-note">Accepted target: split chat with Summary. Invented records; no service is connected.</p>
+<div class="ds-row ds-fixture-controls" aria-label="Split preview controls" data-id="split-preview-controls">
+<span class="ds-role" id="round-state" role="status">Running</span>
+<button class="ds-button" id="round-finish" data-id="round-finish">Finish</button>
+<button class="ds-button" id="round-late" data-id="round-late">Late reply</button>
+<button class="ds-button" id="round-blocked" data-id="round-blocked">Blocked</button>
+<button class="ds-button" id="round-failed" data-id="round-failed">Failed</button>
+<button class="ds-button" id="round-stopped" data-id="round-stopped">Stopped</button>
+<button class="ds-button" id="round-reset" data-id="round-reset">Reset</button></div>
+<div class="ds-team" data-id="team-example">
+<header class="ds-team-header" id="team-header"><h3>Reconnect streaming</h3><div class="ds-row">
+<button class="ds-button" id="team-summary-open" popovertarget="summary" aria-expanded="false" data-id="team-summary-open">Summary</button>
+<button class="ds-button" id="split-toggle" aria-label="Hide team chat" title="Hide team chat"
+aria-controls="team-column" aria-pressed="true" data-id="split-toggle" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/>
+<path d="M12 3v18"/></svg><span class="ds-unread" id="team-unread" hidden></span></button></div></header>
+<div class="ds-split-body" id="split-body">
+<div class="ds-supervisor"><div class="ds-column-scroll" id="supervisor-scroll" tabindex="0" aria-label="Supervisor conversation">
+<div class="ds-column-label" id="supervisor-label">Mira</div><div class="ds-thread-column">
+<div class="ds-user-message" data-id="round-request">Fix duplicate output after reconnect. Keep the keyboard shortcuts as they are.</div>
+<article class="ds-team-message" id="round-handoff" data-id="round-handoff">
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time>09:15</time>
+</header>
+<p>I found the boundary: we save the cursor before the event is complete.</p>
+<p>Rowan, fix the cursor commit. Kit, replay interruptions and check the shortcuts. Lane, check reconnect and stopped states.
+I’ll reconcile the results and ask Sol to review.</p>
+</article>
+<div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
+<article class="ds-team-message" data-id="status-without-thread">
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time>09:52</time>
+</header>
+<p>Yes. Stop keeps the text already received.</p>
+</article>
+<div class="ds-user-message" data-id="direct-request">@Lane Does Retry keep my draft too?</div>
+<article class="ds-team-message" data-id="direct-reply">
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">L</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Lane</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:54</time>
+</header>
+<p>Yes. The draft stays in the composer while you retry.</p>
+</article>
+<article class="ds-team-message" id="round-final" hidden data-id="round-final">
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time
+id="final-time">10:03</time>
+</header>
+<p>The cursor change is ready. Reconnect keeps one reply, tool output stays attached, and Stop keeps the partial text.
+The keyboard shortcuts are unchanged.</p>
+<span class="ds-reaction" aria-label="Sol agrees" title="Sol agrees" data-id="review-agreement">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<path d="M7 10v11H3V10h4Zm0 1 5-8c2 0 3 2 2 5l-1 2h6c2 0 2 2 1 4l-2 7H7"/></svg>Sol</span>
+</article>
+<div id="team-sent-messages" aria-live="polite"></div>
+
+<button class="ds-working ds-waiting" id="waiting-on-team" title="Mira is waiting for Kit, Lane and Sol, since 09:15">
+<span class="ds-spinner" aria-hidden="true"></span>Waiting on team <span class="ds-workers" aria-label="Kit and Lane"><i>K</i><i>L</i></span><span class="ds-role">38 minutes</span></button>
+</div></div><div class="ds-compose-dock"><details class="ds-plan" id="agent-plan" data-id="agent-plan" data-source="elements/agent-plan">
+<summary id="plan-toggle" data-id="plan-toggle"><span class="ds-spinner" aria-hidden="true"></span>
+<svg id="plan-done" hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><strong>Plan</strong><span class="ds-role" id="plan-state">Kit and Lane working</span>
+<span class="ds-segments" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1">
+<i data-state="done"></i><i data-state="active"></i><i data-state="active"></i><i></i></span>
+<span class="ds-fraction" id="plan-count">1/4</span><span class="ds-chevron" aria-hidden="true"></span></summary>
+<ol class="ds-plan-steps">
+<li data-owner="Rowan" data-state="done">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Commit the cursor after a complete event<b class="ds-step-outcome" id="step-rowan-outcome"></b><small class="ds-step-detail" id="step-rowan-detail"></small></span><small>Rowan</small></li>
+<li data-owner="Kit" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Replay interruptions and check shortcuts<b class="ds-step-outcome" id="step-kit-outcome"></b><small class="ds-step-detail" id="step-kit-detail"></small></span><small>Kit</small></li>
+<li data-owner="Lane" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Check reconnect and stopped states<b class="ds-step-outcome" id="step-lane-outcome"></b><small class="ds-step-detail" id="step-lane-detail"></small></span><small>Lane</small></li>
+<li data-owner="Sol" data-state="pending">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Review the cursor change<b class="ds-step-outcome" id="step-sol-outcome"></b><small class="ds-step-detail" id="step-sol-detail"></small></span><small>Sol</small></li>
+</ol></details><form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
+<input id="message" aria-label="Message" placeholder="Message Mira…" autocomplete="off">
+<div class="ds-composer-toolbar">
+<button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<select aria-label="Recipient" data-id="recipient">
+<option>Mira</option><option>Rowan</option><option>Kit</option><option>Lane</option><option>Sol</option></select>
+<button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+</div>
+</form></div></div>
+<div class="ds-column-scroll" id="team-column" tabindex="0" aria-label="Team conversation">
+<div class="ds-column-label">Team</div><div class="ds-thread-column" id="team-replies">
+<article class="ds-team-message" data-id="thread-rowan">
+<p class="ds-assignment">Mira to Rowan · Cursor commit</p>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">R</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Rowan</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:42</time>
+</header>
+<details class="ds-tool-disclosure" data-id="rowan-tools"><summary>32 tool calls</summary><pre id="rowan-tool-log"></pre></details>
+<p>The saved cursor now advances only after a complete event. A reconnect resumes the existing reply rather than creating a second one.</p>
+<h4>What changed</h4>
+<p>The stream reader keeps an unfinished frame in memory and commits its cursor when the frame terminator arrives.
+The display can still show partial text immediately. Persisting the cursor and displaying text are separate operations,
+so a slow connection does not make the reply feel stalled.</p>
+<p>Tool output stays attached to its original call. When a connection drops halfway through a result, the next connection
+resumes that result using its call ID. We no longer create another tool row for the same call.</p>
+<h4>Checks</h4>
+<p>I replayed a disconnect before the first token, between text fragments and during a tool result. The partial answer
+stayed visible each time. Repeated events did not duplicate text, and a final result arriving twice completed the turn once.</p>
+<p>The longer replay includes text, a file read, a command result and another paragraph after the tool finishes.
+Each interruption resumes the same sequence. The tool's expanded state stays with its original call, so opening the
+result before the reconnect does not create a second disclosure or close the one you were reading.</p>
+<p>I also left the chat scrolled halfway through an earlier answer while the replay continued. New text arrived below
+the reading position. Returning to the end showed the complete reply with the same cursor boundary. A queued message
+started after that reply finished, without replacing its text or borrowing its tool results.</p>
+<p>Kit still needs to check the interruption cases against the keyboard flow. Lane is checking the stopped notice.
+The cursor change is ready for their results.</p>
+</article>
+<article class="ds-team-message" data-id="thread-kit">
+<p class="ds-assignment">Mira to Kit · Interruptions and shortcuts</p>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">K</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Kit</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:48</time>
+</header>
+<details class="ds-tool-disclosure" data-id="kit-tools"><summary>18 tool calls</summary>
+<pre>Read interruption fixtures
+Replayed a disconnect during tool output
+Checked Tab, Enter and Escape</pre></details>
+<p id="kit-result">The interrupted tool result stays in its original row. I’m checking the last shortcut case now.</p>
+</article>
+<article class="ds-team-message" data-id="thread-lane">
+<p class="ds-assignment">Mira to Lane · Reconnect and stopped states</p>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">L</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Lane</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:50</time>
+</header>
+<p id="lane-result">The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.</p>
+</article>
+<article class="ds-team-message" id="late-member" hidden data-id="thread-sol">
+<p class="ds-assignment">Mira to Sol · Review the cursor change</p>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">S</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Sol</span>
+<span
+class="ds-role">Reviewer</span>
+</span>
+<time>11:32
+<span class="ds-unread" id="late-unread" hidden aria-label="New message"></span></time></header>
+<p>The replay keeps one reply and one tool result. I checked the cursor boundary and the duplicate final event. No findings.</p>
+</article>
+
+<div class="ds-working" id="team-working"><span class="ds-spinner" aria-hidden="true"></span>Working <span class="ds-workers" aria-label="Kit and Lane"><i>K</i><i>L</i></span></div>
+</div></div></div></div></section>
+<section class="ds-section" id="archive-stale" data-id="archive-stale">
+<h2>Archive and stale</h2>
+<p class="ds-note">Selected: folded Archived group. Local sample data, no service.
+<a href="../archive-stale/v3.html">Open the selected reference</a>. The separate flyout is retired.</p>
+<div class="ds-two">
+<div class="ds-workspace ds-archive-nav" data-id="archive-sidebar-sample">
+<h3>Chats</h3>
+<div class="ds-archive-row" id="archive-active-row">
+<span title="Launch checklist">Launch checklist</span>
+<button class="ds-button" data-icon id="archive-menu-open" popovertarget="archive-menu" aria-label="More for Launch checklist" data-id="archive-menu-open">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<details class="ds-archive-fold" data-id="archived-fold" id="archive-fold">
+<summary><svg class="ds-archive-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect class="ds-archive-lid" width="20" height="5" x="2" y="3" rx="1"/>
+<path d="M4 8v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8M10 12h4"/></svg>Archived<span class="ds-role" id="archive-sample-count">3</span></summary>
+<button class="ds-archive-chat" data-id="archived-chat-1">Sidebar exploration</button>
+<button class="ds-archive-chat" data-id="archived-chat-2">First-run copy</button>
+<button class="ds-archive-chat" data-id="archived-chat-3" title="Conversation layout and navigation review for the upcoming desktop release">
+Conversation layout and navigation review for the upcoming desktop release</button>
+</details>
+</div>
+<div class="ds-workspace ds-archive-tasks" data-id="stale-tasks-sample">
+<h3>Tasks</h3><h4>Questions</h4><div class="ds-archive-task">Pick the release headline
+<small>For you · Launch checklist</small></div>
+<h4>Stale</h4><div class="ds-archive-task">Choose the keyboard shortcuts
+<small>For you · Keyboard navigation</small><small>Idle 4 days</small></div>
+<div class="ds-archive-task">Check the release build
+<small>Ellis · Launch checklist</small><small>Idle 12 days · Waiting on CI</small></div>
+</div>
+</div>
+<div class="ds-workspace" data-id="archived-composer-sample"><div class="ds-archive-readonly" data-id="archived-readonly">Archived
+<button class="ds-button" id="archive-restore" data-id="archive-restore">Restore</button></div>
+</div>
+<p class="ds-note">Your questions stay open until you answer or cancel them. Only inactive agent tasks are cancelled automatically.</p>
+<button class="ds-button" data-variant="outline" id="archive-general-open" data-id="archive-general-open">General</button>
+<p class="ds-role" role="status" id="archive-sample-status" data-id="archive-sample-status"></p>
+</section>
+<p class="ds-status" id="status" role="status" data-id="status"></p>
+</main>
+</div>
+<div class="ds-summary" id="summary" popover data-id="summary">
+<h3>Agents</h3>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="mira" data-source="elements/subagent-list">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit, Lane and Sol since 09:15</span></small>
+</summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li id="summary-mira-task">No assigned tasks</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Mira actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="rowan" data-source="elements/subagent-list">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
+<small class="ds-role">Member · <span id="summary-rowan-state">Ready</span></small>
+<span class="ds-agent-progress"><progress aria-label="Rowan task progress" value="1" max="1"></progress>
+<span id="summary-rowan-count">1/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="done" id="summary-rowan-task">Commit the cursor after a complete event</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Rowan actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="kit" data-source="elements/subagent-list">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
+<small class="ds-role">Member · <span id="summary-kit-state">Working</span></small>
+<span class="ds-agent-progress"><progress aria-label="Kit task progress" value="0" max="1"></progress>
+<span id="summary-kit-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="active" id="summary-kit-task">Replay interruptions and check shortcuts</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Kit actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="lane" data-source="elements/subagent-list">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
+<small class="ds-role">Member · <span id="summary-lane-state">Working</span></small>
+<span class="ds-agent-progress"><progress aria-label="Lane task progress" value="0" max="1"></progress>
+<span id="summary-lane-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="active" id="summary-lane-task">Check reconnect and stopped states</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Lane actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="sol" data-source="elements/subagent-list">
+<summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
+<small class="ds-role">Reviewer · <span id="summary-sol-state">Ready</span></small>
+<span class="ds-agent-progress"><progress aria-label="Sol task progress" value="0" max="1"></progress>
+<span id="summary-sol-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="pending" id="summary-sol-task">Review the cursor change</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Sol actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+</div>
+<div popover id="agent-actions" class="ds-agent-actions"><p>Local preview</p>
+<button class="ds-button" id="agent-action-close">Close</button></div>
+<section id="help" popover class="help-panel" data-id="help"><h4>Approvals</h4>
+<dl><dt>Ask</dt><dd>Ask before actions that need permission</dd><dt>Edits</dt><dd>Allow file edits in the worktree. Ask before other actions that need permission.</dd>
+<dt>Auto</dt><dd>The engine checks actions. Pushes and file tools writing outside the worktree need approval.</dd>
+<dt>Full</dt><dd>Allow actions without asking</dd></dl></section>
+<dialog class="ds-dialog" id="settings" aria-labelledby="settings-title" data-id="settings">
+<header class="ds-dialog-header"><h2 id="settings-title">Settings</h2><button type="button" class="ds-button" data-icon aria-label="Close Settings" title="Close Settings" id="settings-close">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header>
+<div class="ds-settings"><nav aria-label="Settings categories">
+<button aria-current="page" data-section="General" data-id="category-general">General</button>
+<button data-section="Engines" data-id="category-engines">Engines</button>
+<button data-section="Agents" data-id="category-agents">Agents</button>
+<button data-section="Diagnostics" data-id="category-diagnostics">Diagnostics</button></nav>
+<div class="ds-settings-content">
+<h3 id="settings-heading">General</h3>
+<div data-settings="General"><div class="ds-setting-row"><div id="startup-label">Open at login<small id="startup-scope">This computer</small></div>
+<button class="switch" type="button" role="switch" aria-checked="false" aria-labelledby="startup-label"
+aria-describedby="startup-scope" id="startup"><span></span></button></div><div class="ds-setting-row" data-id="stale-days-setting">
+<span class="ds-archive-setting-label"><label for="system-stale-days">Stale after</label>
+<button class="help-button" type="button" popovertarget="stale-days-help" aria-label="About stale days" id="stale-days-help-open" data-id="stale-days-help-open"><span>?</span></button></span>
+<span class="ds-archive-days"><input class="ds-field" id="system-stale-days" type="number" min="1" max="365" step="1" value="3" aria-describedby="system-stale-unit">
+<small id="system-stale-unit">days</small></span></div>
+<div class="ds-setting-row" data-id="cancel-days-setting">
+<span class="ds-archive-setting-label"><label for="system-cancel-days">Auto-cancel after</label>
+<button class="help-button" type="button" popovertarget="cancel-days-help" aria-label="About cancel days" id="cancel-days-help-open" data-id="cancel-days-help-open"><span>?</span></button></span>
+<span class="ds-archive-days"><input class="ds-field" id="system-cancel-days" type="number" min="1" max="365" step="1" value="7" aria-describedby="system-cancel-unit">
+<small id="system-cancel-unit">days</small></span></div>
+<p class="ds-archive-invalid" id="system-days-invalid" hidden role="alert">Enter a whole number from 1 to 365</p>
+</div>
+<div data-settings="Engines" hidden><div class="ds-setting-row"><span>No accounts</span>
+<button class="ds-button" data-variant="primary" id="add-account">Add</button></div></div>
+<div data-settings="Agents" hidden><form class="ds-settings-form" id="agent-form">
+<label>Account<select class="ds-field"><option>Sample account</option></select></label>
+<label>Model<select class="ds-field"><option>Engine default</option></select></label>
+<label>Effort<select class="ds-field"><option>Engine default</option></select></label>
+<label>Approvals<select class="ds-field"><option>Auto</option><option>Ask</option><option>Edits</option><option>Full</option></select></label>
+<footer><button class="ds-button" type="reset">Cancel</button><button class="ds-button" data-variant="primary">Save</button></footer>
+</form></div>
+<div data-settings="Diagnostics" hidden><p class="ds-mono">sample-01</p><p>Send failed</p><details class="ds-tool-disclosure">
+<summary>Timeline</summary><pre>Request received
+Engine unavailable
+Reference recorded</pre></details></div>
+</div></div></dialog>
+<div class="ds-archive-menu" popover="auto" id="archive-menu" role="menu" aria-label="Chat actions" data-id="archive-menu">
+<button role="menuitem" class="ds-button" id="archive-pause">Pause</button><hr>
+<button role="menuitem" class="ds-button" data-confirm="Archive" data-id="archive-action">Archive</button><hr>
+<button role="menuitem" class="ds-button ds-archive-delete" data-confirm="Delete" data-id="delete-action">Delete</button></div>
+<dialog class="ds-dialog ds-archive-confirm" id="archive-confirm" aria-labelledby="archive-confirm-title" data-id="archive-confirm">
+<h2 id="archive-confirm-title" data-id="archive-confirm-title"></h2>
+<footer><button class="ds-button" id="archive-confirm-cancel" data-id="archive-confirm-cancel">Cancel</button>
+<button class="ds-button" id="archive-confirm-go" data-id="archive-confirm-go">Archive</button></footer></dialog>
+<section id="stale-days-help" popover="auto" class="help-panel" data-id="stale-days-help">
+<p>Turns, messages, answers and waits count as progress</p></section>
+<section id="cancel-days-help" popover="auto" class="help-panel" data-id="cancel-days-help">
+<p>Counts from when an agent task becomes stale. Ongoing or paused work keeps it open.</p></section>
+</body>
+</html>

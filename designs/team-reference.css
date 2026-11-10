@@ -72,7 +72,7 @@
 	padding: 12px 24px 0;
 	pointer-events: none;
 	background: linear-gradient(to bottom, var(--background) 45%, transparent);
-	font-size: 12px;
+	font-size: 13px;
 	font-weight: 500;
 }
 .ds-thread-column {
@@ -94,12 +94,22 @@
 .ds-team-message {
 	margin-bottom: 28px;
 }
+.ds-team-message {
+	line-height: 1.7;
+}
+.ds-speaker-label {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	flex-wrap: wrap;
+	min-width: 0;
+}
 .ds-speaker {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 10px;
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 500;
 }
 .ds-speaker .ds-agent-identity {
@@ -108,8 +118,8 @@
 .ds-speaker time {
 	margin-left: auto;
 	color: var(--muted-foreground);
-	font-size: 11px;
-	font-weight: 400;
+	font-size: 12px;
+	font-weight: 450;
 	font-variant-numeric: tabular-nums;
 }
 .ds-team-message > :not(.ds-speaker, .ds-assignment) {
@@ -120,14 +130,14 @@
 	margin-bottom: 0;
 }
 .ds-team-message h4 {
-	font-size: 14px;
+	font-size: 15px;
 	font-weight: 600;
 	margin-top: 24px;
 	margin-bottom: 0;
 }
 .ds-team-message .ds-assignment {
 	color: var(--muted-foreground);
-	font-size: 11px;
+	font-size: 12px;
 	margin: 0 0 12px;
 }
 .ds-team-message .ds-tool-disclosure {
@@ -143,7 +153,7 @@
 	gap: 8px;
 	color: var(--muted-foreground);
 	padding: 4px 10px 4px 6px;
-	font: 13px / 18px var(--font-sans);
+	font: 450 14px / 1.6 var(--font-sans);
 	border-radius: 999px;
 	border: 0;
 	background: transparent;
@@ -208,7 +218,7 @@
 	padding: 0 12px 0 14px;
 	list-style: none;
 	cursor: pointer;
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-plan > summary::-webkit-details-marker,
 .ds-agent summary::-webkit-details-marker {
@@ -245,7 +255,7 @@
 	background: var(--attention);
 }
 .ds-fraction {
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--muted-foreground);
 	font-variant-numeric: tabular-nums;
 	min-width: 30px;
@@ -275,17 +285,17 @@
 	display: flex;
 	gap: 10px;
 	padding: 5px 0;
-	font-size: 13px;
-	line-height: 20px;
+	font-size: 14px;
+	line-height: 1.6;
 	color: var(--muted-foreground);
 }
 .ds-plan-steps li > small {
 	margin-left: auto;
-	font-size: 11px;
+	font-size: 12px;
 }
 .ds-step-detail {
 	display: block;
-	font-size: 12px;
+	font-size: 13px;
 }
 .ds-step-icon {
 	width: 7px;
@@ -322,7 +332,7 @@
 	border: 1px solid var(--border);
 	border-radius: 999px;
 	color: var(--muted-foreground);
-	font-size: 11px;
+	font-size: 12px;
 }
 .ds-reaction svg {
 	width: 14px;
@@ -364,7 +374,7 @@
 	display: flex;
 	gap: 8px;
 	align-items: center;
-	font: 11px var(--font-mono);
+	font: 450 12px / 1.6 var(--font-mono);
 	color: var(--muted-foreground);
 }
 .ds-agent-progress progress {
@@ -403,7 +413,7 @@
 .ds-todos li {
 	display: flex;
 	gap: 8px;
-	font-size: 12px;
+	font-size: 13px;
 	line-height: 18px;
 }
 .ds-todos li::before {

@@ -1,14 +1,14 @@
 /* Prototype semantic values. Dark is the desktop default; .light selects light. */
 @font-face {
-	font-family: "Public Sans Variable";
-	src: url("./fonts/public-sans-latin-wght-normal.woff2") format("woff2");
-	font-weight: 100 900;
+	font-family: "Hanken Grotesk Variable";
+	src: url("./fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2");
+	font-weight: 300 700;
 	font-style: normal;
 	font-display: swap;
 }
 :root {
 	color-scheme: dark;
-	--font-sans: "Public Sans Variable", "Public Sans", ui-sans-serif, sans-serif;
+	--font-sans: "Hanken Grotesk Variable", "Hanken Grotesk", ui-sans-serif, sans-serif;
 	--background: #181818;
 	--foreground: oklch(0.985 0.002 106);
 	--card: #202020;

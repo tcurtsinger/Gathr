@@ -39,8 +39,10 @@ the portable HTML's static anatomy into new hand-built React components.
 Official sources recorded by the prototype include
 [assistant-ui's registry](https://r.assistant-ui.com/thread.json) and
 [shadcn's Button registry](https://ui.shadcn.com/r/styles/new-york-v4/button.json).
-The associated MIT notices are retained in notices/. Public Sans's SIL Open Font
-License is in fonts/LICENSE.txt beside the unmodified Latin variable font.
+The associated MIT notices are retained in notices/. The owner's typography update
+replaces the prototype's Public Sans with Hanken Grotesk. Its SIL Open Font License
+1.1 is in fonts/LICENSE.txt beside the unmodified Latin variable font; fonts/README.md
+records the package version and integrity.
 
 ## Source SHA-256
 
