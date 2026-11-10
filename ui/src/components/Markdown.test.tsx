@@ -42,12 +42,19 @@ function View({ state }: { state: ChatState }) {
   );
 }
 // Newlines between blocks are only whitespace; the saved render keeps them, the streamed one does not.
+// A token React updated in place keeps an empty style attribute where a new one has none.
 const markdown = (container: HTMLElement) =>
-  container.querySelector('.markdown')?.innerHTML.replaceAll(/>\n+</g, '><');
+  container.querySelector('.markdown')?.innerHTML.replaceAll(/>\n+</g, '><').replaceAll(' style=""', '');
+
+// Before Shiki answers, Streamdown draws each token with `--sdm-c: inherit`.
+const coloured = (container: HTMLElement) =>
+  !container.querySelector('.markdown pre span[style*="--sdm-c: inherit"]');
 
 for (const [name, text] of Object.entries(cases)) {
   test(`${name}: a streamed reply ends as the saved reply renders`, async () => {
     const whole = await render(<View state={saved(text)} />);
+    // Shiki colours a code block once its language loads; the stream then finds it coloured at once.
+    await expect.poll(() => coloured(whole.container), { timeout: 5000 }).toBe(true);
     const expected = markdown(whole.container);
     await whole.unmount();
 

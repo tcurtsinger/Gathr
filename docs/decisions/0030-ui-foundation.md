@@ -53,9 +53,12 @@ needed: `designs/tokens.css` already self-hosts the font.
   (`javascript:` reads "[blocked]").
 - **Links** open in the person's browser (`target="_blank"`), Streamdown's link-safety dialog off. In-page links (footnotes)
   stay in the reply.
-- **Code** renders as plain `pre` and `code`, as under 0027. Streamdown's own code block loads its body lazily, and React holds a
-  revealed Suspense fallback for 300 ms, which put a chat with code 300 ms late on first open. Table controls (copy, download,
-  fullscreen) are off.
+- **Code** uses Streamdown's own code block, as in the prototype: the language, Copy and Download, coloured by Shiki through
+  `@streamdown/code` (1.1.1, the line `@assistant-ui/react-streamdown` 0.3.21 takes, with Shiki 3) in GitHub's light and dark
+  themes. A block shows plain at once and coloured once its language loads; each language's grammar loads at its first use.
+  The block's body loads lazily, and React holds a revealed Suspense fallback for 300 ms, which put a chat with code 300 ms
+  late on first open, so one block is drawn off the page at start (`preloadCodeBlock`), loading Shiki and its themes too.
+  Table controls (copy, download, fullscreen) are off.
 - **Finished replies** parse in one pass (Streamdown's static mode). A reply drawn while streaming stays in streaming mode
   until it's drawn again, so a stream's end never re-parses it whole.
 - **Long chats** draw their newest 100 messages; scrolling near the top adds the next 100 above, keeping the messages on screen

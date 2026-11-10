@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { preloadCodeBlock } from './components/Markdown';
 import './theme.css';
 
 // The theme follows the system's light or dark setting.
@@ -9,6 +10,7 @@ const theme = () => document.documentElement.classList.toggle('light', light.mat
 theme();
 light.addEventListener('change', theme);
 
+preloadCodeBlock();
 createRoot(document.getElementById('root') as HTMLElement).render(
   <StrictMode>
     <App />

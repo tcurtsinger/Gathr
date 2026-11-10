@@ -1,7 +1,9 @@
 import { useAuiState } from '@assistant-ui/react';
 import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
+import { code } from '@streamdown/code';
 import { type ComponentProps, useState } from 'react';
-import { defaultRehypePlugins, defaultRemarkPlugins } from 'streamdown';
+import { createRoot } from 'react-dom/client';
+import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown';
 import { blockSplitter } from './blocks';
 import './markdown.css';
 
@@ -25,10 +27,7 @@ const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText];
 const rehypePlugins = [defaultRehypePlugins.harden];
 
 // A link leaves the window for the person's browser; an in-page one (a footnote) stays in the reply.
-// Code is plain pre and code: Streamdown's own code block loads lazily, and React holds that for 300 ms.
 const components = {
-  pre: 'pre' as const,
-  code: 'code' as const,
   a: ({ node: _, ...props }: ComponentProps<'a'> & { node?: unknown }) =>
     // Harden adds target="_blank" to every link, so an in-page one drops it.
     props.href?.startsWith('#') ? (
@@ -37,6 +36,20 @@ const components = {
       <a {...props} target="_blank" rel="noreferrer" />
     ),
 };
+
+// Code blocks keep Streamdown's language label, Copy and Download, as in the prototype; tables have none.
+// Shiki colours a block once its language loads; until then it shows plain.
+const controls = { table: false };
+const plugins = { code };
+
+/** Streamdown draws a code block's body through React.lazy, and React holds a revealed Suspense fallback
+ * for 300 ms, so the first chat with code drew 300 ms late. One block drawn off the page at start loads
+ * it, and Shiki with its themes, before any chat; each language's grammar still loads at first use. */
+export function preloadCodeBlock() {
+  createRoot(document.createElement('div')).render(
+    <Streamdown plugins={plugins}>{'```text\n.\n```'}</Streamdown>,
+  );
+}
 
 /** An agent's text, formatted by Streamdown as it streams (0030). */
 export function MarkdownText() {
@@ -53,7 +66,8 @@ export function MarkdownText() {
       rehypePlugins={rehypePlugins}
       components={components}
       linkSafety={{ enabled: false }}
-      controls={false}
+      controls={controls}
+      plugins={plugins}
       containerClassName="markdown"
     />
   );
