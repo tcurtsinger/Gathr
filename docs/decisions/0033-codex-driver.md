@@ -55,7 +55,7 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   `features.apps=false`, `features.plugins=false`, `features.hooks=false`,
   `skills.bundled.enabled=false`, `skills.include_instructions=false`, `notify=[]`,
   `check_for_update_on_startup=false`, `cli_auth_credentials_store="file"`. `config/read` proves
-  each took; a test reads them from a recorded start.
+  each took; the signed-out live probe reads them back through config/read.
 - **Accounts (C2):** `<data>/accounts/<id>/codex` is the account's `CODEX_HOME`, with
   `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` removed from the engine's environment
   (0002). Sign-in is app-server's own `account/login/start`: `chatgpt` answers a page whose
@@ -136,6 +136,9 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
 - The owner selected browser-first design A. Sign-in starts the browser; Open sign-in page is
   the fallback, and Use a device code is secondary. Device failures retain `device: true` for Retry.
   Claude's waiting sign-in has `paste: true`; Codex has `paste: false`.
+- The desktop app and sign-in share the same browser opener. It is deliberately outside the
+  child-ending jobs for git/checks: an external browser belongs to the person and outlives Gathr.
+  A stand-in browser regression proves sign-in does not stop it with its launcher.
 - API tests cover independent accounts, replayed authentication failure, browser completion,
   device failure and reference tracing, replacing/cancelling a sign-in, paged models and effort
   validation. Driver checks cover a message and Stop arriving before the thread opens.

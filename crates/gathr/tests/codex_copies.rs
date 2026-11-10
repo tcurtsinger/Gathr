@@ -61,7 +61,14 @@ fn codex_has_a_separate_owned_copy_and_a_bad_archive_never_replaces_it() {
             "latest",
             json!({"version":version}).to_string().into_bytes(),
         );
-        feed.put(&format!("{version}-{target}"), json!({"version":format!("{version}-{target}"), "dist":{"tarball":format!("{}/codex.tgz",feed.url().display()), "integrity":integrity}}).to_string().into_bytes());
+        let manifest = json!({
+            "version":format!("{version}-{target}"),
+            "dist": { "tarball":format!("{}/codex.tgz",feed.url().display()), "integrity":integrity }
+        });
+        feed.put(
+            &format!("{version}-{target}"),
+            manifest.to_string().into_bytes(),
+        );
     };
     feed.put("codex.tgz", bytes);
     publish("0.166.0", &checksum);
@@ -95,7 +102,16 @@ fn codex_has_a_separate_owned_copy_and_a_bad_archive_never_replaces_it() {
 
 fn integrity(path: &std::path::Path) -> String {
     // Node is part of this repository's toolchain; it is used only to prepare this test's feed.
-    let out=std::process::Command::new("node").args(["-e", "const fs=require('fs'),c=require('crypto');process.stdout.write('sha512-'+c.createHash('sha512').update(fs.readFileSync(process.argv[1])).digest('base64'))"]).arg(path).output().unwrap();
+    let script = concat!(
+        "const fs=require('fs'),c=require('crypto');",
+        "process.stdout.write('sha512-'+c.createHash('sha512')",
+        ".update(fs.readFileSync(process.argv[1])).digest('base64'))"
+    );
+    let out = std::process::Command::new("node")
+        .args(["-e", script])
+        .arg(path)
+        .output()
+        .unwrap();
     assert!(out.status.success(), "fixture checksum failed");
     String::from_utf8(out.stdout).unwrap()
 }

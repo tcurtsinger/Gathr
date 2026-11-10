@@ -23,7 +23,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`. A failing test that started a service prints the service's last 50 events, and with `GATHR_TEST_KEEP=<folder>` set keeps a copy of its data folder there; in CI, a failed Rust job keeps them as the artifact `rust-failures-<Windows|macOS>`. A request that times out names itself, how long it waited and how many bytes came back.
-  - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters)
+  - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters). Stage new source files first: this check reads `git ls-files`.
   - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
   - `node scripts/registry.check.mjs` (the files in `ui/src/registry` are as published, [0030](docs/decisions/0030-ui-foundation.md))
   - in `ui/`: `npx biome ci`, `npx tsc --noEmit`, `npx vitest run`, `npx vite build`. The tests run in a real browser: Edge on Windows (already installed), WebKit on macOS (`npx playwright install webkit` once). A failing test leaves its screenshot in `ui/.vitest/`; in CI, a failed UI job keeps that folder as the artifact `ui-failures-<Windows|macOS>`.

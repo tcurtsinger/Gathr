@@ -43,6 +43,16 @@ fn recording_beside_me() -> std::io::Result<String> {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|a| a.starts_with("https://")) {
+        if let Ok(folder) = std::env::var("GATHR_REPLAY_BROWSER_WAIT") {
+            let folder = std::path::Path::new(&folder);
+            std::fs::write(folder.join("browser-started"), "").unwrap();
+            while folder.exists() && !folder.join("browser-go").exists() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            if folder.exists() {
+                std::fs::write(folder.join("browser-finished"), "").unwrap();
+            }
+        }
         return;
     }
     if args.first().is_some_and(|a| a == "app-server") {

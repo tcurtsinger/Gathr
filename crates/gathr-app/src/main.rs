@@ -368,13 +368,7 @@ fn parse(url: &str) -> tauri::Url {
 
 /// A link that opens a new window goes to the person's own browser; the window shows only Gathr.
 fn open_in_browser(url: &tauri::Url) {
-    if !matches!(url.scheme(), "http" | "https") {
-        return;
-    }
-    let program = if cfg!(windows) { "explorer" } else { "open" };
-    let _ = std::process::Command::new(program)
-        .arg(url.as_str())
-        .spawn();
+    let _ = platform::open_browser(url.as_str());
 }
 
 fn exit(message: &str) -> ! {

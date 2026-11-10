@@ -59,7 +59,7 @@ pub async fn start(s: Arc<State>, t: Trace, account: Account, device: bool) -> A
         .unwrap_or_default();
     let shown = json!({"state":"waiting", "url":url, "paste":false, "device":device, "user_code":page["userCode"]});
     sign_in.show(&s.chats, shown.clone());
-    if !device && let Err(why) = open_page(url, &folder).await {
+    if !device && let Err(why) = gathr::platform::open_browser(url) {
         s.writer.record(
             Event::point("gathr.engine.sign_in.browser")
                 .trace(&t.0)
@@ -153,29 +153,4 @@ pub async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> 
     };
     close(s, client).await;
     result
-}
-
-async fn open_page(url: &str, folder: &std::path::Path) -> Result<(), String> {
-    if !url.starts_with("https://") {
-        return Err("Codex returned no HTTPS sign-in page".into());
-    }
-    let browser = std::env::var_os("BROWSER").filter(|v| !v.is_empty());
-    let (program, args) = match browser {
-        Some(program) => (std::path::PathBuf::from(program), vec![url]),
-        None if cfg!(windows) => {
-            let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:/Windows".into());
-            (
-                std::path::PathBuf::from(root).join("System32/rundll32.exe"),
-                vec!["url.dll,FileProtocolHandler", url],
-            )
-        }
-        None => (std::path::PathBuf::from("/usr/bin/open"), vec![url]),
-    };
-    let env = std::env::vars_os().collect();
-    let ran = gathr::run::run(&program, &args, folder, &env, Duration::from_secs(10)).await?;
-    if ran.code == Some(0) {
-        Ok(())
-    } else {
-        Err(ran.reason().to_string())
-    }
 }

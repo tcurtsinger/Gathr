@@ -221,3 +221,44 @@ fn device_failure_is_traced_and_switching_kind_cancels_the_previous_attempt() {
     let diag = common::gathr(&data.0, &["diag", "health"]);
     assert!(diag.0, "{}", diag.1);
 }
+
+#[test]
+fn the_browser_opened_for_sign_in_outlives_its_launcher() {
+    let data = TempDir::new();
+    let replay = common::replay_engine();
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_CODEX_PATH", &replay),
+            ("BROWSER", &replay),
+            ("GATHR_REPLAY_BROWSER_WAIT", &data.0),
+        ],
+    );
+    let a = service
+        .send(
+            "POST",
+            "/api/accounts",
+            json!({"engine":"codex","name":"Codex test"}),
+        )
+        .json();
+    let id = a["id"].as_str().unwrap();
+    let signed = service.call("POST", &format!("/api/accounts/{id}/sign-in"));
+    assert_eq!(signed.status, 200, "{}", signed.body);
+    let started_deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while !data.0.join("browser-started").exists() {
+        assert!(
+            std::time::Instant::now() < started_deadline,
+            "the browser was not launched"
+        );
+        std::thread::yield_now();
+    }
+    std::fs::write(data.0.join("browser-go"), "").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
+    while !data.0.join("browser-finished").exists() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "sign-in killed the person's browser with its launcher"
+        );
+        std::thread::yield_now();
+    }
+}
