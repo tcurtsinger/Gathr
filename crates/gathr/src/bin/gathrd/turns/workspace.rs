@@ -14,6 +14,8 @@ use rusqlite::{Connection, OptionalExtension};
 
 use super::{Assignment, Task};
 
+const IN_DATA: &str = "it leads into Gathr's data folder";
+
 pub(super) struct Workspace {
     pub cwd: PathBuf,
     /// The project folder, when the engine works in a worktree of it.
@@ -86,8 +88,12 @@ impl Task {
         let data = self.chats.data.path();
         let chat = assigned.chat.clone();
         let Some(agent) = assigned.agent.clone() else {
+            let cwd = data.join("chats").join(&chat);
+            if self.shut(&cwd, true, (&chat, None), trace) {
+                return Err(format!("{} wasn't used: {IN_DATA}", cwd.display()));
+            }
             return Ok(Workspace {
-                cwd: data.join("chats").join(&chat),
+                cwd,
                 project: None,
                 env: fresh,
                 place: None,
@@ -119,15 +125,14 @@ impl Task {
         let scratch = folders::scratch(&found.place, &chat);
         let from_before = folders::from_before(data, &chat, Some(&agent), &cwd);
         // Nothing is made or given in the data folder, however the agent folder leads there.
-        let refused = |dir: &Path, old: bool| self.shut(dir, old, (&chat, &agent), trace);
+        let refused = |dir: &Path, old: bool| self.shut(dir, old, (&chat, Some(&agent)), trace);
         let must = [
             (&found.place.root, false),
             (&cwd, from_before),
             (&scratch, false),
         ];
         if let Some((dir, _)) = must.into_iter().find(|&(dir, old)| refused(dir, old)) {
-            let why = "it leads into Gathr's data folder";
-            return Err(format!("{} wasn't used: {why}", dir.display()));
+            return Err(format!("{} wasn't used: {IN_DATA}", dir.display()));
         }
         let beside = [&found.place.agent, &found.place.shared]
             .into_iter()
@@ -171,7 +176,7 @@ impl Task {
         &self,
         dir: &Path,
         from_before: bool,
-        (chat, agent): (&str, &str),
+        (chat, agent): (&str, Option<&str>),
         trace: &str,
     ) -> bool {
         let data = self.chats.data.path();
@@ -182,9 +187,9 @@ impl Task {
             .trace(trace)
             .chat(chat)
             .error("in_data")
-            .attr("gen_ai.agent.id", agent.to_string())
+            .attr("gen_ai.agent.id", agent.map(String::from))
             .attr("path", dir.display().to_string())
-            .attr("why", "it leads into Gathr's data folder");
+            .attr("why", IN_DATA);
         self.record(event);
         true
     }

@@ -24,7 +24,8 @@ pub fn ask(
             let path = text("file_path").or_else(|| text("notebook_path"))?;
             let own = folders.first()?;
             let path = own.join(path);
-            let old_own = from_before && inside(&path, own);
+            // Read again at each write: a link made since the engine started counts too.
+            let old_own = from_before && !linked(own, data) && inside(&path, own);
             if reaches(&path, data) && !old_own {
                 return Some("it writes in Gathr's data folder");
             }
@@ -62,12 +63,22 @@ fn inside(path: &Path, boundary: &Path) -> bool {
 
 /// Whether `folder` must never be given to an agent: it holds the data folder or lands in it,
 /// links followed. An engine's own folder `from_before` the agent folder is in the data folder by
-/// design (0034): it's shut only when it holds the data folder.
+/// design (0034): it's shut once a link in it below the data folder leads anywhere else (the
+/// logins, the database), as a link there was never Gathr's.
 pub fn shut(folder: &Path, data: &Path, from_before: bool) -> bool {
     match from_before {
-        true => reaches(data, folder),
+        true => linked(folder, data),
         false => overlaps(folder, data),
     }
+}
+
+/// Whether `folder`, below `data`, isn't on the disk where its name says: a link in it.
+fn linked(folder: &Path, data: &Path) -> bool {
+    let Ok(below) = folder.strip_prefix(data) else {
+        return true;
+    };
+    let real = crate::folders::real;
+    below.as_os_str().is_empty() || fold(&real(folder)) != fold(&real(data).join(below))
 }
 
 /// Whether `path` may land in `boundary`, either way `..` is worked out.
@@ -327,6 +338,21 @@ mod tests {
         assert!(shut(&shared, &data, false), "a link into it");
         assert!(!shut(&old[0], &data, true), "a folder from before");
         assert!(shut(&data, &data, true), "one from before that holds it");
+        // A folder from before, made a link to the logins.
+        let logins = data.join("accounts");
+        std::fs::create_dir_all(&logins).unwrap();
+        std::fs::create_dir_all(data.join("chats")).unwrap();
+        let moved = [data.join("chats").join("c2")];
+        link(&logins, &moved[0]);
+        assert!(shut(&moved[0], &data, true), "a link from before");
+        let login = moved[0].join(".credentials.json");
+        assert_eq!(old_write(login, &moved, true), asks, "through it");
+        let login = logins.join(".credentials.json");
+        assert_eq!(
+            old_write(login, &moved, true),
+            asks,
+            "the logins themselves"
+        );
         assert!(
             super::overlaps(&shared, &data.join("accounts")),
             "a link above it"

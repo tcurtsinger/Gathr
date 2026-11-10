@@ -39,7 +39,10 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   agent's own folder never opens it. The one exception is an engine's own folder from before the
   agent folder, recognised by where it is, never by being in the data folder:
   `<data>/worktrees/<chat>/<agent>` or `<data>/chats/<chat>` for that chat and agent; it stays
-  writable, and nothing else is ever added beside it. Each turn reads the agent folder's real path
+  writable while it's on the disk where its name says, and nothing else is ever added beside it.
+  A link anywhere in it below the data folder (to the logins, say) was never Gathr's: a turn there
+  is refused like the agent folder's below, and the hook, which reads it again at each write, asks.
+  Each turn reads the agent folder's real path
   first: one that holds the data folder or leads into it (a link made after it was saved) is
   refused before anything is made or recorded, and the turn fails with `gathr.folder.refused` and
   its reference; Settings still shows it, and saving it again is refused. A Shared or own folder
@@ -65,9 +68,9 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   aren't changes: they go with it). Each such folder is skipped with an error event
   (`gathr.cleanup.skip`: `in_use`, `changes`, `in_data`, or `left` when the disk refuses),
   recorded once per reason with the reference its removal later shares (`gathr.cleanup.remove`),
-  and tried again at the next sweep. Restore waits for a removal already under way, and each removal reads again,
-  right before it starts, whether its chat is still archived: a chat restored while a sweep looks
-  at it keeps what's there.
+  and tried again at the next sweep. Restore waits for a removal already under way, and each
+  removal reads again, right before it starts, whether its chat is still archived: a chat restored
+  while a sweep looks at it keeps what's there.
 
 ## Why
 

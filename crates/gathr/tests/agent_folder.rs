@@ -14,7 +14,15 @@ use serde_json::{Value, json};
 /// starts in `env.jsonl` and arguments in `args.jsonl`; looks every 100 ms, idle engines close
 /// after 300 ms. And its account.
 fn service(data: &Path) -> (TestService, String) {
-    let service = TestService::with_engine(
+    let service = start(data);
+    let account = service.add_account("Work");
+    sign_in_account(data, &account);
+    (service, account)
+}
+
+/// The service of `service`, started again on its data folder.
+fn start(data: &Path) -> TestService {
+    TestService::with_engine(
         data,
         &[
             ("GATHR_REPLAY", &held_recording(data)),
@@ -24,10 +32,7 @@ fn service(data: &Path) -> (TestService, String) {
             ("GATHR_WAIT_EVERY_MS", Path::new("100")),
             ("GATHR_IDLE_CLOSE_MS", Path::new("300")),
         ],
-    );
-    let account = service.add_account("Work");
-    sign_in_account(data, &account);
-    (service, account)
+    )
 }
 
 fn agent(service: &TestService, account: &str, name: &str) -> String {
@@ -520,4 +525,40 @@ fn an_agent_folder_that_leads_into_the_data_folder_is_refused_at_every_turn() {
     assert_eq!(again.status, 400, "{}", again.body);
     std::fs::remove_dir(&root).ok();
     std::fs::remove_file(&root).ok();
+}
+
+#[test]
+fn a_folder_from_before_that_became_a_link_is_refused() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0);
+    let ann = agent(&service, &account, "Ann");
+    let chat = service.new_chat();
+    send(&service, &chat, &ann);
+    let started = nth(&data.0.join("env.jsonl"), 0);
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&chat, 20, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    engine_closed(&started);
+    service.stop();
+
+    // As before the agent folder: its session, no folder recorded, so it resumes in
+    // `<data>/chats/<chat>`, which is now a link to the logins.
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    db.execute("DELETE FROM agent_folders", []).unwrap();
+    drop(db);
+    let old = data.0.join("chats").join(&chat);
+    std::fs::create_dir_all(old.parent().unwrap()).unwrap();
+    link(&data.0.join("accounts"), &old);
+    let service = start(&data.0);
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": ann }));
+    assert_eq!(sent.status, 500, "{}", sent.body);
+    let answer = sent.json();
+    let trace = traced(&data.0, answer["ref"].as_str().unwrap());
+    assert!(trace.contains("gathr.folder.refused"), "{trace}");
+    let starts = std::fs::read_to_string(data.0.join("env.jsonl")).unwrap();
+    assert_eq!(starts.lines().count(), 1, "no engine started: {starts}");
+    std::fs::remove_dir(&old).ok();
+    std::fs::remove_file(&old).ok();
 }
