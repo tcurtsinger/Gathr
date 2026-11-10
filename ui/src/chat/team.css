@@ -1,4 +1,4 @@
-/* Team messages: the inline thread under a hand-off (DESIGN.md, designs/team-reference.css). */
+/* Team messages: a speaker on each reply, and the task above a member's work (DESIGN.md). */
 .speaker {
   display: flex;
   align-items: center;
@@ -9,96 +9,18 @@
   color: var(--muted-foreground);
   font-size: 11px;
 }
+.speaker .attention,
 .speaker time {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
-
-.team-head {
-  margin-bottom: -12px;
-  border-top: 1px solid var(--border);
-}
-.team-head[data-closed] {
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--border);
-}
-.team-head > button {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  width: 100%;
-  margin: 0;
-  padding: 12px 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--foreground);
-  font-size: 12px;
-  text-align: left;
-  scroll-margin-block: 24px;
-}
-.team-head > button:hover {
-  background: var(--hover-tint);
-}
-.team-head strong {
-  font-weight: 500;
-}
-.team-head-chevron {
-  align-self: center;
-  width: 14px;
-  height: 14px;
-  transition: transform 120ms;
-}
-.team-head > button[aria-expanded="true"] .team-head-chevron {
-  transform: rotate(90deg);
-}
-.team-head-state {
-  margin-left: auto;
-  color: var(--muted-foreground);
-  font-size: 11px;
-}
-
-/* Replies hang on one neutral hairline, unbroken across the gaps between them. */
-.in-thread {
-  position: relative;
-  margin-left: 18px;
-}
-.reply.in-thread,
-.user-message.in-thread,
-.in-thread.assignment,
-.in-thread.gathr-line {
-  padding-left: 20px;
-}
-.in-thread::before {
-  content: "";
-  position: absolute;
-  top: -24px;
-  bottom: 0;
-  left: 0;
-  border-left: 1px solid var(--border);
-}
-.in-thread.thread-first::before {
-  top: 0;
-}
-/* The next item's line starts 12 px up, under this one's negative margin: drawn twice, it reads brighter. */
-.in-thread.assignment::before {
-  bottom: 12px;
-}
-.in-thread.thread-end {
-  padding-bottom: 20px;
-}
-.in-thread.thread-end::after {
-  content: "";
-  position: absolute;
-  right: 8px;
-  bottom: 0;
-  left: -18px;
-  border-bottom: 1px solid var(--border);
+.speaker .attention + time {
+  margin-left: 0;
 }
 
 .assignment {
   margin-bottom: -12px;
+  padding: 0 8px;
   color: var(--muted-foreground);
   font-size: 11px;
 }
@@ -115,25 +37,62 @@
   font-weight: 500;
 }
 
-.last-word {
-  display: flex;
+/* Who is at work: "Waiting on team" after the Supervisor's latest message, "Working" under the team's. */
+.working {
+  display: inline-flex;
+  align-self: flex-start;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  /* 24px under the latest message (its list keeps 56px below for the composer's fade). */
+  margin: -32px 0 24px 8px;
+  padding: 4px 10px 4px 6px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
 }
-.thread-link {
-  padding: 4px 8px;
-  border-radius: 8px;
+button.working:hover {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  color: var(--foreground);
+}
+.working-spinner {
+  display: flex;
+  justify-content: center;
+  width: 16px;
+  color: var(--attention);
+}
+.working-spinner svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+.working-initials {
+  display: flex;
+}
+.working-initials > span {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  /* #2a2a2a on the dark canvas, as the design has it; its match in light. */
+  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+  box-shadow: 0 0 0 2px var(--background);
+  color: var(--foreground);
+  font-size: 9px;
+  font-weight: 500;
+}
+.working-initials > span + span {
+  margin-left: -4px;
+}
+.working-time {
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 @media (max-width: 600px) {
   .speaker {
     flex-wrap: wrap;
-  }
-  .reply.in-thread {
-    padding-left: 12px;
-  }
-  .team-head-state {
-    flex-basis: 100%;
-    margin-left: 20px;
   }
 }

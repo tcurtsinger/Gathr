@@ -3,7 +3,6 @@ import { expect, test } from 'vitest';
 import type { Agent, Message, Task, Turn } from '../api';
 import { type Custom, toThread } from './messages';
 import { type ChatState, empty } from './state';
-import { unfolded } from './TeamParts';
 
 const people = ['Mira', 'Rowan', 'Kit', 'Lane', 'Sol'];
 const agents: Agent[] = people.map((name) => ({
@@ -88,100 +87,95 @@ function round(): ChatState {
 
 const view = (state: ChatState) => toThread(state, agents, [], new Map());
 const custom = (m: ThreadMessageLike) => (m.metadata?.custom ?? {}) as Custom;
-const ids = (all: ThreadMessageLike[]) => all.map((m) => m.id ?? '');
+const ids = (all: ThreadMessageLike[]) => all.map((m) => (m.id ?? '').replace(/-(user|gathr)-\d+$/, '-$1'));
+const byId = (all: ThreadMessageLike[], id: string) =>
+  custom(all.find((m) => m.id === id) as ThreadMessageLike);
+const text = (m: ThreadMessageLike | undefined) =>
+  ((m?.content ?? []) as readonly { text?: string; toolName?: string }[])
+    .map((p) => p.text ?? p.toolName)
+    .join(' | ');
 
-test("members' work sits under the message that gave it, not where it fell in time", () => {
-  const all = view(round());
-  const order = ids(all).map((id) => id.replace(/-gathr-\d+$/, '-gathr'));
-  expect(order).toEqual([
-    expect.stringMatching(/^ask-user/),
-    'a-ask',
-    't-ask',
-    'rowan-gathr',
-    'a-rowan',
-    'kit-gathr',
-    'a-kit',
-    expect.stringMatching(/^mid-user/),
-    'a-mid',
-    expect.stringMatching(/^direct-user/),
-    'a-direct',
-  ]);
-  const byId = (id: string) => custom(all.find((m) => m.id === id) as ThreadMessageLike);
-  expect(byId('t-ask').head).toMatchObject({ root: 'ask', text: 'Kit working · Rowan done', done: false });
-  expect(byId('a-rowan')).toMatchObject({ thread: 'ask', agent: 'Rowan', role: 'member' });
-  expect(byId('a-direct').thread).toBeUndefined();
+test("members' work on a hand-off is in the team column; the person's and the lead's words stay in the main one", () => {
+  const { main, team } = view(round());
+  expect(ids(main)).toEqual(['ask-user', 'a-ask', 'mid-user', 'a-mid', 'direct-user', 'a-direct']);
+  expect(ids(team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
+  expect(byId(team, 'a-rowan')).toMatchObject({ agent: 'Rowan', role: 'member', time: expect.any(String) });
   // Gathr's message that started a task is its assignment line, never an agent's reply.
-  const assignment = all.find((m) => m.id?.startsWith('rowan-gathr')) as ThreadMessageLike;
+  const assignment = team[0];
   expect(assignment.role).toBe('system');
-  expect(custom(assignment)).toMatchObject({
-    thread: 'ask',
-    first: true,
-    assignment: { from: 'Mira', to: 'Rowan', what: 'Task 1' },
-  });
+  expect(custom(assignment)).toMatchObject({ assignment: { from: 'Mira', to: 'Rowan', what: 'Task 1' } });
 });
 
-test("replies that finish out of order keep their turns' order in the thread, as a reload shows them", () => {
+test("replies that finish out of order keep their turns' order in the team column, as a reload shows them", () => {
   const state = round();
   // Rowan's turn started first; Kit's reply was saved first.
   const rowan = state.messages.filter((m) => m.turn === 'rowan');
   state.messages = [...state.messages.filter((m) => m.turn !== 'rowan'), ...rowan];
-  const order = ids(view(state)).filter((id) => /^(rowan|kit)-gathr|^a-(rowan|kit)$/.test(id));
-  expect(order.map((id) => id.replace(/-gathr-\d+$/, '-gathr'))).toEqual([
-    'rowan-gathr',
-    'a-rowan',
-    'kit-gathr',
-    'a-kit',
-  ]);
+  expect(ids(view(state).team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
 });
 
-test('a task a member gave sits in the same thread, and a turn nobody gave a task to has none', () => {
+test("two turns' messages saved interleaved are one reply each, in each column", () => {
+  const state = round();
+  // Rowan and Kit work at once in the team column; Mira, woken by Gathr, and Lane at once in the main one.
+  state.turns.woke = turn('woke', 'mira');
+  const tool = (turnId: string, id: string): Message => ({
+    id,
+    turn: turnId,
+    time: '2026-11-08T09:01:00Z',
+    role: 'assistant',
+    kind: 'tool',
+    body: { tool: 'Bash', status: 'ok' },
+  });
+  state.messages.push(
+    tool('rowan', 'r1'),
+    tool('kit', 'k1'),
+    said('rowan', 'assistant', 'Rowan again'),
+    said('kit', 'assistant', 'Kit again'),
+    said('woke', 'gathr', 'Your wait on CI on #12 ended'),
+    said('woke', 'assistant', 'CI passed'),
+    said('direct', 'assistant', 'Lane again'),
+    said('woke', 'assistant', 'Mira again'),
+  );
+  const { main, team } = view(state);
+  expect(ids(team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
+  expect(team[1].content).toHaveLength(3);
+  expect(text(team[3])).toBe('Checked | Bash | Kit again');
+  expect(ids(main).slice(4)).toEqual(['direct-user', 'a-direct', 'woke-gathr', 'a-woke']);
+  expect(text(main[5])).toBe('It does | Lane again');
+  expect(text(main[7])).toBe('CI passed | Mira again');
+});
+
+test("a person's message sent into a running turn still splits that reply where it was sent", () => {
+  const state = round();
+  state.turns.mid.status = 'running';
+  state.messages.push(said('ask', 'user', 'Also keep the draft'), said('mid', 'assistant', 'Will do'));
+  state.partial = { mid: 'Streaming on' };
+  const { main } = view(state);
+  expect(ids(main).slice(2)).toEqual(['mid-user', 'a-mid', 'direct-user', 'a-direct', 'ask-user', 'a-mid-1']);
+  expect(text(main.at(-1))).toBe('Will do | Streaming on');
+  // A person's message in the main column never splits a member's reply in the team column.
+  state.messages.push(said('kit', 'assistant', 'Kit carries on'));
+  expect(ids(view(state).team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
+});
+
+test('a task a member gave is in the team column, and a turn nobody gave a task to stays in the main one', () => {
   const state = round();
   state.turns.sub = turn('sub', 'lane', { task: 3 });
   state.tasks.push(task(3, 'lane', 'rowan', { giver: 'rowan' }));
   state.messages.push(said('sub', 'assistant', 'Sub-task done'));
-  const all = view(state);
-  expect(custom(all.find((m) => m.id === 'a-sub') as ThreadMessageLike).thread).toBe('ask');
-  expect(all.filter((m) => custom(m).head)).toHaveLength(1);
+  const { main, team } = view(state);
+  expect(ids(team)).toContain('a-sub');
+  expect(ids(main)).toContain('a-direct');
 });
 
-test("the lead's last word links back and folds the thread, with no agreement read into a review; a late reply says so in place", () => {
+test("what Gathr told the lead when a round settled isn't shown; the lead's word is, in the main column", () => {
   const state = round();
-  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(3, 'sol', 'ask', { kind: 'review' })];
-  state.turns.sol = turn('sol', 'sol', { task: 3 });
-  state.messages.push(said('sol', 'assistant', 'No findings'));
   state.turns.back = turn('back', 'mira', { answers: 'ask' });
-  state.messages.push(said('back', 'gathr', 'The 3 tasks you gave are settled'));
+  state.messages.push(said('back', 'gathr', 'The 2 tasks you gave are settled'));
   state.messages.push(said('back', 'assistant', 'All done'));
-  let all = view(state);
-  expect(all.some((m) => m.id?.startsWith('back-gathr'))).toBe(false);
-  expect(custom(all.at(-1) as ThreadMessageLike)).toMatchObject({
-    back: { root: 'ask', done: true },
-  });
-  // Done is what it reviewed, not a verdict: it may have asked for changes.
-  expect(custom(all.at(-1) as ThreadMessageLike)).not.toHaveProperty('agreed');
-  const head = custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head;
-  expect(head).toMatchObject({ done: true, text: 'Rowan, Kit and Sol done' });
-  expect(ids(unfolded(all, new Map()))).not.toContain('a-rowan');
-  expect(ids(unfolded(all, new Map([['ask', true]])))).toContain('a-rowan');
-
-  state.turns.late = turn('late', 'lane', { task: 4 });
-  state.tasks.push(task(4, 'lane', 'ask'));
-  state.messages.push(said('late', 'assistant', 'Retry keeps it'));
-  all = view(state);
-  expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.text).toMatch(
-    /^Lane replied at \d\d:\d\d · Rowan, Kit and Sol done$/,
-  );
-  expect(all.at(-1)?.id).toBe('a-back');
-
-  // The late reply settles the round again, so the lead hears back once more: still late, one link.
-  state.turns.again = turn('again', 'mira', { answers: 'ask' });
-  state.messages.push(said('again', 'assistant', 'Lane is right'));
-  all = view(state);
-  expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.text).toMatch(
-    /^Lane replied at/,
-  );
-  expect(custom(all.find((m) => m.id === 'a-back') as ThreadMessageLike).back).toBeUndefined();
-  expect(custom(all.find((m) => m.id === 'a-again') as ThreadMessageLike).back?.root).toBe('ask');
+  const { main, team } = view(state);
+  expect(ids(main).slice(-1)).toEqual(['a-back']);
+  expect(ids([...main, ...team])).not.toContain('back-gathr');
 });
 
 test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {
@@ -189,24 +183,14 @@ test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {
   state.turns.woke = turn('woke', 'mira');
   state.messages.push(said('woke', 'gathr', 'Your wait on CI on #12 ended'));
   state.messages.push(said('woke', 'assistant', 'CI passed'));
-  const all = view(state);
-  const wake = all.find((m) => m.id?.startsWith('woke-gathr')) as ThreadMessageLike;
+  const { main } = view(state);
+  const wake = main.find((m) => m.id?.startsWith('woke-gathr')) as ThreadMessageLike;
   expect(wake.role).toBe('system');
   expect(custom(wake).gathr).toBe('Your wait on CI on #12 ended');
-  expect(all.find((m) => m.id === 'a-woke')?.content).toEqual([{ type: 'text', text: 'CI passed' }]);
+  expect(main.find((m) => m.id === 'a-woke')?.content).toEqual([{ type: 'text', text: 'CI passed' }]);
 });
 
-test("the lead's word mid-round links back but doesn't fold the thread while work is open", () => {
-  const state = round();
-  state.turns.woke = turn('woke', 'mira', { answers: 'ask' });
-  state.messages.push(said('woke', 'gathr', 'Your wait on CI on #12 ended'));
-  state.messages.push(said('woke', 'assistant', 'CI passed; Kit is still on it'));
-  const all = view(state);
-  expect(custom(all.find((m) => m.id === 'a-woke') as ThreadMessageLike).back?.root).toBe('ask');
-  expect(custom(all.find((m) => m.id === 't-ask') as ThreadMessageLike).head?.done).toBe(false);
-});
-
-test('a member hearing back on a task it gave stays in the thread, not the main line', () => {
+test('a member hearing back on a task it gave stays in the team column', () => {
   const state = round();
   state.turns.sub = turn('sub', 'lane', { task: 3, answers: 'rowan' });
   state.tasks.push(task(3, 'lane', 'rowan', { giver: 'rowan' }));
@@ -214,8 +198,6 @@ test('a member hearing back on a task it gave stays in the thread, not the main 
   state.turns.heard = turn('heard', 'rowan', { answers: 'rowan' });
   state.messages.push(said('heard', 'gathr', 'The task you gave is settled'));
   state.messages.push(said('heard', 'assistant', 'Lane finished it; my part is done too'));
-  const all = view(state);
-  const heard = custom(all.find((m) => m.id === 'a-heard') as ThreadMessageLike);
-  expect(heard).toMatchObject({ thread: 'ask' });
-  expect(heard.back).toBeUndefined();
+  const { team } = view(state);
+  expect(ids(team).slice(-3)).toEqual(['a-sub', 'heard-gathr', 'a-heard']);
 });

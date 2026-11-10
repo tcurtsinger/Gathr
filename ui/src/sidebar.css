@@ -79,6 +79,19 @@
 .archive-group {
   margin-top: 24px;
 }
+.archive-lid {
+  transform-box: view-box;
+  transform-origin: 2px 8px;
+  transition: transform 160ms ease-out;
+}
+.archive-icon[data-open] .archive-lid {
+  transform: translateY(-1.5px) rotate(-14deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .archive-lid {
+    transition: none;
+  }
+}
 .sidebar-empty {
   margin: 0;
   padding: 8px;

@@ -111,12 +111,6 @@
   position: relative;
   flex: none;
 }
-.attention {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--attention);
-}
 .workspace-toggle .attention {
   position: absolute;
   top: 1px;

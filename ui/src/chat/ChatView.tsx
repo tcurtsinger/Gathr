@@ -1,5 +1,6 @@
-import { Folder } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { Columns2, Folder } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
 import { Composer } from '../components/Composer';
@@ -7,13 +8,15 @@ import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ChatMenu } from './ChatMenu';
-import type { SendFailure } from './messages';
+import { type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread } from './Thread';
 import { roleName } from './team';
+import { useUnseen } from './unseen';
 import { type Unsent, useChat } from './useChat';
+import { TeamWait, TeamWorking } from './Working';
 import './chat.css';
 
 interface Props {
@@ -49,6 +52,9 @@ interface Props {
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;
+  /** The team chat beside the Supervisor's, in a chat with more than one agent; kept per chat. */
+  split: boolean;
+  onSplit: (open: boolean) => void;
 }
 
 export function ChatView(props: Props) {
@@ -76,6 +82,15 @@ export function ChatView(props: Props) {
   const lead = members.find((m) => m.role === 'supervisor')?.agent;
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
   const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
+
+  const cache = useRef(new Map());
+  const columns = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
+  const team = !fresh && state.members.length > 1;
+  const split = team && props.split;
+  const unseen = useUnseen(chat.id, columns.team, split, loaded);
+  // Drawn from its first opening on, then only hidden, so it keeps its place in the team's work.
+  const [teamDrawn, setTeamDrawn] = useState(split);
+  if (split && !teamDrawn) setTeamDrawn(true);
 
   useFirstTokenReport(state.partial);
   // A failed send is kept for Retry, so the composer is free for the next message at once.
@@ -129,81 +144,116 @@ export function ChatView(props: Props) {
               onDelete={props.onDelete}
             />
           )}
-          {state.members.length > 1 && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
+          {team && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
+          {team && (
+            <TooltipIconButton
+              tooltip={split ? 'Hide team chat' : 'Show team chat'}
+              aria-pressed={split}
+              className="split-toggle"
+              onClick={() => props.onSplit(!split)}
+            >
+              <Columns2 />
+              {unseen.dot && <i className="attention" />}
+            </TooltipIconButton>
+          )}
           {headerEnd}
         </div>
       </header>
       {props.notice}
-      <Thread
-        state={state}
-        agents={agents}
-        unsent={failed}
-        running={!!turn}
-        actions={actions}
-        empty={loaded && state.messages.length === 0 && failed.length === 0}
-        after={!archived && <RunLine run={run} members={state.members} />}
-        header={
-          loadFailure && (
-            <FailureNotice
-              failure={loadFailure}
-              onReference={actions.reference}
-              action={
-                <Button type="button" variant="outline" onClick={reload}>
-                  Retry
+      <div className="chat-body">
+        <Thread
+          messages={columns.main}
+          running={!!turn}
+          actions={actions}
+          label={split ? (state.members.find((m) => m.role === 'supervisor')?.name ?? 'Chat') : undefined}
+          empty={loaded && state.messages.length === 0 && failed.length === 0}
+          after={
+            !archived && (
+              <>
+                <RunLine run={run} members={state.members} />
+                {team && run.state === 'running' && (
+                  <TeamWait state={state} onOpen={split ? undefined : () => props.onSplit(true)} />
+                )}
+              </>
+            )
+          }
+          header={
+            loadFailure && (
+              <FailureNotice
+                failure={loadFailure}
+                onReference={actions.reference}
+                action={
+                  <Button type="button" variant="outline" onClick={reload}>
+                    Retry
+                  </Button>
+                }
+              />
+            )
+          }
+        >
+          {fresh && (
+            <label className="project-pick">
+              <Folder aria-hidden="true" />
+              <select
+                aria-label="Project"
+                value={chat.project ?? ''}
+                onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
+              >
+                <option value="">No project</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+                <option value="new">New project</option>
+              </select>
+            </label>
+          )}
+          {archived ? (
+            <>
+              {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
+              <div className="archived-line">
+                Archived
+                <Button size="sm" variant="outline" onClick={onRestore}>
+                  Restore
                 </Button>
+              </div>
+            </>
+          ) : (
+            <Composer
+              draft={draft}
+              onDraft={onDraft}
+              onSend={sendDraft}
+              onStop={turn ? () => act('stop', thisChat) : undefined}
+              inputRef={input}
+              tools={
+                agent && (
+                  <AgentPicker
+                    agents={recipients}
+                    selected={agent}
+                    onSelect={setPicked}
+                    onEdit={() => onEditAgent(agent)}
+                  />
+                )
               }
             />
-          )
-        }
-      >
-        {fresh && (
-          <label className="project-pick">
-            <Folder aria-hidden="true" />
-            <select
-              aria-label="Project"
-              value={chat.project ?? ''}
-              onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
-            >
-              <option value="">No project</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-              <option value="new">New project</option>
-            </select>
-          </label>
+          )}
+        </Thread>
+        {teamDrawn && (
+          <div className="team-column" hidden={!split}>
+            <Thread
+              messages={columns.team}
+              running={!!turn}
+              actions={actions}
+              label="Team"
+              fresh={unseen.highlight}
+              empty={false}
+              header={loaded && columns.team.length === 0 && <p className="empty">No team messages</p>}
+              after={<TeamWorking state={state} />}
+            />
+          </div>
         )}
-        {archived ? (
-          <>
-            {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
-            <div className="archived-line">
-              Archived
-              <Button size="sm" variant="outline" onClick={onRestore}>
-                Restore
-              </Button>
-            </div>
-          </>
-        ) : (
-          <Composer
-            draft={draft}
-            onDraft={onDraft}
-            onSend={sendDraft}
-            onStop={turn ? () => act('stop', thisChat) : undefined}
-            inputRef={input}
-            tools={
-              agent && (
-                <AgentPicker
-                  agents={recipients}
-                  selected={agent}
-                  onSelect={setPicked}
-                  onEdit={() => onEditAgent(agent)}
-                />
-              )
-            }
-          />
-        )}
-      </Thread>
+      </div>
     </main>
   );
 }

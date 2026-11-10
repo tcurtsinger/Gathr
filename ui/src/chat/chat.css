@@ -53,6 +53,41 @@
 .empty {
   color: var(--muted-foreground);
 }
+/* The Supervisor's conversation, and the team chat beside it 50/50 while the split is open. */
+.chat-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.chat-body > .thread,
+.team-column {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.team-column {
+  display: flex;
+  border-left: 1px solid var(--border);
+}
+.team-column[hidden] {
+  display: none;
+}
+.team-column .empty {
+  margin: 24px 8px;
+  font-size: 13px;
+}
+.split-toggle {
+  position: relative;
+  flex: none;
+}
+.split-toggle[aria-pressed="true"] {
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  color: var(--foreground);
+}
+.split-toggle .attention {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+}
 /* Paused or stopped: a current state after the latest content, not a saved event (the prototype). */
 .run-line {
   margin: 0 0 16px;

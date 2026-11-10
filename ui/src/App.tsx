@@ -42,6 +42,8 @@ export function App() {
   const pauses = usePauses(setFailure);
   // Each chat's workspace: the files opened from its questions, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
+  // Each chat's team column, open until the person hides it (the owner's split chat design).
+  const [splits, setSplits] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const started = performance.now();
@@ -245,6 +247,8 @@ export function App() {
           onRestore={() => restore(chat)}
           restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
           onReference={openReference}
+          split={splits[chat.id] ?? true}
+          onSplit={(open) => setSplits((all) => ({ ...all, [chat.id]: open }))}
           notice={notice}
           headerEnd={
             chat.id &&

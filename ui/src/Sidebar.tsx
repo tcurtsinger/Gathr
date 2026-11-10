@@ -1,4 +1,4 @@
-import { Archive, ArchiveX, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
+import { Folder, FolderOpen, Plus, Settings } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
@@ -125,7 +125,7 @@ export function Sidebar(props: Props) {
               if (!archiveOpen) requestAnimationFrame(() => group?.scrollIntoView({ block: 'nearest' }));
             }}
           >
-            {archiveOpen ? <ArchiveX aria-hidden="true" /> : <Archive aria-hidden="true" />}
+            <ArchiveIcon open={archiveOpen} />
             Archived
             <span className="nav-count">{archived.length}</span>
           </button>
@@ -141,5 +141,25 @@ export function Sidebar(props: Props) {
       </div>
       <ResizeHandle label="Resize navigation" side="right" name="--sidebar-width" min={190} max={() => 400} />
     </nav>
+  );
+}
+
+/** Lucide's Archive, its lid lifted on its left hinge while the group is open. */
+function ArchiveIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className="archive-icon"
+      data-open={open || undefined}
+    >
+      <rect className="archive-lid" width="20" height="5" x="2" y="3" rx="1" />
+      <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
+    </svg>
   );
 }
