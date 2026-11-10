@@ -252,8 +252,9 @@ The service owns that timing and every archive effect; see 0010.
 
 Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:
 at most 1024 by 760px, 32px horizontal and 48px vertical clearance, a fixed header,
-a 200px category rail and Close at top right. Below 768px categories move above
-content. Escape/Close return focus and preserve the chat's draft and position.
+a 200px category rail and an X at top right (the shared icon button, 16px from the top
+and right, with a Close Settings tooltip; 0023). Below 768px categories move above
+content. Escape/the X return focus and preserve the chat's draft and position.
 Apply the new shared tokens, type and controls within that layout.
 
 General starts with Theme for This computer: System (default, follows the system's

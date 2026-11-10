@@ -86,7 +86,9 @@
     {
       "path": "components/ui/tooltip.tsx",
       "url": "https://ui.shadcn.com/r/styles/new-york-v4/tooltip.json",
-      "sha256": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433"
+      "sha256": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433",
+      "adapted": "f87eebd4469655b80980403259b6f22e1ab825a28108237aac00610d7ea79da0",
+      "why": "Inside a dialog, the tooltip portals into it and stays within it: a modal's top layer hides anything portalled to the page (Settings' X, 0023). A hidden probe beside the trigger finds the dialog, as the content renders before the dialog opens."
     },
     {
       "path": "components/ui/dropdown-menu.tsx",
