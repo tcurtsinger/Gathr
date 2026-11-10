@@ -145,7 +145,10 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
   Claude's waiting sign-in has `paste: true`; Codex has `paste: false`.
 - The desktop app and sign-in share the same browser opener. It is deliberately outside the
   child-ending jobs for git/checks: an external browser belongs to the person and outlives Gathr.
-  A stand-in browser regression proves sign-in does not stop it with its launcher.
+  A stand-in browser regression proves sign-in does not stop it with its launcher. On Windows,
+  `explorer.exe <url>` opened Documents for both short and long links. The shared opener now uses
+  `rundll32 url.dll,FileProtocolHandler`; a manual loopback check proved the browser received a
+  450-plus-character URL with its `&`, `%` and `+` intact. macOS keeps `/usr/bin/open`.
 - API tests cover independent accounts, replayed authentication failure, browser completion,
   device failure and reference tracing, replacing/cancelling a sign-in, paged models and effort
   validation. Driver checks cover a message and Stop arriving before the thread opens.
@@ -157,7 +160,9 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
   `codex_signed_in.jsonl` recording covers streaming, tools, refusal and token totals.
 - The signed-in 0.167.0 catalog reports eight exact models; the signed-out list has one extra,
   `gpt-5.5`. Engine default resolves to `gpt-6.1-sol`. A test uses the saved signed-in catalog
-  to check all four Family Latest rows.
+  to check all four Family Latest rows. A subsequent real turn saved `latest:sol`, queried the
+  account catalog, then sent `gpt-6.1-sol` in `thread/resume`; it called Gathr `list_tasks` and
+  finished in 7.27 seconds (first text 6.93 seconds).
 - Gathr never borrows either engine from PATH. A missing checked copy holds the saved turn with
   a downloading notice; replay checks cover persistence and release when the first copy arrives.
 
