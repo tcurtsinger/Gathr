@@ -8,6 +8,7 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::get;
 use axum::{Json, Router};
+use gathr::app::Copies;
 use gathr::event::Event;
 use gathr::launch;
 use gathr::platform::login::{self, Item};
@@ -21,13 +22,21 @@ pub fn routes() -> Router<Arc<State>> {
     Router::new().route("/api/startup", get(read).put(change))
 }
 
-/// The window beside this service on its data folder.
+/// The window on this data folder: beside this service when it runs where it was built, else beside
+/// the installed one the window last reached it from (the service runs from the folder's copy).
 fn item(s: &State) -> Result<Item, String> {
-    let app = launch::beside_me("gathr-app").map_err(|e| e.to_string())?;
-    if !app.is_file() {
-        return Err(format!("{} isn't there", app.display()));
-    }
-    Ok(Item::new(&app, s.data.path()))
+    let beside = launch::beside_me("gathr-app").map_err(|e| e.to_string())?;
+    let installed = Copies::new(&s.data)
+        .installed()
+        .map(|gathrd| gathrd.with_file_name(beside.file_name().unwrap_or_default()));
+    let app = std::iter::once(&beside)
+        .chain(&installed)
+        .find(|p| p.is_file());
+    let Some(app) = app else {
+        let missing = installed.as_ref().unwrap_or(&beside);
+        return Err(format!("{} isn't there", missing.display()));
+    };
+    Ok(Item::new(app, s.data.path()))
 }
 
 async fn read(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {

@@ -449,3 +449,29 @@ fn a_hold_that_waits_too_long_lets_the_turns_go() {
     let now = ServiceInfo::read(&DataDir::new(&data)).unwrap();
     assert_eq!(now.pid, service.info.pid, "it switched after giving up");
 }
+
+/// Open at login starts the installed window, which isn't beside the folder's copy of the service
+/// (v0.1.9 failed Settings > General on every installed Gathr). Read only: nothing is turned on.
+#[test]
+fn open_at_login_finds_the_installed_window_from_the_folders_copy() {
+    let dir = TempDir::new();
+    let installed = dir.0.join("Gathr");
+    std::fs::create_dir_all(&installed).unwrap();
+    let gathrd = installed.join(program_name());
+    std::fs::copy(env!("CARGO_BIN_EXE_gathrd"), &gathrd).unwrap();
+    let window = installed.join(format!("gathr-app{}", std::env::consts::EXE_SUFFIX));
+    std::fs::write(&window, "").unwrap();
+    let data = dir.0.join("data");
+    let _running = Successor(data.clone());
+    let found = gathr::launch::find_or_start(&DataDir::new(&data), &gathrd).unwrap();
+
+    let startup = http::call(found.info.port, &found.info.token, "GET", "/api/startup").unwrap();
+    assert_eq!(startup.status, 200, "{}", startup.body);
+    assert_eq!(startup.json()["on"], false, "{}", startup.body);
+
+    std::fs::remove_file(&window).unwrap();
+    let gone = http::call(found.info.port, &found.info.token, "GET", "/api/startup").unwrap();
+    assert_eq!(gone.status, 500, "{}", gone.body);
+    let why = gone.json()["why"].as_str().unwrap_or_default().to_string();
+    assert!(why.contains(&window.display().to_string()), "{why}");
+}

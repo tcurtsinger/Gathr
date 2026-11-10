@@ -35,6 +35,9 @@ enum Env {
 /// copied in first when the folder has none, or an older one: 0032).
 pub fn find_or_start(data: &DataDir, installed: &Path) -> Result<Found, Error> {
     std::fs::create_dir_all(data.path())?;
+    // Before finding a running service too: a window that updated itself, or moved, comes back to
+    // the service it left running.
+    Copies::new(data).note_installed(installed)?;
     match data.take_lock() {
         Ok(lock) => drop(lock),
         Err(Error::AlreadyRunning) => {
