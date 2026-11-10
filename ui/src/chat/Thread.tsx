@@ -248,6 +248,16 @@ function AssistantMessage() {
           key={a.request}
           state="request"
           title={`Allow ${a.tool}?`}
+          command={
+            typeof a.input === 'object' &&
+            a.input !== null &&
+            'command' in a.input &&
+            typeof a.input.command === 'string'
+              ? a.input.command
+              : undefined
+          }
+          description={a.tool === 'wait check' ? 'Runs outside the engine sandbox.' : undefined}
+          style={{ overflowWrap: 'anywhere' }}
           subtitle={agent ?? ''}
           allowOnceLabel="Allow"
           denyLabel="Deny"
@@ -281,6 +291,13 @@ function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions
             Continue
           </Button>
         }
+      />
+    );
+  }
+  if (turn.held === 'claude' || turn.held === 'codex') {
+    return (
+      <Notice
+        title={turn.why ?? (turn.held === 'codex' ? 'Codex is downloading' : 'Claude Code is downloading')}
       />
     );
   }

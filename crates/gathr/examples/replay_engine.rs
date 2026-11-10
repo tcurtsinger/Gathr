@@ -30,6 +30,8 @@
 //! (`GATHR_REPLAY_LINGER_MS` sets how long).
 
 use std::io::{BufRead, Write};
+#[path = "replay_engine/codex.rs"]
+mod codex;
 
 /// The recording named in `replay-recording` beside this program: an installed service passes
 /// engines no `GATHR_*` variable, so a check on one puts the replay engine in as its copy with this.
@@ -40,6 +42,24 @@ fn recording_beside_me() -> std::io::Result<String> {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a.starts_with("https://")) {
+        if let Ok(folder) = std::env::var("GATHR_REPLAY_BROWSER_WAIT") {
+            let folder = std::path::Path::new(&folder);
+            std::fs::write(folder.join("browser-started"), "").unwrap();
+            while folder.exists() && !folder.join("browser-go").exists() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            if folder.exists() {
+                std::fs::write(folder.join("browser-finished"), "").unwrap();
+            }
+        }
+        return;
+    }
+    if args.first().is_some_and(|a| a == "app-server") {
+        record_start(&args);
+        codex::run();
+        return;
+    }
     if args.iter().map(String::as_str).eq(["auth", "login"]) {
         auth_login();
     }
@@ -85,30 +105,7 @@ fn main() {
     let recording = std::env::var("GATHR_REPLAY")
         .or_else(|_| recording_beside_me())
         .unwrap_or_default();
-    if let Ok(file) = std::env::var("GATHR_REPLAY_ARGS") {
-        let mut out = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(file)
-            .expect("the args file opens");
-        append_line(&mut out, serde_json::to_string(&args).unwrap());
-    }
-    if let Ok(file) = std::env::var("GATHR_REPLAY_ENV") {
-        let token = std::env::var("GATHR_AGENT_TOKEN").ok();
-        let mut out = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(file)
-            .expect("the env file opens");
-        let cwd = std::env::current_dir()
-            .ok()
-            .map(|d| d.display().to_string());
-        let path = std::env::var("PATH").ok();
-        let push = std::env::var("GATHR_PUSH_URL").ok();
-        let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
-            "GATHR_PUSH_URL": push });
-        append_line(&mut out, start.to_string());
-    }
+    record_start(&args);
     let text = match recording.as_str() {
         "" => String::new(),
         file => std::fs::read_to_string(file).expect("the recording reads"),
@@ -219,4 +216,31 @@ fn auth_login() -> ! {
         "accessToken": "made-up", "refreshToken": "made-up", "expiresAt": expires as u64 } });
     std::fs::write(folder.join(".credentials.json"), login.to_string()).unwrap();
     std::process::exit(0);
+}
+
+fn record_start(args: &[String]) {
+    if let Ok(file) = std::env::var("GATHR_REPLAY_ARGS") {
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)
+            .expect("the args file opens");
+        append_line(&mut out, serde_json::to_string(&args).unwrap());
+    }
+    if let Ok(file) = std::env::var("GATHR_REPLAY_ENV") {
+        let token = std::env::var("GATHR_AGENT_TOKEN").ok();
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)
+            .expect("the env file opens");
+        let cwd = std::env::current_dir()
+            .ok()
+            .map(|d| d.display().to_string());
+        let path = std::env::var("PATH").ok();
+        let push = std::env::var("GATHR_PUSH_URL").ok();
+        let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
+            "GATHR_PUSH_URL": push });
+        append_line(&mut out, start.to_string());
+    }
 }

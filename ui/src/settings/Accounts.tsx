@@ -4,9 +4,13 @@ import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
+import { SignInFailed, SignInWaiting } from './SignIn';
 
-/** The engines Gathr can run, as the service names them. Codex joins with its driver. */
-const engines: [string, string][] = [['claude', 'Claude Code']];
+/** The engines Gathr can run, as the service names them. */
+export const engines: [string, string][] = [
+  ['claude', 'Claude Code'],
+  ['codex', 'Codex'],
+];
 export const engineName = (engine: string) => engines.find(([id]) => id === engine)?.[1] ?? engine;
 
 const said: Record<string, string> = {
@@ -255,57 +259,9 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
         </div>
       )}
       {failed && (
-        <Notice
-          danger
-          title="Sign in failed"
-          reference={{ ref: failed.ref, open: onReference }}
-          links={<span className="muted">{failed.why}</span>}
-        />
+        <SignInFailed account={id} failed={failed} onFailure={onFailure} onReference={onReference} />
       )}
-      {waiting?.url && <SignInCode account={id} url={waiting.url} onFailure={onFailure} />}
+      {waiting && <SignInWaiting account={account} waiting={waiting} onFailure={onFailure} />}
     </li>
-  );
-}
-
-/** While Claude Code waits: its page, if the browser didn't open, and the code that page gives. */
-function SignInCode({
-  account,
-  url,
-  onFailure,
-}: {
-  account: string;
-  url: string;
-  onFailure: (f: Failure) => void;
-}) {
-  const [code, setCode] = useState('');
-  const [sent, setSent] = useState(false);
-  const field = useId();
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSent(true);
-    api.signInCode(account, code.trim()).catch((f) => {
-      setSent(false);
-      onFailure(f);
-    });
-  };
-  return (
-    <form className="pathfield" onSubmit={submit}>
-      <label htmlFor={field}>Code</label>
-      <div className="pathline">
-        <input
-          id={field}
-          value={code}
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(e) => setCode(e.target.value)}
-        />
-        <Button type="submit" disabled={sent || !code.trim()}>
-          {sent ? 'Signing in' : 'Sign in'}
-        </Button>
-      </div>
-      <a href={url} target="_blank" rel="noreferrer">
-        Open sign-in page
-      </a>
-    </form>
   );
 }

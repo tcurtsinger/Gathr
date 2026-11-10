@@ -26,6 +26,9 @@ use crate::routes::{Answer, Fail, fail};
 use crate::turns::CLOSE_GRACE;
 
 /// How long Claude Code has to print its sign-in page (it took 0.2 s in task 893).
+mod codex;
+pub use codex::log_out as codex_log_out;
+
 const PAGE_WAIT: Duration = Duration::from_secs(30);
 /// `claude auth logout` took 0.4 s on 2.1.318 (task 947).
 const SIGN_OUT_WAIT: Duration = Duration::from_secs(30);
@@ -146,8 +149,13 @@ async fn start(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Path(account): Path<String>,
+    body: Option<Json<Value>>,
 ) -> Answer {
     let account = find(&s, &t, &account, "Sign in failed").await?;
+    if account.engine == "codex" {
+        let device = body.is_some_and(|b| b.0["device"] == true);
+        return codex::start(s, t, account, device).await;
+    }
     let sign_in = s.sign_ins.get(&account.id);
     let cancels = sign_in.running.lock().expect("never poisoned").cancels;
     let _one = sign_in.starting.lock().await;
@@ -208,7 +216,10 @@ async fn start(
             return Err(fail(why));
         }
     };
-    sign_in.show(&s.chats, json!({ "state": "waiting", "url": url }));
+    sign_in.show(
+        &s.chats,
+        json!({ "state": "waiting", "url": url, "paste": true }),
+    );
     let job = Job {
         trace: t.0.clone(),
         started,
@@ -216,7 +227,7 @@ async fn start(
         sign_in: sign_in.clone(),
     };
     tokio::spawn(watch(s.clone(), engine, lines, asks, job));
-    Ok(Json(json!({ "url": url })))
+    Ok(Json(json!({ "url": url, "paste": true })))
 }
 
 /// Waits for a Cancel; a code before the page has nowhere to go yet.
@@ -364,6 +375,13 @@ async fn code(
     Json(body): Json<Code>,
 ) -> Answer {
     let account = find(&s, &t, &account, "Sign in failed").await?;
+    if account.engine == "codex" {
+        return Err(failed(
+            StatusCode::CONFLICT,
+            "Codex sign-in finishes in the browser",
+            &t.0,
+        ));
+    }
     let code = body.code.trim().to_string();
     let running = s
         .sign_ins
@@ -427,6 +445,10 @@ pub async fn pass_gate(s: &State, folder: &std::path::Path) -> Result<login::Hol
 }
 
 async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> {
+    if folder.file_name().is_some_and(|n| n == "codex") {
+        let _gate = pass_gate(s, folder).await?;
+        return codex::log_out(s, folder).await;
+    }
     let program = command::find(s.chats.copy())?;
     let _gate = pass_gate(s, folder).await?;
     log_out_held(s, &program, folder).await

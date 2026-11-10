@@ -43,7 +43,7 @@ fn accounts_are_added_and_renamed_each_with_its_own_folder_and_kept_after_a_rest
             "a name already used",
         ),
         (
-            json!({ "engine": "codex", "name": "Codex" }),
+            json!({ "engine": "unknown", "name": "Unknown" }),
             400,
             "an engine Gathr can't run yet",
         ),

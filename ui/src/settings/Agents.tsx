@@ -310,7 +310,10 @@ function AgentForm(props: FormProps) {
                 </Fragment>
               ))}
             </dl>
-            <p>Shell commands can run outside the worktree in Auto mode</p>
+            {/* Codex's sandbox keeps commands' writes in the worktree (0033). */}
+            {accounts.find((a) => a.id === account)?.engine === 'claude' && (
+              <p>Shell commands can run outside the worktree in Auto mode</p>
+            )}
           </Help>
         </span>
         <select

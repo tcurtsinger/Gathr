@@ -270,6 +270,24 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
+        if let Some(check) = &ask.check {
+            let input = serde_json::json!({ "command": check });
+            let mut stopping = self.stopping.clone();
+            let allowed = tokio::select! {
+                allowed = self.chats.ask_service(&caller, input, "check") => allowed,
+                _ = stopping.wait_for(|stop| *stop) => false,
+            };
+            if !allowed {
+                return Ok(self
+                    .respond(
+                        &caller,
+                        "wait",
+                        started,
+                        Err("the wait check was not allowed".into()),
+                    )
+                    .await);
+            }
+        }
         let (on, trace) = (caller.on(), trace_of(&caller));
         let (chat, agent) = (
             caller.chat.clone(),

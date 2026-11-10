@@ -20,6 +20,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0010_person_tasks.sql"),
     include_str!("../migrations/0011_pauses.sql"),
     include_str!("../migrations/0012_archive_stale.sql"),
+    include_str!("../migrations/0013_engine_waits.sql"),
 ];
 
 /// The schema version this build writes.
@@ -244,5 +245,58 @@ mod tests {
             }) => {}
             other => panic!("expected a refusal of schema 99, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod engine_wait_migration_test {
+    use super::*;
+    #[test]
+    fn engine_wait_migration_keeps_turn_fields_and_background_references() {
+        let path =
+            std::env::temp_dir().join(format!("gathr-migrate-{}.sqlite", crate::ids::span_id()));
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..12] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch("PRAGMA user_version = 12;
+            INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+            INSERT INTO turns VALUES ('t', 'c', 'trace', 'queued', 2, NULL, 'paused', 'a', 3, 4, 'answer', 'pause', 'cancelled');
+            INSERT INTO background VALUES ('b', 't', 'command', 5);").unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let kept: (String, i64, i64, String, String, String) = conn.query_row(
+            "SELECT agent_id, position, task, answers, held, stop_why FROM turns WHERE id = 't'", [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).unwrap();
+        assert_eq!(
+            kept,
+            (
+                "a".into(),
+                3,
+                4,
+                "answer".into(),
+                "pause".into(),
+                "cancelled".into()
+            )
+        );
+        assert_eq!(
+            conn.query_row("SELECT turn_id FROM background WHERE id = 'b'", [], |r| {
+                r.get::<_, String>(0)
+            })
+            .unwrap(),
+            "t"
+        );
+        conn.execute("UPDATE turns SET held = 'codex' WHERE id = 't'", [])
+            .unwrap();
+        assert_eq!(
+            conn.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r
+                .get::<_, i64>(
+                0
+            ))
+            .unwrap(),
+            0
+        );
+        drop(conn);
+        let _ = std::fs::remove_file(path);
     }
 }

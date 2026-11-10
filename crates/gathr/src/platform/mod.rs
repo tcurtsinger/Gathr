@@ -80,6 +80,41 @@ pub fn no_window(command: &mut std::process::Command) {
     std::os::unix::process::CommandExt::process_group(command, 0);
 }
 
+/// Opens a web page in the person's browser. It must outlive Gathr, so it never goes in the
+/// child-ending job used for git and checks. BROWSER names a stand-in executable in tests.
+pub fn open_browser(url: &str) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("Only HTTP and HTTPS links can open in the browser".into());
+    }
+    let mut command = match std::env::var_os("BROWSER").filter(|v| !v.is_empty()) {
+        Some(stand_in) => std::process::Command::new(stand_in),
+        None if cfg!(windows) => {
+            // The shell's own handler for links, as Start-Process uses. Never explorer.exe: it
+            // opens the Documents folder for a link instead of the browser (1281).
+            let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
+            let mut c = std::process::Command::new(
+                PathBuf::from(root).join("System32").join("rundll32.exe"),
+            );
+            c.arg("url.dll,FileProtocolHandler");
+            c
+        }
+        None => std::process::Command::new("/usr/bin/open"),
+    };
+    command
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    no_window(&mut command);
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("The browser didn't open: {e}"))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 /// Starts a short program so that ending it ends everything it started (1219): in a Job Object on
 /// Windows, which takes in each child as it's created, even one Git Bash was starting when it was
 /// ended, before MSYS or any process tree lists it; in its own process group on Unix, whose id stays

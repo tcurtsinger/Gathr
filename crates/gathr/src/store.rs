@@ -246,7 +246,7 @@ pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) ->
     Ok(())
 }
 
-/// What holds a queued turn back (`pause`, `usage`, or none), and why in words.
+/// What holds a queued turn back (`pause`, `usage`, `claude`, `codex`, or none), and why in words.
 pub fn set_held(
     conn: &Connection,
     id: &str,

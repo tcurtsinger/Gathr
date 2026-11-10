@@ -25,6 +25,7 @@ pub struct State {
     pub stop: tokio::sync::Notify,
     pub chats: Arc<crate::chats::Chats>,
     pub updates: Arc<crate::updates::Updates>,
+    pub codex_updates: Arc<crate::updates::Updates>,
     pub app: Arc<crate::app_update::AppUpdates>,
     pub sign_ins: Arc<crate::sign_in::SignIns>,
     pub models: crate::models::Models,
@@ -64,7 +65,10 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::models::routes())
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
-        .nest_service("/mcp", crate::tools::service(state.chats.clone()))
+        .nest_service(
+            "/mcp",
+            crate::tools::service(state.chats.clone(), state.stopping.subscribe()),
+        )
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
         .fallback(crate::ui::page)

@@ -72,7 +72,11 @@ pub async fn list(s: &State, trace: &str, account: &Account) -> Result<Value, St
     let folder = account.folder(&s.data);
     // One ask at a time: a second request waits for the first's list instead of starting another.
     let mut last = s.models.last.lock().await;
-    let program = command::find(s.chats.copy());
+    let program = if account.engine == "codex" {
+        gathr::codex::command::find(gathr::codex::copies::storage(&s.data).program())
+    } else {
+        command::find(s.chats.copy())
+    };
     let login = s.chats.login_status(&folder).await.0;
     if let (Ok(program), Some((was, was_login, list))) = (&program, last.get(&account.id))
         && program == was
@@ -82,6 +86,7 @@ pub async fn list(s: &State, trace: &str, account: &Account) -> Result<Value, St
     }
     let started = Instant::now();
     let asked = match program.clone() {
+        Ok(program) if account.engine == "codex" => ask_codex(s, &program, &folder).await,
         Ok(program) => ask(s, &program, &folder).await,
         Err(why) => Err(why),
     };
@@ -148,7 +153,7 @@ async fn ask(
     folder: &std::path::Path,
 ) -> Result<Value, String> {
     const STOPPING: &str = "the service is stopping";
-    let (chats, models) = (&s.chats, &s.models);
+    let chats = &s.chats;
     let cwd = chats.data.path().join("chats");
     for dir in [folder, &cwd] {
         std::fs::create_dir_all(dir).map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
@@ -179,6 +184,11 @@ async fn ask(
     // Its exit takes another 0.6 s, which the list needn't wait for, but shutdown does.
     // Never killed for being slow: it runs on the account's login and may be renewing it (0001).
     // Only shutdown kills, after the grace every engine gets.
+    close_later(s, engine);
+    answer
+}
+
+fn close_later(s: &State, mut engine: Engine) {
     let (writer, pid) = (s.writer.clone(), engine.pid);
     let mut stopping = s.stopping.subscribe();
     let close = async move {
@@ -200,8 +210,11 @@ async fn ask(
         };
         writer.record_now(event.attr("process.pid", pid)).await;
     };
-    models.closing.lock().expect("never poisoned").spawn(close);
-    answer
+    s.models
+        .closing
+        .lock()
+        .expect("never poisoned")
+        .spawn(close);
 }
 
 async fn answered(lines: &mut tokio::sync::mpsc::UnboundedReceiver<Line>) -> Result<Value, String> {
@@ -253,4 +266,47 @@ fn listed(init: &Value) -> Value {
         })
         .collect();
     json!({ "version": init["claude_code_version"], "models": models })
+}
+
+async fn ask_codex(
+    s: &State,
+    program: &std::path::Path,
+    folder: &std::path::Path,
+) -> Result<Value, String> {
+    let mut gate = crate::sign_in::pass_gate(s, folder).await?;
+    let mut client = gathr::codex::client::Client::start(program, folder).await?;
+    let answer = tokio::select! {
+        list = codex_list(&mut client) => list,
+        () = s.stopped() => Err("the service is stopping".into()),
+    };
+    gate.release();
+    close_later(s, client.engine);
+    answer
+}
+
+async fn codex_list(client: &mut gathr::codex::client::Client) -> Result<Value, String> {
+    let mut all = Vec::new();
+    let mut cursor = Value::Null;
+    let mut seen = std::collections::HashSet::new();
+    loop {
+        let page = client
+            .request("model/list", json!({"cursor":cursor,"includeHidden":false}))
+            .await?;
+        let rows = page["data"]
+            .as_array()
+            .ok_or("Codex returned no model list")?;
+        all.extend(rows.iter().filter(|m| m["hidden"] != true).cloned());
+        cursor = page["nextCursor"].clone();
+        if cursor.is_null() {
+            break;
+        }
+        let value = cursor
+            .as_str()
+            .ok_or("Codex returned an invalid model cursor")?;
+        if !seen.insert(value.to_string()) {
+            return Err("Codex repeated a model-list cursor".into());
+        }
+    }
+    let models = gathr::codex::models::listed(&all)?;
+    Ok(json!({"version":client.version, "models":models}))
 }

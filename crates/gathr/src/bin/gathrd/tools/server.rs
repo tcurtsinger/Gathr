@@ -26,13 +26,17 @@ const MOST: u32 = 100;
 
 /// The service to mount at `/mcp`. Answers are plain JSON where the call allows it, and the old
 /// revisions with sessions still work (0005).
-pub fn service(chats: Arc<Chats>) -> StreamableHttpService<Tools, LocalSessionManager> {
+pub fn service(
+    chats: Arc<Chats>,
+    stopping: tokio::sync::watch::Receiver<bool>,
+) -> StreamableHttpService<Tools, LocalSessionManager> {
     let config = StreamableHttpServerConfig::default()
         .with_json_response(true)
         .with_sse_keep_alive(None);
     let tools = move || {
         Ok(Tools {
             chats: chats.clone(),
+            stopping: stopping.clone(),
             tool_router: Tools::tool_router() + Tools::coord_router() + Tools::person_router(),
         })
     };
@@ -42,6 +46,7 @@ pub fn service(chats: Arc<Chats>) -> StreamableHttpService<Tools, LocalSessionMa
 #[derive(Clone)]
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
+    pub(super) stopping: tokio::sync::watch::Receiver<bool>,
     tool_router: ToolRouter<Self>,
 }
 

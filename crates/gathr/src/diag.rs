@@ -63,7 +63,11 @@ fn accounts(data: &DataDir, conn: &Connection, held: Value) -> Value {
         .iter()
         .map(|account| {
             let folder = account.folder(data);
-            let (login, expires) = crate::claude::login::status(&folder, copy.clone(), now_ms);
+            let (login, expires) = if account.engine == "codex" {
+                (crate::codex::login::status(&folder), None)
+            } else {
+                crate::claude::login::status(&folder, copy.clone(), now_ms)
+            };
             json!({
                 "id": account.id,
                 "name": account.name,
