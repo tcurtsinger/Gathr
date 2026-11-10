@@ -61,6 +61,22 @@ test('Theme applies at once, is kept for the next start, and System follows the 
   expect(light()).toBe(systemLight);
 });
 
+test('the desktop window title bar takes Theme at start and on each change, and System hands it back', async () => {
+  service(false, [], []);
+  const calls: unknown[] = [];
+  vi.stubGlobal('__TAURI_INTERNALS__', {
+    invoke: async (cmd: string, args: unknown) => calls.push([cmd, args]),
+  });
+  cookie('dark');
+  followTheme();
+  const screen = await render(<General onReference={() => {}} />);
+  const theme = screen.getByRole('combobox', { name: 'Theme' });
+  await userEvent.selectOptions(theme, 'Light');
+  await userEvent.selectOptions(theme, 'System');
+  const set = (value: string | null) => ['plugin:window|set_theme', { value }];
+  expect(calls).toEqual([set('dark'), set('light'), set(null)]);
+});
+
 test('Space turns it on; a change that fails puts it back with its reference and keeps focus', async () => {
   const sent: unknown[] = [];
   service(false, [true, 'fail'], sent);
