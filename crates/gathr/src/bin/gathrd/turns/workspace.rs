@@ -37,7 +37,11 @@ struct Found {
     resumes: bool,
 }
 
-fn found(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Found>, gathr::Error> {
+fn found(
+    conn: &Connection,
+    data: &Path,
+    (chat, agent): (&str, &str),
+) -> Result<Option<Found>, gathr::Error> {
     let project: Option<String> = conn
         .query_row("SELECT project FROM chats WHERE id = ?1", [chat], |r| {
             r.get(0)
@@ -60,7 +64,7 @@ fn found(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Found>, ga
     Ok(Some(Found {
         project,
         name,
-        place: folders::place(conn, chat, agent)?,
+        place: folders::place(conn, data, chat, agent)?,
         recorded: folders::workspace(conn, chat, agent)?,
         resumes,
     }))
@@ -86,11 +90,11 @@ impl Task {
                 scratch: None,
             });
         };
-        let (c, a) = (chat.clone(), agent.clone());
+        let (c, a, d) = (chat.clone(), agent.clone(), data.to_path_buf());
         let read = self
             .chats
             .writer
-            .call(move |conn| found(conn, &c, &a))
+            .call(move |conn| found(conn, &d, (&c, &a)))
             .await;
         let found = match read {
             Some(Ok(Some(found))) => found,

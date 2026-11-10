@@ -12,16 +12,14 @@ use crate::Error;
 
 /// The setting's key, and its name in `/api/settings`.
 pub const SETTING: &str = "agent_folder";
-/// Stands in for the default in dev and tests only, so a check never writes in the person's own.
-pub const DEFAULT_VAR: &str = "GATHR_AGENT_FOLDER";
 /// Where a chat with no project keeps its work, as a project would.
 const NO_PROJECT: &str = "Chats";
 const SHARED: &str = "Shared";
 /// Longer names make deep worktree paths, which Windows tools still trip on past 260 characters.
 const LONGEST: usize = 40;
 
-/// The agent folder: as set, else the home folder's `Gathr`.
-pub fn root(conn: &Connection) -> Result<PathBuf, Error> {
+/// The agent folder for the data folder `data`: as set, else the default (`default_root`).
+pub fn root(conn: &Connection, data: &Path) -> Result<PathBuf, Error> {
     let saved: Option<String> = conn
         .query_row(
             "SELECT value FROM settings WHERE key = ?1",
@@ -29,17 +27,26 @@ pub fn root(conn: &Connection) -> Result<PathBuf, Error> {
             |r| r.get(0),
         )
         .optional()?;
-    Ok(saved.map_or_else(default_root, PathBuf::from))
+    Ok(saved.map_or_else(|| default_root(data), PathBuf::from))
 }
 
-fn default_root() -> PathBuf {
-    match std::env::var_os(DEFAULT_VAR).filter(|v| !v.is_empty()) {
-        Some(set) => PathBuf::from(set),
-        None => std::env::home_dir().unwrap_or_default().join("Gathr"),
+/// The home folder's `Gathr` for the system's own data folder only. Any other data folder (a test,
+/// a check, `gathr dev`) keeps its agents beside it, as `<data>-agents`, so its made-up projects
+/// never land in the person's own; no variable is needed, which an installed Gathr never reads.
+fn default_root(data: &Path) -> PathBuf {
+    let full = |p: &Path| {
+        let full = std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
+        // Both systems' disks ignore case by default.
+        PathBuf::from(full.to_string_lossy().to_lowercase())
+    };
+    let system = crate::platform::default_data_dir();
+    match full(data).components().eq(full(&system).components()) {
+        true => std::env::home_dir().unwrap_or_default().join("Gathr"),
+        false => beside(&std::path::absolute(data).unwrap_or_else(|_| data.to_path_buf())),
     }
 }
 
-/// The default for a data folder used for a check (`gathr dev`): beside it, as `<name>-agents`.
+/// Where a data folder that isn't the system's keeps its agents: beside it, as `<name>-agents`.
 pub fn beside(data: &Path) -> PathBuf {
     let name = data.file_name().unwrap_or_default().to_string_lossy();
     data.with_file_name(format!("{name}-agents"))
@@ -131,8 +138,8 @@ pub struct Place {
 
 /// Where `agent` works in `chat`, naming the project and agent in the agent folder the first time.
 /// A chat with no project keeps its work in `Chats`, as a project would.
-pub fn place(conn: &Connection, chat: &str, agent: &str) -> Result<Place, Error> {
-    let root = root(conn)?;
+pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<Place, Error> {
+    let root = root(conn, data)?;
     let project: Option<String> = conn
         .query_row("SELECT project_id FROM chats WHERE id = ?1", [chat], |r| {
             r.get(0)
@@ -383,6 +390,20 @@ mod tests {
         assert_eq!(safe_name("...", "Project"), "Project");
         assert_eq!(safe_name("tab\there", "Agent"), "tab-here");
         assert_eq!(safe_name(&"é".repeat(50), "Agent").chars().count(), 40);
+    }
+
+    #[test]
+    fn only_the_systems_own_data_folder_keeps_its_agents_in_the_home_folder() {
+        let home = std::env::home_dir().unwrap().join("Gathr");
+        let system = crate::platform::default_data_dir();
+        assert_eq!(default_root(&system), home);
+        let shouted = PathBuf::from(system.to_string_lossy().to_uppercase());
+        assert_eq!(default_root(&shouted), home, "case is folded");
+        let test = std::env::temp_dir().join("gathr-test-x");
+        assert_eq!(
+            default_root(&test),
+            std::env::temp_dir().join("gathr-test-x-agents")
+        );
     }
 
     #[test]

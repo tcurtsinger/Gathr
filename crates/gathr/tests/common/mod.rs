@@ -26,6 +26,7 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+        // A service on a data folder here keeps its agent folder beside it (0034).
         let _ = std::fs::remove_dir_all(gathr::folders::beside(&self.0));
     }
 }
@@ -54,7 +55,6 @@ impl TestService {
     pub fn start_program(program: &Path, data: &Path, env: &[(&str, &Path)]) -> TestService {
         let mut command = Command::new(program);
         command.arg("--data").arg(data).arg("--port").arg("0");
-        command.env(gathr::folders::DEFAULT_VAR, gathr::folders::beside(data));
         for (name, value) in env {
             command.env(name, value);
         }
@@ -247,12 +247,9 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// `gathrd` on `data`, with its agent folder beside it (0034): never the person's own, and removed
-/// with the test's temp folder.
 pub fn gathrd(data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_gathrd"));
     command.arg("--data").arg(data).arg("--port").arg("0");
-    command.env(gathr::folders::DEFAULT_VAR, gathr::folders::beside(data));
     command
 }
 

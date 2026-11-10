@@ -67,7 +67,8 @@ async fn file(
 /// Settings > General: the stale days (F11), after how many days without a move a task is stale and
 /// cancelled, and the agent folder (0034).
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    db(&s, &t, "Settings failed", |c| shown(c)).await
+    let data = s.data.path().to_path_buf();
+    db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
 }
 
 #[derive(Deserialize)]
@@ -97,6 +98,7 @@ async fn change_settings(
             return Err(fail(StatusCode::BAD_REQUEST, "Save failed", &why, &trace));
         }
     }
+    let data = s.data.path().to_path_buf();
     db(&s, &t, "Save failed", move |c| {
         let was = stale::days(c)?;
         let days = stale::Days {
@@ -115,17 +117,23 @@ async fn change_settings(
         event
             .attr("stale_days", days.stale)
             .attr("cancel_days", days.cancel)
-            .attr("agent_folder", folders::root(c)?.display().to_string())
+            .attr(
+                "agent_folder",
+                folders::root(c, &data)?.display().to_string(),
+            )
             .insert(c)?;
         saved?;
-        shown(c)
+        shown(c, &data)
     })
     .await
 }
 
-fn shown(c: &rusqlite::Connection) -> Result<serde_json::Value, gathr::Error> {
+fn shown(
+    c: &rusqlite::Connection,
+    data: &std::path::Path,
+) -> Result<serde_json::Value, gathr::Error> {
     let days = stale::days(c)?;
-    let folder = folders::root(c)?.display().to_string();
+    let folder = folders::root(c, data)?.display().to_string();
     Ok(json!({ "stale_days": days.stale, "cancel_days": days.cancel, "agent_folder": folder }))
 }
 

@@ -7,7 +7,9 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
 
 - **One folder for all agents' work,** set in Settings > General as the agent folder:
   `GET /api/settings` answers `agent_folder` (a full path), `PATCH /api/settings {"agent_folder"}`
-  saves it. Unset, it's the home folder's `Gathr` (`~/Gathr`). A path that isn't full, that Gathr's
+  saves it. Unset, it's the home folder's `Gathr` (`~/Gathr`) for the system's own data folder only;
+  any other data folder (`--data`: a test, a check, `gathr dev`, a window opened on a test folder)
+  keeps its agents beside it, `<data>-agents`, so every test folder keeps to itself. A path that isn't full, that Gathr's
   data folder holds or is in, or that can't be made or written is refused with a reference
   (`gathr.settings.change`). A change applies to new work: what was made stays where it is.
 - **Layout:** `<agent folder>/<Project>/Shared` for the team's kept files (plans, reviews, evidence),
@@ -81,9 +83,11 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   switch would close and start the engine again, losing its prompt cache and background commands.
 - **Removing an archived chat's worktree with changes not committed:** archiving is undoable,
   deleting work isn't. Delete removes it, as before.
-- **The data folder as the default for tests and dev:** `GATHR_AGENT_FOLDER` names the default in
-  dev and tests only; `gathr dev` and the tests put it beside the data folder (`<data>-agents`), so a
-  check never writes in the person's own `~/Gathr`.
+- **`~/Gathr` as the default for every data folder:** a window opened with `--data <test folder>` and
+  no agent folder set would put that folder's agents in the person's real one.
+- **A `GATHR_*` variable naming the default for tests and dev:** an installed Gathr never reads
+  those, so a test folder opened in the installed window would still miss it. The data folder
+  alone decides, everywhere.
 
 ## Limits
 

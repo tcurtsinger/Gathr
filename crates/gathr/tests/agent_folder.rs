@@ -96,10 +96,11 @@ fn the_agent_folder_is_shown_saved_and_refused_when_it_cant_be_used() {
     let data = TempDir::new();
     let service = TestService::start(&data.0);
     let shown = service.call("GET", "/api/settings").json();
+    // A data folder that isn't the system's keeps its agents beside it, never in the person's own.
     let default = beside(&data.0).display().to_string();
     assert_eq!(
         shown["agent_folder"], default,
-        "the default, as a full path: {shown}"
+        "the default for a data folder of its own: {shown}"
     );
     let file = data.0.join("a-file");
     std::fs::write(&file, "").unwrap();
