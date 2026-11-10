@@ -91,3 +91,12 @@ assert(
 );
 assert(fs.existsSync(path.join(__dirname, "fonts/LICENSE.txt")), "font licence retained");
 console.log("Current system: offline assets, IDs, references, script, tokens and design boundaries passed.");
+
+new vm.Script(fs.readFileSync(path.join(__dirname, "search/reference.js"), "utf8"));
+for (const version of [1, 2]) {
+ const html = fs.readFileSync(path.join(__dirname, "search/v" + version + ".html"), "utf8");
+ const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]);
+ assert.equal(new Set(ids).size, ids.length, "Search proposal IDs unique");
+ assert(html.includes("reference.js") && html.includes("../tokens.css"), "Search uses shared assets");
+}
+assert(system.includes('id="search-preview"'), "System contains Search");

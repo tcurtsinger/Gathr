@@ -1,0 +1,149 @@
+<!doctype html>
+<html
+lang="en">
+<head>
+<meta
+charset="utf-8">
+<meta
+name="viewport"
+content="width=device-width,initial-scale=1">
+<title>Gathr Search: Title first</title>
+<link
+rel="stylesheet"
+href="../tokens.css">
+<link
+rel="stylesheet"
+href="../components.css">
+<link
+rel="stylesheet"
+href="reference.css">
+<script
+src="reference.js" defer>
+</script>
+<style>body{padding:24px;
+max-width:1200px;
+margin:auto}header.ds-row{justify-content:space-between;
+margin-bottom:16px}@media(max-width:600px){body{padding:12px}}</style>
+</head>
+<body
+class="system-page"
+data-search-version="title">
+<header
+class="ds-row"
+data-id="search-page-header">
+<h1
+style="font-size:20px;
+font-weight:500;
+margin:0">Title first</h1>
+<button
+class="ds-button"
+data-id="search-theme"
+onclick="document.documentElement.classList.toggle('light')">Switch theme</button>
+</header>
+<section
+class="ds-section"
+id="search-preview"
+data-id="search-preview">
+<h2>Search</h2><p class="ds-note">Selected: title first. Invented local records; no service connected.</p>
+<div
+class="ds-row ds-search-controls">
+<input id="search-layout" type="hidden" value="title">
+<label>State <select
+id="search-state"
+data-id="search-state">
+<option
+value="results">Results</option>
+<option
+value="empty">Empty</option>
+<option
+value="none">No matches</option>
+<option
+value="loading">Loading</option>
+<option
+value="error">Error</option>
+</select>
+</label>
+</div>
+<div class="ds-search-shell" data-id="search-shell">
+<aside class="ds-search-nav" aria-label="Search preview navigation"><strong>Gathr</strong>
+<button class="ds-button" id="search-new" data-id="search-new">New</button>
+<button class="ds-button" id="search-open" popovertarget="navigation-flyout" aria-expanded="false" data-id="search-open">Search <kbd>Ctrl K</kbd></button>
+<button class="ds-button" id="tasks-flyout-open" popovertarget="navigation-flyout" aria-expanded="false" data-id="tasks-flyout-open">Tasks <span>2</span></button>
+<span class="ds-role">Gathr</span><span>Reconnect streaming</span><span>Review keyboard shortcuts</span><span class="ds-role">Archived (3)</span></aside>
+<div
+class="ds-search-chat"
+aria-label="Search destination">
+<header>
+<strong
+id="search-chat-title">Reconnect streaming</strong>
+<span
+class="ds-search-archived"
+id="search-chat-archived" hidden>Archived</span>
+</header>
+<div
+class="ds-search-destination"
+tabindex="0"
+id="search-destination"
+data-id="search-destination">
+<article
+id="search-target"
+data-id="search-target">
+<strong>Mira</strong>
+<p
+id="search-target-text">The partial reply stays visible after reconnect.</p>
+</article>
+</div>
+<footer><span id="search-open-status" role="status" data-id="search-open-status"></span><button class="ds-button" id="search-latest" hidden data-id="search-latest">Latest</button></footer></div></div>
+<div class="ds-search-flyout" popover="auto" id="navigation-flyout" role="dialog" aria-labelledby="flyout-title" data-id="navigation-flyout">
+<header>
+<h3
+id="flyout-title">Search</h3>
+<button
+class="ds-button"
+id="flyout-close"
+aria-label="Close Search"
+data-id="flyout-close" data-icon
+title="Close Search">
+<svg
+viewBox="0 0 24 24"
+fill="none"
+stroke="currentColor"
+aria-hidden="true">
+<path
+d="M18 6 6 18M6 6l12 12"/>
+</svg>
+</button>
+</header>
+<div
+id="search-content">
+<label
+class="ds-search-field">
+<span
+class="ds-search-sr">Search chats and messages</span>
+<input
+id="search-query"
+placeholder="Search chats and messages"
+maxlength="200"
+autocomplete="off"
+role="combobox"
+aria-autocomplete="list"
+aria-expanded="true"
+aria-controls="search-results"
+data-id="search-query">
+</label>
+<div id="search-results" role="listbox" aria-label="Search results" data-id="search-results"></div><p class="ds-search-status" id="search-feedback" role="status" data-id="search-feedback"></p></div>
+<div
+id="tasks-flyout-content" hidden>
+<h4>Questions</h4>
+<button
+class="ds-search-hit"
+data-id="search-task-example">Keep the partial reply?<small>Mira · Reconnect streaming</small>
+</button>
+<h4>Stale</h4>
+<p>No stale tasks</p>
+</div>
+</div>
+</section>
+<script>if(location.hash==='#light')document.documentElement.classList.add('light');</script>
+</body>
+</html>
