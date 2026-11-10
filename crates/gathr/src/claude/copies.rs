@@ -136,7 +136,7 @@ impl Copies {
                 if folder.exists() {
                     std::fs::rename(&folder, &aside).map_err(disk)?;
                 }
-                std::fs::rename(&staging, &folder).map_err(disk)?;
+                crate::platform::move_folder(&staging, &folder).map_err(disk)?;
                 placed = true;
                 Ok(())
             })

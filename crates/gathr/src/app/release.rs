@@ -106,7 +106,7 @@ pub fn install(copies: &Copies, release: &Release, stop: &AtomicBool) -> Result<
             if folder.exists() {
                 std::fs::remove_dir_all(&folder).map_err(disk)?;
             }
-            std::fs::rename(&unpacked, folder).map_err(disk)
+            platform::move_folder(&unpacked, &folder).map_err(disk)
         });
     let _ = std::fs::remove_dir_all(&staging);
     done
