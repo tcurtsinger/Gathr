@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { type Account, api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 
@@ -33,9 +34,13 @@ export function SignInWaiting({
       <div className="signin-actions">
         <OpenPage url={waiting.url} />
         {device && (
-          <button type="button" onClick={() => api.signIn(account.id, true).catch(onFailure)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => api.signIn(account.id, true).catch(onFailure)}
+          >
             Use a device code
-          </button>
+          </Button>
         )}
       </div>
       {device && (
@@ -74,12 +79,16 @@ export function SignInFailed({
         <>
           <p className="muted">{ENABLE}</p>
           <div className="signin-actions">
-            <button type="button" onClick={() => api.signIn(account, true).catch(onFailure)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => api.signIn(account, true).catch(onFailure)}
+            >
               Retry
-            </button>
-            <button type="button" onClick={() => api.signIn(account).catch(onFailure)}>
+            </Button>
+            <Button type="button" variant="outline" onClick={() => api.signIn(account).catch(onFailure)}>
               Use browser
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -90,9 +99,9 @@ export function SignInFailed({
 /** The sign-in page in the person's browser, for when it didn't open there by itself. */
 function OpenPage({ url }: { url: string }) {
   return (
-    <button type="button" className="primary" onClick={() => window.open(url, '_blank', 'noreferrer')}>
+    <Button type="button" onClick={() => window.open(url, '_blank', 'noreferrer')}>
       Open sign-in page
-    </button>
+    </Button>
   );
 }
 
@@ -118,15 +127,15 @@ function DeviceCode({
       <p className="muted">Enter this code on the sign-in page. Any browser works.</p>
       <div className="signin-actions">
         <code className="device-code">{code}</code>
-        <button type="button" onClick={copy}>
+        <Button type="button" variant="outline" onClick={copy}>
           {copied ? 'Copied' : 'Copy code'}
-        </button>
+        </Button>
       </div>
       <div className="signin-actions">
         <OpenPage url={url} />
-        <button type="button" onClick={() => api.signIn(account).catch(onFailure)}>
+        <Button type="button" variant="outline" onClick={() => api.signIn(account).catch(onFailure)}>
           Use browser
-        </button>
+        </Button>
       </div>
       <p className="muted">{ENABLE}</p>
       <p className="muted" role="status">
@@ -160,9 +169,9 @@ function SignInCode({ account, url, onFailure }: { account: string; url: string;
           spellCheck={false}
           onChange={(e) => setCode(e.target.value)}
         />
-        <button type="submit" disabled={sent || !code.trim()}>
+        <Button type="submit" disabled={sent || !code.trim()}>
           {sent ? 'Signing in' : 'Sign in'}
-        </button>
+        </Button>
       </div>
       <a href={url} target="_blank" rel="noreferrer">
         Open sign-in page

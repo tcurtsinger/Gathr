@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import './dialog.css';
 
@@ -50,9 +51,9 @@ export function Dialog({ open, title, onClose, opener, className, bare, children
           <header className="dialog-header">
             <h2 id={titled}>{title}</h2>
             {!bare && (
-              <button type="button" onClick={onClose}>
+              <Button type="button" variant="ghost" onClick={onClose}>
                 Close
-              </button>
+              </Button>
             )}
           </header>
           {children}

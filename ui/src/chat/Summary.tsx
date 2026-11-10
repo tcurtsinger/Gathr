@@ -1,11 +1,24 @@
 import { Popover } from 'radix-ui';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
+import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import type { Member, PauseScope, Pauses, Task, Wait } from '../api';
 import { ChatMenu } from './ChatMenu';
 import { agentPause, type PauseAction, type Run } from './pauses';
 import type { ChatState } from './state';
 import { clock, list, roleName } from './team';
 import './summary.css';
+
+/** The prototype's own icon (ChatActions.tsx): two agents, each with a line. */
+function SummaryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+      <circle cx="6" cy="6.5" r="2.5" />
+      <path d="M12 6.5h8" strokeLinecap="round" />
+      <circle cx="6" cy="17.5" r="2.5" />
+      <path d="M12 17.5h8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 const open = (t: Task) => !['done', 'blocked', 'failed', 'stopped', 'cancelled'].includes(t.state);
 
@@ -31,9 +44,9 @@ export function Summary({ state, pauses, run, onPause }: Props) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <button type="button" className="summary-open">
-          Summary
-        </button>
+        <TooltipIconButton tooltip="Summary">
+          <SummaryIcon />
+        </TooltipIconButton>
       </Popover.Trigger>
       <Popover.Anchor asChild>
         <span className="summary-anchor" aria-hidden="true" />

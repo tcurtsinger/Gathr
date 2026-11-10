@@ -36,20 +36,6 @@ button:where(:not([data-slot])):hover,
 select:where(:not([data-slot])):hover {
   background: var(--raised);
 }
-button.primary {
-  background: var(--text);
-  color: var(--canvas);
-}
-button.primary:hover {
-  background: var(--muted);
-}
-button.danger {
-  color: var(--danger);
-  border: 1px solid var(--danger-border);
-}
-button.danger:hover {
-  background: var(--danger-surface);
-}
 button:disabled {
   opacity: 0.5;
   cursor: default;

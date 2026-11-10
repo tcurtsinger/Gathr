@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
@@ -51,9 +52,9 @@ export function Accounts({ onReference }: { onReference: Open }) {
     <>
       <div className="account-heading">
         <h3 id="engines-title">Accounts</h3>
-        <button type="button" ref={addButton} onClick={(e) => open(e.currentTarget)}>
+        <Button type="button" variant="outline" ref={addButton} onClick={(e) => open(e.currentTarget)}>
           Add
-        </button>
+        </Button>
       </div>
       {failure && (
         <Notice
@@ -145,12 +146,12 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
         />
       </label>
       <div className="account-form-actions">
-        <button type="button" onClick={onClose}>
+        <Button type="button" variant="ghost" onClick={onClose}>
           Cancel
-        </button>
-        <button type="submit" className="primary" disabled={busy || !name.trim()}>
+        </Button>
+        <Button type="submit" disabled={busy || !name.trim()}>
           {account ? 'Save' : 'Sign in'}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -180,18 +181,33 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
     call.catch(onFailure).finally(() => setBusy(null));
   };
   const action = waiting ? (
-    <button type="button" aria-describedby={name} onClick={() => act('Cancelling', api.cancelSignIn(id))}>
+    <Button
+      type="button"
+      variant="outline"
+      aria-describedby={name}
+      onClick={() => act('Cancelling', api.cancelSignIn(id))}
+    >
       Cancel
-    </button>
+    </Button>
   ) : account.login === 'signed_out' ? (
-    <button type="button" aria-describedby={name} onClick={() => act('Signing in', api.signIn(id))}>
+    <Button
+      type="button"
+      variant="outline"
+      aria-describedby={name}
+      onClick={() => act('Signing in', api.signIn(id))}
+    >
       Sign in
-    </button>
+    </Button>
   ) : (
     account.login !== 'unknown' && (
-      <button type="button" aria-describedby={name} onClick={() => act('Signing out', api.signOut(id))}>
+      <Button
+        type="button"
+        variant="outline"
+        aria-describedby={name}
+        onClick={() => act('Signing out', api.signOut(id))}
+      >
         Sign out
-      </button>
+      </Button>
     )
   );
 
@@ -217,13 +233,19 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
         />
       ) : (
         <div className="account-actions">
-          <button type="button" aria-describedby={name} onClick={(e) => onRename(e.currentTarget)}>
+          <Button
+            type="button"
+            variant="outline"
+            aria-describedby={name}
+            onClick={(e) => onRename(e.currentTarget)}
+          >
             Rename
-          </button>
+          </Button>
           {!busy && action}
           {!busy && (
-            <button
+            <Button
               type="button"
+              variant="outline"
               aria-describedby={name}
               ref={(b) => {
                 if (b && cancelled.current) b.focus();
@@ -232,7 +254,7 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
               onClick={() => setConfirming(true)}
             >
               Remove
-            </button>
+            </Button>
           )}
         </div>
       )}

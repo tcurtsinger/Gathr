@@ -1,18 +1,4 @@
 /* Summary: the prototype's popover from the chat header (DESIGN.md, designs/system-reference.css). */
-.summary-open {
-  margin-left: auto;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 12px;
-}
-.summary-open:hover,
-.summary-open[data-state="open"] {
-  background: var(--hover-tint);
-  color: var(--foreground);
-}
 .summary-anchor {
   position: absolute;
   right: 8px;
