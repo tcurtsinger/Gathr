@@ -93,18 +93,25 @@ Checked request deadline</pre></details>
 </section>
 <section class="ds-section" id="team-message" data-id="team-message">
 <h2>Team messages</h2>
-<p class="ds-note">Selected: inline thread with Summary. Invented local data; no service is connected.</p>
-<div class="ds-row ds-fixture-controls" aria-label="Thread preview controls" data-id="thread-preview-controls">
+<p class="ds-note">Accepted target: split chat with Summary. Invented records; no service is connected.</p>
+<div class="ds-row ds-fixture-controls" aria-label="Split preview controls" data-id="split-preview-controls">
 <span class="ds-role" id="round-state" role="status">Running</span>
 <button class="ds-button" id="round-finish" data-id="round-finish">Finish</button>
 <button class="ds-button" id="round-late" data-id="round-late">Late reply</button>
-<button class="ds-button" id="round-reset" data-id="round-reset">Reset</button>
-</div>
+<button class="ds-button" id="round-blocked" data-id="round-blocked">Blocked</button>
+<button class="ds-button" id="round-failed" data-id="round-failed">Failed</button>
+<button class="ds-button" id="round-stopped" data-id="round-stopped">Stopped</button>
+<button class="ds-button" id="round-reset" data-id="round-reset">Reset</button></div>
 <div class="ds-team" data-id="team-example">
-<header class="ds-team-header" id="team-header">
-<h3>Reconnect streaming</h3>
+<header class="ds-team-header" id="team-header"><h3>Reconnect streaming</h3><div class="ds-row">
 <button class="ds-button" id="team-summary-open" popovertarget="summary" aria-expanded="false" data-id="team-summary-open">Summary</button>
-</header>
+<button class="ds-button" id="split-toggle" aria-label="Hide team chat" title="Hide team chat"
+aria-controls="team-column" aria-pressed="true" data-id="split-toggle" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/>
+<path d="M12 3v18"/></svg><span class="ds-unread" id="team-unread" hidden></span></button></div></header>
+<div class="ds-split-body" id="split-body">
+<div class="ds-supervisor"><div class="ds-column-scroll" id="supervisor-scroll" tabindex="0" aria-label="Supervisor conversation">
+<div class="ds-column-label" id="supervisor-label">Mira</div><div class="ds-thread-column">
 <div class="ds-user-message" data-id="round-request">Fix duplicate output after reconnect. Keep the keyboard shortcuts as they are.</div>
 <article class="ds-team-message" id="round-handoff" data-id="round-handoff">
 <header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
@@ -113,10 +120,112 @@ Checked request deadline</pre></details>
 <p>Rowan, fix the cursor commit. Kit, replay interruptions and check the shortcuts. Lane, check reconnect and stopped states.
 I’ll reconcile the results and ask Sol to review.</p>
 </article>
-<details class="ds-team-thread" id="round-thread" open data-id="round-thread">
-<summary id="thread-toggle" data-id="thread-toggle"><strong>Team thread</strong>
-<span class="ds-role" id="thread-state">Kit and Lane working · Rowan done · Sol waiting</span></summary>
-<div class="ds-thread-replies" data-id="thread-replies">
+<div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
+<article class="ds-team-message" data-id="status-without-thread">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<span class="ds-role">Supervisor</span><time>09:52</time></header>
+<p>Yes. Stop keeps the text already received.</p>
+</article>
+<div class="ds-user-message" data-id="direct-request">@Lane Does Retry keep my draft too?</div>
+<article class="ds-team-message" data-id="direct-reply">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
+<span class="ds-role">Member</span><time>09:54</time></header>
+<p>Yes. The draft stays in the composer while you retry.</p>
+</article>
+<article class="ds-team-message" id="round-final" hidden data-id="round-final">
+<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
+<span class="ds-role">Supervisor</span><time id="final-time">10:03</time></header>
+<p>The cursor change is ready. Reconnect keeps one reply, tool output stays attached, and Stop keeps the partial text.
+The keyboard shortcuts are unchanged.</p>
+<span class="ds-reaction" aria-label="Sol agrees" title="Sol agrees" data-id="review-agreement">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<path d="M7 10v11H3V10h4Zm0 1 5-8c2 0 3 2 2 5l-1 2h6c2 0 2 2 1 4l-2 7H7"/></svg>Sol</span>
+</article>
+<div id="team-sent-messages" aria-live="polite"></div>
+
+<button class="ds-working ds-waiting" id="waiting-on-team" title="Mira is waiting for Kit, Lane and Sol, since 09:15">
+<span class="ds-spinner" aria-hidden="true"></span>Waiting on team <span class="ds-workers" aria-label="Kit and Lane"><i>K</i><i>L</i></span><span class="ds-role">38 minutes</span></button>
+</div></div><div class="ds-compose-dock"><details class="ds-plan" id="agent-plan" data-id="agent-plan" data-source="elements/agent-plan">
+<summary id="plan-toggle" data-id="plan-toggle"><span class="ds-spinner" aria-hidden="true"></span>
+<svg id="plan-done" hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><strong>Plan</strong><span class="ds-role" id="plan-state">Kit and Lane working</span>
+<span class="ds-segments" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1">
+<i data-state="done"></i><i data-state="active"></i><i data-state="active"></i><i></i></span>
+<span class="ds-fraction" id="plan-count">1/4</span><span class="ds-chevron" aria-hidden="true"></span></summary>
+<ol class="ds-plan-steps">
+<li data-owner="Rowan" data-state="done">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Commit the cursor after a complete event<b class="ds-step-outcome" id="step-rowan-outcome"></b><small class="ds-step-detail" id="step-rowan-detail"></small></span><small>Rowan</small></li>
+<li data-owner="Kit" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Replay interruptions and check shortcuts<b class="ds-step-outcome" id="step-kit-outcome"></b><small class="ds-step-detail" id="step-kit-detail"></small></span><small>Kit</small></li>
+<li data-owner="Lane" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Check reconnect and stopped states<b class="ds-step-outcome" id="step-lane-outcome"></b><small class="ds-step-detail" id="step-lane-detail"></small></span><small>Lane</small></li>
+<li data-owner="Sol" data-state="pending">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Review the cursor change<b class="ds-step-outcome" id="step-sol-outcome"></b><small class="ds-step-detail" id="step-sol-detail"></small></span><small>Sol</small></li>
+</ol></details><form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
+<input id="message" aria-label="Message" placeholder="Message Mira…" autocomplete="off">
+<div class="ds-composer-toolbar">
+<button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+<select aria-label="Recipient" data-id="recipient">
+<option>Mira</option><option>Rowan</option><option>Kit</option><option>Lane</option><option>Sol</option></select>
+<button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+</div>
+</form></div></div>
+<div class="ds-column-scroll" id="team-column" tabindex="0" aria-label="Team conversation">
+<div class="ds-column-label">Team</div><div class="ds-thread-column" id="team-replies">
 <article class="ds-team-message" data-id="thread-rowan">
 <p class="ds-assignment">Mira to Rowan · Cursor commit</p>
 <header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
@@ -160,47 +269,13 @@ Checked Tab, Enter and Escape</pre></details>
 <article class="ds-team-message" id="late-member" hidden data-id="thread-sol">
 <p class="ds-assignment">Mira to Sol · Review the cursor change</p>
 <header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
-<span class="ds-role">Reviewer</span><time>11:32</time></header>
+<span class="ds-role">Reviewer</span><time>11:32
+<span class="ds-unread" id="late-unread" hidden aria-label="New message"></span></time></header>
 <p>The replay keeps one reply and one tool result. I checked the cursor boundary and the duplicate final event. No findings.</p>
 </article>
-</div>
-</details>
-<div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
-<article class="ds-team-message" data-id="status-without-thread">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<span class="ds-role">Supervisor</span><time>09:52</time></header>
-<p>Yes. Stop keeps the text already received.</p>
-</article>
-<div class="ds-user-message" data-id="direct-request">@Lane Does Retry keep my draft too?</div>
-<article class="ds-team-message" data-id="direct-reply">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
-<span class="ds-role">Member</span><time>09:54</time></header>
-<p>Yes. The draft stays in the composer while you retry.</p>
-</article>
-<article class="ds-team-message" id="round-final" hidden data-id="round-final">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<span class="ds-role">Supervisor</span><time id="final-time">10:03</time></header>
-<p>The cursor change is ready. Reconnect keeps one reply, tool output stays attached, and Stop keeps the partial text.
-The keyboard shortcuts are unchanged.</p>
-<a class="ds-thread-link" href="#round-thread" id="thread-back" data-id="thread-back">View team thread</a>
-<span class="ds-reaction" aria-label="Sol agrees" title="Sol agrees" data-id="review-agreement">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
-<path d="M7 10v11H3V10h4Zm0 1 5-8c2 0 3 2 2 5l-1 2h6c2 0 2 2 1 4l-2 7H7"/></svg>Sol</span>
-</article>
-<div id="team-sent-messages" aria-live="polite"></div>
-<form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
-<input id="message" aria-label="Message" placeholder="Message Mira…" autocomplete="off">
-<div class="ds-composer-toolbar">
-<button type="button" class="ds-button" data-icon aria-label="New" id="new-message" data-id="new">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-<select aria-label="Recipient" data-id="recipient">
-<option>Mira</option><option>Rowan</option><option>Kit</option><option>Lane</option><option>Sol</option></select>
-<button class="ds-button" data-variant="primary" data-icon aria-label="Send" id="message-send" disabled data-id="send">
-<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
-</div>
-</form>
-</div>
-</section>
+
+<div class="ds-working" id="team-working"><span class="ds-spinner" aria-hidden="true"></span>Working <span class="ds-workers" aria-label="Kit and Lane"><i>K</i><i>L</i></span></div>
+</div></div></div></div></section>
 <section class="ds-section" id="archive-stale" data-id="archive-stale">
 <h2>Archive and stale</h2>
 <p class="ds-note">Selected: folded Archived group. Local sample data, no service.
@@ -214,7 +289,9 @@ The keyboard shortcuts are unchanged.</p>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
 <circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
 <details class="ds-archive-fold" data-id="archived-fold" id="archive-fold">
-<summary>Archived<span class="ds-role" id="archive-sample-count">3</span></summary>
+<summary><svg class="ds-archive-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect class="ds-archive-lid" width="20" height="5" x="2" y="3" rx="1"/>
+<path d="M4 8v12a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V8M10 12h4"/></svg>Archived<span class="ds-role" id="archive-sample-count">3</span></summary>
 <button class="ds-archive-chat" data-id="archived-chat-1">Sidebar exploration</button>
 <button class="ds-archive-chat" data-id="archived-chat-2">First-run copy</button>
 <button class="ds-archive-chat" data-id="archived-chat-3" title="Conversation layout and navigation review for the upcoming desktop release">
@@ -242,27 +319,48 @@ Conversation layout and navigation review for the upcoming desktop release</butt
 </div>
 <div class="ds-summary" id="summary" popover data-id="summary">
 <h3>Agents</h3>
-<details class="ds-agent">
+<div class="ds-agent-row"><details class="ds-agent" data-agent="mira" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit and Lane</span></small></summary>
-<ul><li id="summary-mira-task">Reconcile results, then ask Sol to review</li></ul></details>
-<details class="ds-agent">
+<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit, Lane and Sol since 09:15</span></small>
+</summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li id="summary-mira-task">No assigned tasks</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Mira actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="rowan" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
-<small class="ds-role">Member · Ready</small></summary>
-<ul><li>Cursor patch done</li></ul></details>
-<details class="ds-agent">
+<small class="ds-role">Member · <span id="summary-rowan-state">Ready</span></small>
+<span class="ds-agent-progress"><progress aria-label="Rowan task progress" value="1" max="1"></progress>
+<span id="summary-rowan-count">1/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="done" id="summary-rowan-task">Commit the cursor after a complete event</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Rowan actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="kit" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
-<small class="ds-role">Member · <span id="summary-kit-state">Working</span></small></summary>
-<ul><li id="summary-kit-task">Check interruptions and shortcuts</li></ul></details>
-<details class="ds-agent">
+<small class="ds-role">Member · <span id="summary-kit-state">Working</span></small>
+<span class="ds-agent-progress"><progress aria-label="Kit task progress" value="0" max="1"></progress>
+<span id="summary-kit-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="active" id="summary-kit-task">Replay interruptions and check shortcuts</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Kit actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="lane" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
-<small class="ds-role">Member · <span id="summary-lane-state">Working</span></small></summary>
-<ul><li id="summary-lane-task">Check reconnect and stopped states</li></ul></details>
-<details class="ds-agent">
+<small class="ds-role">Member · <span id="summary-lane-state">Working</span></small>
+<span class="ds-agent-progress"><progress aria-label="Lane task progress" value="0" max="1"></progress>
+<span id="summary-lane-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="active" id="summary-lane-task">Check reconnect and stopped states</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Lane actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
+<div class="ds-agent-row"><details class="ds-agent" data-agent="sol" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
-<small class="ds-role">Reviewer · <span id="summary-sol-state">Waiting for Kit</span></small></summary>
-<ul><li id="summary-sol-task">Review after replay checks</li></ul></details>
+<small class="ds-role">Reviewer · <span id="summary-sol-state">Ready</span></small>
+<span class="ds-agent-progress"><progress aria-label="Sol task progress" value="0" max="1"></progress>
+<span id="summary-sol-count">0/1</span></span></summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li data-state="pending" id="summary-sol-task">Review the cursor change</li></ul></details>
+<button class="ds-button ds-agent-more" aria-label="Sol actions" popovertarget="agent-actions" data-icon>
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
 </div>
+<div popover id="agent-actions" class="ds-agent-actions"><p>Local preview</p>
+<button class="ds-button" id="agent-action-close">Close</button></div>
 <section id="help" popover class="help-panel" data-id="help"><h4>Approvals</h4>
 <dl><dt>Ask</dt><dd>Ask before actions that need permission</dd><dt>Edits</dt><dd>Allow file edits in the worktree. Ask before other actions that need permission.</dd>
 <dt>Auto</dt><dd>The engine checks actions. Pushes and file tools writing outside the worktree need approval.</dd>
