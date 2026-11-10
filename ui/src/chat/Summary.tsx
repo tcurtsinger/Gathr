@@ -1,13 +1,37 @@
 import { Popover } from 'radix-ui';
-import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
+import { useState } from 'react';
+import { type SubagentItem, SubagentList } from '@/components/assistant-ui/elements/subagent-list';
+import { type TodoItem, TodoList } from '@/components/assistant-ui/elements/todo-list';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
-import type { Member, PauseScope, Pauses } from '../api';
+import type { Member, PauseScope, Pauses, Task } from '../api';
 import { ChatMenu } from './ChatMenu';
 import { agentPause, type PauseAction, type Run } from './pauses';
 import type { ChatState } from './state';
 import { clock, list, roleName } from './team';
+import { initials } from './Working';
 import { began, open, waitingOn } from './waits';
 import './summary.css';
+
+/** Tasks an agent's list shows before Show more; open ones always show. */
+const FOLD = 5;
+
+interface Row extends SubagentItem {
+  member: Member;
+  /** Done tasks over the agent's tasks in this chat, cancelled ones left out, as a percentage. */
+  share: number;
+  todos: TodoItem[];
+}
+
+/** A task as the agent's TodoList shows it: done, at work (working or held), failed, else pending. */
+export function todo(t: Task): TodoItem {
+  const id = String(t.number);
+  if (t.state === 'done') return { id, text: t.what, status: 'done' };
+  if (t.state === 'working' || t.state === 'held') return { id, text: t.what, status: 'active' };
+  if (t.state === 'failed') return { id, text: t.what, status: 'failed', reason: t.reason ?? undefined };
+  const outcome = t.state === 'blocked' ? 'Blocked' : t.state === 'stopped' ? 'Stopped' : undefined;
+  const description = outcome && (t.reason ? `${outcome}: ${t.reason}` : outcome);
+  return { id, text: t.what, status: 'pending', description };
+}
 
 /** The prototype's own icon (ChatActions.tsx): two agents, each with a line. */
 function SummaryIcon() {
@@ -39,6 +63,34 @@ export function Summary({ state, pauses, run, onPause }: Props) {
   // A null owner is the person: a question the Supervisor put to them.
   const name = (agent: string | null) =>
     agent === null ? 'you' : (state.members.find((m) => m.agent === agent)?.name ?? 'an agent');
+  const [expanded, setExpanded] = useState<string>();
+  const rows = members.map((m): Row => {
+    const mine = state.tasks
+      .filter((t) => t.owner === m.agent && t.state !== 'cancelled')
+      .sort((a, b) => a.number - b.number);
+    // Its open work first: an agent's earlier rounds can leave dozens done.
+    const todos = [...mine.filter(open), ...mine.filter((t) => !open(t))].map(todo);
+    const done = todos.filter((t) => t.status === 'done').length;
+    const now = doing(m, state, run, agentPause(pauses, m.agent), name);
+    return {
+      member: m,
+      name: m.name,
+      model: roleName[m.role],
+      avatar: (
+        <span className="summary-avatar" aria-hidden="true">
+          {initials(m.name)}
+        </span>
+      ),
+      detail: (
+        <>
+          {roleName[m.role]} · <span data-working={now === 'Working' || undefined}>{now}</span>
+        </>
+      ),
+      count: todos.length ? `${done}/${todos.length}` : undefined,
+      share: todos.length ? (100 * done) / todos.length : 0,
+      todos,
+    };
+  });
 
   return (
     <Popover.Root>
@@ -61,43 +113,37 @@ export function Summary({ state, pauses, run, onPause }: Props) {
           aria-label="Summary"
         >
           <h3>Agents</h3>
-          {members.map((m) => {
-            const tasks = state.tasks.filter((t) => t.owner === m.agent);
-            const own = agentPause(pauses, m.agent);
-            const agent: PauseScope = { scope: 'agent', target: m.agent };
-            return (
-              <div key={m.agent} className="summary-agent">
-                <details>
-                  <summary>
-                    <SpeakerIdentity
-                      className="w-auto"
-                      turns={[{ id: m.agent, kind: 'agent', name: m.name, text: '' }]}
-                    />
-                    <small>
-                      {roleName[m.role]} · {doing(m, state, run, own, name)}
-                    </small>
-                  </summary>
-                  <ul>
-                    {tasks.length === 0 && <li>No assigned tasks</li>}
-                    {[...tasks.filter(open), ...tasks.filter((t) => !open(t))].map((t) => (
-                      <li key={t.number}>
-                        {t.what}
-                        {!open(t) && <span className="summary-done"> · {t.state}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
+          <SubagentList
+            presentation="inline"
+            agents={rows}
+            completedCount={0}
+            progress={rows.map((r) => r.share)}
+            showSummary={false}
+            summaryAgent={rows[0] as Row}
+            expandedAgent={expanded}
+            onExpandedAgentChange={setExpanded}
+            renderAgentTasks={(row) => {
+              const { todos } = row as Row;
+              if (todos.length === 0) return <p className="summary-none">No assigned tasks</p>;
+              return <TodoList className="summary-todos" items={todos} maxVisible={FOLD} />;
+            }}
+            renderAgentActions={(row) => {
+              const { member } = row as Row;
+              const own = agentPause(pauses, member.agent);
+              const agent: PauseScope = { scope: 'agent', target: member.agent };
+              return (
                 <ChatMenu
-                  label={`More for ${m.name}`}
+                  label={`More for ${member.name}`}
+                  side="left"
                   pause={{
                     state: own.paused ? 'paused' : 'running',
                     onPause: () => onPause('pause', agent),
                     onResume: () => onPause('resume', agent),
                   }}
                 />
-              </div>
-            );
-          })}
+              );
+            }}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>

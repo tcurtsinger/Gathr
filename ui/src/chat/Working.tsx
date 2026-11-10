@@ -102,7 +102,7 @@ function Initials({ members }: { members: Member[] }) {
 }
 
 /** As the chat's avatars show them (speaker-identity): the first letters of the first two words. */
-const initials = (name: string) =>
+export const initials = (name: string) =>
   name
     .split(/\s+/)
     .filter(Boolean)

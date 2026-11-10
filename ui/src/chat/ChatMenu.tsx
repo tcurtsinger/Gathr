@@ -30,6 +30,8 @@ interface Props {
   className?: string;
   /** Where the menu lines up with its button: 'start' beside the chat title, 'end' at a row's end. */
   align?: 'start' | 'end';
+  /** Where its tooltip shows: left in a list, so it never covers the next row's button. */
+  side?: 'bottom' | 'left';
 }
 
 /**
@@ -46,6 +48,7 @@ export function ChatMenu({
   onDelete,
   className,
   align = 'end',
+  side,
 }: Props) {
   const running = pause?.state === 'running';
   const trigger = useRef<HTMLButtonElement>(null);
@@ -86,7 +89,7 @@ export function ChatMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipIconButton ref={trigger} tooltip={label} className={className}>
+        <TooltipIconButton ref={trigger} tooltip={label} side={side} className={className}>
           <MoreHorizontal />
         </TooltipIconButton>
       </DropdownMenuTrigger>
