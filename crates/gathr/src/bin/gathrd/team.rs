@@ -68,6 +68,9 @@ pub async fn create(
     if let Some(seats) = seats {
         record(&s, &t, chat["id"].as_str().unwrap_or_default(), &seats);
     }
+    // Every window, so one open before it shows the chat in its sidebar.
+    s.chats
+        .publish(json!({ "type": "chat", "chat": chat["id"], "change": "created" }));
     Ok(Json(chat))
 }
 

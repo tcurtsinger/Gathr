@@ -60,10 +60,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    api.projects().then(setProjects, setFailure);
+    const load = () => api.projects().then(setProjects, setFailure);
+    load();
+    return listen((event) => {
+      if (event.type === 'project' || event.type === 'lagged') load();
+    });
   }, []);
 
-  // Archived, restored or deleted here or in another window: both lists as the service has them.
+  const current = useRef(fresh);
+  current.current = fresh;
+  // Made, archived, restored or deleted here or elsewhere: both lists as the service has them.
   const reloadLists = useCallback(
     () => Promise.all([api.chats().then(setChats), api.archivedChats().then(setArchived)]),
     [],
@@ -83,7 +89,14 @@ export function App() {
     api.archivedChats().then(setArchived, setFailure);
     return listen((event) => {
       if (event.type === 'chat' && event.change === 'deleted') leave(event.chat);
-      if (event.type === 'chat' || event.type === 'lagged') reloadLists().catch(setFailure);
+      if (event.type !== 'chat' && event.type !== 'lagged') return;
+      // A chat made elsewhere opens only when nothing, not even a draft, is open once the lists are in:
+      // the person may have clicked New while they loaded.
+      const created = event.type === 'chat' && event.change === 'created';
+      reloadLists().then(
+        () => created && !current.current && setSelected((s) => s ?? event.chat),
+        setFailure,
+      );
     });
   }, [reloadLists, leave]);
 
@@ -94,14 +107,13 @@ export function App() {
   }, []);
   const keep = (chat: string, f: SendFailure) =>
     setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
-  const current = useRef(fresh);
-  current.current = fresh;
   const start = (text: string, agent?: string) => {
     const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, failure: e });
     const draft = fresh;
     api.createChat(draft?.project).then(
       (made) => {
-        setChats((list) => [made, ...list]);
+        // The live "created" may have reloaded the list with it already.
+        setChats((list) => [made, ...list.filter((c) => c.id !== made.id)]);
         // Only while the person is still on this draft: another chat, or a newer draft, stays open.
         if (current.current === draft) {
           setFresh(null);
@@ -177,10 +189,15 @@ export function App() {
             stale={person.stale}
             name={name}
             onOpen={(t) => {
-              choose(t.chat);
-              person.select(t.chat, t.number);
-              person.setOpen(t.chat, true);
-              setTab(t.chat, () => ({ selected: 'tasks' }));
+              const open = () => {
+                choose(t.chat);
+                person.select(t.chat, t.number);
+                person.setOpen(t.chat, true);
+                setTab(t.chat, () => ({ selected: 'tasks' }));
+              };
+              // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
+              if ([...chats, ...archived].some((c) => c.id === t.chat)) open();
+              else reloadLists().catch(setFailure).finally(open);
             }}
           />
         }
@@ -278,7 +295,7 @@ export function App() {
         projects={projects}
         onClose={() => setNewProject(false)}
         onCreated={(project) => {
-          setProjects((list) => [...list, project]);
+          setProjects((list) => [...list.filter((p) => p.id !== project.id), project]);
           setNewProject(false);
           if (fresh) setFresh({ project: project.id });
         }}
