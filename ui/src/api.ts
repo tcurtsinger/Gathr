@@ -95,6 +95,7 @@ export interface Task {
   after: number[];
   /** Its last move, once it has gone the stale days without one (F11). */
   stale_us?: number | null;
+  created_us: number;
 }
 
 /** An agent's stale task, on the person's list across chats. */
@@ -111,7 +112,6 @@ export interface PersonTask extends Task {
   form: 'choice' | 'choices' | 'yesno' | 'done' | 'text';
   choices: { label: string; detail?: string }[];
   files: { name: string; size: number }[];
-  created_us: number;
 }
 
 export interface PersonAnswer {
@@ -130,6 +130,8 @@ export interface Wait {
   kind: string;
   target: string | null;
   state: string;
+  /** When it began, in microseconds, as tasks' created_us. */
+  created_ts: number;
 }
 
 export interface Project {
