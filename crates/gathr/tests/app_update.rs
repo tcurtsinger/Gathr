@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use common::feed::Feed;
-use common::{TempDir, TestService, gathr, held_recording, replay_engine, until};
+use common::{TempDir, TestService, gathr, held_recording, recording, replay_engine, until};
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::{VERSION, http};
 use serde_json::{Value, json};
@@ -322,6 +322,63 @@ fn a_newer_installed_copy_that_dies_after_moving_the_database_on_rolls_back_with
     assert_eq!(get(&back, "/api/app")["version"], "0.0.1");
     let kept = http::call(back.port, &back.token, "GET", &format!("/api/chats/{chat}")).unwrap();
     assert_eq!(kept.status, 200, "{}", kept.body);
+}
+
+/// 0.1.38's hand-over to 0.1.39 hung here: an engine killed at shutdown left children holding its
+/// output, and the stopped service waited on that read for good, still holding the folder. The
+/// update starts anyway, and records where its hand-over got to.
+#[test]
+fn a_killed_engines_children_dont_hold_up_the_hand_over() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let (feed, child) = (Feed::start(), dir.0.join("child-lives"));
+    std::fs::write(&child, "").unwrap();
+    let service = TestService::start_program(
+        &old,
+        &data,
+        &[
+            ("GATHR_APP_RELEASES", &feed.url()),
+            ("GATHR_CLAUDE_PATH", &replay_engine()),
+            ("GATHR_REPLAY", &recording("signed_in")),
+            ("GATHR_REPLAY_INIT", Path::new("linger")),
+            ("GATHR_REPLAY_CHILD", &child),
+        ],
+    );
+    let _next = Successor(data.clone());
+    service.signed_in(&data);
+    let chat = service.new_chat();
+    say(&service, &chat, "Say hi");
+    service.wait_for(&chat, 20, "the turn", |h| h["turns"][0]["status"] == "done");
+
+    publish(
+        &feed,
+        &dir.0,
+        VERSION,
+        env!("CARGO_BIN_EXE_gathrd"),
+        "new ui",
+    );
+    let began = Instant::now();
+    update_now(&service);
+    successor(&data, service.info.pid);
+    let took = began.elapsed();
+    std::fs::remove_file(&child).unwrap();
+    // The engine's 10 s grace and the stopped service's 5 s wait; the child lives a minute.
+    assert!(
+        took < Duration::from_secs(40),
+        "the hand-over took {took:?}"
+    );
+    let handed = events(&data, "gathr.app.handover");
+    assert_eq!(handed.len(), 1, "{handed:?}");
+    let attrs = &handed[0]["attrs"];
+    assert!(handed[0]["error_type"].is_null(), "{handed:?}");
+    assert_eq!(attrs["step"], gathr::app::STARTING, "{attrs}");
+    assert_eq!(
+        (&attrs["from"], &attrs["to"]),
+        (&json!("0.0.1"), &json!(VERSION))
+    );
+    // Only Windows reads a child's pipes as blocking work.
+    assert_eq!(attrs["left_running"], cfg!(windows), "{attrs}");
 }
 
 /// The window started the new copy after the old service let go of the folder and before that

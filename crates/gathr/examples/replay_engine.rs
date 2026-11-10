@@ -29,7 +29,9 @@
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
 //! `GATHR_REPLAY_INIT=silent` never answers it; `linger` stays a minute after its input closes
-//! (`GATHR_REPLAY_LINGER_MS` sets how long).
+//! (`GATHR_REPLAY_LINGER_MS` sets how long). `GATHR_REPLAY_CHILD` names a file: the engine starts a
+//! child holding its output pipes, which lives while the file does (a minute at most), as an
+//! engine's own children can outlive it.
 
 use std::io::{BufRead, Write};
 #[path = "replay_engine/codex.rs"]
@@ -54,6 +56,15 @@ fn main() {
             if folder.exists() {
                 std::fs::write(folder.join("browser-finished"), "").unwrap();
             }
+        }
+        return;
+    }
+    if let [mode, file] = args.as_slice()
+        && mode == "child-of"
+    {
+        let since = std::time::Instant::now();
+        while std::path::Path::new(file).exists() && since.elapsed().as_secs() < 60 {
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
         return;
     }
@@ -108,6 +119,16 @@ fn main() {
         .or_else(|_| recording_beside_me())
         .unwrap_or_default();
     record_start(&args);
+    if let Some(file) = std::env::var_os("GATHR_REPLAY_CHILD") {
+        let me = std::env::current_exe().unwrap();
+        // Stdio is inherited: the child holds this engine's stdout and stderr, and outlives it.
+        #[allow(clippy::zombie_processes)]
+        let _child = std::process::Command::new(me)
+            .arg("child-of")
+            .arg(file)
+            .spawn()
+            .unwrap();
+    }
     let text = match recording.as_str() {
         "" => String::new(),
         file => std::fs::read_to_string(file).expect("the recording reads"),
