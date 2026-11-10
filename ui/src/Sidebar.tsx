@@ -127,7 +127,7 @@ export function Sidebar(props: Props) {
           >
             {archiveOpen ? <ArchiveX aria-hidden="true" /> : <Archive aria-hidden="true" />}
             Archived
-            {archived.length > 0 && <span className="nav-count">{archived.length}</span>}
+            <span className="nav-count">{archived.length}</span>
           </button>
           {archiveOpen &&
             (archived.length ? archived.map(row) : <p className="sidebar-empty">No archived chats</p>)}
