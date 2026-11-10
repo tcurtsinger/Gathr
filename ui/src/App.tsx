@@ -47,8 +47,8 @@ export function App() {
   const [splits, setSplits] = useState<Record<string, boolean>>({});
   // Each chat's plan bar, folded until the person opens it.
   const [plans, setPlans] = useState<Record<string, boolean>>({});
-  // A search hit's message, until its chat shows it.
-  const [found, setFound] = useState<{ chat: string; message: string; at: number } | null>(null);
+  // A search hit's message (none for a title: the latest), until its chat shows it.
+  const [found, setFound] = useState<{ chat: string; message?: string; at: number } | null>(null);
 
   useEffect(() => {
     const started = performance.now();
@@ -221,7 +221,7 @@ export function App() {
               onReference={openReference}
               onOpen={(hit, at) =>
                 openChat(hit.chat, () =>
-                  setFound('message' in hit ? { chat: hit.chat, message: hit.message, at } : null),
+                  setFound({ chat: hit.chat, message: 'message' in hit ? hit.message : undefined, at }),
                 )
               }
             />

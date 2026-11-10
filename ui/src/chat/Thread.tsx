@@ -69,10 +69,14 @@ interface Props {
   onTarget?: () => void;
 }
 
-/** A thread message to open at; `text` is the hit's own part of a reply. `at` is when it was picked. */
+/**
+ * A thread message to open at, or with no `id` the latest one; `text` is the hit's own part of a reply, the
+ * `nth` with that text. `at` is when it was picked.
+ */
 export interface Target {
-  id: string;
+  id?: string;
   text?: string;
+  nth?: number;
   at: number;
 }
 

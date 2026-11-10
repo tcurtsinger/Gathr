@@ -78,7 +78,9 @@ const tasks = Array.from({ length: 30 }, (_, n) => ({
   created_us: 0,
 }));
 
-function Chat({ found, onFound, split }: { found: string; onFound: () => void; split: boolean }) {
+type Found = { message?: string; at: number };
+
+function Chat({ found, onFound, split }: { found: Found; onFound: () => void; split: boolean }) {
   const [open, setOpen] = useState(split);
   return (
     <div style={{ height: 600, display: 'flex', flexDirection: 'column' }}>
@@ -102,7 +104,7 @@ function Chat({ found, onFound, split }: { found: string; onFound: () => void; s
         onSplit={setOpen}
         plan={false}
         onPlan={() => {}}
-        found={{ message: found, at: performance.now() }}
+        found={found}
         onFound={onFound}
       />
     </div>
@@ -121,7 +123,9 @@ async function openAt(history: History, found: string, split = true) {
     json(path.endsWith('/tasks') ? { tasks, waits: [] } : path.startsWith('/api/chats/') ? history : {}),
   );
   const onFound = vi.fn();
-  render(<Chat found={found} onFound={onFound} split={split} />);
+  const shown = await render(
+    <Chat found={{ message: found, at: performance.now() }} onFound={onFound} split={split} />,
+  );
   await expect.poll(() => onFound.mock.calls.length).toBe(1);
   await frames(3);
   const hit = document.querySelector('[data-search-hit]') as HTMLElement;
@@ -130,7 +134,8 @@ async function openAt(history: History, found: string, split = true) {
   const view = viewport.getBoundingClientRect();
   const box = hit.getBoundingClientRect();
   expect(Math.abs(box.top + box.height / 2 - (view.top + (view.height - footer) / 2))).toBeLessThan(2);
-  return { hit, viewport };
+  const reopen = (next: Found) => shown.rerender(<Chat found={next} onFound={onFound} split={split} />);
+  return { hit, viewport, reopen, onFound };
 }
 
 test('a hit far up opens centred, and the view holds there while the chat goes on', async () => {
@@ -165,4 +170,33 @@ test("a member's hit opens in the team column, shown for it if it was hidden", a
   expect(viewport.closest('.team-column')?.hasAttribute('data-hidden')).toBe(false);
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
   expect(hit.textContent).toBe('Made-up finding 12');
+});
+
+test("the chat's title, after a hit in it, opens at its latest message", async () => {
+  const { viewport, reopen, onFound } = await openAt(long, 'a100');
+  await reopen({ at: performance.now() });
+  await expect.poll(() => onFound.mock.calls.length).toBeGreaterThan(1);
+  await frames(3);
+  expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2);
+  expect(document.querySelector('[data-search-hit]')).toBeNull();
+});
+
+test('a reply that says the same thing twice opens at the passage the hit is', async () => {
+  const same = 'Made-up identical passage.';
+  const twice: History = {
+    ...long,
+    messages: [
+      ...long.messages,
+      text('u', 'tt', 'user', 'Made-up ask'),
+      text('d1', 'tt', 'assistant', same),
+      ...Array.from({ length: 40 }, (_, n) => text(`p${n}`, 'tt', 'assistant', `Made-up paragraph ${n}`)),
+      text('d2', 'tt', 'assistant', same),
+      ...Array.from({ length: 20 }, (_, n) => text(`q${n}`, 'tt', 'assistant', `Made-up close ${n}`)),
+    ],
+    turns: [...long.turns, done('tt', 'a', turns)],
+  };
+  const { hit } = await openAt(twice, 'd2');
+  const passages = [...(hit.closest('[data-message-id]')?.querySelectorAll('.found-part') ?? [])];
+  expect(passages).toHaveLength(2);
+  expect(passages.indexOf(hit)).toBe(1);
 });

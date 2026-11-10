@@ -47,6 +47,8 @@ export interface Spot {
   column: 'main' | 'team';
   id: string;
   text?: string;
+  /** Which of the reply's texts equal to `text` it is: a reply can say the same thing twice. */
+  nth?: number;
 }
 
 type Part = Exclude<ThreadMessageLike['content'], string>[number];
@@ -114,8 +116,11 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
       ['team', work],
     ] as const) {
       const g = groups.find((x) => x.msgs.includes(m)) ?? groups.find(sameTurn);
-      if (g)
-        return { column, id: g.key, text: g.reply && g.msgs.includes(m) ? (m.body as string) : undefined };
+      if (!g) continue;
+      const at = g.msgs.indexOf(m);
+      if (!g.reply || at < 0) return { column, id: g.key };
+      const nth = g.msgs.slice(0, at).filter((x) => x.kind !== 'tool' && x.body === m.body).length;
+      return { column, id: g.key, text: m.body as string, nth };
     }
     return undefined;
   };

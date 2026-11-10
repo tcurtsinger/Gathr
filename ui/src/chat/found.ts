@@ -45,6 +45,13 @@ export function useFound(
   useLayoutEffect(() => {
     const el = viewport.current;
     if (!found || centred.current === found || !el) return;
+    if (!found.id) {
+      // A chat's title: its latest message, whatever an earlier hit held.
+      release();
+      el.scrollTop = el.scrollHeight;
+      onTarget?.();
+      return;
+    }
     const index = all.findIndex((m) => m.id === found.id);
     if (index < 0) return;
     const message = el.querySelector(`[data-message-id="${CSS.escape(found.id)}"]`);
@@ -62,7 +69,7 @@ export function useFound(
       const frame = requestAnimationFrame(() => nextFrame((n) => n + 1));
       return () => cancelAnimationFrame(frame);
     }
-    const block = (found.text && message.querySelector('.found-part')) || message;
+    const block = (found.text && message.querySelectorAll('.found-part')[found.nth ?? 0]) || message;
     spot.current?.removeAttribute('data-search-hit');
     centre(el, block);
     // A column drawn for it may still wrap its text again once its scroll bar shows.
@@ -111,24 +118,26 @@ export function useFound(
 
 /**
  * Where a hit's message shows, once the chat is loaded: the team column opens for one there. A message
- * no longer in the chat leaves it at the bottom, with `gathr.ui.search.error`.
+ * no longer in the chat leaves it at the bottom, with `gathr.ui.search.error`. A chat's title, with no
+ * message, opens both columns at their latest.
  */
 export function useTarget(
-  found: { message: string; at: number } | undefined,
+  found: { message?: string; at: number } | undefined,
   loaded: boolean,
   columns: Columns,
   split: boolean,
   onSplit: (open: boolean) => void,
   onFound: (() => void) | undefined,
-): (Spot & Target) | undefined {
+): (Partial<Spot> & Target) | undefined {
   // biome-ignore lint/correctness/useExhaustiveDependencies: placed once, as the chat is when it loads
-  const target = useMemo(() => {
-    const spot = found && loaded ? columns.find(found.message) : undefined;
-    return spot && found && { ...spot, at: found.at };
+  const target = useMemo<(Partial<Spot> & Target) | undefined>(() => {
+    if (!found?.message) return found && { at: found.at };
+    const spot = loaded ? columns.find(found.message) : undefined;
+    return spot && { ...spot, at: found.at };
   }, [found, loaded]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per hit
   useEffect(() => {
-    if (!found || !loaded) return;
+    if (!found?.message || !loaded) return;
     if (!target) {
       report({ name: 'gathr.ui.search.error', error: 'message_gone', attrs: { message: found.message } });
       onFound?.();
