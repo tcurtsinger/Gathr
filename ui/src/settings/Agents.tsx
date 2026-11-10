@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Help } from '../components/Help';
@@ -44,8 +45,9 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
   return (
     <section className="agents" aria-label="Agents">
       <div className="agent-list">
-        <button
+        <Button
           type="button"
+          variant="outline"
           ref={addButton}
           className="agent-add"
           disabled={accounts?.length === 0}
@@ -56,7 +58,7 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
           }}
         >
           Add
-        </button>
+        </Button>
         {agents?.map((a) => (
           <button
             type="button"
@@ -343,8 +345,9 @@ function AgentForm(props: FormProps) {
               onRemove={remove}
             />
           ) : (
-            <button
+            <Button
               type="button"
+              variant="outline"
               disabled={busy}
               ref={(b) => {
                 if (b && cancelled.current) b.focus();
@@ -353,21 +356,17 @@ function AgentForm(props: FormProps) {
               onClick={() => setConfirming(true)}
             >
               Remove
-            </button>
+            </Button>
           ))}
         <span className="muted" role="status">
           {saved && !changed ? 'Saved' : ''}
         </span>
-        <button type="button" onClick={reset} disabled={busy || (!!agent && !changed)}>
+        <Button type="button" variant="ghost" onClick={reset} disabled={busy || (!!agent && !changed)}>
           Cancel
-        </button>
-        <button
-          type="submit"
-          className="primary"
-          disabled={busy || !changed || !draft.name || model === undefined}
-        >
+        </Button>
+        <Button type="submit" disabled={busy || !changed || !draft.name || model === undefined}>
           Save
-        </button>
+        </Button>
       </div>
     </form>
   );

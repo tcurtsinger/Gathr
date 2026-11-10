@@ -32,12 +32,6 @@
 .notice-action {
   margin-inline-start: auto;
 }
-.notice-action button {
-  background: var(--canvas);
-  color: var(--text);
-  border: 1px solid var(--control);
-  border-radius: 20px;
-}
 @media (max-width: 767px) {
   .notice {
     padding: 16px;

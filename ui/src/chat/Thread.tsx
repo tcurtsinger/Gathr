@@ -17,6 +17,7 @@ import {
   ToolGroupTrigger,
 } from '@/components/assistant-ui/elements/tool-group.aui';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Agent } from '../api';
 import { MarkdownText } from '../components/Markdown';
@@ -193,9 +194,9 @@ function UserMessage() {
           links={<DiagnosticsLink open={() => actions.diagnostics()} />}
           action={
             unsent.text && (
-              <button type="button" onClick={() => actions.resend(unsent)}>
+              <Button type="button" variant="outline" onClick={() => actions.resend(unsent)}>
                 Retry
-              </button>
+              </Button>
             )
           }
         />
@@ -276,9 +277,9 @@ function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions
       <Notice
         title="Stopped"
         action={
-          <button type="button" onClick={actions.carryOn}>
+          <Button type="button" variant="outline" onClick={actions.carryOn}>
             Continue
-          </button>
+          </Button>
         }
       />
     );
@@ -288,9 +289,9 @@ function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions
       <Notice
         title="Waiting for sign-in"
         action={
-          <button type="button" onClick={actions.signIn}>
+          <Button type="button" variant="outline" onClick={actions.signIn}>
             Sign in
-          </button>
+          </Button>
         }
       />
     );
@@ -302,9 +303,9 @@ function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions
       reference={{ ref: turn.ref, open: () => actions.diagnostics(turn.id) }}
       links={<DiagnosticsLink open={() => actions.diagnostics(turn.id)} />}
       action={
-        <button type="button" onClick={() => actions.retry(turn.id)}>
+        <Button type="button" variant="outline" onClick={() => actions.retry(turn.id)}>
           Retry
-        </button>
+        </Button>
       }
     />
   );
