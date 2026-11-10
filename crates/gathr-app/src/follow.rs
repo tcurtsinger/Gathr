@@ -24,8 +24,16 @@ pub fn run(app: &AppHandle) {
         loop {
             std::thread::sleep(Duration::from_secs(1));
             let service = app.state::<Service>();
-            // None while Quit stops it; an update's install exits this window anyway.
+            // None while Quit stops it, or while "Start failed" shows: then it tries again, so a
+            // folder an old service let go of is taken up without a relaunch.
             let Some(known) = service.info.lock().unwrap().clone() else {
+                if service.failed.load(Ordering::SeqCst) {
+                    silent += 1;
+                    if silent >= SILENT {
+                        silent = 0;
+                        start_again(&app, None);
+                    }
+                }
                 continue;
             };
             let updates = app.try_state::<update::Updates>();
@@ -43,7 +51,7 @@ pub fn run(app: &AppHandle) {
                     silent += 1;
                     if silent >= SILENT {
                         silent = 0;
-                        start_again(&app, known.pid);
+                        start_again(&app, Some(known.pid));
                     }
                 }
             }
@@ -55,7 +63,7 @@ fn answers(info: &ServiceInfo) -> bool {
     http::call(info.port, &info.token, "GET", "/health").is_ok_and(|r| r.status == 200)
 }
 
-fn start_again(app: &AppHandle, from_pid: u32) {
+fn start_again(app: &AppHandle, from_pid: Option<u32>) {
     let since = Instant::now();
     let data = app.state::<Service>().data.clone();
     let found = launch::beside_me("gathrd").and_then(|g| launch::find_or_start(&data, &g));
@@ -97,6 +105,7 @@ fn sign_in(app: &AppHandle, info: ServiceInfo, event: &str, mut attrs: serde_jso
         done.map_err(|e| Error::Other(e.to_string()))
     });
     *app.state::<Service>().info.lock().unwrap() = Some(info);
+    app.state::<Service>().failed.store(false, Ordering::SeqCst);
     attrs["in_place"] = in_place.into();
     report(
         app,

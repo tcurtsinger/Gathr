@@ -9,7 +9,7 @@ mod update;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use gathr::data::{DataDir, ServiceInfo};
@@ -56,6 +56,8 @@ fn dev(context: Context<Wry>, url: tauri::Url, title: String) {
 struct Service {
     data: DataDir,
     info: Mutex<Option<ServiceInfo>>,
+    /// Showing "Start failed": the window tries again by itself until it reaches one.
+    failed: AtomicBool,
 }
 
 fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
@@ -78,6 +80,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
         .manage(Service {
             data,
             info: Mutex::new(None),
+            failed: AtomicBool::new(false),
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -125,6 +128,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             if updates.is_some_and(|u| u.installing.load(Ordering::SeqCst)) {
                 return;
             }
+            app.state::<Service>().failed.store(false, Ordering::SeqCst);
             if let Some(info) = app.state::<Service>().info.lock().unwrap().take() {
                 let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
             }
@@ -145,7 +149,10 @@ fn connect(app: &AppHandle) -> (tauri::Url, Option<bool>) {
             *service.info.lock().unwrap() = Some(found.info);
             (parse(&url), Some(found.started))
         }
-        Err(why) => (failed_page(&why), None),
+        Err(why) => {
+            service.failed.store(true, Ordering::SeqCst);
+            (failed_page(&why), None)
+        }
     }
 }
 
