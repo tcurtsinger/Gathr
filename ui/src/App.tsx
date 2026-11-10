@@ -90,9 +90,13 @@ export function App() {
     return listen((event) => {
       if (event.type === 'chat' && event.change === 'deleted') leave(event.chat);
       if (event.type !== 'chat' && event.type !== 'lagged') return;
-      // A chat made elsewhere opens only when nothing, not even a draft, is open.
-      const opens = event.type === 'chat' && event.change === 'created' && !current.current;
-      reloadLists().then(() => opens && setSelected((s) => s ?? event.chat), setFailure);
+      // A chat made elsewhere opens only when nothing, not even a draft, is open once the lists are in:
+      // the person may have clicked New while they loaded.
+      const created = event.type === 'chat' && event.change === 'created';
+      reloadLists().then(
+        () => created && !current.current && setSelected((s) => s ?? event.chat),
+        setFailure,
+      );
     });
   }, [reloadLists, leave]);
 
