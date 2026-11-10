@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { api, type Engine, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { Accounts } from './Accounts';
@@ -67,9 +68,9 @@ function Programs({ onReference }: { onReference: (ref: string) => void }) {
               {status}
             </span>
             {copy?.state !== 'off' && (
-              <button type="button" disabled={checking} onClick={check}>
+              <Button type="button" variant="outline" disabled={checking} onClick={check}>
                 Check
-              </button>
+              </Button>
             )}
           </div>
           {engine.why_not_found && <p className="field-error">{engine.why_not_found}</p>}

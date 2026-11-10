@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
 import { Dialog } from './components/Dialog';
 import { Notice } from './components/Notice';
@@ -128,12 +129,12 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
           />
         )}
         <footer className="agent-actions">
-          <button type="button" onClick={onClose}>
+          <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="primary" disabled={!ready}>
+          </Button>
+          <Button type="submit" disabled={!ready}>
             Create
-          </button>
+          </Button>
         </footer>
       </form>
     </Dialog>
