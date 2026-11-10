@@ -751,12 +751,13 @@ fn in_team(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
     }))
 }
 
-/// The task's `after` tasks not done yet.
+/// The task's `after` tasks not done yet, or not held only on their merge.
 fn waiting_on(conn: &Connection, task: i64) -> Result<Vec<i64>, Error> {
-    let mut stmt = conn.prepare_cached(
+    let mut stmt = conn.prepare_cached(&format!(
         "SELECT a.after_task FROM task_after a JOIN tasks t ON t.number = a.after_task
-         WHERE a.task = ?1 AND t.state != 'done'",
-    )?;
+         WHERE a.task = ?1 AND t.state != 'done' AND NOT {}",
+        held::ONLY_ITS_MERGE
+    ))?;
     let rows = stmt.query_map([task], |r| r.get(0))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
@@ -786,7 +787,8 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         return Ok(Vec::new());
     };
     let mut starts = Vec::new();
-    if !state.settled() {
+    // A held task may count as done for its dependants (`waiting_on`); it settles nothing else.
+    if !state.settled() && state != State::Held {
         return Ok(starts);
     }
     // A blocked dependant waits on another `after` task that failed or stopped: only a cancel
@@ -804,10 +806,10 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
             continue;
         }
         match state {
-            State::Done if waiting_on(tx, dependant)?.is_empty() => {
+            State::Done | State::Held if waiting_on(tx, dependant)?.is_empty() => {
                 starts.push(ready(tx, dependant, None)?)
             }
-            State::Done => {}
+            State::Done | State::Held => {}
             // It can never go on (F11): cancelled at once, not left blocked.
             State::Cancelled => {
                 let why = format!("#{task} was cancelled");

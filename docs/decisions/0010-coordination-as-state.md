@@ -66,7 +66,7 @@ Transitions and who makes them:
 | From | To | By |
 |---|---|---|
 | (new) | `waiting` or `ready` | the giver (`task --for`), the Supervisor for a plan's hand-out |
-| `waiting` | `ready` | the service, when every `after` task is `done` |
+| `waiting` | `ready` | the service, when every `after` task is `done`, or `held` only on its PR to merge |
 | `waiting` | `blocked` | the service, when an `after` task fails or stops; the giver is told |
 | `waiting`, `blocked` | `cancelled` | the service, at once, when the `after` task or the task it's blocked on is cancelled (F11) |
 | `ready` | `working` | the service, through the gate |
@@ -79,6 +79,7 @@ Transitions and who makes them:
 
 Rules:
 - A turn that ends well with something still open (a wait, a task given in its turns that it hasn't heard back on, a work task's PR) holds the task on it, and the reason says on what and whether its owner called it done: "done, waiting on CI on #54" reads apart from stalled work (G75). A wait firing, or the hear-back from the tasks it gave, wakes the owner on the task; its PR merging settles it as `done` without a turn, and its PR closing cancels it (G67).
+- A task its owner called done and held only on its PR to merge counts as done for the tasks `after` it, so they start at once. It still settles as `done` when the PR merges, and is cancelled if the PR closes. Why: a review given `after` the fix waited on the fix, held until its PR merged, while the merge waited on the review, and nothing flagged it (found in the first live team round). A task held on anything else (a wait, a background command, work handed on) or left unfinished still holds the tasks after it: its work isn't over.
 - A review is `done` only with the commit it reviewed, and is done when its owner says so: its PR is what it reviewed, not work it still owes. A newer head on that PR marks it out of date until the PR merges or closes (G73).
 - A turn on a task that fails or stops before it runs (no engine, no worktree) settles the task the same way, so its dependants move and it can be restarted.
 - Every turn Gathr starts (a task's, a wake-up, a hear-back) is saved, queued with its ask, in the transaction of the change that calls for it, so a stop right after that commit loses nothing: the next start takes it over. A turn's status is saved in the same transaction as what it moves (its task, its giver's hear-back, waits on its agent), so no stop falls between a turn's end and the round it closes.
