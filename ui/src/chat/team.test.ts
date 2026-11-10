@@ -2,7 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react';
 import { expect, test } from 'vitest';
 import type { Agent, Message, Task, Turn } from '../api';
 import { type Custom, toThread } from './messages';
-import { type ChatState, empty } from './state';
+import { apply, type ChatState, empty } from './state';
 
 const people = ['Mira', 'Rowan', 'Kit', 'Lane', 'Sol'];
 const agents: Agent[] = people.map((name) => ({
@@ -80,7 +80,7 @@ function round(): ChatState {
     ...empty,
     members,
     messages,
-    turns: Object.fromEntries(turns.map((t) => [t.id, t])),
+    turns: Object.fromEntries(turns.map((t, position) => [t.id, { ...t, position }])),
     tasks: [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask', { state: 'working' })],
   };
 }
@@ -112,6 +112,23 @@ test("replies that finish out of order keep their turns' order in the team colum
   const rowan = state.messages.filter((m) => m.turn === 'rowan');
   state.messages = [...state.messages.filter((m) => m.turn !== 'rowan'), ...rowan];
   expect(ids(view(state).team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
+});
+
+test("two turns started live keep the service's order and show when they were made, whatever order their updates arrive in", () => {
+  const state = round();
+  const live = (turn: string, agent: string, task: number, position: number, created: string) =>
+    ({ type: 'turn', chat: 'c', turn, status: 'running', agent, task, position, created }) as const;
+  // Lane's task turn started before Sol's, but Sol's update arrived first; neither has saved a word.
+  const started = [
+    live('sol', 'sol', 4, 7, '2026-11-08T09:05:01Z'),
+    live('lane', 'lane', 3, 6, '2026-11-08T09:05:00Z'),
+  ];
+  let next = started.reduce(apply, state);
+  next.tasks.push(task(3, 'lane', 'ask', { state: 'working' }), task(4, 'sol', 'ask', { state: 'working' }));
+  next = { ...next, partial: { sol: 'Sol starts', lane: 'Lane starts' } };
+  const { team } = view(next);
+  expect(ids(team).slice(-2)).toEqual(['a-lane', 'a-sol']);
+  expect(byId(team, 'a-sol').time).toBe('2026-11-08T09:05:01Z');
 });
 
 test("two turns' messages saved interleaved are one reply each, in each column", () => {

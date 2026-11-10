@@ -81,8 +81,11 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
     else if (!(g.gathr && state.turns[g.turn ?? '']?.answers)) main.push(cached(cache, g, state, crew));
   }
   // Replies streaming at once save in the order they finish: the team keeps its turns' order, as a reload does.
+  // Live updates can arrive out of order, so a turn's place wins; one not started yet goes last.
   const order = new Map(Object.keys(state.turns).map((id, i) => [id, i]));
-  work.sort((a, b) => (order.get(a.turn ?? '') ?? 0) - (order.get(b.turn ?? '') ?? 0));
+  const place = (id: string | null) => state.turns[id ?? '']?.position ?? Number.POSITIVE_INFINITY;
+  const seen = (id: string | null) => order.get(id ?? '') ?? 0;
+  work.sort((a, b) => place(a.turn) - place(b.turn) || seen(a.turn) - seen(b.turn));
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
   for (const f of unsent) if (!f.failure.ref || !told.has(f.failure.ref)) main.push(failed(f));

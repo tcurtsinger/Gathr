@@ -18,6 +18,8 @@ export type LiveEvent =
       task?: number | null;
       answers?: string | null;
       held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
+      created?: string;
+      position?: number | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
