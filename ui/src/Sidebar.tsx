@@ -2,6 +2,7 @@ import { Archive, ArchiveX, Folder, FolderOpen, Plus, Settings } from 'lucide-re
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
+import { ResizeHandle } from './components/ResizeHandle';
 import './sidebar.css';
 
 interface Props {
@@ -138,6 +139,7 @@ export function Sidebar(props: Props) {
           Settings
         </button>
       </div>
+      <ResizeHandle label="Resize navigation" side="right" name="--sidebar-width" min={190} max={() => 400} />
     </nav>
   );
 }

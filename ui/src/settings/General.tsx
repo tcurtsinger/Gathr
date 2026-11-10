@@ -3,10 +3,12 @@ import { api, type Failure } from '../api';
 import { Notice } from '../components/Notice';
 import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
+import { savedTheme, setTheme, type Theme } from '../theme';
 import { StaleDays } from './StaleDays';
 
 /** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
 export function General({ onReference }: { onReference: (ref: string) => void }) {
+  const [theme, setShown] = useState(savedTheme);
   const [on, setOn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -56,6 +58,26 @@ export function General({ onReference }: { onReference: (ref: string) => void })
           links={failure.why && <span className="muted">{failure.why}</span>}
         />
       )}
+      <div className="settingrow">
+        <label htmlFor="theme">Theme</label>
+        <span className="setting-scope" id="theme-scope">
+          This computer
+        </span>
+        <select
+          id="theme"
+          aria-describedby="theme-scope"
+          value={theme}
+          onChange={(e) => {
+            const next = e.target.value as Theme;
+            setTheme(next);
+            setShown(next);
+          }}
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </div>
       {on !== null && (
         <div className="settingrow">
           <span id="startup-label">Open at login</span>

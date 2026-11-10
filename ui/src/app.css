@@ -1,6 +1,8 @@
+/* Navigation is 246px until resized (--sidebar-width), from 190 to 400px; 190px below 760px. */
 .app {
+  --nav: clamp(190px, var(--sidebar-width, 246px), 400px);
   display: grid;
-  grid-template-columns: 246px minmax(0, 1fr) auto;
+  grid-template-columns: var(--nav) minmax(0, 1fr) auto;
   height: 100dvh;
 }
 .app > .chat .empty {
@@ -14,6 +16,9 @@
 }
 @media (max-width: 759px) {
   .app {
-    grid-template-columns: 190px minmax(0, 1fr) auto;
+    --nav: 190px;
+  }
+  .sidebar > .resize-handle {
+    display: none;
   }
 }

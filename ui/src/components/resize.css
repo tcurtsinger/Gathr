@@ -1,0 +1,21 @@
+/* A pane's edge, 7px to grab, over its border (the prototype's ResizeHandle). */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 10;
+  width: 7px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.resize-handle[data-side="right"] {
+  right: -4px;
+}
+.resize-handle[data-side="left"] {
+  left: -4px;
+}
+.resize-handle:hover,
+.resize-handle:focus-visible {
+  outline: none;
+  background: color-mix(in oklab, var(--attention) 15%, transparent);
+}

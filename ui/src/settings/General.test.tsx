@@ -2,6 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import { followTheme } from '../theme';
 import { General } from './General';
 
 /** Answers GET /api/startup with `on`; each PUT takes the next answer in `puts`. */
@@ -19,6 +20,30 @@ function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
   });
 }
 afterEach(() => vi.unstubAllGlobals());
+
+test('Theme applies at once, is kept for the next start, and System follows the system again', async () => {
+  service(false, [], []);
+  localStorage.clear();
+  const light = () => document.documentElement.classList.contains('light');
+  const systemLight = matchMedia('(prefers-color-scheme: light)').matches;
+  const screen = await render(<General onReference={() => {}} />);
+  const theme = screen.getByRole('combobox', { name: 'Theme' });
+  await expect.element(theme).toHaveValue('system');
+
+  await userEvent.selectOptions(theme, systemLight ? 'Dark' : 'Light');
+  expect(light()).toBe(!systemLight);
+
+  // A new start: the class comes from what was kept, before any screen draws.
+  document.documentElement.classList.toggle('light', systemLight);
+  followTheme();
+  expect(light()).toBe(!systemLight);
+  await screen.rerender(<General key="again" onReference={() => {}} />);
+  const kept = screen.getByRole('combobox', { name: 'Theme' });
+  await expect.element(kept).toHaveValue(systemLight ? 'dark' : 'light');
+
+  await userEvent.selectOptions(kept, 'System');
+  expect(light()).toBe(systemLight);
+});
 
 test('Space turns it on; a change that fails puts it back with its reference and keeps focus', async () => {
   const sent: unknown[] = [];
