@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
 import { Dialog } from './Dialog';
-import { Notice } from './Notice';
+import { FailureNotice } from './Notice';
 import './confirm.css';
 
 /** Outlined danger, not the registry's filled destructive: Delete and Remove (DESIGN.md "Archive and stale"). */
@@ -44,14 +44,7 @@ export function Confirm({
   };
   return (
     <Dialog open bare title={question} className="confirm-dialog" onClose={() => busy || onCancel()}>
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <footer>
         <span className="visually-hidden" role="status">
           {busy ? 'Saving' : ''}

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
 import { Help } from '../components/Help';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { desktop } from '../desktop';
 import { report } from '../report';
 
@@ -130,14 +130,7 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
           <small id="agent-folder-scope">Applies to new work. Current work stays where it is.</small>
         </form>
       )}
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
     </div>
   );
 }

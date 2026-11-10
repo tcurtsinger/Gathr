@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { SignInFailed, SignInWaiting } from './SignIn';
 
@@ -56,14 +56,7 @@ export function Accounts({ onReference }: { onReference: Open }) {
           Add
         </Button>
       </div>
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       {form && (
         // A new form for each account, so one account's draft never carries to another.
         <AccountForm

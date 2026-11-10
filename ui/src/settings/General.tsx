@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
@@ -51,14 +51,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
   return (
     <section aria-labelledby="general-title">
       <h3 id="general-title">General</h3>
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="settingrow">
         <label htmlFor="theme">Theme</label>
         <span className="setting-scope" id="theme-scope">

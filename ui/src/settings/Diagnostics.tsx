@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
-import { Notice } from '../components/Notice';
+import { FailureNotice, Notice } from '../components/Notice';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
 
@@ -36,9 +36,7 @@ function Reference({ reference }: { reference: string }) {
       <div className="diagnostics-head">
         <h3 id="diagnostics-title">Reference {reference}</h3>
       </div>
-      {failure && (
-        <Notice danger title={failure.error} links={<span className="muted">{failure.why}</span>} />
-      )}
+      {failure && <FailureNotice failure={failure} />}
       {events && (
         <div className="trace">
           {typeof why === 'string' && <p>{why}</p>}
@@ -102,7 +100,7 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
           {list && <span className="muted">{list.length === 1 ? '1 turn' : `${list.length} turns`}</span>}
         </div>
       </div>
-      {failure && <Notice danger title={failure.error} />}
+      {failure && <FailureNotice failure={failure} />}
       {list?.length === 0 && <p className="empty">No turns yet</p>}
       {list && list.length > 0 && (
         <div className="split">

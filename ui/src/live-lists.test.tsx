@@ -23,6 +23,7 @@ const made: {
   projects: Project[];
   tasks: PersonTask[];
   refuse?: boolean;
+  refuseAgents?: boolean;
   hold?: Promise<void>;
 } = { chats: [], projects: [], tasks: [] };
 function service() {
@@ -35,6 +36,8 @@ function service() {
       return json(chats);
     }
     if (path === '/api/chats?archived=true') return json([]);
+    if (path === '/api/agents' && made.refuseAgents)
+      return json({ error: 'Agents failed', why: 'made-up agents refusal', ref: 'made-up-agents' }, 500);
     if (path === '/api/agents') return json({ agents: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
     if (path === '/api/person-tasks') return json({ tasks: made.tasks, stale: [] });
@@ -73,6 +76,7 @@ afterEach(() => {
   made.projects = [];
   made.tasks = [];
   made.refuse = false;
+  made.refuseAgents = false;
   made.hold = undefined;
 });
 
@@ -131,6 +135,27 @@ test('a question whose chat the window has not loaded opens that chat at the que
   await page.getByRole('button', { name: /^Which label\?/ }).click();
   await expect.element(page.getByRole('heading', { level: 1, name: 'Made-up round' })).toBeInTheDocument();
   await expect.element(page.getByRole('tab', { name: /^Tasks/ })).toHaveAttribute('aria-selected', 'true');
+});
+
+test('a failure while a chat is open shows above it, with why and its reference, until dismissed', async () => {
+  made.chats = [{ id: 'c0', title: 'Made-up open chat', project: null }];
+  service();
+  await render(<App />);
+  await expect
+    .element(page.getByRole('heading', { level: 1, name: 'Made-up open chat' }))
+    .toBeInTheDocument();
+
+  made.refuseAgents = true;
+  for (const on of live) on({ type: 'agents' } as LiveEvent);
+  const notice = page.getByRole('alert').filter({ hasText: 'Agents failed' });
+  await expect.element(notice.getByText('made-up agents refusal')).toBeVisible();
+  await expect.element(notice.getByRole('button', { name: 'Reference made-up-agents' })).toBeVisible();
+  await expect
+    .element(page.getByRole('heading', { level: 1, name: 'Made-up open chat' }))
+    .toBeInTheDocument();
+
+  await notice.getByRole('button', { name: 'Dismiss' }).click();
+  await expect.element(notice).not.toBeInTheDocument();
 });
 
 test('a question whose chat fails to load says why, with its reference', async () => {

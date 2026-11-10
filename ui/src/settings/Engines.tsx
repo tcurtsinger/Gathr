@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api, type Engine, type Failure } from '../api';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { Accounts, engines } from './Accounts';
 import './engines.css';
 
@@ -56,14 +56,7 @@ function Program({ id, name, onReference }: { id: string; name: string; onRefere
         : '';
   return (
     <>
-      {shown && (
-        <Notice
-          danger
-          title={shown.error}
-          reference={shown.ref ? { ref: shown.ref, open: onReference } : undefined}
-          links={shown.why && <span className="muted">{shown.why}</span>}
-        />
-      )}
+      {shown && <FailureNotice failure={shown} onReference={onReference} />}
       {engine && (
         <>
           <div className="settingrow">

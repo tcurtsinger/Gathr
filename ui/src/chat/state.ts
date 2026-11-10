@@ -1,4 +1,4 @@
-import type { History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
+import type { Failure, History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -6,6 +6,8 @@ export interface Approval {
   request: string;
   tool: string;
   input?: unknown;
+  /** The person's answer, until the service takes it; with its failure if it was refused. */
+  answer?: { allow: boolean; failure?: Failure };
 }
 
 /** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
@@ -127,6 +129,10 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
 
 export function answered(state: ChatState, request: string): ChatState {
   return { ...state, approvals: state.approvals.filter((a) => a.request !== request) };
+}
+
+export function answering(state: ChatState, request: string, answer: Approval['answer']): ChatState {
+  return { ...state, approvals: state.approvals.map((a) => (a.request === request ? { ...a, answer } : a)) };
 }
 
 /** A turn still under way, if any: Stop applies to the chat's turns. A held turn waits for Resume or

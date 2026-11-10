@@ -3,7 +3,7 @@ import { api, type Failure } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './messages';
-import { answered, apply, type ChatState, empty, fromLoad } from './state';
+import { answered, answering, apply, type ChatState, empty, fromLoad } from './state';
 
 /** Changes the chat's messages that never reached the service; the app keeps them across switches. */
 export type Unsent = (update: (list: SendFailure[]) => SendFailure[]) => void;
@@ -13,7 +13,7 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const [state, setState] = useState<ChatState>(empty);
   const [loaded, setLoaded] = useState(false);
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
-  // A Stop or an answer that failed: nothing to resend, so it lives only while the chat is open.
+  // A Stop or Pause that failed: nothing to resend, so it lives only while the chat is open.
   const [actionFailure, setActionFailure] = useState<SendFailure | null>(null);
   const pending = useRef<LiveEvent[] | null>(null);
   const openedAt = useRef(0);
@@ -102,12 +102,14 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
     [],
   );
 
+  // The card stays until the service takes the answer; a refusal shows on it, to answer again.
   const approve = useCallback(
     (request: string, allow: boolean) => {
-      setState((s) => answered(s, request));
-      api
-        .approve(chat, request, allow)
-        .catch((e: Failure) => setActionFailure({ id: 'answer', text: '', failure: e }));
+      setState((s) => answering(s, request, { allow }));
+      api.approve(chat, request, allow).then(
+        () => setState((s) => answered(s, request)),
+        (failure: Failure) => setState((s) => answering(s, request, { allow, failure })),
+      );
     },
     [chat],
   );

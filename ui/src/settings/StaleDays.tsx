@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, type StaleDays as Days, type Failure } from '../api';
 import { Help } from '../components/Help';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { useNewestWins } from '../newest';
 
 const rows = [
@@ -59,14 +59,7 @@ export function StaleDays({ onReference }: { onReference: (ref: string) => void 
 
   return (
     <>
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       {saved &&
         rows.map((r) => (
           <div className="settingrow" key={r.key}>

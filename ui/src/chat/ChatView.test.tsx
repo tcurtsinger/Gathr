@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { ChatView } from './ChatView';
 import type { SendFailure } from './messages';
+import '../theme.css';
 
 /** Two chats and what the app keeps for each while another is open. */
 function TwoChats() {
@@ -245,4 +246,60 @@ test('a new chat is made with its first message, in its project, to its Supervis
   await expect.element(screen.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up A');
   await screen.getByRole('button', { name: 'Send' }).click();
   expect(started).toEqual([{ text: 'Made-up first ask', agent: 'a' }]);
+});
+
+test('an approval stays until the service takes the answer; a refused answer shows on it, with its reference', async () => {
+  const answers: { allow: boolean; settle: (r: Response) => void }[] = [];
+  vi.stubGlobal('fetch', (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.includes('/approvals/')) {
+      const { allow } = JSON.parse(String(init.body));
+      return new Promise<Response>((settle) => answers.push({ allow, settle }));
+    }
+    const asked = { id: 'm', turn: 't', time: '', role: 'user', kind: 'text', body: 'Made-up ask' };
+    const turns = [{ id: 't', status: 'running', why: null, ref: 'r', agent: 'a' }];
+    const approvals = [{ turn: 't', request_id: 'q1', tool: 'Bash', input: { command: 'made-up --cmd' } }];
+    return Promise.resolve(new Response(JSON.stringify({ chat: 'c', messages: [asked], turns, approvals })));
+  });
+  const opened: string[] = [];
+  const screen = await render(
+    <ChatView
+      chat={{ id: 'c', title: 'Made-up chat' }}
+      agents={[]}
+      onEditAgent={() => {}}
+      draft=""
+      onDraft={() => {}}
+      unsent={[]}
+      onUnsent={() => {}}
+      openSettings={() => {}}
+      onNamed={() => {}}
+      projects={[]}
+      onProject={() => {}}
+      onNewProject={() => {}}
+      onStart={() => {}}
+      pauses={{ pauses: [], usage: [] }}
+      onPause={async () => {}}
+      onReference={(ref) => opened.push(ref)}
+    />,
+  );
+  const card = screen.getByRole('group', { name: 'Allow Bash?' });
+  await card.getByRole('button', { name: 'Deny', exact: true }).click();
+  // Sent, not yet taken: the card stays, and can't be answered twice.
+  await expect.element(card.getByText('Denying…')).toBeVisible();
+  await expect.element(card.getByRole('button', { name: 'Deny', exact: true })).not.toBeInTheDocument();
+
+  const refusal = { error: 'Answer failed', why: 'made-up reason', ref: 'r-answer' };
+  answers[0].settle(new Response(JSON.stringify(refusal), { status: 500 }));
+  const notice = screen.getByRole('alert').filter({ hasText: 'Answer failed' });
+  await expect.element(notice.getByText('made-up reason')).toBeVisible();
+  // Focus goes back to the answer that failed, so the keyboard can answer again.
+  await expect.element(card.getByRole('button', { name: 'Deny', exact: true })).toHaveFocus();
+  await notice.getByRole('button', { name: 'Reference r-answer' }).click();
+  expect(opened).toEqual(['r-answer']);
+
+  await card.getByRole('button', { name: 'Allow', exact: true }).click();
+  await expect.element(notice).not.toBeInTheDocument();
+  answers[1].settle(new Response('{}'));
+  await expect.element(card).not.toBeInTheDocument();
+  expect(answers.map((a) => a.allow)).toEqual([false, true]);
+  vi.unstubAllGlobals();
 });
