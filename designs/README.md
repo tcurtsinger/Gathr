@@ -100,3 +100,9 @@ real desktop sizes, with Workspace and Summary controls. The system page and
 current shared reference CSS use the new scale. Older proposal pages keep their
 original composition; the new type contract supersedes their sizing. See
 [typography checks](typography/README.md).
+
+## Selected Search
+
+[Title first](search/v1.html), selected 2026-11-10, extends the existing Tasks
+flyout shell. Snippet first (v2) is retired. system.html#search-preview shows the
+selected rows and fixture states. See [Search checks](search/README.md).

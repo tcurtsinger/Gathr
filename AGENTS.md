@@ -215,3 +215,7 @@ The original v1/v2 proposals stay unchanged; the v2 archive flyout is retired.
 Typography: `node designs/check-typography.cjs <absolute evidence folder outside the repo>`
 checks the self-hosted face, 450 weight, size scale, message baselines, split plus
 workspace, Summary and overflow at 1440, 1024 and 390px in both themes.
+
+Search reference: `node designs/check-search.cjs <absolute evidence folder outside the repo>`
+checks the selected and retired rows, shared Tasks shell, retained query, keyboard cursor,
+Archived label and fixture states at 1440, 1024 and 390px in both themes.

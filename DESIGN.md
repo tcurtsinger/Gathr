@@ -235,6 +235,15 @@ Search and the pending human Tasks list share a contextual flyout, at most
 340px wide, beside navigation. Escape, outside click, Close or the same trigger
 dismisses it. Search matches titles and message text, supports arrow selection and
 Enter, and retains its query. A task routes to its exact chat and task.
+Archived chats are included and labelled Archived. Chats precede Messages; one
+keyboard cursor spans both groups. A message hit centres its saved message and
+holds the scroll there until the person returns to the bottom. The matched
+message gets a 1.6-second attention tint; reduced motion uses a static tint until
+the person leaves that result. No outline or ring. In-chat find is separate work.
+
+Search uses [title first](designs/search/v1.html), selected 2026-11-10, matching
+Tasks. Snippet first (v2) is retired. Search and Tasks share the icon-button close.
+The portable reference demonstrates empty, loading, no matches and referenced errors.
 
 Workspace has a permanent Home tab, then Tasks, Changes, Terminal, Files, Web and
 canonical document tabs as opened. Plus returns to Home. Each chat retains its
