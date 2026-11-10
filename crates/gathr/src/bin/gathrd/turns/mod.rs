@@ -876,10 +876,9 @@ impl Task {
         running.stopping = true;
         let ids = running.ids.clone();
         // Shown at once; the turn's row and end event follow when the engine says it ended.
-        self.publish(
-            &ids.chat,
-            json!({ "type": "turn", "turn": ids.turn, "status": "stopped", "agent": ids.agent }),
-        );
+        let update =
+            json!({ "type": "turn", "turn": ids.turn, "status": "stopped", "agent": ids.agent });
+        self.publish_turn(&ids, update).await;
         let event = Event::point("gathr.turn.stop").trace(&ids.trace);
         self.record(event.chat(&ids.chat).ok());
         let request = self.driver.interrupt(&format!("stop-{}", span_id()));

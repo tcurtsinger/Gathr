@@ -65,8 +65,7 @@ test('Back and Next keep drafts, and Send answers only the ready questions', asy
   const screen = await render(<Tab />);
   await screen.getByRole('button', { name: /Start fresh/ }).click();
   await screen.getByRole('button', { name: 'Next' }).click();
-  // Both questions have Notes: in WebKit the click can return before the second is drawn, and the
-  // notes then went into the first (CI run 42749442823).
+  // Both questions have Notes: wait for the second before typing.
   await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
   // Notes alone don't answer a pick: this one stays open.
   await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('not sure yet');
@@ -85,6 +84,24 @@ test('Back and Next keep drafts, and Send answers only the ready questions', asy
     .toHaveTextContent('[{"task":1,"pick":["Start fresh"]},{"task":3,"text":"Reconnecting"}]');
   await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
   await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
+});
+
+// Focus that lands a frame later can take it from the field being typed in: WebKit lost the answer
+// that way (CI runs 42741029642, 42749442823, 42882378961). Frames are held to keep that frame late.
+test('Back and Next focus the new heading before the next frame', async () => {
+  const held: FrameRequestCallback[] = [];
+  const frame = window.requestAnimationFrame;
+  window.requestAnimationFrame = (callback) => held.push(callback);
+  try {
+    const screen = await render(<Tab />);
+    await screen.getByRole('button', { name: 'Next' }).click();
+    await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toHaveFocus();
+    await screen.getByRole('button', { name: 'Back' }).click();
+    await expect.element(screen.getByRole('heading', { name: 'Keep the partial reply?' })).toHaveFocus();
+  } finally {
+    window.requestAnimationFrame = frame;
+    for (const callback of held) callback(performance.now());
+  }
 });
 
 test('Send shows the first refused question, still open, with why', async () => {
