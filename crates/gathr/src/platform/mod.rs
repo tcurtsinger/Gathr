@@ -2,6 +2,7 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 pub mod env;
 pub mod login;
@@ -174,6 +175,30 @@ pub fn make_executable(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// How long a folder's move waits for its files to be let go.
+const MOVE_WAIT: Duration = Duration::from_secs(10);
+
+/// Moves a folder by a rename. Windows refuses to rename a folder while any file in it is open,
+/// whatever the sharing ("Access is denied"), and a program just written or run is read for a
+/// moment after (an antivirus scan, the indexer): the move waits up to `MOVE_WAIT` for that. Its
+/// error names the folder and how long it waited.
+pub fn move_folder(from: &Path, to: &Path) -> io::Result<()> {
+    let began = Instant::now();
+    loop {
+        let e = match std::fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(e) => e,
+        };
+        let held = cfg!(windows) && e.kind() == io::ErrorKind::PermissionDenied;
+        if !held || began.elapsed() >= MOVE_WAIT {
+            let (from, to, waited) = (from.display(), to.display(), began.elapsed().as_millis());
+            let why = format!("{from} wasn't moved to {to} (waited {waited} ms): {e}");
+            return Err(io::Error::new(e.kind(), why));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
 /// Writes a file only this user may read: mode 0600 on Unix. On Windows the data folder's
 /// own permissions apply (`%APPDATA%` is the user's).
 pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -182,4 +207,31 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     #[cfg(unix)]
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     io::Write::write_all(&mut options.open(path)?, bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An update failed on Windows CI with "Access is denied": something still read the new
+    /// `gathrd` as its folder moved into place.
+    #[test]
+    fn a_folder_moves_once_a_file_held_open_in_it_is_let_go() {
+        let root = std::env::temp_dir().join(format!("gathr-move-{}", crate::ids::span_id()));
+        let (from, to) = (root.join("unpacked"), root.join("0.2.0"));
+        std::fs::create_dir_all(&from).unwrap();
+        std::fs::write(from.join("gathrd"), "new").unwrap();
+        let held = std::fs::File::open(from.join("gathrd")).unwrap();
+        let reader = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(300));
+            drop(held);
+        });
+
+        let moved = move_folder(&from, &to);
+        reader.join().unwrap();
+        let landed = std::fs::read_to_string(to.join("gathrd"));
+        let _ = std::fs::remove_dir_all(&root);
+        moved.unwrap();
+        assert_eq!(landed.unwrap(), "new");
+    }
 }

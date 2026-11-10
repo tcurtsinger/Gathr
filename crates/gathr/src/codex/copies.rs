@@ -151,7 +151,7 @@ fn install(
             if folder.exists() {
                 std::fs::rename(&folder, &aside).map_err(disk)?;
             }
-            std::fs::rename(&unpacked, &folder).map_err(disk)?;
+            crate::platform::move_folder(&unpacked, &folder).map_err(disk)?;
             placed = true;
             let scratch = staging.join("probe");
             let mut client = super::client::Client::start(&storage.path(version), &scratch)
