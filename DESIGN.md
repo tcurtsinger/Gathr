@@ -71,6 +71,13 @@ a new chat and 20px for a panel. Weights 400 and 500,
 - Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px.
 - Chat header and workspace tabstrip align at 46px. The prototype's 40px preview
   strip is fixture chrome, not a Gathr requirement.
+- Header: the title, then More 4px after it in the same group; the title truncates
+  with an ellipsis and More stays visible. The right holds view controls only:
+  Summary, team chat, then Open sidebar. These and the workspace's Close share one
+  icon-button style: 30px, 8px radius, 4px apart, 17px Lucide icons at 1.75 stroke
+  (Summary's own icon too; More's dots radius 1.4). Pressed (team chat while split,
+  Close while the workspace is open): foreground 9% background, foreground icon,
+  12% on hover.
 - Thread column is 52rem including 16px inner padding, leaving 800px at the
   normal 16px root size. Composer shares that content width. New chat centres
   its heading, optional project notch and composer.
@@ -142,7 +149,7 @@ existing assistant-ui registry components and Gathr state in React; never port
 its HTML or third-party runtime.
 
 The main column holds the person's messages, the Supervisor's hand-offs and final
-words, and direct @member exchanges. A header Columns2 toggle opens one running
+words, and direct @member exchanges. A header MessagesSquare toggle opens one running
 team conversation on the right. Both columns get half the chat width, with
 min-width:0 and independent scrolling. No per-hand-off disclosures or return
 links remain. Every hand-off reply goes in the shared team column, in 0028's
@@ -159,9 +166,8 @@ in the owner's prototype. The workspace still opens to the right of both columns
 with its existing sizing and overlay rules. Team content uses the same centred 52rem
 maximum as the conversation. The composer stays in the Supervisor column.
 
-The split toggle is a 24px TooltipIconButton, after Summary and before Open
-sidebar. Tooltips are Show team chat and Hide team chat. Pressed uses a 9%
-foreground tint. A new team message while closed adds an attention dot to the
+The split toggle is a header icon button (Layout), after Summary and before Open
+sidebar. Tooltips are Show team chat and Hide team chat. A new team message while closed adds an attention dot to the
 toggle and beside that message's time until seen. Opening clears the header dot.
 Retain split state per chat, both scroll positions, draft and recipient. Incoming
 work never moves the reader. The reviewer's agreement stays a named reaction;

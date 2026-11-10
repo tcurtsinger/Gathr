@@ -16,8 +16,16 @@
   border-bottom: 1px solid var(--border);
   background: var(--card);
 }
-.topbar h1 {
+/* The title, then More 4px after it: the title truncates, More stays. */
+.topbar-title {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.topbar h1 {
+  min-width: 0;
   margin: 0;
   font-size: 14px;
   font-weight: 500;
@@ -25,20 +33,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.topbar h1:has(+ .topbar-state) {
-  flex: 0 1 auto;
-}
 .topbar-state {
-  flex: 1;
+  flex: none;
+  margin-left: 4px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
-/* The prototype's More, Summary, sidebar toggle, 2px apart. */
+/* View controls only: Summary, team chat, sidebar, 4px apart. */
 .topbar-actions {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 /* An archived chat reads only: its composer is this line and Restore (archive-stale/v1). */
 .archived-line {
@@ -74,19 +80,6 @@
 .team-column .empty {
   margin: 24px 8px;
   font-size: 13px;
-}
-.split-toggle {
-  position: relative;
-  flex: none;
-}
-.split-toggle[aria-pressed="true"] {
-  background: color-mix(in oklab, var(--foreground) 9%, transparent);
-  color: var(--foreground);
-}
-.split-toggle .attention {
-  position: absolute;
-  top: 1px;
-  right: 1px;
 }
 /* Paused or stopped: a current state after the latest content, not a saved event (the prototype). */
 .run-line {

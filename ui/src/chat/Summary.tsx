@@ -12,7 +12,7 @@ import './summary.css';
 /** The prototype's own icon (ChatActions.tsx): two agents, each with a line. */
 function SummaryIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
       <circle cx="6" cy="6.5" r="2.5" />
       <path d="M12 6.5h8" strokeLinecap="round" />
       <circle cx="6" cy="17.5" r="2.5" />
@@ -43,7 +43,7 @@ export function Summary({ state, pauses, run, onPause }: Props) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <TooltipIconButton tooltip="Summary">
+        <TooltipIconButton tooltip="Summary" className="head-button">
           <SummaryIcon />
         </TooltipIconButton>
       </Popover.Trigger>

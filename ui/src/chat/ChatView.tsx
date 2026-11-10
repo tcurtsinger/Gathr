@@ -1,4 +1,4 @@
-import { Columns2, Folder } from 'lucide-react';
+import { Folder, MessagesSquare } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
@@ -127,9 +127,8 @@ export function ChatView(props: Props) {
   return (
     <main className="chat" aria-label={chat.title}>
       <header className="topbar">
-        <h1>{chat.title}</h1>
-        {archived && <small className="topbar-state">Archived</small>}
-        <div className="topbar-actions">
+        <div className="topbar-title">
+          <h1>{chat.title}</h1>
           {!fresh && (
             <ChatMenu
               pause={{
@@ -142,17 +141,22 @@ export function ChatView(props: Props) {
               onArchive={props.onArchive}
               onRestore={onRestore}
               onDelete={props.onDelete}
+              className="head-button"
+              align="start"
             />
           )}
+          {archived && <small className="topbar-state">Archived</small>}
+        </div>
+        <div className="topbar-actions">
           {team && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
           {team && (
             <TooltipIconButton
               tooltip={split ? 'Hide team chat' : 'Show team chat'}
               aria-pressed={split}
-              className="split-toggle"
+              className="head-button"
               onClick={() => props.onSplit(!split)}
             >
-              <Columns2 />
+              <MessagesSquare />
               {unseen.dot && <i className="attention" />}
             </TooltipIconButton>
           )}

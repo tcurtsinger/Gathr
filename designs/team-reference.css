@@ -17,20 +17,56 @@
 	padding: 0 16px;
 	border-bottom: 1px solid var(--border);
 }
+.ds-team-title {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+}
 .ds-team-header h3 {
+	min-width: 0;
 	margin: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 .ds-team-header .ds-row {
-	gap: 2px;
+	flex: none;
+	gap: 4px;
 }
-#split-toggle {
+/* The header's one icon-button style (DESIGN.md Layout): 30px, 8px radius, 17px icons at 1.75. */
+.ds-head-button {
 	position: relative;
-	width: 24px;
-	height: 24px;
-	padding: 4px;
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--muted-foreground);
+	cursor: pointer;
 }
-#split-toggle[aria-pressed="true"] {
+.ds-head-button svg {
+	width: 17px;
+	height: 17px;
+	stroke-width: 1.75;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+.ds-head-button:hover {
+	background: color-mix(in srgb, var(--foreground) 6%, transparent);
+	color: var(--foreground);
+}
+.ds-head-button[aria-pressed="true"] {
 	background: color-mix(in srgb, var(--foreground) 9%, transparent);
+	color: var(--foreground);
+}
+.ds-head-button[aria-pressed="true"]:hover {
+	background: color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 .ds-unread {
 	display: inline-block;

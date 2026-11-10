@@ -92,7 +92,7 @@ export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onC
         <TooltipIconButton
           tooltip="Close sidebar"
           aria-expanded={true}
-          className="workspace-toggle"
+          className="head-button workspace-toggle"
           onClick={onClose}
         >
           <PanelRight />
@@ -130,7 +130,7 @@ export function WorkspaceOpener({ waiting, onOpen }: { waiting: boolean; onOpen:
     <TooltipIconButton
       tooltip="Open sidebar"
       aria-expanded={false}
-      className="workspace-toggle"
+      className="head-button workspace-toggle"
       onClick={onOpen}
     >
       <PanelRight />
