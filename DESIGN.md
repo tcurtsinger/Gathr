@@ -256,7 +256,10 @@ a 200px category rail and Close at top right. Below 768px categories move above
 content. Escape/Close return focus and preserve the chat's draft and position.
 Apply the new shared tokens, type and controls within that layout.
 
-General includes Open at login for This computer, applied immediately with Switch.
+General starts with Theme for This computer: System (default, follows the system's
+setting), Light or Dark, applied at once without a reload. Then Open at login for
+This computer, applied immediately with Switch. The window keeps the theme and the
+navigation and workspace widths across restarts.
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
 one shared editor: Account, Model, Effort, Approvals. Account implies engine;

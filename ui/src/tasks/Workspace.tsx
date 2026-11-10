@@ -1,6 +1,7 @@
 import { FileText, ListTodo, PanelRight, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { ResizeHandle } from '../components/ResizeHandle';
 import './workspace.css';
 
 /** A file a question came with: the service's copy, made when it was asked. */
@@ -11,6 +12,12 @@ export interface FileTab {
 }
 
 export const fileId = (f: FileTab) => `${f.task}/${f.index}`;
+
+/** DESIGN.md Layout: beside the chat it leaves the chat 360px; over it (1200px and below), as workspace.css. */
+function widest() {
+  const nav = document.querySelector('.sidebar')?.getBoundingClientRect().width ?? 0;
+  return innerWidth > 1200 ? Math.max(360, innerWidth - nav - 360) : innerWidth - 48;
+}
 
 interface Props {
   /** A question waits on the person in this chat. */
@@ -70,6 +77,7 @@ export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onC
   );
   return (
     <aside className="workspace" aria-label="Chat workspace">
+      <ResizeHandle label="Resize chat sidebar" side="left" name="--workspace-width" min={360} max={widest} />
       <div className="workspace-tabs">
         <div
           className="workspace-tablist"
