@@ -15,11 +15,26 @@ function pane(side: 'left' | 'right', max = 400, key = 'first') {
   );
 }
 
+/** Writes the window's cookie as any port of this host could. */
+function cookie(value: string) {
+  // biome-ignore lint/suspicious/noDocumentCookie: the test plays a window on another port.
+  document.cookie = `gathr.width${name}=${value}; path=/; max-age=${value ? 60 : 0}`;
+}
+
 beforeEach(() => {
-  localStorage.clear();
+  cookie('');
   document.documentElement.style.removeProperty(name);
 });
 afterEach(() => vi.restoreAllMocks());
+
+test('a width kept while the service ran on another port is used at start', async () => {
+  // localStorage is kept per origin, so per port; a cookie is kept per host, which every port reads.
+  cookie('350');
+  const screen = await render(pane('right'));
+  await expect
+    .element(screen.getByRole('separator', { name: 'Resize pane' }))
+    .toHaveAttribute('aria-valuenow', '350');
+});
 
 test('keys move a right-edge handle 10px, 40px with Shift, and Home and End go to the limits', async () => {
   const screen = await render(pane('right'));

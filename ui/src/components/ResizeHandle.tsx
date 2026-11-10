@@ -1,4 +1,5 @@
 import { type KeyboardEvent, type PointerEvent, useLayoutEffect, useRef, useState } from 'react';
+import { keep, kept } from '../kept';
 import './resize.css';
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
   max: () => number;
 }
 
-const kept = (name: string) => `gathr.width${name}`;
+const cookie = (name: string) => `gathr.width${name}`;
 const steps: Record<string, number> = { ArrowLeft: -10, ArrowRight: 10 };
 
 /**
@@ -28,7 +29,7 @@ export function ResizeHandle({ label, side, name, min, max }: Props) {
 
   // The kept width before the pane draws; then the pane's real width, after its CSS limits.
   useLayoutEffect(() => {
-    const width = Number(localStorage.getItem(kept(name)));
+    const width = Number(kept(cookie(name)));
     if (width > 0) document.documentElement.style.setProperty(name, `${width}px`);
     const pane = ref.current?.parentElement;
     if (!pane) return;
@@ -40,11 +41,11 @@ export function ResizeHandle({ label, side, name, min, max }: Props) {
   const width = () => ref.current?.parentElement?.getBoundingClientRect().width ?? min;
   const resize = (to: number) =>
     root.setProperty(name, `${Math.round(Math.min(max(), Math.max(min, to)))}px`);
-  const keep = () => localStorage.setItem(kept(name), String(parseFloat(root.getPropertyValue(name))));
+  const keepWidth = () => keep(cookie(name), String(parseFloat(root.getPropertyValue(name))));
   const end = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current) return;
     drag.current = null;
-    keep();
+    keepWidth();
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
   const keys = (e: KeyboardEvent) => {
@@ -54,7 +55,7 @@ export function ResizeHandle({ label, side, name, min, max }: Props) {
     if (to === undefined) return;
     e.preventDefault();
     resize(to);
-    keep();
+    keepWidth();
   };
 
   return (

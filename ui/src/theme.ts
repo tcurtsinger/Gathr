@@ -1,11 +1,12 @@
+import { keep, kept } from './kept';
+
 export type Theme = 'system' | 'light' | 'dark';
 
-// Kept by the window (its webview's storage), so each computer has its own.
 const key = 'gathr.theme';
 const systemLight = matchMedia('(prefers-color-scheme: light)');
 
 export function savedTheme(): Theme {
-  const theme = localStorage.getItem(key);
+  const theme = kept(key);
   return theme === 'light' || theme === 'dark' ? theme : 'system';
 }
 
@@ -24,7 +25,6 @@ export function followTheme() {
 }
 
 export function setTheme(theme: Theme) {
-  if (theme === 'system') localStorage.removeItem(key);
-  else localStorage.setItem(key, theme);
+  keep(key, theme === 'system' ? undefined : theme);
   apply();
 }

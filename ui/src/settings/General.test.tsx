@@ -21,9 +21,25 @@ function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
 }
 afterEach(() => vi.unstubAllGlobals());
 
+/** Writes the window's Theme cookie as any port of this host could. */
+function cookie(value: string) {
+  // biome-ignore lint/suspicious/noDocumentCookie: the test plays a window on another port.
+  document.cookie = `gathr.theme=${value}; path=/; max-age=${value ? 60 : 0}`;
+}
+
+test('a Theme kept while the service ran on another port is used at start', () => {
+  // localStorage is kept per origin, so per port; a cookie is kept per host, which every port reads.
+  const systemLight = matchMedia('(prefers-color-scheme: light)').matches;
+  cookie(systemLight ? 'dark' : 'light');
+  followTheme();
+  expect(document.documentElement.classList.contains('light')).toBe(!systemLight);
+  cookie('');
+  followTheme();
+});
+
 test('Theme applies at once, is kept for the next start, and System follows the system again', async () => {
   service(false, [], []);
-  localStorage.clear();
+  cookie('');
   const light = () => document.documentElement.classList.contains('light');
   const systemLight = matchMedia('(prefers-color-scheme: light)').matches;
   const screen = await render(<General onReference={() => {}} />);
