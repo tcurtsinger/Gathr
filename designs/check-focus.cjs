@@ -48,6 +48,18 @@ async function check() {
 					assert.equal(focused.background, hovered, `${label}: keyboard focus must use the hover highlight`);
 					console.log(`${label}: keyboard focus and hover highlight passed`);
 				}
+				await page.locator("#search-open").click();
+				const input = page.locator("#search-query");
+				await input.fill("partial");
+				const row = page.locator("#search-results .ds-search-hit").first();
+				await row.hover();
+				const hovered = await row.evaluate(node => getComputedStyle(node).backgroundColor);
+				await page.mouse.move(0, 0);
+				await input.press("ArrowDown");
+				assert.equal(await row.evaluate(node => getComputedStyle(node).backgroundColor), hovered);
+				assert.equal(await row.getAttribute("aria-selected"), "true");
+				await input.press("Escape");
+
 			}
 		}
 	} finally {
