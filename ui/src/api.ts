@@ -185,7 +185,7 @@ export interface History {
   messages: Message[];
   turns: Turn[];
   /** Questions the engine asked that nobody has answered yet. */
-  approvals: { turn: string; request_id: string; tool: string }[];
+  approvals: { turn: string; request_id: string; tool: string; input?: unknown }[];
   /** The chat's agents and their roles (0028); empty for a chat nobody joined yet. */
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */

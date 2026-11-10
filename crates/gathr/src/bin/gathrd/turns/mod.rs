@@ -89,8 +89,8 @@ struct Running {
     tools: HashMap<String, (String, String, i64)>,
     /// Questions Claude Code asked and nobody has answered: each tool, its input and why it asks.
     approvals: HashMap<String, (String, Value, Option<String>)>,
-    /// Of those, the ones a worktree's `pre-push` hook asked: where each answer goes.
-    pushes: HashMap<String, oneshot::Sender<bool>>,
+    /// Service-side asks (pushes and Codex wait checks): where each answer goes.
+    service_approvals: HashMap<String, (&'static str, oneshot::Sender<bool>)>,
     /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
     push_allowed: bool,
     stopping: bool,
@@ -270,7 +270,12 @@ impl Task {
             } => {
                 let _ = reply.send(self.approve(&chat, &request_id, allow).await);
             }
-            Cmd::AskPush { chat, input, reply } => self.ask_push(&chat, input, reply),
+            Cmd::AskService {
+                kind,
+                chat,
+                input,
+                reply,
+            } => self.ask_service(kind, &chat, input, reply),
             Cmd::Open { chat, reply } => {
                 let _ = reply.send((self.open_approvals(&chat), self.streaming(&chat).await));
             }
@@ -732,7 +737,7 @@ impl Task {
             streamed: false,
             tools: HashMap::new(),
             approvals: HashMap::new(),
-            pushes: HashMap::new(),
+            service_approvals: HashMap::new(),
             push_allowed: false,
             stopping: false,
             stop_why: None,
@@ -876,8 +881,8 @@ impl Task {
         let Some((tool, input, _)) = turn.approvals.remove(request_id) else {
             return false;
         };
-        if let Some(reply) = turn.pushes.remove(request_id) {
-            return self.answer_push(request_id, allow, reply);
+        if let Some((kind, reply)) = turn.service_approvals.remove(request_id) {
+            return self.answer_service(kind, request_id, allow, reply);
         }
         if allow && gathr::approvals::runs_push(&tool, &input) {
             turn.push_allowed = true;
@@ -895,10 +900,10 @@ impl Task {
         let Some(turn) = self.turn.as_ref().filter(|t| t.ids.chat == chat) else {
             return Vec::new();
         };
-        // A push whose hook gave up (git ended it) has no one to answer.
+        // A service action whose caller gave up has no one to answer.
         let open = turn.approvals.iter().filter(|(request_id, _)| {
-            let push = turn.pushes.get(*request_id);
-            push.is_none_or(|reply| !reply.is_closed())
+            let push = turn.service_approvals.get(*request_id);
+            push.is_none_or(|(_, reply)| !reply.is_closed())
         });
         let open = open.map(|(request_id, (tool, input, why))| {
             json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input,

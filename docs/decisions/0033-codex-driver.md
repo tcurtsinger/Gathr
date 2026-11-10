@@ -166,6 +166,20 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
 - Gathr never borrows either engine from PATH. A missing checked copy holds the saved turn with
   a downloading notice; replay checks cover persistence and release when the first copy arrives.
 
+## Review recovery checks
+
+- A Codex `wait` with a shell check now reaches a service-side approval before it is saved or run.
+  Ask, Edits and Auto are tested with refusal and allowance; Full bypasses the ask. A pending
+  question is refused at shutdown. Claude keeps its native hook, so it asks once as before.
+- A rejected `turn/start` retires the pending session before processing its TurnEnd. The gentle
+  close recovers inputs that have no Read acknowledgment, so held messages and subsequent sends
+  can run on a fresh session rather than stay behind the rejected start flag.
+- A rejected `turn/steer` is a recoverable engine error, not an ignored control reply. The same
+  gentle close requeues unread input in order. A controlled completion-then-rejection test proves
+  the second message receives its own completed turn and a third send still completes.
+- These regressions use the real service API/MCP with controlled app-server replies; none is
+  presented as a live Codex rejection or approval run.
+
 ## Not verified
 
 - Live Codex approvals and Stop (protocol replay covers their mappings).

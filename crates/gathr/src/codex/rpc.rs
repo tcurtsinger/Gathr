@@ -238,6 +238,17 @@ impl Session {
             }
             (Some(asked @ (Asked::Steer | Asked::Interrupt)), _) => {
                 let ok = error.is_none();
+                if asked == Asked::Steer
+                    && let Some(error) = error
+                {
+                    read.frames.push(Frame::EngineError {
+                        kind: "steer".into(),
+                        message: error["message"]
+                            .as_str()
+                            .unwrap_or("Codex rejected the message")
+                            .into(),
+                    });
+                }
                 let request_id = format!("{asked:?}").to_lowercase();
                 read.frames.push(Frame::ControlAnswer { request_id, ok });
             }

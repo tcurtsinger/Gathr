@@ -30,7 +30,7 @@ impl Task {
         match serde_json::from_str::<Value>(&text) {
             Ok(value) => {
                 let read = self.driver.read(&value);
-                let failed = super::driver::Driver::failed_start(&read.frames);
+                let failed = super::driver::Driver::needs_recovery(&read.frames);
                 for send in read.send {
                     if let Err(e) = self.write(&send, turn.as_deref()).await {
                         self.record(
@@ -40,13 +40,21 @@ impl Task {
                         );
                     }
                 }
+                let failure = read.frames.iter().find_map(|frame| match frame {
+                    Frame::EngineError { message, .. } => Some(message.clone()),
+                    _ => None,
+                });
+                // Retire a rejected start or steer before TurnEnd can start another message on
+                // the same pending session. Closing recovers every input not acknowledged Read.
+                if failed {
+                    self.close("the engine rejected its request").await;
+                }
                 for frame in read.frames {
                     self.on_frame(frame).await;
                 }
                 if failed {
-                    self.close("the engine couldn't open its thread").await;
                     self.turn_ended(TurnEnd {
-                        message: Some("The engine couldn't open its thread".into()),
+                        message: failure,
                         ..TurnEnd::default()
                     })
                     .await;

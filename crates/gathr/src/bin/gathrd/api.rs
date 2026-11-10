@@ -65,7 +65,10 @@ pub fn router(state: Arc<State>) -> Router {
         .merge(crate::models::routes())
         .merge(crate::startup::routes())
         .merge(crate::app_update::routes())
-        .nest_service("/mcp", crate::tools::service(state.chats.clone()))
+        .nest_service(
+            "/mcp",
+            crate::tools::service(state.chats.clone(), state.stopping.subscribe()),
+        )
         .merge(crate::tools::hook_routes())
         .merge(crate::ui::routes())
         .fallback(crate::ui::page)

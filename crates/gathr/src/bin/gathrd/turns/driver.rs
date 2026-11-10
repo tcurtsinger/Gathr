@@ -42,7 +42,7 @@ impl Driver {
             Self::Codex(session) => session.approval(id, allow),
         }
     }
-    pub fn failed_start(frames: &[Frame]) -> bool {
-        frames.iter().any(|f| matches!(f, Frame::EngineError { kind, .. } if kind == "initialize" || kind == "thread" || kind == "engine_version" || kind == "models"))
+    pub fn needs_recovery(frames: &[Frame]) -> bool {
+        frames.iter().any(|f| matches!(f, Frame::EngineError { kind, .. } if kind == "initialize" || kind == "thread" || kind == "engine_version" || kind == "models" || kind == "turn" || kind == "steer"))
     }
 }

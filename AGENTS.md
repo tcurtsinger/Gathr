@@ -87,6 +87,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   the copy passes its checks. Explicit `GATHR_CLAUDE_PATH` / `GATHR_CODEX_PATH` stand-ins remain for dev/tests;
   neither engine falls back to the person's PATH. To check: `cargo test -p gathr --test owned_engines --test engine_copies`.
 - **A signed-in test account:** a new data folder has none. Add one in Settings (or `POST /api/accounts`) and sign it in there; its login lives in `<folder>/accounts/<id>/claude`. Never point Claude Code at `~/.claude`.
+- **Codex recovery checks:** `cargo test -p gathr --test codex_recovery` covers service-gated wait checks (including Full and shutdown), rejected turn starts, and a completion racing a rejected steer. The service asks before saving a Codex check; Claude keeps its native hook.
 - **Engine recordings:** the tests replay real Claude Code and Codex frames from `crates/gathr/tests/frames` through `examples/replay_engine.rs`, which `cargo test` builds. To record one, run the turn on a dev service, export its frames with the query in `scripts/scrub-frames.mjs`, run that script, and read the result for anything personal before committing it.
 - **Schema changes** are a new numbered file in `crates/gathr/migrations/`, never an edit to a released one. Migrations run with foreign keys off, so one may rebuild a table others point at, and each is checked for broken references before it commits. Released means part of a build published to people; until the first, a migration on `main` may be edited, and the PR says so.
 

@@ -3,14 +3,14 @@
 import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import { type Agent, Failure, type Message, type Turn } from '../api';
+import { type Agent, Failure, type History, type Message, type Turn } from '../api';
 import type { LiveEvent } from '../live';
 import '../theme.css';
 import type { SendFailure } from './messages';
 import approval from './recorded/approval.json';
 import exitsMidReply from './recorded/exits-mid-reply.json';
 import sendFailed from './recorded/send-failed.json';
-import { apply, type ChatState, empty } from './state';
+import { apply, type ChatState, empty, fromHistory } from './state';
 import { type Actions, Thread } from './Thread';
 
 const none: Actions = {
@@ -197,4 +197,32 @@ test('a long chat draws its newest messages, and older ones as you scroll up, ke
   // The message that was at the top stays where it was on screen.
   expect(Math.abs(first.element().getBoundingClientRect().top - top)).toBeLessThan(2);
   expect(screen.getByText('Made-up message 99', { exact: true }).query()).toBeNull();
+});
+
+test('a wait check approval keeps its exact command through live updates and reload', async () => {
+  const command = 'printf allowed > ../outside-engine-folder.txt';
+  const before = { ...empty, messages: [said('u', 'user', 'Wait for it')], turns: turn('running') };
+  const event: LiveEvent = {
+    type: 'approval',
+    chat: 'c',
+    turn: 't',
+    request_id: 'check-1',
+    tool: 'wait check',
+    input: { command },
+  };
+  const history: History = {
+    chat: 'c',
+    messages: before.messages,
+    turns: Object.values(before.turns),
+    members: [],
+    approvals: [{ turn: 't', request_id: 'check-1', tool: 'wait check', input: { command } }],
+  };
+  const screen = await render(<View state={apply(before, event)} />);
+  for (const state of [apply(before, event), fromHistory(history)]) {
+    await screen.rerender(<View state={state} />);
+    const card = screen.getByRole('group', { name: 'Allow wait check?' });
+    await expect.element(card.getByText(command, { exact: true })).toBeVisible();
+    await expect.element(card.getByRole('button', { name: 'Allow', exact: true })).toBeEnabled();
+    await expect.element(card.getByRole('button', { name: 'Deny', exact: true })).toBeEnabled();
+  }
 });

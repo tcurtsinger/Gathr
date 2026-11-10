@@ -41,7 +41,8 @@ pub enum Cmd {
         reply: oneshot::Sender<bool>,
     },
     /// A `git push` from the agent's worktree, waiting for its answer (0029).
-    AskPush {
+    AskService {
+        kind: &'static str,
         chat: String,
         input: Value,
         reply: oneshot::Sender<bool>,
@@ -233,6 +234,16 @@ impl Chats {
     /// Whether a `git push` from the engine of `caller` may go on: its agent's task asks the
     /// person and answers once they have. No task running for it: no.
     pub async fn ask_push(&self, caller: &crate::tools::Caller, input: Value) -> bool {
+        self.ask_service(caller, input, "push").await
+    }
+
+    /// A service-side action, approved on the engine's active turn before it can be saved/run.
+    pub async fn ask_service(
+        &self,
+        caller: &crate::tools::Caller,
+        input: Value,
+        kind: &'static str,
+    ) -> bool {
         let key = match &caller.agent {
             Some(agent) => format!("agent:{agent}"),
             None => format!("chat:{}", caller.chat),
@@ -245,7 +256,15 @@ impl Chats {
             .cloned();
         let (reply, answer) = oneshot::channel();
         let chat = caller.chat.clone();
-        let asked = task.is_some_and(|t| t.send(Cmd::AskPush { chat, input, reply }).is_ok());
+        let asked = task.is_some_and(|t| {
+            t.send(Cmd::AskService {
+                kind,
+                chat,
+                input,
+                reply,
+            })
+            .is_ok()
+        });
         asked && answer.await.unwrap_or(false)
     }
 
