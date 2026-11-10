@@ -111,22 +111,24 @@ export function ChatView(props: Props) {
       <header className="topbar">
         <h1>{chat.title}</h1>
         {archived && <small className="topbar-state">Archived</small>}
-        {state.members.length > 1 && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
-        {!fresh && (
-          <ChatMenu
-            pause={{
-              state: run.state,
-              all: run.scope?.scope === 'app',
-              onPause: () => act('pause', thisChat),
-              onResume: () => act('resume', run.scope ?? thisChat),
-            }}
-            archived={archived}
-            onArchive={props.onArchive}
-            onRestore={onRestore}
-            onDelete={props.onDelete}
-          />
-        )}
-        {headerEnd}
+        <div className="topbar-actions">
+          {!fresh && (
+            <ChatMenu
+              pause={{
+                state: run.state,
+                all: run.scope?.scope === 'app',
+                onPause: () => act('pause', thisChat),
+                onResume: () => act('resume', run.scope ?? thisChat),
+              }}
+              archived={archived}
+              onArchive={props.onArchive}
+              onRestore={onRestore}
+              onDelete={props.onDelete}
+            />
+          )}
+          {state.members.length > 1 && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
+          {headerEnd}
+        </div>
       </header>
       <Thread
         state={state}
@@ -145,9 +147,9 @@ export function ChatView(props: Props) {
                 loadFailure.ref ? { ref: loadFailure.ref, open: () => actions.diagnostics() } : undefined
               }
               action={
-                <button type="button" onClick={reload}>
+                <Button type="button" variant="outline" onClick={reload}>
                   Retry
-                </button>
+                </Button>
               }
             />
           )

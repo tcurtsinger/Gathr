@@ -1,4 +1,6 @@
 import { useId } from 'react';
+import { Button } from '@/components/ui/button';
+import { danger } from './Confirm';
 import './confirm.css';
 
 /** A short question, Cancel and the verb, in place of the actions it asks about. Escape cancels it, not Settings. */
@@ -24,13 +26,12 @@ export function ConfirmRemove({
       }}
     >
       <span id={question}>Remove {name}?</span>
-      {/* biome-ignore lint/a11y/noAutofocus: the question opens from Remove; Cancel is the safe answer */}
-      <button type="button" autoFocus onClick={onCancel}>
+      <Button type="button" variant="outline" autoFocus onClick={onCancel}>
         Cancel
-      </button>
-      <button type="button" className="danger" onClick={onRemove}>
+      </Button>
+      <Button type="button" variant="outline" className={danger} onClick={onRemove}>
         Remove
-      </button>
+      </Button>
     </fieldset>
   );
 }

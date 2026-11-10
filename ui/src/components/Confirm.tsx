@@ -5,6 +5,9 @@ import { Dialog } from './Dialog';
 import { Notice } from './Notice';
 import './confirm.css';
 
+/** Outlined danger, not the registry's filled destructive: Delete and Remove (DESIGN.md "Archive and stale"). */
+export const danger = 'border-danger-border text-danger hover:bg-danger-surface';
+
 interface Props {
   /** The short question: "Delete Launch checklist?". */
   question: string;
@@ -19,7 +22,15 @@ interface Props {
 }
 
 /** A question, Cancel and the verb, over the current screen (a variant of the one Dialog). Cancel has focus. */
-export function Confirm({ question, verb, danger, opener, onCancel, onConfirm, onReference }: Props) {
+export function Confirm({
+  question,
+  verb,
+  danger: isDanger,
+  opener,
+  onCancel,
+  onConfirm,
+  onReference,
+}: Props) {
   const [busy, setBusy] = useState(false);
   useEffect(() => () => opener?.focus(), [opener]);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -48,11 +59,10 @@ export function Confirm({ question, verb, danger, opener, onCancel, onConfirm, o
         <Button size="sm" variant="outline" autoFocus disabled={busy} onClick={onCancel}>
           Cancel
         </Button>
-        {/* Outlined danger like Settings' Remove (button.danger), not the registry's filled destructive. */}
         <Button
           size="sm"
-          variant={danger ? 'outline' : 'default'}
-          className={danger ? 'border-danger-border text-danger hover:bg-danger-surface' : undefined}
+          variant={isDanger ? 'outline' : 'default'}
+          className={isDanger ? danger : undefined}
           disabled={busy}
           onClick={go}
         >

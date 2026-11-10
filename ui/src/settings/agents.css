@@ -9,7 +9,7 @@
   border-right: 1px solid var(--border);
   overflow: auto;
 }
-.agent-list button {
+.agent-list button:not([data-slot]) {
   display: block;
   width: 100%;
   margin-bottom: 8px;
@@ -17,9 +17,9 @@
   overflow-wrap: anywhere;
 }
 .agent-list .agent-add {
-  border: 1px solid var(--control);
+  margin-bottom: 12px;
 }
-.agent-list [aria-current] {
+.agent-list [aria-current]:not([data-slot]) {
   background: var(--raised);
   outline: 1px solid var(--control);
 }
@@ -112,7 +112,7 @@
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
-  .agent-list button {
+  .agent-list button:not([data-slot]) {
     width: auto;
     margin: 0;
   }

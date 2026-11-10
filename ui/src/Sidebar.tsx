@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
+import { Archive, ArchiveX, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
@@ -124,7 +124,7 @@ export function Sidebar(props: Props) {
               if (!archiveOpen) requestAnimationFrame(() => group?.scrollIntoView({ block: 'nearest' }));
             }}
           >
-            {archiveOpen ? <ChevronDown aria-hidden="true" /> : <ChevronRight aria-hidden="true" />}
+            {archiveOpen ? <ArchiveX aria-hidden="true" /> : <Archive aria-hidden="true" />}
             Archived
             {archived.length > 0 && <span className="nav-count">{archived.length}</span>}
           </button>
