@@ -66,7 +66,7 @@ export function SignInFailed({
     <div className="signin-panel">
       <Notice
         danger
-        title="Sign in failed"
+        title="Sign-in failed"
         reference={{ ref: failed.ref, open: onReference }}
         links={<span className="muted">{failed.why}</span>}
       />
