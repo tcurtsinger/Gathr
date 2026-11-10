@@ -1,6 +1,6 @@
 import { type RefObject, useState } from 'react';
 
-const PAGE = 100;
+export const PAGE = 100;
 // How close to the top, in pixels, scrolling brings in the next older page.
 const NEAR = 800;
 

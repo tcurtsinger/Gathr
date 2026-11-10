@@ -1,10 +1,8 @@
-import { ListTodo, X } from 'lucide-react';
-import { Popover } from 'radix-ui';
+import { ListTodo } from 'lucide-react';
 import { useState } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import type { PersonTask, StaleTask } from '../api';
+import { NavFlyout } from '../components/NavFlyout';
 import { idle } from './model';
-import './flyout.css';
 
 interface Props {
   tasks: PersonTask[];
@@ -14,11 +12,7 @@ interface Props {
   onOpen: (task: PersonTask | StaleTask) => void;
 }
 
-/**
- * The person's open questions across every chat (DESIGN.md "Navigation and workspace"): the
- * prototype's Radix flyout beside navigation, so its own tooltips draw above it. Picking one opens
- * its chat's Tasks tab at that question.
- */
+/** The person's open questions across every chat. Picking one opens its chat's Tasks tab at that question. */
 export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
   const [open, setOpen] = useState(false);
   const questions = tasks.filter((t) => !t.stale_us);
@@ -28,7 +22,7 @@ export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
     <button
       type="button"
       key={t.number}
-      className="flyout-task"
+      className="flyout-row"
       onClick={() => {
         setOpen(false);
         onOpen(t);
@@ -47,54 +41,33 @@ export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
     </button>
   );
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-        <button type="button" className="navbutton">
+    <NavFlyout
+      title="Tasks"
+      open={open}
+      onOpenChange={setOpen}
+      focus={(panel) => panel.querySelector<HTMLElement>('.flyout-row')}
+      trigger={
+        <>
           <ListTodo aria-hidden="true" />
           Tasks
           {tasks.length > 0 && <span className="nav-count">{tasks.length}</span>}
-        </button>
-      </Popover.Trigger>
-      <Popover.Anchor asChild>
-        <span className="flyout-anchor" aria-hidden="true" />
-      </Popover.Anchor>
-      <Popover.Portal>
-        <Popover.Content
-          className="flyout"
-          side="right"
-          align="start"
-          sideOffset={8}
-          collisionPadding={8}
-          role="dialog"
-          aria-label="Tasks"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            const panel = e.currentTarget as HTMLElement;
-            (panel.querySelector<HTMLElement>('.flyout-task') ?? panel.querySelector('button'))?.focus();
-          }}
-        >
-          <header>
-            <h2>Tasks</h2>
-            <TooltipIconButton tooltip="Close Tasks" onClick={() => setOpen(false)}>
-              <X />
-            </TooltipIconButton>
-          </header>
-          <div className="flyout-body">
-            <section aria-labelledby="flyout-questions">
-              <h3 id="flyout-questions">
-                Questions<span className="nav-count">{questions.length || ''}</span>
-              </h3>
-              {questions.length ? questions.map(row) : <p className="flyout-empty">No questions</p>}
-            </section>
-            <section aria-labelledby="flyout-stale">
-              <h3 id="flyout-stale">
-                Stale<span className="nav-count">{quiet.length || ''}</span>
-              </h3>
-              {quiet.length ? quiet.map(row) : <p className="flyout-empty">No stale tasks</p>}
-            </section>
-          </div>
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+        </>
+      }
+    >
+      <div className="flyout-body">
+        <section aria-labelledby="flyout-questions">
+          <h3 id="flyout-questions">
+            Questions<span className="nav-count">{questions.length || ''}</span>
+          </h3>
+          {questions.length ? questions.map(row) : <p className="flyout-empty">No questions</p>}
+        </section>
+        <section aria-labelledby="flyout-stale">
+          <h3 id="flyout-stale">
+            Stale<span className="nav-count">{quiet.length || ''}</span>
+          </h3>
+          {quiet.length ? quiet.map(row) : <p className="flyout-empty">No stale tasks</p>}
+        </section>
+      </div>
+    </NavFlyout>
   );
 }

@@ -10,6 +10,7 @@ import { listen } from './live';
 import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
+import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
 import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
@@ -46,6 +47,8 @@ export function App() {
   const [splits, setSplits] = useState<Record<string, boolean>>({});
   // Each chat's plan bar, folded until the person opens it.
   const [plans, setPlans] = useState<Record<string, boolean>>({});
+  // A search hit's message, until its chat shows it.
+  const [found, setFound] = useState<{ chat: string; message: string; at: number } | null>(null);
 
   useEffect(() => {
     const started = performance.now();
@@ -166,6 +169,15 @@ export function App() {
   const setTab = (c: string, change: (t: { files: FileTab[]; selected: string }) => Partial<typeof t>) =>
     setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
   const name = (agent: string | null) => agents.find((a) => a.id === agent)?.name ?? 'An agent';
+  // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
+  const openChat = (id: string, then: () => void) => {
+    const open = () => {
+      choose(id);
+      then();
+    };
+    if ([...chats, ...archived].some((c) => c.id === id)) open();
+    else reloadLists().catch(setFailure).finally(open);
+  };
   const openReference = (reference: string) =>
     setSettings((s) => ({
       page: 'diagnostics',
@@ -203,22 +215,29 @@ export function App() {
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
         actions={
-          <TasksFlyout
-            tasks={person.tasks}
-            stale={person.stale}
-            name={name}
-            onOpen={(t) => {
-              const open = () => {
-                choose(t.chat);
-                person.select(t.chat, t.number);
-                person.setOpen(t.chat, true);
-                setTab(t.chat, () => ({ selected: 'tasks' }));
-              };
-              // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
-              if ([...chats, ...archived].some((c) => c.id === t.chat)) open();
-              else reloadLists().catch(setFailure).finally(open);
-            }}
-          />
+          <>
+            <SearchFlyout
+              name={name}
+              onReference={openReference}
+              onOpen={(hit, at) =>
+                openChat(hit.chat, () =>
+                  setFound('message' in hit ? { chat: hit.chat, message: hit.message, at } : null),
+                )
+              }
+            />
+            <TasksFlyout
+              tasks={person.tasks}
+              stale={person.stale}
+              name={name}
+              onOpen={(t) =>
+                openChat(t.chat, () => {
+                  person.select(t.chat, t.number);
+                  person.setOpen(t.chat, true);
+                  setTab(t.chat, () => ({ selected: 'tasks' }));
+                })
+              }
+            />
+          </>
         }
       />
       {chat ? (
@@ -253,6 +272,8 @@ export function App() {
           onSplit={(open) => setSplits((all) => ({ ...all, [chat.id]: open }))}
           plan={!!plans[chat.id]}
           onPlan={(open) => setPlans((all) => ({ ...all, [chat.id]: open }))}
+          found={found?.chat === chat.id ? found : undefined}
+          onFound={() => setFound(null)}
           notice={notice}
           headerEnd={
             chat.id &&
