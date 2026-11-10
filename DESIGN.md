@@ -301,7 +301,7 @@ References: [JetBrains: Writing Short and Clear](https://plugins.jetbrains.com/d
 - Capitalize Gathr. Keep one component for each repeated pattern.
 - Use the prototype's real components with Gathr adapters and real state.
 - Preserve identifiers, references, recovery steps and the tool arguments an agent needs.
-- Stale notices use "No progress in 3 days: #72 Approve the wording? (for the person). Finish, restart or cancel it."
+- Stale notices use "No progress in 3 days: #72 Approve the wording? (waiting for your answer). Finish, restart or cancel it."
   Agent tasks name the agent and state. Only a list with agent tasks explains when those tasks are cancelled automatically.
   Questions for the person stay open. Multiple tasks use one row each and one shared instruction.
 - Keep screenshots and fixture data invented; never port personal content.
