@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Message, Turn } from '../api';
+import { toThread } from '../chat/messages';
 import { type ChatState, empty } from '../chat/state';
 import { type Actions, Thread } from '../chat/Thread';
 
@@ -36,9 +37,7 @@ const streaming = (text: string): ChatState => ({
 
 function View({ state }: { state: ChatState }) {
   return (
-    <Thread state={state} agents={[]} unsent={[]} running={false} actions={none} empty={false}>
-      {null}
-    </Thread>
+    <Thread messages={toThread(state, [], [], new Map()).main} running={false} actions={none} empty={false} />
   );
 }
 // Newlines between blocks are only whitespace; the saved render keeps them, the streamed one does not.

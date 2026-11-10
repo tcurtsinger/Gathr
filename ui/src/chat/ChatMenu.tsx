@@ -28,6 +28,8 @@ interface Props {
   onRestore?: () => void;
   onDelete?: (opener: HTMLElement | null) => void;
   className?: string;
+  /** Where the menu lines up with its button: 'start' beside the chat title, 'end' at a row's end. */
+  align?: 'start' | 'end';
 }
 
 /**
@@ -43,6 +45,7 @@ export function ChatMenu({
   onRestore,
   onDelete,
   className,
+  align = 'end',
 }: Props) {
   const running = pause?.state === 'running';
   const trigger = useRef<HTMLButtonElement>(null);
@@ -87,7 +90,7 @@ export function ChatMenu({
           <MoreHorizontal />
         </TooltipIconButton>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={8}>
+      <DropdownMenuContent align={align} sideOffset={8}>
         {items.map(([key, item], i) => (
           <Fragment key={key}>
             {i > 0 && <DropdownMenuSeparator />}

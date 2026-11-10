@@ -1,17 +1,18 @@
 import { Popover } from 'radix-ui';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
-import type { Member, PauseScope, Pauses, Task, Wait } from '../api';
+import type { Member, PauseScope, Pauses } from '../api';
 import { ChatMenu } from './ChatMenu';
 import { agentPause, type PauseAction, type Run } from './pauses';
 import type { ChatState } from './state';
 import { clock, list, roleName } from './team';
+import { began, open, waitingOn } from './waits';
 import './summary.css';
 
 /** The prototype's own icon (ChatActions.tsx): two agents, each with a line. */
 function SummaryIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
       <circle cx="6" cy="6.5" r="2.5" />
       <path d="M12 6.5h8" strokeLinecap="round" />
       <circle cx="6" cy="17.5" r="2.5" />
@@ -19,8 +20,6 @@ function SummaryIcon() {
     </svg>
   );
 }
-
-const open = (t: Task) => !['done', 'blocked', 'failed', 'stopped', 'cancelled'].includes(t.state);
 
 interface Props {
   state: ChatState;
@@ -44,7 +43,7 @@ export function Summary({ state, pauses, run, onPause }: Props) {
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
-        <TooltipIconButton tooltip="Summary">
+        <TooltipIconButton tooltip="Summary" className="head-button">
           <SummaryIcon />
         </TooltipIconButton>
       </Popover.Trigger>
@@ -128,32 +127,8 @@ function doing(
   const queued = turns.some((t) => t.status === 'queued');
   if (own.paused || run.state !== 'running') return mine.length || queued ? 'Held' : 'Paused';
   // Each name the agent waits for, with when its earliest wait on it began.
-  const since = new Map<string, number>();
-  const on = (who: string, us: number) => since.set(who, Math.min(us, since.get(who) ?? us));
-  for (const w of state.waits.filter((w) => w.agent === m.agent && w.state === 'open')) {
-    on(waitName(w, name), w.created_ts);
-  }
-  for (const t of mine) {
-    for (const b of state.tasks.filter((b) => t.after.includes(b.number) && open(b)))
-      on(name(b.owner), t.created_us);
-  }
-  for (const t of state.tasks.filter((t) => t.giver === m.agent && open(t))) on(name(t.owner), t.created_us);
-  if (since.size) return `Waiting for ${list([...since].map(([who, us]) => `${who} since ${began(us)}`))}`;
+  const { agents, other } = waitingOn(m.agent, state);
+  const since = [...[...agents].map(([who, us]) => [name(who), us] as const), ...other];
+  if (since.length) return `Waiting for ${list(since.map(([who, us]) => `${who} since ${began(us)}`))}`;
   return mine.length || queued ? 'Waiting' : 'Ready';
-}
-
-/** When a wait began: its time today, else its date (Nov 8). */
-function began(us: number): string {
-  const at = new Date(us / 1000);
-  if (at.toDateString() === new Date().toDateString()) return clock(at.toISOString());
-  return at.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-/** A wait in a few words, as the service names it (tasks/words.rs `wait_name`). */
-function waitName(w: Wait, name: (agent: string) => string): string {
-  const target = w.target ?? '';
-  if (w.kind === 'agent') return name(target);
-  if (w.kind === 'ci') return /^\d+$/.test(target) ? `CI on #${target}` : `CI on ${target.slice(0, 7)}`;
-  if (w.kind === 'pr') return `#${target} to merge or close`;
-  return 'a check';
 }

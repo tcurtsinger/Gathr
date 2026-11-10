@@ -36,6 +36,8 @@ function TwoChats() {
         onStart={() => {}}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
+        split
+        onSplit={() => {}}
       />
     </>
   );
@@ -91,6 +93,8 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
+      split
+      onSplit={() => {}}
     />,
   );
   const picker = screen.getByRole('combobox', { name: 'Agent' });
@@ -140,6 +144,8 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
+      split
+      onSplit={() => {}}
     />,
   );
   await screen.getByRole('combobox', { name: 'Agent' }).click();
@@ -185,6 +191,8 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
+      split
+      onSplit={() => {}}
     />
   );
   const screen = await render(view('p'));
@@ -240,6 +248,8 @@ test('a new chat is made with its first message, in its project, to its Supervis
       onStart={(text, agent) => started.push({ text, agent })}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
+      split
+      onSplit={() => {}}
     />,
   );
   await expect.element(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('p');
@@ -278,6 +288,8 @@ test('an approval stays until the service takes the answer; a refused answer sho
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
+      split
+      onSplit={() => {}}
       onReference={(ref) => opened.push(ref)}
     />,
   );

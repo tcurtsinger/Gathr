@@ -2,12 +2,13 @@ import {
   AssistantRuntimeProvider,
   groupPartByType,
   MessagePrimitive,
+  type ThreadMessageLike,
   ThreadPrimitive,
   useAuiState,
   useExternalStoreRuntime,
 } from '@assistant-ui/react';
 import { ArrowDown } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolFallback } from '@/components/assistant-ui/elements/tool-fallback.aui';
@@ -18,26 +19,13 @@ import {
 } from '@/components/assistant-ui/elements/tool-group.aui';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import type { Agent } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { useEdges } from './edges';
-import { type Custom, type SendFailure, type TurnNotice, toThread } from './messages';
+import type { Custom, SendFailure, TurnNotice } from './messages';
 import { useOlder } from './older';
-import type { Approval, ChatState } from './state';
-import {
-  type Folding,
-  FoldingContext,
-  GathrLine,
-  headId,
-  LastWord,
-  remember,
-  rememberedFolds,
-  TeamHead,
-  threaded,
-  unfolded,
-} from './TeamParts';
+import type { Approval } from './state';
+import { GathrLine } from './TeamParts';
 import { clock, roleName } from './team';
 import './thread.css';
 
@@ -56,54 +44,33 @@ export interface Actions {
 
 const ActionsContext = createContext<Actions | null>(null);
 const useActions = () => useContext(ActionsContext) as Actions;
+/** Team replies that came in while the team column was hidden: a dot by their time. */
+const FreshContext = createContext<ReadonlySet<string>>(new Set());
 
 interface Props {
-  state: ChatState;
-  agents: Agent[];
-  unsent: SendFailure[];
+  /** Its messages, from toThread. */
+  messages: ThreadMessageLike[];
   running: boolean;
   actions: Actions;
+  /** Its name, over the top of the column, in the split chat. */
+  label?: string;
+  fresh?: ReadonlySet<string>;
   /** Shown above the messages: the chat's own load failure. */
   header?: ReactNode;
-  /** Shown after the latest message: the quiet "You paused" line. */
+  /** Shown after the latest message: the quiet "You paused" line, or who is working. */
   after?: ReactNode;
   empty: boolean;
   /** The composer, kept below the messages as they scroll. */
-  children: ReactNode;
+  children?: ReactNode;
 }
 
-/** The chat's messages, drawn by assistant-ui's thread over Gathr's own chat state (0030). */
+const none: ReadonlySet<string> = new Set();
+
+/** A column of the chat, drawn by assistant-ui's thread over Gathr's own chat state (0030). */
 export function Thread(props: Props) {
-  const { state, agents, unsent, running, actions, header, after, empty, children } = props;
-  const cache = useRef(new Map());
-  const all = useMemo(() => toThread(state, agents, unsent, cache.current), [state, agents, unsent]);
-  const [chosen, setChosen] = useState(rememberedFolds);
-  // A folded thread's replies aren't mounted at all, so a long round costs nothing until opened.
-  const shown = useMemo(() => unfolded(all, chosen), [all, chosen]);
+  const { running, actions, label, header, after, empty, children } = props;
   const viewport = useRef<HTMLDivElement>(null);
-  const { messages, onScroll, reach } = useOlder(shown, viewport);
-  // A new context value makes React search every drawn block for its readers, so it changes only with
-  // a fold, never with each streamed word.
-  const now = useRef({ shown, reach });
-  now.current = { shown, reach };
-  const folding = useMemo<Folding>(
-    () => ({
-      chosen,
-      set: (root, open) => setChosen(remember(root, open)),
-      reveal: (root) => {
-        setChosen(remember(root, true));
-        now.current.reach(now.current.shown.findIndex((m) => m.id === `t-${root}`));
-        // After the thread and anything above it are drawn.
-        requestAnimationFrame(() => {
-          const disclosure = document.getElementById(headId(root));
-          // Shown as keyboard focus (the quiet highlight) even when the link was clicked.
-          disclosure?.focus({ preventScroll: true, focusVisible: true });
-          disclosure?.scrollIntoView({ block: 'start' });
-        });
-      },
-    }),
-    [chosen],
-  );
+  const { messages, onScroll } = useOlder(props.messages, viewport);
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
@@ -130,9 +97,14 @@ export function Thread(props: Props) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
-        <FoldingContext value={folding}>
-          <ThreadPrimitive.Root className="thread">
+        <FreshContext value={props.fresh ?? none}>
+          <ThreadPrimitive.Root className="thread" role={label ? 'region' : undefined} aria-label={label}>
             <ThreadPrimitive.Viewport ref={viewport} className="thread-viewport" onScroll={onScroll}>
+              {label && (
+                <div className="column-label" aria-hidden="true">
+                  {label}
+                </div>
+              )}
               <div className="thread-column" data-empty={empty || undefined}>
                 {header}
                 {empty && <h2 className="welcome">What are we working on?</h2>}
@@ -155,7 +127,7 @@ export function Thread(props: Props) {
               </div>
             </ThreadPrimitive.Viewport>
           </ThreadPrimitive.Root>
-        </FoldingContext>
+        </FreshContext>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );
@@ -169,10 +141,9 @@ function ThreadMessage() {
 const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
 
-/** Gathr's own items: a team thread's disclosure, or what Gathr told an agent. */
+/** What Gathr told an agent. */
 function SystemItem() {
-  const own = useAuiState(custom);
-  return own.head ? <TeamHead head={own.head} /> : <GathrLine custom={own} />;
+  return <GathrLine custom={useAuiState(custom)} />;
 }
 
 function UserMessage() {
@@ -180,7 +151,7 @@ function UserMessage() {
   const { unsent } = own;
   const actions = useActions();
   return (
-    <MessagePrimitive.Root className={cn('user-message', threaded(own))}>
+    <MessagePrimitive.Root className="user-message">
       {/* A failed Stop or Pause sent no text: only its notice shows, with nothing to resend. */}
       {unsent?.text !== '' && (
         <div className="user-bubble">
@@ -209,10 +180,11 @@ const groupBy = groupPartByType({ 'tool-call': ['group-tool'] });
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, role, time, notice, approvals, back } = own;
+  const { agent, role, time, notice, approvals } = own;
   const actions = useActions();
+  const fresh = useContext(FreshContext).has(useAuiState((s) => s.message.id));
   return (
-    <MessagePrimitive.Root className={cn('reply', threaded(own))}>
+    <MessagePrimitive.Root className="reply">
       {agent && (
         <header className="speaker">
           <SpeakerIdentity
@@ -220,6 +192,7 @@ function AssistantMessage() {
             turns={[{ id: 'author', kind: 'agent', name: agent, text: '' }]}
           />
           {role && <span className="speaker-role">{roleName[role]}</span>}
+          {fresh && <i className="attention" role="img" aria-label="New" />}
           {time && <time dateTime={time}>{clock(time)}</time>}
         </header>
       )}
@@ -247,7 +220,6 @@ function AssistantMessage() {
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
       {notice && <ReplyNotice notice={notice} actions={actions} />}
-      {back && <LastWord back={back} />}
     </MessagePrimitive.Root>
   );
 }

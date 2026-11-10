@@ -1,7 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Agent, Failure, Message, Role, Task, ToolBody, Turn } from '../api';
+import type { Agent, Failure, Message, Role, ToolBody, Turn } from '../api';
 import type { Approval, ChatState } from './state';
-import { describe, finished, type Team, team } from './team';
+import { type Team, team } from './team';
 
 /** A request that failed: what was sent (none for Stop or Pause), for Retry, and why. */
 export interface SendFailure {
@@ -19,15 +19,6 @@ export interface TurnNotice {
   replied: boolean;
 }
 
-/** A team thread's disclosure: who is working, waiting and done, and whether the round is over. */
-export interface ThreadHead {
-  root: string;
-  text: string;
-  done: boolean;
-  /** No member has started yet, so nothing sits under it. */
-  alone: boolean;
-}
-
 /** Gathr's own part of a message, read by the thread's message components. */
 export type Custom = {
   agent?: string;
@@ -38,18 +29,17 @@ export type Custom = {
   approvals?: Approval[];
   /** A message that never reached the service. */
   unsent?: SendFailure;
-  /** The thread it sits in, by its root turn; `first` and `end` start and close it. */
-  thread?: string;
-  first?: boolean;
-  end?: boolean;
-  head?: ThreadHead;
   /** What Gathr told an agent outside a task: a wake-up. */
   gathr?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
   assignment?: { from?: string; to?: string; what: string };
-  /** The lead's last word on a round: its thread. */
-  back?: { root: string; done: boolean };
 };
+
+/** The chat's two columns: the Supervisor's conversation, and the team's work on hand-offs. */
+export interface Columns {
+  main: ThreadMessageLike[];
+  team: ThreadMessageLike[];
+}
 
 type Part = Exclude<ThreadMessageLike['content'], string>[number];
 type Cache = Map<string, { sig: string; value: ThreadMessageLike }>;
@@ -58,6 +48,8 @@ interface Group {
   turn: string | null;
   msgs: Message[];
   reply: boolean;
+  /** The person's message: always in the main column, even one sent into a member's turn on a task. */
+  person?: boolean;
   /** What Gathr told the turn's agent. */
   gathr?: boolean;
   /** The turn's last reply: the one its streaming text, notice and approvals go on. */
@@ -67,92 +59,44 @@ interface Group {
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
 const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
 const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
-const settled = new Set(['done', 'blocked', 'failed', 'stopped', 'cancelled']);
 
 /**
- * Gathr's chat as assistant-ui messages: each person's message, then the reply to it holding its
- * text and tool calls in order. A message sent into a running turn splits that turn's reply in two,
- * one before it and one after; the last holds the streaming text, the notice and the approvals.
+ * Gathr's chat as assistant-ui messages, in two columns. Each person's message, then the reply to it
+ * holding its text and tool calls in order: a turn is one reply wherever its messages land among other
+ * agents' and Gathr's, but a person's message sent into a running turn of the main column splits it in
+ * two, one before it and one after; the last holds the streaming text, the notice and the approvals.
  * A reply keeps one id from its first streamed text to its saved messages, so nothing remounts when
  * a stream ends, and a reply whose parts didn't change keeps the same object, so assistant-ui doesn't
  * convert it again.
  *
- * In a team chat, the work on each task sits in one thread right after the lead's message that gave
- * it, under a disclosure item (`t-<turn>`), wherever the work's turns fall in time.
+ * Work on a hand-off (a turn on a task, or one hearing back inside it) goes to the team column, in the
+ * order its turns began, so replies streaming at once never interleave (0015, 0028). The person's own
+ * messages all stay in the main column.
  */
-export function toThread(
-  state: ChatState,
-  agents: Agent[],
-  unsent: SendFailure[],
-  cache: Cache,
-): ThreadMessageLike[] {
+export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[], cache: Cache): Columns {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
-  const groups = grouped(state);
-  const main: Group[] = [];
-  const threaded = new Map<string, Group[]>();
-  for (const g of groups) {
-    const root = g.turn ? crew.rootOf(g.turn) : undefined;
-    if (root) threaded.set(root, [...(threaded.get(root) ?? []), g]);
-    else main.push(g);
+  const inTeam = (turn: string | null) => !!turn && !!crew.rootOf(turn);
+  const main: ThreadMessageLike[] = [];
+  const work: Group[] = [];
+  for (const g of grouped(state, inTeam)) {
+    if (g.person || !inTeam(g.turn)) {
+      // What Gathr told the lead when a round settled: the team column and Summary already show it.
+      if (!(g.gathr && state.turns[g.turn ?? '']?.answers)) main.push(cached(cache, g, state, crew));
+    } else work.push(g);
   }
-  // Replies streaming at once save in the order they finish: a thread keeps its turns' order, as a reload does.
+  // Replies streaming at once save in the order they finish: the team keeps its turns' order, as a reload does.
+  // Live updates can arrive out of order, so a turn's place wins; one not started yet goes last.
   const order = new Map(Object.keys(state.turns).map((id, i) => [id, i]));
-  for (const list of threaded.values())
-    list.sort((a, b) => (order.get(a.turn ?? '') ?? 0) - (order.get(b.turn ?? '') ?? 0));
-  const roots = new Set([...crew.threads.keys(), ...threaded.keys()]);
-  // The lead's word on a round: a main-line turn Gathr started that answers the turn with a thread.
-  const roundOf = (turn: string | null) => {
-    const answers = turn ? state.turns[turn]?.answers : undefined;
-    const root = answers ? (crew.rootOf(answers) ?? answers) : undefined;
-    return root && roots.has(root) ? root : undefined;
-  };
-  // A round's first word, and its newest: a reply that came late brings the lead back with another.
-  const firsts = new Map<string, Turn>();
-  const finals = new Map<string, Turn>();
-  for (const turn of Object.values(state.turns)) {
-    const root = crew.rootOf(turn.id) ? undefined : roundOf(turn.id);
-    if (!root) continue;
-    if (!firsts.has(root)) firsts.set(root, turn);
-    finals.set(root, turn);
-  }
-  const newest = (turn: string | null) => {
-    const root = roundOf(turn);
-    return root && finals.get(root)?.id === turn ? root : undefined;
-  };
-  // What Gathr told the lead about its round reads as the link on its word, not as words of their own.
-  const lines = main.filter((g) => !(g.gathr && roundOf(g.turn)));
-  main.length = 0;
-  main.push(...lines);
-  const places = new Map<number, string[]>();
-  for (const root of roots) {
-    const at = main.findLastIndex((g) => g.turn === root);
-    const i = at < 0 ? main.length - 1 : at;
-    places.set(i, [...(places.get(i) ?? []), root]);
-  }
-
-  const out: ThreadMessageLike[] = [];
-  const place = (i: number) => {
-    for (const root of places.get(i) ?? []) {
-      const members = threaded.get(root) ?? [];
-      out.push(head(cache, root, members, state, crew, firsts.get(root), finals.get(root)));
-      members.forEach((g, n) => {
-        const ends = { first: n === 0, end: n === members.length - 1 };
-        out.push(cached(cache, g, state, crew, { thread: root, ...ends }));
-      });
-    }
-  };
-  place(-1);
-  main.forEach((g, i) => {
-    out.push(cached(cache, g, state, crew, g.last ? lastWord(g, newest(g.turn), state, crew) : {}));
-    place(i);
-  });
+  const place = (id: string | null) => state.turns[id ?? '']?.position ?? Number.POSITIVE_INFINITY;
+  const seen = (id: string | null) => order.get(id ?? '') ?? 0;
+  work.sort((a, b) => place(a.turn) - place(b.turn) || seen(a.turn) - seen(b.turn));
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
-  for (const f of unsent) if (!f.failure.ref || !told.has(f.failure.ref)) out.push(failed(f));
-  return out;
+  for (const f of unsent) if (!f.failure.ref || !told.has(f.failure.ref)) main.push(failed(f));
+  return { main, team: work.map((g) => cached(cache, g, state, crew)) };
 }
 
-function grouped(state: ChatState): Group[] {
+function grouped(state: ChatState, inTeam: (turn: string | null) => boolean): Group[] {
   // The nth reply of a turn is `a-<turn>`, then `a-<turn>-<n>`: history only grows at its end, so n is stable.
   const counts = new Map<string, number>();
   const reply = (turn: string): Group => {
@@ -161,22 +105,29 @@ function grouped(state: ChatState): Group[] {
     return { key: n ? `a-${turn}-${n}` : `a-${turn}`, turn, msgs: [], reply: true };
   };
   const groups: Group[] = [];
+  // Each turn's reply that its next message joins, until a person's message in its column splits it.
+  const open = new Map<string, Group>();
   for (const m of state.messages) {
-    const prev = groups.at(-1);
-    if (m.role === 'user') groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false });
-    else if (m.role === 'gathr')
+    if (m.role === 'user') {
+      groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, person: true });
+      for (const turn of open.keys()) if (!inTeam(turn)) open.delete(turn);
+    } else if (m.role === 'gathr')
       groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, gathr: true });
-    else if (m.turn && prev?.reply && prev.turn === m.turn) prev.msgs.push(m);
-    else if (m.turn) groups.push({ ...reply(m.turn), msgs: [m] });
-    else groups.push({ key: `a-${m.id}`, turn: null, msgs: [m], reply: true });
+    else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
+    else if (m.turn) {
+      const g = { ...reply(m.turn), msgs: [m] };
+      groups.push(g);
+      open.set(m.turn, g);
+    } else groups.push({ key: `a-${m.id}`, turn: null, msgs: [m], reply: true });
   }
   // A turn with streaming text, a notice or an approval but no reply since its latest message still
   // has one, right after that message.
   const waiting = new Set(state.approvals.map((a) => a.turn));
   for (const t of Object.values(state.turns)) {
     const at = groups.findLastIndex((g) => g.turn === t.id);
-    if (at >= 0 && groups[at].reply) {
-      groups[at].last = true;
+    const last = open.get(t.id) ?? groups[at];
+    if (last?.reply) {
+      last.last = true;
       continue;
     }
     if (!(state.partial[t.id] || hasNotice(t) || waiting.has(t.id))) continue;
@@ -185,55 +136,7 @@ function grouped(state: ChatState): Group[] {
   return groups;
 }
 
-/**
- * On the lead's last word of a round: the link back to its thread. No reviewer's agreement: a review
- * done says what it reviewed, not whether it approved, and the service records no verdict yet.
- */
-function lastWord(g: Group, back: string | undefined, state: ChatState, crew: Team): Custom {
-  if (!back || !g.reply) return {};
-  return { back: { root: back, done: roundOver(state.turns[g.turn ?? ''], crew.threads.get(back) ?? []) } };
-}
-
-const roundOver = (final: Turn | undefined, tasks: Task[]) =>
-  finished(final) && tasks.every((t) => settled.has(t.state));
-
-function head(
-  cache: Cache,
-  root: string,
-  members: Group[],
-  state: ChatState,
-  crew: Team,
-  first: Turn | undefined,
-  final: Turn | undefined,
-): ThreadMessageLike {
-  const tasks = crew.threads.get(root) ?? [];
-  const done = roundOver(final, tasks);
-  // A reply that began after the lead's first word on the round began came late.
-  const began = (turn: string | null | undefined) =>
-    Date.parse(state.messages.find((m) => m.turn === turn)?.time ?? '');
-  const after = began(first?.id);
-  const late = members
-    .filter((g) => g.reply && began(g.turn) > after)
-    .map((g) => ({ agent: state.turns[g.turn as string]?.agent ?? '', time: g.msgs[0]?.time ?? '' }))
-    .filter((l, i, all) => l.agent && all.findLastIndex((x) => x.agent === l.agent) === i);
-  const text = describe(tasks, late, crew.name);
-  const key = `t-${root}`;
-  const alone = members.length === 0;
-  const sig = `${text}|${done}|${alone}`;
-  const hit = cache.get(key);
-  if (hit?.sig === sig) return hit.value;
-  const custom: Custom = { head: { root, text, done, alone } };
-  const value: ThreadMessageLike = {
-    id: key,
-    role: 'system',
-    content: [{ type: 'text', text: 'Team thread' }],
-    metadata: { custom },
-  };
-  cache.set(key, { sig, value });
-  return value;
-}
-
-function cached(cache: Cache, group: Group, state: ChatState, crew: Team, extra: Custom) {
+function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
   const id = group.turn;
   const turn = id ? state.turns[id] : undefined;
   const partial = group.last && id ? (state.partial[id] ?? '') : '';
@@ -243,21 +146,20 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team, extra:
   const parts = group.msgs.map((m) => `${m.id}:${m.kind === 'tool' ? (m.body as ToolBody).status : ''}`);
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
-  const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(extra)}`;
+  const who = `${agent}|${role}|${JSON.stringify(task)}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const value = group.gathr
-    ? toGathr(group.msgs[0], task, extra)
+    ? toGathr(group.msgs[0], task)
     : group.reply
       ? toReply(group, partial, group.last ? turn : undefined, approvals, {
-          ...extra,
           agent,
           role,
           time: role ? (group.msgs[0]?.time ?? turn?.created) : undefined,
         })
-      : toUser(group.msgs[0], extra);
+      : toUser(group.msgs[0]);
   cache.set(group.key, { sig, value });
   return value;
 }
@@ -269,19 +171,18 @@ function taskLine(turn: Turn | undefined, state: ChatState, crew: Team): Custom[
   return { from: crew.name(task.giver), to: crew.name(task.owner), what: task.what };
 }
 
-function toUser(m: Message, extra: Custom): ThreadMessageLike {
-  const custom: Custom = { ...extra };
+function toUser(m: Message): ThreadMessageLike {
   return {
     id: m.id,
     role: 'user',
     content: [{ type: 'text', text: m.body as string }],
-    metadata: { custom },
+    metadata: { custom: {} },
   };
 }
 
-function toGathr(m: Message, assignment: Custom['assignment'], extra: Custom): ThreadMessageLike {
+function toGathr(m: Message, assignment: Custom['assignment']): ThreadMessageLike {
   const text = m.body as string;
-  const custom: Custom = assignment ? { ...extra, assignment } : { ...extra, gathr: text };
+  const custom: Custom = assignment ? { assignment } : { gathr: text };
   return { id: m.id, role: 'system', content: [{ type: 'text', text }], metadata: { custom } };
 }
 

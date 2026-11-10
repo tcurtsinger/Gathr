@@ -1,4 +1,4 @@
-/* The conversation column (DESIGN.md: 44rem including 16px padding, the composer at its width). */
+/* The conversation column (DESIGN.md: 52rem including 16px padding, the composer at its width). */
 .thread {
   display: flex;
   flex: 1;
@@ -18,7 +18,7 @@
   flex: 1;
   flex-direction: column;
   width: 100%;
-  max-width: 44rem;
+  max-width: 52rem;
   margin: 0 auto;
   padding: 24px 16px 0;
 }
@@ -128,4 +128,26 @@
 }
 .reply-body:empty {
   display: none;
+}
+/* Under the speaker, a reply lines up with the agent's name: its 24px avatar and 10px gap. */
+.speaker ~ * {
+  margin-left: 34px;
+}
+/* Over the top of a column in the split chat: its name, with the canvas fading out below it. */
+.column-label {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: none;
+  height: 44px;
+  margin-bottom: -44px;
+  padding: 12px 24px 0;
+  background: linear-gradient(to bottom, var(--background) 45%, transparent);
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+}
+/* What a label covers starts 4px below it. */
+.column-label + .thread-column {
+  padding-top: 48px;
 }

@@ -101,26 +101,11 @@
   width: 11px;
   height: 11px;
 }
-.workspace-tabs svg {
+.workspace-tablist svg {
   width: 14px;
   height: 14px;
   flex: none;
   stroke-width: 1.5;
-}
-.workspace-toggle {
-  position: relative;
-  flex: none;
-}
-.attention {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--attention);
-}
-.workspace-toggle .attention {
-  position: absolute;
-  top: 1px;
-  right: 1px;
 }
 .workspace-view {
   display: flex;

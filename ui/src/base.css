@@ -79,6 +79,15 @@ dialog:modal {
 .muted {
   color: var(--muted);
 }
+/* Something new to look at: on a header button, at its top right; beside a message's time. */
+.attention {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+}
 @media (max-width: 767px) {
   button,
   select,

@@ -1,12 +1,13 @@
 // Live events recorded from a real gathrd on Claude Code's recorded frames, replayed into the
 // thread as the socket delivers them (the UI's side of the engine-replay tests).
+import { useRef } from 'react';
 import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { type Agent, Failure, type History, type Message, type Turn } from '../api';
 import type { LiveEvent } from '../live';
 import '../theme.css';
-import type { SendFailure } from './messages';
+import { type SendFailure, toThread } from './messages';
 import approval from './recorded/approval.json';
 import exitsMidReply from './recorded/exits-mid-reply.json';
 import sendFailed from './recorded/send-failed.json';
@@ -34,11 +35,16 @@ function View({
 }) {
   return (
     <div style={{ height: 600, display: 'flex' }}>
-      <Thread state={state} agents={agents} unsent={unsent} running={false} actions={none} empty={false}>
+      <Thread messages={useColumns(state, agents, unsent).main} running={false} actions={none} empty={false}>
         <p>Composer</p>
       </Thread>
     </div>
   );
+}
+/** The chat's columns as ChatView makes them, its cache kept across redraws. */
+function useColumns(state: ChatState, agents: Agent[], unsent: SendFailure[]) {
+  const cache = useRef(new Map());
+  return toThread(state, agents, unsent, cache.current);
 }
 const replay = (events: unknown) => (events as LiveEvent[]).reduce(apply, empty);
 
