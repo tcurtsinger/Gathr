@@ -74,3 +74,44 @@ test('Escape cancels the edit without closing Settings, and saves nothing', asyn
   expect(closed).toBe(0);
   expect(sent).toEqual([]);
 });
+
+test('in the desktop window Change opens the system picker: a cancel saves nothing, a pick saves, a failure gives the field', async () => {
+  const sent: unknown[] = [];
+  service(sent);
+  const picks: (string | null | Error)[] = [
+    null,
+    'Y:\\bad',
+    'Y:\\Picked',
+    new Error('made-up picker failure'),
+  ];
+  const asked: unknown[] = [];
+  vi.stubGlobal('__TAURI_INTERNALS__', {
+    invoke: async (cmd: string, args: unknown) => {
+      asked.push([cmd, args]);
+      const next = picks.shift();
+      if (next instanceof Error) throw next;
+      return next;
+    },
+  });
+  const screen = await render(<AgentFolder onReference={() => {}} />);
+  const change = screen.getByRole('button', { name: 'Change' });
+
+  await change.click();
+  await expect.element(change).toHaveFocus();
+  expect(sent).toEqual([]);
+
+  await change.click();
+  await expect.element(screen.getByText('Change failed')).toBeVisible();
+  await expect.element(screen.getByText('X:\\Made\\Up')).toBeVisible();
+
+  await change.click();
+  await expect.element(screen.getByText('Y:\\Picked')).toBeVisible();
+  await expect.element(screen.getByText('Change failed')).not.toBeInTheDocument();
+  expect(sent).toEqual([{ agent_folder: 'Y:\\bad' }, { agent_folder: 'Y:\\Picked' }]);
+
+  await change.click();
+  await expect.element(screen.getByRole('textbox', { name: 'Agent folder' })).toHaveValue('Y:\\Picked');
+  const options = { directory: true, title: 'Agent folder', canCreateDirectories: true };
+  expect(asked[0]).toEqual(['plugin:dialog|open', { options: { ...options, defaultPath: 'X:\\Made\\Up' } }]);
+  expect(asked[3]).toEqual(['plugin:dialog|open', { options: { ...options, defaultPath: 'Y:\\Picked' } }]);
+});

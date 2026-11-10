@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure } from '../api';
 import { Help } from '../components/Help';
 import { Notice } from '../components/Notice';
+import { desktop } from '../desktop';
+import { report } from '../report';
 
 /** Settings > General's Agent folder (M1): every project's Shared folder and one folder per agent, in one place. */
 export function AgentFolder({ onReference }: { onReference: (ref: string) => void }) {
@@ -29,18 +31,41 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
     setFailure(null);
   };
 
-  const save = (e: FormEvent) => {
-    e.preventDefault();
-    if (typed === null || !typed.trim() || saving) return;
+  const store = (path: string) => {
     setSaving(true);
     setFailure(null);
     api
-      .saveSettings({ agent_folder: typed.trim() })
+      .saveSettings({ agent_folder: path })
       .then((s) => {
         setFolder(s.agent_folder);
         close();
       }, setFailure)
       .finally(() => setSaving(false));
+  };
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    if (typed?.trim() && !saving) store(typed.trim());
+  };
+
+  /** The system's folder picker in the desktop window; a browser, or a picker that fails, gets the field. */
+  const pick = () => {
+    const window = desktop();
+    if (saving) return;
+    if (!window) return setTyped(folder);
+    const options = {
+      directory: true,
+      defaultPath: folder,
+      title: 'Agent folder',
+      canCreateDirectories: true,
+    };
+    window.invoke('plugin:dialog|open', { options }).then(
+      (picked) => typeof picked === 'string' && store(picked),
+      (e) => {
+        report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });
+        setTyped(folder);
+      },
+    );
   };
 
   if (folder === null) return null;
@@ -49,13 +74,13 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
       <span className="setting-label">
         {typed === null ? <span>Agent folder</span> : <label htmlFor="agent-folder">Agent folder</label>}
         <Help label="About agent folder">
-          <p>Each project gets a Shared folder and one folder per agent.</p>
+          <p>Each project gets a Shared folder and one folder per agent. Changes apply to new work.</p>
         </Help>
       </span>
       {typed === null ? (
         <span className="agent-folder-now">
           <code title={folder}>{folder}</code>
-          <Button type="button" variant="outline" ref={change} onClick={() => setTyped(folder)}>
+          <Button type="button" variant="outline" ref={change} aria-busy={saving} onClick={pick}>
             Change
           </Button>
         </span>
