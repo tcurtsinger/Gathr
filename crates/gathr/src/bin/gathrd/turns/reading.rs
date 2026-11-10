@@ -147,8 +147,18 @@ impl Task {
                 turn.partial_units = 0;
                 let ids = turn.ids.clone();
                 if !text.is_empty() {
-                    let message = self.db_message(&ids, "assistant", "text", &text).await;
-                    self.publish(&ids.chat, json!({ "type": "message", "message": message }));
+                    match self.db_message(&ids, "assistant", "text", &text).await {
+                        Ok(message) => self
+                            .publish(&ids.chat, json!({ "type": "message", "message": message })),
+                        Err(why) => {
+                            // Kept as the turn's unsaved text, which a window reads as streaming.
+                            if let Some(turn) = self.turn.as_mut() {
+                                turn.partial_units = text.encode_utf16().count();
+                                turn.partial = text;
+                            }
+                            self.save_failed(why).await;
+                        }
+                    }
                 }
             }
             Frame::ToolStart { id, name } => self.tool_started(id, name).await,
@@ -298,7 +308,10 @@ impl Task {
         };
         let ids = turn.ids.clone();
         let body = json!({ "tool": name, "status": "running" }).to_string();
-        let message = self.db_message(&ids, "assistant", "tool", &body).await;
+        let message = match self.db_message(&ids, "assistant", "tool", &body).await {
+            Ok(message) => message,
+            Err(why) => return self.save_failed(why).await,
+        };
         let message_id = message["id"].as_str().unwrap_or_default().to_string();
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         if let Some(turn) = self.turn.as_mut() {
@@ -350,8 +363,17 @@ impl Task {
         let ids = turn.ids.clone();
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         if !text.is_empty() {
-            let message = self.db_message(&ids, "assistant", "text", &text).await;
-            self.publish(&ids.chat, json!({ "type": "message", "message": message }));
+            match self.db_message(&ids, "assistant", "text", &text).await {
+                Ok(message) => {
+                    self.publish(&ids.chat, json!({ "type": "message", "message": message }))
+                }
+                Err(why) => {
+                    if let Some(turn) = self.turn.as_mut() {
+                        turn.save_failed.get_or_insert(why);
+                    }
+                    self.unsaved.push((ids, text));
+                }
+            }
         }
         for id in open {
             self.tool_ended(&id, "stopped").await;
@@ -367,12 +389,14 @@ impl Task {
         turn.gate.release();
         self.idle_since = std::time::Instant::now();
         let status = match () {
+            _ if turn.save_failed.is_some() => "failed",
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
             _ if end.ok => "done",
             _ => "failed",
         };
         let why = match status {
+            "failed" if turn.save_failed.is_some() => turn.save_failed.clone(),
             "failed" => Some(
                 end.message
                     .clone()

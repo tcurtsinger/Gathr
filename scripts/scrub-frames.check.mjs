@@ -1,7 +1,7 @@
 // Fails if scrub-frames.mjs lets a person's own names into a public recording.
 // usage: node scripts/scrub-frames.check.mjs
 import assert from 'node:assert/strict';
-import { scrub } from './scrub-frames.mjs';
+import { scrub, scrubFragments } from './scrub-frames.mjs';
 
 const init = scrub({
   type: 'system',
@@ -45,4 +45,10 @@ try {
   rmSync(folder, { recursive: true });
 }
 
+const delta = (index, partial_json) => ({ type: 'stream_event', event: { type: 'content_block_delta', index, delta: { type: 'input_json_delta', partial_json } } });
+const split = [delta(1, '{"file_path": "C:\\Us'), delta(1, 'ers\\private-name\\x"}'), { type: 'stream_event', event: { type: 'content_block_stop', index: 1 } }];
+const hide = (s) => s.replace(/C:\\Users\\private-name/g, 'home');
+const joined = scrubFragments(split, hide).slice(0, 2).map((f) => f.event.delta.partial_json).join('');
+assert.ok(!joined.includes('private-name'), `a name split across fragments survived the scrub: ${joined}`);
+assert.equal(joined, '{"file_path": "home\\x"}', 'the fragments still join into the scrubbed input');
 console.log('scrub-frames: ok');

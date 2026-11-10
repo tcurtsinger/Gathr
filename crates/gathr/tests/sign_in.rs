@@ -86,6 +86,26 @@ fn a_refused_code_fails_with_a_reference_that_finds_why() {
     );
 }
 
+/// A Cancel that comes while Claude Code is saving the login a pasted code gave it waits for it to
+/// finish: a login cut short there is a spent token (0002, audit 2.1.3).
+#[test]
+fn cancel_after_a_pasted_code_lets_the_login_finish_saving() {
+    let data = TempDir::new();
+    let saving = [("GATHR_REPLAY_LOGIN_MS", Path::new("1500"))];
+    let service = TestService::with_engine(&data.0, &saving);
+    let id = service.add_account("Test");
+    service.call("POST", &format!("/api/accounts/{id}/sign-in"));
+    let code = json!({ "code": "made-up-code#made-up-state" });
+    let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let cancelled = service.call("DELETE", &format!("/api/accounts/{id}/sign-in"));
+    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
+    let engine = engine_until(&service, &id, "the login to be saved", |e| {
+        e["login"] == "signed_in"
+    });
+    assert!(engine["sign_in"].is_null(), "still signing in: {engine}");
+}
+
 #[test]
 fn cancel_ends_the_wait_and_sign_in_starts_again() {
     let data = TempDir::new();

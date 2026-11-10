@@ -468,3 +468,64 @@ fn a_chats_history_holds_the_reply_still_streaming() {
     let last = after["messages"].as_array().unwrap().last().unwrap();
     assert_eq!(last["body"], "Hi!", "{after}");
 }
+
+/// Audit 2.2.6: a reply the database won't take fails its turn with a reference, stays readable as
+/// `streaming`, and is saved once a write works again. Never dropped while the turn carries on.
+#[test]
+fn a_reply_that_cant_be_saved_fails_the_turn_and_is_kept_until_it_can() {
+    let data = TempDir::new();
+    let fixture = recording("signed_in");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    let refuse = "CREATE TRIGGER no_reply BEFORE INSERT ON messages WHEN NEW.role = 'assistant' \
+                  AND NEW.kind = 'text' BEGIN SELECT RAISE(ABORT, 'forced'); END";
+    db.execute(refuse, []).unwrap();
+    let say = |text: &str| {
+        service.send(
+            "POST",
+            &format!("/api/chats/{chat}/messages"),
+            json!({ "text": text }),
+        )
+    };
+    say("Say hi");
+
+    let history = service.wait_for(&chat, 10, "the turn to fail", |h| {
+        turn_status(h) == Some("failed")
+    });
+    let turn = history["turns"].as_array().unwrap().last().unwrap().clone();
+    let why = turn["why"].as_str().unwrap_or_default();
+    assert!(
+        why.contains("wasn't saved"),
+        "the turn doesn't say why: {turn}"
+    );
+    let kept = history["streaming"].as_array().cloned().unwrap_or_default();
+    assert!(
+        kept.iter()
+            .any(|s| s["text"].as_str().is_some_and(|t| t.starts_with("Hi!"))),
+        "the reply is gone: {history}"
+    );
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", turn["ref"].as_str().unwrap()]);
+    assert!(
+        ok && trace.to_string().contains("forced"),
+        "the reference doesn't find the failed save: {trace}"
+    );
+
+    db.execute("DROP TRIGGER no_reply", []).unwrap();
+    say("Again");
+    let history = service.wait_for(&chat, 10, "the kept reply to be saved", |h| {
+        let mut replies = h["messages"].as_array().into_iter().flatten();
+        replies.any(|m| m["role"] == "assistant" && m["kind"] == "text")
+    });
+    let first = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "assistant")
+        .unwrap();
+    assert_eq!(
+        first["turn"], turn["id"],
+        "the kept reply was saved on another turn: {history}"
+    );
+}

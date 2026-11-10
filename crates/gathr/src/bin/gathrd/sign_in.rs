@@ -30,8 +30,6 @@ mod codex;
 pub use codex::log_out as codex_log_out;
 
 const PAGE_WAIT: Duration = Duration::from_secs(30);
-/// `claude auth logout` took 0.4 s on 2.1.318 (task 947).
-const SIGN_OUT_WAIT: Duration = Duration::from_secs(30);
 
 /// Each account's sign-in, made when first asked for.
 #[derive(Default)]
@@ -197,10 +195,11 @@ async fn start(
     let url = match waited {
         Ok(Ok(Some(url))) => url,
         Ok(Err(done)) => {
-            end_cancelled(&s, &sign_in, engine, &t.0, done).await;
+            end_cancelled(&s, &sign_in, engine, &t.0, done, false).await;
             return Ok(Json(json!({ "cancelled": true })));
         }
         Ok(Ok(None)) | Err(_) => {
+            // No code has reached it, so there's no login to cut short.
             let code = match engine.close(Duration::ZERO).await {
                 Closed::Exited(code) => format!("exit {code:?}"),
                 Closed::Killed => "no sign-in page within 30 s".into(),
@@ -240,16 +239,26 @@ async fn cancelled(asks: &mut mpsc::UnboundedReceiver<Ask>) -> Option<oneshot::S
     None
 }
 
+/// Before a code, Claude Code holds no login and never ends on its own (2.1.319 still waited
+/// 150 s after its input closed), so it's stopped at once. Once a code has reached it, it may be
+/// saving the login that code gave: it ends on its own, killed only at shutdown (0002).
 async fn end_cancelled(
     s: &State,
     sign_in: &SignIn,
     engine: Engine,
     trace: &str,
     done: Option<oneshot::Sender<()>>,
+    passed: bool,
 ) {
-    engine.close(Duration::ZERO).await;
+    let closed = match passed {
+        false => engine.close(Duration::ZERO).await,
+        true => close_gently(s, engine).await,
+    };
     let ended = Event::point("gathr.engine.sign_in").trace(trace);
-    let ended = ended.attr("account", sign_in.account.clone());
+    let ended = ended
+        .attr("account", sign_in.account.clone())
+        .attr("code_passed", passed)
+        .attr("killed", matches!(closed, Closed::Killed));
     s.writer.record(ended.attr("ended", "cancelled"));
     sign_in.show(&s.chats, Value::Null);
     if let Some(done) = done {
@@ -292,6 +301,7 @@ async fn watch(
         sign_in,
     } = job;
     let mut last_error = None;
+    let mut passed = false;
     loop {
         tokio::select! {
             line = lines.recv() => match line {
@@ -305,11 +315,12 @@ async fn watch(
             },
             Some(ask) = asks.recv() => match ask {
                 Ask::Code(code) => {
-                    if let Err(e) = engine.write_line(&code).await {
-                        last_error = Some(format!("the code didn't reach Claude Code: {e}"));
+                    match engine.write_line(&code).await {
+                        Ok(()) => passed = true,
+                        Err(e) => last_error = Some(format!("the code didn't reach Claude Code: {e}")),
                     }
                 }
-                Ask::Cancel(done) => return end_cancelled(&s, &sign_in, engine, &trace, Some(done)).await,
+                Ask::Cancel(done) => return end_cancelled(&s, &sign_in, engine, &trace, Some(done), passed).await,
             },
         }
     }
@@ -464,20 +475,12 @@ pub async fn log_out_held(
         .map_err(|e| format!("{} wasn't made: {e}", folder.display()))?;
     let env = command::env(std::env::vars_os(), folder);
     let args = ["auth".to_string(), "logout".to_string()];
-    let (mut engine, mut lines) = Engine::start(program, &args, env, folder)
+    let (engine, mut lines) = Engine::start(program, &args, env, folder)
         .map_err(|e| format!("Claude Code didn't start from {}: {e}", program.display()))?;
-    // `None` when shutdown came first: it then gets the grace every engine gets to finish.
-    let waited = tokio::select! {
-        exited = tokio::time::timeout(SIGN_OUT_WAIT, engine.wait()) => Some(exited),
-        () = s.stopped() => None,
-    };
-    let closed = match waited {
-        Some(Ok(code)) => Closed::Exited(code),
-        Some(Err(_)) => engine.close(Duration::ZERO).await,
-        None => match engine.close(CLOSE_GRACE).await {
-            Closed::Killed => return Err(STOPPING.into()),
-            exited => exited,
-        },
+    // It may be writing the folder's login as it signs out: never cut short (0002).
+    let closed = match close_gently(s, engine).await {
+        Closed::Killed => return Err(STOPPING.into()),
+        exited => exited,
     };
     let mut said = Vec::new();
     let next = Duration::from_secs(2);
@@ -489,9 +492,16 @@ pub async fn log_out_held(
     match closed {
         Closed::Exited(Some(0)) => Ok(()),
         Closed::Exited(code) => Err(format!("Claude Code exited ({code:?}): {}", said.join(" "))),
-        Closed::Killed => Err(format!(
-            "Claude Code didn't finish signing out in {} s",
-            SIGN_OUT_WAIT.as_secs()
-        )),
+        Closed::Killed => Err(STOPPING.into()),
+    }
+}
+
+/// The gentle close (0001, 0002): input closed, then the engine's own exit, as long as it takes.
+/// Killed only at shutdown, after the grace every engine gets.
+pub async fn close_gently(s: &State, mut engine: Engine) -> Closed {
+    engine.close_input();
+    tokio::select! {
+        code = engine.wait() => Closed::Exited(code),
+        () = s.stopped() => engine.close(CLOSE_GRACE).await,
     }
 }

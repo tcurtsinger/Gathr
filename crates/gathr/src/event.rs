@@ -4,7 +4,7 @@ use rusqlite::{Connection, params};
 use serde_json::{Map, Value};
 
 use crate::ids::{now_us, ulid};
-use crate::redact::redact;
+use crate::redact::redact_json;
 
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -84,7 +84,7 @@ impl Event {
     /// Writes the row. Every string in `attrs` is redacted first.
     pub fn insert(&self, conn: &Connection) -> rusqlite::Result<()> {
         let attrs = (!self.attrs.is_empty())
-            .then(|| redact_strings(Value::Object(self.attrs.clone())).to_string());
+            .then(|| redact_json(&Value::Object(self.attrs.clone())).to_string());
         conn.prepare_cached(
             "INSERT INTO events (id, ts, name, phase, trace_id, span_id, parent_span_id, conversation_id,
                 duration_us, status, error_type, attrs, task_id)
@@ -106,18 +106,5 @@ impl Event {
             self.task_id.map(|n| n.to_string()),
         ])?;
         Ok(())
-    }
-}
-
-fn redact_strings(value: Value) -> Value {
-    match value {
-        Value::String(s) => Value::String(redact(&s)),
-        Value::Array(items) => Value::Array(items.into_iter().map(redact_strings).collect()),
-        Value::Object(map) => Value::Object(
-            map.into_iter()
-                .map(|(k, v)| (k, redact_strings(v)))
-                .collect(),
-        ),
-        other => other,
     }
 }

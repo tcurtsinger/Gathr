@@ -4,11 +4,33 @@
 /// Flags whose next word is a secret.
 const SECRET_FLAGS: &[&str] = &["token", "key", "secret", "password"];
 
+/// Keys whose string value is a secret whatever it looks like (`refresh_token`, `Authorization`).
+const SECRET_KEYS: &[&str] = &[
+    "token",
+    "secret",
+    "password",
+    "apikey",
+    "api_key",
+    "authorization",
+    "credential",
+    "cookie",
+];
+
+/// Where a word ends: whitespace, or the punctuation JSON and shell quoting put around a value,
+/// so a key inside `{"key":"sk-…"}` or a fragment of streamed tool input is still one word.
+fn ends_word(c: char) -> bool {
+    c.is_whitespace()
+        || matches!(
+            c,
+            '"' | '\'' | '{' | '}' | '[' | ']' | '(' | ')' | ',' | ';' | ':' | '`' | '\\'
+        )
+}
+
 pub fn redact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut hide_next: Option<&str> = None;
-    for piece in text.split_inclusive(char::is_whitespace) {
-        let word = piece.trim_end();
+    for piece in text.split_inclusive(ends_word) {
+        let word = piece.trim_end_matches(ends_word);
         let gap = &piece[word.len()..];
         if word.is_empty() {
             out.push_str(piece);
@@ -18,15 +40,9 @@ pub fn redact(text: &str) -> String {
             out.push_str(&format!("[redacted:{kind}]{gap}"));
             continue;
         }
-        let bare =
-            word.trim_matches(|c: char| matches!(c, '"' | '\'' | '(' | ')' | ',' | ';' | '`'));
-        match classify(bare) {
-            Some(Shape::Whole(kind)) => {
-                out.push_str(&word.replace(bare, &format!("[redacted:{kind}]")))
-            }
-            Some(Shape::Value(name)) => {
-                out.push_str(&word.replace(bare, &format!("{name}=[redacted:env]")))
-            }
+        match classify(word) {
+            Some(Shape::Whole(kind)) => out.push_str(&format!("[redacted:{kind}]")),
+            Some(Shape::Value(name)) => out.push_str(&format!("{name}=[redacted:env]")),
             Some(Shape::Next(kind)) => {
                 hide_next = Some(kind);
                 out.push_str(word);
@@ -36,6 +52,32 @@ pub fn redact(text: &str) -> String {
         out.push_str(gap);
     }
     out
+}
+
+/// Every string in a JSON value redacted, and a secret-named key's string hidden whole. Frames
+/// and event attributes go through here, not `redact` on their text: in JSON text a secret sits
+/// inside quotes and escapes that `redact` alone can't see past.
+pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    let secret_key = |k: &str| {
+        let k = k.to_ascii_lowercase();
+        SECRET_KEYS.iter().any(|s| k.contains(s))
+    };
+    match value {
+        Value::String(s) => Value::String(redact(s)),
+        Value::Array(items) => Value::Array(items.iter().map(redact_json).collect()),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(k, v)| match v {
+                    Value::String(s) if secret_key(k) && !s.is_empty() => {
+                        (k.clone(), Value::from("[redacted:named]"))
+                    }
+                    _ => (k.clone(), redact_json(v)),
+                })
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 enum Shape<'a> {
@@ -87,7 +129,47 @@ fn is_jwt(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::redact;
+    use super::{redact, redact_json};
+    use serde_json::{Value, json};
+
+    /// Real frame shapes (Claude Code and Codex) with a secret where an agent's work can put one.
+    #[test]
+    fn secrets_inside_frame_values_are_redacted() {
+        let frames = [
+            json!({ "type": "user", "message": { "role": "user", "content": "sk-ant-api03-abcdefghijklmnopqrst" } }),
+            json!({ "type": "assistant", "message": { "content": [{ "type": "tool_use", "name": "Bash",
+                "input": { "command": "curl -H \"Authorization: Bearer abc123secret\" x" } }] } }),
+            json!({ "type": "stream_event", "event": { "type": "content_block_delta",
+                "delta": { "type": "input_json_delta", "partial_json": "{\"key\":\"sk-proj-0123456789abcdefgh\"}" } } }),
+            json!({ "method": "item/started", "params": { "item": { "type": "mcpToolCall",
+                "arguments": { "headers": { "Authorization": "Basic dXNlcjpwYXNz" }, "refresh_token": "rt-1" } } } }),
+        ];
+        for frame in frames {
+            let line = frame.to_string();
+            let body = redact_json(&frame).to_string();
+            for secret in [
+                "sk-ant-api03",
+                "abc123secret",
+                "sk-proj-0123",
+                "dXNlcjpwYXNz",
+                "rt-1",
+            ] {
+                assert!(
+                    !body.contains(secret),
+                    "{secret} survived in {body} (from {line})"
+                );
+            }
+            assert!(body.contains("[redacted:"), "nothing was marked in {body}");
+            serde_json::from_str::<Value>(&body).expect("the redacted frame is still JSON");
+        }
+    }
+
+    #[test]
+    fn frame_values_without_secrets_are_untouched() {
+        let frame = json!({ "type": "result", "usage": { "input_tokens": 12, "output_tokens": 3 },
+            "result": "Done: wrote note.txt", "session_id": "8947397a-6c50-409f-9253-43c09abad99c" });
+        assert_eq!(redact_json(&frame), frame);
+    }
 
     #[test]
     fn each_secret_shape_is_redacted() {
