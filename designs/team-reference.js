@@ -1,70 +1,137 @@
 (() => {
-	const thread = document.querySelector("#round-thread");
-	const toggle = document.querySelector("#thread-toggle");
-	const summary = document.querySelector("#summary");
+	const get = (selector) => document.querySelector(selector);
+	const text = (id, value) => {
+		document.getElementById(id).textContent = value;
+	};
+	const summary = get("#summary");
 	const triggers = [...document.querySelectorAll('[popovertarget="summary"]')];
-	const text = (id, value) => { document.getElementById(id).textContent = value; };
-	let manuallySet = false;
 	let anchor = triggers[0];
-	toggle.addEventListener("click", () => { manuallySet = true; });
-	const log = document.querySelector("#rowan-tool-log");
+	const toggle = get("#split-toggle");
+	const team = get("#team-column");
+	const supervisor = get("#supervisor-scroll");
+	let positions = [0, 0];
+	function setSplit(open) {
+		positions = [
+			supervisor.scrollTop,
+			team.hidden ? positions[1] : team.scrollTop,
+		];
+		team.hidden = !open;
+		get("#supervisor-label").hidden = !open;
+		toggle.setAttribute("aria-pressed", String(open));
+		toggle.setAttribute(
+			"aria-label",
+			open ? "Hide team chat" : "Show team chat",
+		);
+		toggle.title = toggle.getAttribute("aria-label");
+		if (open) {
+			get("#team-unread").hidden = true;
+			get("#late-unread").hidden = true;
+		}
+		supervisor.scrollTop = positions[0];
+		team.scrollTop = positions[1];
+	}
+	toggle.onclick = () => setSplit(team.hidden);
+	get("#waiting-on-team").onclick = () => setSplit(true);
+	const log = get("#rowan-tool-log");
 	for (let call = 1; call <= 32; call++) {
 		log.textContent += `${call}. ${call % 2 ? "Read cursor replay fixture" : "Checked interruption boundary"}\n`;
 	}
+	// Invented fixture records, not a production data adapter. No prose parsing or timers.
+	const tasks = [...get("#agent-plan").querySelectorAll("li")].map((row) => ({
+		owner: row.dataset.owner.toLowerCase(),
+		state: row.dataset.state,
+		row,
+	}));
+	const initial = tasks.map((task) => task.state);
 	function showResult(phase) {
 		const done = phase !== "running";
 		const late = phase === "late";
-		document.querySelector("#round-final").hidden = !done;
-		document.querySelector("#late-member").hidden = !late;
-		document.querySelector("#round-finish").disabled = done;
-		document.querySelector("#round-late").disabled = done;
+		get("#round-final").hidden = !done;
+		get("#late-member").hidden = !late;
+		get("#waiting-on-team").hidden = done;
+		get("#team-working").hidden = done;
+		get("#round-finish").disabled = done;
+		get("#round-late").disabled = late;
 		text("round-state", late ? "Late reply" : done ? "Finished" : "Running");
 		text("final-time", late ? "11:35" : "10:03");
-		text("thread-state", late ? "Sol replied at 11:32 · Rowan, Kit and Lane done"
-			: done ? "Rowan, Kit and Lane replied · Sol reviewed" : "Kit and Lane working · Rowan done · Sol waiting");
-		text("kit-result", done ? "All interruption cases passed. Tab, Enter and Escape keep the existing behavior."
-			: "The interrupted tool result stays in its original row. I’m checking the last shortcut case now.");
-		text("lane-result", done ? "Reconnect, Stop and Retry keep the partial answer and the draft at both window sizes."
-			: "The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.");
-		text("summary-mira-state", done ? "Ready" : "Waiting for Kit and Lane");
-		text("summary-mira-task", done ? "No assigned tasks" : "Reconcile results, then ask Sol to review");
-		for (const member of ["kit", "lane"]) {
-			text(`summary-${member}-state`, done ? "Ready" : "Working");
+		text("plan-state", done ? "Done" : "Kit and Lane working");
+		text(
+			"kit-result",
+			done
+				? "All interruption cases passed. Tab, Enter and Escape keep the existing behavior."
+				: "The interrupted tool result stays in its original row. I’m checking the last shortcut case now.",
+		);
+		text(
+			"lane-result",
+			done
+				? "Reconnect, Stop and Retry keep the partial answer and the draft at both window sizes."
+				: "The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.",
+		);
+		tasks.forEach((task, index) => {
+			task.state = done ? "done" : initial[index];
+			task.row.dataset.state = task.state;
+			const item = get(`#summary-${task.owner}-task`);
+			item.dataset.state = task.state;
+			const count = task.state === "done" ? 1 : 0;
+			text(`summary-${task.owner}-count`, `${count}/1`);
+			get(`[data-agent="${task.owner}"] progress`).value = count;
+			get(`#summary-${task.owner}-state`).dataset.state = task.state;
+			const waiting = task.owner === "mira" && !done;
+			text(
+				`summary-${task.owner}-state`,
+				waiting
+					? "Waiting for Kit and Lane since 09:15"
+					: task.state === "active"
+						? "Working"
+						: "Ready",
+			);
+			get(".ds-segments").children[index].dataset.state = task.state;
+		});
+		// Only recorded fixture detail is shown, and only while its step is active.
+		text("step-kit-detail", done ? "" : "Checking the last shortcut case");
+		text("step-lane-detail", done ? "" : "Checking Retry at 1024px");
+		const count = tasks.filter((task) => task.state === "done").length;
+		text("plan-count", `${count}/${tasks.length}`);
+		get(".ds-segments").setAttribute("aria-valuenow", String(count));
+		get("#plan-toggle .ds-spinner").hidden = done;
+		get("#plan-done").hidden = !done;
+		if (late && team.hidden) {
+			get("#team-unread").hidden = false;
+			get("#late-unread").hidden = false;
 		}
-		text("summary-kit-task", done ? "Interruption and shortcut checks done" : "Check interruptions and shortcuts");
-		text("summary-lane-task", done ? "Reconnect and stopped checks done" : "Check reconnect and stopped states");
-		text("summary-sol-state", done ? "Ready" : "Waiting for Kit");
-		text("summary-sol-task", done ? "Review done" : "Review after replay checks");
-		if (!manuallySet) thread.open = !done;
 	}
-	document.querySelector("#round-finish").onclick = () => showResult("finished");
-	document.querySelector("#round-late").onclick = () => showResult("late");
-	document.querySelector("#round-reset").onclick = () => {
-		manuallySet = false;
+	get("#round-finish").onclick = () => showResult("finished");
+	get("#round-late").onclick = () => showResult("late");
+	get("#round-reset").onclick = () => {
 		showResult("running");
+		get("#team-unread").hidden = true;
+		get("#late-unread").hidden = true;
 	};
-	document.querySelector("#thread-back").onclick = (event) => {
-		event.preventDefault();
-		manuallySet = true;
-		thread.open = true;
-		toggle.focus({ preventScroll: true });
-		toggle.scrollIntoView({ block: "start" });
-	};
+	get("#agent-action-close").onclick = () =>
+		get("#agent-actions").hidePopover();
+	showResult("running");
 	function placeSummary() {
 		if (!summary.matches(":popover-open")) return;
-		const at = anchor.id === "team-summary-open"
-			? document.querySelector("#team-header").getBoundingClientRect() : anchor.getBoundingClientRect();
+		const at =
+			anchor.id === "team-summary-open"
+				? document.querySelector("#team-header").getBoundingClientRect()
+				: anchor.getBoundingClientRect();
 		const size = summary.getBoundingClientRect();
 		summary.style.left = `${Math.max(16, Math.min(at.right - size.width - 8, innerWidth - size.width - 16))}px`;
 		summary.style.top = `${Math.max(16, Math.min(at.bottom + 8, innerHeight - size.height - 16))}px`;
 	}
 	for (const trigger of triggers) {
 		trigger.setAttribute("aria-expanded", "false");
-		trigger.addEventListener("click", () => { anchor = trigger; });
+		trigger.addEventListener("click", () => {
+			anchor = trigger;
+		});
 	}
 	summary.addEventListener("toggle", (event) => {
 		for (const trigger of triggers) {
-			trigger.setAttribute("aria-expanded", String(event.newState === "open" && trigger === anchor));
+			trigger.setAttribute(
+				"aria-expanded",
+				String(event.newState === "open" && trigger === anchor),
+			);
 		}
 		placeSummary();
 	});

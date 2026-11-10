@@ -1,23 +1,91 @@
 .ds-fixture-controls {
-	margin-bottom: 24px;
+	margin-bottom: 16px;
 }
 .ds-team {
-	max-width: 704px;
-	padding-inline: 16px;
-	margin-inline: auto;
 	overflow-wrap: anywhere;
+	border: 1px solid var(--border);
+}
+.ds-team [hidden] {
+	display: none !important;
 }
 .ds-team-header {
+	height: 46px;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	min-height: 46px;
-	margin-bottom: 24px;
+	gap: 8px;
+	padding: 0 16px;
 	border-bottom: 1px solid var(--border);
 }
 .ds-team-header h3 {
 	margin: 0;
+}
+.ds-team-header .ds-row {
+	gap: 2px;
+}
+#split-toggle {
+	position: relative;
+	width: 24px;
+	height: 24px;
+	padding: 4px;
+}
+#split-toggle[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+.ds-unread {
+	display: inline-block;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--attention);
+	margin-left: 4px;
+}
+#team-unread {
+	position: absolute;
+	top: 0;
+	right: 0;
+}
+.ds-split-body {
+	display: flex;
+	height: 680px;
+}
+.ds-supervisor {
+	flex: 1 1 0;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.ds-column-scroll {
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+	overflow-y: auto;
+}
+#team-column {
+	border-left: 1px solid var(--border);
+}
+.ds-column-label {
+	position: sticky;
+	top: 0;
+	height: 44px;
+	margin-bottom: -44px;
+	padding: 12px 24px 0;
+	pointer-events: none;
+	background: linear-gradient(to bottom, var(--background) 45%, transparent);
+	font-size: 12px;
+	font-weight: 500;
+}
+.ds-thread-column {
+	max-width: 52rem;
+	margin: auto;
+	padding: 24px 16px 32px;
+}
+.ds-compose-dock {
+	padding: 0 16px 16px;
+}
+.ds-compose-dock .ds-composer {
+	max-width: 52rem;
+	margin: auto;
 }
 .ds-team-message {
 	margin-bottom: 28px;
@@ -25,9 +93,13 @@
 .ds-speaker {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	flex-wrap: wrap;
+	gap: 10px;
 	font-size: 13px;
 	font-weight: 500;
+}
+.ds-speaker .ds-agent-identity {
+	gap: 10px;
 }
 .ds-speaker time {
 	margin-left: auto;
@@ -36,58 +108,17 @@
 	font-weight: 400;
 	font-variant-numeric: tabular-nums;
 }
+.ds-team-message > :not(.ds-speaker, .ds-assignment) {
+	margin-left: 34px;
+}
 .ds-team-message p {
-	margin: 12px 0 0;
+	margin-top: 12px;
+	margin-bottom: 0;
 }
 .ds-team-message h4 {
 	font-size: 14px;
 	font-weight: 600;
-	margin: 24px 0 0;
-}
-.ds-team-thread {
-	margin-bottom: 28px;
-	border-block: 1px solid var(--border);
-}
-.ds-team-thread > summary {
-	display: flex;
-	align-items: baseline;
-	flex-wrap: wrap;
-	gap: 8px;
-	padding: 12px 8px;
-	border-radius: 8px;
-	cursor: pointer;
-	list-style: none;
-	font-size: 12px;
-	scroll-margin-block: 24px;
-}
-.ds-team-thread > summary::-webkit-details-marker {
-	display: none;
-}
-.ds-team-thread > summary::before {
-	content: "";
-	width: 6px;
-	height: 6px;
-	border-right: 1px solid currentColor;
-	border-bottom: 1px solid currentColor;
-	transform: rotate(-45deg);
-	align-self: center;
-	margin-right: 4px;
-}
-.ds-team-thread[open] > summary::before {
-	transform: rotate(45deg);
-}
-.ds-team-thread strong {
-	font-weight: 500;
-}
-.ds-team-thread > summary .ds-role {
-	margin-left: auto;
-}
-.ds-thread-replies {
-	margin: 12px 0 20px 10px;
-	padding-left: 20px;
-	border-left: 1px solid var(--border);
-}
-.ds-thread-replies .ds-team-message:last-child {
+	margin-top: 24px;
 	margin-bottom: 0;
 }
 .ds-team-message .ds-assignment {
@@ -96,31 +127,196 @@
 	margin: 0 0 12px;
 }
 .ds-team-message .ds-tool-disclosure {
-	margin: 8px 0 0;
+	margin-top: 8px;
 }
-.ds-team-message .ds-tool-disclosure pre {
+.ds-tool-disclosure pre {
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
-.ds-thread-link {
-	display: inline-block;
-	margin-top: 12px;
-	padding: 4px 8px;
-	border-radius: 8px;
-	font-size: 12px;
-	text-underline-offset: 3px;
+.ds-working {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--muted-foreground);
+	padding: 4px 10px 4px 6px;
+	font: 13px / 18px var(--font-sans);
+	border-radius: 999px;
+	border: 0;
+	background: transparent;
 }
-.ds-thread-link:is(:hover, :focus-visible) {
+.ds-waiting {
+	cursor: pointer;
+}
+.ds-waiting:is(:hover, :focus-visible) {
+	background: color-mix(in srgb, var(--foreground) 6%, transparent);
+	color: var(--foreground);
+}
+.ds-workers {
+	display: inline-flex;
+	padding-left: 4px;
+}
+.ds-workers i {
+	font: 500 9px / 18px var(--font-sans);
+	text-align: center;
+	width: 18px;
+	border-radius: 50%;
 	background: var(--raised);
+	color: var(--foreground);
+	margin-left: -4px;
+	box-shadow: 0 0 0 2px var(--background);
+}
+.ds-spinner {
+	display: inline-block;
+	flex: 0 0 12px;
+	width: 12px;
+	height: 12px;
+	border: 1.5px solid transparent;
+	border-top-color: var(--attention);
+	border-right-color: var(--attention);
+	border-radius: 50%;
+	animation: ds-spin 1s linear infinite;
+}
+@keyframes ds-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.ds-plan {
+	position: relative;
+	width: 100%;
+	max-width: 44rem;
+	margin: 0 auto 8px;
+	padding-bottom: 40px;
+	border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+	border-radius: 16px;
+	background: var(--popover);
+	overflow: hidden;
+}
+.ds-plan > summary {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 40px;
+	padding: 0 12px 0 14px;
+	list-style: none;
+	cursor: pointer;
+	font-size: 13px;
+}
+.ds-plan > summary::-webkit-details-marker,
+.ds-agent summary::-webkit-details-marker {
+	display: none;
+}
+.ds-plan > summary:is(:hover, :focus-visible) {
+	background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.ds-plan strong {
+	font-weight: 500;
+	white-space: nowrap;
+}
+#plan-state {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+.ds-segments {
+	display: flex;
+	gap: 3px;
+	margin-left: auto;
+}
+.ds-segments i {
+	width: 12px;
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+.ds-segments [data-state="done"] {
+	background: color-mix(in srgb, var(--foreground) 80%, transparent);
+}
+.ds-segments [data-state="active"] {
+	background: var(--attention);
+}
+.ds-fraction {
+	font-size: 12px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+	min-width: 30px;
+	text-align: right;
+}
+.ds-chevron {
+	width: 6px;
+	height: 6px;
+	border-left: 1px solid currentColor;
+	border-top: 1px solid currentColor;
+	transform: rotate(45deg);
+	transition: transform 200ms;
+	flex-shrink: 0;
+}
+.ds-plan[open] .ds-chevron {
+	transform: rotate(225deg);
+}
+.ds-plan-steps {
+	list-style: none;
+	margin: 0;
+	padding: 10px 14px 6px;
+	max-height: 40vh;
+	overflow: auto;
+	border-bottom: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.ds-plan-steps li {
+	display: flex;
+	gap: 10px;
+	padding: 5px 0;
+	font-size: 13px;
+	line-height: 20px;
+	color: var(--muted-foreground);
+}
+.ds-plan-steps li > small {
+	margin-left: auto;
+	font-size: 11px;
+}
+.ds-step-detail {
+	display: block;
+	font-size: 12px;
+}
+.ds-step-icon {
+	width: 7px;
+	height: 7px;
+	margin: 6px 5px 0 2px;
+	border: 1px solid currentColor;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+.ds-plan-steps [data-state="active"] {
+	color: var(--foreground);
+}
+[data-state="active"] > .ds-step-icon,
+.ds-todos [data-state="active"]::before {
+	border-color: var(--attention);
+	border-right-color: transparent;
+	border-radius: 50%;
+	animation: ds-spin 1s linear infinite;
+}
+[data-state="done"] > .ds-step-icon,
+.ds-todos [data-state="done"]::before {
+	border-radius: 0;
+	border-top: 0;
+	border-right: 0;
+	transform: rotate(-45deg);
+	height: 5px;
 }
 .ds-reaction {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	margin-left: 12px;
+	margin-top: 12px;
 	padding: 3px 8px;
 	border: 1px solid var(--border);
-	border-radius: 9999px;
+	border-radius: 999px;
 	color: var(--muted-foreground);
 	font-size: 11px;
 }
@@ -135,27 +331,146 @@
 	margin: 0;
 	max-height: min(560px, calc(100dvh - 32px));
 }
+.ds-agent-row {
+	position: relative;
+}
+.ds-agent {
+	padding: 0;
+}
 .ds-agent summary {
 	flex-direction: column;
 	gap: 4px;
-	padding: 4px;
-	border-radius: 8px;
+	padding: 8px;
+	border-radius: 10px;
+}
+.ds-agent summary:is(:hover, :focus-visible) {
+	background: var(--hover-tint);
+}
+.ds-agent-identity {
+	gap: 10px;
+}
+.ds-agent summary .ds-role,
+.ds-agent-progress {
+	margin-left: 34px;
 }
 .ds-agent summary .ds-role {
-	padding-left: 32px;
+	padding-right: 16px;
+}
+.ds-agent-progress {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	font: 11px var(--font-mono);
+	color: var(--muted-foreground);
+}
+.ds-agent-progress progress {
+	appearance: none;
+	width: 100%;
+	height: 3px;
+	border: 0;
+	border-radius: 99px;
+	background: color-mix(in srgb, var(--foreground) 6%, transparent);
+}
+.ds-agent-progress progress::-webkit-progress-bar {
+	background: color-mix(in srgb, var(--foreground) 6%, transparent);
+	border-radius: 99px;
+}
+.ds-agent-progress progress::-webkit-progress-value {
+	background: color-mix(in srgb, var(--foreground) 80%, transparent);
+	border-radius: 99px;
+}
+.ds-agent-progress progress::-moz-progress-bar {
+	background: color-mix(in srgb, var(--foreground) 80%, transparent);
+	border-radius: 99px;
+}
+.ds-agent-more {
+	position: absolute;
+	right: 8px;
+	top: 8px;
+	width: 24px;
+	height: 24px;
+	padding: 4px;
+}
+.ds-agent .ds-todos {
+	list-style: none;
+	padding: 0 8px 0 42px;
+	margin: 4px 0 12px;
+}
+.ds-todos li {
+	display: flex;
+	gap: 8px;
+	font-size: 12px;
+	line-height: 18px;
+}
+.ds-todos li::before {
+	content: "";
+	width: 9px;
+	height: 9px;
+	border: 1px solid currentColor;
+	flex-shrink: 0;
+	margin-top: 4px;
+}
+.ds-todos [data-state="done"] {
+	text-decoration: line-through;
+}
+.ds-agent-actions {
+	background: var(--popover);
+	color: var(--foreground);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 12px;
+}
+.ds-archive-icon {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	margin-right: 8px;
+	vertical-align: middle;
+	overflow: visible;
+}
+.ds-archive-lid {
+	transform-origin: 2px 8px;
+	transition: transform 160ms ease-out;
+}
+.ds-archive-fold[open] .ds-archive-lid {
+	transform: translateY(-1.5px) rotate(-14deg);
+}
+@media (prefers-reduced-motion: reduce) {
+	.ds-spinner,
+	[data-state="active"] > .ds-step-icon,
+	.ds-todos [data-state="active"]::before {
+		animation: none;
+	}
+	.ds-chevron,
+	.ds-archive-lid {
+		transition: none;
+	}
 }
 @media (max-width: 600px) {
-	.ds-team {
-		padding-inline: 0;
+	.ds-team-header {
+		padding-inline: 8px;
 	}
-	.ds-speaker {
+	.ds-thread-column,
+	.ds-compose-dock {
+		padding-inline: 8px;
+	}
+	.ds-column-label {
+		padding-inline: 8px;
+	}
+	.ds-working {
 		flex-wrap: wrap;
 	}
-	.ds-thread-replies {
-		padding-left: 12px;
+	#plan-state {
+		display: none;
 	}
-	.ds-team-thread > summary .ds-role {
-		flex-basis: 100%;
-		margin-left: 20px;
+	.ds-segments {
+		gap: 2px;
 	}
+	.ds-segments i {
+		width: 6px;
+	}
+}
+
+.ds-agent .ds-role [data-state="active"] {
+	color: var(--attention);
 }
