@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "theme",
+  "description": "Gathr's page, served by the service on 127.0.0.1, sets the title bar to its Theme. Nothing else.",
+  "windows": ["main"],
+  "remote": { "urls": ["http://127.0.0.1:*"] },
+  "permissions": ["core:window:allow-set-theme"]
+}
