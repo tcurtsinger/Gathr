@@ -179,7 +179,7 @@ fn tell_lead(
                     t.state.as_str()
                 )
             }
-            None => "for the person".to_string(),
+            None => "waiting for your answer".to_string(),
         };
         lines.push(format!("#{n} {} ({whose})", t.what));
     }

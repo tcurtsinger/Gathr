@@ -240,7 +240,7 @@ fn a_stale_task_something_can_still_move_is_only_flagged() {
     let mixed = sweep(&mut conn, 5 * DAY, &[]);
     let notice = &mixed.starts[0].text;
     assert!(
-        notice.contains(&format!("#{person} Pick a name (for the person)"))
+        notice.contains(&format!("#{person} Pick a name (waiting for your answer)"))
             && notice
                 .contains("agent tasks auto-cancel after 7 more days without progress unless work is ongoing or paused."),
         "mixed notice must identify the person and scope auto-cancel to agents: {notice}"
