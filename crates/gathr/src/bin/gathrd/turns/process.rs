@@ -158,6 +158,7 @@ impl Task {
             cwd: cwd.clone(),
             folders: std::iter::once(cwd.clone()).chain(beside.clone()).collect(),
             scratch: place.scratch.clone(),
+            from_before: place.from_before,
         };
         let pass = self.pass_for(&assigned, worktree, given, trace).await?;
         drop(making);

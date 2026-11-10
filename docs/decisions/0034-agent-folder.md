@@ -36,10 +36,16 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   `thread/resume`). Gathr's data folder (logins, database, engine copies) is never one of them, and
   the setting refuses a folder that holds it. Whatever those folders say, the hook asks before a
   write that lands in the data folder, links followed, so a link made later in Shared or the
-  agent's own folder never opens it; only an engine's own folder from before (`<data>/chats`,
-  `<data>/worktrees`) stays writable there. A Shared or own folder that holds the data folder or
-  leads into it through a link isn't passed to the engine at all (`gathr.folder.refused`, with the
-  turn's reference), and a turn whose worktree or temp folder would land there fails.
+  agent's own folder never opens it. The one exception is an engine's own folder from before the
+  agent folder, recognised by where it is, never by being in the data folder:
+  `<data>/worktrees/<chat>/<agent>` or `<data>/chats/<chat>` for that chat and agent; it stays
+  writable, and nothing else is ever added beside it. Each turn reads the agent folder's real path
+  first: one that holds the data folder or leads into it (a link made after it was saved) is
+  refused before anything is made or recorded, and the turn fails with `gathr.folder.refused` and
+  its reference; Settings still shows it, and saving it again is refused. A Shared or own folder
+  that leads into the data folder isn't passed to the engine (`--add-dir`, Codex's writable roots),
+  a turn whose worktree or temp folder would land there fails the same way, and a sweep never
+  removes a folder that now leads there (`gathr.cleanup.skip`, `in_data`).
 - **One name for each folder:** Gathr resolves the agent folder as the disk names it (links
   followed, macOS's `/var` as `/private/var`, without Windows' `\\?\` prefix) before it makes
   anything in it, so the engine, its sandbox and Gathr's own checks all see the same paths.
@@ -57,9 +63,9 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   folder a running engine works or keeps its temporary files in, or one a wait check runs in, and
   while a chat is only archived, never a worktree with changes not committed (files git ignores
   aren't changes: they go with it). Each such folder is skipped with an error event
-  (`gathr.cleanup.skip`: `in_use`, `changes`, or `left` when the disk refuses), recorded once per
-  reason with the reference its removal later shares (`gathr.cleanup.remove`), and tried again at
-  the next sweep. Restore waits for a removal already under way, and each removal reads again,
+  (`gathr.cleanup.skip`: `in_use`, `changes`, `in_data`, or `left` when the disk refuses),
+  recorded once per reason with the reference its removal later shares (`gathr.cleanup.remove`),
+  and tried again at the next sweep. Restore waits for a removal already under way, and each removal reads again,
   right before it starts, whether its chat is still archived: a chat restored while a sweep looks
   at it keeps what's there.
 

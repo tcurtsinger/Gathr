@@ -10,15 +10,21 @@ use serde_json::Value;
 /// Why Gathr asks the person before this tool call, or `None` to leave it to the agent's mode.
 /// `folders` are where it writes without asking, the engine's own first: a relative path is in it.
 /// `data` is Gathr's data folder, never written without asking, though a link in a folder leads
-/// there: only the engine's own folder, when Gathr made it there before the agent folder (0034).
-pub fn ask(tool: &str, input: &Value, folders: &[PathBuf], data: &Path) -> Option<&'static str> {
+/// there: only the engine's own folder when it's one `from_before` the agent folder (0034).
+pub fn ask(
+    tool: &str,
+    input: &Value,
+    folders: &[PathBuf],
+    data: &Path,
+    from_before: bool,
+) -> Option<&'static str> {
     let text = |key: &str| input.get(key).and_then(Value::as_str);
     match tool {
         "Write" | "Edit" | "NotebookEdit" => {
             let path = text("file_path").or_else(|| text("notebook_path"))?;
             let own = folders.first()?;
             let path = own.join(path);
-            let old_own = written_in(own, data) && inside(&path, own);
+            let old_own = from_before && inside(&path, own);
             if reaches(&path, data) && !old_own {
                 return Some("it writes in Gathr's data folder");
             }
@@ -54,10 +60,14 @@ fn inside(path: &Path, boundary: &Path) -> bool {
     resolved(path, boundary).iter().all(|&inside| inside)
 }
 
-/// Whether `folder` holds the data folder or leads into it through a link, when Gathr didn't make
-/// it there itself (a chat's folder from before the agent folder, 0034).
-pub fn into_data(folder: &Path, data: &Path) -> bool {
-    overlaps(folder, data) && !written_in(folder, data)
+/// Whether `folder` must never be given to an agent: it holds the data folder or lands in it,
+/// links followed. An engine's own folder `from_before` the agent folder is in the data folder by
+/// design (0034): it's shut only when it holds the data folder.
+pub fn shut(folder: &Path, data: &Path, from_before: bool) -> bool {
+    match from_before {
+        true => reaches(data, folder),
+        false => overlaps(folder, data),
+    }
 }
 
 /// Whether `path` may land in `boundary`, either way `..` is worked out.
@@ -73,16 +83,6 @@ fn resolved(path: &Path, boundary: &Path) -> [bool; 2] {
     };
     let path = boundary.join(path);
     [real(&path), real(&lexical(&path))].map(|p| p.is_some_and(|p| fold(&p).starts_with(&base)))
-}
-
-/// Whether `path` is in `boundary` as written, links not followed.
-fn written_in(path: &Path, boundary: &Path) -> bool {
-    let full = |p: &Path| {
-        fold(&lexical(
-            &std::path::absolute(p).unwrap_or_else(|_| p.into()),
-        ))
-    };
-    full(path).starts_with(full(boundary))
 }
 
 fn fold(path: &Path) -> PathBuf {
@@ -154,7 +154,15 @@ mod tests {
     fn a_write_outside_the_worktree_asks_and_one_inside_does_not() {
         let tree = at(&["work", "trees", "pia-ui"]);
         let folders = [tree.clone()];
-        let write = |path: PathBuf| ask("Write", &json!({ "file_path": path }), &folders, &data());
+        let write = |path: PathBuf| {
+            ask(
+                "Write",
+                &json!({ "file_path": path }),
+                &folders,
+                &data(),
+                false,
+            )
+        };
         assert_eq!(write(at(&["work", "trees", "pia-ui", "src", "a.rs"])), None);
         assert_eq!(
             write(at(&["WORK", "trees", "Pia-UI", "b.rs"])),
@@ -181,10 +189,13 @@ mod tests {
             "another checkout"
         );
         let notebook = json!({ "notebook_path": at(&["elsewhere", "n.ipynb"]) });
-        assert_eq!(ask("NotebookEdit", &notebook, &folders, &data()), outside);
+        assert_eq!(
+            ask("NotebookEdit", &notebook, &folders, &data(), false),
+            outside
+        );
         let read = json!({ "file_path": at(&["elsewhere", "x"]) });
         assert_eq!(
-            ask("Read", &read, &folders, &data()),
+            ask("Read", &read, &folders, &data(), false),
             None,
             "reads never ask"
         );
@@ -227,6 +238,7 @@ mod tests {
                 &json!({ "file_path": path }),
                 &[tree.to_path_buf()],
                 &data(),
+                false,
             )
         };
         let asks = Some("it writes outside the agent's folders");
@@ -262,7 +274,22 @@ mod tests {
         link(&data, &shared);
         let folders = [own.join("tree"), own.clone(), shared.clone()];
         let write = |path: PathBuf, folders: &[PathBuf]| {
-            ask("Write", &json!({ "file_path": path }), folders, &data)
+            ask(
+                "Write",
+                &json!({ "file_path": path }),
+                folders,
+                &data,
+                false,
+            )
+        };
+        let old_write = |path: PathBuf, folders: &[PathBuf], from_before: bool| {
+            ask(
+                "Write",
+                &json!({ "file_path": path }),
+                folders,
+                &data,
+                from_before,
+            )
         };
         let asks = Some("it writes in Gathr's data folder");
         assert_eq!(
@@ -278,14 +305,28 @@ mod tests {
             None,
             "its own folder"
         );
-        // A chat's folder Gathr made in the data folder before the agent folder.
+        // A chat's folder Gathr made in the data folder before the agent folder, and only that.
         let old = [data.join("chats").join("c1")];
-        assert_eq!(write(old[0].join("a.md"), &old), None, "its own old folder");
+        let mine = old[0].join("a.md");
         assert_eq!(
-            write(data.join("gathr.db"), &old),
+            old_write(mine.clone(), &old, true),
+            None,
+            "its own old folder"
+        );
+        assert_eq!(
+            old_write(mine, &old, false),
+            asks,
+            "a folder in data made since"
+        );
+        let db = data.join("gathr.db");
+        assert_eq!(
+            old_write(db, &old, true),
             asks,
             "the rest of the data folder"
         );
+        assert!(shut(&shared, &data, false), "a link into it");
+        assert!(!shut(&old[0], &data, true), "a folder from before");
+        assert!(shut(&data, &data, true), "one from before that holds it");
         assert!(
             super::overlaps(&shared, &data.join("accounts")),
             "a link above it"
@@ -303,6 +344,7 @@ mod tests {
                 &json!({ "file_path": path }),
                 &[tree.to_path_buf()],
                 &data(),
+                false,
             )
         };
         assert_eq!(write("X:/work/tree/a.rs"), None);
@@ -312,7 +354,15 @@ mod tests {
     fn a_push_asks_however_it_is_written() {
         let tree = at(&["w"]);
         let folders = [tree];
-        let run = |command: &str| ask("Bash", &json!({ "command": command }), &folders, &data());
+        let run = |command: &str| {
+            ask(
+                "Bash",
+                &json!({ "command": command }),
+                &folders,
+                &data(),
+                false,
+            )
+        };
         for push in [
             "git push",
             "git push origin main",
@@ -337,6 +387,7 @@ mod tests {
             &json!({ "command": "git push" }),
             &folders,
             &data(),
+            false,
         );
         assert_eq!(ps, Some("it pushes"));
     }

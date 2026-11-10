@@ -23,6 +23,8 @@ pub(super) struct Workspace {
     pub place: Option<Place>,
     /// Of those, the ones it writes in without asking: never one that leads into the data folder.
     pub beside: Vec<PathBuf>,
+    /// `cwd` is where Gathr put the agent's work before the agent folder, in the data folder.
+    pub from_before: bool,
     /// Where its temporary files go (TEMP, TMP, TMPDIR).
     pub scratch: Option<PathBuf>,
 }
@@ -90,6 +92,7 @@ impl Task {
                 env: fresh,
                 place: None,
                 beside: Vec::new(),
+                from_before: true,
                 scratch: None,
             });
         };
@@ -114,6 +117,23 @@ impl Task {
                 None => data.join("chats").join(&chat),
             });
         let scratch = folders::scratch(&found.place, &chat);
+        let from_before = folders::from_before(data, &chat, Some(&agent), &cwd);
+        // Nothing is made or given in the data folder, however the agent folder leads there.
+        let refused = |dir: &Path, old: bool| self.shut(dir, old, (&chat, &agent), trace);
+        let must = [
+            (&found.place.root, false),
+            (&cwd, from_before),
+            (&scratch, false),
+        ];
+        if let Some((dir, _)) = must.into_iter().find(|&(dir, old)| refused(dir, old)) {
+            let why = "it leads into Gathr's data folder";
+            return Err(format!("{} wasn't used: {why}", dir.display()));
+        }
+        let beside = [&found.place.agent, &found.place.shared]
+            .into_iter()
+            .filter(|dir| !refused(dir, false))
+            .cloned()
+            .collect();
         let kind = match found.project {
             Some(_) => "worktree",
             None => "folder",
@@ -121,16 +141,6 @@ impl Task {
         let made = [(cwd.as_path(), kind), (&scratch, "scratch")];
         let project = found.project.as_deref();
         self.record_made(&made, (&chat, &agent), project).await?;
-        let refused = |dir: &Path| self.leads_into_data(dir, (&chat, &agent), trace);
-        if let Some(dir) = [&cwd, &scratch].into_iter().find(|dir| refused(dir)) {
-            let why = "it leads into Gathr's data folder";
-            return Err(format!("{} wasn't used: {why}", dir.display()));
-        }
-        let beside = [&found.place.agent, &found.place.shared]
-            .into_iter()
-            .filter(|dir| !refused(dir))
-            .cloned()
-            .collect();
         let mut dirs = vec![&found.place.agent, &found.place.shared, &scratch];
         if project.is_none() {
             dirs.push(&cwd);
@@ -150,15 +160,22 @@ impl Task {
             env: fresh,
             place: Some(found.place),
             beside,
+            from_before,
             scratch: Some(scratch),
         })
     }
 
-    /// Whether `dir` holds Gathr's data folder or leads into it through a link: never given to an
-    /// agent (0034). Recorded with the turn's reference when it does.
-    fn leads_into_data(&self, dir: &Path, (chat, agent): (&str, &str), trace: &str) -> bool {
+    /// Whether `dir` holds Gathr's data folder or leads into it through a link: never made or
+    /// given to an agent (0034). Recorded with the turn's reference when it does.
+    fn shut(
+        &self,
+        dir: &Path,
+        from_before: bool,
+        (chat, agent): (&str, &str),
+        trace: &str,
+    ) -> bool {
         let data = self.chats.data.path();
-        if !gathr::approvals::into_data(dir, data) {
+        if !gathr::approvals::shut(dir, data, from_before) {
             return false;
         }
         let event = Event::point("gathr.folder.refused")

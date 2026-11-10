@@ -64,6 +64,7 @@ async fn pre_tool_use(
         &input["tool_input"],
         &caller.folders,
         s.chats.data.path(),
+        caller.from_before,
     ) else {
         // Empty: the agent's mode decides.
         return Json(json!({}));

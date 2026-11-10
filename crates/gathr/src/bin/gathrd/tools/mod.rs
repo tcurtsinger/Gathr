@@ -27,6 +27,8 @@ pub struct Caller {
     pub folders: Vec<PathBuf>,
     /// Its temporary files' folder (TEMP), while it runs.
     pub scratch: Option<PathBuf>,
+    /// `cwd` is where Gathr put its work in the data folder before the agent folder (0034).
+    pub from_before: bool,
     turn: Arc<Mutex<Option<OnTurn>>>,
 }
 
@@ -76,6 +78,7 @@ pub struct Place {
     pub cwd: PathBuf,
     pub folders: Vec<PathBuf>,
     pub scratch: Option<PathBuf>,
+    pub from_before: bool,
 }
 
 /// What one engine was given: its token and its briefing's file. Both end when it's dropped,
@@ -109,6 +112,7 @@ impl Pass {
             cwd: place.cwd,
             folders: place.folders,
             scratch: place.scratch,
+            from_before: place.from_before,
             turn: turn.clone(),
         };
         let mut all = passes.0.lock().expect("never poisoned");

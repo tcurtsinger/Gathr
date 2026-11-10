@@ -142,6 +142,15 @@ async fn blocked(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'stat
         );
         return Err(("in_use", why));
     }
+    // A folder that leads into the data folder now (its agent folder became a link) is never
+    // removed: it would remove what's there.
+    let data = chats.data.path();
+    let agent = clean.agent.as_deref();
+    let from_before = folders::from_before(data, &clean.chat, agent, path);
+    if gathr::approvals::shut(path, data, from_before) {
+        let why = format!("{} leads into Gathr's data folder", path.display());
+        return Err(("in_data", why));
+    }
     if clean.kind != "worktree" || !clean.chat_kept || !path.exists() {
         return Ok(());
     }

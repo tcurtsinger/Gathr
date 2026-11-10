@@ -355,6 +355,13 @@ fn slow_status(worktree: &Path, release: &Path) -> PathBuf {
         r"printf 'token\000/\000'"
     );
     std::fs::write(&hook, script).unwrap();
+    // git runs the hook itself: on macOS one that can't be run is skipped, and status is quick.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let run = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(&hook, run).unwrap();
+    }
     let hook = posix(&hook);
     git(worktree, &["config", "--worktree", "core.fsmonitor", &hook]);
     let version = ["config", "--worktree", "core.fsmonitorHookVersion", "2"];
@@ -464,4 +471,53 @@ fn a_shared_folder_that_leads_into_the_data_folder_is_never_written_through() {
     assert!(trace.contains("Shared"), "{trace}");
     let token = again["GATHR_AGENT_TOKEN"].as_str().unwrap();
     assert_eq!(write(token, s.shared.join("gathr.db")), "ask", "{again}");
+}
+
+#[test]
+fn an_agent_folder_that_leads_into_the_data_folder_is_refused_at_every_turn() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0);
+    let elsewhere = TempDir::new();
+    let root = elsewhere.0.join("Agents");
+    let saved = service.send("PATCH", "/api/settings", json!({ "agent_folder": root }));
+    assert_eq!(saved.status, 200, "{}", saved.body);
+    let vale = agent(&service, &account, "Vale");
+    let (project, _) = project(&service, &data.0, "Probe", &vale);
+    let first = chat_in(&service, &project);
+    send(&service, &first, &vale);
+    let started = nth(&data.0.join("env.jsonl"), 0);
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&first, 20, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    engine_closed(&started);
+
+    // The saved folder becomes a link into the data folder.
+    std::fs::remove_dir_all(&root).unwrap();
+    link(&data.0, &root);
+    let next = chat_in(&service, &project);
+    let path = format!("/api/chats/{next}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": vale }));
+    assert_eq!(sent.status, 500, "{}", sent.body);
+    let answer = sent.json();
+    let why = answer["why"].as_str().unwrap();
+    assert!(why.contains("Gathr's data folder"), "{answer}");
+    let trace = traced(&data.0, answer["ref"].as_str().unwrap());
+    assert!(trace.contains("gathr.folder.refused"), "{trace}");
+    service.wait_for(&next, 20, "the turn failed", |h| {
+        h["turns"][0]["status"] == "failed"
+    });
+    assert!(
+        !data.0.join("Probe").exists(),
+        "nothing made in the data folder"
+    );
+    let starts = std::fs::read_to_string(data.0.join("env.jsonl")).unwrap();
+    assert_eq!(starts.lines().count(), 1, "no engine started: {starts}");
+
+    let shown = service.call("GET", "/api/settings");
+    assert_eq!(shown.status, 200, "{}", shown.body);
+    let again = service.send("PATCH", "/api/settings", json!({ "agent_folder": root }));
+    assert_eq!(again.status, 400, "{}", again.body);
+    std::fs::remove_dir(&root).ok();
+    std::fs::remove_file(&root).ok();
 }

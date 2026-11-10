@@ -165,6 +165,8 @@ fn among(names: &[String], name: &str) -> bool {
 /// An agent's folders for a chat: its own, and its project's Shared.
 #[derive(Debug, Clone)]
 pub struct Place {
+    /// The agent folder, as the disk names it.
+    pub root: PathBuf,
     pub agent: PathBuf,
     pub shared: PathBuf,
 }
@@ -186,6 +188,7 @@ pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<
     let project = root.join(project);
     let agent = named(conn, "agents", agent, &project, &[SHARED])?;
     Ok(Place {
+        root,
         agent: project.join(agent),
         shared: project.join(SHARED),
     })
@@ -274,6 +277,15 @@ pub fn made(conn: &Connection, m: &Made) -> Result<(), Error> {
         ],
     )?;
     Ok(())
+}
+
+/// Whether `path` is where Gathr put `agent`'s work in `chat` before the agent folder (0034):
+/// `<data>/worktrees/<chat>/<agent>` or `<data>/chats/<chat>`, the one place in the data folder an
+/// engine may write. Never one made since: the agent folder can't be in the data folder.
+pub fn from_before(data: &Path, chat: &str, agent: Option<&str>, path: &Path) -> bool {
+    let same = |old: PathBuf| old.as_os_str().eq_ignore_ascii_case(path.as_os_str());
+    let worktree = agent.map(|agent| crate::worktree::old_folder(data, chat, agent));
+    worktree.is_some_and(same) || same(data.join("chats").join(chat))
 }
 
 /// The folder `agent` works in for `chat`, as recorded when it was made, removed since or not.
