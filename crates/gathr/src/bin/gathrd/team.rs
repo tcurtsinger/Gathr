@@ -159,18 +159,26 @@ fn changed_to(
         .publish(json!({ "type": "members", "chat": chat, "members": members }));
 }
 
-/// Each member's worktree folder, once it has one.
-pub fn with_folders(s: &State, chat: &str, history: &mut Value) {
+/// Each member's worktree folder, once it has one: as recorded when it was made (0034), else
+/// where worktrees were made before.
+pub fn with_folders(
+    conn: &rusqlite::Connection,
+    data: &std::path::Path,
+    chat: &str,
+    history: &mut Value,
+) -> Result<(), gathr::Error> {
     let Some(members) = history["members"].as_array_mut() else {
-        return;
+        return Ok(());
     };
     for member in members {
         let agent = member["agent"].as_str().unwrap_or_default();
-        let folder = worktree::folder(s.chats.data.path(), chat, agent);
+        let recorded = gathr::folders::workspace(conn, chat, agent)?;
+        let folder = recorded.unwrap_or_else(|| worktree::old_folder(data, chat, agent));
         if folder.join(".git").exists() {
             member["folder"] = json!(folder.display().to_string());
         }
     }
+    Ok(())
 }
 
 /// The seats as roles, once the rules hold and every agent exists.

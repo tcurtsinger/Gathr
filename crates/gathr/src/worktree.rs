@@ -3,8 +3,9 @@
 //!
 //! Two agents in one folder step on each other: one's half-made change is in the other's tests.
 //! So each agent in a project chat works in a worktree of its own, on a branch of its own, made
-//! the first time it needs one, from the project's remote default branch fetched then. Only deleting
-//! the chat removes one (F11), and its branch stays in the project with what was committed on it.
+//! the first time it needs one, from the project's remote default branch fetched then, in the
+//! agent's own folder (0034). Archiving or deleting the chat removes it (F11, 0034), and its branch
+//! stays in the project with what was committed on it.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -15,8 +16,8 @@ use crate::platform::env::Vars;
 const FETCH_LIMIT: Duration = Duration::from_secs(120);
 const LOCAL_LIMIT: Duration = Duration::from_secs(30);
 
-/// Where an agent's worktree for a chat lives.
-pub fn folder(data: &Path, chat: &str, agent: &str) -> PathBuf {
+/// Where an agent's worktree for a chat was made before the agent folder (0034): kept there.
+pub fn old_folder(data: &Path, chat: &str, agent: &str) -> PathBuf {
     data.join("worktrees").join(chat).join(agent)
 }
 
@@ -38,9 +39,8 @@ pub fn branch(name: &str, agent: &str, chat: &str) -> String {
     } else {
         slug
     };
-    let tail = chat.len().saturating_sub(6);
     let id: String = agent.chars().take(6).collect();
-    format!("gathr/{slug}-{}-{id}", chat[tail..].to_lowercase())
+    format!("gathr/{slug}-{}-{id}", crate::folders::chat_part(chat))
 }
 
 /// A worktree just made: its branch, the commit it started from, and why the fetch before it
@@ -144,34 +144,50 @@ pub async fn remove_chat(
     chat_folder: &Path,
     env: &Vars,
 ) -> Result<(), String> {
-    let project = project.filter(|p| p.is_dir());
     let folders = std::fs::read_dir(chat_folder)
         .into_iter()
         .flatten()
         .flatten();
+    let mut left = Ok(());
     for folder in folders.map(|e| e.path()).filter(|p| p.is_dir()) {
-        if let Some(project) = project {
-            // Unregistered by git if it can; the folder goes below either way.
-            let path = folder.to_string_lossy();
-            let _ = git(
-                env,
-                project,
-                &["worktree", "remove", "--force", &path],
-                LOCAL_LIMIT,
-            )
-            .await;
-        }
+        left = left.and(remove(project, &folder, env).await);
     }
-    let removed = match std::fs::remove_dir_all(chat_folder) {
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            Err(format!("{} wasn't deleted: {e}", chat_folder.display()))
-        }
-        _ => Ok(()),
-    };
+    left.and(remove_dir(chat_folder))
+}
+
+/// Removes the worktree at `folder` of `project`, with what wasn't committed in it; its branch
+/// stays. Fails only when the folder is left behind.
+pub async fn remove(project: Option<&Path>, folder: &Path, env: &Vars) -> Result<(), String> {
+    let project = project.filter(|p| p.is_dir());
+    if let Some(project) = project {
+        // Unregistered by git if it can; the folder goes below either way.
+        let path = folder.to_string_lossy();
+        let remove = ["worktree", "remove", "--force", &path];
+        let _ = git(env, project, &remove, LOCAL_LIMIT).await;
+    }
+    let removed = remove_dir(folder);
     if let Some(project) = project {
         let _ = git(env, project, &["worktree", "prune"], LOCAL_LIMIT).await;
     }
     removed
+}
+
+fn remove_dir(folder: &Path) -> Result<(), String> {
+    match std::fs::remove_dir_all(folder) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+            Err(format!("{} wasn't deleted: {e}", folder.display()))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Whether the worktree at `folder` has changes not committed: an archive keeps those (0034).
+pub async fn changed(folder: &Path, env: &Vars) -> Result<bool, String> {
+    let status = ["status", "--porcelain", "--untracked-files=normal"];
+    Ok(!git(env, folder, &status, LOCAL_LIMIT)
+        .await?
+        .trim()
+        .is_empty())
 }
 
 const HOOK: &str = include_str!("git-hook.sh");

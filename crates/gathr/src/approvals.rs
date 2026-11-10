@@ -1,18 +1,22 @@
 //! Gathr's own asks, on top of the agent's mode (0029): before a push, and before a file tool
-//! writes outside the folder its engine runs in. Claude Code asks Gathr through a hook before
-//! each such tool, whatever its mode or a project's rules would allow.
+//! writes outside the agent's folders: the one its engine runs in, its own folder and its
+//! project's Shared (0034). Claude Code asks Gathr through a hook before each such tool, whatever
+//! its mode or a project's rules would allow.
 
 use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
 /// Why Gathr asks the person before this tool call, or `None` to leave it to the agent's mode.
-pub fn ask(tool: &str, input: &Value, boundary: &Path) -> Option<&'static str> {
+/// `folders` are where it writes without asking, the engine's own first: a relative path is in it.
+pub fn ask(tool: &str, input: &Value, folders: &[PathBuf]) -> Option<&'static str> {
     let text = |key: &str| input.get(key).and_then(Value::as_str);
     match tool {
         "Write" | "Edit" | "NotebookEdit" => {
             let path = text("file_path").or_else(|| text("notebook_path"))?;
-            (!inside(Path::new(path), boundary)).then_some("it writes outside the agent's worktree")
+            let path = folders.first()?.join(path);
+            let inside_one = folders.iter().any(|folder| inside(&path, folder));
+            (!inside_one).then_some("it writes outside the agent's folders")
         }
         "Bash" | "PowerShell" => runs_push(tool, input).then_some("it pushes"),
         // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
@@ -29,6 +33,11 @@ pub fn ask(tool: &str, input: &Value, boundary: &Path) -> Option<&'static str> {
 pub fn runs_push(tool: &str, input: &Value) -> bool {
     let command = input.get("command").and_then(Value::as_str);
     matches!(tool, "Bash" | "PowerShell") && command.is_some_and(pushes)
+}
+
+/// Whether either folder holds the other, as the disk resolves them.
+pub fn overlaps(a: &Path, b: &Path) -> bool {
+    inside(a, b) || inside(b, a)
 }
 
 /// Whether `path`, relative to `boundary` when it isn't absolute, is in `boundary` as the disk
@@ -110,7 +119,8 @@ mod tests {
     #[test]
     fn a_write_outside_the_worktree_asks_and_one_inside_does_not() {
         let tree = at(&["work", "trees", "pia-ui"]);
-        let write = |path: PathBuf| ask("Write", &json!({ "file_path": path }), &tree);
+        let folders = [tree.clone()];
+        let write = |path: PathBuf| ask("Write", &json!({ "file_path": path }), &folders);
         assert_eq!(write(at(&["work", "trees", "pia-ui", "src", "a.rs"])), None);
         assert_eq!(
             write(at(&["WORK", "trees", "Pia-UI", "b.rs"])),
@@ -122,7 +132,7 @@ mod tests {
             None,
             "relative to the worktree"
         );
-        let outside = Some("it writes outside the agent's worktree");
+        let outside = Some("it writes outside the agent's folders");
         let sibling = at(&["work", "trees", "pia-ui-2", "a.rs"]);
         assert_eq!(
             write(sibling),
@@ -137,9 +147,9 @@ mod tests {
             "another checkout"
         );
         let notebook = json!({ "notebook_path": at(&["elsewhere", "n.ipynb"]) });
-        assert_eq!(ask("NotebookEdit", &notebook, &tree), outside);
+        assert_eq!(ask("NotebookEdit", &notebook, &folders), outside);
         let read = json!({ "file_path": at(&["elsewhere", "x"]) });
-        assert_eq!(ask("Read", &read, &tree), None, "reads never ask");
+        assert_eq!(ask("Read", &read, &folders), None, "reads never ask");
     }
 
     /// A link at `link` to the folder `to`: a junction on Windows (no admin needed), else a
@@ -168,8 +178,14 @@ mod tests {
         link(&outside, &tree.join("out"));
         link(&root.join("gone"), &tree.join("dangling"));
         link(&tree, &root.join("tree-link"));
-        let write = |path: PathBuf, tree: &Path| ask("Write", &json!({ "file_path": path }), tree);
-        let asks = Some("it writes outside the agent's worktree");
+        let write = |path: PathBuf, tree: &Path| {
+            ask(
+                "Write",
+                &json!({ "file_path": path }),
+                &[tree.to_path_buf()],
+            )
+        };
+        let asks = Some("it writes outside the agent's folders");
         let through = tree.join("out").join("proof.txt");
         assert_eq!(write(through, &tree), asks, "through a link out");
         let deeper = tree.join("out").join("new").join("proof.txt");
@@ -196,14 +212,21 @@ mod tests {
     #[test]
     fn claude_codes_forward_slashes_on_windows_are_the_same_path() {
         let tree = Path::new(r"X:\work\tree");
-        let write = |path: &str| ask("Write", &json!({ "file_path": path }), tree);
+        let write = |path: &str| {
+            ask(
+                "Write",
+                &json!({ "file_path": path }),
+                &[tree.to_path_buf()],
+            )
+        };
         assert_eq!(write("X:/work/tree/a.rs"), None);
         assert!(write("X:/work/other/a.rs").is_some());
     }
     #[test]
     fn a_push_asks_however_it_is_written() {
         let tree = at(&["w"]);
-        let run = |command: &str| ask("Bash", &json!({ "command": command }), &tree);
+        let folders = [tree];
+        let run = |command: &str| ask("Bash", &json!({ "command": command }), &folders);
         for push in [
             "git push",
             "git push origin main",
@@ -223,7 +246,7 @@ mod tests {
         ] {
             assert_eq!(run(not), None, "{not}");
         }
-        let ps = ask("PowerShell", &json!({ "command": "git push" }), &tree);
+        let ps = ask("PowerShell", &json!({ "command": "git push" }), &folders);
         assert_eq!(ps, Some("it pushes"));
     }
 }

@@ -14,7 +14,7 @@ use gathr::store::{self, RawFrame};
 use serde_json::json;
 
 use super::{Assignment, Task};
-use crate::tools::{Pass, briefing};
+use crate::tools::{Pass, Place, briefing};
 
 /// How long an engine gets at shutdown to exit on its own before it's killed (0001).
 pub const CLOSE_GRACE: Duration = Duration::from_secs(10);
@@ -112,12 +112,13 @@ impl Task {
         })
     }
 
-    /// Starts the engine in the agent's session for the chat, resumed when it has one.
+    /// Starts the engine in the agent's session for the chat, resumed when it has one, with its
+    /// temporary files in `task`'s folder (0034).
     pub(super) async fn spawn(
         &mut self,
         program: &Path,
         assigned: Assignment,
-        trace: &str,
+        (task, trace): (Option<i64>, &str),
     ) -> Result<(), String> {
         let a = assigned.clone();
         let session = self
@@ -144,14 +145,25 @@ impl Task {
             None => command::args(Session::New(&new_id), given, Some(&hook)),
         };
         let folder = assigned.folder.as_path();
-        let place = self.workspace(&assigned, trace).await?;
+        let place = self.workspace(&assigned, task, trace).await?;
         let cwd = place.cwd;
         for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
                 .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
         }
+        // Beside the folder it runs in: its own folder and Shared, where it writes without asking.
+        let beside: Vec<PathBuf> = place
+            .place
+            .iter()
+            .flat_map(|p| [p.agent.clone(), p.shared.clone()])
+            .collect();
         let worktree = place.project.map(|project| (cwd.clone(), project));
-        let pass = self.pass_for(&assigned, worktree, &cwd, trace).await?;
+        let given = Place {
+            cwd: cwd.clone(),
+            folders: std::iter::once(cwd.clone()).chain(beside.clone()).collect(),
+            scratch: place.scratch.clone(),
+        };
+        let pass = self.pass_for(&assigned, worktree, given, trace).await?;
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         let first = if codex {
             args = gathr::codex::command::args(Some(&url));
@@ -164,6 +176,7 @@ impl Task {
                 instructions: Some(
                     std::fs::read_to_string(&pass.briefing).map_err(|e| e.to_string())?,
                 ),
+                writable: beside.iter().map(|d| d.display().to_string()).collect(),
             };
             let (driver, first) = super::driver::Driver::codex(opening);
             self.driver = driver;
@@ -171,6 +184,7 @@ impl Task {
         } else {
             self.driver = Default::default();
             args.extend(command::given(&url, &pass.briefing));
+            args.extend(command::folders(&beside));
             None
         };
         let (env_from, env_why) = (place.env.from, place.env.why);
@@ -179,6 +193,9 @@ impl Task {
         } else {
             command::env(place.env.vars.into_iter(), folder)
         };
+        if let Some(scratch) = &place.scratch {
+            command::scratch(&mut env, scratch);
+        }
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
         let push = format!(
             "http://127.0.0.1:{}{}",
@@ -205,10 +222,20 @@ impl Task {
                         .attr("gathr.effort", assigned.effort.clone())
                         .attr("gathr.approvals", assigned.approvals.as_str())
                         .attr("cwd", cwd.display().to_string())
+                        .attr("gathr.folder.scratch", shown(place.scratch.as_deref()))
+                        .attr(
+                            "gathr.folder.agent",
+                            shown(beside.first().map(PathBuf::as_path)),
+                        )
+                        .attr(
+                            "gathr.folder.shared",
+                            shown(beside.get(1).map(PathBuf::as_path)),
+                        )
                         .attr("gathr.env.from", env_from)
                         .attr("gathr.env.why", env_why),
                 );
                 self.engine = Some(engine);
+                self.scratch_task = task;
                 self.program = Some(program.to_path_buf());
                 self.assigned = Some(assigned);
                 self.lines = Some(lines);
@@ -242,14 +269,18 @@ impl Task {
         &self,
         assigned: &Assignment,
         worktree: Option<(PathBuf, String)>,
-        cwd: &Path,
+        place: Place,
         trace: &str,
     ) -> Result<Pass, String> {
         let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
+        let own = place
+            .folders
+            .get(1..3)
+            .map(|f| (f[0].clone(), f[1].clone()));
         let facts = self
             .chats
             .writer
-            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree))
+            .call(move |conn| briefing::facts(conn, &chat, agent.as_deref(), worktree, own))
             .await;
         let facts = match facts {
             Some(read) => read.map_err(|e| e.to_string()),
@@ -259,7 +290,7 @@ impl Task {
             let folder = self.chats.data.path().join("briefings");
             let text = briefing::text(&facts);
             let (agent, chat) = (assigned.agent.clone(), &assigned.chat);
-            let caller = (agent, chat.as_str(), cwd);
+            let caller = (agent, chat.as_str(), place);
             Pass::new(&self.chats.passes, folder, caller, &text).map_err(|e| e.to_string())
         });
         made.map_err(|e| {
@@ -537,4 +568,8 @@ impl Task {
             );
         }
     }
+}
+
+fn shown(path: Option<&Path>) -> Option<String> {
+    path.map(|p| p.display().to_string())
 }

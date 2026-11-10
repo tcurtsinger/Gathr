@@ -61,6 +61,7 @@ pub async fn once(chats: &Arc<Chats>) {
         Ok(tasks::stale::sweep(c, now, day, &paused, &t)?.starts)
     })
     .await;
+    crate::cleanup::sweep(chats, None).await;
     let found = chats.writer.call(|c| waits::to_look_at(c)).await;
     let prs = chats.writer.call(|c| tasks::with_prs(c)).await;
     let (Some(Ok(found)), Some(Ok(prs))) = (found, prs) else {
@@ -96,10 +97,9 @@ pub async fn once(chats: &Arc<Chats>) {
         }
     }
     for (task, chat, owner, pr) in prs {
-        let folder = worktree::folder(chats.data.path(), &chat, &owner);
-        let dir = match folder.exists() {
-            true => folder,
-            false => project_of(chats, &chat).await,
+        let dir = match worktree_of(chats, &chat, &owner).await {
+            Some(folder) if folder.exists() => folder,
+            _ => project_of(chats, &chat).await,
         };
         let args = ["pr", "view", &pr.to_string(), "--json", "state,headRefOid"];
         let Ok(answer) = gh(&args, &dir, &vars).await else {
@@ -323,7 +323,7 @@ fn pr_view<'a>(number: &'a str, fields: &'a str, repo: Option<&'a str>) -> Vec<&
 }
 
 /// The person's environment now (G23), as engines and git get it.
-pub(super) async fn fresh() -> Vars {
+pub async fn fresh() -> Vars {
     tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect()).vars)
         .await
         .unwrap_or_else(|_| std::env::vars_os().collect())
@@ -345,6 +345,19 @@ pub(super) async fn gh(args: &[&str], dir: &Path, vars: &Vars) -> Result<String,
 fn json_text(answer: &str, key: &str) -> String {
     let value: Value = serde_json::from_str(answer).unwrap_or_default();
     value[key].as_str().unwrap_or_default().to_string()
+}
+
+/// The agent's worktree in the chat: as recorded (0034), else where worktrees were made before.
+async fn worktree_of(chats: &Arc<Chats>, chat: &str, agent: &str) -> Option<PathBuf> {
+    let (c, a) = (chat.to_string(), agent.to_string());
+    let read = chats
+        .writer
+        .call(move |conn| gathr::folders::workspace(conn, &c, &a));
+    match read.await {
+        Some(Ok(Some(folder))) => Some(folder),
+        Some(Ok(None)) => Some(worktree::old_folder(chats.data.path(), chat, agent)),
+        _ => None,
+    }
 }
 
 /// The chat's project folder, or the data folder when it has none.

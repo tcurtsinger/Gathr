@@ -4,7 +4,7 @@
 
 mod common;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use common::{TempDir, call_tool, first_token, gathr, git, team, text, until};
 use serde_json::{Value, json};
@@ -188,11 +188,9 @@ fn deleting_a_project_chat_removes_its_rows_and_worktrees_and_keeps_its_branches
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     service.wait_for(&chat, 20, "the turn", |h| h["turns"][0]["status"] == "done");
-    let worktrees = data.0.join("worktrees").join(&chat);
-    assert!(
-        worktrees.join(&lead).is_dir(),
-        "the lead's worktree was made"
-    );
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let worktree = PathBuf::from(history["members"][0]["folder"].as_str().unwrap());
+    assert!(worktree.is_dir(), "the lead's worktree was made");
 
     let mut live = service.live();
     let deleted = service.call("DELETE", &format!("/api/chats/{chat}"));
@@ -212,7 +210,7 @@ fn deleting_a_project_chat_removes_its_rows_and_worktrees_and_keeps_its_branches
         service.call("GET", &format!("/api/chats/{chat}")).status,
         404
     );
-    assert!(!worktrees.exists(), "its worktrees are gone");
+    assert!(!worktree.exists(), "its worktree is gone");
     let branches = git(&folder, &["branch", "--list", "gathr/*"]);
     assert!(!branches.trim().is_empty(), "the branch stays: {branches}");
     for table in ["messages", "turns", "chat_members", "engine_sessions"] {
@@ -234,11 +232,18 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
     ];
     let (service, chat, _) = team(&data.0, &common::held_recording(&data.0), &fast);
     let read = service.call("GET", "/api/settings").json();
-    assert_eq!(read, json!({ "stale_days": 3, "cancel_days": 7 }));
+    assert_eq!(
+        (&read["stale_days"], &read["cancel_days"]),
+        (&json!(3), &json!(7))
+    );
     let saved = service.send("PATCH", "/api/settings", json!({ "cancel_days": 500 }));
     assert_eq!(saved.status, 409, "{}", saved.body);
     let saved = service.send("PATCH", "/api/settings", json!({ "cancel_days": 9 }));
-    assert_eq!(saved.json(), json!({ "stale_days": 3, "cancel_days": 9 }));
+    let saved = saved.json();
+    assert_eq!(
+        (&saved["stale_days"], &saved["cancel_days"]),
+        (&json!(3), &json!(9))
+    );
 
     let sent = service.send(
         "POST",

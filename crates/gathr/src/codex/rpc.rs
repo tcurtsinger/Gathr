@@ -19,6 +19,8 @@ pub struct Opening {
     /// `(sandbox, approvalPolicy, approvalsReviewer)`, from `command::policy`.
     pub policy: (&'static str, &'static str, &'static str),
     pub instructions: Option<String>,
+    /// The agent's folders beside `cwd` its sandbox writes in (0034): its own and Shared.
+    pub writable: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -299,6 +301,10 @@ impl Session {
         if let Some(model) = &o.model {
             params["model"] = model.clone().into();
         }
+        if !o.writable.is_empty() {
+            let roots = json!({ "writable_roots": o.writable });
+            params["config"] = json!({ "sandbox_workspace_write": roots });
+        }
         Some(match &o.resume {
             Some(thread) => {
                 params["threadId"] = thread.clone().into();
@@ -549,6 +555,24 @@ mod tests {
             instructions: Some("briefing".into()),
             ..Opening::default()
         }
+    }
+
+    /// Codex 0.166.0's `thread/start` answered these back as its sandbox's `writableRoots` (0034).
+    #[test]
+    fn the_agents_folders_open_the_thread_as_writable_roots() {
+        let folders = vec!["agent-folder".to_string(), "shared".to_string()];
+        let opening = Opening {
+            writable: folders.clone(),
+            ..opening()
+        };
+        let (_, _, sent) = played("codex_signed_out", opening);
+        let config = &sent[2]["params"]["config"];
+        assert_eq!(
+            config["sandbox_workspace_write"]["writable_roots"],
+            json!(folders),
+            "{}",
+            sent[2]
+        );
     }
 
     #[test]

@@ -120,6 +120,8 @@ struct Task {
     program: Option<PathBuf>,
     /// What the engine runs as, while it runs.
     assigned: Option<Assignment>,
+    /// The task whose folder holds the engine's temporary files (0034).
+    scratch_task: Option<i64>,
     lines: Option<mpsc::UnboundedReceiver<Line>>,
     /// The engine's last stderr line: when it exits mid-turn, that's usually why (0019).
     last_stderr: Option<String>,
@@ -162,6 +164,7 @@ pub async fn run(
         pass: None,
         program: None,
         assigned: None,
+        scratch_task: None,
         lines: None,
         last_stderr: None,
         turn: None,
@@ -476,6 +479,11 @@ impl Task {
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
         }
+        // Its temporary files are its task's, set when it starts; a turn on no task keeps them.
+        if self.engine.is_some() && next.ids.task.is_some() && next.ids.task != self.scratch_task {
+            self.close("the next turn is on another task").await;
+            return Ok(self.hold_back(next, "queued").await);
+        }
         let kind = if assigned.as_ref().is_some_and(|a| a.engine == "codex") {
             "codex"
         } else {
@@ -531,7 +539,8 @@ impl Task {
         }
         let gate = self.chats.gate(&assigned.folder).pass().await;
         if let Some(program) = program {
-            self.spawn(&program, assigned, &next.ids.trace).await?;
+            self.spawn(&program, assigned, (next.ids.task, &next.ids.trace))
+                .await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         if let Err(e) = self.write_user(&next.text, Some(&next.ids.turn)).await {

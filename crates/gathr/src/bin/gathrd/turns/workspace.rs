@@ -1,13 +1,15 @@
-//! Where an engine runs and with what environment (0028): in a project chat, the agent's own
-//! worktree, made the first time; elsewhere the chat's folder. Either way with the environment a
-//! new sign-in would give (G23).
+//! Where an engine runs and with what environment (0028, 0034): an agent works in its own folder
+//! in the agent folder, in a worktree of its own in a project chat, made the first time, with a
+//! folder for its task's temporary files. A turn to no agent runs in the chat's folder in the data
+//! folder, as before. Either way with the environment a new sign-in would give (G23).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gathr::event::Event;
+use gathr::folders::{self, Made, Place};
 use gathr::platform::env::{self, Fresh};
 use gathr::worktree;
-use rusqlite::OptionalExtension;
+use rusqlite::{Connection, OptionalExtension};
 
 use super::{Assignment, Task};
 
@@ -16,59 +18,179 @@ pub(super) struct Workspace {
     /// The project folder, when the engine works in a worktree of it.
     pub project: Option<String>,
     pub env: Fresh,
+    /// The agent's own folder and its project's Shared; none for a turn to no agent.
+    pub place: Option<Place>,
+    /// Where its temporary files go (TEMP, TMP, TMPDIR).
+    pub scratch: Option<PathBuf>,
+}
+
+/// What the database says about where the agent works in the chat.
+struct Found {
+    project: Option<String>,
+    name: String,
+    place: Place,
+    /// The folder it was given before, recorded when it was made.
+    recorded: Option<PathBuf>,
+    /// It has a session in the chat from before the agent folder: a session resumes only in the
+    /// folder it was made in, so it keeps that one.
+    resumes: bool,
+}
+
+fn found(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Found>, gathr::Error> {
+    let project: Option<String> = conn
+        .query_row("SELECT project FROM chats WHERE id = ?1", [chat], |r| {
+            r.get(0)
+        })
+        .optional()?
+        .flatten();
+    let name: Option<String> = conn
+        .query_row("SELECT name FROM agents WHERE id = ?1", [agent], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    let resumes = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM engine_sessions WHERE chat_id = ?1 AND agent_key = ?2)",
+        [chat, agent],
+        |r| r.get(0),
+    )?;
+    Ok(Some(Found {
+        project,
+        name,
+        place: folders::place(conn, chat, agent)?,
+        recorded: folders::workspace(conn, chat, agent)?,
+        resumes,
+    }))
 }
 
 impl Task {
     pub(super) async fn workspace(
         &self,
         assigned: &Assignment,
+        task: Option<i64>,
         trace: &str,
     ) -> Result<Workspace, String> {
         let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect()))
             .await
             .map_err(|e| format!("the environment wasn't read: {e}"))?;
-        let (chat, agent) = (assigned.chat.clone(), assigned.agent.clone());
-        let found = self
+        let data = self.chats.data.path();
+        let chat = assigned.chat.clone();
+        let Some(agent) = assigned.agent.clone() else {
+            return Ok(Workspace {
+                cwd: data.join("chats").join(&chat),
+                project: None,
+                env: fresh,
+                place: None,
+                scratch: None,
+            });
+        };
+        let (c, a) = (chat.clone(), agent.clone());
+        let read = self
+            .chats
+            .writer
+            .call(move |conn| found(conn, &c, &a))
+            .await;
+        let found = match read {
+            Some(Ok(Some(found))) => found,
+            Some(Ok(None)) => return Err("its agent was deleted".into()),
+            Some(Err(e)) => return Err(format!("the agent's folder wasn't read: {e}")),
+            None => return Err("the agent's folder wasn't read: the database didn't answer".into()),
+        };
+        let cwd = found
+            .recorded
+            .clone()
+            .unwrap_or_else(|| match &found.project {
+                _ if !found.resumes => folders::new_workspace(&found.place, &chat),
+                Some(_) => worktree::old_folder(data, &chat, &agent),
+                None => data.join("chats").join(&chat),
+            });
+        let scratch = folders::scratch(&found.place, &chat, task);
+        let kind = match found.project {
+            Some(_) => "worktree",
+            None => "folder",
+        };
+        let made = [(cwd.as_path(), kind, None), (&scratch, "scratch", task)];
+        let project = found.project.as_deref();
+        self.record_made(&made, (&chat, &agent), project).await?;
+        let mut dirs = vec![&found.place.agent, &found.place.shared, &scratch];
+        if project.is_none() {
+            dirs.push(&cwd);
+        }
+        for dir in dirs {
+            std::fs::create_dir_all(dir)
+                .map_err(|e| format!("{} wasn't made: {e}", dir.display()))?;
+        }
+        if let Some(project) = project {
+            let who = (agent.as_str(), found.name.as_str(), chat.as_str());
+            self.ensure_worktree(project, &cwd, who, &fresh, trace)
+                .await?;
+        }
+        Ok(Workspace {
+            cwd,
+            project: found.project,
+            env: fresh,
+            place: Some(found.place),
+            scratch: Some(scratch),
+        })
+    }
+
+    /// Records each folder before it's made, so Gathr removes it later (0034).
+    async fn record_made(
+        &self,
+        made: &[(&Path, &'static str, Option<i64>)],
+        (chat, agent): (&str, &str),
+        project: Option<&str>,
+    ) -> Result<(), String> {
+        let rows: Vec<(PathBuf, &'static str, Option<i64>)> = made
+            .iter()
+            .map(|(path, kind, task)| (path.to_path_buf(), *kind, *task))
+            .collect();
+        let (chat, agent) = (chat.to_string(), agent.to_string());
+        let project = project.map(String::from);
+        let saved = self
             .chats
             .writer
             .call(move |conn| {
-                let project: Option<String> = conn
-                    .query_row("SELECT project FROM chats WHERE id = ?1", [&chat], |r| {
-                        r.get(0)
-                    })
-                    .optional()?
-                    .flatten();
-                let name: Option<String> = match &agent {
-                    Some(id) => conn
-                        .query_row("SELECT name FROM agents WHERE id = ?1", [id], |r| r.get(0))
-                        .optional()?,
-                    None => None,
-                };
-                Ok::<_, gathr::Error>(project.zip(agent.zip(name)))
+                for (path, kind, task) in &rows {
+                    let row = Made {
+                        path,
+                        kind,
+                        chat: &chat,
+                        agent: Some(&agent),
+                        task: *task,
+                        project: project.as_deref().filter(|_| *kind == "worktree"),
+                    };
+                    folders::made(conn, &row)?;
+                }
+                Ok::<_, gathr::Error>(())
             })
             .await;
-        let in_project = match found {
-            Some(Ok(found)) => found,
-            Some(Err(e)) => return Err(format!("the chat's project wasn't read: {e}")),
-            None => return Err("the chat's project wasn't read: the database didn't answer".into()),
-        };
-        let Some((project, (agent, name))) = in_project else {
-            let cwd = self.chats.data.path().join("chats").join(&assigned.chat);
-            return Ok(Workspace {
-                cwd,
-                project: None,
-                env: fresh,
-            });
-        };
-        let folder = worktree::folder(self.chats.data.path(), &assigned.chat, &agent);
-        let branch = worktree::branch(&name, &agent, &assigned.chat);
-        let made = worktree::ensure(project.as_ref(), &folder, &branch, &fresh.vars).await;
+        match saved {
+            Some(Ok(())) => Ok(()),
+            Some(Err(e)) => Err(format!("the agent's folders weren't recorded: {e}")),
+            None => Err("the agent's folders weren't recorded: the database didn't answer".into()),
+        }
+    }
+
+    /// The agent's worktree at `folder`, made if it isn't there, with its pushes guarded (0029).
+    async fn ensure_worktree(
+        &self,
+        project: &str,
+        folder: &Path,
+        (agent, name, chat): (&str, &str, &str),
+        fresh: &Fresh,
+        trace: &str,
+    ) -> Result<(), String> {
+        let branch = worktree::branch(name, agent, chat);
+        let made = worktree::ensure(project.as_ref(), folder, &branch, &fresh.vars).await;
         let event = Event::point("gathr.worktree.add")
             .trace(trace)
-            .chat(&assigned.chat)
-            .attr("gen_ai.agent.id", agent.clone())
+            .chat(chat)
+            .attr("gen_ai.agent.id", agent.to_string())
             .attr("path", folder.display().to_string())
-            .attr("project", project.clone());
+            .attr("project", project.to_string());
         match made {
             Ok(None) => {}
             Ok(Some(made)) => self.record(
@@ -83,21 +205,17 @@ impl Task {
                 return Err(format!("the agent's worktree wasn't made: {why}"));
             }
         }
-        let hooks = worktree::hooks_folder(self.chats.data.path(), &assigned.chat, &agent);
-        if let Err(why) = worktree::guard_pushes(&folder, &hooks, &fresh.vars).await {
+        let hooks = worktree::hooks_folder(self.chats.data.path(), chat, agent);
+        if let Err(why) = worktree::guard_pushes(folder, &hooks, &fresh.vars).await {
             let event = Event::point("gathr.approvals.push_guard")
                 .trace(trace)
-                .chat(&assigned.chat)
+                .chat(chat)
                 .error("push_guard")
-                .attr("gen_ai.agent.id", agent.clone())
+                .attr("gen_ai.agent.id", agent.to_string())
                 .attr("why", why.clone());
             self.record(event);
             return Err(format!("the worktree's push guard wasn't set: {why}"));
         }
-        Ok(Workspace {
-            cwd: folder,
-            project: Some(project),
-            env: fresh,
-        })
+        Ok(())
     }
 }

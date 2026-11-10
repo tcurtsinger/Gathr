@@ -15,6 +15,7 @@ mod api;
 mod looks;
 
 pub use api::routes;
+pub use looks::fresh;
 
 /// How often waits are looked at, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).
 const EVERY: Duration = Duration::from_secs(120);
