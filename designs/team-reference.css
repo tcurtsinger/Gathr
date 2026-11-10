@@ -80,6 +80,10 @@
 	margin: auto;
 	padding: 24px 16px 32px;
 }
+/* Keep the first line below the sticky label, including assignment metadata. */
+.ds-column-label:not([hidden]) + .ds-thread-column {
+	padding-top: 48px;
+}
 .ds-compose-dock {
 	padding: 0 16px 16px;
 }

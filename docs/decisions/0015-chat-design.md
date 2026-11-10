@@ -15,7 +15,9 @@ below. This records the target before implementation, not completed UI work.
 
 - A header toggle opens one chronological team chat beside the Supervisor's
   conversation, 50/50. Each scrolls independently. The composer stays on the left;
-  the workspace still opens to the right of both columns.
+  the workspace still opens to the right of both columns. Content starts 48px
+  below visible sticky labels, clearing the first assignment line (a refinement
+  of the reference's overlapping labels).
 - Main keeps the person's messages, Supervisor hand-offs/final words and direct
   @member exchanges. Hand-off replies move to the team column, with their
   assignment lines, ordered by turn start (0028). Concurrent turns never interleave.

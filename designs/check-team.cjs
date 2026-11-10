@@ -101,6 +101,46 @@ async function check() {
 							node.parentElement.getBoundingClientRect().left,
 					);
 				assert.equal(indent, 34, "body aligns with speaker name");
+				const clearance = await team.evaluate((node) => ({
+					labelBottom: node
+						.querySelector(".ds-column-label")
+						.getBoundingClientRect().bottom,
+					assignmentTop: node
+						.querySelector(".ds-assignment")
+						.getBoundingClientRect().top,
+				}));
+				assert(
+					clearance.assignmentTop >= clearance.labelBottom,
+					`${label}: first assignment clears sticky label; got ${JSON.stringify(clearance)}`,
+				);
+				await shot(`running-top-${label}`);
+				await main.evaluate((node) => {
+					node.scrollTop = node.scrollHeight;
+				});
+				const pill = await page.locator("#waiting-on-team").evaluate((node) => {
+					const rect = node.getBoundingClientRect();
+					const viewport = node
+						.closest(".ds-column-scroll")
+						.getBoundingClientRect();
+					const plan = document
+						.querySelector("#agent-plan")
+						.getBoundingClientRect();
+					return {
+						top: rect.top,
+						bottom: rect.bottom,
+						viewportTop: viewport.top,
+						viewportBottom: viewport.bottom,
+						planTop: plan.top,
+					};
+				});
+				assert(
+					pill.top >= pill.viewportTop && pill.bottom <= pill.viewportBottom,
+					`${label}: waiting pill is fully visible at latest message; got ${JSON.stringify(pill)}`,
+				);
+				assert(
+					pill.bottom <= pill.planTop,
+					`${label}: waiting pill is above plan bar`,
+				);
 				await shot(`running-${label}`);
 				await page.getByText("32 tool calls", { exact: true }).click();
 				assert.equal(
@@ -326,7 +366,15 @@ async function check() {
 				assert.equal(await draft.inputValue(), "");
 				await page.getByRole("button", { name: "New", exact: true }).click();
 				assert.equal(await page.locator("#team-sent-messages").innerText(), "");
-				results.push({ width, theme, geometry, lid, interactions: "passed" });
+				results.push({
+					width,
+					theme,
+					geometry,
+					clearance,
+					pill,
+					lid,
+					interactions: "passed",
+				});
 				console.log(
 					`${label}: split, scroll, late/unread, plan, Summary, draft and keyboard passed`,
 				);

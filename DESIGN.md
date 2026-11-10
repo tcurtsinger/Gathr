@@ -153,8 +153,10 @@ the Supervisor's next word stays at the bottom of the main column.
 While split, sticky overlay labels name the Supervisor and Team. Each has a
 44px height, a negative 44px bottom margin, 12px 24px top/side padding and a
 canvas-to-transparent fade. They have no border or banner and pass pointer input
-through. The workspace still opens to the right of both columns, with its
-existing sizing and overlay rules. Team content uses the same centred 52rem
+through. Content below a visible label starts at 48px, leaving 4px clear of the
+label; the first assignment line never sits under it. This corrects the overlap
+in the owner's prototype. The workspace still opens to the right of both columns,
+with its existing sizing and overlay rules. Team content uses the same centred 52rem
 maximum as the conversation. The composer stays in the Supervisor column.
 
 The split toggle is a 24px TooltipIconButton, after Summary and before Open
