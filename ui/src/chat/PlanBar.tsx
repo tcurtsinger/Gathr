@@ -1,5 +1,5 @@
 import { ChevronUpIcon, CircleCheckIcon, LoaderIcon } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { AgentPlan } from '@/components/assistant-ui/elements/agent-plan';
 import {
   CollapsibleContent,
@@ -13,13 +13,19 @@ import './plan.css';
 /** Gathr has no plan records yet: until it does, the bar is titled Plan (never a title made from text). */
 const TITLE = 'Plan';
 
+interface Props {
+  state: ChatState;
+  /** Kept per chat by the app, like the team column. */
+  open: boolean;
+  setOpen: (open: boolean) => void;
+}
+
 /**
  * The Supervisor's current round, docked above the composer (DESIGN.md "Agent plan"): its state, the
  * segments of its steps and done/total; opening it lists the steps above the row.
  */
-export function PlanBar({ state }: { state: ChatState }) {
+export function PlanBar({ state, open, setOpen }: Props) {
   const round = useMemo(() => currentRound(state), [state]);
-  const [open, setOpen] = useState(false);
   if (!round) return null;
   const { steps, done } = round;
   const label = `${TITLE}${round.status ? `: ${round.status}` : ''}. ${done} of ${steps.length} done`;

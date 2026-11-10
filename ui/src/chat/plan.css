@@ -57,33 +57,41 @@
   border: 1px solid var(--muted-foreground);
   border-radius: 50%;
 }
+/* Keeps room for "Plan" and the start of its line; the line takes what the segments leave. */
 .plan-title {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
+  min-width: min(7.5rem, 40%);
   align-items: baseline;
   gap: 8px;
-  min-width: 0;
-  overflow: hidden;
   white-space: nowrap;
 }
 .plan-title strong {
+  flex: none;
   font-size: 13px;
   font-weight: 500;
 }
 .plan-title span {
-  min-width: 0;
+  flex: 1;
+  width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted-foreground);
   font-size: 12px;
 }
+/* A long round narrows its segments rather than pushing done/total out of the row. */
 .plan-segments {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
   gap: 3px;
+  min-width: 0;
+  overflow: hidden;
 }
 .plan-segments i {
+  /* A width, not only a basis: the track's own size comes from its segments' widths. */
+  flex: 0 1 auto;
   width: 12px;
+  min-width: 2px;
   height: 4px;
   border-radius: 9999px;
   background: color-mix(in oklab, var(--foreground) 12%, transparent);

@@ -57,6 +57,9 @@ interface Props {
   /** The team chat beside the Supervisor's, in a chat with more than one agent; kept per chat. */
   split: boolean;
   onSplit: (open: boolean) => void;
+  /** The plan bar's steps shown; kept per chat. */
+  plan: boolean;
+  onPlan: (open: boolean) => void;
 }
 
 export function ChatView(props: Props) {
@@ -240,7 +243,7 @@ export function ChatView(props: Props) {
             </>
           ) : (
             <>
-              {team && <PlanBar state={state} />}
+              {team && <PlanBar state={state} open={props.plan} setOpen={props.onPlan} />}
               <Composer
                 draft={draft}
                 onDraft={onDraft}

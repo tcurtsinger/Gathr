@@ -93,6 +93,8 @@ function Chat() {
         onPause={async () => {}}
         split={split}
         onSplit={setSplit}
+        plan={false}
+        onPlan={() => {}}
       />
     </div>
   );

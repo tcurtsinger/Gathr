@@ -44,6 +44,8 @@ export function App() {
   const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
   // Each chat's team column, open until the person hides it (the owner's split chat design).
   const [splits, setSplits] = useState<Record<string, boolean>>({});
+  // Each chat's plan bar, folded until the person opens it.
+  const [plans, setPlans] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const started = performance.now();
@@ -249,6 +251,8 @@ export function App() {
           onReference={openReference}
           split={splits[chat.id] ?? true}
           onSplit={(open) => setSplits((all) => ({ ...all, [chat.id]: open }))}
+          plan={!!plans[chat.id]}
+          onPlan={(open) => setPlans((all) => ({ ...all, [chat.id]: open }))}
           notice={notice}
           headerEnd={
             chat.id &&
