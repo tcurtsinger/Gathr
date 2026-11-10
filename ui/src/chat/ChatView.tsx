@@ -86,7 +86,8 @@ export function ChatView(props: Props) {
 
   const cache = useRef(new Map());
   const columns = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
-  const team = !fresh && state.members.length > 1;
+  // A team that shrank to one agent still has its saved hand-offs to read.
+  const team = !fresh && (state.members.length > 1 || columns.team.length > 0);
   const split = team && props.split;
   const unseen = useUnseen(chat.id, columns.team, split, loaded);
   // Drawn from its first opening on, then only hidden, so it keeps its place in the team's work.

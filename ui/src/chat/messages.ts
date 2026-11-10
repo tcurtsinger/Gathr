@@ -48,6 +48,8 @@ interface Group {
   turn: string | null;
   msgs: Message[];
   reply: boolean;
+  /** The person's message: always in the main column, even one sent into a member's turn on a task. */
+  person?: boolean;
   /** What Gathr told the turn's agent. */
   gathr?: boolean;
   /** The turn's last reply: the one its streaming text, notice and approvals go on. */
@@ -61,14 +63,15 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
 /**
  * Gathr's chat as assistant-ui messages, in two columns. Each person's message, then the reply to it
  * holding its text and tool calls in order: a turn is one reply wherever its messages land among other
- * agents' and Gathr's, but a person's message sent into a running turn of the same column splits it in
+ * agents' and Gathr's, but a person's message sent into a running turn of the main column splits it in
  * two, one before it and one after; the last holds the streaming text, the notice and the approvals.
  * A reply keeps one id from its first streamed text to its saved messages, so nothing remounts when
  * a stream ends, and a reply whose parts didn't change keeps the same object, so assistant-ui doesn't
  * convert it again.
  *
  * Work on a hand-off (a turn on a task, or one hearing back inside it) goes to the team column, in the
- * order its turns began, so replies streaming at once never interleave (0015, 0028).
+ * order its turns began, so replies streaming at once never interleave (0015, 0028). The person's own
+ * messages all stay in the main column.
  */
 export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[], cache: Cache): Columns {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
@@ -76,9 +79,10 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const main: ThreadMessageLike[] = [];
   const work: Group[] = [];
   for (const g of grouped(state, inTeam)) {
-    if (inTeam(g.turn)) work.push(g);
-    // What Gathr told the lead when a round settled: the team column and Summary already show it.
-    else if (!(g.gathr && state.turns[g.turn ?? '']?.answers)) main.push(cached(cache, g, state, crew));
+    if (g.person || !inTeam(g.turn)) {
+      // What Gathr told the lead when a round settled: the team column and Summary already show it.
+      if (!(g.gathr && state.turns[g.turn ?? '']?.answers)) main.push(cached(cache, g, state, crew));
+    } else work.push(g);
   }
   // Replies streaming at once save in the order they finish: the team keeps its turns' order, as a reload does.
   // Live updates can arrive out of order, so a turn's place wins; one not started yet goes last.
@@ -105,8 +109,8 @@ function grouped(state: ChatState, inTeam: (turn: string | null) => boolean): Gr
   const open = new Map<string, Group>();
   for (const m of state.messages) {
     if (m.role === 'user') {
-      groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false });
-      for (const turn of open.keys()) if (inTeam(turn) === inTeam(m.turn)) open.delete(turn);
+      groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, person: true });
+      for (const turn of open.keys()) if (!inTeam(turn)) open.delete(turn);
     } else if (m.role === 'gathr')
       groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, gathr: true });
     else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);

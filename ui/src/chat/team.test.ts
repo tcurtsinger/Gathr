@@ -175,6 +175,18 @@ test("a person's message sent into a running turn still splits that reply where 
   expect(ids(view(state).team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
 });
 
+test("the person's message to a member working on a task is in the main column; the member's reply stays whole in the team one", () => {
+  const state = round();
+  state.turns.kit.status = 'running';
+  // The service saves a message sent into a running turn on that turn.
+  state.messages.push(said('kit', 'user', '@Kit keep the shortcuts'), said('kit', 'assistant', 'Kept'));
+  state.partial = { kit: 'Still checking' };
+  const { main, team } = view(state);
+  expect(ids(main).slice(-1)).toEqual(['kit-user']);
+  expect(ids(team)).toEqual(['rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit']);
+  expect(text(team.at(-1))).toBe('Checked | Kept | Still checking');
+});
+
 test('a task a member gave is in the team column, and a turn nobody gave a task to stays in the main one', () => {
   const state = round();
   state.turns.sub = turn('sub', 'lane', { task: 3 });

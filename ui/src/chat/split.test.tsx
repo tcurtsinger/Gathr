@@ -98,14 +98,14 @@ function Chat() {
   );
 }
 
-async function open() {
+async function open(chat = history) {
   vi.stubGlobal('fetch', async (path: string) =>
     json(
       path.endsWith('/tasks')
         ? { tasks, waits: [] }
         : path === '/api/pauses'
           ? { pauses: [], usage: [] }
-          : history,
+          : chat,
     ),
   );
   const screen = await render(<Chat />);
@@ -152,6 +152,13 @@ test('Hide then Show keeps the team column where the reader left it', async () =
   await expect.element(screen.getByRole('region', { name: 'Team' })).not.toBeInTheDocument();
   await toggle();
   expect(viewport.scrollTop).toBe(reading);
+});
+
+test('a chat whose team shrank to its lead still shows the hand-offs it saved, and can hide them', async () => {
+  const { screen, toggle } = await open({ ...history, members: history.members.slice(0, 1) });
+  await toggle();
+  await expect.element(screen.getByRole('region', { name: 'Team' })).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Show team chat' })).toBeVisible();
 });
 
 test('a team column following the latest reply follows one that came while it was hidden', async () => {
