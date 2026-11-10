@@ -110,8 +110,8 @@ function rank(m: Member) {
 }
 
 /**
- * Working; out of usage; stopped; paused, or held when work waits for Resume; waiting (and for whom, by
- * name); or ready. From the service's records only.
+ * Working; out of usage; stopped; paused, or held when work waits for Resume; waiting (for whom, by name,
+ * and since when); or ready. From the service's records only.
  */
 function doing(
   m: Member,
@@ -127,14 +127,26 @@ function doing(
   const mine = state.tasks.filter((t) => t.owner === m.agent && open(t));
   const queued = turns.some((t) => t.status === 'queued');
   if (own.paused || run.state !== 'running') return mine.length || queued ? 'Held' : 'Paused';
-  const after = mine.flatMap((t) => t.after);
-  const on = [
-    ...state.waits.filter((w) => w.agent === m.agent && w.state === 'open').map((w) => waitName(w, name)),
-    ...state.tasks.filter((t) => after.includes(t.number) && open(t)).map((t) => name(t.owner)),
-    ...state.tasks.filter((t) => t.giver === m.agent && open(t)).map((t) => name(t.owner)),
-  ];
-  if (on.length) return `Waiting for ${list([...new Set(on)])}`;
+  // Each name the agent waits for, with when its earliest wait on it began.
+  const since = new Map<string, number>();
+  const on = (who: string, us: number) => since.set(who, Math.min(us, since.get(who) ?? us));
+  for (const w of state.waits.filter((w) => w.agent === m.agent && w.state === 'open')) {
+    on(waitName(w, name), w.created_ts);
+  }
+  for (const t of mine) {
+    for (const b of state.tasks.filter((b) => t.after.includes(b.number) && open(b)))
+      on(name(b.owner), t.created_us);
+  }
+  for (const t of state.tasks.filter((t) => t.giver === m.agent && open(t))) on(name(t.owner), t.created_us);
+  if (since.size) return `Waiting for ${list([...since].map(([who, us]) => `${who} since ${began(us)}`))}`;
   return mine.length || queued ? 'Waiting' : 'Ready';
+}
+
+/** When a wait began: its time today, else its date (Nov 8). */
+function began(us: number): string {
+  const at = new Date(us / 1000);
+  if (at.toDateString() === new Date().toDateString()) return clock(at.toISOString());
+  return at.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 /** A wait in a few words, as the service names it (tasks/words.rs `wait_name`). */

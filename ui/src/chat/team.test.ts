@@ -50,6 +50,7 @@ const task = (number: number, owner: string, given_in: string, more: Partial<Tas
   state: 'done',
   reason: null,
   after: [],
+  created_us: 0,
   ...more,
 });
 
