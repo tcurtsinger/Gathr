@@ -9,6 +9,12 @@ use crate::event::Event;
 /// `left` twice in a row by turns that ran no tool and left nothing open is `blocked` (0010).
 const IDLE_LEFTS: i64 = 2;
 
+/// Tasks `t` its owner called done that are held only until their PR merges, read from the reason
+/// `settle` writes. They count as done for the tasks `after` them: a review of that PR may be what
+/// the merge waits on (0010). Never null, so `NOT` keeps every other task.
+pub(super) const ONLY_ITS_MERGE: &str = "(t.state = 'held' AND t.pr IS NOT NULL
+    AND t.reason IS 'done, waiting on #' || t.pr || ' to merge')";
+
 /// What the task still has open, each in a few words: its waits, the tasks given in its turns that
 /// aren't settled, and its PR.
 pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error> {
