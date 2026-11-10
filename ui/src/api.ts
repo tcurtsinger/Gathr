@@ -155,6 +155,11 @@ export interface StaleDays {
   cancel_days: number;
 }
 
+/** Settings > General: the stale rules, and the folder that holds every project's Shared and agent folders (M1). */
+export interface Settings extends StaleDays {
+  agent_folder: string;
+}
+
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
 export interface Agent {
   id: string;
@@ -267,8 +272,8 @@ export const api = {
   personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
   cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),
   restartTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/restart`),
-  settings: () => call<StaleDays>('GET', '/api/settings'),
-  saveSettings: (days: Partial<StaleDays>) => call<StaleDays>('PATCH', '/api/settings', days),
+  settings: () => call<Settings>('GET', '/api/settings'),
+  saveSettings: (change: Partial<Settings>) => call<Settings>('PATCH', '/api/settings', change),
   answer: (answers: PersonAnswer[]) =>
     call<{ answered: Task[]; refused: { task: number; why: string; ref: string | null }[] }>(
       'POST',

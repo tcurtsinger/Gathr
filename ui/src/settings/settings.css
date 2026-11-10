@@ -101,3 +101,33 @@
   color: var(--danger);
   font-size: 12px;
 }
+/* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another. */
+.agent-folder-now {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-left: auto;
+}
+.agent-folder-now code {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-folder-edit {
+  display: flex;
+  flex: 1 1 360px;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-folder-edit small {
+  color: var(--muted);
+  font-size: 12px;
+}
+/* Under the field it belongs to: the row's padding spaces it, not a reply's margins. */
+.agent-folder .notice {
+  flex-basis: 100%;
+  margin: 0;
+}
