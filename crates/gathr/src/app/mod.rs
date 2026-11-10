@@ -4,7 +4,10 @@
 //! before it, and whether the current one is still on trial: switched to and not yet proven by a
 //! finished turn or `TRIAL` of running, and gone back from if it doesn't start or dies before.
 
+mod handover;
 pub mod release;
+
+pub use handover::{HandOver, STARTING};
 
 use std::io;
 use std::path::{Path, PathBuf};

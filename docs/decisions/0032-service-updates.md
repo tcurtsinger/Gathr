@@ -34,6 +34,15 @@ The service outlives the window and active engine turns. Separate checked copies
   ordinary way (engines closed gently, the database checkpointed and closed), keeps a copy of the database, names the
   new copy current on trial, and starts it. If something still runs after 30 minutes, the turns go on and the next
   look tries again (`gathr.app.hold`, `busy`).
+- **The hand-over can't hang** (0.1.38 to 0.1.39 did, 2026-11-10): the stopped service waits at most 5 s for its
+  runtime's blocking work, then leaves it to end with the process. On Windows, reading an engine's output is blocking
+  work, and an engine killed at shutdown can leave children holding that pipe (a Codex engine did), so the wait never
+  ended and the old service kept the folder locked. Each step is noted in `app/handover.json` (`ending background
+  work`, `switching copies`, `starting the update`); the next start records it as `gathr.app.handover`, an error
+  with a reference if it stopped before starting the update, with `left_running` when the 5 s ran out. A window that
+  finds the folder held by a service stopped mid-update says so, with its process id, instead of "didn't answer".
+  Killing an engine's whole process tree at shutdown was turned down here: it fixes only this one cause of blocking
+  work, and 0031 keeps engines to the gentle close.
 - **Trial:** a new copy is on trial from the switch until it finishes a turn or runs 10 minutes (`gathr.app.trial`,
   `by` `turn` or `time`). Until then the copy before it and the database as it was before the update are kept. Its
   first start records `gathr.app.switch`. The kept database is a SQLite snapshot (`VACUUM INTO`), not a file copy, so
