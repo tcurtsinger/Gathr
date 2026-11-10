@@ -260,6 +260,14 @@ General starts with Theme for This computer: System (default, follows the system
 setting), Light or Dark, applied at once without a reload. Then Open at login for
 This computer, applied immediately with Switch. The window keeps the theme and the
 navigation and workspace widths across restarts.
+
+Agent folder follows Open at login: the current path, Change and shared ? Help
+explaining each project's Shared and per-agent folders. It belongs to the service
+host, with no This computer label. The path editor saves on Save/Enter and applies
+to new work; current work stays where it is. Cancel/Escape returns focus to Change
+without closing Settings. A refused save keeps the typed path, reason and error
+reference.
+
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
 one shared editor: Account, Model, Effort, Approvals. Account implies engine;
