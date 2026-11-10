@@ -5,29 +5,33 @@ import { render } from 'vitest-browser-react';
 import type { Account, Engine } from '../api';
 import { Engines } from './Engines';
 
-const account = (id: string, name: string): Account => ({
+const account = (id: string, name: string, sign_in: Account['sign_in'] = null): Account => ({
   id,
   name,
   engine: 'claude',
   login: 'signed_out',
   expires: null,
-  sign_in: null,
+  sign_in,
 });
 
-/** Answers GET /api/accounts and /api/engines/claude; each engine answer is the next in `copies`. */
-function service(copies: Engine['copy'][], removed: string[] = []) {
+/**
+ * Answers GET /api/accounts and each engine: Claude Code's answer is the next in `copies`, Codex's
+ * is always up to date. Every request except a GET lands in `sent`.
+ */
+function service(copies: Engine['copy'][], sent: string[] = [], accounts = defaults) {
   const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
-    if (init?.method === 'DELETE') removed.push(path);
-    if (path === '/api/accounts')
-      return answer({ accounts: [account('a', 'Made-up one'), account('b', 'Made-up two')] });
+    if (init?.method && init.method !== 'GET') sent.push(`${init.method} ${path}`);
+    if (path === '/api/accounts') return answer({ accounts });
     if (path === '/api/engines/claude') {
       const copy = copies.length > 1 ? copies.shift() : copies[0];
       return answer({ found: 'claude', why_not_found: null, copy });
     }
+    if (path === '/api/engines/codex') return answer({ found: 'codex', why_not_found: null, copy: codex });
     return answer({});
   });
 }
+const defaults = [account('a', 'Made-up one'), account('b', 'Made-up two')];
 afterEach(() => vi.unstubAllGlobals());
 
 const copy = (state: Engine['copy']['state'], failed: Engine['copy']['failed'] = null): Engine['copy'] => ({
@@ -36,6 +40,7 @@ const copy = (state: Engine['copy']['state'], failed: Engine['copy']['failed'] =
   checked: state === 'checking' ? null : '2026-11-08T00:00:00Z',
   failed,
 });
+const codex: Engine['copy'] = { ...copy('idle'), version: '0.166.0' };
 
 test('Rename on another account opens its own name, not the last draft', async () => {
   service([copy('idle')]);
@@ -69,7 +74,7 @@ test('Remove asks first: Escape keeps the account and Settings open, Remove dele
 
   await remove.click();
   await question.getByRole('button', { name: 'Remove' }).click();
-  await expect.poll(() => removed).toEqual(['/api/accounts/b']);
+  await expect.poll(() => removed).toEqual(['DELETE /api/accounts/b']);
   await expect.element(screen.getByRole('button', { name: 'Add' })).toHaveFocus();
 });
 
@@ -78,6 +83,39 @@ test('a check that takes several looks ends as failed, with Check back and no Up
   service([copy('checking'), copy('checking'), copy('checking'), copy('idle', failed)]);
   const screen = await render(<Engines onReference={() => {}} />);
   await expect.element(screen.getByText('Update failed')).toBeVisible();
-  await expect.element(screen.getByRole('button', { name: 'Check' })).toBeEnabled();
-  await expect.element(screen.getByText('Up to date')).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Check' }).first()).toBeEnabled();
+  // Only Codex, listed second, is up to date.
+  await expect.element(screen.getByText('Up to date')).toBeVisible();
+  expect(screen.getByText('Up to date').elements()).toHaveLength(1);
+});
+
+test("each engine's Check asks for its own copy", async () => {
+  const sent: string[] = [];
+  service([copy('idle')], sent);
+  const screen = await render(<Engines onReference={() => {}} />);
+  // Codex is listed second.
+  await screen.getByRole('button', { name: 'Check' }).nth(1).click();
+  await expect.poll(() => sent).toEqual(['POST /api/engines/codex/update']);
+});
+
+test('a sign-in shows the code field only when its engine takes a pasted code', async () => {
+  const page = 'https://example.invalid/sign-in';
+  service(
+    [copy('idle')],
+    [],
+    [
+      account('a', 'Made-up paste', { state: 'waiting', url: page, paste: true }),
+      { ...account('b', 'Made-up browser', { state: 'waiting', url: page, paste: false }), engine: 'codex' },
+    ],
+  );
+  const screen = await render(<Engines onReference={() => {}} />);
+  const rows = screen.getByRole('listitem');
+  const paste = rows.filter({ hasText: 'Made-up paste' });
+  const browser = rows.filter({ hasText: 'Made-up browser' });
+  await expect.element(paste.getByRole('textbox', { name: 'Code' })).toBeVisible();
+  await expect.element(browser.getByText('Codex / Signing in')).toBeVisible();
+  await expect
+    .element(browser.getByRole('link', { name: 'Open sign-in page' }))
+    .toHaveAttribute('href', page);
+  await expect.element(browser.getByRole('textbox', { name: 'Code' })).not.toBeInTheDocument();
 });

@@ -4,8 +4,11 @@ import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
 
-/** The engines Gathr can run, as the service names them. Codex joins with its driver. */
-const engines: [string, string][] = [['claude', 'Claude Code']];
+/** The engines Gathr can run, as the service names them. */
+export const engines: [string, string][] = [
+  ['claude', 'Claude Code'],
+  ['codex', 'Codex'],
+];
 export const engineName = (engine: string) => engines.find(([id]) => id === engine)?.[1] ?? engine;
 
 const said: Record<string, string> = {
@@ -240,12 +243,24 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
           links={<span className="muted">{failed.why}</span>}
         />
       )}
-      {waiting?.url && <SignInCode account={id} url={waiting.url} onFailure={onFailure} />}
+      {waiting?.url &&
+        (waiting.paste ? (
+          <SignInCode account={id} url={waiting.url} onFailure={onFailure} />
+        ) : (
+          <SignInPage url={waiting.url} />
+        ))}
     </li>
   );
 }
 
-/** While Claude Code waits: its page, if the browser didn't open, and the code that page gives. */
+/** The sign-in page, for when the browser didn't open. */
+const SignInPage = ({ url }: { url: string }) => (
+  <a href={url} target="_blank" rel="noreferrer">
+    Open sign-in page
+  </a>
+);
+
+/** While the engine waits for the code its page gives: that page, and the code. */
 function SignInCode({
   account,
   url,
@@ -281,9 +296,7 @@ function SignInCode({
           {sent ? 'Signing in' : 'Sign in'}
         </button>
       </div>
-      <a href={url} target="_blank" rel="noreferrer">
-        Open sign-in page
-      </a>
+      <SignInPage url={url} />
     </form>
   );
 }

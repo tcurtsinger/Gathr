@@ -208,8 +208,14 @@ export interface Account {
   engine: string;
   login: string;
   expires: string | null;
-  /** A sign-in from Settings: waiting (with its page once there is one), or failed with why and a reference. */
-  sign_in: { state: 'waiting'; url?: string } | { state: 'failed'; why: string; ref: string } | null;
+  /**
+   * A sign-in from Settings: waiting (with its page once there is one, and `paste` when the engine
+   * takes the code that page gives), or failed with why and a reference.
+   */
+  sign_in:
+    | { state: 'waiting'; url?: string; paste?: boolean }
+    | { state: 'failed'; why: string; ref: string }
+    | null;
 }
 
 /** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
@@ -278,8 +284,8 @@ export const api = {
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
-  engine: () => call<Engine>('GET', '/api/engines/claude'),
-  checkEngine: () => call<unknown>('POST', '/api/engines/claude/update'),
+  engine: (engine: string) => call<Engine>('GET', `/api/engines/${engine}`),
+  checkEngine: (engine: string) => call<unknown>('POST', `/api/engines/${engine}/update`),
   accounts: () => call<{ accounts: Account[] }>('GET', '/api/accounts').then((a) => a.accounts),
   addAccount: (engine: string, name: string) => call<Account>('POST', '/api/accounts', { engine, name }),
   renameAccount: (account: string, name: string) =>
