@@ -43,6 +43,12 @@ impl Driver {
         }
     }
     pub fn needs_recovery(frames: &[Frame]) -> bool {
-        frames.iter().any(|f| matches!(f, Frame::EngineError { kind, .. } if kind == "initialize" || kind == "thread" || kind == "engine_version" || kind == "models" || kind == "turn" || kind == "steer"))
+        frames.iter().any(|f| match f {
+            Frame::EngineError { kind, .. } => matches!(
+                kind.as_str(),
+                "initialize" | "thread" | "engine_version" | "models" | "turn" | "steer"
+            ),
+            _ => false,
+        })
     }
 }

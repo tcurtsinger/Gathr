@@ -28,17 +28,22 @@ impl Task {
             .chat(chat)
             .attr("gen_ai.agent.id", self.agent.clone())
             .attr("remote", input["remote"].as_str().map(String::from));
+        // Claude already asked through its native hook. Keep that path valid even if its
+        // completed turn ended just before the MCP request reached us.
+        if native_hook {
+            self.record(event.ok().attr("allowed_by", "Claude Code PreToolUse"));
+            let _ = reply.send(true);
+            return;
+        }
         let Some(turn) = turn else {
             let why = "no turn of the agent's is running in the chat";
-            self.record(event.error(format!("{kind}_refused")).attr("why", why));
+            self.record(event.error(&format!("{kind}_refused")).attr("why", why));
             let _ = reply.send(false);
             return;
         };
-        if full || native_hook || (kind == "push" && turn.push_allowed) {
+        if full || (kind == "push" && turn.push_allowed) {
             let by = if full {
                 "full"
-            } else if native_hook {
-                "Claude Code PreToolUse"
             } else {
                 "the command was allowed"
             };
@@ -85,7 +90,7 @@ impl Task {
         self.record(match sent {
             true => event.ok(),
             false => event
-                .error(format!("{kind}_gone"))
+                .error(&format!("{kind}_gone"))
                 .attr("why", "the caller ended the action before the answer"),
         });
         sent

@@ -15,8 +15,7 @@ Status: accepted (slice 2, the owner's pick of "Auto, with guards"). Date: 2026-
   approval in Ask, Edits and Auto; Full admits it immediately. Refusal or shutdown saves no wait.
   It shares the push approval's question/response path, but an allowed push command never admits
   a wait check. Claude retains its native hook, avoiding a second ask and its 60-second MCP limit.
-  Codex's configured MCP timeout is one hour; if its caller times out, the question is no longer
-  answerable and no wait is saved. Once approved and saved, normal wait persistence applies.
+  Codex's configured MCP timeout is one hour. Once approved and saved, normal wait persistence applies.
 - **What auto mode blocks** isn't a question: Claude Code refuses it, tells the agent why, and sends `system/permission_denied`. Gathr records it as `gathr.approvals.blocked` with its reason (`[Data Exfiltration]`). After 3 blocks in a row or 20 in a session Claude Code falls back to asking (its docs), which reaches Gathr as an approval like any other.
 - **An engine in another mode than asked** (auto mode isn't offered for every model: Claude Code starts in Manual instead) is a `gathr.approvals.mode` error on the turn's trace, with the mode given and the one running.
 - **A project's own Claude rules never widen this.** Gathr reads a project's `.claude/settings*.json` (`--setting-sources project,local`, needed for its `CLAUDE.md`), but Claude Code ignores a project's allow rules until the folder is trusted, and Gathr never marks a folder trusted. Deny and ask rules beat allow rules from any file (Claude Code's docs). Not checked: whether the hook's "ask" also beats an allow rule in a folder someone trusted by hand.

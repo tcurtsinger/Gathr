@@ -40,7 +40,7 @@ pub enum Cmd {
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
-    /// A `git push` from the agent's worktree, waiting for its answer (0029).
+    /// A service action (push or Codex wait check), waiting for its answer (0029).
     AskService {
         kind: &'static str,
         chat: String,
