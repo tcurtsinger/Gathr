@@ -529,6 +529,81 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     assert_eq!(state(&conn, under_way.number), (State::Cancelled, why));
 }
 
+/// Ann's fix with its PR, #69.
+fn fix_with_pr(conn: &mut Connection) -> i64 {
+    let fix = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "ann",
+        given_in: None,
+        parent: None,
+        kind: Kind::Work,
+        what: "Fix the label",
+        why: None,
+        after: &[],
+        pr: Some(69),
+    };
+    tasks::give(conn, &fix, T).unwrap().0.number
+}
+
+// Found live: the review of #69 waited on the fix, held until #69 merged, which waited on the review.
+#[test]
+fn a_task_done_and_held_only_on_its_pr_lets_the_tasks_after_it_start() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let fix = fix_with_pr(&mut conn);
+    let (review, _) = give(&mut conn, "bo", &[fix], None);
+    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let held = Some("done, waiting on #69 to merge".to_string());
+    assert_eq!(
+        state(&conn, fix),
+        (State::Held, held),
+        "settled by the merge"
+    );
+    assert_eq!(
+        state(&conn, review).0,
+        State::Ready,
+        "the review of #69 starts while #69 waits on it"
+    );
+    let bo: Vec<_> = starts.iter().filter(|s| s.agent == "bo").collect();
+    assert_eq!(bo.len(), 1, "{starts:?}");
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
+    assert_eq!(state(&conn, fix).0, State::Done);
+    let again: Vec<_> = merged.iter().filter(|s| s.agent == "bo").collect();
+    assert!(again.is_empty(), "the review starts once: {again:?}");
+}
+
+#[test]
+fn a_task_held_on_more_than_its_pr_or_left_still_holds_the_tasks_after_it() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let fix = fix_with_pr(&mut conn);
+    let (review, _) = give(&mut conn, "bo", &[fix], None);
+    tasks::started(&mut conn, fix, T).unwrap();
+    let wait = Leave {
+        chat: "c",
+        agent: "ann",
+        task: Some(fix),
+        left_in: None,
+        cwd: Some("."),
+        then_do: "check the logs",
+        parts: vec![part("ci", "#69")],
+    };
+    waits::leave(&mut conn, &wait, T).unwrap();
+    tasks::ended(&mut conn, fix, Outcome::Ok { tools: 2 }, T).unwrap();
+    let held = Some("done, waiting on CI on #69, #69 to merge".to_string());
+    assert_eq!(state(&conn, fix), (State::Held, held));
+    assert_eq!(state(&conn, review).0, State::Waiting, "held on a wait");
+    let left = fix_with_pr(&mut conn);
+    let (after_left, _) = give(&mut conn, "bo", &[left], None);
+    work(&mut conn, left, Some(Finish::Left), 2);
+    assert_eq!(
+        state(&conn, after_left).0,
+        State::Waiting,
+        "its owner left work"
+    );
+}
+
 #[test]
 fn a_task_is_refused_with_why() {
     let dir = TempDir::new();
