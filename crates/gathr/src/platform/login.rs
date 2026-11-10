@@ -43,12 +43,32 @@ const APPROVED: &str =
 pub fn is_on(item: &Item) -> Result<bool, String> {
     use super::env;
     let command = command_line(&item.args);
-    let listed = env::parse_reg(&env::export(RUN)?)
+    let entries = match env::export(RUN) {
+        Ok(bytes) => env::parse_reg(&bytes),
+        // A profile nothing ever started at login from may have no Run key (CI's runners): off.
+        // `reg` says so only in the system's language, so the key's parent is asked instead.
+        Err(_) if !key_exists(RUN)? => Vec::new(),
+        Err(why) => return Err(why),
+    };
+    let listed = entries
         .iter()
         .any(|(name, value, _)| name.eq_ignore_ascii_case(&item.name) && *value == command);
     // A person who never turned anything off may have no such key.
     let off = env::export(APPROVED).is_ok_and(|b| turned_off(&env::utf16le(&b), &item.name));
     Ok(listed && !off)
+}
+
+/// Whether `key` is one of its parent's subkeys, as `reg query` lists them (key names print as
+/// they are in any language).
+#[cfg(windows)]
+fn key_exists(key: &str) -> Result<bool, String> {
+    use super::env;
+    let (parent, _) = key.rsplit_once('\\').expect("a subkey");
+    let mut command = env::reg();
+    command.args(["query", parent]);
+    let listed = env::run(command, std::time::Duration::from_secs(10))?;
+    let listed = String::from_utf8_lossy(&listed);
+    Ok(listed.lines().any(|l| l.trim().eq_ignore_ascii_case(key)))
 }
 
 /// Adds or removes the item, and clears any earlier "off" so that on means on.
@@ -196,6 +216,17 @@ fn plist(label: &str, args: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn a_key_is_found_among_its_parents_subkeys_and_a_missing_one_isnt() {
+        assert_eq!(
+            key_exists(r"HKEY_CURRENT_USER\Software\Microsoft"),
+            Ok(true)
+        );
+        let missing = r"HKEY_CURRENT_USER\Software\Microsoft\GathrNoSuchKey";
+        assert_eq!(key_exists(missing), Ok(false));
+    }
 
     #[test]
     fn a_reg_file_escapes_the_command_and_deletes_with_a_dash() {

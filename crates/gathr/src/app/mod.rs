@@ -85,6 +85,26 @@ impl Copies {
         self.root.join("current.json")
     }
 
+    fn installed_file(&self) -> PathBuf {
+        self.root.join("installed")
+    }
+
+    /// Records the installed `gathrd` the window (or `gathr open`) reaches the service from: the
+    /// window sits beside it, not beside the copy that runs, and Open at login starts it.
+    pub fn note_installed(&self, installed: &Path) -> io::Result<()> {
+        std::fs::create_dir_all(&self.root)?;
+        std::fs::write(
+            self.installed_file(),
+            installed.to_string_lossy().as_bytes(),
+        )
+    }
+
+    pub fn installed(&self) -> Option<PathBuf> {
+        std::fs::read_to_string(self.installed_file())
+            .ok()
+            .map(PathBuf::from)
+    }
+
     /// The database as it was before `version` first started, kept until that start passes.
     fn kept_db(&self, version: &str) -> PathBuf {
         self.root.join(format!("gathr.db.before-{version}"))
