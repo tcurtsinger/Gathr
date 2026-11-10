@@ -1,7 +1,8 @@
 //! Where an engine runs and with what environment (0028, 0034): an agent works in its own folder
 //! in the agent folder, in a worktree of its own in a project chat, made the first time, with a
-//! folder for its task's temporary files. A turn to no agent runs in the chat's folder in the data
-//! folder, as before. Either way with the environment a new sign-in would give (G23).
+//! folder for the engine's temporary files that lasts as long as the engine. A turn to no agent
+//! runs in the chat's folder in the data folder, as before. Either way with the environment a new
+//! sign-in would give (G23).
 
 use std::path::{Path, PathBuf};
 
@@ -69,7 +70,6 @@ impl Task {
     pub(super) async fn workspace(
         &self,
         assigned: &Assignment,
-        task: Option<i64>,
         trace: &str,
     ) -> Result<Workspace, String> {
         let fresh = tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect()))
@@ -106,12 +106,12 @@ impl Task {
                 Some(_) => worktree::old_folder(data, &chat, &agent),
                 None => data.join("chats").join(&chat),
             });
-        let scratch = folders::scratch(&found.place, &chat, task);
+        let scratch = folders::scratch(&found.place, &chat);
         let kind = match found.project {
             Some(_) => "worktree",
             None => "folder",
         };
-        let made = [(cwd.as_path(), kind, None), (&scratch, "scratch", task)];
+        let made = [(cwd.as_path(), kind), (&scratch, "scratch")];
         let project = found.project.as_deref();
         self.record_made(&made, (&chat, &agent), project).await?;
         let mut dirs = vec![&found.place.agent, &found.place.shared, &scratch];
@@ -139,13 +139,13 @@ impl Task {
     /// Records each folder before it's made, so Gathr removes it later (0034).
     async fn record_made(
         &self,
-        made: &[(&Path, &'static str, Option<i64>)],
+        made: &[(&Path, &'static str)],
         (chat, agent): (&str, &str),
         project: Option<&str>,
     ) -> Result<(), String> {
-        let rows: Vec<(PathBuf, &'static str, Option<i64>)> = made
+        let rows: Vec<(PathBuf, &'static str)> = made
             .iter()
-            .map(|(path, kind, task)| (path.to_path_buf(), *kind, *task))
+            .map(|(path, kind)| (path.to_path_buf(), *kind))
             .collect();
         let (chat, agent) = (chat.to_string(), agent.to_string());
         let project = project.map(String::from);
@@ -153,13 +153,12 @@ impl Task {
             .chats
             .writer
             .call(move |conn| {
-                for (path, kind, task) in &rows {
+                for (path, kind) in &rows {
                     let row = Made {
                         path,
                         kind,
                         chat: &chat,
                         agent: Some(&agent),
-                        task: *task,
                         project: project.as_deref().filter(|_| *kind == "worktree"),
                     };
                     folders::made(conn, &row)?;

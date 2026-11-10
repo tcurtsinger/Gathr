@@ -130,8 +130,8 @@ pub fn text(facts: &Facts) -> String {
         lines.push(format!(
             "Your own folder is \"{}\": keep test data, builds and notes there. The team's shared \
              folder is \"{}\": put plans, reviews and evidence for others there. You can write in \
-             both without asking. Gathr deletes a task's TEMP folder after the task ends, and your \
-             worktree after the chat is archived.",
+             both without asking. Gathr deletes your TEMP folder when it closes your session, and \
+             your worktree after the chat is archived.",
             own.display(),
             shared.display()
         ));

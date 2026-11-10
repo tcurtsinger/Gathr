@@ -1,5 +1,5 @@
-//! Gathr removes what it made for agents' work (0034): a task's temporary files once the task is
-//! done or cancelled, a chat's worktrees and folders once it's archived or deleted; branches stay.
+//! Gathr removes what it made for agents' work (0034): an engine's temporary files once it has
+//! closed, a chat's worktrees and folders once it's archived or deleted; branches stay.
 //! Never a folder a running engine or wait check uses, nor, while the chat is only archived, a
 //! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
 //! again at the next sweep, which runs with the service's looks (0010).
@@ -14,8 +14,28 @@ use gathr::worktree;
 
 use crate::chats::Chats;
 
-/// One sweep at a time: an archive's and the looks' would remove the same folder at once.
+/// One sweep at a time, and none while an engine's folders are made: an archive's and the looks'
+/// would remove the same folder at once, and a sweep could remove a folder made again meanwhile.
 static SWEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Holds sweeps off while an engine's folders are made, until its token says it uses them.
+pub async fn hold() -> tokio::sync::MutexGuard<'static, ()> {
+    SWEEPING.lock().await
+}
+
+/// The agent's engine in `chat` has closed: its temporary files go, at once unless in use.
+pub async fn engine_closed(chats: &Arc<Chats>, chat: &str, agent: &str) {
+    let (c, a) = (chat.to_string(), agent.to_string());
+    let due = chats
+        .writer
+        .call(move |conn| folders::engine_closed(conn, &c, &a));
+    if let Some(Ok(n)) = due.await
+        && n > 0
+    {
+        let (chats, chat) = (chats.clone(), chat.to_string());
+        tokio::spawn(async move { sweep(&chats, Some(&chat)).await });
+    }
+}
 
 /// Removes what goes now, of `chat` or of every chat: what's left, each with why and its reference.
 pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {

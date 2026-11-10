@@ -6,10 +6,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{
-    TempDir, TestService, call_tool, gathr, git, held_recording, hook, nth, sign_in_account, text,
-    until,
-};
+use common::{TempDir, TestService, gathr, git, held_recording, hook, nth, sign_in_account, until};
 use gathr::folders::beside;
 use serde_json::{Value, json};
 
@@ -249,48 +246,28 @@ fn a_renamed_agent_keeps_its_folder() {
 }
 
 #[test]
-fn a_tasks_temp_folder_waits_for_its_engine_to_let_go_then_goes() {
+fn an_engines_temp_folder_lasts_as_long_as_the_engine() {
     let data = TempDir::new();
     let (service, account) = service(&data.0);
-    let (lead, ann) = (
-        agent(&service, &account, "Lead"),
-        agent(&service, &account, "Ann"),
-    );
-    let members = json!([
-        { "agent": lead, "role": "supervisor" },
-        { "agent": ann, "role": "member" }
-    ]);
-    let made = service.send("POST", "/api/chats", json!({ "members": members }));
-    let chat = made.json()["id"].as_str().unwrap().to_string();
-    send(&service, &chat, &lead);
-    let env = data.0.join("env.jsonl");
-    let lead_token = nth(&env, 0)["GATHR_AGENT_TOKEN"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let ask = json!({ "to": "Ann", "what": "Write the notes" });
-    let given = text(&call_tool(service.info.port, &lead_token, "give_task", ask));
-    assert!(given.starts_with("Task #1 for Ann"), "{given}");
-    let started = nth(&env, 1);
+    let ann = agent(&service, &account, "Ann");
+    let chat = service.new_chat();
+    send(&service, &chat, &ann);
+    let started = nth(&data.0.join("env.jsonl"), 0);
     let temp = PathBuf::from(started["TEMP"][0].as_str().unwrap());
-    let expected = beside(&data.0)
-        .join("Chats")
-        .join("Ann")
-        .join("temp")
-        .join("task-1");
-    assert_eq!(temp, expected, "{started}");
-    assert!(temp.is_dir(), "made before the engine starts");
-
-    let cancel = json!({ "why": "not needed" });
-    let cancelled = service.send("POST", "/api/tasks/1/cancel", cancel);
-    assert_eq!(cancelled.status, 200, "{}", cancelled.body);
-    let skip = skipped(&data.0, "scratch", "in_use");
-    assert!(temp.is_dir(), "kept while Ann's engine runs with it");
+    let part = chat[chat.len() - 6..].to_lowercase();
+    let own = beside(&data.0).join("Chats").join("Ann");
+    assert_eq!(
+        temp,
+        own.join("temp").join(format!("chat-{part}")),
+        "{started}"
+    );
+    std::fs::write(temp.join("build.log"), "made by a test run").unwrap();
     std::fs::write(data.0.join("go"), "").unwrap();
-    until(20, "the task's temp folder removed", || {
+    service.wait_for(&chat, 20, "the turn", |h| h["turns"][0]["status"] == "done");
+    until(20, "the temp folder removed once the engine closed", || {
         (!temp.exists()).then_some(())
     });
-    removal_traced(&data.0, &skip);
+    assert!(own.join(&part).is_dir(), "the chat's own folder stays");
 }
 
 #[test]
