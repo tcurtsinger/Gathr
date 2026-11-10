@@ -19,6 +19,8 @@ pub struct Facts {
     team: bool,
     /// The agent's folder and the project it's a worktree of.
     worktree: Option<(PathBuf, String)>,
+    /// The agent's own folder and its project's Shared (0034).
+    own: Option<(PathBuf, PathBuf)>,
 }
 
 pub fn facts(
@@ -26,6 +28,7 @@ pub fn facts(
     chat: &str,
     agent: Option<&str>,
     worktree: Option<(PathBuf, String)>,
+    own: Option<(PathBuf, PathBuf)>,
 ) -> Result<Facts, gathr::Error> {
     let title: String = conn
         .query_row("SELECT title FROM chats WHERE id = ?1", [chat], |r| {
@@ -62,6 +65,7 @@ pub fn facts(
         others,
         team: !members.is_empty(),
         worktree,
+        own,
     })
 }
 
@@ -120,6 +124,16 @@ pub fn text(facts: &Facts) -> String {
             "Your worktree is \"{}\", from \"{project}\". Make changes and commits only in your \
              worktree.",
             folder.display()
+        ));
+    }
+    if let Some((own, shared)) = &facts.own {
+        lines.push(format!(
+            "Your own folder is \"{}\": keep test data, builds and notes there. The team's shared \
+             folder is \"{}\": put plans, reviews and evidence for others there. You can write in \
+             both without asking. Gathr deletes your TEMP folder when it closes your session, and \
+             a worktree once the chat is archived, keeping its branch and anything not committed.",
+            own.display(),
+            shared.display()
         ));
     }
     lines.extend([

@@ -49,12 +49,13 @@ fn build(what: &[&str]) -> Result<(), Error> {
 async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error> {
     let exe =
         std::env::current_exe()?.with_file_name(format!("gathrd{}", std::env::consts::EXE_SUFFIX));
-    let mut child = tokio::process::Command::new(&exe)
+    let mut command = tokio::process::Command::new(&exe);
+    command
         .arg("--data")
         .arg(data.path())
         .arg("--port")
-        .arg(port.to_string())
-        .spawn()?;
+        .arg(port.to_string());
+    let mut child = command.spawn()?;
     let pid = child.id().unwrap_or(0);
     let info = tokio::select! {
         info = ready(data, pid) => info?,

@@ -7,8 +7,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, git, project, recording, sign_in_account};
-use gathr::http;
+use common::{TempDir, TestService, gathr, git, hook, nth, project, recording, sign_in_account};
 use serde_json::{Value, json};
 
 /// `signed_in` with the engine held after the message arrives, until `go` exists.
@@ -18,24 +17,6 @@ fn held_recording(dir: &Path) -> PathBuf {
     let (first, rest) = frames.split_once('\n').unwrap();
     std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
     held
-}
-
-/// The `n`th line of a file the replay engine appends to, once it's there and whole.
-fn nth(file: &Path, n: usize) -> Value {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    loop {
-        let text = std::fs::read_to_string(file).unwrap_or_default();
-        let whole = text.rsplit_once('\n').map_or("", |(lines, _)| lines);
-        if let Some(line) = whole.lines().nth(n) {
-            return serde_json::from_str(line).unwrap();
-        }
-        assert!(
-            Instant::now() < deadline,
-            "no line {n} in {}",
-            file.display()
-        );
-        std::thread::sleep(Duration::from_millis(50));
-    }
 }
 
 fn after<'a>(args: &'a [Value], switch: &str) -> &'a str {
@@ -54,16 +35,6 @@ fn mode(args: &[Value]) -> &str {
 
 /// Gathr's `wait` tool as Claude Code names it.
 const WAIT_TOOL: &str = "mcp__gathr__wait";
-
-fn hook(port: u16, token: &str, tool: &str, input: Value) -> http::Response {
-    let body = json!({ "hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input });
-    let auth = format!("Bearer {token}");
-    let headers = [
-        ("Authorization", auth.as_str()),
-        ("Content-Type", "application/json"),
-    ];
-    http::post(port, "/hook", &headers, &body.to_string()).unwrap()
-}
 
 #[test]
 fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
@@ -134,7 +105,8 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
     );
     assert_eq!(inside.status, 200, "{}", inside.body);
     assert_eq!(inside.json(), json!({}), "a write inside asked");
-    let outside = cwd.parent().unwrap().join("elsewhere.txt");
+    // Outside the folder it runs in, its own folder and Shared (0034).
+    let outside = data.0.join("elsewhere.txt");
     let asked = hook(port, token, "Write", json!({ "file_path": outside })).json();
     assert_eq!(
         asked["hookSpecificOutput"]["permissionDecision"], "ask",
