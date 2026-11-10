@@ -14,6 +14,13 @@
   margin: 24px auto;
   padding: 0 16px;
 }
+/* Over an open chat: under its header, at the chat's reading width, the thread scrolling below. */
+.topbar + .app-failure {
+  flex-shrink: 0;
+}
+.topbar + .app-failure .notice {
+  margin: 0;
+}
 @media (max-width: 759px) {
   .app {
     --nav: 190px;

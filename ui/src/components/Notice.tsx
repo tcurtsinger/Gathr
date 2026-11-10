@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { Failure } from '../api';
 import './notice.css';
 
 interface Props {
@@ -30,5 +31,34 @@ export function Notice({ title, danger, reference, links, action }: Props) {
       {links}
       {action && <span className="notice-action">{action}</span>}
     </div>
+  );
+}
+
+/** A request the service refused: what failed, why, and its reference (opened when it can be). */
+export function FailureNotice({
+  failure,
+  onReference,
+  links,
+  action,
+}: {
+  failure: Pick<Failure, 'error' | 'why' | 'ref'>;
+  onReference?: (ref: string) => void;
+  links?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <Notice
+      danger
+      title={failure.error}
+      reference={failure.ref && onReference ? { ref: failure.ref, open: onReference } : undefined}
+      links={
+        <>
+          {failure.ref && !onReference && <code className="ref">{failure.ref}</code>}
+          {failure.why && <span className="muted">{failure.why}</span>}
+          {links}
+        </>
+      }
+      action={action}
+    />
   );
 }

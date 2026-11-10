@@ -3,7 +3,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
 import { Composer } from '../components/Composer';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ChatMenu } from './ChatMenu';
@@ -38,6 +38,8 @@ interface Props {
   onStart: (text: string, agent?: string) => void;
   /** At the header's end: the workspace's opener. */
   headerEnd?: ReactNode;
+  /** Under the header, whatever is scrolled to: the app's latest failure. */
+  notice?: ReactNode;
   /** Every pause, and what the person can do to one (the app keeps them for every chat). */
   pauses: Pauses;
   onPause: (action: PauseAction, scope: PauseScope) => Promise<void>;
@@ -86,6 +88,7 @@ export function ChatView(props: Props) {
 
   const actions: Actions = {
     diagnostics: (t) => openSettings('diagnostics', t),
+    reference: (ref) => (props.onReference ? props.onReference(ref) : openSettings('diagnostics')),
     signIn: () => openSettings('engines'),
     // To the agent it was sent to (none if it was sent to none), never the one picked now:
     // if that agent was removed, the service refuses and the failure shows with its reference.
@@ -130,6 +133,7 @@ export function ChatView(props: Props) {
           {headerEnd}
         </div>
       </header>
+      {props.notice}
       <Thread
         state={state}
         agents={agents}
@@ -140,12 +144,9 @@ export function ChatView(props: Props) {
         after={!archived && <RunLine run={run} members={state.members} />}
         header={
           loadFailure && (
-            <Notice
-              danger
-              title={loadFailure.error}
-              reference={
-                loadFailure.ref ? { ref: loadFailure.ref, open: () => actions.diagnostics() } : undefined
-              }
+            <FailureNotice
+              failure={loadFailure}
+              onReference={actions.reference}
               action={
                 <Button type="button" variant="outline" onClick={reload}>
                   Retry
@@ -175,18 +176,7 @@ export function ChatView(props: Props) {
         )}
         {archived ? (
           <>
-            {restoreFailure && (
-              <Notice
-                danger
-                title={restoreFailure.error}
-                reference={
-                  restoreFailure.ref && props.onReference
-                    ? { ref: restoreFailure.ref, open: props.onReference }
-                    : undefined
-                }
-                links={restoreFailure.why && <span className="muted">{restoreFailure.why}</span>}
-              />
-            )}
+            {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
             <div className="archived-line">
               Archived
               <Button size="sm" variant="outline" onClick={onRestore}>

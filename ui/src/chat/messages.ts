@@ -3,7 +3,7 @@ import type { Agent, Failure, Message, Role, Task, ToolBody, Turn } from '../api
 import type { Approval, ChatState } from './state';
 import { describe, finished, type Team, team } from './team';
 
-/** A request that failed: what was sent (none for Stop or an approval), for Retry, and why. */
+/** A request that failed: what was sent (none for Stop or Pause), for Retry, and why. */
 export interface SendFailure {
   id: string;
   text: string;
@@ -244,7 +244,8 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team, extra:
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
   const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(extra)}`;
-  const sig = `${parts}|${partial.length}|${ending}|${approvals.map((a) => a.request)}|${who}`;
+  const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
+  const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const value = group.gathr

@@ -15,6 +15,7 @@ import { type Actions, Thread } from './Thread';
 
 const none: Actions = {
   diagnostics: () => {},
+  reference: () => {},
   signIn: () => {},
   retry: () => {},
   resend: () => {},

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure, StaleTask } from '../api';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { idle } from './model';
 
 /** Only a settled task starts again (0010); an open one the person can only cancel. */
@@ -30,14 +30,7 @@ export function StaleTaskView({ task, name, onSettle, onReference }: Props) {
     <section className="tasks" aria-label="Stale task">
       <div className="tasks-scroll">
         <div className="tasks-page">
-          {failure && (
-            <Notice
-              danger
-              title={failure.error}
-              reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-              links={failure.why && <span className="muted">{failure.why}</span>}
-            />
-          )}
+          {failure && <FailureNotice failure={failure} onReference={onReference} />}
           <h2>{task.what}</h2>
           <p className="tasks-meta">
             <span>{name(task.giver)}</span>

@@ -7,7 +7,7 @@ import {
   useExternalStoreRuntime,
 } from '@assistant-ui/react';
 import { ArrowDown } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolFallback } from '@/components/assistant-ui/elements/tool-fallback.aui';
@@ -21,11 +21,11 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { Agent } from '../api';
 import { MarkdownText } from '../components/Markdown';
-import { Notice } from '../components/Notice';
+import { FailureNotice, Notice } from '../components/Notice';
 import { useEdges } from './edges';
 import { type Custom, type SendFailure, type TurnNotice, toThread } from './messages';
 import { useOlder } from './older';
-import type { ChatState } from './state';
+import type { Approval, ChatState } from './state';
 import {
   type Folding,
   FoldingContext,
@@ -44,6 +44,8 @@ import './thread.css';
 /** What a reply's notices and approvals can do. Stable for a chat, so replies don't redraw for it. */
 export interface Actions {
   diagnostics: (turn?: string) => void;
+  /** Opens an error's reference in Diagnostics. */
+  reference: (ref: string) => void;
   signIn: () => void;
   retry: (turn: string) => void;
   /** Sends a message again that failed before any turn began. */
@@ -116,6 +118,7 @@ export function Thread(props: Props) {
   const stable = useMemo<Actions>(
     () => ({
       diagnostics: (turn) => latest.current.diagnostics(turn),
+      reference: (ref) => latest.current.reference(ref),
       signIn: () => latest.current.signIn(),
       retry: (turn) => latest.current.retry(turn),
       resend: (failed) => latest.current.resend(failed),
@@ -178,19 +181,16 @@ function UserMessage() {
   const actions = useActions();
   return (
     <MessagePrimitive.Root className={cn('user-message', threaded(own))}>
-      {/* A failed Stop or approval sent no text: only its notice shows, with nothing to resend. */}
+      {/* A failed Stop or Pause sent no text: only its notice shows, with nothing to resend. */}
       {unsent?.text !== '' && (
         <div className="user-bubble">
           <MessagePrimitive.Parts />
         </div>
       )}
       {unsent && (
-        <Notice
-          danger
-          title={unsent.failure.error}
-          reference={
-            unsent.failure.ref ? { ref: unsent.failure.ref, open: () => actions.diagnostics() } : undefined
-          }
+        <FailureNotice
+          failure={unsent.failure}
+          onReference={actions.reference}
           links={<DiagnosticsLink open={() => actions.diagnostics()} />}
           action={
             unsent.text && (
@@ -244,26 +244,7 @@ function AssistantMessage() {
         </MessagePrimitive.GroupedParts>
       </div>
       {approvals?.map((a) => (
-        <ApprovalCard
-          key={a.request}
-          state="request"
-          title={`Allow ${a.tool}?`}
-          command={
-            typeof a.input === 'object' &&
-            a.input !== null &&
-            'command' in a.input &&
-            typeof a.input.command === 'string'
-              ? a.input.command
-              : undefined
-          }
-          description={a.tool === 'wait check' ? 'Runs outside the engine sandbox.' : undefined}
-          style={{ overflowWrap: 'anywhere' }}
-          subtitle={agent ?? ''}
-          allowOnceLabel="Allow"
-          denyLabel="Deny"
-          onAllowOnce={() => actions.approve(a.request, true)}
-          onDeny={() => actions.approve(a.request, false)}
-        />
+        <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
       {notice && <ReplyNotice notice={notice} actions={actions} />}
       {back && <LastWord back={back} />}
@@ -277,6 +258,47 @@ function ToolGroup({ count, running, children }: { count: number; running: boole
       <ToolGroupTrigger count={count} active={running} />
       <ToolGroupContent>{children}</ToolGroupContent>
     </ToolGroupRoot>
+  );
+}
+
+/** An approval: sending shows on the card, and a refused answer shows under it, to answer again. */
+function AskApproval({
+  approval: a,
+  agent,
+  actions,
+}: {
+  approval: Approval;
+  agent: string;
+  actions: Actions;
+}) {
+  const card = useRef<HTMLDivElement>(null);
+  const failure = a.answer?.failure;
+  const sending = a.answer && !failure;
+  // The answer's button went while it was sent: on a refusal, focus goes back to it.
+  useEffect(() => {
+    if (!failure || document.activeElement !== document.body) return;
+    const slot = a.answer?.allow ? 'approval-card-allow-once' : 'approval-card-deny';
+    card.current?.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.focus();
+  }, [failure, a.answer?.allow]);
+  const input = a.input as { command?: unknown } | null | undefined;
+  return (
+    <>
+      <ApprovalCard
+        ref={card}
+        state={sending ? 'running' : 'request'}
+        statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
+        title={`Allow ${a.tool}?`}
+        command={typeof input?.command === 'string' ? input.command : undefined}
+        description={a.tool === 'wait check' ? 'Runs outside the engine sandbox.' : undefined}
+        style={{ overflowWrap: 'anywhere' }}
+        subtitle={agent}
+        allowOnceLabel="Allow"
+        denyLabel="Deny"
+        onAllowOnce={() => actions.approve(a.request, true)}
+        onDeny={() => actions.approve(a.request, false)}
+      />
+      {failure && <FailureNotice failure={failure} onReference={actions.reference} />}
+    </>
   );
 }
 

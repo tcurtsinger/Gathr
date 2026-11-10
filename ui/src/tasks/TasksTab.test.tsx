@@ -65,6 +65,9 @@ test('Back and Next keep drafts, and Send answers only the ready questions', asy
   const screen = await render(<Tab />);
   await screen.getByRole('button', { name: /Start fresh/ }).click();
   await screen.getByRole('button', { name: 'Next' }).click();
+  // Both questions have Notes: in WebKit the click can return before the second is drawn, and the
+  // notes then went into the first (CI run 42749442823).
+  await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
   // Notes alone don't answer a pick: this one stays open.
   await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('not sure yet');
   await screen.getByRole('button', { name: 'Back' }).click();

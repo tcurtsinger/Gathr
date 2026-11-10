@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Help } from '../components/Help';
-import { Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
@@ -74,14 +74,7 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
         ))}
       </div>
       <div className="agent-form">
-        {failure && (
-          <Notice
-            danger
-            title={failure.error}
-            reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-            links={failure.why && <span className="muted">{failure.why}</span>}
-          />
-        )}
+        {failure && <FailureNotice failure={failure} onReference={onReference} />}
         {ready && accounts.length === 0 && <p className="muted">No accounts</p>}
         {ready && accounts.length > 0 && !agent && shown !== NEW && <p className="muted">No agents</p>}
         {ready && accounts.length > 0 && (agent || shown === NEW) && (
@@ -250,12 +243,7 @@ function AgentForm(props: FormProps) {
           {model === undefined ? '' : chosen(list, model)}
         </p>
         {models.failure ? (
-          <Notice
-            danger
-            title={models.failure.error}
-            reference={models.failure.ref ? { ref: models.failure.ref, open: onReference } : undefined}
-            links={models.failure.why && <span className="muted">{models.failure.why}</span>}
-          />
+          <FailureNotice failure={models.failure} onReference={onReference} />
         ) : models.list === null ? (
           <p className="muted" role="status">
             Loading models
@@ -328,14 +316,7 @@ function AgentForm(props: FormProps) {
           ))}
         </select>
       </div>
-      {failure && (
-        <Notice
-          danger
-          title={failure.error}
-          reference={failure.ref ? { ref: failure.ref, open: onReference } : undefined}
-          links={failure.why && <span className="muted">{failure.why}</span>}
-        />
-      )}
+      {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
         {agent &&
           (confirming ? (

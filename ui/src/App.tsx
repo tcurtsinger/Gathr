@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { type Agent, api, type Chat, type Failure, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
 import { Confirm } from './components/Confirm';
-import { Notice } from './components/Notice';
+import { FailureNotice } from './components/Notice';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { report, timeToPaint } from './report';
@@ -169,6 +170,20 @@ export function App() {
       reference,
       opener: s?.opener ?? (document.activeElement as HTMLElement),
     }));
+  // The latest failure of what the app loads or does itself, over whatever is open, until dismissed.
+  const notice = failure && (
+    <div className="reading app-failure">
+      <FailureNotice
+        failure={failure}
+        onReference={openReference}
+        action={
+          <Button type="button" variant="outline" onClick={() => setFailure(null)}>
+            Dismiss
+          </Button>
+        }
+      />
+    </div>
+  );
 
   return (
     <div className="app">
@@ -230,6 +245,7 @@ export function App() {
           onRestore={() => restore(chat)}
           restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
           onReference={openReference}
+          notice={notice}
           headerEnd={
             chat.id &&
             !paneOpen && (
@@ -238,19 +254,7 @@ export function App() {
           }
         />
       ) : (
-        <main className="chat">
-          {failure ? (
-            <div className="reading">
-              <Notice
-                danger
-                title={failure.error}
-                reference={failure.ref ? { ref: failure.ref, open: openReference } : undefined}
-              />
-            </div>
-          ) : (
-            <p className="empty">No chats yet</p>
-          )}
-        </main>
+        <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
       )}
       {chat?.id && paneOpen && (
         <Workspace
