@@ -1,11 +1,10 @@
-/* Code blocks scroll inside the reply (DESIGN.md). Streamdown styles the rest. */
-.markdown pre {
-  margin: 16px 0;
-  padding: 12px 14px;
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
-  background: var(--muted-surface);
-  font-size: 13px;
-  line-height: 1.55;
+/* Streamdown styles replies and their code blocks (0030). Links are blue (DESIGN.md: Colors). */
+.markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* A code block's Copy and Download keep Streamdown's size, not Gathr's 32px buttons. */
+.markdown [data-streamdown="code-block-actions"] button {
+  min-height: 0;
 }
