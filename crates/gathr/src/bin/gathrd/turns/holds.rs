@@ -305,6 +305,9 @@ impl Task {
     pub(super) async fn engine_gone(&mut self, chat: String) {
         self.background = 0;
         self.woke_from = None;
+        if let Some(agent) = &self.agent {
+            crate::cleanup::engine_closed(&self.chats, &chat, agent).await;
+        }
         let agent = self.agent.clone();
         let gone = self
             .chats

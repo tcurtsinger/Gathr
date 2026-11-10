@@ -112,13 +112,12 @@ impl Task {
         })
     }
 
-    /// Starts the engine in the agent's session for the chat, resumed when it has one, with its
-    /// temporary files in `task`'s folder (0034).
+    /// Starts the engine in the agent's session for the chat, resumed when it has one.
     pub(super) async fn spawn(
         &mut self,
         program: &Path,
         assigned: Assignment,
-        (task, trace): (Option<i64>, &str),
+        trace: &str,
     ) -> Result<(), String> {
         let a = assigned.clone();
         let session = self
@@ -145,7 +144,8 @@ impl Task {
             None => command::args(Session::New(&new_id), given, Some(&hook)),
         };
         let folder = assigned.folder.as_path();
-        let place = self.workspace(&assigned, task, trace).await?;
+        let making = crate::cleanup::hold().await;
+        let place = self.workspace(&assigned, trace).await?;
         let cwd = place.cwd;
         for dir in [folder, &cwd] {
             std::fs::create_dir_all(dir)
@@ -164,6 +164,7 @@ impl Task {
             scratch: place.scratch.clone(),
         };
         let pass = self.pass_for(&assigned, worktree, given, trace).await?;
+        drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         let first = if codex {
             args = gathr::codex::command::args(Some(&url));
@@ -235,7 +236,6 @@ impl Task {
                         .attr("gathr.env.why", env_why),
                 );
                 self.engine = Some(engine);
-                self.scratch_task = task;
                 self.program = Some(program.to_path_buf());
                 self.assigned = Some(assigned);
                 self.lines = Some(lines);
@@ -445,6 +445,13 @@ impl Task {
             .attr("process.pid", pid)
             .attr("why", closing.why);
         self.record_now(event).await;
+        // Its temporary files go at the next start's first sweep.
+        if let Some(agent) = self.agent.clone() {
+            let due = move |conn: &mut rusqlite::Connection| {
+                gathr::folders::engine_closed(conn, &chat, &agent)
+            };
+            let _ = self.chats.writer.call(due).await;
+        }
         for done in self.leaving.drain(..) {
             let _ = done.send(());
         }

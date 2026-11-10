@@ -8,16 +8,14 @@ ALTER TABLE agents ADD COLUMN folder_name TEXT;
 -- use stays here until a later sweep removes it.
 CREATE TABLE agent_folders (
     path TEXT PRIMARY KEY,
-    -- A git worktree, a plain folder a chat with no project runs in, or a task's temporary files.
+    -- A git worktree, a plain folder a chat with no project runs in, or an engine's temporary files.
     kind TEXT NOT NULL CHECK (kind IN ('worktree', 'folder', 'scratch')),
     chat_id TEXT NOT NULL,
     agent_id TEXT,
-    -- A scratch folder's task: it goes once the task is done or cancelled. NULL for a chat's own.
-    task INTEGER,
     -- The git folder a worktree is of, to unregister it there.
     project TEXT,
     made_ts INTEGER NOT NULL,
-    -- When its chat was archived or deleted: it goes then.
+    -- When it was due to go: its chat archived or deleted, or, for temporary files, its engine closed.
     due_ts INTEGER,
     -- The trace of its removal: each skip and the removal itself share one reference.
     trace TEXT,

@@ -1,6 +1,6 @@
 //! The agent folder (0034): one folder, set in Settings > General, that holds every project's work:
 //! `<root>/<Project>/Shared` for the team's kept files and `<root>/<Project>/<Agent>` for each
-//! agent's worktrees and its tasks' temporary files. Agents write there without asking; Gathr's
+//! agent's worktrees and its engines' temporary files. Agents write there without asking; Gathr's
 //! data folder (logins, the database, engine copies) is never one of them. Gathr records each
 //! folder it makes before making it, and only ever removes what it recorded.
 
@@ -198,14 +198,13 @@ pub fn new_workspace(place: &Place, chat: &str) -> PathBuf {
     place.agent.join(name)
 }
 
-/// Where an engine's temporary files go (TEMP, TMP, TMPDIR): its task's own folder, or the chat's
-/// when its turn is on no task.
-pub fn scratch(place: &Place, chat: &str, task: Option<i64>) -> PathBuf {
-    let name = match task {
-        Some(task) => format!("task-{task}"),
-        None => format!("chat-{}", chat_part(chat)),
-    };
-    place.agent.join("temp").join(name)
+/// Where the agent's engine in a chat keeps its temporary files (TEMP, TMP, TMPDIR), from its
+/// start: they go when it closes.
+pub fn scratch(place: &Place, chat: &str) -> PathBuf {
+    place
+        .agent
+        .join("temp")
+        .join(format!("chat-{}", chat_part(chat)))
 }
 
 /// A folder Gathr is about to make for an agent's work.
@@ -214,16 +213,15 @@ pub struct Made<'a> {
     pub kind: &'a str,
     pub chat: &'a str,
     pub agent: Option<&'a str>,
-    pub task: Option<i64>,
     pub project: Option<&'a str>,
 }
 
-/// Records a folder before it's made: one made again (its chat restored, its task restarted) is
-/// open again, its last removal forgotten.
+/// Records a folder before it's made: one made again (its chat restored, its engine started
+/// again) is open again, its last removal forgotten.
 pub fn made(conn: &Connection, m: &Made) -> Result<(), Error> {
     conn.execute(
-        "INSERT INTO agent_folders (path, kind, chat_id, agent_id, task, project, made_ts)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "INSERT INTO agent_folders (path, kind, chat_id, agent_id, project, made_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT (path) DO UPDATE SET made_ts = excluded.made_ts, due_ts = NULL, trace = NULL,
            skipped = NULL, removed_ts = NULL",
         params![
@@ -231,7 +229,6 @@ pub fn made(conn: &Connection, m: &Made) -> Result<(), Error> {
             m.kind,
             m.chat,
             m.agent,
-            m.task,
             m.project,
             crate::ids::now_us()
         ],
@@ -250,6 +247,16 @@ pub fn workspace(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Pa
         )
         .optional()?;
     Ok(path.map(PathBuf::from))
+}
+
+/// The temporary files of `agent`'s engine in `chat` go: the engine has closed. How many.
+pub fn engine_closed(conn: &Connection, chat: &str, agent: &str) -> Result<usize, Error> {
+    Ok(conn.execute(
+        "UPDATE agent_folders SET due_ts = ?3
+         WHERE chat_id = ?1 AND agent_id = ?2 AND kind = 'scratch' AND removed_ts IS NULL
+           AND due_ts IS NULL",
+        params![chat, agent, crate::ids::now_us()],
+    )?)
 }
 
 /// The chat's folders go: it was archived or deleted. How many.
@@ -287,15 +294,13 @@ pub struct Clean {
 }
 
 /// What goes now (of `chat`'s, or everyone's): the folders of chats archived or deleted, and the
-/// temporary files of tasks done or cancelled.
+/// temporary files of engines that have closed.
 pub fn to_clean(conn: &Connection, chat: Option<&str>) -> Result<Vec<Clean>, Error> {
     let mut stmt = conn.prepare(
         "SELECT f.path, f.kind, f.chat_id, f.agent_id, f.project, f.trace, f.skipped,
            EXISTS (SELECT 1 FROM chats c WHERE c.id = f.chat_id)
          FROM agent_folders f
-         WHERE f.removed_ts IS NULL AND (?1 IS NULL OR f.chat_id = ?1) AND (f.due_ts IS NOT NULL
-           OR (f.kind = 'scratch' AND f.task IS NOT NULL AND NOT EXISTS (SELECT 1 FROM tasks t
-             WHERE t.number = f.task AND t.state NOT IN ('done', 'cancelled'))))
+         WHERE f.removed_ts IS NULL AND f.due_ts IS NOT NULL AND (?1 IS NULL OR f.chat_id = ?1)
          ORDER BY f.made_ts",
     )?;
     let rows = stmt.query_map([chat], |r| {
