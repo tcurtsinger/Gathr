@@ -6,7 +6,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, git, project, recording, sign_in_account};
+use common::{TempDir, TestService, gathr, git, next_live, project, recording, sign_in_account};
 use serde_json::{Value, json};
 
 /// A signed-in account's agent: its id.
@@ -267,6 +267,7 @@ fn replies_keep_their_place_by_when_their_turn_started() {
         }
     };
 
+    let mut live = service.live();
     send(&service, &chat, json!({ "text": "Orin first" }));
     service.wait_for(&chat, 10, "Orin's first block", first_blocks(1));
     send(&service, &chat, json!({ "text": "@Pia second" }));
@@ -285,6 +286,22 @@ fn replies_keep_their_place_by_when_their_turn_started() {
         ["Orin first", "Hi!", "Again", "@Pia second", "Hi!", "Again"],
         "replies interleaved: {history}"
     );
+    // A window following live places each turn as a reload would, from the running update alone.
+    let mut placed = Vec::new();
+    while placed.len() < 2 {
+        let update = next_live(&mut live);
+        if update["type"] == "turn" && update["status"] == "running" {
+            placed.push((update["turn"].clone(), update["position"].clone()));
+        }
+    }
+    for (id, position) in placed {
+        let kept = &turn(&history, &id)["position"];
+        assert!(kept.is_i64(), "history has no place for {id}: {history}");
+        assert_eq!(
+            &position, kept,
+            "turn {id} started live at {position}, history says {kept}"
+        );
+    }
 }
 
 /// The briefing the engine's last start was given, read while that engine still runs.

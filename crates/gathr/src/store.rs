@@ -246,6 +246,13 @@ pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) ->
     Ok(())
 }
 
+/// A turn's place in its chat (none until it starts) and when it was made, as history shows them.
+pub fn turn_place(conn: &Connection, id: &str) -> Result<(Option<i64>, String), Error> {
+    let sql = "SELECT position, created_ts FROM turns WHERE id = ?1";
+    let row = |r: &rusqlite::Row<'_>| Ok((r.get(0)?, crate::ids::utc(r.get(1)?)));
+    Ok(conn.prepare_cached(sql)?.query_row([id], row)?)
+}
+
 /// What holds a queued turn back (`pause`, `usage`, `claude`, `codex`, or none), and why in words.
 pub fn set_held(
     conn: &Connection,

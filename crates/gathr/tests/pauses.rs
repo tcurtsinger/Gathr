@@ -8,8 +8,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::{
-    TempDir, TestService, call_tool, first_token as token, gathr, recording, sign_in_account, team,
-    text, until,
+    TempDir, TestService, call_tool, first_token as token, gathr, next_live, recording,
+    sign_in_account, team, text, until,
 };
 use serde_json::{Value, json};
 
@@ -36,6 +36,28 @@ fn send(service: &TestService, chat: &str, text: &str) -> Value {
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     sent.json()
+}
+
+/// The first turn's live updates until `last` takes one, each checked against history: when the
+/// turn was made, and its place once it started, so a window following live shows and orders it
+/// as a reload would (0028).
+fn live_matches(live: &mut std::net::TcpStream, history: &Value, last: impl Fn(&Value) -> bool) {
+    let turn = &history["turns"][0];
+    let mut started = false;
+    loop {
+        let update = next_live(live);
+        if update["type"] != "turn" || update["turn"] != turn["id"] {
+            continue;
+        }
+        started |= update["status"] != "queued";
+        assert_eq!(update["created"], turn["created"], "{update} vs {turn}");
+        if started {
+            assert_eq!(update["position"], turn["position"], "{update} vs {turn}");
+        }
+        if last(&update) {
+            return;
+        }
+    }
 }
 
 fn pause(service: &TestService, path: &str, chat: &str) -> Value {
@@ -101,6 +123,7 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     let parts = [recording("stopped_before_reply"), recording("signed_in")];
     let replay = joined(&data.0, "stop.jsonl", &parts);
     let (service, chat, lead) = team(&data.0, &replay, &[]);
+    let mut live = service.live();
     send(&service, &chat, "Write 2,000 words on rivers");
     service.wait_for(&chat, 10, "the turn", |h| {
         h["turns"][0]["status"] == "running"
@@ -111,6 +134,7 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
         h["turns"][0]["status"] == "stopped" && h["turns"][1]["held"] == "pause"
     });
     assert_eq!(history["run"]["state"], "stopped", "{history}");
+    live_matches(&mut live, &history, |u| u["status"] == "stopped");
     assert_eq!(history["turns"][1]["agent"], lead.as_str());
     assert_eq!(
         history["turns"][1]["answers"], history["turns"][0]["id"],
@@ -229,10 +253,12 @@ fn an_engine_that_closed_leaves_no_background_command_behind() {
 fn a_usage_limit_holds_the_turn_until_the_reset_instead_of_failing_it() {
     let data = TempDir::new();
     let (service, chat, lead) = team(&data.0, &recording("usage_limit"), &[]);
+    let mut live = service.live();
     send(&service, &chat, "Say hi");
     let history = service.wait_for(&chat, 10, "the usage hold", |h| {
         h["turns"][0]["held"] == "usage"
     });
+    live_matches(&mut live, &history, |u| u["held"] == "usage");
     let turn = &history["turns"][0];
     assert_eq!(
         turn["status"], "queued",
