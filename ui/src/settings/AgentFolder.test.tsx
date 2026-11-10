@@ -96,7 +96,9 @@ test('in the desktop window Change opens the system picker: a cancel saves nothi
   const screen = await render(<AgentFolder onReference={() => {}} />);
   const change = screen.getByRole('button', { name: 'Change' });
 
-  await change.click();
+  // A click that leaves focus where it was, as WebKit's click on a button does.
+  await expect.element(change).toBeVisible();
+  (change.element() as HTMLElement).click();
   await expect.element(change).toHaveFocus();
   expect(sent).toEqual([]);
 

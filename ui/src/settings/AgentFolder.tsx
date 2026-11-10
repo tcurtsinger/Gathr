@@ -65,7 +65,11 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
     window
       .invoke('plugin:dialog|open', { options })
       .then(
-        (picked) => typeof picked === 'string' && store(picked),
+        (picked) => {
+          // Back to Change, as from the field: WebKit never focuses a clicked button.
+          change.current?.focus();
+          if (typeof picked === 'string') store(picked);
+        },
         (e) => {
           report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });
           setTyped(folder);
