@@ -38,6 +38,8 @@ pub struct Session {
     opening: Option<Opening>,
     thread: Option<String>,
     turn: Option<String>,
+    starting: bool,
+    stop_pending: bool,
     /// Messages sent before the thread opened, in order.
     held: Vec<String>,
     /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id.
@@ -93,6 +95,10 @@ impl Session {
 
     /// A message: a new turn, or added to the one under way. Held until the thread is open.
     pub fn user(&mut self, text: &str) -> Option<Value> {
+        if self.starting {
+            self.held.push(text.to_string());
+            return None;
+        }
         let Some(thread) = self.thread.clone() else {
             self.held.push(text.to_string());
             return None;
@@ -105,6 +111,7 @@ impl Session {
                 json!({ "threadId": thread, "expectedTurnId": turn, "input": input }),
             ),
             None => {
+                self.starting = true;
                 let effort = self.opening.as_ref().and_then(|o| o.effort.clone());
                 let mut params = json!({ "threadId": thread, "input": input });
                 if let Some(effort) = effort {
@@ -117,7 +124,11 @@ impl Session {
 
     /// Stop: Codex's own interrupt of the turn under way, never a kill.
     pub fn interrupt(&mut self) -> Option<Value> {
-        let (thread, turn) = (self.thread.clone()?, self.turn.clone()?);
+        let (Some(thread), Some(turn)) = (self.thread.clone(), self.turn.clone()) else {
+            self.stop_pending = true;
+            return None;
+        };
+        self.stop_pending = false;
         let params = json!({ "threadId": thread, "turnId": turn });
         Some(self.request(Asked::Interrupt, "turn/interrupt", params))
     }
@@ -175,12 +186,21 @@ impl Session {
                     tools: Vec::new(),
                     permission_mode: format!("{sandbox} {policy}"),
                 });
-                for text in std::mem::take(&mut self.held) {
-                    read.send.extend(self.user(&text));
+                if self.stop_pending {
+                    self.stop_pending = false;
+                    self.held.clear();
+                    read.frames.push(Frame::TurnEnd(ended("interrupted")));
+                } else {
+                    self.flush_held(read);
                 }
             }
             (Some(Asked::Turn), None) => {
                 self.turn = result["turn"]["id"].as_str().map(String::from);
+                self.starting = false;
+                if self.stop_pending {
+                    read.send.extend(self.interrupt());
+                }
+                self.flush_held(read);
             }
             (Some(asked @ (Asked::Initialize | Asked::Thread | Asked::Turn)), Some(error)) => {
                 read.frames.push(Frame::EngineError {
@@ -197,6 +217,12 @@ impl Session {
                 read.frames.push(Frame::ControlAnswer { request_id, ok });
             }
             _ => read.frames.push(Frame::Other("answer".into())),
+        }
+    }
+
+    fn flush_held(&mut self, read: &mut Read) {
+        for text in std::mem::take(&mut self.held) {
+            read.send.extend(self.user(&text));
         }
     }
 
@@ -224,6 +250,11 @@ impl Session {
         match method {
             "turn/started" => {
                 self.turn = params["turn"]["id"].as_str().map(String::from);
+                self.starting = false;
+                if self.stop_pending {
+                    read.send.extend(self.interrupt());
+                }
+                self.flush_held(read);
                 self.replied = false;
                 self.baseline = self.total;
                 self.summed = Usage::default();
@@ -281,6 +312,8 @@ impl Session {
                 end.usage = self.turn_usage();
                 end.duration_ms = turn["durationMs"].as_i64();
                 self.turn = None;
+                self.starting = false;
+                self.stop_pending = false;
                 read.frames.push(Frame::TurnEnd(end));
             }
             other => read.frames.push(Frame::Other(other.to_string())),
@@ -553,5 +586,46 @@ mod tests {
         };
         assert_eq!((end.usage.input, end.usage.output), (50, 50));
         assert!(end.ok);
+    }
+}
+
+#[cfg(test)]
+mod start_tests {
+    use super::*;
+    fn opened() -> Session {
+        let (mut s, _) = Session::open(Opening::default());
+        s.read(&json!({"id":1,"result":{"userAgent":"gathr/0.166.0 (test)"}}));
+        s
+    }
+    #[test]
+    fn messages_before_the_thread_opens_start_one_turn_then_steer() {
+        let mut s = opened();
+        assert!(s.user("first").is_none());
+        assert!(s.user("second").is_none());
+        let opened = s.read(&json!({"id":2,"result":{"thread":{"id":"thread"}}}));
+        assert_eq!(
+            opened.send.len(),
+            1,
+            "two turns started before either answered: {:?}",
+            opened.send
+        );
+        let next = s.read(&json!({"id":3,"result":{"turn":{"id":"turn"}}}));
+        assert_eq!(next.send[0]["method"], "turn/steer");
+        assert_eq!(next.send[0]["params"]["expectedTurnId"], "turn");
+    }
+    #[test]
+    fn stop_before_the_thread_opens_never_starts_the_held_message() {
+        let mut s = opened();
+        s.user("first");
+        assert!(s.interrupt().is_none());
+        let read = s.read(&json!({"id":2,"result":{"thread":{"id":"thread"}}}));
+        assert!(read.send.is_empty(), "Stop started a turn: {:?}", read.send);
+        assert!(
+            read.frames.iter().any(
+                |f| matches!(f,Frame::TurnEnd(end) if end.reason.as_deref()==Some("interrupted"))
+            ),
+            "Stop never ended: {:?}",
+            read.frames
+        );
     }
 }

@@ -44,17 +44,7 @@ pub fn download(
     redirects: Redirects,
     stop: &AtomicBool,
 ) -> Result<(), (&'static str, String)> {
-    // No total time limit: a slow link may take a while. A stalled one stops within a minute.
-    let size = file.size.to_string();
-    let mut command = curl(
-        redirects,
-        &["--max-filesize", &size, "--speed-limit", "1024"],
-    );
-    command
-        .args(["--speed-time", "60", "--output"])
-        .arg(to)
-        .arg(&file.url);
-    run_until(command, stop).map_err(|why| ("download", why))?;
+    transfer(&file.url, to, file.size, redirects, stop).map_err(|why| ("download", why))?;
     let size = std::fs::metadata(to).map(|m| m.len()).unwrap_or(0);
     if size != file.size {
         let why = format!(
@@ -172,6 +162,26 @@ fn run_until(mut command: Command, stop: &AtomicBool) -> Result<String, String> 
         return Ok(out.unwrap_or_default());
     }
     Err(format!("{} ({status})", error.unwrap_or_default().trim()))
+}
+
+/// Shared transfer for an npm archive (SHA-512) and a release file (SHA-256).
+pub(crate) fn transfer(
+    url: &str,
+    to: &Path,
+    max_size: u64,
+    redirects: Redirects,
+    stop: &AtomicBool,
+) -> Result<(), String> {
+    let size = max_size.to_string();
+    let mut command = curl(
+        redirects,
+        &["--max-filesize", &size, "--speed-limit", "1024"],
+    );
+    command
+        .args(["--speed-time", "60", "--output"])
+        .arg(to)
+        .arg(url);
+    run_until(command, stop).map(|_| ())
 }
 
 #[cfg(test)]

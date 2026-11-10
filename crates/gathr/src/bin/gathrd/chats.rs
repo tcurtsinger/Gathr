@@ -473,6 +473,9 @@ impl Chats {
     /// `claude auth status` (0016).
     pub async fn login_status(&self, folder: &Path) -> (Login, Option<i64>) {
         let folder = folder.to_path_buf();
+        if folder.file_name().is_some_and(|n| n == "codex") {
+            return (gathr::codex::login::status(&folder), None);
+        }
         let (copy, now_ms) = (self.copy(), gathr::ids::now_us() / 1000);
         tokio::task::spawn_blocking(move || login::status(&folder, copy, now_ms))
             .await

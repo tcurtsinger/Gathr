@@ -69,7 +69,7 @@ record) reads the same `Frame`s and doesn't know which engine runs.
 - **Gathr's copy (C3, 0025's Codex part):** npm's per-platform package
   (`@openai/codex@<version>-<platform>`), checked against its SHA-512 `integrity`, unpacked with the
   system's `tar` into `<data>/engines/codex/<version>`. The whole `vendor/<target>` folder is kept,
-  not only `codex(.exe)`: it starts its own helpers from there (`codex-command-runner`, the sandbox
+  not only `bin/codex(.exe)`: it starts its own helpers from there (`codex-command-runner`, the sandbox
   setup, `codex-code-mode-host`). The same `current.json` switch and known-good copy as Claude's.
   `GATHR_CODEX_PATH` overrides it in dev and tests only.
 - **Models (C4):** `model/list` on the account's app-server, all pages, hidden ones left out. Each
@@ -101,7 +101,7 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   hook is git's own, so the hook's two rules hold without one.
 
 Docs read 2026-11-09 at learn.chatgpt.com (where developers.openai.com/codex now redirects); schema
-from `codex app-server generate-json-schema` on 0.166.0. Where they differ, the schema wins.
+from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.0. Where they differ, the schema wins.
 
 ## Checked live (codex-cli 0.166.0, Windows, a Gathr account folder, signed out)
 
@@ -116,6 +116,29 @@ from `codex app-server generate-json-schema` on 0.166.0. Where they differ, the 
 
 - With `windows.sandbox="mxc"`, `command/exec` under `workspaceWrite` wrote a file in its folder,
   was refused one outside it ("Access is denied."), and saw `GATHR_AGENT_TOKEN` in its environment.
+
+## Implementation checks (0.167.0, Windows)
+
+- The npm launcher for [0.166.0](https://github.com/openai/codex/blob/rust-v0.166.0/codex-cli/bin/codex.js#L83-L88)
+  and [0.167.0](https://github.com/openai/codex/blob/rust-v0.167.0/codex-cli/bin/codex.js#L83-L88)
+  locates the executable at `vendor/<target>/bin/codex(.exe)`. The whole target directory is retained.
+  An initial trial used the wrong `codex/` subdirectory; the npm-shaped regression archive now proves
+  the correct path, and the real 0.167.0 package passed SHA-512 and the app-server probe.
+- The same copy storage, current/previous switch and update loop serve both engines. A corrupt
+  npm archive leaves the active copy unchanged. Transfers use the existing system curl path.
+- Generated schema 0.167.0 confirms `chatgptDeviceCode`, the two login URL fields, `userCode`,
+  `isDefault`, supported reasoning efforts and `auto_review`. No protocol difference from the
+  0.166.0 fields used here was found.
+- `config/read` returned all nine switches exactly as given. The Windows sandbox returned
+  `ready`. `model/list` returned nine visible models signed out, with `gpt-6.1-sol` the default.
+- The model picker includes a synthetic `default` row, using the actual default model's efforts;
+  no new Latest alias is invented. Every model-list page is read.
+- The owner selected browser-first design A. Sign-in starts the browser; Open sign-in page is
+  the fallback, and Use a device code is secondary. Device failures retain `device: true` for Retry.
+  Claude's waiting sign-in has `paste: true`; Codex has `paste: false`.
+- API tests cover independent accounts, replayed authentication failure, browser completion,
+  device failure and reference tracing, replacing/cancelling a sign-in, paged models and effort
+  validation. Driver checks cover a message and Stop arriving before the thread opens.
 
 ## Not verified
 

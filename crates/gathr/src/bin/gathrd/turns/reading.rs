@@ -2,8 +2,7 @@
 
 use gathr::claude::command;
 use gathr::claude::engine::Line;
-use gathr::claude::frames::{self, Frame, TurnEnd};
-use gathr::claude::login;
+use gathr::claude::frames::{Frame, TurnEnd};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id};
 use gathr::store;
@@ -30,8 +29,27 @@ impl Task {
         };
         match serde_json::from_str::<Value>(&text) {
             Ok(value) => {
-                for frame in frames::read(&value) {
+                let read = self.driver.read(&value);
+                let failed = super::driver::Driver::failed_start(&read.frames);
+                for send in read.send {
+                    if let Err(e) = self.write(&send, turn.as_deref()).await {
+                        self.record(
+                            Event::point("gathr.engine.write")
+                                .error("write")
+                                .attr("why", e.to_string()),
+                        );
+                    }
+                }
+                for frame in read.frames {
                     self.on_frame(frame).await;
+                }
+                if failed {
+                    self.close("the engine couldn't open its thread").await;
+                    self.turn_ended(TurnEnd {
+                        message: Some("The engine couldn't open its thread".into()),
+                        ..TurnEnd::default()
+                    })
+                    .await;
                 }
             }
             Err(e) => self.record(
@@ -219,7 +237,19 @@ impl Task {
         let Some(assigned) = self.assigned.as_ref() else {
             return;
         };
-        let given = command::mode(assigned.approvals);
+        let expected;
+        let given = if assigned.engine == "codex" {
+            let (sandbox, policy, _) = gathr::codex::command::policy(assigned.approvals);
+            let sandbox = match sandbox {
+                "read-only" => "readOnly",
+                "workspace-write" => "workspaceWrite",
+                _ => "dangerFullAccess",
+            };
+            expected = format!("{sandbox} {policy}");
+            expected.as_str()
+        } else {
+            command::mode(assigned.approvals)
+        };
         if running == given {
             return;
         }
@@ -344,7 +374,7 @@ impl Task {
             "stopped" => turn.stop_why.clone(),
             _ => None,
         };
-        let mut event = Event::point("invoke_agent claude")
+        let mut event = Event::point(&format!("invoke_agent {}", self.engine_name()))
             .trace(&turn.ids.trace)
             .chat(&turn.ids.chat)
             .span("end", &turn.span)
@@ -381,7 +411,7 @@ impl Task {
             });
             self.close("the login was refused").await;
             if let Some(folder) = self.assigned.as_ref().map(|a| a.folder.clone()) {
-                let stamp = login_stamp(&login::credentials(&folder));
+                let stamp = login_stamp(&Self::credentials(&folder));
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }

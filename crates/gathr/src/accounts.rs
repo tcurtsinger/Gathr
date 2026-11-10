@@ -37,7 +37,7 @@ pub enum Refused {
     TooLong,
     Taken,
     Unknown,
-    /// Only Claude Code has a driver so far; Codex comes with its own.
+    /// The engine has no driver.
     Engine,
 }
 
@@ -48,7 +48,7 @@ impl Refused {
             Refused::TooLong => "The name must be 80 characters or fewer",
             Refused::Taken => "Another account has that name. Use a different name.",
             Refused::Unknown => "no such account",
-            Refused::Engine => "Gathr currently supports Claude Code accounts only",
+            Refused::Engine => "Choose Claude Code or Codex",
         }
     }
 }
@@ -80,7 +80,7 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Account>, Error> {
 }
 
 pub fn add(conn: &Connection, engine: &str, name: &str) -> Changed {
-    if engine != "claude" {
+    if !matches!(engine, "claude" | "codex") {
         return Ok(Err(Refused::Engine));
     }
     let name = match checked(name) {

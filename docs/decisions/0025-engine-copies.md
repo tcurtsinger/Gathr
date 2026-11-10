@@ -87,4 +87,5 @@ has run, and a chat's engine never sends `initialize` today).
 
 - A real update from one Claude Code release to the next on macOS (the Windows one was run).
 - Whether separate Claude Code config folders on macOS share one Keychain entry.
-- Codex: none of its part is built or run.
+- Codex is implemented in 0033. Its owned 0.167.0 package passed installation and a signed-out
+  app-server/config/model probe on Windows; signed-in use and macOS remain to verify.

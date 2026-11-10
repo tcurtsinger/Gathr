@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use gathr::agents;
 use gathr::claude::engine::{Engine, Line};
-use gathr::claude::frames;
 use gathr::claude::login::{self, Login};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id, ulid};
@@ -19,6 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod driver;
 mod ended;
 mod given;
 mod holds;
@@ -66,6 +66,7 @@ struct Queued {
 struct Assignment {
     agent: Option<String>,
     account: String,
+    engine: String,
     folder: PathBuf,
     model: Option<String>,
     effort: Option<String>,
@@ -112,6 +113,7 @@ struct Task {
     /// The agent this task runs; `None` for a chat's turns sent to no agent.
     agent: Option<String>,
     engine: Option<Engine>,
+    driver: driver::Driver,
     /// The engine's token for Gathr's tools and its briefing, while it runs.
     pass: Option<crate::tools::Pass>,
     /// The file the engine runs, so an engine on Gathr's copy moves when it updates (0025).
@@ -156,6 +158,7 @@ pub async fn run(
         chats,
         agent,
         engine: None,
+        driver: Default::default(),
         pass: None,
         program: None,
         assigned: None,
@@ -326,7 +329,7 @@ impl Task {
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
             let ids = running.ids.clone();
             let message = self.db_message(&ids, "user", "text", &text).await;
-            if let Err(e) = self.write(&frames::user(&text), Some(&ids.turn)).await {
+            if let Err(e) = self.write_user(&text, Some(&ids.turn)).await {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
@@ -449,7 +452,7 @@ impl Task {
             return Ok(self.hold_back(next, "queued").await);
         }
         if let Some(version) = self.copy_moved() {
-            let why = format!("Gathr's copy of Claude Code is now {version}");
+            let why = format!("Gathr's engine copy is now {version}");
             self.close(&why).await;
             return Ok(self.hold_back(next, "queued").await);
         }
@@ -471,7 +474,13 @@ impl Task {
         // A wrong path fails the send at once, signed in or not (hand check 8).
         let program = match self.engine {
             Some(_) => None,
-            None => Some(self.find_engine(&next.ids.trace).await?),
+            None => Some(
+                self.find_engine(
+                    assigned.as_ref().map_or("claude", |a| a.engine.as_str()),
+                    &next.ids.trace,
+                )
+                .await?,
+            ),
         };
         // No account yet waits like a signed-out one: adding one and signing it in sends it.
         let Some(assigned) = assigned else {
@@ -489,12 +498,12 @@ impl Task {
             self.spawn(&program, assigned, &next.ids.trace).await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
-        if let Err(e) = self
-            .write(&frames::user(&next.text), Some(&next.ids.turn))
-            .await
-        {
+        if let Err(e) = self.write_user(&next.text, Some(&next.ids.turn)).await {
             self.turn = None;
-            return Err(format!("Claude Code didn't take the message: {e}"));
+            return Err(format!(
+                "{} didn't take the message: {e}",
+                self.engine_label()
+            ));
         }
         self.set_turn(&next.ids, "running", None).await;
         Ok("running")
@@ -581,32 +590,49 @@ impl Task {
     /// What the turn runs as: its agent's account, model and effort as saved now; with no agent,
     /// the chats' account and the engine's defaults. `None` while there's no account.
     async fn assignment(&self, next: &Queued) -> Result<Option<Assignment>, String> {
-        let on = |account: String, agent, (model, effort, approvals), team| Assignment {
-            folder: gathr::accounts::folder(&self.chats.data, &account, "claude"),
-            account,
-            agent,
-            model,
-            effort,
-            approvals,
-            chat: next.ids.chat.clone(),
-            team,
+        let on = |account: gathr::accounts::Account, agent, (model, effort, approvals), team| {
+            Assignment {
+                folder: account.folder(&self.chats.data),
+                account: account.id,
+                engine: account.engine,
+                agent,
+                model,
+                effort,
+                approvals,
+                chat: next.ids.chat.clone(),
+                team,
+            }
         };
         let Some(id) = next.ids.agent.clone() else {
-            return Ok(self
+            let Some(id) = self.chats.account() else {
+                return Ok(None);
+            };
+            return match self
                 .chats
-                .account()
-                .map(|a| on(a, None, (None, None, Default::default()), Vec::new())));
+                .writer
+                .call(move |conn| gathr::accounts::get(conn, &id))
+                .await
+            {
+                Some(Ok(account)) => {
+                    Ok(account.map(|a| on(a, None, (None, None, Default::default()), Vec::new())))
+                }
+                _ => Err("the account wasn't read".into()),
+            };
         };
         let chat = next.ids.chat.clone();
         let read = move |conn: &mut rusqlite::Connection| {
             let team = gathr::team::members(conn, &chat)?;
             let team = team.into_iter().map(|m| (m.agent, m.role)).collect();
-            Ok::<_, gathr::Error>(agents::get(conn, &id)?.map(|a| (a, team)))
+            let Some(agent) = agents::get(conn, &id)? else {
+                return Ok(None);
+            };
+            let account = gathr::accounts::get(conn, &agent.account)?;
+            Ok::<_, gathr::Error>(account.map(|account| (agent, account, team)))
         };
         match self.chats.writer.call(read).await {
-            Some(Ok(Some((a, team)))) => {
+            Some(Ok(Some((a, account, team)))) => {
                 let given = (a.model, a.effort, a.approvals);
-                Ok(Some(on(a.account, Some(a.id), given, team)))
+                Ok(Some(on(account, Some(a.id), given, team)))
             }
             Some(Ok(None)) => Err("its agent was deleted".into()),
             Some(Err(e)) => Err(format!("its agent wasn't read: {e}")),
@@ -646,7 +672,7 @@ impl Task {
         let briefing = self.pass.as_ref().map_or(0, |p| p.briefing_chars);
         let estimate = |chars: usize| chars.div_ceil(4);
         self.record(
-            Event::point("invoke_agent claude")
+            Event::point(&format!("invoke_agent {}", self.engine_name()))
                 .attr("gathr.context.briefing.chars", briefing)
                 .attr("gathr.context.briefing.tokens_estimate", estimate(briefing))
                 .attr("gathr.context.ask.chars", ask_chars)
@@ -732,8 +758,30 @@ impl Task {
         self.set_turn(&ids, "running", None).await;
     }
 
+    fn engine_label(&self) -> &str {
+        if self.engine_name() == "codex" {
+            "Codex"
+        } else {
+            "Claude Code"
+        }
+    }
+
+    fn engine_name(&self) -> &str {
+        self.assigned
+            .as_ref()
+            .map_or("claude", |a| a.engine.as_str())
+    }
+
+    fn credentials(folder: &std::path::Path) -> PathBuf {
+        if folder.file_name().is_some_and(|n| n == "codex") {
+            gathr::codex::login::credentials(folder)
+        } else {
+            login::credentials(folder)
+        }
+    }
+
     async fn login(&mut self, folder: &std::path::Path) -> Login {
-        let file = login::credentials(folder);
+        let file = Self::credentials(folder);
         if let Some((_, stamp, when)) = self.refused.as_ref().filter(|r| r.0 == folder) {
             let (stamp, when) = (*stamp, *when);
             let unchanged = login_stamp(&file) == stamp;
@@ -776,8 +824,10 @@ impl Task {
         );
         let event = Event::point("gathr.turn.stop").trace(&ids.trace);
         self.record(event.chat(&ids.chat).ok());
-        let request = frames::interrupt(&format!("stop-{}", span_id()));
-        if let Err(e) = self.write(&request, Some(&ids.turn)).await {
+        let request = self.driver.interrupt(&format!("stop-{}", span_id()));
+        if let Some(request) = request
+            && let Err(e) = self.write(&request, Some(&ids.turn)).await
+        {
             let event = Event::point("gathr.turn.stop")
                 .trace(&ids.trace)
                 .chat(&ids.chat)
@@ -802,7 +852,9 @@ impl Task {
             turn.push_allowed = true;
         }
         let turn = turn.ids.turn.clone();
-        let answer = frames::approval(request_id, allow, &input);
+        let Some(answer) = self.driver.approval(request_id, allow, &input) else {
+            return false;
+        };
         self.write(&answer, Some(&turn)).await.is_ok()
     }
 

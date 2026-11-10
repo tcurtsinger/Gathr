@@ -30,6 +30,8 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine))
         .route("/api/engines/claude/update", post(update_engine))
+        .route("/api/engines/codex", get(codex_engine))
+        .route("/api/engines/codex/update", post(update_codex_engine))
         .route("/api/live", get(live))
 }
 
@@ -260,6 +262,28 @@ async fn engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
 }
 
 /// Checks the release feed now (0025); `GET /api/engines/claude` shows how it went.
+async fn codex_engine(Extract(s): Extract<Arc<State>>) -> Json<Value> {
+    let found = gathr::codex::command::find(gathr::codex::copies::storage(&s.data).program());
+    Json(
+        json!({"found":found.as_ref().ok().map(|p| p.display().to_string()), "why_not_found":found.err(), "copy":s.codex_updates.view()}),
+    )
+}
+
+async fn update_codex_engine(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+) -> Answer {
+    if !s.codex_updates.check_now() {
+        return Err(fail(
+            StatusCode::CONFLICT,
+            "Update failed",
+            "this dev build has no release feed: set GATHR_CODEX_RELEASES",
+            &t.0,
+        ));
+    }
+    Ok(Json(json!({"checking":true})))
+}
+
 async fn update_engine(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     if !s.updates.check_now() {
         let why = "this dev build has no release feed: set GATHR_CLAUDE_RELEASES";
