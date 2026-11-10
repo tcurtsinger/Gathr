@@ -91,7 +91,7 @@ async function check() {
 					0,
 					"direct exchange stays in main",
 				);
-				assert.equal(await page.locator("#plan-count").innerText(), "1/5");
+				assert.equal(await page.locator("#plan-count").innerText(), "1/4");
 				const indent = await page
 					.locator("[data-id=thread-rowan] > p:not(.ds-assignment)")
 					.first()
@@ -166,7 +166,7 @@ async function check() {
 						.locator("#late-member")
 						.evaluate((node) => node.closest("#team-column") !== null),
 				);
-				assert.equal(await page.locator("#plan-count").innerText(), "5/5");
+				assert.equal(await page.locator("#plan-count").innerText(), "4/4");
 				assert.equal(await page.locator("#waiting-on-team").isVisible(), false);
 				assert.equal(await page.locator("#team-working").isVisible(), false);
 				assert.equal(await recipient.inputValue(), "Lane");
@@ -188,12 +188,37 @@ async function check() {
 					await page.locator("#agent-plan").evaluate((node) => node.open),
 					true,
 				);
-				assert.equal(await page.locator(".ds-plan-steps li").count(), 5);
+				assert.equal(await page.locator(".ds-plan-steps li").count(), 4);
 				assert.equal(
 					await page.locator("#step-kit-detail").innerText(),
-					"Checking the last shortcut case",
+					"Checked Tab, Enter and Escape",
 				);
 				await shot(`plan-${label}`);
+				for (const state of ["blocked", "failed", "stopped"]) {
+					await page.locator(`#round-${state}`).click();
+					assert.equal(
+						await page.locator("#plan-count").innerText(),
+						"1/4",
+						"unsuccessful outcomes do not count done",
+					);
+					assert.equal(
+						await page.locator("#step-kit-outcome").innerText(),
+						state[0].toUpperCase() + state.slice(1),
+					);
+					assert.equal(
+						await page.locator(`[data-owner="Kit"] .ds-step-icon`).isVisible(),
+						false,
+						"outcome has no working spinner",
+					);
+					assert.equal(
+						await page
+							.locator(`#waiting-on-team .ds-workers`)
+							.getAttribute("aria-label"),
+						"Lane",
+					);
+					await shot(`${state}-${label}`);
+				}
+				await page.locator("#round-reset").click();
 				await page.locator("#plan-toggle").click();
 				const trigger = page.locator("#team-summary-open");
 				await trigger.focus();
@@ -236,7 +261,7 @@ async function check() {
 				await page.locator("#round-finish").click();
 				assert.equal(
 					await page.locator(".ds-segments").getAttribute("aria-valuenow"),
-					"5",
+					"4",
 				);
 				await shot(`finished-${label}`);
 				await page.locator("#archive-fold summary").click();

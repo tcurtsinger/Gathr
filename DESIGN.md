@@ -166,13 +166,14 @@ work never moves the reader. The reviewer's agreement stays a named reaction;
 a question stays a reply. Agent bodies, tools and reactions indent 34px to align
 with the speaker name (24px avatar plus 10px gap).
 
-While work runs, Waiting on team appears after the main column's latest message;
-Working appears at the bottom of the team column. Both use an attention spinner
+Waiting on team appears after the main column's latest message while the current
+round has an open task and no Supervisor turn is running. Working appears at the
+bottom of the team column for members with running turns. Both use an attention spinner
 and overlapping 18px initials for members with running turns. Waiting on team
-opens the split and names the Supervisor's open wait and its recorded start in
-the tooltip. Its elapsed time derives from that start, never a timer that invents
-a wait. Show indicators only for real running turns or open waits; do not invent
-working agents for a pending task.
+opens the split. Its time and tooltip use the earliest created_us of the round's
+open tasks given by the Supervisor, plus created_ts of any own open wait, as
+Summary does. A Supervisor cannot wait on its own team; no wait record is invented.
+Never show a queued or pending task as a working agent.
 
 ### Agent plan and Summary
 
@@ -180,10 +181,22 @@ The official agent-plan registry element docks above the composer as a collapsib
 bar, max-width 44rem, bottom margin 8px, radius 16px, popover surface and 6%
 foreground border. Its 40px row shows state, title, segmented progress, done/total
 and chevron. Expansion opens above the row, capped at 40vh. Rows show task state,
-label, owner and available recorded progress detail for active tasks. A round is
-the tasks given in one Supervisor turn, linked by given_in. Never invent a step
+label and owner. Working detail is the latest tool call on that task; held or
+blocked detail is the stored reason, omitted when absent. Agents have no free-text
+progress record. A round follows given_in/task/answers links to one main-line
+Supervisor turn, including nested tasks. Exclude person questions and cancelled
+tasks; order by task number. Only done tasks count toward the fraction. Never invent a step
 from prose. Until plan records exist, the title is Plan; afterwards it is the
-recorded plan title. Do not infer titles, progress or review completion from text.
+recorded plan title. Do not infer titles, progress or review completion from text. The bar says Done
+only after every task is settled and the Supervisor's hear-back has ended;
+settled failures can leave the fraction below total, so the outcome stays visible.
+
+Blocked steps use a static square-minus, Blocked and the stored reason. Failed
+uses a destructive circle-exclamation and Failed. Stopped uses a muted square
+and Stopped. Keep these outcomes separate from pending; none counts done or spins.
+Their segments stay unfilled, with destructive color for failed. A mixed round
+can still show running agents beside a terse outcome count (Lane working, 1 blocked).
+Use stored task states only; never infer success from a finished turn.
 
 Summary remains a 320px floating popover in the chat header, alongside the optional
 team column. It is not a workspace tab. Use official SubagentList rows and
@@ -195,7 +208,7 @@ The TodoList shows checked/struck-through done items, active spinners and pendin
 empty squares. No tasks says No assigned tasks, without a fabricated fraction.
 Escape/outside click dismisses Summary; Escape returns focus to its trigger.
 
-All plan steps, counts, working agents, assignments and wait starts come from
+All plan steps, counts, working agents, assignments and timing come from
 service tasks, turns and waits. Missing records never become inferred state.
 The portable reference uses explicitly invented records only. Reduced motion
 stops spinners and removes chevron and archive-lid transitions.

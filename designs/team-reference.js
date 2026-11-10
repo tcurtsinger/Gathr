@@ -44,7 +44,10 @@
 	}));
 	const initial = tasks.map((task) => task.state);
 	function showResult(phase) {
-		const done = phase !== "running";
+		const done = phase === "finished" || phase === "late";
+		const outcome = ["blocked", "failed", "stopped"].includes(phase)
+			? phase
+			: null;
 		const late = phase === "late";
 		get("#round-final").hidden = !done;
 		get("#late-member").hidden = !late;
@@ -52,9 +55,25 @@
 		get("#team-working").hidden = done;
 		get("#round-finish").disabled = done;
 		get("#round-late").disabled = late;
-		text("round-state", late ? "Late reply" : done ? "Finished" : "Running");
+		text(
+			"round-state",
+			late
+				? "Late reply"
+				: done
+					? "Finished"
+					: outcome
+						? outcome[0].toUpperCase() + outcome.slice(1)
+						: "Running",
+		);
 		text("final-time", late ? "11:35" : "10:03");
-		text("plan-state", done ? "Done" : "Kit and Lane working");
+		text(
+			"plan-state",
+			done
+				? "Done"
+				: outcome
+					? `Lane working, 1 ${outcome}`
+					: "Kit and Lane working",
+		);
 		text(
 			"kit-result",
 			done
@@ -68,7 +87,11 @@
 				: "The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.",
 		);
 		tasks.forEach((task, index) => {
-			task.state = done ? "done" : initial[index];
+			task.state = done
+				? "done"
+				: task.owner === "kit" && outcome
+					? outcome
+					: initial[index];
 			task.row.dataset.state = task.state;
 			const item = get(`#summary-${task.owner}-task`);
 			item.dataset.state = task.state;
@@ -76,20 +99,52 @@
 			text(`summary-${task.owner}-count`, `${count}/1`);
 			get(`[data-agent="${task.owner}"] progress`).value = count;
 			get(`#summary-${task.owner}-state`).dataset.state = task.state;
-			const waiting = task.owner === "mira" && !done;
+
 			text(
 				`summary-${task.owner}-state`,
-				waiting
-					? "Waiting for Kit and Lane since 09:15"
-					: task.state === "active"
-						? "Working"
-						: "Ready",
+				task.state === "active" ? "Working" : "Ready",
 			);
 			get(".ds-segments").children[index].dataset.state = task.state;
 		});
 		// Only recorded fixture detail is shown, and only while its step is active.
-		text("step-kit-detail", done ? "" : "Checking the last shortcut case");
-		text("step-lane-detail", done ? "" : "Checking Retry at 1024px");
+		text(
+			"step-kit-detail",
+			done
+				? ""
+				: outcome === "blocked"
+					? "Waiting for the replay fixture"
+					: outcome === "failed"
+						? "Replay command failed (ref sample-02)"
+						: outcome === "stopped"
+							? ""
+							: "Checked Tab, Enter and Escape",
+		);
+		text("step-lane-detail", "");
+		for (const task of tasks) {
+			text(
+				`step-${task.owner}-outcome`,
+				["blocked", "failed", "stopped"].includes(task.state)
+					? task.state[0].toUpperCase() + task.state.slice(1)
+					: "",
+			);
+		}
+		text(
+			"summary-mira-state",
+			done
+				? "Ready"
+				: outcome
+					? "Waiting for Lane and Sol since 09:15"
+					: "Waiting for Kit, Lane and Sol since 09:15",
+		);
+		get("#waiting-on-team").title = done
+			? ""
+			: outcome
+				? "Mira is waiting for Lane and Sol, since 09:15"
+				: "Mira is waiting for Kit, Lane and Sol, since 09:15";
+		for (const workers of document.querySelectorAll(".ds-workers")) {
+			workers.setAttribute("aria-label", outcome ? "Lane" : "Kit and Lane");
+			workers.innerHTML = outcome ? "<i>L</i>" : "<i>K</i><i>L</i>";
+		}
 		const count = tasks.filter((task) => task.state === "done").length;
 		text("plan-count", `${count}/${tasks.length}`);
 		get(".ds-segments").setAttribute("aria-valuenow", String(count));
@@ -99,6 +154,9 @@
 			get("#team-unread").hidden = false;
 			get("#late-unread").hidden = false;
 		}
+	}
+	for (const state of ["blocked", "failed", "stopped"]) {
+		get(`#round-${state}`).onclick = () => showResult(state);
 	}
 	get("#round-finish").onclick = () => showResult("finished");
 	get("#round-late").onclick = () => showResult("late");

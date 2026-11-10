@@ -474,3 +474,35 @@
 .ds-agent .ds-role [data-state="active"] {
 	color: var(--attention);
 }
+
+.ds-outcome-icon {
+	display: none;
+	width: 16px;
+	height: 20px;
+	flex-shrink: 0;
+}
+.ds-step-outcome {
+	display: block;
+	font-weight: 500;
+}
+.ds-plan-steps [data-state="blocked"] .ds-step-icon,
+.ds-plan-steps [data-state="failed"] .ds-step-icon,
+.ds-plan-steps [data-state="stopped"] .ds-step-icon {
+	display: none;
+}
+[data-state="blocked"] > .ds-blocked-icon,
+[data-state="failed"] > .ds-failed-icon,
+[data-state="stopped"] > .ds-stopped-icon {
+	display: block;
+}
+[data-state="failed"] > .ds-failed-icon,
+[data-state="failed"] .ds-step-outcome {
+	color: var(--destructive);
+}
+.ds-segments [data-state="failed"] {
+	background: transparent;
+	border: 1px solid var(--destructive);
+}
+.ds-todos #summary-mira-task::before {
+	display: none;
+}

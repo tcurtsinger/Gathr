@@ -98,6 +98,9 @@ Checked request deadline</pre></details>
 <span class="ds-role" id="round-state" role="status">Running</span>
 <button class="ds-button" id="round-finish" data-id="round-finish">Finish</button>
 <button class="ds-button" id="round-late" data-id="round-late">Late reply</button>
+<button class="ds-button" id="round-blocked" data-id="round-blocked">Blocked</button>
+<button class="ds-button" id="round-failed" data-id="round-failed">Failed</button>
+<button class="ds-button" id="round-stopped" data-id="round-stopped">Stopped</button>
 <button class="ds-button" id="round-reset" data-id="round-reset">Reset</button></div>
 <div class="ds-team" data-id="team-example">
 <header class="ds-team-header" id="team-header"><h3>Reconnect streaming</h3><div class="ds-row">
@@ -140,25 +143,76 @@ The keyboard shortcuts are unchanged.</p>
 </article>
 <div id="team-sent-messages" aria-live="polite"></div>
 
-<button class="ds-working ds-waiting" id="waiting-on-team" title="Mira is waiting for Kit and Lane, since 09:15">
+<button class="ds-working ds-waiting" id="waiting-on-team" title="Mira is waiting for Kit, Lane and Sol, since 09:15">
 <span class="ds-spinner" aria-hidden="true"></span>Waiting on team <span class="ds-workers" aria-label="Kit and Lane"><i>K</i><i>L</i></span><span class="ds-role">38 minutes</span></button>
 </div></div><div class="ds-compose-dock"><details class="ds-plan" id="agent-plan" data-id="agent-plan" data-source="elements/agent-plan">
 <summary id="plan-toggle" data-id="plan-toggle"><span class="ds-spinner" aria-hidden="true"></span>
 <svg id="plan-done" hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
 <circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><strong>Plan</strong><span class="ds-role" id="plan-state">Kit and Lane working</span>
-<span class="ds-segments" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1">
-<i data-state="done"></i><i data-state="active"></i><i data-state="active"></i><i></i><i></i></span>
-<span class="ds-fraction" id="plan-count">1/5</span><span class="ds-chevron" aria-hidden="true"></span></summary>
-<ol class="ds-plan-steps"><li data-owner="Rowan" data-state="done"><span class="ds-step-icon" aria-hidden="true"></span>
-<span>Commit the cursor after a complete event<small class="ds-step-detail" id="step-rowan-detail"></small></span><small>Rowan</small></li>
-<li data-owner="Kit" data-state="active"><span class="ds-step-icon" aria-hidden="true"></span>
-<span>Replay interruptions and check shortcuts<small class="ds-step-detail" id="step-kit-detail"></small></span><small>Kit</small></li>
-<li data-owner="Lane" data-state="active"><span class="ds-step-icon" aria-hidden="true"></span>
-<span>Check reconnect and stopped states<small class="ds-step-detail" id="step-lane-detail"></small></span><small>Lane</small></li>
-<li data-owner="Sol" data-state="pending"><span class="ds-step-icon" aria-hidden="true"></span>
-<span>Review the cursor change<small class="ds-step-detail" id="step-sol-detail"></small></span><small>Sol</small></li>
-<li data-owner="Mira" data-state="pending"><span class="ds-step-icon" aria-hidden="true"></span>
-<span>Reconcile and report back<small class="ds-step-detail" id="step-mira-detail"></small></span><small>Mira</small></li>
+<span class="ds-segments" role="progressbar" aria-label="Plan progress" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1">
+<i data-state="done"></i><i data-state="active"></i><i data-state="active"></i><i></i></span>
+<span class="ds-fraction" id="plan-count">1/4</span><span class="ds-chevron" aria-hidden="true"></span></summary>
+<ol class="ds-plan-steps">
+<li data-owner="Rowan" data-state="done">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Commit the cursor after a complete event<b class="ds-step-outcome" id="step-rowan-outcome"></b><small class="ds-step-detail" id="step-rowan-detail"></small></span><small>Rowan</small></li>
+<li data-owner="Kit" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Replay interruptions and check shortcuts<b class="ds-step-outcome" id="step-kit-outcome"></b><small class="ds-step-detail" id="step-kit-detail"></small></span><small>Kit</small></li>
+<li data-owner="Lane" data-state="active">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Check reconnect and stopped states<b class="ds-step-outcome" id="step-lane-outcome"></b><small class="ds-step-detail" id="step-lane-detail"></small></span><small>Lane</small></li>
+<li data-owner="Sol" data-state="pending">
+<span class="ds-step-icon" aria-hidden="true">
+</span>
+<svg class="ds-outcome-icon ds-stopped-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="5" y="5" width="14" height="14" rx="1"/>
+</svg>
+<svg class="ds-outcome-icon ds-failed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<circle cx="12" cy="12" r="9"/>
+<path d="M12 7v6m0 3v1"/>
+</svg>
+<svg class="ds-outcome-icon ds-blocked-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+<rect x="4" y="4" width="16" height="16" rx="2"/>
+<path d="M8 12h8"/>
+</svg>
+<span>Review the cursor change<b class="ds-step-outcome" id="step-sol-outcome"></b><small class="ds-step-detail" id="step-sol-detail"></small></span><small>Sol</small></li>
 </ol></details><form class="ds-composer" data-id="composer" data-source="components/assistant-ui/elements/composer.tsx">
 <input id="message" aria-label="Message" placeholder="Message Mira…" autocomplete="off">
 <div class="ds-composer-toolbar">
@@ -267,10 +321,9 @@ Conversation layout and navigation review for the upcoming desktop release</butt
 <h3>Agents</h3>
 <div class="ds-agent-row"><details class="ds-agent" data-agent="mira" data-source="elements/subagent-list">
 <summary><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit and Lane since 09:15</span></small>
-<span class="ds-agent-progress"><progress aria-label="Mira task progress" value="0" max="1"></progress>
-<span id="summary-mira-count">0/1</span></span></summary>
-<ul class="ds-todos" data-source="elements/todo-list"><li data-state="pending" id="summary-mira-task">Reconcile and report back</li></ul></details>
+<small class="ds-role">Supervisor · <span id="summary-mira-state">Waiting for Kit, Lane and Sol since 09:15</span></small>
+</summary>
+<ul class="ds-todos" data-source="elements/todo-list"><li id="summary-mira-task">No assigned tasks</li></ul></details>
 <button class="ds-button ds-agent-more" aria-label="Mira actions" popovertarget="agent-actions" data-icon>
 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></button></div>
 <div class="ds-agent-row"><details class="ds-agent" data-agent="rowan" data-source="elements/subagent-list">

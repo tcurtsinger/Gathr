@@ -24,10 +24,19 @@ below. This records the target before implementation, not completed UI work.
   A closed split gets a new-message dot; opening clears its header dot. Late work
   updates the same chronological team chat without moving the reader.
 - Waiting on team opens the split; Working ends the team column. Their initials
-  come from running turns; the Supervisor's named wait supplies its start time.
+  come from running turns. Time uses the earliest created_us of the round's open
+  tasks given by the Supervisor, plus any own open wait's created_ts, as Summary
+  does. No wait on its own team is invented.
 - An agent-plan bar docks above the composer. Its checklist is the round's real
-  tasks (given_in links them to one Supervisor turn). Until plans are records,
+  tasks (task/given_in/answers links root them at one Supervisor turn, including
+  nested assignments). Exclude person questions and cancelled tasks; order by
+  task number. Working detail is the latest tool call; held/blocked detail is the
+  stored reason. There is no free-text progress record. Until plans are records,
   its title is Plan. Never derive a plan title or step from message prose.
+- Blocked is a static square-minus with label and stored reason; Failed is a
+  destructive circle-exclamation; Stopped is a muted square. Show the named state,
+  without a spinner or done credit. Done status waits for settled tasks and the
+  Supervisor's completed hear-back; unsuccessful outcomes remain visible.
 - Summary remains a popover: official SubagentList rows, progress and expandable
   TodoList assignments. Counts are done/total per agent in this chat, excluding
   cancelled tasks. States and wait starts come from tasks, turns and waits.
