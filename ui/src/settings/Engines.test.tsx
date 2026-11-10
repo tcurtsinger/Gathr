@@ -16,12 +16,13 @@ const account = (id: string, name: string, sign_in: Account['sign_in'] = null): 
 
 /**
  * Answers GET /api/accounts and each engine: Claude Code's answer is the next in `copies`, Codex's
- * is always up to date. Every request except a GET lands in `sent`.
+ * is always up to date. Every request except a GET lands in `sent`, with its body if it has one.
  */
 function service(copies: Engine['copy'][], sent: string[] = [], accounts = defaults) {
   const answer = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
-    if (init?.method && init.method !== 'GET') sent.push(`${init.method} ${path}`);
+    if (init?.method && init.method !== 'GET')
+      sent.push([init.method, path, init.body].filter(Boolean).join(' '));
     if (path === '/api/accounts') return answer({ accounts });
     if (path === '/api/engines/claude') {
       const copy = copies.length > 1 ? copies.shift() : copies[0];
@@ -108,14 +109,52 @@ test('a sign-in shows the code field only when its engine takes a pasted code', 
       { ...account('b', 'Made-up browser', { state: 'waiting', url: page, paste: false }), engine: 'codex' },
     ],
   );
+  const opened: unknown[] = [];
+  vi.stubGlobal('open', (url: unknown) => opened.push(url));
   const screen = await render(<Engines onReference={() => {}} />);
   const rows = screen.getByRole('listitem');
   const paste = rows.filter({ hasText: 'Made-up paste' });
   const browser = rows.filter({ hasText: 'Made-up browser' });
   await expect.element(paste.getByRole('textbox', { name: 'Code' })).toBeVisible();
   await expect.element(browser.getByText('Codex / Signing in')).toBeVisible();
-  await expect
-    .element(browser.getByRole('link', { name: 'Open sign-in page' }))
-    .toHaveAttribute('href', page);
   await expect.element(browser.getByRole('textbox', { name: 'Code' })).not.toBeInTheDocument();
+  await browser.getByRole('button', { name: 'Open sign-in page' }).click();
+  expect(opened).toEqual([page]);
+});
+
+test('a Codex sign-in moves between the browser page and a device code, and a refused code offers Retry', async () => {
+  const page = 'https://example.invalid/sign-in';
+  const codex = (id: string, name: string, sign_in: Account['sign_in']) => ({
+    ...account(id, name, sign_in),
+    engine: 'codex',
+  });
+  const sent: string[] = [];
+  service([copy('idle')], sent, [
+    codex('a', 'Made-up page', { state: 'waiting', url: page }),
+    codex('b', 'Made-up device', { state: 'waiting', url: page, user_code: 'MADE-UP1' }),
+    codex('c', 'Made-up refused', {
+      state: 'failed',
+      why: 'made-up refusal',
+      ref: 'made-up-ref',
+      device: true,
+    }),
+  ]);
+  const screen = await render(<Engines onReference={() => {}} />);
+  const rows = screen.getByRole('listitem');
+
+  await rows.filter({ hasText: 'Made-up page' }).getByRole('button', { name: 'Use a device code' }).click();
+  const device = rows.filter({ hasText: 'Made-up device' });
+  await expect.element(device.getByText('MADE-UP1')).toBeVisible();
+  await expect.element(device.getByRole('button', { name: 'Use a device code' })).not.toBeInTheDocument();
+  await device.getByRole('button', { name: 'Use browser' }).click();
+  const refused = rows.filter({ hasText: 'Made-up refused' });
+  await expect.element(refused.getByText('made-up refusal')).toBeVisible();
+  await refused.getByRole('button', { name: 'Retry' }).click();
+  await expect
+    .poll(() => sent)
+    .toEqual([
+      'POST /api/accounts/a/sign-in {"device":true}',
+      'POST /api/accounts/b/sign-in',
+      'POST /api/accounts/c/sign-in {"device":true}',
+    ]);
 });

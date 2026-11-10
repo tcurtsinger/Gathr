@@ -209,12 +209,12 @@ export interface Account {
   login: string;
   expires: string | null;
   /**
-   * A sign-in from Settings: waiting (with its page once there is one, and `paste` when the engine
-   * takes the code that page gives), or failed with why and a reference.
+   * A sign-in from Settings: waiting (with its page once there is one, `paste` when the engine takes
+   * the code that page gives, `user_code` for a device code), or failed with why and a reference.
    */
   sign_in:
-    | { state: 'waiting'; url?: string; paste?: boolean }
-    | { state: 'failed'; why: string; ref: string }
+    | { state: 'waiting'; url?: string; paste?: boolean; user_code?: string }
+    | { state: 'failed'; why: string; ref: string; device?: boolean }
     | null;
 }
 
@@ -292,7 +292,9 @@ export const api = {
     call<Account>('PATCH', `/api/accounts/${account}`, { name }),
   removeAccount: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}`),
   signOut: (account: string) => call<unknown>('POST', `/api/accounts/${account}/sign-out`),
-  signIn: (account: string) => call<{ url: string }>('POST', `/api/accounts/${account}/sign-in`),
+  /** With `device`, a device code instead of the browser page (0033). */
+  signIn: (account: string, device?: boolean) =>
+    call<unknown>('POST', `/api/accounts/${account}/sign-in`, device ? { device } : undefined),
   signInCode: (account: string, code: string) =>
     call<unknown>('POST', `/api/accounts/${account}/sign-in/code`, { code }),
   cancelSignIn: (account: string) => call<unknown>('DELETE', `/api/accounts/${account}/sign-in`),

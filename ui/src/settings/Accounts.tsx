@@ -3,6 +3,7 @@ import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
 import { Notice } from '../components/Notice';
 import { listen } from '../live';
+import { SignInFailed, SignInWaiting } from './SignIn';
 
 /** The engines Gathr can run, as the service names them. */
 export const engines: [string, string][] = [
@@ -236,67 +237,9 @@ function AccountRow({ account, onRename, onRemoved, onFailure, onReference }: Ro
         </div>
       )}
       {failed && (
-        <Notice
-          danger
-          title="Sign in failed"
-          reference={{ ref: failed.ref, open: onReference }}
-          links={<span className="muted">{failed.why}</span>}
-        />
+        <SignInFailed account={id} failed={failed} onFailure={onFailure} onReference={onReference} />
       )}
-      {waiting?.url &&
-        (waiting.paste ? (
-          <SignInCode account={id} url={waiting.url} onFailure={onFailure} />
-        ) : (
-          <SignInPage url={waiting.url} />
-        ))}
+      {waiting && <SignInWaiting account={account} waiting={waiting} onFailure={onFailure} />}
     </li>
-  );
-}
-
-/** The sign-in page, for when the browser didn't open. */
-const SignInPage = ({ url }: { url: string }) => (
-  <a href={url} target="_blank" rel="noreferrer">
-    Open sign-in page
-  </a>
-);
-
-/** While the engine waits for the code its page gives: that page, and the code. */
-function SignInCode({
-  account,
-  url,
-  onFailure,
-}: {
-  account: string;
-  url: string;
-  onFailure: (f: Failure) => void;
-}) {
-  const [code, setCode] = useState('');
-  const [sent, setSent] = useState(false);
-  const field = useId();
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSent(true);
-    api.signInCode(account, code.trim()).catch((f) => {
-      setSent(false);
-      onFailure(f);
-    });
-  };
-  return (
-    <form className="pathfield" onSubmit={submit}>
-      <label htmlFor={field}>Code</label>
-      <div className="pathline">
-        <input
-          id={field}
-          value={code}
-          autoComplete="off"
-          spellCheck={false}
-          onChange={(e) => setCode(e.target.value)}
-        />
-        <button type="submit" disabled={sent || !code.trim()}>
-          {sent ? 'Signing in' : 'Sign in'}
-        </button>
-      </div>
-      <SignInPage url={url} />
-    </form>
   );
 }
