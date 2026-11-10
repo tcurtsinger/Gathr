@@ -73,6 +73,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             reopen(app, "second launch")
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Service {
             data,
             info: Mutex::new(None),
