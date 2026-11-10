@@ -1,6 +1,6 @@
 //! Gathr's hook (0029): Claude Code asks it before each file write and command, with the engine's
-//! own token. It answers "ask" before a push or a write outside the engine's folder, which sends
-//! the call to the person as an approval whatever the agent's mode or a project's rules allow.
+//! own token. It answers "ask" before a push or a write outside the agent's folders (0034), which
+//! sends the call to the person as an approval whatever the agent's mode or a project's rules allow.
 
 use std::sync::Arc;
 
@@ -59,7 +59,7 @@ async fn pre_tool_use(
     Json(input): Json<Value>,
 ) -> Json<Value> {
     let tool = input["tool_name"].as_str().unwrap_or("");
-    let Some(why) = gathr::approvals::ask(tool, &input["tool_input"], &caller.cwd) else {
+    let Some(why) = gathr::approvals::ask(tool, &input["tool_input"], &caller.folders) else {
         // Empty: the agent's mode decides.
         return Json(json!({}));
     };

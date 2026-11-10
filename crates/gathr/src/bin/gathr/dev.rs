@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use gathr::crash_log::CrashLog;
 use gathr::data::{DataDir, ServiceInfo};
-use gathr::{Error, http};
+use gathr::{Error, folders, http};
 
 pub fn run(
     data: &DataDir,
@@ -49,12 +49,18 @@ fn build(what: &[&str]) -> Result<(), Error> {
 async fn supervise(data: &DataDir, port: u16, window: bool) -> Result<(), Error> {
     let exe =
         std::env::current_exe()?.with_file_name(format!("gathrd{}", std::env::consts::EXE_SUFFIX));
-    let mut child = tokio::process::Command::new(&exe)
+    let mut command = tokio::process::Command::new(&exe);
+    command
         .arg("--data")
         .arg(data.path())
         .arg("--port")
-        .arg(port.to_string())
-        .spawn()?;
+        .arg(port.to_string());
+    // Made-up projects never land in the person's own agent folder (0034).
+    if std::env::var_os(folders::DEFAULT_VAR).is_none() {
+        let beside = folders::beside(&std::path::absolute(data.path())?);
+        command.env(folders::DEFAULT_VAR, beside);
+    }
+    let mut child = command.spawn()?;
     let pid = child.id().unwrap_or(0);
     let info = tokio::select! {
         info = ready(data, pid) => info?,

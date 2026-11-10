@@ -26,6 +26,7 @@ impl TempDir {
 impl Drop for TempDir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
+        let _ = std::fs::remove_dir_all(gathr::folders::beside(&self.0));
     }
 }
 
@@ -53,6 +54,7 @@ impl TestService {
     pub fn start_program(program: &Path, data: &Path, env: &[(&str, &Path)]) -> TestService {
         let mut command = Command::new(program);
         command.arg("--data").arg(data).arg("--port").arg("0");
+        command.env(gathr::folders::DEFAULT_VAR, gathr::folders::beside(data));
         for (name, value) in env {
             command.env(name, value);
         }
@@ -245,9 +247,12 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// `gathrd` on `data`, with its agent folder beside it (0034): never the person's own, and removed
+/// with the test's temp folder.
 pub fn gathrd(data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_gathrd"));
     command.arg("--data").arg(data).arg("--port").arg("0");
+    command.env(gathr::folders::DEFAULT_VAR, gathr::folders::beside(data));
     command
 }
 
@@ -512,4 +517,24 @@ pub fn first_token(data: &Path) -> String {
         let line: Value = serde_json::from_str(text.lines().next()?).ok()?;
         line["GATHR_AGENT_TOKEN"].as_str().map(String::from)
     })
+}
+
+/// The `n`th line of a file the replay engine appends to, once it's there and whole.
+pub fn nth(file: &Path, n: usize) -> Value {
+    until(10, &format!("line {n} in {}", file.display()), || {
+        let text = std::fs::read_to_string(file).unwrap_or_default();
+        let whole = text.rsplit_once('\n').map_or("", |(lines, _)| lines);
+        serde_json::from_str(whole.lines().nth(n)?).ok()
+    })
+}
+
+/// Gathr's hook (0029), asked as Claude Code asks it before `tool`, with the engine's `token`.
+pub fn hook(port: u16, token: &str, tool: &str, input: Value) -> Response {
+    let body = json!({ "hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input });
+    let auth = format!("Bearer {token}");
+    let headers = [
+        ("Authorization", auth.as_str()),
+        ("Content-Type", "application/json"),
+    ];
+    http::post(port, "/hook", &headers, &body.to_string()).unwrap()
 }

@@ -74,16 +74,16 @@ async fn history(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let (approvals, streaming) = s.chats.open(&chat).await;
-    let (id, pauses) = (chat.clone(), s.chats.pauses());
+    let (id, pauses, data) = (chat.clone(), s.chats.pauses(), s.data.path().to_path_buf());
     let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
         let mut history = store::history(conn, &id)?;
         gathr::pauses::with_run(conn, &pauses, &id, &mut history)?;
+        crate::team::with_folders(conn, &data, &id, &mut history)?;
         Ok(history)
     })
     .await?;
     history["approvals"] = json!(approvals);
     history["streaming"] = json!(still_streaming(&history, streaming));
-    crate::team::with_folders(&s, &chat, &mut history);
     Ok(Json(history))
 }
 

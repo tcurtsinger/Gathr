@@ -8,7 +8,7 @@
 //! `GATHR_REPLAY` names the recording, else a file `replay-recording` beside it; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
 //! for Gathr's tools to (`{"GATHR_AGENT_TOKEN": …}`), so a test can call them as the engine, with
-//! its working folder (`cwd`), `PATH` and `GATHR_PUSH_URL`.
+//! its working folder (`cwd`), `PATH`, `GATHR_PUSH_URL` and `TEMP` (its TEMP, TMP and TMPDIR).
 //!
 //! `auth status` answers as Claude Code does where its login is a file: exit 0 when
 //! `CLAUDE_CONFIG_DIR` holds `.credentials.json`, 1 when it doesn't. It isn't a run.
@@ -239,8 +239,9 @@ fn record_start(args: &[String]) {
             .map(|d| d.display().to_string());
         let path = std::env::var("PATH").ok();
         let push = std::env::var("GATHR_PUSH_URL").ok();
+        let temp = ["TEMP", "TMP", "TMPDIR"].map(|name| std::env::var(name).ok());
         let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
-            "GATHR_PUSH_URL": push });
+            "GATHR_PUSH_URL": push, "TEMP": temp });
         append_line(&mut out, start.to_string());
     }
 }
