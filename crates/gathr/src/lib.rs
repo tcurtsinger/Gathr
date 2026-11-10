@@ -25,6 +25,7 @@ pub mod platform;
 pub mod projects;
 pub mod redact;
 pub mod run;
+pub mod search;
 pub mod seed;
 pub mod store;
 pub mod tasks;
