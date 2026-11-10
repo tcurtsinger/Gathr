@@ -101,14 +101,14 @@ impl Task {
             task: ids.task,
             trace: &ids.trace,
         };
-        crate::coord::turn_moved(&self.chats, moved, status, why).await;
+        let position = crate::coord::turn_moved(&self.chats, moved, status, why).await;
         self.chats.settle_pauses(false).await;
         let reference = gathr::ids::reference(&ids.trace);
         self.publish(
             &ids.chat,
             json!({ "type": "turn", "turn": ids.turn, "status": status,
             "agent": ids.agent, "why": why, "ref": reference, "task": ids.task,
-            "answers": ids.answers }),
+            "answers": ids.answers, "position": position }),
         );
     }
 
