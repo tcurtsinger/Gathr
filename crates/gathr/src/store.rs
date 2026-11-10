@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 use crate::Error;
 use crate::ids::{now_us, ulid};
-use crate::redact::redact;
+use crate::redact::{redact, redact_json};
 
 /// The longest raw body kept for a frame that isn't JSON (0011).
 const MALFORMED_CAP: usize = 64 * 1024;
@@ -361,7 +361,7 @@ pub fn add_raw(conn: &Connection, frame: &RawFrame<'_>) -> Result<(), Error> {
         (Some(value), _) => (
             crate::claude::frames::kind(value),
             false,
-            redact(frame.line),
+            redact_json(value).to_string(),
         ),
         (None, _) => {
             let mut cut = frame.line.len().min(MALFORMED_CAP);

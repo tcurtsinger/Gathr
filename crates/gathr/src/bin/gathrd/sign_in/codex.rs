@@ -136,12 +136,8 @@ async fn finish(
     }
 }
 
-async fn close(s: &State, mut client: Client) {
-    client.engine.close_input();
-    tokio::select! {
-        _ = client.engine.wait() => {},
-        () = s.stopped() => { client.engine.close(CLOSE_GRACE).await; }
-    }
+async fn close(s: &State, client: Client) {
+    super::close_gently(s, client.engine).await;
 }
 
 pub async fn log_out(s: &State, folder: &std::path::Path) -> Result<(), String> {

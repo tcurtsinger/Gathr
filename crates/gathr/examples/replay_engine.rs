@@ -15,7 +15,9 @@
 //!
 //! `auth login` prints what Claude Code 2.1.318 prints with no terminal (task 893), waits for a
 //! pasted `code#state` on stdin, and signs the folder in when the code is `made-up-code`.
-//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher. `auth logout`
+//! `GATHR_REPLAY_PAGE_MS` holds its page back that long, as a slow launcher; `GATHR_REPLAY_LOGIN_MS`
+//! holds a good code that long before the login is saved, as the exchange does. Like Claude Code
+//! 2.1.319, it doesn't end when its input closes before a code (checked live: still waiting 150 s on). `auth logout`
 //! removes the folder's login file, as Claude Code 2.1.318 does; `GATHR_REPLAY_LOGOUT=stall`
 //! first leaves `logout-started` in the folder and waits a minute.
 //!
@@ -202,9 +204,19 @@ fn auth_login() -> ! {
     stdout.flush().unwrap();
     let mut code = String::new();
     std::io::stdin().lock().read_line(&mut code).unwrap();
+    if code.is_empty() {
+        // Input closed with no code: wait, as Claude Code does, until it's stopped.
+        std::thread::sleep(std::time::Duration::from_secs(600));
+    }
     if !code.starts_with("made-up-code#") {
         eprintln!("Login failed: That code wasn't accepted. Try signing in again.");
         std::process::exit(1);
+    }
+    if let Some(ms) = std::env::var("GATHR_REPLAY_LOGIN_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+    {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
     }
     let folder = std::path::PathBuf::from(std::env::var_os("CLAUDE_CONFIG_DIR").unwrap());
     let expires = std::time::SystemTime::now()

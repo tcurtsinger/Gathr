@@ -35,6 +35,29 @@ export const scrub = (f) => {
   return f;
 };
 
+// Streamed tool input comes in fragments (`input_json_delta`), and a path can be split across them,
+// where a swap on each string never sees it whole. Each block's fragments are scrubbed joined: when
+// that changes them, the first carries the scrubbed whole and the rest are left empty.
+export const scrubFragments = (frames, cleanText) => {
+  const blocks = new Map();
+  const flush = (index) => {
+    const parts = blocks.get(index) ?? [];
+    blocks.delete(index);
+    const whole = parts.map((f) => f.event.delta.partial_json).join('');
+    const scrubbed = cleanText(whole);
+    if (scrubbed !== whole) parts.forEach((f, n) => (f.event.delta.partial_json = n === 0 ? scrubbed : ''));
+  };
+  for (const f of frames) {
+    const e = f?.event;
+    if (e?.type === 'content_block_delta' && e.delta?.type === 'input_json_delta') {
+      if (!blocks.has(e.index)) blocks.set(e.index, []);
+      blocks.get(e.index).push(f);
+    } else if (e?.type === 'content_block_stop') flush(e.index);
+  }
+  for (const index of [...blocks.keys()]) flush(index);
+  return frames;
+};
+
 const main = (src, dst, data) => {
   if (!src || !dst || !data) throw new Error('usage: scrub-frames.mjs <export.jsonl> <out.jsonl> <data folder>');
   const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -50,25 +73,29 @@ const main = (src, dst, data) => {
     [/cf-ray: [0-9a-z-]+/gi, 'cf-ray: test'],
     [/req_[0-9a-f]{8,}/g, 'req_test'],
   ];
+  const cleanText = (s) => swaps.reduce((t, [re, to]) => t.replace(re, to), s);
   const clean = (v) => {
-    if (typeof v === 'string') return swaps.reduce((s, [re, to]) => s.replace(re, to), v);
+    if (typeof v === 'string') return cleanText(v);
     if (Array.isArray(v)) return v.map(clean);
     if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)]));
     return v;
   };
 
-  const rows = [];
   const text = fs.readFileSync(src, 'utf8');
   const exported = text.trimStart().startsWith('{"rows"') ? JSON.parse(text).rows : text.split('\n').filter(Boolean).map((l) => JSON.parse(l));
-  for (const row of exported.filter((r) => ['in', 'out', 'err'].includes(r.dir))) {
-    let line = row.line;
+  const kept = exported.filter((r) => ['in', 'out', 'err'].includes(r.dir));
+  const parse = (line) => {
     try {
-      line = JSON.stringify(clean(scrub(JSON.parse(line))));
+      return scrub(JSON.parse(line));
     } catch {
-      line = clean(line);
+      return undefined;
     }
-    rows.push(JSON.stringify({ dir: row.dir, line }));
-  }
+  };
+  const frames = scrubFragments(kept.map((r) => parse(r.line)), cleanText);
+  const rows = kept.map((row, n) => {
+    const line = frames[n] === undefined ? cleanText(row.line) : JSON.stringify(clean(frames[n]));
+    return JSON.stringify({ dir: row.dir, line });
+  });
   fs.writeFileSync(dst, rows.join('\n') + '\n');
   console.log(`${rows.length} frames written to ${dst}. Read it for anything personal before committing it.`);
 };

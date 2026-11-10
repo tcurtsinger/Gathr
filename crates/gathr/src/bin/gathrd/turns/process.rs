@@ -325,6 +325,7 @@ impl Task {
         let Some(mut engine) = self.engine.take() else {
             return;
         };
+        self.flush_raw().await;
         self.lines = None;
         if self.turn.as_ref().is_some_and(|t| !t.stopping)
             && let Some(request) = self.driver.interrupt("close")
@@ -457,6 +458,7 @@ impl Task {
 
     /// The engine's output ended: it's exiting.
     pub(super) async fn on_exit(&mut self) {
+        self.flush_raw().await;
         self.lines = None;
         if let Some(turn) = self.turn.as_mut() {
             turn.gate.release();
@@ -535,6 +537,30 @@ impl Task {
         engine.write(frame).await?;
         self.raw(turn, pid, "in", &frame.to_string()).await;
         Ok(())
+    }
+
+    /// Writes the held lines in their order, their stream fragments redacted joined
+    /// (`redact::stream`). Lines that aren't frames go as they came, redacted as text.
+    pub(super) async fn flush_raw(&mut self) {
+        let held = std::mem::take(&mut self.held_raw);
+        let parse = |(_, _, dir, line): &(Option<String>, u32, &str, String)| {
+            (*dir == "out")
+                .then(|| serde_json::from_str(line).ok())
+                .flatten()
+        };
+        let parsed: Vec<Option<serde_json::Value>> = held.iter().map(parse).collect();
+        let mut frames: Vec<serde_json::Value> = parsed
+            .iter()
+            .map(|v| v.clone().unwrap_or_default())
+            .collect();
+        gathr::redact::stream::redact_run(&mut frames);
+        for ((turn, pid, dir, line), (frame, was)) in held.iter().zip(frames.iter().zip(&parsed)) {
+            let text = match was {
+                Some(_) => frame.to_string(),
+                None => line.clone(),
+            };
+            self.raw(turn.as_deref(), *pid, dir, &text).await;
+        }
     }
 
     /// One frame in or out of the engine, recorded under the chat it runs in (0011).

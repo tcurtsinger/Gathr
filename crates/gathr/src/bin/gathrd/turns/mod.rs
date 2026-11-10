@@ -96,6 +96,8 @@ struct Running {
     stopping: bool,
     /// Why Gathr stopped it, when Gathr did: the stopped turn says so.
     stop_why: Option<String>,
+    /// A message of it the database refused: the turn fails with this (audit 2.2.6).
+    save_failed: Option<String>,
     signed_out: bool,
     /// Tools it has started: a turn cut off after one never runs again from its ask (F10).
     tools_started: u32,
@@ -147,6 +149,10 @@ struct Task {
     /// The turn (and task) of the last background command that ended: the engine's next turn of
     /// its own carries on from it.
     woke_from: Option<(String, Option<i64>)>,
+    /// Reply text of ended turns that the database refused, kept until a save works.
+    unsaved: Vec<(Ids, String)>,
+    /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
+    held_raw: Vec<(Option<String>, u32, &'static str, String)>,
 }
 
 pub async fn run(
@@ -177,6 +183,8 @@ pub async fn run(
         usage_until_us: None,
         background: 0,
         woke_from: None,
+        unsaved: Vec::new(),
+        held_raw: Vec::new(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
@@ -324,6 +332,8 @@ impl Task {
         agent: Option<String>,
         trace: String,
     ) -> Result<Value, Failed> {
+        // A reply kept unsaved goes in first, before the message that follows it.
+        self.save_unsaved().await;
         // Only into the same chat's turn: a message in another chat waits for the agent.
         let steered = self
             .turn
@@ -333,7 +343,9 @@ impl Task {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
             let ids = running.ids.clone();
+            // Never sent on to the engine unsaved: its answer would answer a message nobody has.
             let message = self.db_message(&ids, "user", "text", &text).await;
+            let message = message.map_err(|why| self.fail_send(&ids, why))?;
             if let Err(e) = self.write_user(&text, Some(&ids.turn)).await {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
@@ -377,6 +389,14 @@ impl Task {
             return Err(self.fail_send(ids, e.to_string()));
         }
         let message = self.db_message(ids, "user", "text", &queued.text).await;
+        let message = match message {
+            Ok(message) => message,
+            Err(why) => {
+                // Its turn row is there already: it ends failed, not queued for good.
+                self.set_turn(ids, "failed", Some(&why)).await;
+                return Err(self.fail_send(ids, why));
+            }
+        };
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             Event::point("gathr.chat.send")
@@ -423,6 +443,7 @@ impl Task {
 
     /// Starts the turns waiting, in order, while nothing runs or closes.
     async fn try_next(&mut self) {
+        self.save_unsaved().await;
         while self.turn.is_none() && self.closing.is_none() {
             // The first turn no pause holds: a paused chat's turns never hold another chat's.
             let Some(next) = self
@@ -741,6 +762,7 @@ impl Task {
             push_allowed: false,
             stopping: false,
             stop_why: None,
+            save_failed: None,
             signed_out: false,
             tools_started: 0,
             limited: false,
@@ -916,10 +938,23 @@ impl Task {
     /// with how many of the turn's messages are. Counted here, where nothing new is saved meanwhile,
     /// so whoever reads the chat after can tell a block saved since from the text still streaming.
     async fn streaming(&self, chat: &str) -> Option<Value> {
-        let turn = self
+        let running = self
             .turn
             .as_ref()
-            .filter(|t| t.ids.chat == chat && !t.partial.is_empty())?;
+            .filter(|t| t.ids.chat == chat && !t.partial.is_empty());
+        let unsaved: Vec<&(Ids, String)> = self
+            .unsaved
+            .iter()
+            .filter(|(ids, _)| ids.chat == chat)
+            .collect();
+        let Some(turn) = running.filter(|_| unsaved.is_empty()) else {
+            // Blocks the database refused, then what's streaming now, as one unsaved text.
+            let (ids, _) = unsaved.first()?;
+            let mut texts: Vec<&str> = unsaved.iter().map(|(_, text)| text.as_str()).collect();
+            texts.extend(running.map(|t| t.partial.as_str()));
+            let text = texts.join("\n\n");
+            return Some(json!({ "turn": ids.turn, "agent": ids.agent, "text": text, "saved": 0 }));
+        };
         let (chat, id) = (chat.to_string(), turn.ids.turn.clone());
         let count = move |conn: &mut rusqlite::Connection| store::replies(conn, &chat, &id);
         let saved = self.chats.writer.call(count).await?.ok()?;
