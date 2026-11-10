@@ -43,6 +43,7 @@ fn main() {
 
 fn dev(context: Context<Wry>, url: tauri::Url, title: String) {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             window(app.handle(), url, &title, None)?.show()?;
             Ok(())

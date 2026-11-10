@@ -15,6 +15,7 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
   const [failure, setFailure] = useState<Failure | null>(null);
   const change = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  const picking = useRef(false);
 
   useEffect(() => {
     api.settings().then((s) => setFolder(s.agent_folder), setFailure);
@@ -51,7 +52,8 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
   /** The system's folder picker in the desktop window; a browser, or a picker that fails, gets the field. */
   const pick = () => {
     const window = desktop();
-    if (saving) return;
+    // One picker at a time: each open is its own system dialog, and Change can still be invoked behind it.
+    if (saving || picking.current) return;
     if (!window) return setTyped(folder);
     const options = {
       directory: true,
@@ -59,13 +61,19 @@ export function AgentFolder({ onReference }: { onReference: (ref: string) => voi
       title: 'Agent folder',
       canCreateDirectories: true,
     };
-    window.invoke('plugin:dialog|open', { options }).then(
-      (picked) => typeof picked === 'string' && store(picked),
-      (e) => {
-        report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });
-        setTyped(folder);
-      },
-    );
+    picking.current = true;
+    window
+      .invoke('plugin:dialog|open', { options })
+      .then(
+        (picked) => typeof picked === 'string' && store(picked),
+        (e) => {
+          report({ name: 'gathr.ui.window.folder', error: 'open', attrs: { message: String(e) } });
+          setTyped(folder);
+        },
+      )
+      .finally(() => {
+        picking.current = false;
+      });
   };
 
   if (folder === null) return null;

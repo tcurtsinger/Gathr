@@ -115,3 +115,26 @@ test('in the desktop window Change opens the system picker: a cancel saves nothi
   expect(asked[0]).toEqual(['plugin:dialog|open', { options: { ...options, defaultPath: 'X:\\Made\\Up' } }]);
   expect(asked[3]).toEqual(['plugin:dialog|open', { options: { ...options, defaultPath: 'Y:\\Picked' } }]);
 });
+
+test('Change while the picker is still open opens no second one', async () => {
+  service([]);
+  let answer = (_: string | null) => {};
+  let opened = 0;
+  vi.stubGlobal('__TAURI_INTERNALS__', {
+    invoke: () => {
+      opened++;
+      return new Promise((done) => {
+        answer = done;
+      });
+    },
+  });
+  const screen = await render(<AgentFolder onReference={() => {}} />);
+  const change = screen.getByRole('button', { name: 'Change' });
+  await change.click();
+  await change.click();
+  expect(opened).toBe(1);
+  answer(null);
+  await new Promise((done) => setTimeout(done, 50));
+  await change.click();
+  expect(opened).toBe(2);
+});
