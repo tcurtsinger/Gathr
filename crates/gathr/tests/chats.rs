@@ -560,7 +560,8 @@ fn a_reply_that_cant_be_saved_fails_the_turn_and_is_kept_until_it_can() {
 }
 
 /// A key streamed in two pieces never reaches the raw record in either (Vale, #84): each piece
-/// alone looks like nothing, so the run is redacted joined before it's written.
+/// alone looks like nothing, so the run is redacted joined before it's written, even with stderr
+/// between the pieces (pauses fix its place, as in Vale's second look).
 #[test]
 fn a_key_split_across_streamed_frames_is_never_stored() {
     let data = TempDir::new();
@@ -574,6 +575,13 @@ fn a_key_split_across_streamed_frames_is_never_stored() {
     for row in rows.lines() {
         if row.contains("text_delta") {
             lines.push(split("Your key: sk-pr"));
+            for (dir, line) in [
+                ("sleep", "150"),
+                ("err", "a harmless warning"),
+                ("sleep", "150"),
+            ] {
+                lines.push(json!({ "dir": dir, "line": line }).to_string());
+            }
             lines.push(split("oj-0123456789abcdefghijklmnop"));
         } else {
             lines.push(row.to_string());

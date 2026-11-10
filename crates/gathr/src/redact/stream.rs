@@ -1,9 +1,21 @@
 //! Streamed pieces of one value, redacted together (0011, audit 2.1.1 at review). Claude Code
 //! streams a tool's input and its text in fragments, and Codex its replies and command output, so a
-//! key can be split across two frames where neither looks like one. A run of fragments is held
-//! back and redacted joined before any of it is written.
+//! key can be split across two frames where neither looks like one. Once a fragment comes, every
+//! line after it (stderr and unrelated frames too, so their order holds) is held back until a block
+//! or item ends, then the run is redacted joined before any of it is written.
 
 use serde_json::Value;
+
+/// A frame that ends what was streaming: Claude Code's block or message end, its whole message or
+/// result; Codex's item or turn end.
+pub fn ends_block(frame: &Value) -> bool {
+    let event = frame["event"]["type"].as_str().unwrap_or("");
+    let kind = frame["type"].as_str().unwrap_or("");
+    let method = frame["method"].as_str().unwrap_or("");
+    matches!(event, "content_block_stop" | "message_stop")
+        || matches!(kind, "assistant" | "result")
+        || matches!(method, "item/completed" | "turn/completed")
+}
 
 /// The piece a frame carries, and which value it's a piece of, when it's a stream fragment.
 pub fn fragment(frame: &Value) -> Option<(String, &str)> {

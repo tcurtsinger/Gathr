@@ -18,18 +18,25 @@ impl Task {
             Line::Out(text) => ("out", text),
             Line::Err(text) => ("err", text),
         };
-        // Written, redacted, before it's acted on (0011). A stream fragment waits for the end of
-        // its run, so a secret split across fragments is redacted whole.
-        let fragment = (direction == "out")
+        // Written, redacted, before it's acted on (0011). From a stream fragment on, lines wait
+        // for the block's end, so a secret split across fragments is redacted whole.
+        let parsed = (direction == "out")
             .then(|| serde_json::from_str::<Value>(text).ok())
-            .flatten()
-            .filter(|v| gathr::redact::stream::fragment(v).is_some());
-        match fragment {
-            Some(value) => self.held_raw.push((turn.clone(), pid, value)),
-            None => {
+            .flatten();
+        let fragment = parsed
+            .as_ref()
+            .is_some_and(|v| gathr::redact::stream::fragment(v).is_some());
+        if fragment || !self.held_raw.is_empty() {
+            self.held_raw
+                .push((turn.clone(), pid, direction, text.clone()));
+            if parsed
+                .as_ref()
+                .is_some_and(gathr::redact::stream::ends_block)
+            {
                 self.flush_raw().await;
-                self.raw(turn.as_deref(), pid, direction, text).await;
             }
+        } else {
+            self.raw(turn.as_deref(), pid, direction, text).await;
         }
         let Line::Out(text) = line else {
             self.record(Event::point("gathr.engine.stderr").attr("line", text.clone()));

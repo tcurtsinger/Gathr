@@ -152,7 +152,7 @@ struct Task {
     /// Reply text of ended turns that the database refused, kept until a save works.
     unsaved: Vec<(Ids, String)>,
     /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
-    held_raw: Vec<(Option<String>, u32, Value)>,
+    held_raw: Vec<(Option<String>, u32, &'static str, String)>,
 }
 
 pub async fn run(

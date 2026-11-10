@@ -539,14 +539,27 @@ impl Task {
         Ok(())
     }
 
-    /// Writes the held run of stream fragments, redacted joined (`redact::stream`).
+    /// Writes the held lines in their order, their stream fragments redacted joined
+    /// (`redact::stream`). Lines that aren't frames go as they came, redacted as text.
     pub(super) async fn flush_raw(&mut self) {
         let held = std::mem::take(&mut self.held_raw);
-        let mut frames: Vec<serde_json::Value> = held.iter().map(|(_, _, v)| v.clone()).collect();
+        let parse = |(_, _, dir, line): &(Option<String>, u32, &str, String)| {
+            (*dir == "out")
+                .then(|| serde_json::from_str(line).ok())
+                .flatten()
+        };
+        let parsed: Vec<Option<serde_json::Value>> = held.iter().map(parse).collect();
+        let mut frames: Vec<serde_json::Value> = parsed
+            .iter()
+            .map(|v| v.clone().unwrap_or_default())
+            .collect();
         gathr::redact::stream::redact_run(&mut frames);
-        for ((turn, pid, _), frame) in held.iter().zip(frames) {
-            self.raw(turn.as_deref(), *pid, "out", &frame.to_string())
-                .await;
+        for ((turn, pid, dir, line), (frame, was)) in held.iter().zip(frames.iter().zip(&parsed)) {
+            let text = match was {
+                Some(_) => frame.to_string(),
+                None => line.clone(),
+            };
+            self.raw(turn.as_deref(), *pid, dir, &text).await;
         }
     }
 
