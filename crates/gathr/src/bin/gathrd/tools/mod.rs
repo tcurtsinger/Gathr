@@ -3,7 +3,7 @@
 //! chat, and the token ends when the engine exits.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub mod briefing;
@@ -20,9 +20,15 @@ pub use server::service;
 pub struct Caller {
     pub agent: Option<String>,
     pub chat: String,
-    /// The folder the engine runs in: its worktree in a project's chat. Gathr asks before a
-    /// write outside it (0029).
+    /// The folder the engine runs in: its worktree in a project's chat.
     pub cwd: PathBuf,
+    /// Where it writes without asking: `cwd`, its own folder and its project's Shared (0029,
+    /// 0034). Gathr asks before a write anywhere else.
+    pub folders: Vec<PathBuf>,
+    /// Its temporary files' folder (TEMP), while it runs.
+    pub scratch: Option<PathBuf>,
+    /// `cwd` is where Gathr put its work in the data folder before the agent folder (0034).
+    pub from_before: bool,
     turn: Arc<Mutex<Option<OnTurn>>>,
 }
 
@@ -54,6 +60,25 @@ impl Passes {
     pub fn caller(&self, token: &str) -> Option<Caller> {
         self.0.lock().expect("never poisoned").get(token).cloned()
     }
+
+    /// Whether a running engine works in `folder` or has its temporary files there, or in a
+    /// folder that holds it: it isn't removed then (0034).
+    pub fn using(&self, folder: &Path) -> bool {
+        let all = self.0.lock().expect("never poisoned");
+        let mut used = all
+            .values()
+            .flat_map(|c| std::iter::once(&c.cwd).chain(&c.scratch));
+        used.any(|p| p.starts_with(folder) || folder.starts_with(p))
+    }
+}
+
+/// Where an engine works: the folder it runs in, where it writes without asking, its temporary
+/// files' folder.
+pub struct Place {
+    pub cwd: PathBuf,
+    pub folders: Vec<PathBuf>,
+    pub scratch: Option<PathBuf>,
+    pub from_before: bool,
 }
 
 /// What one engine was given: its token and its briefing's file. Both end when it's dropped,
@@ -67,13 +92,13 @@ pub struct Pass {
 }
 
 impl Pass {
-    /// A new token for an engine about to start as `agent` in `chat` from `cwd`, with its
+    /// A new token for an engine about to start as `agent` in `chat` at `place`, with its
     /// briefing written where the engine reads it and the agent's own tools don't look: the data
     /// folder.
     pub fn new(
         passes: &Arc<Passes>,
         folder: PathBuf,
-        (agent, chat, cwd): (Option<String>, &str, &std::path::Path),
+        (agent, chat, place): (Option<String>, &str, Place),
         briefing: &str,
     ) -> std::io::Result<Pass> {
         std::fs::create_dir_all(&folder)?;
@@ -84,7 +109,10 @@ impl Pass {
         let caller = Caller {
             agent,
             chat: chat.to_string(),
-            cwd: cwd.to_path_buf(),
+            cwd: place.cwd,
+            folders: place.folders,
+            scratch: place.scratch,
+            from_before: place.from_before,
             turn: turn.clone(),
         };
         let mut all = passes.0.lock().expect("never poisoned");

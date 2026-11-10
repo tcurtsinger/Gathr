@@ -10,6 +10,7 @@ use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use gathr::event::Event;
+use gathr::folders;
 use gathr::tasks;
 use gathr::tasks::{Start, person, stale};
 use serde::Deserialize;
@@ -63,16 +64,18 @@ async fn file(
     Ok((headers, bytes).into_response())
 }
 
-/// Settings > General's stale days (F11): after how many days without a move a task is stale, and
-/// cancelled.
+/// Settings > General: the stale days (F11), after how many days without a move a task is stale and
+/// cancelled, and the agent folder (0034).
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    db(&s, &t, "Settings failed", |c| shown(c)).await
+    let data = s.data.path().to_path_buf();
+    db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
 }
 
 #[derive(Deserialize)]
 pub struct Change {
     stale_days: Option<i64>,
     cancel_days: Option<i64>,
+    agent_folder: Option<String>,
 }
 
 async fn change_settings(
@@ -81,6 +84,21 @@ async fn change_settings(
     Json(body): Json<Change>,
 ) -> Answer {
     let trace = t.0.clone();
+    let folder = body
+        .agent_folder
+        .map(|f| std::path::PathBuf::from(f.trim()));
+    if let Some(folder) = folder.clone() {
+        let data = s.data.path().to_path_buf();
+        let checked = tokio::task::spawn_blocking(move || folders::usable(&folder, &data)).await;
+        let refused = checked.unwrap_or_else(|e| Err(format!("the folder wasn't checked: {e}")));
+        if let Err(why) = refused {
+            let event = Event::point("gathr.settings.change").trace(&trace);
+            s.writer
+                .record(event.error("refused").attr("why", why.clone()));
+            return Err(fail(StatusCode::BAD_REQUEST, "Save failed", &why, &trace));
+        }
+    }
+    let data = s.data.path().to_path_buf();
     db(&s, &t, "Save failed", move |c| {
         let was = stale::days(c)?;
         let days = stale::Days {
@@ -88,6 +106,9 @@ async fn change_settings(
             cancel: body.cancel_days.unwrap_or(was.cancel),
         };
         let saved = stale::set_days(c, days);
+        if let (Ok(()), Some(folder)) = (&saved, &folder) {
+            folders::set_root(c, folder)?;
+        }
         let event = Event::point("gathr.settings.change").trace(&trace);
         let event = match &saved {
             Ok(()) => event.ok(),
@@ -96,16 +117,24 @@ async fn change_settings(
         event
             .attr("stale_days", days.stale)
             .attr("cancel_days", days.cancel)
+            .attr(
+                "agent_folder",
+                folders::root(c, &data)?.display().to_string(),
+            )
             .insert(c)?;
         saved?;
-        shown(c)
+        shown(c, &data)
     })
     .await
 }
 
-fn shown(c: &rusqlite::Connection) -> Result<serde_json::Value, gathr::Error> {
+fn shown(
+    c: &rusqlite::Connection,
+    data: &std::path::Path,
+) -> Result<serde_json::Value, gathr::Error> {
     let days = stale::days(c)?;
-    Ok(json!({ "stale_days": days.stale, "cancel_days": days.cancel }))
+    let folder = folders::root(c, data)?.display().to_string();
+    Ok(json!({ "stale_days": days.stale, "cancel_days": days.cancel, "agent_folder": folder }))
 }
 
 #[derive(Deserialize)]

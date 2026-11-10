@@ -1,7 +1,9 @@
 //! Archive, unarchive and delete a chat (F11, 0010). Archiving ends the chat's work in one step:
 //! the database part in one transaction and event, then every agent's queue stops what it ran there.
 //! Deleting archives first, closes the chat's engines the gentle way, removes its rows, then its
-//! worktrees and files.
+//! worktrees and files. Archiving removes the chat's worktrees in the agent folder, which a
+//! restored chat checks out again; deleting removes all its folders there (0034), as `cleanup`
+//! removes them: an engine still running in one keeps it until a later sweep.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -37,6 +39,9 @@ async fn archive_chat(
     known(&s, &t, &chat).await?;
     let Json(ended) = archive_now(&s, &t, &chat, "Archive failed").await?;
     announce(&s, &chat, "archived");
+    // Not in the answer: removing a worktree can take a while, and what's in use waits anyway.
+    let (chats, id) = (s.chats.clone(), chat.clone());
+    tokio::spawn(async move { crate::cleanup::sweep(&chats, Some(&id)).await });
     Ok(Json(json!({ "archived": true, "ended": ended })))
 }
 
@@ -67,6 +72,7 @@ async fn unarchive_chat(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     let (id, trace) = (chat.clone(), t.0.clone());
+    let _removing = crate::cleanup::restoring().await;
     let _ = db(&s, &t, "Unarchive failed", move |c| {
         archive::unarchive(c, &id, &trace).map(|()| Value::Null)
     })
@@ -115,6 +121,7 @@ async fn delete_chat(
     let files: Vec<PathBuf> = serde_json::from_value(files).unwrap_or_default();
     let project = project.as_str().map(PathBuf::from);
     let mut left = remove_files(&s, &chat, project, files).await;
+    left.extend(crate::cleanup::sweep(&s.chats, Some(&chat)).await);
     if exited.is_err() {
         left.insert(0, "An engine or wait check is still running".into());
     }
@@ -130,7 +137,8 @@ async fn delete_chat(
     Ok(Json(json!({ "deleted": true, "left": left })))
 }
 
-/// The chat's worktrees, hooks, folder and its tasks' files: what couldn't be removed, with why.
+/// The chat's worktrees from before the agent folder, its hooks, folder and its tasks' files: what
+/// couldn't be removed, with why.
 async fn remove_files(
     s: &State,
     chat: &str,

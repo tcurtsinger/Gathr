@@ -21,7 +21,7 @@ pub struct Agent {
 }
 
 /// What the agent may do without asking (0029). Gathr asks before a push or a write outside the
-/// agent's worktree in every mode but `Full`.
+/// agent's folders (0034) in every mode but `Full`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Approvals {

@@ -194,6 +194,20 @@ pub fn given(url: &str, briefing: &Path) -> Vec<String> {
     ]
 }
 
+/// The agent's folders beside the one it runs in (0034): its file tools reach them, and Edits mode
+/// takes edits there as it does in its own folder.
+pub fn folders(dirs: &[PathBuf]) -> Vec<String> {
+    let dirs = dirs.iter().map(|d| format!("--add-dir={}", d.display()));
+    dirs.collect()
+}
+
+/// Points the engine's temporary files (TEMP, TMP, TMPDIR) at `scratch` (0034).
+pub fn scratch(env: &mut Vec<(OsString, OsString)>, scratch: &Path) {
+    let names = ["TEMP", "TMP", "TMPDIR"];
+    env.retain(|(name, _)| !names.iter().any(|n| name.eq_ignore_ascii_case(n)));
+    env.extend(names.map(|n| (n.into(), scratch.into())));
+}
+
 /// The parent's environment without anything that picks a credential, a provider or another
 /// Claude Code session, plus the account's folder.
 pub fn env(
