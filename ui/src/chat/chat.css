@@ -61,6 +61,7 @@
 }
 /* The Supervisor's conversation, and the team chat beside it 50/50 while the split is open. */
 .chat-body {
+  position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -74,8 +75,14 @@
   display: flex;
   border-left: 1px solid var(--border);
 }
-.team-column[hidden] {
-  display: none;
+/*
+ * Hidden, it keeps the size it would have open, out of the flow and unseen, never display: none: at no
+ * size its scroll is lost and assistant-ui reads it as at the bottom, so Show would jump to the latest.
+ */
+.team-column[data-hidden] {
+  position: absolute;
+  inset: 0 0 0 50%;
+  visibility: hidden;
 }
 .team-column .empty {
   margin: 24px 8px;

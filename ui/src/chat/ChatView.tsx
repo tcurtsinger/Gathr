@@ -1,5 +1,5 @@
 import { Folder, MessagesSquare } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
@@ -10,6 +10,7 @@ import { AgentPicker, type Recipient } from './AgentPicker';
 import { ChatMenu } from './ChatMenu';
 import { type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
+import { keepReading, type Reading, readingAt } from './reading';
 import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread } from './Thread';
@@ -91,6 +92,18 @@ export function ChatView(props: Props) {
   // Drawn from its first opening on, then only hidden, so it keeps its place in the team's work.
   const [teamDrawn, setTeamDrawn] = useState(split);
   if (split && !teamDrawn) setTeamDrawn(true);
+  // Hide and Show widen and narrow the main column: the block being read stays where it was.
+  const body = useRef<HTMLDivElement>(null);
+  const reading = useRef<Reading | null>(null);
+  const onSplit = (open: boolean) => {
+    const viewport = body.current?.querySelector<HTMLElement>(':scope > .thread .thread-viewport') ?? null;
+    reading.current = readingAt(viewport, reading.current);
+    props.onSplit(open);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once the column has its new width
+  useLayoutEffect(() => {
+    if (reading.current) keepReading(reading.current);
+  }, [split]);
 
   useFirstTokenReport(state.partial);
   // A failed send is kept for Retry, so the composer is free for the next message at once.
@@ -154,7 +167,7 @@ export function ChatView(props: Props) {
               tooltip={split ? 'Hide team chat' : 'Show team chat'}
               aria-pressed={split}
               className="head-button"
-              onClick={() => props.onSplit(!split)}
+              onClick={() => onSplit(!split)}
             >
               <MessagesSquare />
               {unseen.dot && <i className="attention" />}
@@ -164,7 +177,7 @@ export function ChatView(props: Props) {
         </div>
       </header>
       {props.notice}
-      <div className="chat-body">
+      <div className="chat-body" ref={body}>
         <Thread
           messages={columns.main}
           running={!!turn}
@@ -176,7 +189,7 @@ export function ChatView(props: Props) {
               <>
                 <RunLine run={run} members={state.members} />
                 {team && run.state === 'running' && (
-                  <TeamWait state={state} onOpen={split ? undefined : () => props.onSplit(true)} />
+                  <TeamWait state={state} onOpen={split ? undefined : () => onSplit(true)} />
                 )}
               </>
             )
@@ -244,7 +257,7 @@ export function ChatView(props: Props) {
           )}
         </Thread>
         {teamDrawn && (
-          <div className="team-column" hidden={!split}>
+          <div className="team-column" data-hidden={!split || undefined}>
             <Thread
               messages={columns.team}
               running={!!turn}
