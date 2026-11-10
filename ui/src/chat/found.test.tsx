@@ -151,8 +151,10 @@ test('a hit far up opens centred, and the view holds there while the chat goes o
     listen({ type: 'turn', chat: 'c', turn: 'next', status: 'running', agent: 'a', position: turns });
   await frames(3);
   for (const listen of live) listen({ type: 'delta', chat: 'c', turn: 'next', text: 'More. '.repeat(400) });
-  await frames(5);
-  expect(viewport.querySelector('[data-message-id="a-next"]')).not.toBeNull();
+  await expect
+    .poll(() => viewport.querySelector('[data-message-id="a-next"]')?.textContent?.length)
+    .toBeGreaterThan(1000);
+  await frames(3);
   expect(Math.abs(hit.getBoundingClientRect().top - held)).toBeLessThan(1);
 });
 
