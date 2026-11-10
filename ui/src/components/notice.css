@@ -17,7 +17,7 @@
 }
 .notice .ref {
   font:
-    12px Consolas,
+    13px Consolas,
     monospace;
   color: inherit;
   text-decoration: underline;
@@ -27,7 +27,7 @@
 }
 .notice a,
 .notice .link {
-  font-size: 13px;
+  font-size: 14px;
 }
 .notice-action {
   margin-inline-start: auto;

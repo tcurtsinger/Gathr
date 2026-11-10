@@ -12,7 +12,7 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--text);
-  font: 14px / 1.6 var(--font-sans);
+  font: 450 15px / 1.6 var(--font-sans);
 }
 button:where(:not([data-slot])),
 input:where(:not([data-slot])),
@@ -44,7 +44,7 @@ button.link {
   min-height: 0;
   padding: 0;
   color: var(--accent);
-  font-size: 12px;
+  font-size: 13px;
   text-decoration: underline;
   text-underline-offset: 3px;
 }

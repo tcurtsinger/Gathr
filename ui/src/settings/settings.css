@@ -44,14 +44,14 @@
 }
 .settingrow h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 /* Who a setting applies to, beside its control. */
 .setting-scope {
   margin-left: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 @media (max-width: 767px) {
   .settings-panel {
@@ -94,12 +94,12 @@
 .setting-days small {
   min-width: 64px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .setting-invalid {
   margin: 12px 0 0;
   color: var(--danger);
-  font-size: 12px;
+  font-size: 13px;
 }
 /* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another. */
 .agent-folder-now {
@@ -112,7 +112,7 @@
 .agent-folder-now code {
   overflow: hidden;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -124,7 +124,7 @@
 }
 .agent-folder-edit small {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 /* Under the field it belongs to: the row's padding spaces it, not a reply's margins. */
 .agent-folder .notice {

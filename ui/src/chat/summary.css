@@ -22,7 +22,7 @@
 }
 .summary h3 {
   margin: 0 0 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 .summary-avatar {
@@ -33,7 +33,7 @@
   height: 24px;
   border-radius: 9999px;
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .summary [data-working] {
@@ -55,7 +55,7 @@
 .summary-todos li {
   gap: 8px;
   padding: 3px 0;
-  font-size: 12px;
+  font-size: 13px;
 }
 .summary-todos li > div {
   line-height: 18px;
@@ -71,5 +71,5 @@
   margin: 2px 0 6px;
   padding: 3px 8px 3px 42px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }

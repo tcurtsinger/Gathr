@@ -38,8 +38,8 @@
       "path": "components/assistant-ui/elements/speaker-identity.tsx",
       "url": "https://r.assistant-ui.com/elements-speaker-identity.json",
       "sha256": "7d2ce0fd3a5c02ca8f49b970e598dbebeb9a096a478c9285f387c5356f3be91f",
-      "adapted": "c4cde7699a779bbc22ff0b42dea566ac11703cd04a9a857ba338a555a8d5b82f",
-      "why": "The prototype's centring (avatar and name on one row), and Gathr's agent identity: initials on a neutral round avatar instead of the shared robot icon (DESIGN.md)."
+      "adapted": "c81d2d334ef9c3b7ad1ff5f6bab51cfcfcf1ae5d24605458e03ebf7e100226e4",
+      "why": "The prototype's centring (avatar and name on one row), and Gathr's agent identity: initials on a neutral round avatar instead of the shared robot icon, and the role beside the name in sans-serif on their shared baseline, 8px apart (DESIGN.md Typography)."
     },
     {
       "path": "components/assistant-ui/elements/surfaces.tsx",

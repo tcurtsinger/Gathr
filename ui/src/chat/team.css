@@ -4,10 +4,9 @@
   align-items: center;
   gap: 8px;
 }
-.speaker-role,
 .speaker time {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
 }
 .speaker .attention,
 .speaker time {
@@ -22,14 +21,14 @@
   margin-bottom: -12px;
   padding: 0 8px;
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
 }
 .gathr-line {
   display: flex;
   gap: 8px;
   padding: 0 8px;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
   white-space: pre-line;
 }
 .gathr-name {
@@ -50,8 +49,8 @@
   border-radius: 9999px;
   background: transparent;
   color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 14px;
+  line-height: 1.6;
 }
 button.working:hover {
   background: color-mix(in oklab, var(--foreground) 6%, transparent);
@@ -88,7 +87,7 @@ button.working:hover {
   margin-left: -4px;
 }
 .working-time {
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 600px) {
