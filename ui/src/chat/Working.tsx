@@ -5,6 +5,7 @@ import type { Member } from '../api';
 import type { ChatState } from './state';
 import { list, team } from './team';
 import { began, waitingOn } from './waits';
+import './team.css';
 
 /** The members with a turn running on a hand-off: the ones the team column shows at work. */
 export function working(state: ChatState): Member[] {
@@ -13,32 +14,34 @@ export function working(state: ChatState): Member[] {
   return state.members.filter((m) => turns.some((t) => t.agent === m.agent));
 }
 
-/** What the Supervisor waits on from its team, and since when (µs); nothing while it works itself. */
+/**
+ * What the Supervisor waits on while its round has open work, and since when (µs): its team by name, then
+ * its own other open waits, as Summary words them (DESIGN.md). Nothing while it works itself.
+ */
 export function leadWait(state: ChatState) {
   const lead = state.members.find((m) => m.role === 'supervisor');
   if (!lead) return undefined;
   if (Object.values(state.turns).some((t) => t.agent === lead.agent && t.status === 'running'))
     return undefined;
-  const on = [...waitingOn(lead.agent, state).agents].filter(([who]) => who && who !== lead.agent);
-  const names = on.map(([who]) => state.members.find((m) => m.agent === who)?.name ?? 'an agent');
-  return { lead, names, since: Math.min(...on.map(([, us]) => us)) };
+  const { agents, other } = waitingOn(lead.agent, state);
+  const team = [...agents].filter(([who]) => who && who !== lead.agent);
+  if (team.length === 0) return undefined;
+  const names = team.map(([who]) => state.members.find((m) => m.agent === who)?.name ?? 'an agent');
+  const all = [...team, ...other];
+  return { lead, names: [...names, ...other.keys()], since: Math.min(...all.map(([, us]) => us)) };
 }
 
 /** "Waiting on team" after the Supervisor's latest message; it opens the team column when that's hidden. */
 export function TeamWait({ state, onOpen }: { state: ChatState; onOpen?: () => void }) {
-  const busy = working(state);
   const wait = leadWait(state);
-  if (!wait || (busy.length === 0 && wait.names.length === 0)) return null;
-  const waited = wait.names.length > 0;
-  const tip = waited
-    ? `${wait.lead.name} is waiting for ${list(wait.names)}, since ${began(wait.since)}`
-    : `${list(busy.map((m) => m.name))} working`;
+  if (!wait) return null;
+  const tip = `${wait.lead.name} is waiting for ${list(wait.names)}, since ${began(wait.since)}`;
   const body = (
     <>
       <Spinner />
       Waiting on team
-      <Initials members={busy} />
-      {waited && <Elapsed since={wait.since} />}
+      <Initials members={working(state)} />
+      <Elapsed since={wait.since} />
     </>
   );
   return (
