@@ -11,7 +11,7 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::app::{Copies, Started, TRIAL, release};
+use gathr::app::{Copies, STARTING, Started, TRIAL, release};
 use gathr::event::Event;
 use gathr::fetch::{Failure, failed, parse_version};
 use gathr::pauses::{self, Pause};
@@ -137,10 +137,31 @@ impl AppUpdates {
         self.handing_over.lock().expect("never poisoned").clone()
     }
 
+    /// Where the last hand-over got to: one that stopped before starting its update is an error.
+    fn record_hand_over(&self) {
+        let Some(hand_over) = self.copies.take_hand_over() else {
+            return;
+        };
+        let event = Event::point("gathr.app.handover");
+        let event = match hand_over.step.as_str() {
+            STARTING => event.ok(),
+            _ => event.trace(&ids::trace_id()).error("stopped"),
+        };
+        let event = event
+            .attr("from", hand_over.from)
+            .attr("to", hand_over.to)
+            .attr("pid", hand_over.pid)
+            .attr("step", hand_over.step)
+            .attr("since", ids::utc(hand_over.since_us))
+            .attr("left_running", hand_over.left_running);
+        self.chats.writer.record(event);
+    }
+
     /// Records what the start found in `current.json` (`Copies::started`, read before the service
     /// said it was up): an update that started, or a rollback from one that didn't; a copy on trial
     /// is watched until it passes.
     pub fn started(self: &Arc<Self>, found: std::io::Result<Started>) {
+        self.record_hand_over();
         let started = match found {
             Ok(started) => started,
             Err(e) => {

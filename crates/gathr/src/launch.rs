@@ -188,11 +188,28 @@ fn running(data: &DataDir) -> Result<ServiceInfo, Error> {
             return Ok(info);
         }
         if Instant::now() > deadline {
-            return Err(Error::Other(
-                "the service holds the data folder but didn't answer within 15 s".into(),
-            ));
+            return Err(Error::Other(not_answering(data)));
         }
         std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// Why the service holding the folder doesn't answer: stopped part way through an update, or not.
+fn not_answering(data: &DataDir) -> String {
+    let stuck = ServiceInfo::read(data)
+        .ok()
+        .and_then(|info| Copies::new(data).hand_over_by(info.pid));
+    match stuck {
+        Some(h) => format!(
+            "Gathr {} stopped to update to {} but hasn't exited: process {} is stuck {} since {}. \
+             End that process, then open Gathr again.",
+            h.from,
+            h.to,
+            h.pid,
+            h.step,
+            crate::ids::utc(h.since_us)
+        ),
+        None => "the service holds the data folder but didn't answer within 15 s".into(),
     }
 }
 
@@ -283,5 +300,35 @@ mod tests {
             folder.display(),
             dotted.display()
         );
+    }
+
+    /// The window names a service stuck in its hand-over, and only the one holding the folder.
+    #[test]
+    fn a_service_stuck_mid_update_is_named_as_one() {
+        use crate::app::{Copies, HandOver};
+        use crate::data::{DataDir, ServiceInfo};
+        let root = std::env::temp_dir().join(format!("gathr-stuck-{}", std::process::id()));
+        let data = DataDir::new(&root);
+        let info = |pid| ServiceInfo {
+            port: 1,
+            token: "made-up".into(),
+            pid,
+        };
+        let mut hand_over = HandOver::new("0.1.38", "0.1.39");
+        Copies::new(&data)
+            .hand_over_at(&mut hand_over, "ending background work")
+            .unwrap();
+        info(hand_over.pid + 1).write(&data).unwrap();
+        let other = super::not_answering(&data);
+        info(hand_over.pid).write(&data).unwrap();
+        let stuck = super::not_answering(&data);
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(other.contains("didn't answer"), "{other}");
+        let named = format!("process {} is stuck ending background work", hand_over.pid);
+        assert!(
+            stuck.contains("0.1.38 stopped to update to 0.1.39"),
+            "{stuck}"
+        );
+        assert!(stuck.contains(&named), "{stuck}");
     }
 }

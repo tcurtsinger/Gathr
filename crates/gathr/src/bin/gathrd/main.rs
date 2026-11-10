@@ -28,9 +28,10 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use clap::Parser;
-use gathr::app::Copies;
+use gathr::app::{Copies, HandOver, STARTING};
 use gathr::crash_log::CrashLog;
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::event::Event;
@@ -109,15 +110,48 @@ fn start(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    let update = runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()))?;
-    if let Some(version) = &update
-        && let Err(e) = Copies::new(data).switch_to(version)
-    {
-        // The copy that ran stays current, and the hand-over starts it again.
-        crash_log.append(&format!("switching to {version} failed: {e}"));
+    let served = runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()));
+    let copies = Copies::new(data);
+    let mut hand_over = match &served {
+        Ok(Some(version)) => Some(HandOver::new(&copies.running_version(), version)),
+        _ => None,
+    };
+    let at = |hand_over: &mut Option<HandOver>, step| {
+        if let Some(hand_over) = hand_over
+            && let Err(e) = copies.hand_over_at(hand_over, step)
+        {
+            crash_log.append(&format!("noting the hand-over at {step} failed: {e}"));
+        }
+    };
+    at(&mut hand_over, "ending background work");
+    // Dropping a runtime waits for its blocking work for good, and on Windows reading an engine's
+    // output is blocking work: after a kill, the engine's own children can hold that pipe open
+    // (Codex's did, and 0.1.38's hand-over to 0.1.39 hung here).
+    let began = Instant::now();
+    runtime.shutdown_timeout(SHUTDOWN_WAIT);
+    if began.elapsed() >= SHUTDOWN_WAIT {
+        let secs = SHUTDOWN_WAIT.as_secs();
+        crash_log.append(&format!(
+            "work still running {secs} s after the stop ends with it"
+        ));
+        if let Some(hand_over) = &mut hand_over {
+            hand_over.left_running = true;
+        }
+    }
+    let update = served?;
+    if let Some(version) = &update {
+        at(&mut hand_over, "switching copies");
+        if let Err(e) = copies.switch_to(version) {
+            // The copy that ran stays current, and the hand-over starts it again.
+            crash_log.append(&format!("switching to {version} failed: {e}"));
+        }
+        at(&mut hand_over, STARTING);
     }
     Ok(update)
 }
+
+/// How long a stopped service waits for its blocking work before leaving it to end with it.
+const SHUTDOWN_WAIT: Duration = Duration::from_secs(5);
 
 async fn serve(
     data: &DataDir,
