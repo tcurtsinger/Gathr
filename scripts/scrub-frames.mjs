@@ -27,6 +27,10 @@ export const scrub = (f) => {
   if (f?.subtype?.startsWith?.('hook_')) for (const k of ['output', 'stdout', 'stderr']) if (k in f) f[k] = '';
   if (f?.type === 'rate_limit_event') f.rate_limit_info = { status: 'allowed', rateLimitType: 'five_hour' };
   if (f && 'credential_expires_at' in f) f.credential_expires_at = '2030-01-01T00:00:00.000Z';
+  // Codex: the computer's name and install id, and the account's plan and usage.
+  if (f?.method === 'remoteControl/status/changed') Object.assign(f.params, { serverName: 'computer', installationId: 'install-test' });
+  if (f?.method === 'account/rateLimits/updated') f.params.rateLimits = { limitId: 'codex', primary: { usedPercent: 10, resetsAt: 1900000000 } };
+  if (f?.result?.account) f.result.account = { type: 'chatgpt', email: 'someone@example.com', planType: 'plus' };
   return f;
 };
 
@@ -39,6 +43,8 @@ const main = (src, dst, data) => {
     ...forms(os.homedir()).map((f) => [new RegExp(escape(f), 'gi'), 'home']),
     [new RegExp(escape(os.userInfo().username), 'gi'), 'someone'],
     [/cc-msg-[0-9a-f]+/g, 'cc-msg-test'],
+    [/cf-ray: [0-9a-z-]+/gi, 'cf-ray: test'],
+    [/req_[0-9a-f]{8,}/g, 'req_test'],
   ];
   const clean = (v) => {
     if (typeof v === 'string') return swaps.reduce((s, [re, to]) => s.replace(re, to), v);
