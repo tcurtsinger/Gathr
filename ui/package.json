@@ -13,6 +13,7 @@
   "dependencies": {
     "@assistant-ui/react": "0.15.33",
     "@assistant-ui/react-streamdown": "0.3.21",
+    "@streamdown/code": "1.1.1",
     "class-variance-authority": "0.7.1",
     "cn": "0.5.2",
     "lucide-react": "1.70.0",

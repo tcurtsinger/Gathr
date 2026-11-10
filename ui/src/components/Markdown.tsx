@@ -1,5 +1,6 @@
 import { useAuiState } from '@assistant-ui/react';
 import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
+import { code } from '@streamdown/code';
 import { type ComponentProps, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown';
@@ -37,13 +38,17 @@ const components = {
 };
 
 // Code blocks keep Streamdown's language label, Copy and Download, as in the prototype; tables have none.
+// Shiki colours a block once its language loads; until then it shows plain.
 const controls = { table: false };
+const plugins = { code };
 
 /** Streamdown draws a code block's body through React.lazy, and React holds a revealed Suspense fallback
  * for 300 ms, so the first chat with code drew 300 ms late. One block drawn off the page at start loads
- * it before any chat. */
+ * it, and Shiki with its themes, before any chat; each language's grammar still loads at first use. */
 export function preloadCodeBlock() {
-  createRoot(document.createElement('div')).render(<Streamdown>{'```\n```'}</Streamdown>);
+  createRoot(document.createElement('div')).render(
+    <Streamdown plugins={plugins}>{'```text\n.\n```'}</Streamdown>,
+  );
 }
 
 /** An agent's text, formatted by Streamdown as it streams (0030). */
@@ -62,6 +67,7 @@ export function MarkdownText() {
       components={components}
       linkSafety={{ enabled: false }}
       controls={controls}
+      plugins={plugins}
       containerClassName="markdown"
     />
   );
