@@ -146,6 +146,8 @@ test('a hit far up opens centred, and the view holds there while the chat goes o
 
   // Where it shows, not scrollTop: an older page drawn above moves that and keeps the view.
   const held = hit.getBoundingClientRect().top;
+  // As in WebKit, which has none: Chromium's scroll anchoring would hide a jump.
+  viewport.style.overflowAnchor = 'none';
   // The agent's next turn starts, then streams a long reply.
   for (const listen of live)
     listen({ type: 'turn', chat: 'c', turn: 'next', status: 'running', agent: 'a', position: turns });

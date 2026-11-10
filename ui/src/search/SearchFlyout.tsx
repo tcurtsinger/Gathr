@@ -173,8 +173,10 @@ export function SearchFlyout({ name, onOpen, onReference }: Props) {
               pick(hits[cursor]);
             } else if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && hits.length) {
               e.preventDefault();
+              const down = e.key === 'ArrowDown';
+              // With nothing selected yet, Up starts at the last row.
               const next =
-                (cursor + (e.key === 'ArrowDown' ? 1 : hits.length - 1) + hits.length) % hits.length;
+                cursor < 0 && !down ? hits.length - 1 : (cursor + (down ? 1 : hits.length - 1)) % hits.length;
               setCursor(next);
               document.getElementById(`search-hit-${next}`)?.scrollIntoView({ block: 'nearest' });
             }

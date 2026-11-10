@@ -11,6 +11,13 @@ const NEAR = 800;
  */
 export function useOlder<T>(all: T[], viewport: RefObject<HTMLElement | null>) {
   const [shown, setShown] = useState(PAGE);
+  // A message added at the end draws one more, rather than dropping the oldest drawn: WebKit has no scroll
+  // anchoring, so the view would jump by that message's height.
+  const [length, setLength] = useState(all.length);
+  if (all.length !== length) {
+    setLength(all.length);
+    if (length > 0 && all.length > length && shown < length) setShown(shown + all.length - length);
+  }
 
   const onScroll = () => {
     const el = viewport.current;

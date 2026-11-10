@@ -47,6 +47,9 @@ test('one cursor runs across Chats and Messages, and Enter opens the row under i
   await userEvent.keyboard('gravel');
   await expect.element(page.getByRole('option')).toHaveLength(3);
   await expect.element(page.getByText('Archived')).toBeVisible();
+  // With nothing selected, Up starts at the last row; Down from there wraps to the first.
+  await userEvent.keyboard('{ArrowUp}');
+  await expect.element(selected('Gravel yard')).toBeVisible();
   await userEvent.keyboard('{ArrowDown}');
   await expect.element(selected('Gravel road')).toBeVisible();
   await userEvent.keyboard('{ArrowDown}');
