@@ -2,6 +2,10 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
+## Implementation status
+
+Supervisor routing, team roles, tool rules and the stable engine briefing are built. Plan mode, stored role job descriptions and the other planned context/state mechanisms below are not built yet.
+
 ## Choice
 
 Anything a person would otherwise have to put in a careful prompt to make Gathr work well is built in: in the Supervisor's briefing, in the roles, in the tools, in the service's state and in defaults. A person can type "build an export for my notes" into a chat and it runs the way a well-prompted one would.

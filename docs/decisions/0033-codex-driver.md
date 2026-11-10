@@ -64,8 +64,11 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   `account/login/completed`, "emitted when a login attempt finishes (success or error)"
   ([app-server](https://learn.chatgpt.com/codex/app-server)); no code is pasted back. The browser
   page is the default: a device code works only once the person enables it in ChatGPT's security
-  settings (or a workspace admin does), and is marked beta ([auth](https://learn.chatgpt.com/codex/auth)). Sign-out is `account/logout`. Signed in means `auth.json` exists in the folder,
-  read for its keys only, never its tokens.
+  settings (or a workspace admin does), and is marked beta ([auth](https://learn.chatgpt.com/codex/auth)). Sign-out is `account/logout`. Login state comes from the account's own `auth.json`
+  without starting app-server: a nonempty refresh token or API key is signed in;
+  missing/blank credentials are signed out; an unreadable/partial file is unknown.
+  Credential values are discarded while decoding. Presence does not verify expiry
+  or provider acceptance. This amends 0002's earlier `account/read` probe proposal.
 - **Gathr's copy (C3, 0025's Codex part):** npm's per-platform package
   (`@openai/codex@<version>-<platform>`), checked against its SHA-512 `integrity`, unpacked with the
   system's `tar` into `<data>/engines/codex/<version>`. The whole `vendor/<target>` folder is kept,
@@ -180,9 +183,15 @@ from `codex app-server generate-json-schema` on 0.166.0 and Gathr's owned 0.167.
 - These regressions use the real service API/MCP with controlled app-server replies; none is
   presented as a live Codex rejection or approval run.
 
+## Live Windows follow-up
+
+Native Allow/Deny and Stop passed on a signed-in Windows turn. Edits asked for shell
+escalation for `gh pr view` and cold-cache `npm ci`; Auto approved those through its own
+reviewer. A native-shell push to a disposable local bare repo reached Gathr's authenticated
+pre-push hook in both modes and ran after its approval, checking the shell's token inheritance.
+Each action was tried once per mode; this is not a promise about future automatic-review decisions.
+
 ## Not verified
 
-- Live Codex approvals and Stop (protocol replay covers their mappings).
-- That the agent's own shell tool passes `GATHR_AGENT_TOKEN` the way `command/exec` did (the docs'
-  `shell_environment_policy` wording on names with `TOKEN` is unclear).
-- macOS.
+- Codex sign-in, turns, approvals and Stop live on macOS.
+- A refused automatic review (none of the Windows probes was refused).

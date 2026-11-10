@@ -1,10 +1,14 @@
 # 0004. One service process, `gathrd`, with an HTTP and WebSocket API on localhost
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+The local service, authentication, window launch and graceful shutdown are built. Remote device authentication (0017) and finding leftover engines from a previous service crash are not built yet.
 
 ## Choice
 
-- **One daemon, `gathrd`:** a single Rust binary on tokio that owns the database (0003), the engines (0001, 0002), scheduling and coordination (0010), the event record (0011) and the MCP server (0005). One per user: a second start finds the first through an exclusive lock on `<data>/gathrd.lock` and exits.
+- **One daemon, `gathrd`:** a single Rust binary on tokio that owns the database (0003), the engines (0001, 0002), scheduling and coordination (0010), the event record (0011) and the MCP server (0005). One per data folder: a second start on that folder finds the first through an exclusive lock on `<data>/gathrd.lock` and exits.
 - **API:** [axum](https://crates.io/crates/axum) 0.8 with its `ws` feature. Plain HTTP (JSON) for reads and commands; one WebSocket per client for everything live (streamed tokens, events, task changes). The built UI is served from the same port (0012).
 - **Where it listens:** `127.0.0.1` on a port chosen at first start and kept, written with a random token to `<data>/service.json`, readable only by the user.
 - **Who may call it:** every request needs the token. Requests whose `Host` isn't `127.0.0.1` or `localhost` get 403; requests with an `Origin` other than the service's own or the Tauri window's get 403, WebSocket upgrades included. While remote use is on, the computer's Tailscale name and its HTTPS origin are accepted too, with a device token ([0017](0017-remote-use.md)). The window's origin per system is in [0016](0016-macos.md).
@@ -22,7 +26,7 @@ Status: proposed. Date: 2026-11-06.
 ## Rules that follow
 
 - Every endpoint is reachable from tests without the window: the first slice's checks start `gathrd` on a temp data folder and a free port.
-- The token never appears in a URL or a log. The window passes it in a header; a browser gets it once through a one-time link the window opens, exchanged for an HTTP-only cookie (details in the first slice).
+- HTTP API clients may pass the service token as a Bearer header. The window and browser exchange a one-time link for an HTTP-only cookie. `/api/live` also accepts `?token=<service-token>` for WebSocket clients that cannot set a header. Request logging stores only the URL path, not the query (`api.rs`). Tokens must not be copied into logs or shared links.
 - `service.json` and `gathrd.lock` are the only files the window reads directly.
 - Diagnostics from day one: `gathrd` writes its own start, stop, crash and every child start and exit to the event record (0011), with the reason.
 

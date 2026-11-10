@@ -1,22 +1,28 @@
 # 0002. One login folder per account, shared by its agents through a renewal gate, never copied, never killed mid-renewal
 
-Status: proposed. Date: 2026-11-06, revised 2026-11-07 (one folder per account, the owner's call).
+Status: accepted. Date: 2026-11-06, revised 2026-11-07 (one folder per account, the owner's call).
+
+## Implementation status
+
+Named accounts, isolated login folders and per-account gates are built. The background login watcher and its renewal/change history are not built yet. Codex login state follows 0033, as clarified below; the expiry-based state is specific to Claude Code.
 
 ## Choice
 
 - Each signed-in account gets its own engine folder under Gathr's data folder: `<data>/accounts/<account-id>/claude` passed as `CLAUDE_CONFIG_DIR`, or `<data>/accounts/<account-id>/codex` passed as `CODEX_HOME`. The person signs each account in once, through the engine's own login flow, inside that folder. An engine can have several accounts (a main and a second Claude login, say).
 - Each agent picks one account. All agents on an account share its folder, so several engine processes can run on it at once, each agent with at most one ([0010, Sessions](0010-coordination-as-state.md#sessions)).
-- **Renewal gate** (ported from the previous app's `renewalGate` in `drivers/claude-login.ts`, the owner's code). Every engine start and every turn sent to a running engine passes the gate of its account first. When the account's access token expires within 5 minutes, one of them goes ahead and its request renews the login; the rest wait, re-reading the login file every 250 ms, until the file shows a fresh expiry or 30 s pass. A start that is no longer wanted leaves the queue. Sign-ins and status probes take the gate the same way.
-- Gathr never reads a login's secret, never copies a login file, and never touches `~/.claude` or `~/.codex`.
+- **Claude renewal gate** (ported from the previous app's `renewalGate` in `drivers/claude-login.ts`, the owner's code). Every engine start and every turn sent to a running engine passes the gate of its account first. When the account's access token expires within 5 minutes, one of them goes ahead and its request renews the login; the rest wait, re-reading the login file every 250 ms, until the file shows a fresh expiry or 30 s pass. A start that is no longer wanted leaves the queue. Sign-ins and status probes take the gate the same way.
+- Gathr retains only credential presence and expiry state while decoding a login file; credential values are discarded. It never copies a login file or uses the person's `~/.claude` or `~/.codex` login.
 - Nothing of the person's own setup is copied into an account's folder, and engines don't load what their login brings into it ([0024](0024-only-what-gathr-gives.md)). What the person wants from Claude or Codex (skills, agents, commands, servers) is imported into Gathr and given to agents from there. Login files are never copied: Claude's `.credentials.json` and `.claude.json`, Codex's `auth.json` and `.sandbox-secrets`.
-- Login state is read without starting a turn: for Claude, `claude auth status` (exits 0 signed in, 1 signed out, prints JSON) on macOS, and the presence and expiry fields of the login file elsewhere, never its tokens; for Codex, `account/read` on the agent's own app-server. It has three values, not two:
+- Login state is read without starting a turn: for Claude, `claude auth status` (exits 0 signed in, 1 signed out, prints JSON) on macOS, and the presence and expiry fields of the login file elsewhere, never its tokens; for Codex, a nonempty refresh token or API key in the account's own `auth.json` (0033), without starting app-server. The following expiry states apply to Claude:
   - **signed in:** a login is there and its access token is current;
-  - **stale:** the access token has expired but a refresh token is there. The engine renews it on its next request, so queued work is not held. The service runs a probe (`claude auth status`, or `account/read`) through the renewal gate, only when no engine on the account is mid-turn, and never killed. If one is, its next turn's result decides instead;
+  - **stale:** the access token has expired but a refresh token is there. The engine renews it on its next request, so queued work is not held. The service runs a Claude probe (`claude auth status`) through the renewal gate, only when no engine on the account is mid-turn, and never killed. If one is, its next turn's result decides instead;
   - **signed out:** only when the login is gone or blank, a probe says signed out, or a turn fails with the engine's login-expired error (Claude: `Login expired · Please run /login`). Then queued work waits for a sign-in.
 - The engine's environment is built, not inherited as is. Every variable that selects a credential or a provider is removed, and only the agent's own choice is put back (a key or provider the person set for that agent in Gathr):
   - Claude, following its [authentication precedence](https://code.claude.com/docs/en/authentication#authentication-precedence), where each of these outranks the folder's `/login`: the provider selectors `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, `CLAUDE_CODE_USE_FOUNDRY`, `CLAUDE_CODE_USE_MANTLE`, `CLAUDE_CODE_USE_ANTHROPIC_AWS` and `AWS_BEARER_TOKEN_BEDROCK`; `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_PROFILE`, `ANTHROPIC_FEDERATION_RULE_ID`; and `ANTHROPIC_BASE_URL`, which reroutes requests to a gateway. As a backstop, any other inherited `CLAUDE_CODE_USE_*` or `ANTHROPIC_*` variable is removed too, so a selector added in a later Claude Code release doesn't slip through.
   - Settings copied into the folder drop `apiKeyHelper` and any of the variables above from their `env` block, since settings can set them as well.
   - Codex: `OPENAI_API_KEY`, `CODEX_API_KEY` and `CODEX_ACCESS_TOKEN` ([Codex environment variables](https://learn.chatgpt.com/codex/config-file/environment-variables)). The driver also starts app-server with `cli_auth_credentials_store="file"`, so the login stays in `auth.json` in the account's folder rather than the OS keyring ([Codex auth](https://learn.chatgpt.com/codex/auth)).
+
+Codex also passes the service's per-account start/turn gate, but Gathr does not read its token expiry. Codex manages its own renewal and `auth.lock`. A readable file with a nonempty refresh token or API key is shown as signed in; a missing/blank login is signed out. An unreadable or partly written file is `unknown`. Presence does not prove the provider will accept the login.
 
 ## Why
 

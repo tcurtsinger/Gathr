@@ -3,6 +3,10 @@
 Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's updater, its key and its restart approved
 2026-11-09). Date: 2026-11-09. Follows [0025](0025-engine-copies.md)'s way of keeping engine copies.
 
+## Why
+
+The service outlives the window and active engine turns. Separate checked copies let the window update independently and let the service switch only when its work is quiet, with rollback for a failed trial.
+
 ## The service
 
 - **Where it runs from:** `<data>/app/<version>/gathrd`, with the built UI beside it in `ui/`, never the install folder,

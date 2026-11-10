@@ -2,7 +2,11 @@
 
 Status: accepted. Date: 2026-11-07. The live stream is the owner's pick, over a browser view inside the window.
 
-Agents need a real browser: open a page, read it, click and type, and keep their own sign-ins. The person needs to watch it and take over (to sign in, or to help). Gathr's UI is a web page shown in a Tauri window, and also in a browser tab (0012) and from another computer (0016), so where the agents' browser lives decides where it can be seen.
+## Implementation status
+
+Not built yet. Browser profiles, control tools, live streaming and handover below are accepted plans.
+
+Agents need a real browser: open a page, read it, click and type, and keep their own sign-ins. The person needs to watch it and take over (to sign in, or to help). Gathr's UI is a web page shown in a Tauri window, and also in a browser tab (0012) and from another computer (0017), so where the agents' browser lives decides where it can be seen.
 
 ## Choice
 
@@ -16,7 +20,7 @@ Agents need a real browser: open a page, read it, click and type, and keep their
 
 ## Why
 
-- **One browser for every place Gathr is used.** Gathr is used from more than one computer (0016) and Gathr opens in a browser tab (0012). A stream from the service shows in all three. A browser view inside the Tauri window shows only in that window, on that computer.
+- **One browser for every place Gathr is used.** Gathr is used from more than one computer (0017) and Gathr opens in a browser tab (0012). A stream from the service shows in all three. A browser view inside the Tauri window shows only in that window, on that computer.
 - **A browser tab can't hold the page itself.** Most sites refuse to be framed with `X-Frame-Options` or CSP `frame-ancestors`. In the test below, an iframe of a page sending `X-Frame-Options: DENY` loaded with its content blocked. So the browser-tab and remote cases need a stream in any design. The only question is whether the window gets a second, native path, and two paths cost twice the work and the testing.
 - **The Mac's WKWebView can't be driven like this.** It has no CDP. Apple's `isInspectable` lets Safari's Web Inspector attach for debugging by hand ([WKWebView.isInspectable](https://developer.apple.com/documentation/webkit/wkwebview/isinspectable), [WebKit blog](https://webkit.org/blog/13936)), and Tauri's own docs say WebDriver testing doesn't work on macOS "due to macOS not having a WKWebView driver tool available" ([Tauri WebDriver](https://v2.tauri.app/develop/tests/webdriver/)). A native view on the Mac would be driven only by injected JavaScript: no trusted input, no network events, no cross-origin frames. A Chromium browser behaves the same on both systems.
 - **Tauri's views inside a window are still unstable.** Adding a second webview to a window (`Window::add_child`) needs Tauri's `unstable` feature ([webview API](https://v2.tauri.app/reference/javascript/api/namespacewebview/), [#9059](https://github.com/tauri-apps/tauri/pull/9059)). Per-view data folders exist, but the Mac form needs macOS 14 ([`data_store_identifier`](https://docs.rs/tauri-runtime/latest/tauri_runtime/webview/struct.WebviewAttributes.html)), and on Windows each data folder starts its own group of WebView2 processes anyway ([WebView2 process model](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/process-model)). So a browser per agent costs about the same in either design.

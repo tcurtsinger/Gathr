@@ -1,6 +1,10 @@
 # 0014. Decisions: fast yes/no answers, optional from day one
 
-Status: proposed. Date: 2026-11-07.
+Status: accepted. Date: 2026-11-07.
+
+## Implementation status
+
+Not built yet. The accepted provider, interface, stand-in, Settings page and uses below remain planned; the first slice did not include them.
 
 ## Choice
 
@@ -29,7 +33,7 @@ It's **optional and off by default**. It runs on a paid API, so it needs the per
 
 The previous app's uses for watchers, reminders, the job board, channels, workflows, goals and rooms are left out with those features. "Watch long work" was called the supervisor there; it's renamed so it isn't confused with a chat's Supervisor ([0013](0013-one-chat-model.md)).
 
-The PR right after the first slice ([first-slice.md](../first-slice.md)) builds the `Decider` interface, the local stand-in provider for tests (below), the Settings page and the cap, so every later feature can use it. Each use comes with the feature it serves.
+A future feature builds the `Decider` interface, local stand-in provider, Settings page and cap. The originally planned PR immediately after the first slice did not happen. Each use still arrives with its feature.
 
 ## Events
 
