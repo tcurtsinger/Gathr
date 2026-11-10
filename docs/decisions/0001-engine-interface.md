@@ -1,10 +1,14 @@
 # 0001. One engine interface, each provider's own harness behind it, ACP later as one more driver
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+Claude Code and Codex drivers are built. The shared Rust `Engine` trait originally proposed here is not built yet: the turn boundary uses a `Driver` enum and shared `Frame` values (0033). The table below describes those operations, not an implemented trait.
 
 ## Choice
 
-- The service defines one Rust `Engine` interface. Every provider sits behind it as a driver that runs that provider's own agent harness as a child process and speaks its own machine protocol. Gathr never runs a model loop of its own over raw APIs.
+- The service uses shared `Frame` values and a `Driver` enum at the turn boundary (0033). Each provider has a driver that runs that provider's own agent harness as a child process and speaks its own machine protocol. Gathr never runs a model loop of its own over raw APIs.
 - **Claude Code driver:** at most one long-lived `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages` process per agent, on one session at a time, with stdin kept open across that session's turns. An agent runs one turn at a time across all its conversations ([0010, Sessions](0010-coordination-as-state.md#sessions)); when its next turn is in another session, the driver closes the process the gentle way (below) and starts a new one with `--resume <id>`. Tool approvals come back over the same pipe with `--permission-prompt-tool stdio`. Stop is the `interrupt` control request.
 - **Codex driver:** one long-lived `codex app-server` process per agent, JSON-RPC over stdio: `initialize`, then `thread/start` or `thread/resume`, `turn/start`, `turn/steer`, and `turn/interrupt` for Stop. Approvals arrive as server requests (`item/commandExecution/requestApproval`, `item/fileChange/requestApproval`).
 - **ACP** is not the path to Claude Code or Codex. The interface is shaped after ACP's concepts (session new, load and resume; prompt; cancel; permission request; plan; usage), so an ACP driver can be added later for agents that speak ACP natively (Gemini CLI, Copilot, Goose and others).
@@ -54,7 +58,7 @@ What ACP would give: one driver for both engines and the long tail of other agen
 - A driver reports what its engine supports (resume, steer, plan, per-turn tokens, cost). The UI shows a feature only when the engine has it, never a stand-in.
 - Usage is normalised per turn in the driver: Claude reports per message and a running session cost, Codex reports running totals with a `last` figure. The previous app once logged 781,768 input tokens for one line by adding them naively.
 - Stop: the engine's interrupt, then wait. Closing a process (to switch sessions, or after 10 idle minutes): close stdin and wait for the engine's own exit. Switching never kills: a process that hasn't exited after 30 seconds holds the switch, shows as a hold on the agent and is recorded ([0010, Sessions](0010-coordination-as-state.md#sessions)). A kill happens only on the person's explicit action or at service shutdown after the grace period, written to the event record with why.
-- Child processes on Windows: start `.exe` directly; resolve npm `.cmd` shims through PATHEXT and run their script under `node` rather than `cmd.exe` (cmd.exe mangles JSON arguments); `CREATE_NO_WINDOW` on every spawn; never `DETACHED_PROCESS`. On this PC `claude` is a native `claude.exe` and `codex` is an npm shim. On macOS: found through the login shell's `PATH`, each engine its own process group ([0016](0016-macos.md)).
+- Engine binaries come only from Gathr's checked copies (0025, 0033), started directly by path. Installed Gathr waits for its own copy rather than searching `PATH`. Dev/test overrides remain explicit. Shell tools still inherit the current system environment; that is separate from engine selection. Shared process handling follows 0031.
 - `--bare` is not used for Claude Code: it never reads a subscription login ([headless: bare mode](https://code.claude.com/docs/en/headless#start-faster-with-bare-mode)). The driver passes `--strict-mcp-config` and its own settings sources instead.
 - **The engine's own tools stay on, with no per-agent switch.** The previous app added a Native tools switch, off by default, because each engine loaded the person's own setup: Claude Code had 79 skills and 18 connectors and Codex 132 skills and 6 connectors, none of them visible in that app, and plugin hooks (adhd-mode, yagni, ponytail) wrote their rules into every turn (the previous app's `planning/CLEAN-APP-PLAN.md`, 2026-10-08). In Gathr, each agent's own folder (0002) leaves out everything kept in `~/.claude` and `~/.codex`: user settings, plugins and their hooks, skills, memory and `config.toml` servers. What comes with the account itself still has to be turned off, the same way for every agent:
   - Claude Code: `--strict-mcp-config` (connectors added on claude.ai reach any folder signed in to that account);

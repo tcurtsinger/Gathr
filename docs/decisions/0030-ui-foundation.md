@@ -4,6 +4,10 @@ Status: accepted (packages approved by the owner, 2026-11-08). Date: 2026-11-08.
 renderer. Amends [0022](0022-ui-tooling.md)'s "no component library". The owner chose assistant-ui's components for the chat
 screens, and the design reference is the assistant-ui prototype (DESIGN.md).
 
+## Why
+
+The owner chose assistant-ui and its prototype as the chat reference. Keeping its registry controls as published avoids maintaining parallel custom controls, while Streamdown supplies streaming Markdown.
+
 ## Choice
 
 | Package | Version | Licence | Why |

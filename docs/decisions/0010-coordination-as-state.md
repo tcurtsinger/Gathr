@@ -1,6 +1,10 @@
 # 0010. Coordination is state in the service
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+Tasks, turns, waits, person tasks, pause/Stop, usage holds, archive and stale handling are built. Plan mode/checks, hand-off chains, side jobs and a fresh session per task are not built yet. A task can still settle when its turn ends without an explicit `finish_task`; requiring an explicit finish remains unbuilt.
 
 ## Choice
 
@@ -107,9 +111,11 @@ Rules:
 - Both counts are in Settings > General (1 to 365 days each). The service sweeps with its looks, every 2 minutes.
 
 Turned down: counting the cancel days from the last move (7 days in all), since the plan reads "after 7 days stale", and cancelling stale tasks only after they had been flagged on a sweep, which would make a service that was off for a week cancel nothing until a second sweep. Deleting a chat's worktree branches too: committed work stays reachable in the project.
- of an agent's engine on one conversation's session.
+## Turns
 
-States: `starting`, `streaming`, `ended`, with an outcome: `ok`, `failed`, `stopped` (the person's Stop or Stop now), `interrupted` (the app or engine went away mid-turn).
+A turn is one run of an agent's engine on one conversation's session.
+
+Persisted states: `queued`, `running`, `done`, `failed` and `stopped`; `waiting_sign_in` remains supported for older rows. Held work remains `queued` with a reason. Starting and streaming describe engine activity, not separate stored turn states.
 
 - Stop always uses the engine's own interrupt, never a process kill: a kill can land while the engine is renewing its login, which spends the login (lesson from the previous app). Each engine's driver provides the interrupt ([0001](0001-engine-interface.md)).
 - A turn records the background processes it started, by process id, so "still running" and Stop now can name them.

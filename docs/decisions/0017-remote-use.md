@@ -1,6 +1,10 @@
 # 0017. Using one computer's chats from another, over Tailscale
 
-Status: proposed. Date: 2026-11-07. Tailscale is the owner's pick.
+Status: accepted. Date: 2026-11-07. Tailscale is the owner's pick.
+
+## Implementation status
+
+Not built yet. Tailscale integration, remote device tokens and the remote client flow below are accepted plans.
 
 The owner works from a Windows PC and a Mac, and wants to use the chats on one from the other, both ways.
 

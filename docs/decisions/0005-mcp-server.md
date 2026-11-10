@@ -1,12 +1,16 @@
 # 0005. One MCP tool server inside the service, over streamable HTTP, with rmcp
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+The in-process server, per-engine tokens, chat reading and coordination tools are built. Diagnostics MCP tools are not built yet (0019); agents use `gathr diag`.
 
 ## Choice
 
 - The service serves Gathr's tools to every agent from one MCP server at `http://127.0.0.1:<port>/mcp`, on the same axum server as the API (0004).
 - Crate: [`rmcp`](https://crates.io/crates/rmcp), the official Rust MCP SDK, with `server`, `macros` and `transport-streamable-http-server`.
-- **Each agent gets its own token,** made when its engine starts and dropped when it exits. The token tells the server which agent is calling, so a tool like "give a task" or "wait" acts as that agent, and every call is an `execute_tool` event in the record (0011) under that agent and turn.
+- **Each agent gets its own token,** made when its engine starts and dropped when it exits. The token tells the server which agent is calling, so a tool like "give a task" or "wait" acts as that agent, and every service tool call is a `gathr.tool.call` event in the record (0011) under that agent and turn.
 - **Claude Code** gets it through `--mcp-config` with `{"type":"http","url":...,"headers":{"Authorization":"Bearer ${GATHR_AGENT_TOKEN}"}}` and `--strict-mcp-config`, the token in the engine's environment.
 - **Codex** gets it through `-c` overrides for `mcp_servers.gathr.url` and `mcp_servers.gathr.bearer_token_env_var = "GATHR_AGENT_TOKEN"`, so the token is never written into its `config.toml`.
 - Tool approvals are not an MCP tool: they come over each engine's own protocol (0001).
@@ -39,5 +43,5 @@ Status: proposed. Date: 2026-11-06.
 
 ## Not verified
 
-- Codex's MCP client against rmcp 3.9's server, both revisions. Checked live in the first slice.
+- The exact revision negotiated by Codex. Its MCP task/finish/hear-back flow worked on a signed-in team after 0033 landed; that did not record the negotiated revision.
 - Which revision Claude Code 2.1.318 speaks to it: the server answered it, but its requests weren't recorded.

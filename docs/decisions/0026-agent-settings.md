@@ -1,6 +1,6 @@
 # 0026: Agent settings
 
-Status: accepted design. Implementation planning remains separate.
+Status: accepted and built (Settings > Engines and Agents).
 
 Agents are created and edited in Settings > Agents, inside the centred Settings
 panel. Edit agent in a chat's agent picker opens that same panel at that agent.
@@ -38,6 +38,6 @@ Turned down: a custom engine source, separate engine and account pickers, and
 one version/update control per account. These duplicate shared program state
 or permit contradictory assignments.
 
-The working layout in designs/settings-entry/v5.html awaits approval before
-implementation. Add, rename, sign in/out and capability lists are simulated;
-no account, engine installation or login is created by this prototype.
+The accepted layout in `designs/settings-entry/v5.html` informed the built Settings
+screen. That portable prototype still simulates accounts and sign-in; the app uses
+the real service for accounts, engine copies, login and live model/effort lists.

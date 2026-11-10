@@ -2,6 +2,10 @@
 
 Status: accepted (owner, 2026-11-07; no borrowing confirmed 2026-11-09, task 1284). Both engines are implemented.
 
+## Why
+
+Gathr owns its runtime and login lifecycle. Checked engine copies keep versions reproducible without changing the person's own installs; a previous known-good copy keeps a failed update recoverable.
+
 ## The choice
 
 Gathr downloads each engine into its data folder, checks it, and keeps it current by itself.

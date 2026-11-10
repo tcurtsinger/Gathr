@@ -1,6 +1,10 @@
 # 0012. React and TypeScript, in a Tauri window, also served to a browser
 
-Status: proposed. Date: 2026-11-06. The framework is the owner's choice (React + TypeScript).
+Status: accepted. Date: 2026-11-06. The framework is the owner's choice (React + TypeScript).
+
+## Implementation status
+
+The React UI, browser client and Windows/macOS desktop window are built. Remote use (0017) is not built yet. The window owns no chat data or engines; local Theme and panel widths persist in the client.
 
 ## Choice
 
