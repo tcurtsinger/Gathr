@@ -325,6 +325,7 @@ impl Task {
         let Some(mut engine) = self.engine.take() else {
             return;
         };
+        self.flush_raw().await;
         self.lines = None;
         if self.turn.as_ref().is_some_and(|t| !t.stopping)
             && let Some(request) = self.driver.interrupt("close")
@@ -457,6 +458,7 @@ impl Task {
 
     /// The engine's output ended: it's exiting.
     pub(super) async fn on_exit(&mut self) {
+        self.flush_raw().await;
         self.lines = None;
         if let Some(turn) = self.turn.as_mut() {
             turn.gate.release();
@@ -535,6 +537,17 @@ impl Task {
         engine.write(frame).await?;
         self.raw(turn, pid, "in", &frame.to_string()).await;
         Ok(())
+    }
+
+    /// Writes the held run of stream fragments, redacted joined (`redact::stream`).
+    pub(super) async fn flush_raw(&mut self) {
+        let held = std::mem::take(&mut self.held_raw);
+        let mut frames: Vec<serde_json::Value> = held.iter().map(|(_, _, v)| v.clone()).collect();
+        gathr::redact::stream::redact_run(&mut frames);
+        for ((turn, pid, _), frame) in held.iter().zip(frames) {
+            self.raw(turn.as_deref(), *pid, "out", &frame.to_string())
+                .await;
+        }
     }
 
     /// One frame in or out of the engine, recorded under the chat it runs in (0011).

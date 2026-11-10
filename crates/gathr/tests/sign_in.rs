@@ -106,6 +106,33 @@ fn cancel_after_a_pasted_code_lets_the_login_finish_saving() {
     assert!(engine["sign_in"].is_null(), "still signing in: {engine}");
 }
 
+/// A Sign out while a Cancel still waits for a login to save waits for the same login: signed out
+/// stays signed out once it has saved (Vale, #84).
+#[test]
+fn sign_out_during_a_pending_cancel_waits_for_the_login_to_end() {
+    let data = TempDir::new();
+    let saving = [("GATHR_REPLAY_LOGIN_MS", Path::new("1200"))];
+    let service = TestService::with_engine(&data.0, &saving);
+    let id = service.add_account("Test");
+    service.call("POST", &format!("/api/accounts/{id}/sign-in"));
+    let code = json!({ "code": "made-up-code#made-up-state" });
+    let sent = service.send("POST", &format!("/api/accounts/{id}/sign-in/code"), code);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    std::thread::scope(|scope| {
+        let cancel = scope.spawn(|| service.call("DELETE", &format!("/api/accounts/{id}/sign-in")));
+        std::thread::sleep(Duration::from_millis(200));
+        let out = service.call("POST", &format!("/api/accounts/{id}/sign-out"));
+        assert_eq!(out.status, 200, "{}", out.body);
+        assert_eq!(cancel.join().unwrap().status, 200);
+    });
+    std::thread::sleep(Duration::from_millis(1500));
+    let engine = service.call("GET", &format!("/api/accounts/{id}")).json();
+    assert_eq!(
+        engine["login"], "signed_out",
+        "the cancelled login signed it back in: {engine}"
+    );
+}
+
 #[test]
 fn cancel_ends_the_wait_and_sign_in_starts_again() {
     let data = TempDir::new();

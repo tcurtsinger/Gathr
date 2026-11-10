@@ -18,8 +18,19 @@ impl Task {
             Line::Out(text) => ("out", text),
             Line::Err(text) => ("err", text),
         };
-        // Written, redacted, before it's acted on (0011).
-        self.raw(turn.as_deref(), pid, direction, text).await;
+        // Written, redacted, before it's acted on (0011). A stream fragment waits for the end of
+        // its run, so a secret split across fragments is redacted whole.
+        let fragment = (direction == "out")
+            .then(|| serde_json::from_str::<Value>(text).ok())
+            .flatten()
+            .filter(|v| gathr::redact::stream::fragment(v).is_some());
+        match fragment {
+            Some(value) => self.held_raw.push((turn.clone(), pid, value)),
+            None => {
+                self.flush_raw().await;
+                self.raw(turn.as_deref(), pid, direction, text).await;
+            }
+        }
         let Line::Out(text) = line else {
             self.record(Event::point("gathr.engine.stderr").attr("line", text.clone()));
             if !text.trim().is_empty() {
@@ -146,20 +157,7 @@ impl Task {
                 turn.partial.clear();
                 turn.partial_units = 0;
                 let ids = turn.ids.clone();
-                if !text.is_empty() {
-                    match self.db_message(&ids, "assistant", "text", &text).await {
-                        Ok(message) => self
-                            .publish(&ids.chat, json!({ "type": "message", "message": message })),
-                        Err(why) => {
-                            // Kept as the turn's unsaved text, which a window reads as streaming.
-                            if let Some(turn) = self.turn.as_mut() {
-                                turn.partial_units = text.encode_utf16().count();
-                                turn.partial = text;
-                            }
-                            self.save_failed(why).await;
-                        }
-                    }
-                }
+                self.save_reply(&ids, text, false).await;
             }
             Frame::ToolStart { id, name } => self.tool_started(id, name).await,
             Frame::ToolEnd { id, ok } => {
@@ -310,7 +308,7 @@ impl Task {
         let body = json!({ "tool": name, "status": "running" }).to_string();
         let message = match self.db_message(&ids, "assistant", "tool", &body).await {
             Ok(message) => message,
-            Err(why) => return self.save_failed(why).await,
+            Err(why) => return self.save_failed(why, false).await,
         };
         let message_id = message["id"].as_str().unwrap_or_default().to_string();
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
@@ -362,19 +360,7 @@ impl Task {
         turn.partial_units = 0;
         let ids = turn.ids.clone();
         let open: Vec<String> = turn.tools.keys().cloned().collect();
-        if !text.is_empty() {
-            match self.db_message(&ids, "assistant", "text", &text).await {
-                Ok(message) => {
-                    self.publish(&ids.chat, json!({ "type": "message", "message": message }))
-                }
-                Err(why) => {
-                    if let Some(turn) = self.turn.as_mut() {
-                        turn.save_failed.get_or_insert(why);
-                    }
-                    self.unsaved.push((ids, text));
-                }
-            }
-        }
+        self.save_reply(&ids, text, true).await;
         for id in open {
             self.tool_ended(&id, "stopped").await;
         }

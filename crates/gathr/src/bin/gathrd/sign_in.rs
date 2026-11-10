@@ -76,6 +76,9 @@ pub struct SignIn {
     running: Mutex<Running>,
     /// One start at a time, so a double click never leaves a process nobody can cancel.
     starting: tokio::sync::Mutex<()>,
+    /// Held from a code passed to Claude Code until it exits, as it may be saving the login that
+    /// code gave: a Cancel, Sign out, Remove or new sign-in waits on it before touching the folder.
+    saving: Arc<tokio::sync::Mutex<()>>,
 }
 
 #[derive(Default)]
@@ -104,6 +107,7 @@ impl SignIn {
             running.asks.take()
         };
         stop(running).await;
+        drop(self.saving.lock().await);
     }
 
     /// Takes `mine` out of `running`, unless a newer sign-in has replaced it.
@@ -171,6 +175,7 @@ async fn start(
         running.asks.replace(mine.clone())
     };
     stop(previous).await;
+    drop(sign_in.saving.lock().await);
     sign_in.show(&s.chats, json!({ "state": "waiting" }));
 
     let env = command::env(std::env::vars_os(), &folder);
@@ -302,6 +307,7 @@ async fn watch(
     } = job;
     let mut last_error = None;
     let mut passed = false;
+    let mut saving = None;
     loop {
         tokio::select! {
             line = lines.recv() => match line {
@@ -315,6 +321,10 @@ async fn watch(
             },
             Some(ask) = asks.recv() => match ask {
                 Ask::Code(code) => {
+                    // Taken before the code goes in, so nothing slips between the two.
+                    if saving.is_none() {
+                        saving = Some(sign_in.saving.clone().lock_owned().await);
+                    }
                     match engine.write_line(&code).await {
                         Ok(()) => passed = true,
                         Err(e) => last_error = Some(format!("the code didn't reach Claude Code: {e}")),

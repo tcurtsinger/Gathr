@@ -1,6 +1,8 @@
 //! Removes secrets from text before it's written anywhere (docs/decisions/0011-event-record.md).
 //! Each removal leaves `[redacted:<kind>]`.
 
+pub mod stream;
+
 /// Flags whose next word is a secret.
 const SECRET_FLAGS: &[&str] = &["token", "key", "secret", "password"];
 

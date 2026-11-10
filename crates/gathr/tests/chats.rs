@@ -469,12 +469,34 @@ fn a_chats_history_holds_the_reply_still_streaming() {
     assert_eq!(last["body"], "Hi!", "{after}");
 }
 
+/// `signed_in` with its reply in two text blocks, as one model call can answer (Vale, #84).
+fn two_block_reply(dir: &Path) -> std::path::PathBuf {
+    let rows = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let blocks = json!([{ "type": "text", "text": "FIRST BLOCK" }, { "type": "text", "text": "SECOND BLOCK" }]);
+    let rows: Vec<String> = rows
+        .lines()
+        .map(|row| {
+            let mut row: Value = serde_json::from_str(row).unwrap();
+            let mut frame: Value = serde_json::from_str(row["line"].as_str().unwrap()).unwrap();
+            if frame["type"] == "assistant" {
+                frame["message"]["content"] = blocks.clone();
+                row["line"] = frame.to_string().into();
+            }
+            row.to_string()
+        })
+        .collect();
+    let fixture = dir.join("two-blocks.jsonl");
+    std::fs::write(&fixture, rows.join("\n") + "\n").unwrap();
+    fixture
+}
+
 /// Audit 2.2.6: a reply the database won't take fails its turn with a reference, stays readable as
-/// `streaming`, and is saved once a write works again. Never dropped while the turn carries on.
+/// `streaming`, and is saved once a write works again, every block in order. Never dropped while
+/// the turn carries on.
 #[test]
 fn a_reply_that_cant_be_saved_fails_the_turn_and_is_kept_until_it_can() {
     let data = TempDir::new();
-    let fixture = recording("signed_in");
+    let fixture = two_block_reply(&data.0);
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
     let chat = service.new_chat();
     service.signed_in(&data.0);
@@ -500,11 +522,10 @@ fn a_reply_that_cant_be_saved_fails_the_turn_and_is_kept_until_it_can() {
         why.contains("wasn't saved"),
         "the turn doesn't say why: {turn}"
     );
-    let kept = history["streaming"].as_array().cloned().unwrap_or_default();
+    let kept = history["streaming"].to_string();
     assert!(
-        kept.iter()
-            .any(|s| s["text"].as_str().is_some_and(|t| t.starts_with("Hi!"))),
-        "the reply is gone: {history}"
+        kept.contains("FIRST BLOCK") && kept.contains("SECOND BLOCK"),
+        "a block of the reply is gone: {history}"
     );
     let (ok, trace) = gathr(&data.0, &["diag", "trace", turn["ref"].as_str().unwrap()]);
     assert!(
@@ -515,17 +536,74 @@ fn a_reply_that_cant_be_saved_fails_the_turn_and_is_kept_until_it_can() {
     db.execute("DROP TRIGGER no_reply", []).unwrap();
     say("Again");
     let history = service.wait_for(&chat, 10, "the kept reply to be saved", |h| {
-        let mut replies = h["messages"].as_array().into_iter().flatten();
-        replies.any(|m| m["role"] == "assistant" && m["kind"] == "text")
+        let replies = h["messages"].as_array().into_iter().flatten();
+        replies
+            .filter(|m| m["role"] == "assistant" && m["kind"] == "text")
+            .count()
+            >= 2
     });
-    let first = history["messages"]
+    let replies: Vec<&Value> = history["messages"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|m| m["role"] == "assistant")
-        .unwrap();
+        .filter(|m| m["role"] == "assistant")
+        .collect();
+    let saved: Vec<(&Value, &Value)> = replies.iter().map(|m| (&m["body"], &m["turn"])).collect();
     assert_eq!(
-        first["turn"], turn["id"],
-        "the kept reply was saved on another turn: {history}"
+        saved,
+        [
+            (&json!("FIRST BLOCK"), &turn["id"]),
+            (&json!("SECOND BLOCK"), &turn["id"])
+        ],
+        "the kept blocks weren't saved in order on their turn: {history}"
     );
+}
+
+/// A key streamed in two pieces never reaches the raw record in either (Vale, #84): each piece
+/// alone looks like nothing, so the run is redacted joined before it's written.
+#[test]
+fn a_key_split_across_streamed_frames_is_never_stored() {
+    let data = TempDir::new();
+    let rows = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let split = |text: &str| {
+        let frame = json!({ "type": "stream_event", "event": { "type": "content_block_delta", "index": 0,
+            "delta": { "type": "text_delta", "text": text } }, "parent_tool_use_id": null });
+        json!({ "dir": "out", "line": frame.to_string() }).to_string()
+    };
+    let mut lines: Vec<String> = Vec::new();
+    for row in rows.lines() {
+        if row.contains("text_delta") {
+            lines.push(split("Your key: sk-pr"));
+            lines.push(split("oj-0123456789abcdefghijklmnop"));
+        } else {
+            lines.push(row.to_string());
+        }
+    }
+    let fixture = data.0.join("split-key.jsonl");
+    std::fs::write(&fixture, lines.join("\n") + "\n").unwrap();
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &fixture)]);
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Say hi" }),
+    );
+    service.wait_for(&chat, 10, "the turn to end", |h| {
+        turn_status(h) == Some("done")
+    });
+
+    let (ok, raw) = gathr(&data.0, &["diag", "query", "SELECT body FROM engine_raw"]);
+    assert!(ok, "{raw}");
+    let raw = raw.to_string();
+    assert!(
+        raw.contains("[redacted:key]"),
+        "the split key wasn't redacted: {raw}"
+    );
+    for piece in ["sk-pr", "oj-0123456789"] {
+        assert!(
+            !raw.contains(piece),
+            "{piece} reached the raw record: {raw}"
+        );
+    }
 }

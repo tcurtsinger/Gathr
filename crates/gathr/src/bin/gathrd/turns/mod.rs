@@ -151,6 +151,8 @@ struct Task {
     woke_from: Option<(String, Option<i64>)>,
     /// Reply text of ended turns that the database refused, kept until a save works.
     unsaved: Vec<(Ids, String)>,
+    /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
+    held_raw: Vec<(Option<String>, u32, Value)>,
 }
 
 pub async fn run(
@@ -182,6 +184,7 @@ pub async fn run(
         background: 0,
         woke_from: None,
         unsaved: Vec::new(),
+        held_raw: Vec::new(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
@@ -939,8 +942,17 @@ impl Task {
             .turn
             .as_ref()
             .filter(|t| t.ids.chat == chat && !t.partial.is_empty());
-        let Some(turn) = running else {
-            let (ids, text) = self.unsaved.iter().find(|(ids, _)| ids.chat == chat)?;
+        let unsaved: Vec<&(Ids, String)> = self
+            .unsaved
+            .iter()
+            .filter(|(ids, _)| ids.chat == chat)
+            .collect();
+        let Some(turn) = running.filter(|_| unsaved.is_empty()) else {
+            // Blocks the database refused, then what's streaming now, as one unsaved text.
+            let (ids, _) = unsaved.first()?;
+            let mut texts: Vec<&str> = unsaved.iter().map(|(_, text)| text.as_str()).collect();
+            texts.extend(running.map(|t| t.partial.as_str()));
+            let text = texts.join("\n\n");
             return Some(json!({ "turn": ids.turn, "agent": ids.agent, "text": text, "saved": 0 }));
         };
         let (chat, id) = (chat.to_string(), turn.ids.turn.clone());
