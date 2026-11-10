@@ -1,6 +1,10 @@
 # 0003. SQLite through rusqlite, one writer thread, migrations as numbered SQL files
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+SQLite, WAL, migrations and the writer thread are built. API reads currently use the writer thread too; a separate read-only pool, large-frame blob spill and online backups are not built yet.
 
 ## Choice
 

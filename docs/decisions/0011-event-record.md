@@ -1,6 +1,10 @@
 # 0011. One event record, named after OpenTelemetry's GenAI conventions
 
-Status: proposed. Date: 2026-11-06.
+Status: accepted. Date: 2026-11-06.
+
+## Implementation status
+
+The event table, raw engine records, turn timeline and core diagnostics are built. Retention controls, pruning, daily rollups, content-capture controls and OTLP export are not built yet. Planned names are separated from emitted names below.
 
 ## Choice
 
@@ -35,11 +39,15 @@ Indexes on `(conversation_id, ts)`, `(room_id, ts)`, `(trace_id)` and `(name, ts
 
 ## Names from OpenTelemetry
 
+The table is the naming target for model/MCP instrumentation. Current turn spans are
+`invoke_agent {engine}`, tool spans are `execute_tool {name}`, and service MCP calls use
+`gathr.tool.call`. The implemented Gathr names are listed below; OTLP export is not built yet.
+
 The GenAI conventions now live in their own repository, [open-telemetry/semantic-conventions-genai](https://github.com/open-telemetry/semantic-conventions-genai); the pages in the main semantic-conventions repo say "Moved". **Every GenAI name below has status Development, not Stable** ([docs/gen-ai/README.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/README.md)). Names can still change, so the service keeps the mapping in one module, pinned to a commit of that repository, and a rename is one change there.
 
 | Gathr thing | Span | Source |
 |---|---|---|
-| A turn (one run of an agent's engine) | `invoke_agent {gen_ai.agent.name}`, `gen_ai.operation.name = invoke_agent`. Span kind `CLIENT`: the engine is a separate process, and the conventions keep `INTERNAL` for an agent running inside the instrumented process. The service's own scheduling around a turn (the gate, holds) is `gathr.*` below, not a second agent span | [gen-ai-agent-spans.md, invoke agent client span](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md) |
+| A turn (one run of an agent's engine) | `invoke_agent {engine}`, `gen_ai.operation.name = invoke_agent`. Span kind `CLIENT`: the engine is a separate process, and the conventions keep `INTERNAL` for an agent running inside the instrumented process. The service's own scheduling around a turn (the gate, holds) is `gathr.*` below, not a second agent span | [gen-ai-agent-spans.md, invoke agent client span](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md) |
 | One model call inside a turn, when the engine reports it | `{gen_ai.operation.name} {gen_ai.request.model}`, usually `chat` | [client-inference.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/client-inference.md) |
 | A tool call | `execute_tool {gen_ai.tool.name}`, kind `INTERNAL` | [execute-tool.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/execute-tool.md) |
 | A call to Gathr's own MCP server | `{mcp.method.name} {target}`, e.g. `tools/call task` | [mcp.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md) |
@@ -53,22 +61,26 @@ OpenTelemetry marks message content and tool arguments and results as Opt-In (`g
 
 ## Gathr's own names
 
-Where OpenTelemetry has nothing, `gathr.` events, each a `point` unless it has a duration:
-- `gathr.task.given`, `gathr.task.state` (from, to, by, reason), `gathr.task.restarted`;
-- `gathr.wait.left`, `gathr.wait.check` (exit code, duration), `gathr.wait.fired`, `gathr.wait.ended`;
-- `gathr.pause.set`, `gathr.pause.quiet`, `gathr.pause.resumed`, `gathr.pause.stop_now` (what was ended, by pid);
-- `gathr.gate.held` (what start was held, and why) and `gathr.gate.released`;
-- `gathr.plan.proposed`, `gathr.plan.check` (checker, agree or objection), `gathr.plan.state`;
-- `gathr.handoff` (from, to, chain length);
-- `gathr.ask` span (asker, helper, outcome `answered`, `passed`, `failed`);
-- `gathr.usage_hold` span (account, until);
-- `gathr.engine.process` span (adapter, pid, exit code, how it ended), `gathr.engine.interrupt`, `gathr.engine.login` (status checks and renewals, never the token);
-- `gathr.stream.first_token` (time from the engine emitting to the UI receiving), and `gathr.ui.timing` points the UI sends for screen opens and switches;
-- `gathr.ui.screen_open` (which screen, never its content), so usage of each screen is counted per day;
-- `gathr.settings.changed` (which setting, by whom, old and new value; secret values masked);
-- `gathr.cli.command` (which command an agent ran, never its arguments).
+Names currently emitted by the service and UI (points unless the call records a duration):
+- tasks: `gathr.task.give`, `gathr.task.state`, `gathr.task.stale`,
+  `gathr.task.hear_back`, `gathr.task.recover`, `gathr.task.answer` and `gathr.task.answered`;
+- waits: `gathr.wait.leave`, `gathr.wait.fire`, `gathr.wait.end`, `gathr.wait.expire`,
+  `gathr.wait.agent` and `gathr.wait.failing`; check commands also use the shared command record;
+- pause: `gathr.pause.start`, `gathr.pause.quiet`, `gathr.pause.end` and `gathr.pause.stop_now`;
+- usage holds: `gathr.usage.hold`;
+- engine lifecycle: `gathr.engine.start`, `gathr.engine.exit`, `gathr.engine.close`, `gathr.engine.hold`,
+  `gathr.engine.stderr`, `gathr.engine.sign_in` and `gathr.engine.sign_out`;
+- Gathr MCP calls: `gathr.tool.call`;
+- timings: `gathr.turn.first_token` at the service, `gathr.ui.first_token` when painted,
+  `gathr.ui.chat_open` and `gathr.ui.chat_switch`;
+- UI failures and settings: `gathr.ui.error` and `gathr.settings.change`.
 
-Usage counts (screens, commands, engines, settings changes) are read through the service's API by the person, and by an agent the person allows. The previous app's usage report had gaps on exactly these: no screen counts, command counts only for the last few days, a turn log capped at 3,000 turns, and no record of settings changes.
+These names match `tasks.rs`, `waits.rs`, `pauses.rs`, `bin/gathrd/coord`, the turn driver and UI reports.
+Use `event_log` for readable JSON attributes and a failure's reference.
+
+Not built yet: dedicated `gathr.gate.held`/`released`, `gathr.plan.*`, `gathr.handoff`,
+`gathr.ask`, generic screen-open/CLI usage counts and their API. These remain planned instrumentation,
+not names to query in a current record.
 
 ## What is never recorded
 

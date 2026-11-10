@@ -2,6 +2,10 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
+## Implementation status
+
+The stable role/team/tool briefing, provider usage and briefing/ask/read size measurements are built. Durable binding decisions, project notes, fresh-session digests and quality comparisons for context changes are not built yet.
+
 ## Choice
 
 Each turn gives an agent what it needs to do excellent work and nothing it can fetch when it needs it. What Gathr adds is small, stable and measured, and any change to it is judged on output quality as well as tokens.

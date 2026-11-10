@@ -1,6 +1,10 @@
 # 0022. UI tooling: Vite, Biome, TypeScript 7 and Vitest in the browser, on npm
 
-Status: proposed. Date: 2026-11-07. Follows [0012](0012-ui-shell.md), which leaves build tooling to the first slice.
+Status: accepted. Date: 2026-11-07. Follows [0012](0012-ui-shell.md), which leaves build tooling to the first slice.
+
+## Implementation status
+
+Vite, Biome, TypeScript checks and Vitest browser tests are built and run in Windows/macOS CI.
 
 ## Choice
 
