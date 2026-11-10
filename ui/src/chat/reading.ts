@@ -29,6 +29,19 @@ export function readingAt(viewport: HTMLElement | null, last: Reading | null): R
   return null;
 }
 
+/**
+ * Scrolls a block to the middle of what shows above the composer; one taller than that starts at the top,
+ * below the column label.
+ */
+export function centre(viewport: HTMLElement, block: Element) {
+  const view = viewport.getBoundingClientRect();
+  const footer = viewport.querySelector('.thread-footer')?.getBoundingClientRect().height ?? 0;
+  const room = view.height - footer;
+  const box = block.getBoundingClientRect();
+  const offset = box.height > room - BELOW_LABEL ? BELOW_LABEL : (room - box.height) / 2;
+  viewport.scrollTop += box.top - view.top - offset;
+}
+
 /** Scrolls so the block read before starts where it did. */
 export function keepReading(reading: Reading) {
   const { viewport, at, offset } = reading;

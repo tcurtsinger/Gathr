@@ -8,6 +8,7 @@ import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ChatMenu } from './ChatMenu';
+import { useTarget } from './found';
 import { type SendFailure, toThread } from './messages';
 import { PlanBar } from './PlanBar';
 import { type PauseAction, type Run, runOf } from './pauses';
@@ -60,6 +61,9 @@ interface Props {
   /** The plan bar's steps shown; kept per chat. */
   plan: boolean;
   onPlan: (open: boolean) => void;
+  /** A search hit's message to open at (none: a title, the latest), and when it was picked; done once shown. */
+  found?: { message?: string; at: number };
+  onFound?: () => void;
 }
 
 export function ChatView(props: Props) {
@@ -109,6 +113,7 @@ export function ChatView(props: Props) {
   useLayoutEffect(() => {
     if (reading.current) keepReading(reading.current);
   }, [split]);
+  const target = useTarget(props.found, loaded, columns, split, props.onSplit, props.onFound);
 
   useFirstTokenReport(state.partial);
   // A failed send is kept for Retry, so the composer is free for the next message at once.
@@ -187,6 +192,8 @@ export function ChatView(props: Props) {
           messages={columns.main}
           running={!!turn}
           actions={actions}
+          target={target && target.column !== 'team' ? target : undefined}
+          onTarget={props.onFound}
           label={split ? (state.members.find((m) => m.role === 'supervisor')?.name ?? 'Chat') : undefined}
           empty={loaded && state.messages.length === 0 && failed.length === 0}
           after={
@@ -270,6 +277,8 @@ export function ChatView(props: Props) {
               messages={columns.team}
               running={!!turn}
               actions={actions}
+              target={target && target.column !== 'main' ? target : undefined}
+              onTarget={props.onFound}
               label="Team"
               fresh={unseen.highlight}
               empty={false}

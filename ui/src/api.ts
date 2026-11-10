@@ -153,6 +153,27 @@ export interface Chat {
   archived?: string | null;
 }
 
+/** A chat whose title holds the query (0035). `time` is its last activity. */
+export interface ChatHit {
+  chat: string;
+  title: string;
+  archived: string | null;
+  time: string;
+}
+
+/** A saved text message holding every typed word as a word start; `marks` are UTF-16 [start, end] in `snippet`. */
+export interface MessageHit {
+  chat: string;
+  chat_title: string;
+  archived: string | null;
+  message: string;
+  role: Message['role'];
+  agent: string | null;
+  time: string;
+  snippet: string;
+  marks: [number, number][];
+}
+
 /** Settings > General's stale rules (F11), in whole days. */
 export interface StaleDays {
   stale_days: number;
@@ -276,6 +297,8 @@ export const api = {
   personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
   cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),
   restartTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/restart`),
+  search: (q: string) =>
+    call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (change: Partial<Settings>) => call<Settings>('PATCH', '/api/settings', change),
   answer: (answers: PersonAnswer[]) =>

@@ -1,0 +1,44 @@
+/* Search's own parts of the shared flyout (designs/search/v1.html). */
+.search-field {
+  display: flex;
+  flex: none;
+  margin: 0 12px 8px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+}
+.search-field:focus-within {
+  background: var(--raised);
+}
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+}
+.search-field input::placeholder {
+  color: var(--muted-foreground);
+}
+.search-title {
+  font-weight: 500;
+}
+.flyout-row > .search-snippet {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.flyout-row mark {
+  background: transparent;
+  color: var(--attention);
+  font-weight: 600;
+}
+.flyout-body > .notice {
+  min-height: 0;
+  margin: 8px 0;
+  padding: 12px;
+}

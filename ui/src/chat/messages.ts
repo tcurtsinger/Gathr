@@ -39,6 +39,16 @@ export type Custom = {
 export interface Columns {
   main: ThreadMessageLike[];
   team: ThreadMessageLike[];
+  /** Where a saved message shows, for a search hit: its column, its thread message, and its text in a reply. */
+  find: (message: string) => Spot | undefined;
+}
+
+export interface Spot {
+  column: 'main' | 'team';
+  id: string;
+  text?: string;
+  /** Which of the reply's texts equal to `text` it is: a reply can say the same thing twice. */
+  nth?: number;
 }
 
 type Part = Exclude<ThreadMessageLike['content'], string>[number];
@@ -77,11 +87,14 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
   const inTeam = (turn: string | null) => !!turn && !!crew.rootOf(turn);
   const main: ThreadMessageLike[] = [];
+  const shown: Group[] = [];
   const work: Group[] = [];
   for (const g of grouped(state, inTeam)) {
     if (g.person || !inTeam(g.turn)) {
       // What Gathr told the lead when a round settled: the team column and Summary already show it.
-      if (!(g.gathr && state.turns[g.turn ?? '']?.answers)) main.push(cached(cache, g, state, crew));
+      if (g.gathr && state.turns[g.turn ?? '']?.answers) continue;
+      main.push(cached(cache, g, state, crew));
+      shown.push(g);
     } else work.push(g);
   }
   // Replies streaming at once save in the order they finish: the team keeps its turns' order, as a reload does.
@@ -93,7 +106,25 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
   for (const f of unsent) if (!f.failure.ref || !told.has(f.failure.ref)) main.push(failed(f));
-  return { main, team: work.map((g) => cached(cache, g, state, crew)) };
+  const find = (message: string): Spot | undefined => {
+    const m = state.messages.find((x) => x.id === message);
+    if (!m) return undefined;
+    // A hear-back Gathr told the lead isn't drawn: its turn's reply stands for it.
+    const sameTurn = (g: Group) => m.role === 'gathr' && !!m.turn && g.turn === m.turn;
+    for (const [column, groups] of [
+      ['main', shown],
+      ['team', work],
+    ] as const) {
+      const g = groups.find((x) => x.msgs.includes(m)) ?? groups.find(sameTurn);
+      if (!g) continue;
+      const at = g.msgs.indexOf(m);
+      if (!g.reply || at < 0) return { column, id: g.key };
+      const nth = g.msgs.slice(0, at).filter((x) => x.kind !== 'tool' && x.body === m.body).length;
+      return { column, id: g.key, text: m.body as string, nth };
+    }
+    return undefined;
+  };
+  return { main, team: work.map((g) => cached(cache, g, state, crew)), find };
 }
 
 function grouped(state: ChatState, inTeam: (turn: string | null) => boolean): Group[] {

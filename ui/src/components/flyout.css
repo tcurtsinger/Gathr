@@ -1,9 +1,12 @@
-/* The Tasks flyout beside navigation: the prototype's NavigationFlyout (DESIGN.md). */
+/* The flyout beside navigation that Search and Tasks share: the prototype's NavigationFlyout (DESIGN.md). */
 .nav-count {
   margin-left: auto;
   color: var(--muted-foreground);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+kbd.nav-count {
+  font-family: inherit;
 }
 /* Just right of navigation, 40px down; the sidebar is its containing block. */
 .flyout-anchor {
@@ -54,7 +57,8 @@
   overflow: auto;
   padding: 0 8px 12px;
 }
-.flyout-task {
+/* A task or a search hit: what it is, then who and where, title first (search/v1). */
+.flyout-row {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -66,15 +70,19 @@
   background: transparent;
   color: var(--foreground);
   text-align: left;
+  overflow-wrap: anywhere;
 }
-.flyout-task:hover {
+.flyout-row:is(:hover, [aria-selected="true"]) {
   background: var(--hover-tint);
 }
-.flyout-task > span {
+.flyout-row > span {
   font-size: 14px;
   line-height: 1.5;
 }
-.flyout-task > small {
+.flyout-row > small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.4;

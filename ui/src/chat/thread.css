@@ -151,3 +151,22 @@
 .column-label + .thread-column {
   padding-top: 48px;
 }
+/* A search hit opened here: a short attention tint (DESIGN.md "Navigation and workspace"). */
+[data-search-hit] {
+  border-radius: 8px;
+  animation: search-hit 1.6s ease-out;
+}
+@keyframes search-hit {
+  from {
+    background: color-mix(in srgb, var(--attention) 16%, var(--background));
+  }
+  to {
+    background: transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-search-hit] {
+    animation: none;
+    background: color-mix(in srgb, var(--attention) 12%, var(--background));
+  }
+}

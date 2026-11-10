@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { useEdges } from './edges';
+import { useFound } from './found';
 import type { Custom, SendFailure, TurnNotice } from './messages';
 import { useOlder } from './older';
 import type { Approval } from './state';
@@ -62,15 +63,33 @@ interface Props {
   empty: boolean;
   /** The composer, kept below the messages as they scroll. */
   children?: ReactNode;
+  /** A search hit to open at: centred and tinted, the view held there until the person is back at the bottom. */
+  target?: Target;
+  /** The target is drawn and centred. */
+  onTarget?: () => void;
+}
+
+/**
+ * A thread message to open at, or with no `id` the latest one; `text` is the hit's own part of a reply, the
+ * `nth` with that text. `at` is when it was picked.
+ */
+export interface Target {
+  id?: string;
+  text?: string;
+  nth?: number;
+  at: number;
 }
 
 const none: ReadonlySet<string> = new Set();
+/** The reply part a search hit opened at. */
+const FoundContext = createContext<string | undefined>(undefined);
 
 /** A column of the chat, drawn by assistant-ui's thread over Gathr's own chat state (0030). */
 export function Thread(props: Props) {
-  const { running, actions, label, header, after, empty, children } = props;
+  const { running, actions, label, header, after, empty, children, target } = props;
   const viewport = useRef<HTMLDivElement>(null);
-  const { messages, onScroll } = useOlder(props.messages, viewport);
+  const { messages, onScroll, reach } = useOlder(props.messages, viewport);
+  const found = useFound(props.messages, viewport, reach, target, props.onTarget);
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
@@ -98,35 +117,45 @@ export function Thread(props: Props) {
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
         <FreshContext value={props.fresh ?? none}>
-          <ThreadPrimitive.Root className="thread" role={label ? 'region' : undefined} aria-label={label}>
-            <ThreadPrimitive.Viewport ref={viewport} className="thread-viewport" onScroll={onScroll}>
-              {label && (
-                <div className="column-label" aria-hidden="true">
-                  {label}
+          <FoundContext value={found.text}>
+            <ThreadPrimitive.Root className="thread" role={label ? 'region' : undefined} aria-label={label}>
+              <ThreadPrimitive.Viewport
+                ref={viewport}
+                className="thread-viewport"
+                scrollToBottomOnRunStart={!found.held}
+                onScroll={() => {
+                  onScroll();
+                  found.onScroll();
+                }}
+              >
+                {label && (
+                  <div className="column-label" aria-hidden="true">
+                    {label}
+                  </div>
+                )}
+                <div className="thread-column" data-empty={empty || undefined}>
+                  {header}
+                  {empty && <h2 className="welcome">What are we working on?</h2>}
+                  <div className="thread-messages">
+                    <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                  </div>
+                  {after}
+                  <ThreadPrimitive.ViewportFooter className="thread-footer">
+                    <ThreadPrimitive.ScrollToBottom asChild>
+                      <TooltipIconButton
+                        tooltip="Scroll to bottom"
+                        variant="outline"
+                        className="thread-bottom bg-background"
+                      >
+                        <ArrowDown />
+                      </TooltipIconButton>
+                    </ThreadPrimitive.ScrollToBottom>
+                    {children}
+                  </ThreadPrimitive.ViewportFooter>
                 </div>
-              )}
-              <div className="thread-column" data-empty={empty || undefined}>
-                {header}
-                {empty && <h2 className="welcome">What are we working on?</h2>}
-                <div className="thread-messages">
-                  <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
-                </div>
-                {after}
-                <ThreadPrimitive.ViewportFooter className="thread-footer">
-                  <ThreadPrimitive.ScrollToBottom asChild>
-                    <TooltipIconButton
-                      tooltip="Scroll to bottom"
-                      variant="outline"
-                      className="thread-bottom bg-background"
-                    >
-                      <ArrowDown />
-                    </TooltipIconButton>
-                  </ThreadPrimitive.ScrollToBottom>
-                  {children}
-                </ThreadPrimitive.ViewportFooter>
-              </div>
-            </ThreadPrimitive.Viewport>
-          </ThreadPrimitive.Root>
+              </ThreadPrimitive.Viewport>
+            </ThreadPrimitive.Root>
+          </FoundContext>
         </FreshContext>
       </ActionsContext>
     </AssistantRuntimeProvider>
@@ -214,7 +243,7 @@ function AssistantMessage() {
                   </ToolGroup>
                 );
               case 'text':
-                return <MarkdownText />;
+                return <TextPart text={part.text} />;
               case 'tool-call':
                 return <ToolFallback {...part} />;
               default:
@@ -228,6 +257,17 @@ function AssistantMessage() {
       ))}
       {notice && <ReplyNotice notice={notice} actions={actions} />}
     </MessagePrimitive.Root>
+  );
+}
+
+/** A reply's text; the one a search hit opened at is wrapped, to centre and tint it alone. */
+function TextPart({ text }: { text: string }) {
+  return useContext(FoundContext) === text ? (
+    <div className="found-part">
+      <MarkdownText />
+    </div>
+  ) : (
+    <MarkdownText />
   );
 }
 
