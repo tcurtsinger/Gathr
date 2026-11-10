@@ -21,14 +21,8 @@ pub use looks::fresh;
 const EVERY: Duration = Duration::from_secs(120);
 
 /// Saves a turn's status with what it moves (its task, its giver's hear-back, waits on its agent),
-/// in one transaction, and starts the turns that calls for. Answers the turn's place in its chat
-/// once it has started (0028), so a live window orders it as a reload would.
-pub async fn turn_moved(
-    chats: &Arc<Chats>,
-    m: Moved<'_>,
-    status: &str,
-    why: Option<&str>,
-) -> Option<i64> {
+/// in one transaction, and starts the turns that calls for.
+pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Option<&str>) {
     let (chat, turn, agent, task, trace) = (
         m.chat.to_string(),
         m.turn.to_string(),
@@ -45,13 +39,9 @@ pub async fn turn_moved(
             task,
             trace: &trace,
         };
-        let starts = tasks::turn_moved(conn, &m, &status, why.as_deref())?;
-        let place = "SELECT position FROM turns WHERE id = ?1";
-        Ok((starts, conn.query_row(place, [&turn], |r| r.get(0))?))
+        tasks::turn_moved(conn, &m, &status, why.as_deref())
     };
-    answered(chats, "gathr.turn.status", m.trace, work)
-        .await
-        .flatten()
+    apply(chats, "gathr.turn.status", m.trace, work).await;
 }
 
 /// A chat's tasks and waits, as `GET /api/chats/<id>/tasks` answers and the live socket sends.
@@ -143,28 +133,12 @@ async fn apply(
     trace: &str,
     work: impl FnOnce(&mut rusqlite::Connection) -> Result<Vec<Start>, gathr::Error> + Send + 'static,
 ) {
-    answered(chats, name, trace, |c| Ok((work(c)?, ()))).await;
-}
-
-/// As `apply`, with what the change answers besides; none when it failed.
-async fn answered<T: Send + 'static>(
-    chats: &Arc<Chats>,
-    name: &str,
-    trace: &str,
-    work: impl FnOnce(&mut rusqlite::Connection) -> Result<(Vec<Start>, T), gathr::Error>
-    + Send
-    + 'static,
-) -> Option<T> {
     match chats.writer.call(work).await {
-        Some(Ok((starts, answer))) => {
-            chats.start(starts);
-            Some(answer)
-        }
+        Some(Ok(starts)) => chats.start(starts),
         Some(Err(e)) => {
             let event = Event::point(name).trace(trace).error("sqlite");
             chats.writer.record(event.attr("why", e.to_string()));
-            None
         }
-        None => None,
+        None => {}
     }
 }

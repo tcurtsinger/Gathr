@@ -101,15 +101,32 @@ impl Task {
             task: ids.task,
             trace: &ids.trace,
         };
-        let position = crate::coord::turn_moved(&self.chats, moved, status, why).await;
+        crate::coord::turn_moved(&self.chats, moved, status, why).await;
         self.chats.settle_pauses(false).await;
         let reference = gathr::ids::reference(&ids.trace);
-        self.publish(
-            &ids.chat,
-            json!({ "type": "turn", "turn": ids.turn, "status": status,
+        let update = json!({ "type": "turn", "turn": ids.turn, "status": status,
             "agent": ids.agent, "why": why, "ref": reference, "task": ids.task,
-            "answers": ids.answers, "position": position }),
-        );
+            "answers": ids.answers });
+        self.publish_turn(ids, update).await;
+    }
+
+    /// Sends a turn's change live with when it was made and its place once started, read from
+    /// its row, so a window following live shows and orders it as a reload would (0028).
+    pub(super) async fn publish_turn(&self, ids: &Ids, mut update: Value) {
+        let turn = ids.turn.clone();
+        let place = self.chats.writer.call(move |c| store::turn_place(c, &turn));
+        match place.await {
+            Some(Ok((position, created))) => {
+                update["position"] = json!(position);
+                update["created"] = json!(created);
+            }
+            Some(Err(e)) => {
+                let event = Event::point("gathr.turn.status").trace(&ids.trace);
+                self.record(event.error("sqlite").attr("why", e.to_string()));
+            }
+            None => {}
+        }
+        self.publish(&ids.chat, update);
     }
 
     pub(super) fn fail_send(&self, ids: &Ids, why: String) -> Failed {
