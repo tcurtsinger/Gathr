@@ -93,6 +93,14 @@ proposal; v2's Archived-button flyout is retired and must not be built. The
 selected anatomy also appears in system.html#archive-stale. No service connects
 to these fixtures. Runtime Archive, Delete and stale rules belong to 0010.
 
+## Typography update
+
+[Hanken Grotesk viewport](typography/v1.html) composes the current reference at
+real desktop sizes, with Workspace and Summary controls. The system page and
+current shared reference CSS use the new scale. Older proposal pages keep their
+original composition; the new type contract supersedes their sizing. See
+[typography checks](typography/README.md).
+
 ## Selected Search
 
 [Title first](search/v1.html), selected 2026-11-10, extends the existing Tasks

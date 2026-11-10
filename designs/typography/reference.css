@@ -1,0 +1,193 @@
+/* Full viewport composition of the existing portable reference, never runtime code. */
+.typography-preview {
+	height: 100dvh;
+	overflow: hidden;
+}
+.typography-preview .ds-header {
+	height: 40px;
+	padding: 0 16px;
+}
+.typography-preview .ds-header h1 {
+	font-size: 14px;
+}
+.typography-preview .ds-header > span {
+	font-size: 12px;
+}
+.typography-preview .ds-header .ds-button {
+	height: 28px;
+	min-height: 28px;
+}
+.typography-preview .ds-layout {
+	height: calc(100dvh - 40px);
+	min-height: 0;
+}
+.typography-preview .ds-navigation {
+	min-height: 0;
+	padding: 16px 12px;
+}
+.typography-preview .ds-navigation > strong {
+	padding: 8px 12px;
+	font-size: 14px;
+	font-weight: 500;
+}
+.typography-preview .ds-navigation a {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.typography-preview .ds-navigation a[aria-current] {
+	background: var(--raised);
+}
+.typography-preview .ds-navigation small {
+	padding: 12px;
+	font-size: 12px;
+}
+.typography-preview .ds-navigation summary {
+	padding: 8px 12px;
+	font-size: 14px;
+	cursor: pointer;
+}
+.typography-preview .ds-navigation span {
+	float: right;
+}
+.typography-preview .ds-content {
+	padding: 0;
+	margin: 0;
+	max-width: none;
+	height: 100%;
+	min-height: 0;
+}
+.typography-preview .ds-content > :not(#team-message) {
+	display: none;
+}
+.typography-preview #team-message {
+	height: 100%;
+	margin: 0;
+}
+.typography-preview #team-message > :not(.ds-team) {
+	display: none;
+}
+.typography-preview .ds-team {
+	height: 100%;
+	position: relative;
+	border: 0;
+}
+.type-chat-and-workspace {
+	display: flex;
+	height: calc(100% - 46px);
+	min-height: 0;
+}
+.typography-preview .ds-split-body {
+	flex: 1;
+	height: 100%;
+	min-width: 0;
+}
+.typography-preview .ds-team-header {
+	padding: 0 12px;
+}
+.typography-preview .ds-team-header h3 {
+	font-size: 14px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+.typography-preview .ds-team-header .ds-row {
+	flex-wrap: nowrap;
+	flex: none;
+}
+.type-workspace {
+	width: 360px;
+	flex: 0 0 360px;
+	min-width: 0;
+	border-left: 1px solid var(--border);
+	background: var(--card);
+}
+.type-workspace[hidden] {
+	display: none;
+}
+.type-workspace .ds-workspace {
+	border: 0;
+	height: 100%;
+	border-radius: 0;
+}
+.type-workspace .ds-tabstrip {
+	gap: 0;
+	padding: 0 4px;
+}
+#type-workspace-close {
+	margin-left: auto;
+	flex: none;
+}
+.typography-preview .ds-plan-toggle {
+	flex-wrap: wrap;
+}
+.typography-preview .ds-working {
+	flex-wrap: wrap;
+}
+@media (max-width: 1200px) {
+	.typography-preview .ds-layout {
+		grid-template-columns: 190px minmax(0, 1fr);
+	}
+	.type-workspace {
+		position: absolute;
+		right: 0;
+		top: 46px;
+		bottom: 0;
+		z-index: 10;
+		width: min(360px, 100%);
+	}
+}
+@media (max-width: 600px) {
+	.typography-preview .ds-header > span {
+		display: none;
+	}
+	.typography-preview .ds-navigation {
+		display: none;
+	}
+	.typography-preview .ds-layout {
+		display: block;
+	}
+	.typography-preview .ds-team-header h3 {
+		font-size: 13px;
+	}
+	.typography-preview .ds-team-header {
+		padding: 0 8px;
+	}
+	.typography-preview .ds-team-header .ds-button {
+		padding: 0 8px;
+		min-height: 32px;
+		height: 32px;
+	}
+	.typography-preview .ds-team-header .ds-row {
+		gap: 0;
+	}
+}
+
+.type-nav-toggle {
+	display: none;
+}
+@media (max-width: 600px) {
+	.type-nav-toggle {
+		display: inline-flex;
+	}
+	.type-nav-open .ds-navigation {
+		display: flex;
+		position: absolute;
+		left: 0;
+		top: 40px;
+		bottom: 0;
+		width: 190px;
+		z-index: 20;
+	}
+	.typography-preview .ds-header {
+		gap: 4px;
+		padding: 0 8px;
+	}
+	.typography-preview .ds-header nav {
+		gap: 0;
+	}
+	.typography-preview .ds-header .ds-button {
+		padding: 0 8px;
+	}
+}

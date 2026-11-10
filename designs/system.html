@@ -52,7 +52,7 @@
 </section>
 <section class="ds-section ds-two" id="type" data-id="type-space">
 <div><h2>Typography</h2><p class="ds-type-large">What are we working on?</p>
-<p>Public Sans Variable. One continuous conversation.</p><p class="ds-mono">Metadata · 11px · ui-monospace</p></div>
+<p>Hanken Grotesk Variable. One continuous conversation.</p><p class="ds-mono">Metadata · 12px · ui-monospace</p></div>
 <div><h2>Spacing</h2><div class="ds-space" aria-label="4, 8, 16, 24 and 32 pixels">
 <span style="height:24px">4</span><span style="height:32px">8</span><span style="height:48px">16</span>
 <span style="height:64px">24</span><span style="height:80px">32</span></div></div>
@@ -216,27 +216,76 @@ aria-controls="team-column" aria-pressed="true" data-id="split-toggle" data-icon
 <div class="ds-column-label" id="supervisor-label">Mira</div><div class="ds-thread-column">
 <div class="ds-user-message" data-id="round-request">Fix duplicate output after reconnect. Keep the keyboard shortcuts as they are.</div>
 <article class="ds-team-message" id="round-handoff" data-id="round-handoff">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<span class="ds-role">Supervisor</span><time>09:15</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time>09:15</time>
+</header>
 <p>I found the boundary: we save the cursor before the event is complete.</p>
 <p>Rowan, fix the cursor commit. Kit, replay interruptions and check the shortcuts. Lane, check reconnect and stopped states.
 I’ll reconcile the results and ask Sol to review.</p>
 </article>
 <div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
 <article class="ds-team-message" data-id="status-without-thread">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<span class="ds-role">Supervisor</span><time>09:52</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time>09:52</time>
+</header>
 <p>Yes. Stop keeps the text already received.</p>
 </article>
 <div class="ds-user-message" data-id="direct-request">@Lane Does Retry keep my draft too?</div>
 <article class="ds-team-message" data-id="direct-reply">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
-<span class="ds-role">Member</span><time>09:54</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">L</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Lane</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:54</time>
+</header>
 <p>Yes. The draft stays in the composer while you retry.</p>
 </article>
 <article class="ds-team-message" id="round-final" hidden data-id="round-final">
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">M</span>Mira</span>
-<span class="ds-role">Supervisor</span><time id="final-time">10:03</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">M</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Mira</span>
+<span
+class="ds-role">Supervisor</span>
+</span>
+<time
+id="final-time">10:03</time>
+</header>
 <p>The cursor change is ready. Reconnect keeps one reply, tool output stays attached, and Stop keeps the partial text.
 The keyboard shortcuts are unchanged.</p>
 <span class="ds-reaction" aria-label="Sol agrees" title="Sol agrees" data-id="review-agreement">
@@ -330,8 +379,20 @@ The keyboard shortcuts are unchanged.</p>
 <div class="ds-column-label">Team</div><div class="ds-thread-column" id="team-replies">
 <article class="ds-team-message" data-id="thread-rowan">
 <p class="ds-assignment">Mira to Rowan · Cursor commit</p>
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">R</span>Rowan</span>
-<span class="ds-role">Member</span><time>09:42</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">R</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Rowan</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:42</time>
+</header>
 <details class="ds-tool-disclosure" data-id="rowan-tools"><summary>32 tool calls</summary><pre id="rowan-tool-log"></pre></details>
 <p>The saved cursor now advances only after a complete event. A reconnect resumes the existing reply rather than creating a second one.</p>
 <h4>What changed</h4>
@@ -354,8 +415,20 @@ The cursor change is ready for their results.</p>
 </article>
 <article class="ds-team-message" data-id="thread-kit">
 <p class="ds-assignment">Mira to Kit · Interruptions and shortcuts</p>
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">K</span>Kit</span>
-<span class="ds-role">Member</span><time>09:48</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">K</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Kit</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:48</time>
+</header>
 <details class="ds-tool-disclosure" data-id="kit-tools"><summary>18 tool calls</summary>
 <pre>Read interruption fixtures
 Replayed a disconnect during tool output
@@ -364,14 +437,37 @@ Checked Tab, Enter and Escape</pre></details>
 </article>
 <article class="ds-team-message" data-id="thread-lane">
 <p class="ds-assignment">Mira to Lane · Reconnect and stopped states</p>
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">L</span>Lane</span>
-<span class="ds-role">Member</span><time>09:50</time></header>
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">L</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Lane</span>
+<span
+class="ds-role">Member</span>
+</span>
+<time>09:50</time>
+</header>
 <p id="lane-result">The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.</p>
 </article>
 <article class="ds-team-message" id="late-member" hidden data-id="thread-sol">
 <p class="ds-assignment">Mira to Sol · Review the cursor change</p>
-<header class="ds-speaker"><span class="ds-agent-identity"><span class="ds-avatar" aria-hidden="true">S</span>Sol</span>
-<span class="ds-role">Reviewer</span><time>11:32
+<header
+class="ds-speaker">
+<span
+class="ds-avatar"
+aria-hidden="true">S</span>
+<span
+class="ds-speaker-label">
+<span
+class="ds-speaker-name">Sol</span>
+<span
+class="ds-role">Reviewer</span>
+</span>
+<time>11:32
 <span class="ds-unread" id="late-unread" hidden aria-label="New message"></span></time></header>
 <p>The replay keeps one reply and one tool result. I checked the cursor boundary and the duplicate final event. No findings.</p>
 </article>

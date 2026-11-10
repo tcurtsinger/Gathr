@@ -92,6 +92,11 @@ assert(
 assert(fs.existsSync(path.join(__dirname, "fonts/LICENSE.txt")), "font licence retained");
 console.log("Current system: offline assets, IDs, references, script, tokens and design boundaries passed.");
 
+assert(tokens.includes("font-weight: 300 700"), "Font exposes requested variable weights");
+assert(tokens.includes("hanken-grotesk-latin-wght-normal.woff2"), "Hanken Grotesk self-hosted");
+assert(!fs.existsSync(path.join(__dirname, "fonts/public-sans-latin-wght-normal.woff2")), "Public Sans removed");
+new vm.Script(fs.readFileSync(path.join(__dirname, "typography/reference.js"), "utf8"));
+
 new vm.Script(fs.readFileSync(path.join(__dirname, "search/reference.js"), "utf8"));
 for (const version of [1, 2]) {
  const html = fs.readFileSync(path.join(__dirname, "search/v" + version + ".html"), "utf8");
