@@ -71,7 +71,7 @@ a new chat and 20px for a panel. Weights 400 and 500,
 - Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px.
 - Chat header and workspace tabstrip align at 46px. The prototype's 40px preview
   strip is fixture chrome, not a Gathr requirement.
-- Thread column is 44rem including 16px inner padding, leaving 672px at the
+- Thread column is 52rem including 16px inner padding, leaving 800px at the
   normal 16px root size. Composer shares that content width. New chat centres
   its heading, optional project notch and composer.
 - Workspace starts at 40% of available width, initially clamped to 480 to 760px.
@@ -133,44 +133,95 @@ Tools are collapsed where they happened. MessageActions serve hover and keyboard
 focus. Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
-### Team messages: inline thread with Summary
+### Team messages: split chat with Summary
 
-The main conversation holds the person's messages, the Supervisor's hand-offs
-and final words. A hand-off has one collapsible team thread below it. Replies
-belong to the message that gave their task, never to the nearest previous message.
-Messages nobody answers have no thread. A direct @member exchange stays in the
-main conversation. See [0015](docs/decisions/0015-chat-design.md).
+The owner's split chat handoff (2026-11-10) supersedes the inline threads in
+[0015](docs/decisions/0015-chat-design.md). This is the accepted target, not a claim
+that every screen has shipped. The handoff HTML is a reference only: compose the
+existing assistant-ui registry components and Gathr state in React; never port
+its HTML or third-party runtime.
 
-The disclosure names who replied, who is working and who is waiting. Open while
-work runs; fold when the Supervisor finishes, unless the person has opened or
-closed it themselves. Retain that manual choice. Opening grows the conversation
-in the page: no inner scroll box, height cap or separately scrolling reply list.
-Indent replies with one neutral hairline; keep names, initials and normal-font
-roles on every reply. Tools fold where they happened. Preserve 0028's turn-start
-order within each thread; concurrent text never interleaves. Wide code and tables
-may scroll horizontally. Thread disclosure and tool disclosure are separate.
+The main column holds the person's messages, the Supervisor's hand-offs and final
+words, and direct @member exchanges. A header Columns2 toggle opens one running
+team conversation on the right. Both columns get half the chat width, with
+min-width:0 and independent scrolling. No per-hand-off disclosures or return
+links remain. Every hand-off reply goes in the shared team column, in 0028's
+turn-start order, with each turn's text and tools kept together. Keep the
+assignment line above each reply. A late reply appears in that same chronology;
+the Supervisor's next word stays at the bottom of the main column.
 
-A late reply updates its original thread in place, including the collapsed
-summary. The Supervisor's next word arrives at the current bottom of the chat,
-after any intervening conversation, with a link back to the hand-off. That link
-opens the thread and moves keyboard focus to its disclosure. Updates alone never
-move the reader's viewport or reopen a manually folded thread. Keep the draft,
-recipient and reading position when toggling a thread or Summary. A reviewer's
-agreement is a named reaction on the final word; a question remains a reply.
+While split, sticky overlay labels name the Supervisor and Team. Each has a
+44px height, a negative 44px bottom margin, 12px 24px top/side padding and a
+canvas-to-transparent fade. They have no border or banner and pass pointer input
+through. Content below a visible label starts at 48px, leaving 4px clear of the
+label; the first assignment line never sits under it. This corrects the overlap
+in the owner's prototype. The workspace still opens to the right of both columns,
+with its existing sizing and overlay rules. Team content uses the same centred 52rem
+maximum as the conversation. The composer stays in the Supervisor column.
 
-Summary stays available from the chat header for a quick glance at every agent's
-role, actual state, named wait and assignments. It is the prototype's floating
-popover, not a new workspace tab or permanent team pane. Opening an agent reveals
-its tasks. Escape/outside click dismisses it; Escape returns focus to Summary.
+The split toggle is a 24px TooltipIconButton, after Summary and before Open
+sidebar. Tooltips are Show team chat and Hide team chat. Pressed uses a 9%
+foreground tint. A new team message while closed adds an attention dot to the
+toggle and beside that message's time until seen. Opening clears the header dot.
+Retain split state per chat, both scroll positions, draft and recipient. Incoming
+work never moves the reader. The reviewer's agreement stays a named reaction;
+a question stays a reply. Agent bodies, tools and reactions indent 34px to align
+with the speaker name (24px avatar plus 10px gap).
 
-These are selected presentation rules, not existing service capabilities. F5 must
-record each task's originating turn and each turn's task before F8b groups replies.
-Never infer those links or completion from prose, @mentions or arrival time.
+Waiting on team appears after the main column's latest message while the current
+round has an open task and no Supervisor turn is running. Working appears at the
+bottom of the team column for members with running turns. Both use an attention spinner
+and overlapping 18px initials for members with running turns. Waiting on team
+opens the split. Its time and tooltip use the earliest created_us of the round's
+open tasks given by the Supervisor, plus created_ts of any own open wait, as
+Summary does. A Supervisor cannot wait on its own team; no wait record is invented.
+Never show a queued or pending task as a working agent.
+
+### Agent plan and Summary
+
+The official agent-plan registry element docks above the composer as a collapsible
+bar, max-width 44rem, bottom margin 8px, radius 16px, popover surface and 6%
+foreground border. Its 40px row shows state, title, segmented progress, done/total
+and chevron. Expansion opens above the row, capped at 40vh. Rows show task state,
+label and owner. Working detail is the latest tool call on that task; held or
+blocked detail is the stored reason, omitted when absent. Agents have no free-text
+progress record. A round follows given_in/task/answers links to one main-line
+Supervisor turn, including nested tasks. Exclude person questions and cancelled
+tasks; order by task number. Only done tasks count toward the fraction. Never invent a step
+from prose. Until plan records exist, the title is Plan; afterwards it is the
+recorded plan title. Do not infer titles, progress or review completion from text. The bar says Done
+only after every task is settled and the Supervisor's hear-back has ended;
+settled failures can leave the fraction below total, so the outcome stays visible.
+
+Blocked steps use a static square-minus, Blocked and the stored reason. Failed
+uses a destructive circle-exclamation and Failed. Stopped uses a muted square
+and Stopped. Keep these outcomes separate from pending; none counts done or spins.
+Their segments stay unfilled, with destructive color for failed. A mixed round
+can still show running agents beside a terse outcome count (Lane working, 1 blocked).
+Use stored task states only; never infer success from a finished turn.
+
+Summary remains a 320px floating popover in the chat header, alongside the optional
+team column. It is not a workspace tab. Use official SubagentList rows and
+expandable TodoList assignments, without card borders. Each row shows initials,
+name, role, actual state and More. States are Working, Ready or a named wait with
+its recorded start. Indent the 3px progress bar and done/total count 34px; count
+done tasks over that agent's tasks in this chat, excluding cancelled tasks.
+The TodoList shows checked/struck-through done items, active spinners and pending
+empty squares. No tasks says No assigned tasks, without a fabricated fraction.
+Escape/outside click dismisses Summary; Escape returns focus to its trigger.
+
+All plan steps, counts, working agents, assignments and timing come from
+service tasks, turns and waits. Missing records never become inferred state.
+The portable reference uses explicitly invented records only. Reduced motion
+stops spinners and removes chevron and archive-lid transitions.
 
 ### Navigation and workspace
 
 New, Search and Tasks sit above projects and their chats. Settings stays bottom
-left. Search and the pending human Tasks list share a contextual flyout, at most
+left. Archived uses Lucide Archive when collapsed and the same icon with its lid
+lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
+hinge (2px 8px), translate it up 1.5px, over 160ms ease-out.
+Search and the pending human Tasks list share a contextual flyout, at most
 340px wide, beside navigation. Escape, outside click, Close or the same trigger
 dismisses it. Search matches titles and message text, supports arrow selection and
 Enter, and retains its query. A task routes to its exact chat and task.
@@ -179,14 +230,14 @@ Workspace has a permanent Home tab, then Tasks, Changes, Terminal, Files, Web an
 canonical document tabs as opened. Plus returns to Home. Each chat retains its
 tabs, selection and tool state; canonical paths reuse a tab, terminals may have
 several instances. Close other tabs retains Home and Recents. Arrow keys,
-Home/End and Delete operate tabs. Summary replaces 0015's earlier Team tab, as
-recorded in its accepted inline-thread refinement. Other tab workflows remain
+Home/End and Delete operate tabs. Summary and the optional team column replace
+0015's earlier Team tab and inline thread. Other tab workflows remain
 governed by their decisions.
 
 Agents show their initials beside their name, replacing the shared robot icon.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
-Team status moves to Summary. Inline SubagentList rows show chat role and named
+Team status appears in Summary. SubagentList rows show chat role and named
 state, with a TodoList disclosure for that agent's assignments in that chat.
 No card borders around the inline rows. Progress must derive from real task
 completion, not a decorative timer. States include Working, Ready and named waits
@@ -252,8 +303,9 @@ The service owns that timing and every archive effect; see 0010.
 
 Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:
 at most 1024 by 760px, 32px horizontal and 48px vertical clearance, a fixed header,
-a 200px category rail and Close at top right. Below 768px categories move above
-content. Escape/Close return focus and preserve the chat's draft and position.
+a 200px category rail and an X at top right (the shared icon button, 16px from the top
+and right, with a Close Settings tooltip; 0023). Below 768px categories move above
+content. Escape/the X return focus and preserve the chat's draft and position.
 Apply the new shared tokens, type and controls within that layout.
 
 General starts with Theme for This computer: System (default, follows the system's
@@ -331,8 +383,9 @@ Run `node designs/check.cjs`. Open `designs/system.html` at 1440 and 1024px,
 dark and light (`#light` or Switch theme). Exercise composer, tool disclosure,
 tabs, Summary, Settings categories, Help, Switch, Escape and keyboard focus.
 Run `node designs/check-team.cjs` after the UI dependencies are available. It
-checks running, finished and late replies, manual folding, keyboard links and
-Summary at both sizes and themes. An optional output folder saves screenshots;
+checks running, finished and late replies, split retention, independent scrolling,
+plan progress, Summary and keyboard controls at both sizes and themes.
+An optional output folder saves screenshots;
 keep evidence outside the repo.
 The old selected pages are retired as layout authority; see designs/README.md.
 No engine, account sign-in, real command or Settings service connects to this page.

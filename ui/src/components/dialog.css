@@ -21,6 +21,8 @@
   align-items: center;
   justify-content: space-between;
   flex-shrink: 0;
+  /* A Close button's height, whether the header holds it or the X sits over it. */
+  min-height: 53px;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -28,4 +30,10 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+}
+/* The prototype's top-4 right-4: 16px from the panel's top and right edges. */
+.dialog-x {
+  position: absolute;
+  top: 16px;
+  right: 16px;
 }

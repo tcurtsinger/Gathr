@@ -8,25 +8,24 @@ After `npm ci` in `ui/`, run `node designs/check-help.cjs` for Help placement,
 Escape and focus return in both themes at 1440 and 1024px (Edge on Windows,
 WebKit on macOS).
 
-Settings retains the centred Gathr layout. Team messages use an inline thread
-under the message that gave the task, with Summary in the chat header (0015).
-The open thread grows in the page; a late reply stays in its original thread and
-the Supervisor's final word arrives at the bottom with a link back. Messages nobody
-answers have no thread. The recipient defaults to the Supervisor by name and has
-no Everyone option. The portable page has no service.
+Settings retains the centred Gathr layout. The accepted split chat (0015,
+2026-11-10) replaces inline team threads: a header toggle opens one chronological
+team conversation beside the Supervisor, with independent scrolling. Direct
+@member exchanges stay in the main column. Summary remains a popover. The
+recipient defaults to the Supervisor by name and has no Everyone option.
 
-`system.html#team-message` shows the selected thread with five invented agents,
-a long reply, 32 tool calls, a message mid-round and a direct @member exchange.
-Finish and Late reply simulate two outcomes; Reset returns to running. These are
-preview controls, not product actions. Manual folding wins over automatic folding.
-The composer uses the same shared anatomy demonstrated elsewhere on the page.
-`team-reference.css` and `team-reference.js` hold this fixture only; F8b must use
-the prototype's actual React components and Gathr state rather than porting it.
+`system.html#team-message` demonstrates the split, 52rem maximum, 34px reply
+indent, docked Agent plan, working initials and Summary progress with invented
+records. Finish and Late reply simulate outcomes; Reset returns to running.
+These are fixture controls, not product actions. The portable page has no service.
+`team-reference.css` and `team-reference.js` are fixture code only. Production
+uses assistant-ui registry components and Gathr state; never port the handoff
+HTML or its support.js runtime. The owner's reference stays in Shared/designs/split_chat.
 
-After UI dependencies are available, run `node designs/check-team.cjs` for the
-thread's state changes, keyboard navigation, Summary, draft retention and overflow
-at 1440 and 1024px in both themes. An optional absolute output folder saves PNGs
-and a JSON check record; keep them under `gathr-work`, outside the repository.
+Run `node designs/check-team.cjs` after installing UI dependencies. It checks split
+state, independent scrolling, late/unread work, plan and Summary counts, keyboard
+controls and draft retention at 1440 and 1024px in both themes. An optional
+absolute folder outside the repo saves PNGs and JSON evidence.
 
 ## Retired selected shell pages
 
