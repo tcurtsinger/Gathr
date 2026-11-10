@@ -293,6 +293,8 @@ header Diagnostics action. The prototype's component gallery is a reference tool
 
 ### Recovery, focus and motion
 
+App-level failures appear under the chat header in the shared Notice, with the reason, reference and Dismiss.
+
 Stopped, waiting for sign-in and failed-send notices stay at their affected reply
 per 0023. Preserve partial text and drafts. Neutral for stopped/waiting; destructive
 for failure, with the reference, Diagnostics and Retry. Errors end in failed.
