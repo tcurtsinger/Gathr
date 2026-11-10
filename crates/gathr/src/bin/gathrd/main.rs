@@ -14,6 +14,7 @@ mod models;
 mod pauses;
 mod projects;
 mod routes;
+mod search;
 mod serve;
 mod sign_in;
 mod startup;

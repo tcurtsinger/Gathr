@@ -19,8 +19,8 @@ colors:
   ring: "transparent"
   attention: "#60a5fa"
 typography:
-  body: { fontFamily: "Public Sans Variable", fontSize: "14px", fontWeight: 400 }
-  composer: { fontFamily: "Public Sans Variable", fontSize: "15px", fontWeight: 400 }
+  body: { fontFamily: "Hanken Grotesk Variable", fontSize: "15px", fontWeight: 450 }
+  composer: { fontFamily: "Hanken Grotesk Variable", fontSize: "16px", fontWeight: 450 }
 rounded: { sm: "8px", floating: "16px", composer: "24px", action: "9999px" }
 spacing: { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "32px" }
 components:
@@ -58,13 +58,23 @@ background, surface to card, text to foreground, danger to destructive.
 
 ## Typography
 
-Public Sans Variable, self-hosted under the SIL Open Font License, then Public
-Sans and the platform sans-serif. The preview includes the Latin variable file;
-other scripts use fallback fonts. No remote font requests. Body 14px; composer
-15px; navigation and agent names 13px; text actions 12px; metadata 11 to 12px
-monospace, except agent roles: those use the normal sans-serif. Headings 26px for
-a new chat and 20px for a panel. Weights 400 and 500,
-600 where emphasis needs it. Prose has relaxed line spacing; code stays monospace.
+Hanken Grotesk Variable, self-hosted under the SIL Open Font License 1.1, then
+Hanken Grotesk and the platform sans-serif. The unmodified Latin variable file
+comes from `@fontsource-variable/hanken-grotesk` 5.3.0; the face exposes weights
+300 to 700. Other scripts use fallback fonts. No remote font requests.
+Body and messages 15px; composer 16px; navigation and agent names 14px; text
+actions 13px; metadata 12 to 13px monospace, except agent roles, which use the
+normal sans-serif at 12px. Headings remain 26px for a new chat and 20px for a panel.
+Base weight is 450; medium 500 and semibold 600 stay unchanged. Body line-height
+is 1.6, replies 1.7. Code stays monospace. The text scale moves 11 to 12, 12 to 13,
+13 to 14, 14 to 15 and 15 to 16px; existing larger headings keep their sizes.
+
+In message headers, the name and role share a flex wrapper with baseline
+alignment and an 8px gap. The avatar stays vertically centred against that
+wrapper. Message text keeps its 34px indent. Do not centre the smaller role
+against the name. The [typography check page](designs/typography/v1.html) shows
+the split, workspace, plan bar and Summary at the new scale. Production sizing
+and header markup follow in the typography UI feature.
 
 ## Layout
 
@@ -231,6 +241,15 @@ Search and the pending human Tasks list share a contextual flyout, at most
 340px wide, beside navigation. Escape, outside click, Close or the same trigger
 dismisses it. Search matches titles and message text, supports arrow selection and
 Enter, and retains its query. A task routes to its exact chat and task.
+Archived chats are included and labelled Archived. Chats precede Messages; one
+keyboard cursor spans both groups. A message hit centres its saved message and
+holds the scroll there until the person returns to the bottom. The matched
+message gets a 1.6-second attention tint; reduced motion uses a static tint until
+the person leaves that result. No outline or ring. In-chat find is separate work.
+
+Search uses [title first](designs/search/v1.html), selected 2026-11-10, matching
+Tasks. Snippet first (v2) is retired. Search and Tasks share the icon-button close.
+The portable reference demonstrates empty, loading, no matches and referenced errors.
 
 Workspace has a permanent Home tab, then Tasks, Changes, Terminal, Files, Web and
 canonical document tabs as opened. Plus returns to Home. Each chat retains its

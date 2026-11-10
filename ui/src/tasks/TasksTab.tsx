@@ -49,14 +49,18 @@ export function TasksTab(props: Props) {
   const task = tasks[at];
   const staged = tasks.filter((t) => ready(t, drafts[t.number])).length;
 
+  const moved = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new question starts at its top
   useLayoutEffect(() => {
     if (scroll.current) scroll.current.scrollTop = 0;
+    // Before paint, never a frame later: late focus took keystrokes from the field being typed in.
+    if (moved.current) heading.current?.focus({ preventScroll: true });
+    moved.current = false;
   }, [task?.number]);
 
   const go = (to: number) => {
+    moved.current = true;
     onSelect(tasks[to].number);
-    requestAnimationFrame(() => heading.current?.focus({ preventScroll: true }));
   };
   const send = async () => {
     setSending(true);

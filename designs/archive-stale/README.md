@@ -35,7 +35,7 @@ v1/v2 pages and their preview.js snapshot remain unchanged for comparison.
 
 - This is a refinement in Operate mode: variance 2, motion 2, density 5.
   Desktop use in daylight and at night keeps both existing themes. No new tokens.
-- Use Public Sans, neutral canvas/surface, foreground actions and attention links
+- Use the current Hanken Grotesk tokens (historical screenshots used Public Sans), neutral canvas/surface, foreground actions and attention links
   from ../tokens.css. The signature remains the centred conversation and quiet
   chrome. No F11-specific accent, icon family or panel style.
 - Compose the existing Sidebar, ChatMenu, registry DropdownMenu, shared Button,

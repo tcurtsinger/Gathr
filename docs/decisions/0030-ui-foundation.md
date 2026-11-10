@@ -24,8 +24,10 @@ The owner chose assistant-ui and its prototype as the chat reference. Keeping it
 | `tailwindcss`, `@tailwindcss/vite` (dev) | 4.3.5 | MIT | Build-time CSS for the registry and Streamdown classes |
 
 Pinned exactly. Installed from this PC's npm cache, so nothing new was downloaded. `react-markdown`, `remark-gfm`,
-`remark-parse` and `unified` are no longer direct dependencies. The approved `@fontsource-variable/public-sans` isn't
-needed: `designs/tokens.css` already self-hosts the font.
+`remark-parse` and `unified` are no longer direct dependencies. Font packages are not runtime dependencies:
+`designs/tokens.css` self-hosts the unmodified font file with its licence. The owner's 2026-11-10 typography
+update replaces Public Sans with Hanken Grotesk from `@fontsource-variable/hanken-grotesk` 5.3.0 (OFL-1.1),
+weights 300 to 700, base 450. See DESIGN.md and designs/fonts/README.md.
 
 - **Registry files** live in `ui/src/registry`, in the prototype's tree (`components/…`, `lib/utils.ts`), imported as `@/…`.
   Only what a merged screen uses comes in: 14 files for the chat. They stay as published: `ui/registry.json` records each

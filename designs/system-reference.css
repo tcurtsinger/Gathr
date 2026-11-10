@@ -1,5 +1,5 @@
 .system-page {
-	font: 14px / 1.6 var(--font-sans);
+	font: 450 15px / 1.6 var(--font-sans);
 	margin: 0;
 	background: var(--background);
 	color: var(--foreground);
@@ -21,7 +21,7 @@
 }
 .ds-header span {
 	color: var(--muted-foreground);
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-header nav {
 	margin-left: auto;
@@ -46,7 +46,7 @@
 	color: var(--foreground);
 	text-decoration: none;
 	border-radius: 7px;
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-navigation a:is(:hover, :focus-visible) {
 	background: var(--raised);
@@ -54,7 +54,7 @@
 .ds-navigation small {
 	padding: 16px 12px;
 	color: var(--muted-foreground);
-	font-size: 11px;
+	font-size: 12px;
 	max-width: 24ch;
 }
 .ds-content {
@@ -75,13 +75,13 @@
 	margin: 0 0 16px;
 }
 .ds-section h3 {
-	font-size: 14px;
+	font-size: 15px;
 	font-weight: 500;
 	margin: 0 0 12px;
 }
 .ds-note {
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: 13px;
 	margin: 8px 0 16px;
 }
 .ds-swatches {
@@ -103,8 +103,7 @@
 .ds-swatch code {
 	display: block;
 	padding: 8px 10px;
-	font:
-		11px / 1.5 ui-monospace,
+	font: 450 12px / 1.5 ui-monospace,
 		monospace;
 	overflow-wrap: anywhere;
 }
@@ -126,7 +125,7 @@
 	border-radius: 9999px;
 	background: transparent;
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: 13px;
 	font-weight: 500;
 	white-space: nowrap;
 }
@@ -177,7 +176,7 @@
 	min-height: 36px;
 	color: var(--foreground);
 	max-width: 100%;
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-field::placeholder {
 	color: var(--muted-foreground);
@@ -189,8 +188,7 @@
 	margin: 0;
 }
 .ds-mono {
-	font:
-		11px / 1.6 ui-monospace,
+	font: 450 12px / 1.6 ui-monospace,
 		monospace;
 	color: var(--muted-foreground);
 }
@@ -205,7 +203,7 @@
 	background: var(--muted-surface);
 	border: 1px solid var(--border);
 	width: 44px;
-	font-size: 11px;
+	font-size: 12px;
 }
 .ds-workspace {
 	border: 1px solid var(--border);
@@ -226,7 +224,7 @@
 	padding: 0 12px;
 	border: 1px solid transparent;
 	border-radius: 8px;
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--muted-foreground);
 }
 .ds-tab[aria-selected="true"] {
@@ -249,7 +247,7 @@
 .ds-tool-content li {
 	padding: 8px 0;
 	border-bottom: 1px solid var(--border);
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-tool-content li:last-child {
 	border: 0;
@@ -270,7 +268,7 @@
 .ds-tool-disclosure {
 	margin: 8px 0 24px;
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: 13px;
 }
 .ds-tool-disclosure summary {
 	cursor: pointer;
@@ -300,7 +298,7 @@
 	min-height: 44px;
 	width: 100%;
 	padding: 0 12px;
-	font-size: 15px;
+	font-size: 16px;
 	caret-color: var(--attention);
 }
 .ds-composer input::placeholder {
@@ -317,10 +315,10 @@
 	border-radius: 16px;
 	background: transparent;
 	padding: 6px 10px;
-	font-size: 12px;
+	font-size: 13px;
 }
 .ds-status {
-	font-size: 12px;
+	font-size: 13px;
 	color: var(--muted-foreground);
 	min-height: 20px;
 	margin-top: 12px;
@@ -334,10 +332,10 @@
 	align-items: center;
 	gap: 12px;
 	color: var(--danger);
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-notice code {
-	font-size: 11px;
+	font-size: 12px;
 }
 .ds-notice .ds-button {
 	margin-left: auto;
@@ -356,7 +354,7 @@
 	box-shadow: 0 10px 24px #0003;
 }
 .ds-summary h3 {
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 500;
 	margin: 0 0 12px;
 }
@@ -365,7 +363,7 @@
 	border: 0;
 	border-radius: 0;
 	background: transparent;
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-agent summary {
 	display: flex;
@@ -389,16 +387,16 @@
 	border-radius: 50%;
 	background: var(--raised);
 	color: var(--foreground);
-	font: 500 11px / 1 var(--font-sans);
+	font: 500 12px / 1 var(--font-sans);
 }
 .ds-role {
-	font: 11px / 1.6 var(--font-sans);
+	font: 450 12px / 1.6 var(--font-sans);
 	color: var(--muted-foreground);
 }
 .ds-agent ul {
 	padding-left: 20px;
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: 13px;
 }
 .ds-dialog {
 	width: min(1024px, calc(100vw - 64px));
@@ -441,7 +439,7 @@
 }
 .ds-settings nav button {
 	text-align: left;
-	font-size: 13px;
+	font-size: 14px;
 	padding: 8px 12px;
 	border-radius: 8px;
 	color: var(--muted-foreground);
@@ -471,7 +469,7 @@
 .ds-setting-row small {
 	display: block;
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: 13px;
 }
 .ds-settings-form {
 	display: grid;
@@ -481,7 +479,7 @@
 .ds-settings-form label {
 	display: grid;
 	gap: 8px;
-	font-size: 13px;
+	font-size: 14px;
 }
 .ds-settings-form footer {
 	display: flex;
