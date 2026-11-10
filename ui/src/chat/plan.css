@@ -1,0 +1,131 @@
+/* The Agent plan bar above the composer (DESIGN.md "Agent plan and Summary"). */
+.plan-bar {
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+  border-radius: 16px;
+  background: var(--popover);
+}
+/* The steps open above the row, inside the same card. */
+.plan-steps {
+  max-height: 40vh;
+  overflow: auto;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 12px 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+.plan-row:hover {
+  background: color-mix(in oklab, var(--foreground) 3%, transparent);
+}
+.plan-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--attention);
+}
+.plan-icon[data-done] {
+  color: var(--foreground);
+}
+.plan-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.plan-icon[data-done] svg {
+  width: 14px;
+  height: 14px;
+}
+/* Nobody at work and not done: the not-started dot, never a spinner. */
+.plan-icon i {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--muted-foreground);
+  border-radius: 50%;
+}
+/* Keeps room for "Plan" and the start of its line; the line takes what the segments leave. */
+.plan-title {
+  display: flex;
+  flex: 1 1 0;
+  min-width: min(7.5rem, 40%);
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+}
+.plan-title strong {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.plan-title span {
+  flex: 1;
+  width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+/* A long round narrows its segments rather than pushing done/total out of the row. */
+.plan-segments {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+}
+.plan-segments i {
+  /* A width, not only a basis: the track's own size comes from its segments' widths. */
+  flex: 0 1 auto;
+  width: 12px;
+  min-width: 2px;
+  height: 4px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.plan-segments [data-state="done"] {
+  background: color-mix(in oklab, var(--foreground) 80%, transparent);
+}
+.plan-segments [data-state="active"] {
+  background: var(--attention);
+}
+.plan-segments [data-state="failed"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--destructive);
+}
+.plan-fraction {
+  flex: none;
+  min-width: 30px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.plan-chevron {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+  transition: transform 200ms;
+}
+.plan-row[data-state="open"] .plan-chevron {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .plan-chevron {
+    transition: none;
+  }
+}

@@ -65,3 +65,43 @@ test('each named wait in Summary says when it began: the time today, the date be
   const day = earlier.toLocaleDateString([], { month: 'short', day: 'numeric' });
   await expect.element(summary).toMatchTextContent(`Member · Waiting for Made-up Third since ${day}`);
 });
+
+test("each agent's progress counts its done tasks in this chat, cancelled left out; no tasks, no count", async () => {
+  const state = {
+    ...empty,
+    members,
+    tasks: [
+      { ...task(1, 'a', 'b', 0), state: 'done' as const },
+      { ...task(2, 'a', 'b', 0), state: 'held' as const },
+      { ...task(3, 'a', 'b', 0), state: 'cancelled' as const },
+      { ...task(4, 'a', 'b', 0), state: 'blocked' as const, reason: 'Made-up fixture missing' },
+      { ...task(5, 'a', 'b', 0), state: 'failed' as const, reason: 'Made-up command failed' },
+    ],
+  };
+  const screen = await render(
+    <Summary
+      state={state}
+      pauses={{ pauses: [], usage: [] }}
+      run={{ state: 'running', by: null, scope: null }}
+      onPause={() => {}}
+    />,
+  );
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  const member = page.getByRole('progressbar', { name: 'Made-up Member progress' });
+  await expect.element(member).toHaveAttribute('aria-valuetext', '1/4');
+  await expect.element(member).toHaveAttribute('aria-valuenow', '25');
+  await expect
+    .element(page.getByRole('progressbar', { name: 'Made-up Third progress' }))
+    .not.toBeInTheDocument();
+
+  await page.getByRole('button', { name: /^Made-up Member/ }).click();
+  const items = page.getByRole('dialog', { name: 'Summary' }).getByRole('listitem');
+  await expect
+    .poll(() => items.all().map((i) => i.element().getAttribute('data-status')))
+    .toEqual(['active', 'done', 'pending', 'failed']);
+  await expect.element(items.nth(2)).toMatchTextContent('Blocked: Made-up fixture missing');
+  await expect.element(items.nth(3)).toMatchTextContent('Made-up command failed');
+
+  await page.getByRole('button', { name: /^Made-up Third/ }).click();
+  await expect.element(page.getByText('No assigned tasks')).toBeVisible();
+});

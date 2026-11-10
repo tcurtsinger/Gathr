@@ -86,6 +86,8 @@ function Chat() {
       onPause={act}
       split
       onSplit={() => {}}
+      plan={false}
+      onPlan={() => {}}
     />
   );
 }

@@ -96,6 +96,25 @@
       "sha256": "d954efb735f13734751207ad22cb0cddd7f6ec53c59d16675d103dae08cb61fb"
     },
     {
+      "path": "components/assistant-ui/elements/agent-plan.tsx",
+      "url": "https://r.assistant-ui.com/elements-agent-plan.json",
+      "sha256": "4cfc56bbe121fdd8269f4e894bdb60b2acb8d5e23bd7cc8359d47949f57336b2",
+      "adapted": "3fb3569d20156182e2b94e4ca3a3cbc38f04162d3f7cc6702a41d9fa88024528",
+      "why": "Gathr's plan steps are tasks, several at work at once (DESIGN.md Agent plan): each step's own status (blocked, failed and stopped outcomes too) and owner, the design's step icons, and the header left to the docked bar."
+    },
+    {
+      "path": "components/assistant-ui/elements/subagent-list.tsx",
+      "url": "https://r.assistant-ui.com/elements-subagent-list.json",
+      "sha256": "45b41b2621c1ed3e0b1268aaa21987b80bb8f3404e0685014f60091d084d83f8",
+      "adapted": "6bfecd5e483b9deaf7c509f9a5034bf1075fb5d0b4734035ef542139b9381bac",
+      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle. The card presentation is unchanged."
+    },
+    {
+      "path": "components/assistant-ui/elements/todo-list.tsx",
+      "url": "https://r.assistant-ui.com/elements-todo-list.json",
+      "sha256": "0090df0bec2350d1e9992a5446d89267abcf4e1145a7603269c07236f295c518"
+    },
+    {
       "path": "lib/utils.ts",
       "url": null,
       "sha256": "a8950be0d3981383f2897a00a5a58913ae927d96e51557d915a76e81fbef4f30",

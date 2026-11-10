@@ -9,6 +9,7 @@ import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ChatMenu } from './ChatMenu';
 import { type SendFailure, toThread } from './messages';
+import { PlanBar } from './PlanBar';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { keepReading, type Reading, readingAt } from './reading';
 import { Summary } from './Summary';
@@ -56,6 +57,9 @@ interface Props {
   /** The team chat beside the Supervisor's, in a chat with more than one agent; kept per chat. */
   split: boolean;
   onSplit: (open: boolean) => void;
+  /** The plan bar's steps shown; kept per chat. */
+  plan: boolean;
+  onPlan: (open: boolean) => void;
 }
 
 export function ChatView(props: Props) {
@@ -238,23 +242,26 @@ export function ChatView(props: Props) {
               </div>
             </>
           ) : (
-            <Composer
-              draft={draft}
-              onDraft={onDraft}
-              onSend={sendDraft}
-              onStop={turn ? () => act('stop', thisChat) : undefined}
-              inputRef={input}
-              tools={
-                agent && (
-                  <AgentPicker
-                    agents={recipients}
-                    selected={agent}
-                    onSelect={setPicked}
-                    onEdit={() => onEditAgent(agent)}
-                  />
-                )
-              }
-            />
+            <>
+              {team && <PlanBar state={state} open={props.plan} setOpen={props.onPlan} />}
+              <Composer
+                draft={draft}
+                onDraft={onDraft}
+                onSend={sendDraft}
+                onStop={turn ? () => act('stop', thisChat) : undefined}
+                inputRef={input}
+                tools={
+                  agent && (
+                    <AgentPicker
+                      agents={recipients}
+                      selected={agent}
+                      onSelect={setPicked}
+                      onEdit={() => onEditAgent(agent)}
+                    />
+                  )
+                }
+              />
+            </>
           )}
         </Thread>
         {teamDrawn && (

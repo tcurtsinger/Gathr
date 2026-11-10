@@ -1,4 +1,4 @@
-/* Summary: the prototype's popover from the chat header (DESIGN.md, designs/system-reference.css). */
+/* Summary: the prototype's popover from the chat header (DESIGN.md "Agent plan and Summary"). */
 .summary-anchor {
   position: absolute;
   right: 8px;
@@ -25,40 +25,51 @@
   font-size: 13px;
   font-weight: 500;
 }
-.summary-agent {
-  position: relative;
-  padding: 10px 0;
-  font-size: 13px;
+.summary-avatar {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  font-size: 11px;
+  font-weight: 500;
 }
-/* The agent's own Pause or Resume, at its row's corner. */
-.summary-agent > button {
-  position: absolute;
-  top: 14px;
-  right: 4px;
+.summary [data-working] {
+  color: var(--attention);
 }
-.summary-agent summary {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 8px;
-  list-style: none;
-  cursor: pointer;
+/* An agent's tasks under its row: no header of their own, the count is on the row. */
+.summary-todos {
+  max-width: none;
+  gap: 0;
+  margin: 2px 0 6px;
+  padding: 0 8px 0 42px;
 }
-.summary-agent summary::-webkit-details-marker {
+.summary-todos > div:first-child {
   display: none;
 }
-.summary-agent summary:hover {
-  background: var(--hover-tint);
+.summary-todos ul {
+  gap: 2px;
 }
-.summary-agent small {
-  padding-left: 34px;
-  color: var(--muted-foreground);
-  font-size: 11px;
+.summary-todos li {
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
 }
-.summary-agent ul {
-  margin: 8px 0 0;
-  padding-left: 20px;
+.summary-todos li > div {
+  line-height: 18px;
+}
+.summary-todos li > span:first-child {
+  width: 14px;
+  height: 18px;
+}
+.summary-todos [data-status="active"] svg {
+  color: var(--attention);
+}
+.summary-none {
+  margin: 2px 0 6px;
+  padding: 3px 8px 3px 42px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
