@@ -45,6 +45,7 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
       onClose={onClose}
       opener={target?.opener}
       className="settings-panel"
+      closeIcon
     >
       {target && (
         <div className="settings-body">

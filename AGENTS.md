@@ -203,8 +203,8 @@ Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exe
 Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
 `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
 The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
-Team messages use 0015's inline thread with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
-manual folding, Summary (expanded assignments and short windows), keyboard links and draft retention in both sizes and themes (uses the UI dependencies).
+Team messages use 0015's split conversation with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
+split retention, independent scrolling, plan/Summary progress, keyboard controls and draft retention in both sizes and themes (uses the UI dependencies).
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
 
 Archive and stale uses `designs/archive-stale/v3.html`, refining the selected folded group from v1.

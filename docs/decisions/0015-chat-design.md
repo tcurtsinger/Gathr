@@ -1,4 +1,4 @@
-# 0015: Desktop chat with inline team threads and Summary
+# 0015: Desktop chat with split team conversation and Summary
 
 Status: accepted
 
@@ -8,7 +8,55 @@ Use a sidebar of projects and their chats, one centred conversation, a rounded c
 The same conversation and composer serve one-agent chats. DESIGN.md and designs/system.html record the selected system.
 The polished pages are listed in designs/README.md.
 
-### Accepted refinement, 2026-11-08
+### Accepted split chat refinement, 2026-11-10
+
+The owner's split_chat/README.md and Split Chat.dc.html replace the inline thread
+below. This records the target before implementation, not completed UI work.
+
+- A header toggle opens one chronological team chat beside the Supervisor's
+  conversation, 50/50. Each scrolls independently. The composer stays on the left;
+  the workspace still opens to the right of both columns. Content starts 48px
+  below visible sticky labels, clearing the first assignment line (a refinement
+  of the reference's overlapping labels).
+- Main keeps the person's messages, Supervisor hand-offs/final words and direct
+  @member exchanges. Hand-off replies move to the team column, with their
+  assignment lines, ordered by turn start (0028). Concurrent turns never interleave.
+  No Team thread disclosure or View team thread link remains.
+- Persist the split per chat. Keep draft, recipient and both reading positions.
+  A closed split gets a new-message dot; opening clears its header dot. Late work
+  updates the same chronological team chat without moving the reader.
+- Waiting on team opens the split; Working ends the team column. Their initials
+  come from running turns. Time uses the earliest created_us of the round's open
+  tasks given by the Supervisor, plus any own open wait's created_ts, as Summary
+  does. No wait on its own team is invented.
+- An agent-plan bar docks above the composer. Its checklist is the round's real
+  tasks (task/given_in/answers links root them at one Supervisor turn, including
+  nested assignments). Exclude person questions and cancelled tasks; order by
+  task number. Working detail is the latest tool call; held/blocked detail is the
+  stored reason. There is no free-text progress record. Until plans are records,
+  its title is Plan. Never derive a plan title or step from message prose.
+- Blocked is a static square-minus with label and stored reason; Failed is a
+  destructive circle-exclamation; Stopped is a muted square. Show the named state,
+  without a spinner or done credit. Done status waits for settled tasks and the
+  Supervisor's completed hear-back; unsuccessful outcomes remain visible.
+- Summary remains a popover: official SubagentList rows, progress and expandable
+  TodoList assignments. Counts are done/total per agent in this chat, excluding
+  cancelled tasks. States and wait starts come from tasks, turns and waits.
+- The thread and composer maximum becomes 52rem. Agent bodies indent 34px to
+  align with names. Archived uses an open-lid Archive icon when expanded.
+- Reduced motion stops spinners and removes the chevron and lid transitions.
+
+Why: one running team conversation keeps parallel work readable without reopening
+each hand-off. The Supervisor remains the primary conversation, and Summary stays
+available for a quick scan. This replaces the earlier rejection of a team pane;
+it does not introduce separate panes per agent or consume the workspace.
+
+Turned down: retaining inline threads, hand-off-specific panes, and porting the
+prototype HTML/runtime into ui/. Use existing assistant-ui registry components
+and Gathr state. DESIGN.md and system.html carry the component anatomy; the
+service remains the authority on assignment and completion (0010).
+
+### Superseded inline refinement, 2026-11-08
 
 For team chats, put the members' work in an inline thread under the Supervisor's hand-off.
 Summary, the prototype's floating popover in the chat header, replaces the earlier Team tab.
@@ -32,14 +80,15 @@ The service remains the authority on assignment and completion (0010).
 The conversation stays readable while coordination remains available beside it. New and Search share outline icons.
 User messages fit their text; agent replies remain unboxed. Both themes use neutral surfaces and one restrained accent.
 
-Inline threads keep the Supervisor's hand-off and final word easy to read while the work stays beside the message
-that asked for it. Summary gives a glance at current work even when its thread is folded or far up the chat.
+The superseded inline choice kept work beside the message that asked for it. The
+accepted split instead gives team work its own scroll area while keeping Summary
+available for a quick scan of assignments and progress.
 
 ## Alternatives
 
 A live agent strip crowded the composer. Pinned working turns reduced conversation space. Earlier overview and room directions were rejected in favour of one desktop chat shell. The Team-panel direction was selected as v10 and subsequently refined without changing its layout. Earlier directions remain in git history.
 
-The inline-thread refinement replaces that Team-panel choice. Rejected: every reply expanded in the main line
+The superseded inline-thread refinement replaced that Team-panel choice. It rejected: every reply expanded in the main line
 (long replies bury the conclusion), member tabs (hide parallel work), a side-panel thread (competes with Tasks and Files),
 and simultaneous agent panes (too little reading height at five agents). The side panel and agent panes were compared
 with inline threads at 1440 and 1024px, light and dark, with running, finished and history fixtures.

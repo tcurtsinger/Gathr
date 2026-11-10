@@ -1,4 +1,6 @@
+import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import './dialog.css';
@@ -12,11 +14,13 @@ interface Props {
   className?: string;
   /** No Close in the header: a confirm, answered by its own buttons or Escape. */
   bare?: boolean;
+  /** An X at the top right, named "Close <title>" in its tooltip, instead of the text Close (Settings, 0023). */
+  closeIcon?: boolean;
   children: ReactNode;
 }
 
 /** Gathr's one modal: centred over the current screen, its title and Close on top. Escape closes it. */
-export function Dialog({ open, title, onClose, opener, className, bare, children }: Props) {
+export function Dialog({ open, title, onClose, opener, className, bare, closeIcon, children }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const back = useRef<HTMLElement | null>(null);
   const titled = useId();
@@ -50,13 +54,24 @@ export function Dialog({ open, title, onClose, opener, className, bare, children
         <>
           <header className="dialog-header">
             <h2 id={titled}>{title}</h2>
-            {!bare && (
+            {!bare && !closeIcon && (
               <Button type="button" variant="ghost" onClick={onClose}>
                 Close
               </Button>
             )}
           </header>
           {children}
+          {/* Last, as the prototype's: opening focuses the content, not the X and its tooltip. */}
+          {!bare && closeIcon && (
+            <TooltipIconButton
+              type="button"
+              tooltip={`Close ${title}`}
+              className="dialog-x"
+              onClick={onClose}
+            >
+              <X />
+            </TooltipIconButton>
+          )}
         </>
       )}
     </dialog>

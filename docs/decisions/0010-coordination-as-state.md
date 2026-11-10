@@ -46,7 +46,7 @@ A task is work owed by one agent, or by the person.
 
 Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `review`, `person`, `person_request`, `plan_check`), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
 
-Each turn records the task it works on. Together with `given_in`, that's what puts a member's work under the message that asked for it (the inline thread, F8b), rather than under whatever message came just before.
+Each turn records the task it works on. Together with `given_in`, this links a member's work to its actual assignment. 0015's accepted split chat uses these links to identify hand-off replies for the chronological team column and tasks for the round, rather than guessing from prose or the preceding message.
 
 F5 builds `work` and `review` tasks between agents. F9 adds the person's (`person`, owner none) and a member's request for one (`person_request`), each with how it's answered (`done`, `yesno`, `choice`, `choices`, `text`), its choices with the asker's pick first, and files copied when it was given. Plan checks come when a feature needs them.
 

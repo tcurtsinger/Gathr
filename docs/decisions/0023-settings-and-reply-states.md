@@ -3,9 +3,13 @@
 Status: accepted.
 
 Settings opens centered over the current screen, with categories at the left and
-Close at the top right. Engines uses one form for the first engine. Diagnostics
+an X at the top right, named Close Settings in its tooltip and to assistive tech. Engines uses one form for the first engine. Diagnostics
 is a category, with a turn list beside the selected timeline (option 1).
 Chat Diagnostics links and failure references open the matching turn in this panel.
+
+Amended 2026-11-10: the owner picked the X over the text Close (UX pass, item 8). It
+matches the prototype's dismissal and keeps the header quiet; the text Close was the
+option turned down. Other dialogs keep their text Close.
 
 Stopped, waiting for sign-in and failed-send notices sit where the reply belongs.
 Failures use a red tinted surface with Send failed, the reference, Diagnostics and
