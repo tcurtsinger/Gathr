@@ -27,10 +27,6 @@
 .settings-page .account-heading h3 {
   margin: 0;
 }
-.account-heading button,
-.account-actions button {
-  border: 1px solid var(--control);
-}
 .account-list {
   margin: 0;
   padding: 0;
@@ -126,9 +122,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
-}
-.signin-actions button {
-  border: 1px solid var(--control);
 }
 .device-code {
   font-family: ui-monospace, monospace;

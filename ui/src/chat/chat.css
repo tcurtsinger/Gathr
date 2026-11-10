@@ -33,6 +33,13 @@
   color: var(--muted-foreground);
   font-size: 12px;
 }
+/* The prototype's More, Summary, sidebar toggle, 2px apart. */
+.topbar-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
 /* An archived chat reads only: its composer is this line and Restore (archive-stale/v1). */
 .archived-line {
   display: flex;
