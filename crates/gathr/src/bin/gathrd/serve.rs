@@ -13,9 +13,10 @@ use hyper_util::service::TowerToHyperService;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 
-/// How long a stop waits for the requests under way. A connection can hold one for good (a request
-/// half sent, a stream nobody ends), and the engines close only after it (G162).
-const FINISH_WAIT: Duration = Duration::from_secs(5);
+/// How long a stop waits for the requests under way: past the grace a sign-in's engine gets to close
+/// at shutdown. A connection can hold one for good (a request half sent, a stream nobody ends), and
+/// the engines close only after it (G162).
+pub const FINISH_WAIT: Duration = crate::turns::CLOSE_GRACE.saturating_add(Duration::from_secs(5));
 
 /// Serves `router` until `stop` ends, then lets the requests under way finish, for `FINISH_WAIT`:
 /// how many connections were still open then, if any.

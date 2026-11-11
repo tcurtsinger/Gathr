@@ -246,9 +246,10 @@ async fn serve(
             .trace(&ids::trace_id())
             .error("open")
             .attr("open", left_open as i64)
+            .attr("waited_ms", serve::FINISH_WAIT.as_millis() as i64)
             .attr(
                 "why",
-                "requests still under way after 5 s: the stop went on without them",
+                "requests still under way: the stop went on without them",
             );
         writer.record(event);
     }

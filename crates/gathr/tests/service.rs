@@ -291,11 +291,11 @@ fn a_stop_waits_only_a_little_for_a_connection_that_never_ends() {
     std::thread::sleep(Duration::from_millis(200));
     let asked = std::time::Instant::now();
     let _ = service.call("POST", "/api/shutdown");
-    while asked.elapsed() < Duration::from_secs(30) && service.child.try_wait().unwrap().is_none() {
+    while asked.elapsed() < Duration::from_secs(40) && service.child.try_wait().unwrap().is_none() {
         std::thread::sleep(Duration::from_millis(50));
     }
     let took = asked.elapsed();
-    assert!(took < Duration::from_secs(20), "the stop took {took:?}");
+    assert!(took < Duration::from_secs(30), "the stop took {took:?}");
     drop(held);
     let sql = "SELECT ref, json_extract(attrs, '$.open') AS open FROM event_log
                WHERE name = 'gathr.service.connections' AND status = 'error'";
