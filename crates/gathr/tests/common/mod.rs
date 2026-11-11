@@ -539,7 +539,8 @@ pub fn first_token(data: &Path) -> String {
 
 /// The `n`th line of a file the replay engine appends to, once it's there and whole.
 pub fn nth(file: &Path, n: usize) -> Value {
-    until(10, &format!("line {n} in {}", file.display()), || {
+    // Project engines create a Git worktree first; parallel nextest setup can exceed 10 s.
+    until(30, &format!("line {n} in {}", file.display()), || {
         let text = std::fs::read_to_string(file).unwrap_or_default();
         let whole = text.rsplit_once('\n').map_or("", |(lines, _)| lines);
         serde_json::from_str(whole.lines().nth(n)?).ok()

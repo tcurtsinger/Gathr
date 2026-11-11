@@ -393,7 +393,21 @@ pub fn finish(
     if t.owner.as_deref() != Some(agent) {
         return Err(refused(format!("task #{task} isn't yours")));
     }
-    if t.state != State::Working {
+    let commit = said.commit.map(str::trim).filter(|c| !c.is_empty());
+    let refresh = t.state == State::Held
+        && t.kind == Kind::Review
+        && how == Finish::Done
+        && commit.is_some()
+        && t.reviewed.is_some()
+        && t.pr.is_some()
+        && said.on_task.is_none()
+        && said.pr.is_none_or(|pr| Some(pr) == t.pr)
+        && tx.query_row(
+            "SELECT pr_closed = 0 FROM tasks WHERE number = ?1",
+            [task],
+            |r| r.get::<_, bool>(0),
+        )?;
+    if t.state != State::Working && !refresh {
         let state = t.state.as_str();
         return Err(refused(format!(
             "task #{task} is {state}, not being worked on"
@@ -407,7 +421,6 @@ pub fn finish(
             )));
         }
     }
-    let commit = said.commit.map(str::trim).filter(|c| !c.is_empty());
     if how == Finish::Done && t.kind == Kind::Review && commit.is_none() {
         return Err(refused(
             "Include the reviewed commit when you finish a review",
@@ -416,6 +429,7 @@ pub fn finish(
     tx.execute(
         "UPDATE tasks SET finish = ?2, finish_note = ?3, blocked_on = COALESCE(?4, blocked_on),
                           pr = COALESCE(?5, pr), reviewed = COALESCE(?6, reviewed),
+                          review_done = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?6 IS NOT NULL) ELSE review_done END,
                           outdated = CASE WHEN ?6 IS NULL THEN outdated ELSE 0 END
          WHERE number = ?1",
         params![task, how.as_str(), said.note, said.on_task, said.pr, commit],
@@ -590,7 +604,7 @@ pub fn restart(
         }
     };
     tx.execute(
-        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL, heard = 0 WHERE number = ?1",
+        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL, heard = 0, review_done = 0 WHERE number = ?1",
         [task],
     )?;
     tx.commit()?;

@@ -170,7 +170,10 @@ Hand-off and answer lines share one quiet disclosure. Closed, each stays on one
 line, with an ellipsis (…) for overflow. Click or Enter opens the full line, wrapping long
 text. A hand-off reads "Mira to Rowan · Cursor commit" and opens to the full task
 title and its reason, when present. An answer reads "You answered #26 · Keep the
-partial answer visible" and opens to the full answer and the original question.
+partial answer visible" and opens to the full answer and the original question. A
+question to the person asked in a turn on a member's task reads "Mira asked you #95 · Ship it?" in the main
+column, where that turn began, and opens to why it was asked: the person's questions and answers are always
+the main column's.
 Click or Enter again closes it. Keyboard focus uses the hover highlight, without
 an outline or ring. This disclosure reveals task text, not a nested team thread.
 
