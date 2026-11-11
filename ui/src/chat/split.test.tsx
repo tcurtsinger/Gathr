@@ -163,6 +163,16 @@ test('a chat whose team shrank to its lead still shows the hand-offs it saved, a
   await expect.element(screen.getByRole('button', { name: 'Show team chat' })).toBeVisible();
 });
 
+test('a team reply with a long line that cannot wrap stays inside its half of the chat', async () => {
+  const wide = { ...reply(11), body: `${long}\n\n\`\`\`\nmade-up-command --flag ${'x'.repeat(160)}\n\`\`\`` };
+  const { screen } = await open({ ...history, messages: [...history.messages.slice(0, -1), wide] });
+  const team = screen.getByRole('region', { name: 'Team' }).element();
+  await expect.element(screen.getByText('made-up-command', { exact: false })).toBeInTheDocument();
+  const column = team.closest('.team-column')?.getBoundingClientRect();
+  // Past the column's right edge, it ran under the workspace and the label's fade drew over that.
+  expect(team.getBoundingClientRect().right).toBeLessThanOrEqual(Math.ceil(column?.right ?? 0));
+});
+
 test('a team column following the latest reply follows one that came while it was hidden', async () => {
   const { viewport, toggle } = await open();
   await toggle();
