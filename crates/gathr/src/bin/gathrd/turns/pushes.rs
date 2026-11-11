@@ -62,15 +62,22 @@ impl Task {
             return;
         }
         let request_id = format!("gathr-{kind}-{}", gathr::ids::uuid());
-        let (tool, why) = if kind == "check" {
-            (
+        let (tool, why) = match kind {
+            "check" => (
                 "wait check".to_string(),
                 "Gathr runs this check in sh (Git Bash on Windows), outside the engine sandbox"
                     .to_string(),
-            )
-        } else {
-            let risk = risk.unwrap_or_default();
-            ("git push".to_string(), format!("Gathr asks because {risk}"))
+            ),
+            // 0036: once per project and command; the project's own files didn't name these.
+            "checks" => (
+                "project checks".to_string(),
+                "Gathr runs these on every PR's head in this project, and the project's files don't name them"
+                    .to_string(),
+            ),
+            _ => {
+                let risk = risk.unwrap_or_default();
+                ("git push".to_string(), format!("Gathr asks because {risk}"))
+            }
         };
         let asked = (tool.clone(), input.clone(), Some(why.to_string()));
         turn.approvals.insert(request_id.clone(), asked);
