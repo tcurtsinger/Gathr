@@ -33,6 +33,13 @@ pub fn service(
     let config = StreamableHttpServerConfig::default()
         .with_json_response(true)
         .with_sse_keep_alive(None);
+    // An older revision's session holds a `GET /mcp` stream open (Codex's does), which rmcp ends
+    // only after 300 idle seconds: a stop would wait that long for it (G162).
+    let (sessions, mut stop) = (config.cancellation_token.clone(), stopping.clone());
+    tokio::spawn(async move {
+        let _ = stop.wait_for(|stopping| *stopping).await;
+        sessions.cancel();
+    });
     let tools = move || {
         Ok(Tools {
             chats: chats.clone(),

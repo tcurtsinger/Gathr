@@ -239,8 +239,19 @@ async fn serve(
         stop_state.stopping.send_replace(true);
         let _ = stopped_tx.send(reason);
     };
-    serve::serve(listener, api::router(state.clone()), stopping).await;
+    let left_open = serve::serve(listener, api::router(state.clone()), stopping).await;
     let reason = stopped_rx.await.unwrap_or("the server ended");
+    if left_open > 0 {
+        let event = Event::point("gathr.service.connections")
+            .trace(&ids::trace_id())
+            .error("open")
+            .attr("open", left_open as i64)
+            .attr(
+                "why",
+                "requests still under way after 5 s: the stop went on without them",
+            );
+        writer.record(event);
+    }
     updates.stop();
     codex_updates.stop();
     app.stop();
