@@ -29,7 +29,7 @@ export type LiveEvent =
   | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
   // A chat was made, archived, restored (unarchived) or deleted.
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
-  | { type: 'project'; project: string; change: 'created' }
+  | { type: 'project'; project: string; change: 'created' | 'changed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.
