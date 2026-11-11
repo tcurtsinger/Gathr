@@ -201,7 +201,48 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
                 _ => Look::NotYet { head: None },
             })
         }
+        "up_to_date" => {
+            let view = gh(
+                &pr_view(target, "state,headRefOid,baseRefName", repo),
+                &dir,
+                vars,
+            )
+            .await?;
+            let (state, head, base) = (
+                json_text(&view, "state"),
+                json_text(&view, "headRefOid"),
+                json_text(&view, "baseRefName"),
+            );
+            if state != "OPEN" {
+                return Ok(up_to_date(target, &state, &base, None));
+            }
+            if head.is_empty() || base.is_empty() {
+                return Err(format!("GitHub gave no head or base for #{target}"));
+            }
+            // How far the head is behind its base, as GitHub compares them.
+            let path = format!(
+                "repos/{}/compare/{base}...{head}",
+                repo.unwrap_or("{owner}/{repo}")
+            );
+            let compared = gh(&["api", &path, "--jq", ".behind_by"], &dir, vars).await?;
+            let behind = compared
+                .trim()
+                .parse()
+                .map_err(|_| format!("GitHub didn't say how far #{target} is behind"))?;
+            Ok(up_to_date(target, &state, &base, Some(behind)))
+        }
         _ => look_ci(wait, &Target::parse(target)?, &dir, vars).await,
+    }
+}
+
+/// An up-to-date wait (0036 C12): met once the PR has every commit its base has, or when it's
+/// merged or closed (nothing left to keep up to date); else not yet.
+fn up_to_date(pr: &str, state: &str, base: &str, behind: Option<u64>) -> Look {
+    match (state, behind) {
+        ("MERGED", _) => Look::Met(format!("#{pr} was merged")),
+        ("CLOSED", _) => Look::Met(format!("#{pr} was closed without merging")),
+        (_, Some(0)) => Look::Met(format!("#{pr} is up to date with {base}")),
+        _ => Look::NotYet { head: None },
     }
 }
 
@@ -302,8 +343,21 @@ async fn moved_past(
 /// A check's command: exit 0 is met; any other exit is "not yet" (G69); one that can't run or
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
-    let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
-    let ran = gathr::run::script(&shell, command, dir, &vars, LIMIT).await?;
+    let ran = match gathr::approvals::read_only_check(command) {
+        // Let through unasked (C11): run as the very words that were checked, with no shell to
+        // expand them, and with what the repository names switched off.
+        Some(_) => {
+            let words: Vec<&str> = command.split_whitespace().collect();
+            let mut vars = vars.clone();
+            let guard = gathr::approvals::read_only_env().into_iter();
+            vars.extend(guard.map(|(k, v)| (k.into(), v.into())));
+            run(Path::new(words[0]), &words[1..], dir, &vars, LIMIT).await?
+        }
+        None => {
+            let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
+            gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
+        }
+    };
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
     }
@@ -374,5 +428,95 @@ async fn project_of(chats: &Arc<Chats>, chat: &str) -> PathBuf {
     match found {
         Some(Ok(Some(project))) => PathBuf::from(project),
         _ => chats.data.path().to_path_buf(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 0036 C12: met when the base's commits are all in the PR, not before; a merged or closed PR
+    /// has nothing left to keep up to date.
+    #[test]
+    fn an_up_to_date_wait_is_met_once_the_base_is_in_the_pr() {
+        let met = |look: Look| matches!(look, Look::Met(_));
+        assert!(
+            !met(up_to_date("7", "OPEN", "main", Some(2))),
+            "behind by 2"
+        );
+        assert!(
+            met(up_to_date("7", "OPEN", "main", Some(0))),
+            "the base moved into it"
+        );
+        assert!(met(up_to_date("7", "MERGED", "main", None)));
+        assert!(met(up_to_date("7", "CLOSED", "main", None)));
+        let Look::Met(said) = up_to_date("7", "OPEN", "main", Some(0)) else {
+            unreachable!()
+        };
+        assert_eq!(said, "#7 is up to date with main");
+    }
+
+    /// Vale, #116: git takes a filter from places outside the tree (here `.git/info/attributes`)
+    /// and runs it on `git status`, so `git status` asks; a read-only check runs as its checked
+    /// words, not through `sh`, and runs nothing the repository names.
+    #[tokio::test]
+    async fn a_read_only_check_runs_nothing_the_repository_names() {
+        let root = std::env::temp_dir().join(format!("gathr-c11-run-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let git = |args: &[&str]| {
+            let mut command = std::process::Command::new("git");
+            command
+                .args(args)
+                .current_dir(&root)
+                .env_clear()
+                .envs(vars.iter().cloned());
+            assert!(command.output().unwrap().status.success(), "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        for (key, value) in [
+            ("user.name", "t"),
+            ("user.email", "t@example.invalid"),
+            ("core.autocrlf", "false"),
+            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
+            ("filter.x.clean", "echo > filter; cat"),
+        ] {
+            git(&["config", key, value]);
+        }
+        std::fs::write(root.join("a.txt"), "a\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "a"]);
+        std::fs::write(root.join(".git/info/attributes"), "*.txt filter=x\n").unwrap();
+        let marks = || ["fsmonitor", "filter"].map(|m| root.join(m).exists());
+        let change = |text: &str| {
+            for mark in ["fsmonitor", "filter"] {
+                let _ = std::fs::remove_file(root.join(mark));
+            }
+            // The same size, a second later: only reading the file tells git it changed.
+            std::thread::sleep(Duration::from_millis(1100));
+            std::fs::write(root.join("a.txt"), text).unwrap();
+        };
+        change("b\n");
+        let looked = check("git log -1 --oneline", &root, &vars).await;
+        let read_only = marks();
+        change("c\n");
+        git(&["status", "--porcelain"]);
+        let status = marks();
+        let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(
+            status,
+            [true, true],
+            "git status didn't run them: the test proves nothing"
+        );
+        assert_eq!(
+            gathr::approvals::read_only_check("git status --porcelain"),
+            None
+        );
+        assert!(matches!(looked, Ok(Look::Met(_))), "{:?}", looked.err());
+        assert_eq!(
+            read_only,
+            [false, false],
+            "a read-only check ran a program the repository names"
+        );
     }
 }

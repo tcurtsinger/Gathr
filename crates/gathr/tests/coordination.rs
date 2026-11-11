@@ -624,3 +624,42 @@ fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
     println!("diag trace {reference}: {trace}");
     std::fs::write(&go, "").unwrap();
 }
+
+/// 0036 C12 (owner, task 1450): a wait for a PR to be up to date with its base is its own kind,
+/// and a look that can't read the PR fails with a reference, as other PR looks do.
+#[test]
+fn an_up_to_date_wait_whose_looks_fail_is_found_from_its_reference() {
+    let data = TempDir::new();
+    let team = team(&data.0, &held_recording(&data.0));
+    let lead_token = lead_turn(&team, &data.0, 0);
+    let port = team.service.info.port;
+    let alone = call_tool(
+        port,
+        &lead_token,
+        "wait",
+        json!({ "up_to_date": true, "then": "x" }),
+    );
+    assert_eq!(alone["isError"], true, "up_to_date without a PR: {alone}");
+    // The engine's folder isn't a GitHub repository, so every look at the PR fails.
+    let ask = json!({ "pr": 1, "up_to_date": true, "then": "merge it" });
+    let left = call_tool(port, &lead_token, "wait", ask);
+    assert!(text(&left).starts_with("Waiting"), "{left}");
+    assert_eq!(
+        tasks(&team)["waits"][0]["kind"],
+        "up_to_date",
+        "{}",
+        tasks(&team)
+    );
+    let failing = until(30, "the wait to show as failing", || {
+        let query = "SELECT ref FROM event_log WHERE name = 'gathr.wait.failing'";
+        let (ok, rows) = gathr(&data.0, &["diag", "query", query]);
+        assert!(ok, "{rows}");
+        rows["rows"].as_array()?.first().cloned()
+    });
+    let (ok, trace) = gathr(
+        &data.0,
+        &["diag", "trace", failing["ref"].as_str().unwrap()],
+    );
+    assert!(ok && trace.to_string().contains("gh"), "{trace}");
+    std::fs::write(data.0.join("go"), "").unwrap();
+}

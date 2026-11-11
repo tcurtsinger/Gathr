@@ -367,3 +367,39 @@ fn shutdown_refuses_a_wait_check_whose_approval_is_still_open() {
         "shutdown admitted the check"
     );
 }
+
+/// 0036 C11 (owner, task 1450): a Codex wait whose check is one known read-only command saves
+/// without asking, and says which rule let it through; the same command redirected still asks.
+#[test]
+fn a_known_read_only_wait_check_saves_without_asking() {
+    let data = TempDir::new();
+    let (service, chat) = setup(&data.0, &held(&data.0), "auto");
+    let path = format!("/api/chats/{chat}/messages");
+    let send = service.send("POST", &path, json!({"text":"Wait for the check"}));
+    assert_eq!(send.status, 200, "{}", send.body);
+    let (port, token) = (service.info.port, first_token(&data.0));
+
+    let wait = |check: &str| json!({"check": check, "then": "Continue"});
+    let answer = call_tool(port, &token, "wait", wait("git log -1 --oneline"));
+    assert!(text(&answer).starts_with("Waiting"), "{answer}");
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(history["approvals"], json!([]), "a read-only check asked");
+    let query = "SELECT attrs FROM event_log WHERE name = 'gathr.approvals.check'";
+    let (ok, rows) = common::gathr(&data.0, &["diag", "query", query]);
+    let allowed = rows["rows"][0]["attrs"]["allowed_by"].clone();
+    assert!(ok && allowed == "read-only: git log", "{rows}");
+
+    let redirected = wait("git log -1 --oneline > out.txt");
+    let asking = std::thread::spawn(move || call_tool(port, &token, "wait", redirected));
+    let history = service.wait_for(&chat, 5, "the redirected check to ask", |h| {
+        !h["approvals"].as_array().unwrap().is_empty()
+    });
+    let approval = history["approvals"][0]["request_id"].as_str().unwrap();
+    let to = format!("/api/chats/{chat}/approvals/{approval}");
+    assert_eq!(
+        service.send("POST", &to, json!({"allow":false})).status,
+        200
+    );
+    assert_eq!(asking.join().unwrap()["isError"], true);
+    std::fs::write(data.0.join("go"), "").unwrap();
+}

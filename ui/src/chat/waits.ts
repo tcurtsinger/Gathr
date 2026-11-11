@@ -38,5 +38,6 @@ function waitName(w: Wait): string {
   const target = w.target ?? '';
   if (w.kind === 'ci') return /^\d+$/.test(target) ? `CI on #${target}` : `CI on ${target.slice(0, 7)}`;
   if (w.kind === 'pr') return `#${target} to merge or close`;
+  if (w.kind === 'up_to_date') return `#${target} to be up to date`;
   return 'a check';
 }

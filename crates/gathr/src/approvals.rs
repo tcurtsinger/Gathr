@@ -37,12 +37,123 @@ pub fn ask(
             pushes_risky(command).then_some("it may force, delete or skip Gathr's push hook")
         }
         // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
-        // classifier: asked here, the call waits for the person as long as they take.
+        // classifier: asked here, the call waits for the person as long as they take. One known
+        // read-only command alone doesn't ask (0036 C11).
         "mcp__gathr__wait" => text("check")
-            .is_some_and(|c| !c.trim().is_empty())
+            .is_some_and(|c| !c.trim().is_empty() && read_only_check(c).is_none())
             .then_some("Gathr runs this check in sh (Git Bash on Windows) until it exits 0"),
         _ => None,
     }
+}
+
+/// The rule that lets a wait's check run without asking (owner, task 1450): one of a few commands
+/// that only read, by its plain name, made only of letters, digits, spaces and `-_./:=%,@+^~` (it
+/// runs as these words, without a shell), with none of their options that write a file, open a browser,
+/// reach another repo or run a program the repository names (a diff driver, textconv, gpg). It
+/// runs with `read_only_env` over the repository's own config. Anything else is `None` and asks.
+pub fn read_only_check(command: &str) -> Option<&'static str> {
+    let plain =
+        |c: char| c.is_ascii_alphanumeric() || c.is_ascii_whitespace() && c != '\n' && c != '\r';
+    if !command
+        .chars()
+        .all(|c| plain(c) || "-_./:=%,@+^~".contains(c))
+    {
+        return None;
+    }
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let (rule, rest) = match words.as_slice() {
+        ["gh", "pr", "view", rest @ ..] => ("gh pr view", rest),
+        ["gh", "pr", "checks", rest @ ..] => ("gh pr checks", rest),
+        ["git", "log", rest @ ..] => ("git log", rest),
+        ["git", "rev-parse", rest @ ..] => ("git rev-parse", rest),
+        _ => return None,
+    };
+    let fine = |word: &&str| match rule {
+        // No diff, stat or signature: those run what the repository names.
+        "git log" => {
+            let (name, value) = word.split_once('=').unwrap_or((word, ""));
+            let count = word.len() > 1 && word[1..].chars().all(|c| c.is_ascii_digit());
+            let format = matches!(name, "--format" | "--pretty");
+            !word.contains("%G")
+                && (!word.starts_with('-') || count || LOG_OPTIONS.contains(&name))
+                && (!format || own_format(value))
+        }
+        "gh pr view" | "gh pr checks" => {
+            let lower = word.to_lowercase();
+            !["--web", "--repo", "-w", "-r"]
+                .iter()
+                .any(|o| lower.starts_with(o))
+        }
+        _ => true,
+    };
+    rest.iter().all(fine).then_some(rule)
+}
+
+/// A `git log` format that is git's own, never a `pretty.<name>` the repository's config defines
+/// (which may verify signatures with `%G`).
+fn own_format(value: &str) -> bool {
+    const BUILT_IN: [&str; 8] = [
+        "oneline",
+        "short",
+        "medium",
+        "full",
+        "fuller",
+        "reference",
+        "email",
+        "raw",
+    ];
+    BUILT_IN.contains(&value)
+        || value.starts_with("format:")
+        || value.starts_with("tformat:")
+        || value.contains('%')
+}
+
+/// `git log`'s options a read-only check may use: which commits, and how each is named.
+const LOG_OPTIONS: [&str; 26] = [
+    "--oneline",
+    "--format",
+    "--pretty",
+    "-n",
+    "--max-count",
+    "--skip",
+    "--since",
+    "--after",
+    "--until",
+    "--before",
+    "--author",
+    "--committer",
+    "--grep",
+    "--first-parent",
+    "--no-merges",
+    "--merges",
+    "--decorate",
+    "--no-decorate",
+    "--date",
+    "--reverse",
+    "--all",
+    "--branches",
+    "--tags",
+    "--remotes",
+    "--abbrev-commit",
+    "--",
+];
+
+/// What a read-only check runs with, over what the repository's config says (which an agent can
+/// change): no pager, signature check or configured default format. `git status` isn't read-only
+/// here: it runs any filter the repository names, from places outside the tree as well
+/// (`.git/info/attributes`, `core.attributesFile`), so it asks.
+pub fn read_only_env() -> Vec<(String, String)> {
+    let pairs = [
+        ("core.pager", "cat"),
+        ("log.showSignature", "false"),
+        ("format.pretty", "medium"),
+    ];
+    let mut vars = vec![("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string())];
+    for (i, (key, value)) in pairs.iter().enumerate() {
+        vars.push((format!("GIT_CONFIG_KEY_{i}"), key.to_string()));
+        vars.push((format!("GIT_CONFIG_VALUE_{i}"), value.to_string()));
+    }
+    vars
 }
 
 /// Whether the call is a shell command that reads as a push. The worktree's `pre-push` hook is
@@ -468,6 +579,68 @@ mod tests {
             "cargo test -- --force",
         ] {
             assert_eq!(run("Bash", not), None, "{not}");
+        }
+    }
+
+    /// 0036 C11 (owner, task 1450): a wait's check that is one known read-only command, alone,
+    /// runs without asking; anything chained, redirected or substituted asks as before.
+    #[test]
+    fn a_known_read_only_check_alone_runs_without_asking() {
+        let wait = |check: &str| {
+            let input = json!({ "check": check, "then": "go on" });
+            ask("mcp__gathr__wait", &input, &[at(&["w"])], &data(), false)
+        };
+        for (check, rule) in [
+            ("gh pr view 12 --json state", "gh pr view"),
+            ("gh pr checks 12", "gh pr checks"),
+            ("git log -1 --format=%H origin/main", "git log"),
+            ("git log --oneline -n 5 --first-parent main", "git log"),
+            ("git log --pretty=oneline HEAD~1..HEAD", "git log"),
+            ("git log --format=format:%h@%an", "git log"),
+            ("git rev-parse HEAD", "git rev-parse"),
+            ("  git rev-parse   HEAD  ", "git rev-parse"),
+        ] {
+            assert_eq!(read_only_check(check), Some(rule), "{check}");
+            assert_eq!(wait(check), None, "{check}");
+        }
+        for check in [
+            "git status; rm -rf x",
+            "git status && rm x",
+            "git status &",
+            "git log | sh",
+            "git status > out",
+            "git log < in",
+            "git rev-parse $(rm x)",
+            "git rev-parse ${HOME}",
+            "git log `rm x`",
+            "git status\nrm x",
+            "git -c core.pager=sh log",
+            "git -C .. status",
+            "git log --output=x",
+            "git log -p --ext-diff",
+            "git log -p",
+            "git log --stat",
+            "git log --show-signature",
+            "git log --format=%G?",
+            "git log --oneline *",
+            "git log --oneline ?",
+            "git status [ab]",
+            "git status --porcelain",
+            "git status",
+            "git log \"--output=x\"",
+            "git log '--output=x'",
+            "git log --pretty=mine",
+            "git log --format=mine",
+            "gh pr view 1 --web",
+            "gh pr checks 1 -w",
+            "gh pr view 1 --repo other/repo",
+            "git push",
+            "gh pr merge 1",
+            "git logx",
+            "/usr/bin/git status",
+        ] {
+            assert_eq!(read_only_check(check), None, "{check}");
+            assert!(wait(check).is_some(), "{check}");
         }
     }
 }
