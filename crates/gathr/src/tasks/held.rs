@@ -232,7 +232,9 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
             .attr("gathr.task.count", settled.len())
             .insert(tx)?;
         let text = words::hear_back(tx, &settled)?;
-        starts.push(Start::queue(tx, (&chat, &giver), (own, Some(turn)), text)?);
+        let mut start = Start::queue(tx, (&chat, &giver), (own, Some(turn)), text)?;
+        start.hear_back = true;
+        starts.push(start);
     }
     Ok(starts)
 }

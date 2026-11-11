@@ -113,6 +113,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "finish_task",
         "give_task",
         "list_tasks",
+        "merge",
         "message",
         "read_chat",
         "restart_task",

@@ -445,9 +445,17 @@ async fn open_prs(caller: &Caller) -> String {
         "--template",
         "{{range .}}#{{.number}} {{.title}}; {{end}}",
     ];
-    match crate::coord::github(&args, &caller.cwd).await {
-        Ok(listed) if listed.trim().is_empty() => "Open PRs: none.".to_string(),
-        Ok(listed) => format!("Open PRs: {}", listed.trim().trim_end_matches(';')),
-        Err(why) => format!("Open PRs weren't listed: {why}"),
+    // A chat outside a project works in a plain folder: nothing there for GitHub to list, and
+    // `gh` may take its whole limit to say so (#120's CI, 30 s on Windows). Never long either way:
+    // the list only helps the giver.
+    if !caller.cwd.join(".git").exists() {
+        return "Open PRs: none here (not a git repository).".to_string();
+    }
+    let listed = crate::coord::github(&args, &caller.cwd);
+    match tokio::time::timeout(std::time::Duration::from_secs(10), listed).await {
+        Ok(Ok(listed)) if listed.trim().is_empty() => "Open PRs: none.".to_string(),
+        Ok(Ok(listed)) => format!("Open PRs: {}", listed.trim().trim_end_matches(';')),
+        Ok(Err(why)) => format!("Open PRs weren't listed: {why}"),
+        Err(_) => "Open PRs weren't listed: GitHub didn't answer in 10 s".to_string(),
     }
 }

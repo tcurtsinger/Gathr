@@ -663,3 +663,40 @@ fn an_up_to_date_wait_whose_looks_fail_is_found_from_its_reference() {
     assert!(ok && trace.to_string().contains("gh"), "{trace}");
     std::fs::write(data.0.join("go"), "").unwrap();
 }
+
+/// Found on #120's Windows CI: `give_task` in a chat whose folder isn't a git repository waited
+/// 30 s on `gh` listing PRs there, past the caller's limit. Gathr doesn't ask GitHub there.
+#[test]
+fn give_task_outside_a_repository_never_asks_github_for_its_prs() {
+    let data = TempDir::new();
+    let answers = data.0.join("gh.json");
+    std::fs::write(&answers, "[]").unwrap();
+    let gh = [
+        ("GATHR_GH_PATH", common::fake_gh()),
+        ("GATHR_FAKE_GH", answers.clone()),
+    ];
+    let more: Vec<(&str, &Path)> = gh.iter().map(|(k, v)| (*k, v.as_path())).collect();
+    let (service, chat, lead) = common::team(&data.0, &held_recording(&data.0), &more);
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Plan it", "agent": lead }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let token = common::first_token(&data.0);
+    let given = call_tool(
+        service.info.port,
+        &token,
+        "give_task",
+        json!({ "to": "Ann", "what": "Fix it" }),
+    );
+    assert!(
+        text(&given).starts_with("Task #1 for Ann"),
+        "{}",
+        text(&given)
+    );
+    let calls = data.0.join("gh.json.calls");
+    assert!(
+        !calls.exists(),
+        "gh was asked in a folder that isn't a repository: {:?}",
+        std::fs::read_to_string(&calls)
+    );
+    std::fs::write(data.0.join("go"), "").unwrap();
+}
