@@ -6,6 +6,8 @@ CREATE TABLE check_runs (
     head TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('running', 'passed', 'failed')),
     why TEXT,
+    -- Cut off by a stop of the service: failed, but the commit may run again.
+    interrupted INTEGER NOT NULL DEFAULT 0,
     trace_id TEXT NOT NULL,
     started_ts INTEGER NOT NULL,
     ended_ts INTEGER

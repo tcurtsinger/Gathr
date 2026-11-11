@@ -132,12 +132,19 @@ pub async fn start(
     tokio::spawn(async move {
         let lock = lock_of(&project);
         let _one = lock.lock().await;
-        let why = run_steps(&chats, &project, &head, &id).await.err();
+        let mut why = run_steps(&chats, &project, &head, &id).await.err();
         let (r, w) = (id.clone(), why.clone());
-        let _ = chats
+        let ended = chats
             .writer
             .call(move |c| gathr::check_runs::end(c, &r, w.as_deref()))
             .await;
+        // An end not saved is never shown as a pass: the run stays "running" in the database
+        // until the next start ends it failed and interrupted (`recover`).
+        match ended {
+            Some(Ok(())) => {}
+            Some(Err(e)) => why = Some(format!("its result wasn't saved: {e}")),
+            None => why = Some("its result wasn't saved: the database didn't answer".into()),
+        }
         let event = Event::point("gathr.checks.end")
             .trace(&trace)
             .attr("gathr.project.id", project.clone())
@@ -226,10 +233,20 @@ async fn run_steps(chats: &Arc<Chats>, project: &str, head: &str, run: &str) -> 
             Err(why) => (None, why.clone()),
         };
         let (r, c, l) = (run.to_string(), command.clone(), log.clone());
-        let _ = chats
+        let saved = chats
             .writer
             .call(move |conn| gathr::check_runs::step(conn, &r, (position, &c), exit, ms, &l))
             .await;
+        // Never a pass without its evidence (Vale, #119).
+        match saved {
+            Some(Ok(())) => {}
+            Some(Err(e)) => return Err(format!("{command}: its result wasn't saved: {e}")),
+            None => {
+                return Err(format!(
+                    "{command}: its result wasn't saved: the database didn't answer"
+                ));
+            }
+        }
         if exit != Some(0) {
             let how = exit.map_or("didn't finish".to_string(), |code| format!("exit {code}"));
             return Err(format!("{command}: {how}"));
@@ -388,5 +405,27 @@ pub async fn for_review(chats: &Arc<Chats>, chat: &str, task: i64, head: &str) {
         .await;
     if let Some(Ok(Some(project))) = wanted {
         let _ = start(chats, &project, head, &gathr::ids::trace_id()).await;
+    }
+}
+
+/// At start, before anything runs: runs the last stop cut off end failed, each with its own
+/// `gathr.checks.end` so its reference traces, and may run again.
+pub async fn recover(chats: &Arc<Chats>) {
+    let recovered = chats.writer.call(|c| gathr::check_runs::recover(c)).await;
+    let Some(Ok(runs)) = recovered else {
+        let event = Event::point("gathr.checks.recover").error("sqlite");
+        chats
+            .writer
+            .record(event.attr("why", format!("{recovered:?}")));
+        return;
+    };
+    for (run, trace) in runs {
+        let event = Event::point("gathr.checks.end")
+            .trace(&trace)
+            .error("checks_failed");
+        let event = event
+            .attr("why", gathr::check_runs::INTERRUPTED)
+            .attr("gathr.checks.run", run);
+        chats.writer.record(event);
     }
 }

@@ -51,10 +51,11 @@ pub fn end(conn: &Connection, run: &str, why: Option<&str>) -> Result<(), Error>
     Ok(())
 }
 
-/// Whether the project has a run at this commit already, of any state.
+/// Whether the project has a run at this commit already: running, passed or failed, but not one
+/// a stop of the service cut off.
 pub fn ran_at(conn: &Connection, project: &str, head: &str) -> Result<bool, Error> {
     Ok(conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM check_runs WHERE project_id = ?1 AND head = ?2)",
+        "SELECT EXISTS (SELECT 1 FROM check_runs WHERE project_id = ?1 AND head = ?2 AND interrupted = 0)",
         params![project, head],
         |r| r.get(0),
     )?)
@@ -90,6 +91,21 @@ pub fn list(conn: &Connection, project: &str) -> Result<Vec<Value>, Error> {
         run["steps"] = Value::Array(found.collect::<Result<_, _>>()?);
     }
     Ok(listed)
+}
+
+/// Why a run the service stopped in the middle of failed.
+pub const INTERRUPTED: &str = "the service stopped during this run";
+
+/// At start: the runs a stop cut off end failed and interrupted. Each one's id and trace.
+pub fn recover(conn: &Connection) -> Result<Vec<(String, String)>, Error> {
+    let mut stmt = conn.prepare(
+        "UPDATE check_runs SET state = 'failed', why = ?1, interrupted = 1, ended_ts = ?2
+         WHERE state = 'running' RETURNING id, trace_id",
+    )?;
+    let rows = stmt.query_map(params![INTERRUPTED, now_us()], |r| {
+        Ok((r.get(0)?, r.get(1)?))
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 /// The project's caches were used now.
