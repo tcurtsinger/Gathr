@@ -2,7 +2,7 @@
 # Fails when a tracked source file is over the limits in AGENTS.md:
 # 1,000 lines, and 200 characters a line. ui/src/registry is upstream code kept as published,
 # held to it by scripts/registry.check.mjs instead (0030). Any tracked text file with a NUL byte
-# fails too.
+# fails too, and so does an AGENTS.md over 32,768 bytes.
 set -euo pipefail
 
 status=0
@@ -25,6 +25,14 @@ nul=$(git ls-files -z '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.cs
   xargs -0 perl -ne 'print "$ARGV: holds a NUL byte, first at line $.\n" if /\x00/; close ARGV if /\x00/ || eof')
 if [ -n "$nul" ]; then
   echo "$nul"
+  status=1
+fi
+
+# Every agent loads AGENTS.md whole in every session, so reference lives in the docs it links
+# (#132). As staged, so a checkout's line endings don't count.
+size=$(git cat-file -s :AGENTS.md)
+if [ "$size" -gt 32768 ]; then
+  echo "AGENTS.md: $size bytes (limit 32768). Move reference into the doc its index names for it."
   status=1
 fi
 
