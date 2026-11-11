@@ -37,12 +37,98 @@ pub fn ask(
             pushes_risky(command).then_some("it may force, delete or skip Gathr's push hook")
         }
         // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
-        // classifier: asked here, the call waits for the person as long as they take.
+        // classifier: asked here, the call waits for the person as long as they take. One known
+        // read-only command alone doesn't ask (0036 C11).
         "mcp__gathr__wait" => text("check")
-            .is_some_and(|c| !c.trim().is_empty())
+            .is_some_and(|c| !c.trim().is_empty() && read_only_check(c).is_none())
             .then_some("Gathr runs this check in sh (Git Bash on Windows) until it exits 0"),
         _ => None,
     }
+}
+
+/// The rule that lets a wait's check run without asking (owner, task 1450): one of a few commands
+/// that only read, alone, by its plain name, with nothing the shell would chain, redirect, expand or
+/// substitute, and none of their options that write a file, open a browser, reach another repo or
+/// run a program the repository's config names (a diff driver, textconv, gpg). It runs with
+/// `READ_ONLY_CONFIG` over the repository's own. Anything else is `None` and asks as before.
+pub fn read_only_check(command: &str) -> Option<&'static str> {
+    const SHELL: [char; 14] = [
+        ';', '&', '|', '<', '>', '`', '$', '(', ')', '{', '}', '\n', '\r', '\\',
+    ];
+    if command.contains(SHELL) {
+        return None;
+    }
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let (rule, rest) = match words.as_slice() {
+        ["gh", "pr", "view", rest @ ..] => ("gh pr view", rest),
+        ["gh", "pr", "checks", rest @ ..] => ("gh pr checks", rest),
+        ["git", "status", rest @ ..] => ("git status", rest),
+        ["git", "log", rest @ ..] => ("git log", rest),
+        ["git", "rev-parse", rest @ ..] => ("git rev-parse", rest),
+        _ => return None,
+    };
+    let fine = |word: &&str| match rule {
+        // No diff, stat or signature: those run what the repository's config names.
+        "git log" => {
+            let name = word.split('=').next().unwrap_or(word);
+            let count = word.len() > 1 && word[1..].chars().all(|c| c.is_ascii_digit());
+            !word.contains("%G") && (!word.starts_with('-') || count || LOG_OPTIONS.contains(&name))
+        }
+        "gh pr view" | "gh pr checks" => {
+            let lower = word.to_lowercase();
+            !["--web", "--repo", "-w", "-r"]
+                .iter()
+                .any(|o| lower.starts_with(o))
+        }
+        _ => true,
+    };
+    rest.iter().all(fine).then_some(rule)
+}
+
+/// `git log`'s options a read-only check may use: which commits, and how each is named.
+const LOG_OPTIONS: [&str; 26] = [
+    "--oneline",
+    "--format",
+    "--pretty",
+    "-n",
+    "--max-count",
+    "--skip",
+    "--since",
+    "--after",
+    "--until",
+    "--before",
+    "--author",
+    "--committer",
+    "--grep",
+    "--first-parent",
+    "--no-merges",
+    "--merges",
+    "--decorate",
+    "--no-decorate",
+    "--date",
+    "--reverse",
+    "--all",
+    "--branches",
+    "--tags",
+    "--remotes",
+    "--abbrev-commit",
+    "--",
+];
+
+/// Config a read-only check runs with, over the repository's own (which an agent can change):
+/// no fsmonitor hook, no pager, no signature check. As `GIT_CONFIG_*` pairs.
+pub fn read_only_config() -> Vec<(String, String)> {
+    let pairs = [
+        ("core.fsmonitor", "false"),
+        ("core.pager", "cat"),
+        ("log.showSignature", "false"),
+    ];
+    let mut vars = vec![("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string())];
+    for (i, (key, value)) in pairs.iter().enumerate() {
+        vars.push((format!("GIT_CONFIG_KEY_{i}"), key.to_string()));
+        vars.push((format!("GIT_CONFIG_VALUE_{i}"), value.to_string()));
+    }
+    vars
 }
 
 /// Whether the call is a shell command that reads as a push. The worktree's `pre-push` hook is
@@ -469,5 +555,94 @@ mod tests {
         ] {
             assert_eq!(run("Bash", not), None, "{not}");
         }
+    }
+
+    /// 0036 C11 (owner, task 1450): a wait's check that is one known read-only command, alone,
+    /// runs without asking; anything chained, redirected or substituted asks as before.
+    #[test]
+    fn a_known_read_only_check_alone_runs_without_asking() {
+        let wait = |check: &str| {
+            let input = json!({ "check": check, "then": "go on" });
+            ask("mcp__gathr__wait", &input, &[at(&["w"])], &data(), false)
+        };
+        for (check, rule) in [
+            ("gh pr view 12 --json state", "gh pr view"),
+            ("gh pr checks 12", "gh pr checks"),
+            ("git status --porcelain", "git status"),
+            ("git log -1 --format=%H origin/main", "git log"),
+            ("git log --oneline -n 5 --first-parent main", "git log"),
+            ("git rev-parse HEAD", "git rev-parse"),
+            ("  git rev-parse   HEAD  ", "git rev-parse"),
+        ] {
+            assert_eq!(read_only_check(check), Some(rule), "{check}");
+            assert_eq!(wait(check), None, "{check}");
+        }
+        for check in [
+            "git status; rm -rf x",
+            "git status && rm x",
+            "git status &",
+            "git log | sh",
+            "git status > out",
+            "git log < in",
+            "git rev-parse $(rm x)",
+            "git rev-parse ${HOME}",
+            "git log `rm x`",
+            "git status\nrm x",
+            "git -c core.pager=sh log",
+            "git -C .. status",
+            "git log --output=x",
+            "git log -p --ext-diff",
+            "git log -p",
+            "git log --stat",
+            "git log --show-signature",
+            "git log --format=%G?",
+            "gh pr view 1 --web",
+            "gh pr checks 1 -w",
+            "gh pr view 1 --repo other/repo",
+            "git push",
+            "gh pr merge 1",
+            "git logx",
+            "/usr/bin/git status",
+        ] {
+            assert_eq!(read_only_check(check), None, "{check}");
+            assert!(wait(check).is_some(), "{check}");
+        }
+    }
+
+    /// A repository's own config can name a program git runs (here `core.fsmonitor` for `git
+    /// status`). An agent can set it, so a read-only check runs with `read_only_config` over it.
+    #[test]
+    fn a_read_only_check_never_runs_a_program_the_repositorys_config_names() {
+        let root = std::env::temp_dir().join(format!("gathr-c11-{}", crate::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let git = |args: &[&str], over: &[(String, String)]| {
+            let mut command = std::process::Command::new("git");
+            for var in crate::platform::env::LOCAL_GIT_VARS {
+                command.env_remove(var);
+            }
+            command
+                .args(args)
+                .current_dir(&root)
+                .envs(over.iter().cloned());
+            command.output().unwrap()
+        };
+        git(&["init", "-q"], &[]);
+        git(
+            &["config", "core.fsmonitor", "echo ran > marker; exit 1"],
+            &[],
+        );
+        git(&["status"], &read_only_config());
+        let after_guarded = root.join("marker").exists();
+        git(&["status"], &[]);
+        let after_plain = root.join("marker").exists();
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            after_plain,
+            "the hook didn't run even unguarded: the test proves nothing"
+        );
+        assert!(
+            !after_guarded,
+            "a read-only check ran the repository's fsmonitor hook"
+        );
     }
 }

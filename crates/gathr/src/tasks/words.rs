@@ -85,6 +85,7 @@ pub fn wait_name(
         "ci" if target.chars().all(|c| c.is_ascii_digit()) => format!("CI on #{target}"),
         "ci" => format!("CI on {}", target.get(..7).unwrap_or(target)),
         "pr" => format!("#{target} to merge or close"),
+        "up_to_date" => format!("#{target} to be up to date"),
         "all" => format!("all of {parts} waits"),
         _ => "a check".to_string(),
     })

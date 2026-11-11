@@ -64,8 +64,13 @@ pub struct WaitFor {
     ci: Option<String>,
     /// Until this PR merges or closes.
     pr: Option<i64>,
+    /// With `pr`: until that PR is up to date with its base branch (it has every commit the base
+    /// has), instead of until it merges or closes. Rather than a shell check for the same.
+    up_to_date: Option<bool>,
     /// Until this command exits 0, run every few minutes in your folder by `sh` (Git Bash on
-    /// Windows, never PowerShell or cmd): write it for that shell.
+    /// Windows, never PowerShell or cmd): write it for that shell. One read-only command alone
+    /// (`gh pr view`, `gh pr checks`, `git status`, `git log`, `git rev-parse`) runs without
+    /// asking the person; anything else asks first.
     check: Option<String>,
     /// What you'll do then: you're told it when woken.
     then: String,
@@ -261,8 +266,9 @@ impl Tools {
     }
 
     #[tool(
-        description = "Wait for an agent, CI, a PR to merge or close, or a check to exit 0. All conditions must be met. Gathr \
-            wakes you here on your task when they are met, or after 24 hours. Use this instead of polling."
+        description = "Wait for an agent, CI, a PR to merge or close or to be up to date with its base, or a check to exit 0. \
+            All conditions must be met. Gathr wakes you here on your task when they are met, or after 24 hours. Use this \
+            instead of polling."
     )]
     async fn wait(
         &self,
@@ -307,7 +313,16 @@ impl Tools {
                     parts.push(part("agent", agent_named(c, &chat, name)?));
                 }
                 parts.extend(ask.ci.clone().map(|ci| part("ci", ci)));
-                parts.extend(ask.pr.map(|pr| part("pr", pr.to_string())));
+                let pr_kind = match ask.up_to_date {
+                    Some(true) if ask.pr.is_none() => {
+                        return Err(Error::Refused(
+                            "up_to_date goes with pr: the PR to keep up to date".into(),
+                        ));
+                    }
+                    Some(true) => "up_to_date",
+                    _ => "pr",
+                };
+                parts.extend(ask.pr.map(|pr| part(pr_kind, pr.to_string())));
                 parts.extend(ask.check.clone().map(|check| part("check", check)));
                 let leave = Leave {
                     chat: &chat,

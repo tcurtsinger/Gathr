@@ -179,7 +179,7 @@ fn checked(conn: &Connection, l: &Leave, part: &Part) -> Result<(), Error> {
         "ci" => {
             ci::Target::parse(target).map_err(refused)?;
         }
-        "pr" => {
+        "pr" | "up_to_date" => {
             if target.parse::<u32>().is_err() {
                 return Err(refused(format!(
                     "a PR wait takes its number, not \"{target}\""
@@ -196,7 +196,7 @@ fn checked(conn: &Connection, l: &Leave, part: &Part) -> Result<(), Error> {
         "check" => {}
         other => {
             return Err(refused(format!(
-                "{other} isn't a wait: agent, ci, pr or check"
+                "{other} isn't a wait: agent, ci, pr, up_to_date or check"
             )));
         }
     }
@@ -247,11 +247,11 @@ fn insert(
     Ok(())
 }
 
-/// The waits the service looks at itself: open CI, PR and check waits, alone or parts.
+/// The waits the service looks at itself: open CI, PR, up-to-date and check waits, alone or parts.
 pub fn to_look_at(conn: &Connection) -> Result<Vec<Wait>, Error> {
     ids(
         conn,
-        "SELECT id FROM waits WHERE state = 'open' AND kind IN ('ci', 'pr', 'check')
+        "SELECT id FROM waits WHERE state = 'open' AND kind IN ('ci', 'pr', 'up_to_date', 'check')
          ORDER BY created_ts",
         [],
     )

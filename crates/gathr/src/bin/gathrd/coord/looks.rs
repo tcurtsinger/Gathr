@@ -201,7 +201,48 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
                 _ => Look::NotYet { head: None },
             })
         }
+        "up_to_date" => {
+            let view = gh(
+                &pr_view(target, "state,headRefOid,baseRefName", repo),
+                &dir,
+                vars,
+            )
+            .await?;
+            let (state, head, base) = (
+                json_text(&view, "state"),
+                json_text(&view, "headRefOid"),
+                json_text(&view, "baseRefName"),
+            );
+            if state != "OPEN" {
+                return Ok(up_to_date(target, &state, &base, None));
+            }
+            if head.is_empty() || base.is_empty() {
+                return Err(format!("GitHub gave no head or base for #{target}"));
+            }
+            // How far the head is behind its base, as GitHub compares them.
+            let path = format!(
+                "repos/{}/compare/{base}...{head}",
+                repo.unwrap_or("{owner}/{repo}")
+            );
+            let compared = gh(&["api", &path, "--jq", ".behind_by"], &dir, vars).await?;
+            let behind = compared
+                .trim()
+                .parse()
+                .map_err(|_| format!("GitHub didn't say how far #{target} is behind"))?;
+            Ok(up_to_date(target, &state, &base, Some(behind)))
+        }
         _ => look_ci(wait, &Target::parse(target)?, &dir, vars).await,
+    }
+}
+
+/// An up-to-date wait (0036 C12): met once the PR has every commit its base has, or when it's
+/// merged or closed (nothing left to keep up to date); else not yet.
+fn up_to_date(pr: &str, state: &str, base: &str, behind: Option<u64>) -> Look {
+    match (state, behind) {
+        ("MERGED", _) => Look::Met(format!("#{pr} was merged")),
+        ("CLOSED", _) => Look::Met(format!("#{pr} was closed without merging")),
+        (_, Some(0)) => Look::Met(format!("#{pr} is up to date with {base}")),
+        _ => Look::NotYet { head: None },
     }
 }
 
@@ -302,7 +343,12 @@ async fn moved_past(
 /// A check's command: exit 0 is met; any other exit is "not yet" (G69); one that can't run or
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
-    let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
+    let (shell, mut vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
+    // A check let through unasked as read-only runs with git's own programs switched off (C11).
+    if gathr::approvals::read_only_check(command).is_some() {
+        let config = gathr::approvals::read_only_config();
+        vars.extend(config.into_iter().map(|(k, v)| (k.into(), v.into())));
+    }
     let ran = gathr::run::script(&shell, command, dir, &vars, LIMIT).await?;
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
@@ -374,5 +420,31 @@ async fn project_of(chats: &Arc<Chats>, chat: &str) -> PathBuf {
     match found {
         Some(Ok(Some(project))) => PathBuf::from(project),
         _ => chats.data.path().to_path_buf(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 0036 C12: met when the base's commits are all in the PR, not before; a merged or closed PR
+    /// has nothing left to keep up to date.
+    #[test]
+    fn an_up_to_date_wait_is_met_once_the_base_is_in_the_pr() {
+        let met = |look: Look| matches!(look, Look::Met(_));
+        assert!(
+            !met(up_to_date("7", "OPEN", "main", Some(2))),
+            "behind by 2"
+        );
+        assert!(
+            met(up_to_date("7", "OPEN", "main", Some(0))),
+            "the base moved into it"
+        );
+        assert!(met(up_to_date("7", "MERGED", "main", None)));
+        assert!(met(up_to_date("7", "CLOSED", "main", None)));
+        let Look::Met(said) = up_to_date("7", "OPEN", "main", Some(0)) else {
+            unreachable!()
+        };
+        assert_eq!(said, "#7 is up to date with main");
     }
 }

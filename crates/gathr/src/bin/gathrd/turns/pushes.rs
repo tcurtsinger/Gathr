@@ -29,6 +29,15 @@ impl Task {
             .chat(chat)
             .attr("gen_ai.agent.id", self.agent.clone())
             .attr("remote", input["remote"].as_str().map(String::from));
+        // One known read-only command alone runs without asking, for every engine (0036 C11).
+        let read_only = input["command"]
+            .as_str()
+            .and_then(gathr::approvals::read_only_check);
+        if let Some(rule) = read_only.filter(|_| kind == "check") {
+            self.record(event.ok().attr("allowed_by", format!("read-only: {rule}")));
+            let _ = reply.send(true);
+            return;
+        }
         // Claude already asked through its native hook. Keep that path valid even if its
         // completed turn ended just before the MCP request reached us.
         if native_hook {
