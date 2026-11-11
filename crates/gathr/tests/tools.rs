@@ -108,12 +108,14 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
     let all = [
         "ask_person",
         "cancel_task",
+        "checks",
         "end_wait",
         "finish_task",
         "give_task",
         "list_tasks",
         "read_chat",
         "restart_task",
+        "set_checks",
         "wait",
     ];
     assert_eq!(names, all, "{tools}");

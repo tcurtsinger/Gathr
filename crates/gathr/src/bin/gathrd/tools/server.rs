@@ -37,7 +37,10 @@ pub fn service(
         Ok(Tools {
             chats: chats.clone(),
             stopping: stopping.clone(),
-            tool_router: Tools::tool_router() + Tools::coord_router() + Tools::person_router(),
+            tool_router: Tools::tool_router()
+                + Tools::coord_router()
+                + Tools::person_router()
+                + Tools::checks_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)
