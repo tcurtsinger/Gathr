@@ -65,7 +65,7 @@ async fn file(
 }
 
 /// Settings > General: the stale days (F11), after how many days without a move a task is stale and
-/// cancelled, and the agent folder (0034).
+/// cancelled, the agent folder (0034) and the hand-off limit (plans/agent-messages.md).
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
     let data = s.data.path().to_path_buf();
     db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
@@ -76,6 +76,14 @@ pub struct Change {
     stale_days: Option<i64>,
     cancel_days: Option<i64>,
     agent_folder: Option<String>,
+    /// Set to a number, or `null` for no limit; left out, unchanged.
+    #[serde(default, deserialize_with = "present")]
+    handoff_limit: Option<Option<i64>>,
+}
+
+/// A field that's there, `null` included, apart from one that's left out.
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+    Option::<i64>::deserialize(d).map(Some)
 }
 
 async fn change_settings(
@@ -105,7 +113,10 @@ async fn change_settings(
             stale: body.stale_days.unwrap_or(was.stale),
             cancel: body.cancel_days.unwrap_or(was.cancel),
         };
-        let saved = stale::set_days(c, days);
+        let mut saved = stale::set_days(c, days);
+        if let (Ok(()), Some(limit)) = (&saved, body.handoff_limit) {
+            saved = gathr::handoffs::set_limit(c, limit);
+        }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;
         }
@@ -117,6 +128,7 @@ async fn change_settings(
         event
             .attr("stale_days", days.stale)
             .attr("cancel_days", days.cancel)
+            .attr("handoff_limit", gathr::handoffs::limit(c)?)
             .attr(
                 "agent_folder",
                 folders::root(c, &data)?.display().to_string(),
@@ -134,7 +146,11 @@ fn shown(
 ) -> Result<serde_json::Value, gathr::Error> {
     let days = stale::days(c)?;
     let folder = folders::root(c, data)?.display().to_string();
-    Ok(json!({ "stale_days": days.stale, "cancel_days": days.cancel, "agent_folder": folder }))
+    let handoff_limit = gathr::handoffs::limit(c)?;
+    Ok(
+        json!({ "stale_days": days.stale, "cancel_days": days.cancel, "agent_folder": folder,
+        "handoff_limit": handoff_limit }),
+    )
 }
 
 #[derive(Deserialize)]

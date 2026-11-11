@@ -211,6 +211,11 @@ pub fn addressee(
     Ok(named.or(lead).or(only).map(|m| m.agent.clone()))
 }
 
+/// The member called `name`, ignoring case, matched as the person's `@Name` is.
+pub fn named<'a>(team: &'a [Member], name: &str) -> Option<&'a Member> {
+    first_named(team, &format!("@{}", name.trim().trim_start_matches('@')))
+}
+
 /// The member whose `@Name` comes first in `text`, ignoring case; at one place, the longest name.
 /// A name counts only where it ends: `@Al` isn't in `@Alex`.
 fn first_named<'a>(team: &'a [Member], text: &str) -> Option<&'a Member> {

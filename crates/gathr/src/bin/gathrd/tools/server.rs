@@ -40,7 +40,8 @@ pub fn service(
             tool_router: Tools::tool_router()
                 + Tools::coord_router()
                 + Tools::person_router()
-                + Tools::checks_router(),
+                + Tools::checks_router()
+                + Tools::message_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)

@@ -58,6 +58,16 @@ pub enum Cmd {
     Resume(store::Waiting),
     /// A turn Gathr starts for the agent: a task's, a wake-up or a hear-back (0010).
     Start(gathr::tasks::Start),
+    /// Another agent's message to this one (plans/agent-messages.md): into the turn it runs in the
+    /// chat, else into one queued there, else a turn of its own. Answers which it was.
+    Message {
+        chat: String,
+        /// What the agent is told: who wrote, and their words.
+        ask: String,
+        /// The sender's turn, which a turn of its own answers.
+        answers: String,
+        reply: oneshot::Sender<&'static str>,
+    },
     /// Closes the task's engine if it runs in this account folder, answering once it has exited;
     /// the queue stays.
     Leave {
