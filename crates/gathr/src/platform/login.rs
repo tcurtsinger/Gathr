@@ -43,19 +43,30 @@ const APPROVED: &str =
 pub fn is_on(item: &Item) -> Result<bool, String> {
     use super::env;
     let command = command_line(&item.args);
-    let entries = match env::export(RUN) {
-        Ok(bytes) => env::parse_reg(&bytes),
-        // A profile nothing ever started at login from may have no Run key (CI's runners): off.
-        // `reg` says so only in the system's language, so the key's parent is asked instead.
-        Err(_) if !key_exists(RUN)? => Vec::new(),
-        Err(why) => return Err(why),
-    };
-    let listed = entries
+    let listed = entries(RUN, env::export(RUN))?
         .iter()
         .any(|(name, value, _)| name.eq_ignore_ascii_case(&item.name) && *value == command);
     // A person who never turned anything off may have no such key.
     let off = env::export(APPROVED).is_ok_and(|b| turned_off(&env::utf16le(&b), &item.name));
     Ok(listed && !off)
+}
+
+/// The values in `key`, from a first `reg export` of it. A profile nothing ever started at login
+/// from may have no Run key (CI's runners): none. `reg` says so only in the system's language, so
+/// the key's parent is asked instead, and a key that appeared meanwhile is read again (the likeliest
+/// cause of CI's rare "unable to find" on a fresh runner: something else made the key between the two).
+#[cfg(windows)]
+fn entries(
+    key: &str,
+    first: Result<Vec<u8>, String>,
+) -> Result<Vec<(String, String, bool)>, String> {
+    use super::env;
+    let bytes = match first {
+        Ok(bytes) => bytes,
+        Err(_) if !key_exists(key)? => return Ok(Vec::new()),
+        Err(_) => env::export(key)?,
+    };
+    Ok(env::parse_reg(&bytes))
 }
 
 /// Whether `key` is one of its parent's subkeys, as `reg query` lists them (key names print as
@@ -66,7 +77,8 @@ fn key_exists(key: &str) -> Result<bool, String> {
     let (parent, _) = key.rsplit_once('\\').expect("a subkey");
     let mut command = env::reg();
     command.args(["query", parent]);
-    let listed = env::run(command, std::time::Duration::from_secs(10))?;
+    let listed = env::run(command, std::time::Duration::from_secs(10))
+        .map_err(|e| format!("{parent} wasn't listed: {e}"))?;
     let listed = String::from_utf8_lossy(&listed);
     Ok(listed.lines().any(|l| l.trim().eq_ignore_ascii_case(key)))
 }
@@ -226,6 +238,47 @@ mod tests {
         );
         let missing = r"HKEY_CURRENT_USER\Software\Microsoft\GathrNoSuchKey";
         assert_eq!(key_exists(missing), Ok(false));
+    }
+
+    /// A made-up key under the person's own, deleted however the test ends.
+    #[cfg(windows)]
+    struct ScratchKey(String);
+
+    #[cfg(windows)]
+    impl Drop for ScratchKey {
+        fn drop(&mut self) {
+            let mut command = super::super::env::reg();
+            command.args(["delete", &self.0, "/f"]);
+            let _ = super::super::env::run(command, std::time::Duration::from_secs(10));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_key_made_after_its_first_read_failed_is_read_again() {
+        use super::super::env;
+        let key = ScratchKey(format!(
+            r"HKEY_CURRENT_USER\Software\GathrTest-{}",
+            crate::ids::span_id()
+        ));
+        let mut command = env::reg();
+        command.args([
+            "add",
+            &key.0,
+            "/v",
+            "Gathr",
+            "/d",
+            r"C:\Apps\gathr-app.exe",
+            "/f",
+        ]);
+        env::run(command, std::time::Duration::from_secs(10)).unwrap();
+        let missing =
+            Err("ERROR: The system was unable to find the specified registry key or value.".into());
+        let read = entries(&key.0, missing).unwrap();
+        assert_eq!(
+            read,
+            [("Gathr".into(), r"C:\Apps\gathr-app.exe".into(), false)]
+        );
     }
 
     #[test]
