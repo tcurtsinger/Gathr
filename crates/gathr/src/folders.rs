@@ -10,6 +10,8 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::Error;
 
+pub mod prs;
+
 /// The setting's key, and its name in `/api/settings`.
 pub const SETTING: &str = "agent_folder";
 /// Where a chat with no project keeps its work, as a project would.

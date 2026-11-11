@@ -72,6 +72,23 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   removal reads again, right before it starts, whether its chat is still archived: a chat restored
   while a sweep looks at it keeps what's there.
 
+### Finished PRs (0036 C10)
+
+A task's merged or closed PR queues cleanup of its local branch and the worktrees Gathr recorded
+for it in the agent folder. The PR looks and a successful `merge` tool both queue it before settling
+the task; the existing sweep runs it, retries skipped work, and keeps the request across restarts.
+Archiving alone still retains branches for Restore.
+
+The branch must belong to the base repository, not a same-named branch in a fork, and still point
+at the finished PR's head. Newer commits and worktrees made after that PR finished stay. Worktrees
+on other branches, unrecorded worktrees, and paths used by an engine or wait check stay too. Dirty
+work is never forced away: Git removes a clean worktree without force, and the branch is deleted
+only if no remaining worktree checks it out and its head still matches. Skips and removals use
+`gathr.cleanup.skip` and `gathr.cleanup.remove`, with the branch and one shared reference.
+
+This reuses the sweep's guards instead of asking an agent to remove its own working folder, and
+keeps skipped cleanup durable rather than depending on another look at an already-settled task.
+
 ## Why
 
 - The owner's own room keeps plans, reviews and evidence in a folder next to the repo, and each
