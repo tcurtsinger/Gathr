@@ -324,3 +324,34 @@ test("G158: the Supervisor's reply to the person's answer is in the main column,
   expect(ids(team)).not.toContain('a-woken');
   expect(ids(team).at(-1)).toBe('a-kit9');
 });
+
+test("G160: the person's questions and their answer lines are in the main column, though asked in a turn on a member's task", () => {
+  const state = round();
+  // Rowan gives Mira task 7; Mira, on 7, asks the person 8 and 9; the answers wake Mira on 7.
+  state.turns.mira7 = turn('mira7', 'mira', { task: 7, answers: 'rowan' });
+  state.turns.woken = turn('woken', 'mira', { task: 7, answers: 'mira7' });
+  const asked = { owner: null, kind: 'person' as const, giver: 'mira' };
+  state.tasks.push(
+    task(7, 'mira', 'rowan', { giver: 'rowan', state: 'working' }),
+    task(8, 'mira', 'mira7', { ...asked, what: 'Ship it?', reason: 'Yes', heard_in: 'woken' }),
+    task(9, 'mira', 'mira7', { ...asked, what: 'Done reading?', reason: 'Done', heard_in: 'woken' }),
+  );
+  state.messages.push(
+    said('mira7', 'gathr', 'Task #7 from Rowan: Task 7'),
+    said('mira7', 'assistant', 'Asking the person'),
+    said('woken', 'gathr', 'The person answered'),
+    said('woken', 'assistant', 'Thanks'),
+  );
+  const { main, team } = view(state);
+  const lines = (all: ThreadMessageLike[]) =>
+    all.flatMap((m) => [...(custom(m).questions ?? []), ...(custom(m).answered ?? [])].map((l) => l.line));
+  expect(lines(main)).toEqual([
+    'Mira asked you #8 · Ship it?',
+    'Mira asked you #9 · Done reading?',
+    'You answered #8 · Yes',
+    'You answered #9 · Done',
+  ]);
+  expect(lines(team)).toEqual([]);
+  // Mira's work on Rowan's task stays in the team column.
+  expect(ids(team)).toContain('a-mira7');
+});
