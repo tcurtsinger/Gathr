@@ -109,3 +109,41 @@ fn a_codex_turn_shows_its_last_calls_fill_and_its_window() {
         "{history}"
     );
 }
+
+#[test]
+fn a_compaction_says_so_in_the_chat_and_shows_the_fill_after_it() {
+    let data = TempDir::new();
+    let recording = common::recording("compact_claude");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording)]);
+    let account = service.signed_in(&data.0);
+    let (chat, agent) = one_turn(&service, &account);
+    service.wait_for(&chat, 10, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "/compact", "agent": agent }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+
+    let history = service.wait_for(&chat, 10, "the compaction", |h| {
+        h["turns"][1]["status"] == "done"
+    });
+    let lines: Vec<&str> = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["role"] == "gathr")
+        .filter_map(|m| m["body"].as_str())
+        .collect();
+    assert_eq!(
+        lines,
+        ["Compacted Made-up's conversation: 23K to 3.6K"],
+        "{history}"
+    );
+    let member = history["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["agent"] == agent.as_str())
+        .unwrap();
+    assert_eq!(member["context"]["used"], 3_611, "{history}");
+}

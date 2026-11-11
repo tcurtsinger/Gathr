@@ -252,6 +252,11 @@ impl Task {
             // agent's own messages or tools (friction ledger G24).
             Frame::Fill { used, model } => self.context_filled(used, model).await,
             Frame::Windows(windows) => self.context_window(windows).await,
+            Frame::Compacted {
+                trigger,
+                before,
+                after,
+            } => self.compacted(trigger, before, after).await,
             Frame::Sub { .. } | Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
     }

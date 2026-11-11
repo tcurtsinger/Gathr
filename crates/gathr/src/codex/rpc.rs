@@ -353,6 +353,14 @@ impl Session {
                     });
                 }
             }
+            // Once, as it completes; Codex 0.166.0 sent no deprecated `thread/compacted` with it.
+            "item/completed" if item["type"] == "contextCompaction" => {
+                read.frames.push(Frame::Compacted {
+                    trigger: "auto".into(),
+                    before: None,
+                    after: None,
+                });
+            }
             "item/completed" if item["type"] == "agentMessage" => {
                 read.frames.push(Frame::Text(text(&item["text"])));
             }
@@ -566,6 +574,23 @@ mod tests {
             instructions: Some("briefing".into()),
             ..Opening::default()
         }
+    }
+
+    /// A compaction reads once, as its item completes (recorded on a test account, Codex 0.166.0,
+    /// compacting by itself); Codex gives no sizes.
+    #[test]
+    fn a_context_compaction_item_reads_once() {
+        let (_, frames, _) = played("compact_codex", opening());
+        let compacted: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Compacted { .. }))
+            .collect();
+        let once = Frame::Compacted {
+            trigger: "auto".into(),
+            before: None,
+            after: None,
+        };
+        assert_eq!(compacted, [&once]);
     }
 
     /// Each call's prompt (`last.inputTokens`) and the model's window (compaction plan, K1).

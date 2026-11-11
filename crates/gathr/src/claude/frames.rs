@@ -77,6 +77,13 @@ pub enum Frame {
     },
     /// Each model's context window, as the engine reports it (never a table of ours).
     Windows(Vec<(Option<String>, i64)>),
+    /// The engine compacted the conversation (`manual` or `auto`), with its size before and after
+    /// when the engine says (Claude Code does; Codex doesn't).
+    Compacted {
+        trigger: String,
+        before: Option<i64>,
+        after: Option<i64>,
+    },
     /// Anything else, by its type: recorded raw, not acted on.
     Other(String),
 }
@@ -147,6 +154,14 @@ fn read_own(value: &Value) -> Vec<Frame> {
             tools: strings(value.get("tools")),
             permission_mode: text(value, "permissionMode"),
         }],
+        "system" if text(value, "subtype") == "compact_boundary" => {
+            let meta = &value["compact_metadata"];
+            vec![Frame::Compacted {
+                trigger: meta["trigger"].as_str().unwrap_or("auto").to_string(),
+                before: meta["pre_tokens"].as_i64(),
+                after: meta["post_tokens"].as_i64(),
+            }]
+        }
         "system" if text(value, "subtype") == "permission_denied" => vec![Frame::Blocked {
             tool: text(value, "tool_name"),
             by: text(value, "decision_reason_type"),
@@ -379,6 +394,23 @@ mod tests {
         assert!(frames.contains(&fill), "{frames:?}");
         let windows = Frame::Windows(vec![(Some("claude-opus-5-5".into()), 1_000_000)]);
         assert!(frames.contains(&windows), "{frames:?}");
+    }
+
+    /// A compaction, read once from its boundary, with the sizes before and after (recorded with
+    /// `/compact` on a test account, Claude Code 2.1.318).
+    #[test]
+    fn a_compaction_reads_once_with_its_sizes() {
+        let frames = replayed("compact_claude");
+        let compacted: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Compacted { .. }))
+            .collect();
+        let once = Frame::Compacted {
+            trigger: "manual".into(),
+            before: Some(23_042),
+            after: Some(3_611),
+        };
+        assert_eq!(compacted, [&once]);
     }
 
     /// A sub-agent's calls fill its own context, never the agent's.

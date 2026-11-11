@@ -52,3 +52,41 @@ pub fn on_members(conn: &Connection, chat: &str, history: &mut Value) -> Result<
     }
     Ok(())
 }
+
+/// The quiet line a compaction leaves in the chat: "Compacted Ann's conversation: 410K to 52K", the
+/// sizes when the engine gives them (Claude Code does; Codex doesn't).
+pub fn compacted_line(
+    conn: &Connection,
+    agent: &str,
+    before: Option<i64>,
+    after: Option<i64>,
+) -> Result<String, Error> {
+    let name = crate::agents::get(conn, agent)?.map_or_else(|| "an agent".to_string(), |a| a.name);
+    Ok(match (before, after) {
+        (Some(before), Some(after)) => {
+            format!(
+                "Compacted {name}'s conversation: {} to {}",
+                tokens(before),
+                tokens(after)
+            )
+        }
+        _ => format!("Compacted {name}'s conversation"),
+    })
+}
+
+/// 950, 3.6K, 23K, 1.2M: tokens as the line reads them.
+fn tokens(n: i64) -> String {
+    let short = |v: f64, unit: &str| {
+        let shown = if v < 10.0 {
+            format!("{:.1}", v)
+        } else {
+            format!("{:.0}", v)
+        };
+        format!("{}{unit}", shown.trim_end_matches(".0"))
+    };
+    match n {
+        n if n < 1_000 => n.to_string(),
+        n if n < 1_000_000 => short(n as f64 / 1_000.0, "K"),
+        n => short(n as f64 / 1_000_000.0, "M"),
+    }
+}
