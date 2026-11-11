@@ -100,6 +100,7 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
 export function useTask(chat: string, number: number) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: another task starts afresh, without the last one's failure
   useEffect(() => {
     let current = true;
     setTasks(null);
