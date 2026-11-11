@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 pub mod briefing;
+mod checks;
 mod coord;
 mod hook;
 mod person;
