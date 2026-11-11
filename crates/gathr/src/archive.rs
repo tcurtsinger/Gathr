@@ -143,6 +143,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         format!("DELETE FROM background WHERE turn_id IN {of_turns}"),
         "DELETE FROM engine_raw WHERE chat_id = ?1".into(),
         "DELETE FROM handoffs WHERE chat_id = ?1".into(),
+        "DELETE FROM agent_context WHERE chat_id = ?1".into(),
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         format!("DELETE FROM task_after WHERE task IN {of_tasks} OR after_task IN {of_tasks}"),

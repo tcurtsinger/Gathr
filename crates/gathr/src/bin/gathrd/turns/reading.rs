@@ -250,6 +250,8 @@ impl Task {
             }
             // A sub-agent's frames stay in the raw record under their Agent call, never in the
             // agent's own messages or tools (friction ledger G24).
+            Frame::Fill { used, model } => self.context_filled(used, model).await,
+            Frame::Windows(windows) => self.context_window(windows).await,
             Frame::Sub { .. } | Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
     }

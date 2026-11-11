@@ -367,6 +367,12 @@ impl Session {
                 let usage = &params["tokenUsage"];
                 self.total = Some(usage_of(&usage["total"]));
                 add(&mut self.summed, &usage_of(&usage["last"]));
+                if let Some(used) = usage["last"]["inputTokens"].as_i64() {
+                    read.frames.push(Frame::Fill { used, model: None });
+                }
+                if let Some(window) = usage["modelContextWindow"].as_i64() {
+                    read.frames.push(Frame::Windows(vec![(None, window)]));
+                }
             }
             "account/rateLimits/updated" => self.limits = windows(&params["rateLimits"]),
             "error" if params["willRetry"] != true => {
@@ -560,6 +566,24 @@ mod tests {
             instructions: Some("briefing".into()),
             ..Opening::default()
         }
+    }
+
+    /// Each call's prompt (`last.inputTokens`) and the model's window (compaction plan, K1).
+    #[test]
+    fn token_usage_says_how_full_the_context_is_and_its_window() {
+        let (_, frames, _) = played("codex_signed_in", opening());
+        let fills: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Fill { .. }))
+            .collect();
+        assert_eq!(
+            fills.last(),
+            Some(&&Frame::Fill {
+                used: 16_291,
+                model: None
+            })
+        );
+        assert!(frames.contains(&Frame::Windows(vec![(None, 475_000)])));
     }
 
     /// Codex 0.166.0's `thread/start` answered these back as its sandbox's `writableRoots` (0034).

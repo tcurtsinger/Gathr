@@ -11,6 +11,7 @@ pub mod check_runs;
 pub mod checks;
 pub mod claude;
 pub mod codex;
+pub mod context;
 pub mod crash_log;
 pub mod data;
 pub mod db;
