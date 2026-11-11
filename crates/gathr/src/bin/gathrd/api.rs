@@ -115,6 +115,9 @@ async fn guard(Extract(s): Extract<Arc<State>>, mut req: Request, next: Next) ->
             next.run(req).await
         }
     };
+    if method == "GET" && path == "/mcp" {
+        response = crate::tools::until_stop(response, s.stopping.subscribe());
+    }
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
         let mut event = Event::point("gathr.api.request")
