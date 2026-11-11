@@ -244,12 +244,13 @@ fn a_run_cut_off_by_a_stop_ends_failed_after_the_restart_and_may_run_again() {
     );
 }
 
-/// Vale, #119: two runs of one project never share the checkout at once.
+/// Vale, #119: two runs of one project never share the checkout at once. (`cargo-target/..` needs
+/// `cargo-target` there on macOS, where the path isn't worked out by its text as on Windows.)
 #[test]
 fn runs_of_one_project_never_overlap() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let repo = repo(&data.0, &repos.0);
-    let order = r#"echo start >> "$CARGO_TARGET_DIR/../order"; sleep 1; echo end >> "$CARGO_TARGET_DIR/../order""#;
+    let order = r#"mkdir -p "$CARGO_TARGET_DIR"; echo start >> "$CARGO_TARGET_DIR/../order"; sleep 1; echo end >> "$CARGO_TARGET_DIR/../order""#;
     repo.checks(&data.0, &[order]);
     let path = format!("/api/projects/{}/checks/runs", repo.project);
     for _ in 0..2 {
