@@ -98,6 +98,8 @@ export interface Task {
   /** Its last move, once it has gone the stale days without one (F11). */
   stale_us?: number | null;
   created_us: number;
+  /** The turn its giver heard it was settled in: a person task's answer shows there. */
+  heard_in?: string | null;
 }
 
 /** An agent's stale task, on the person's list across chats. */

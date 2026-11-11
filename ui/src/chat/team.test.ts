@@ -207,6 +207,27 @@ test("what Gathr told the lead when a round settled isn't shown; the lead's word
   expect(ids([...main, ...team])).not.toContain('back-gathr');
 });
 
+test("the person's answers the lead heard show as one quiet line each where it heard them; its round report doesn't", () => {
+  const state = round();
+  // The turn that handed out tasks 1 and 2 also asked the person 5 and 6; the person answered 5 and cancelled 6.
+  const asked = { owner: null, giver: 'mira', kind: 'person' as const };
+  state.tasks.push(
+    task(5, 'mira', 'ask', { ...asked, what: 'Which notice?', reason: 'B: two sections', heard_in: 'heard' }),
+    task(6, 'mira', 'ask', { ...asked, state: 'cancelled', heard_in: 'heard' }),
+  );
+  state.turns.back = turn('back', 'mira', { answers: 'ask' });
+  state.turns.heard = turn('heard', 'mira', { answers: 'ask' });
+  state.messages.push(
+    said('back', 'gathr', 'The 2 tasks you gave are settled'),
+    said('heard', 'gathr', 'The person answered:\n- #5 Which notice?: B: two sections\nContinue.'),
+  );
+  const { main } = view(state);
+  expect(ids(main)).not.toContain('back-gathr');
+  const line = main.find((m) => m.id?.startsWith('heard-gathr')) as ThreadMessageLike;
+  expect(line.role).toBe('system');
+  expect(custom(line)).toEqual({ answered: ['You answered #5 · B: two sections'] });
+});
+
 test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {
   const state = round();
   state.turns.woke = turn('woke', 'mira');

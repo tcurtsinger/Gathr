@@ -140,6 +140,8 @@ pub struct Task {
     pub created_us: i64,
     /// Since when nothing has moved it, once it's stale (F11).
     pub stale_us: Option<i64>,
+    /// The turn its giver heard it was settled in: the chat shows the person's answer there.
+    pub heard_in: Option<String>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it

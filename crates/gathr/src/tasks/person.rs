@@ -347,12 +347,14 @@ pub(super) fn heard(
             .attr("gathr.task.count", settled.len())
             .insert(tx)?;
         let text = heard_words(tx, &settled)?;
-        starts.push(Start::queue(
-            tx,
-            (&chat, &giver),
-            (own, turn.as_deref()),
-            text,
-        )?);
+        let start = Start::queue(tx, (&chat, &giver), (own, turn.as_deref()), text)?;
+        for t in &settled {
+            tx.execute(
+                "UPDATE tasks SET heard_in = ?2 WHERE number = ?1",
+                params![t.number, start.turn],
+            )?;
+        }
+        starts.push(start);
     }
     Ok(starts)
 }

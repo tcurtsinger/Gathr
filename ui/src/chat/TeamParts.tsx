@@ -2,9 +2,20 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import type { Custom } from './messages';
 import './team.css';
 
-/** What Gathr told an agent: a member's task above its work, else a wake-up in Gathr's own voice. */
+/**
+ * What Gathr told an agent: the person's answers it heard, a member's task above its work, else a
+ * wake-up in Gathr's own voice.
+ */
 export function GathrLine({ custom }: { custom: Custom }) {
-  const { assignment } = custom;
+  const { assignment, answered } = custom;
+  if (answered)
+    return (
+      <MessagePrimitive.Root className="answered">
+        {answered.map((line) => (
+          <div key={line}>{line}</div>
+        ))}
+      </MessagePrimitive.Root>
+    );
   if (assignment) {
     const who = assignment.from && assignment.to ? `${assignment.from} to ${assignment.to}` : assignment.to;
     return (

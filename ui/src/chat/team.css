@@ -17,11 +17,20 @@
   margin-left: 0;
 }
 
-.assignment {
-  margin-bottom: -12px;
+.assignment,
+.answered {
   padding: 0 8px;
   color: var(--muted-foreground);
   font-size: 12px;
+}
+.assignment {
+  margin-bottom: -12px;
+}
+/* The person's answers, as quiet as a hand-off: one line each, cut with … (ux-issues 26). */
+.answered > div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gathr-line {
   display: flex;
