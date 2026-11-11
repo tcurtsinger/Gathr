@@ -72,3 +72,9 @@
 :root {
   --hover-tint: color-mix(in oklab, var(--foreground) 7%, transparent);
 }
+
+/* No tooltip over an open menu. Radix Tooltip opens on a 0 ms timer that a press landing first doesn't
+   cancel, so a More button's tooltip could open over its own menu and take its clicks. */
+body:has([data-slot="dropdown-menu-content"]) [data-slot="tooltip-content"] {
+  display: none;
+}

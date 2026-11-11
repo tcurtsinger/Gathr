@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import '../theme.css';
 import { SettingsPanel, type SettingsTarget } from './SettingsPanel';
 
 function Screen() {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { ResizeHandle } from './ResizeHandle';
-import '../theme.css';
 
 const name = '--test-pane-width';
 

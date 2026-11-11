@@ -97,6 +97,24 @@ test('a refused Archive keeps the question open with its reference; Cancel gives
   await expect.element(page.getByRole('button', { name: 'Made-up a', exact: true })).toBeVisible();
 });
 
+test("a More button's tooltip opening late never covers its menu", async () => {
+  service([chat('a')], []);
+  await render(<App />);
+  const more = page.getByRole('button', { name: 'More for Made-up a' });
+  await expect.element(more).toBeInTheDocument();
+  const button = more.element();
+  await more.click();
+  // Radix opens the tooltip on a 0 ms timer that a press landing first doesn't cancel (WebKit, in CI).
+  for (const type of ['pointerleave', 'pointermove'])
+    button.dispatchEvent(new PointerEvent(type, { pointerType: 'mouse', bubbles: type === 'pointermove' }));
+  await expect
+    .poll(() => document.querySelector('[data-slot="tooltip-content"]')?.textContent)
+    .toContain('More for Made-up a');
+
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
+  await expect.element(page.getByRole('dialog', { name: 'Archive Made-up a?' })).toBeVisible();
+});
+
 test('an archived chat reads only until Restore; a refused Restore says why on it', async () => {
   let refuse = true;
   service([chat('a')], [{ ...chat('z'), archived: '2026-11-08T12:00:00Z' }], (path) =>

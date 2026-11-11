@@ -1,7 +1,6 @@
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import '../theme.css';
 import type { Task, Wait } from '../api';
 import { Summary } from './Summary';
 import { empty } from './state';

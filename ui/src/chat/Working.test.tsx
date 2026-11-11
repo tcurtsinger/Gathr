@@ -1,7 +1,6 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Task, Turn } from '../api';
-import '../theme.css';
 import { type ChatState, empty } from './state';
 import { leadWait, TeamWait, working } from './Working';
 
