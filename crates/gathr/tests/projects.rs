@@ -286,3 +286,200 @@ fn a_project_that_fails_to_save_is_found_from_its_reference() {
     let (ok, trace) = gathr(&data.0, &["diag", "trace", error["ref"].as_str().unwrap()]);
     assert!(ok && trace.to_string().contains("forced"), "{trace}");
 }
+
+/// 0036: a project's name, folder, team, CI choice and merge method are each changed on their own,
+/// each window hears of it, and it's recorded.
+#[test]
+fn each_project_setting_is_changed_on_its_own_and_heard_live() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin", "Vale"]);
+    let team = json!([member(&ids[0], "supervisor")]);
+    let made = service.send(
+        "POST",
+        "/api/projects",
+        json!({ "name": "Gathr", "folder": folder, "members": team }),
+    );
+    assert_eq!(made.status, 200, "{}", made.body);
+    let made = made.json();
+    let id = made["id"].as_str().unwrap().to_string();
+    // A repo with no GitHub Actions workflows has only Gathr's checks to go by.
+    let defaults = (&made["checks"], &made["ci"], &made["merge"]);
+    assert_eq!(
+        defaults,
+        (&json!([]), &json!("gathr"), &json!("fast-forward")),
+        "{made}"
+    );
+
+    let other = repos.0.join("other");
+    let changes = [
+        json!({ "name": "Gathr app" }),
+        json!({ "folder": other }),
+        json!({ "members": [member(&ids[0], "supervisor"), member(&ids[1], "reviewer")] }),
+        json!({ "ci": "both" }),
+        json!({ "merge": "merge" }),
+    ];
+    let path = format!("/api/projects/{id}");
+    let mut live = service.live();
+    for change in &changes {
+        let answer = service.send("PATCH", &path, change.clone());
+        assert_eq!(answer.status, 200, "{change}: {}", answer.body);
+        let heard = common::next_live(&mut live);
+        let expected = json!({ "type": "project", "project": id, "change": "changed" });
+        assert_eq!(heard, expected, "{change}");
+    }
+    let listed = service.call("GET", "/api/projects").json()["projects"][0].clone();
+    assert_eq!(listed["name"], "Gathr app", "{listed}");
+    let saved = std::path::PathBuf::from(listed["folder"].as_str().unwrap());
+    assert_eq!(saved.file_name().unwrap(), "other", "{listed}");
+    assert_eq!(
+        roles(&listed["members"]),
+        [pair(&ids[0], "supervisor"), pair(&ids[1], "reviewer")]
+    );
+    assert_eq!(
+        (&listed["ci"], &listed["merge"]),
+        (&json!("both"), &json!("merge"))
+    );
+    // Its own name in another case is still its own.
+    let recased = service.send("PATCH", &path, json!({ "name": "GATHR APP" }));
+    assert_eq!(recased.status, 200, "{}", recased.body);
+
+    let query = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.project.change'";
+    let (_, rows) = gathr(&data.0, &["diag", "query", query]);
+    assert_eq!(rows["rows"][0]["n"], 6, "one event per change: {rows}");
+}
+
+/// A repo whose checkout has GitHub Actions workflows uses their CI unless the person picks.
+#[test]
+fn a_project_with_github_actions_uses_its_ci() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let workflows = folder.join(".github").join("workflows");
+    std::fs::create_dir_all(&workflows).unwrap();
+    std::fs::write(workflows.join("ci.yml"), "on: push\n").unwrap();
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+    let body =
+        json!({ "name": "Gathr", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let made = service.send("POST", "/api/projects", body);
+    assert_eq!(made.status, 200, "{}", made.body);
+    assert_eq!(made.json()["ci"], "ci", "{}", made.body);
+}
+
+#[test]
+fn a_bad_project_setting_is_refused_with_a_reference_and_changes_nothing() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin", "Vale"]);
+    let team = json!([member(&ids[0], "supervisor")]);
+    let first = service.send(
+        "POST",
+        "/api/projects",
+        json!({ "name": "Gathr", "folder": folder, "members": team }),
+    );
+    let id = first.json()["id"].as_str().unwrap().to_string();
+    let second = json!({ "name": "Site", "folder": repos.0.join("other"), "members": team });
+    assert_eq!(service.send("POST", "/api/projects", second).status, 200);
+    let before = service.call("GET", "/api/projects").json();
+
+    let path = format!("/api/projects/{id}");
+    let refused = [
+        (
+            json!({ "name": "site" }),
+            409,
+            "another project's name, in another case",
+        ),
+        (json!({ "name": " " }), 400, "no name"),
+        (
+            json!({ "folder": "relative/path" }),
+            400,
+            "a folder that isn't a full path",
+        ),
+        (
+            json!({ "folder": repos.0.join("nope") }),
+            400,
+            "not a git repository",
+        ),
+        (
+            json!({ "members": [member(&ids[1], "reviewer")] }),
+            400,
+            "a Reviewer alone",
+        ),
+        (
+            json!({ "members": [member("nope", "member")] }),
+            400,
+            "no such agent",
+        ),
+        (json!({ "members": [] }), 400, "no agents"),
+        (
+            json!({ "checks": ["cargo test"] }),
+            400,
+            "checks, which only the Supervisor sets (task 1455)",
+        ),
+        (json!({ "ci": "travis" }), 400, "an unknown CI choice"),
+        (json!({ "merge": "rebase" }), 400, "an unknown merge method"),
+        (
+            json!({ "ci": "both", "merge": "rebase" }),
+            400,
+            "one bad field among good ones",
+        ),
+    ];
+    for (body, status, what) in refused {
+        let answer = service.send("PATCH", &path, body);
+        assert_eq!(answer.status, status, "{what}: {}", answer.body);
+        let error = answer.json();
+        assert_eq!(error["error"], "Project settings failed", "{what}: {error}");
+        let reference = error["ref"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{what}: {error}"));
+        let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+        assert!(
+            ok && trace.to_string().contains("Project settings failed"),
+            "{what}: {trace}"
+        );
+    }
+    let missing = service.send("PATCH", "/api/projects/nope", json!({ "ci": "ci" }));
+    assert_eq!(missing.status, 404, "{}", missing.body);
+    let after = service.call("GET", "/api/projects").json();
+    assert_eq!(before, after, "a refused change changed the project");
+}
+
+/// Owner's call, task 1455: the person never types a check. Each one reads back with who set it
+/// (an agent, or `found` by Gathr) and when, in its order.
+#[test]
+fn each_check_reads_back_with_who_set_it_and_when() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+    let body =
+        json!({ "name": "Gathr", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let made = service.send("POST", "/api/projects", body);
+    let id = made.json()["id"].as_str().unwrap().to_string();
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    let set = "INSERT INTO project_checks (project_id, position, command, source, set_ts)
+               VALUES (?1, ?2, ?3, ?4, ?5)";
+    db.execute(
+        set,
+        rusqlite::params![id, 1, "npm test", "found", 1_794_000_000_000_000_i64],
+    )
+    .unwrap();
+    db.execute(
+        set,
+        rusqlite::params![id, 0, "cargo test", ids[0], 1_794_000_001_000_000_i64],
+    )
+    .unwrap();
+
+    let listed = service.call("GET", "/api/projects").json()["projects"][0].clone();
+    let expected = json!([
+        { "command": "cargo test", "source": ids[0], "set": "2026-11-06T21:20:01.000Z" },
+        { "command": "npm test", "source": "found", "set": "2026-11-06T21:20:00.000Z" },
+    ]);
+    assert_eq!(listed["checks"], expected, "{listed}");
+}
