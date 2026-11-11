@@ -7,6 +7,7 @@ mod api;
 mod app_update;
 mod archive;
 mod chats;
+mod check_runs;
 mod cleanup;
 mod coord;
 mod logs;

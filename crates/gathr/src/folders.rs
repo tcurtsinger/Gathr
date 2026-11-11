@@ -194,6 +194,12 @@ pub fn place(conn: &Connection, data: &Path, chat: &str, agent: &str) -> Result<
     })
 }
 
+/// The project's own folder in the agent folder, `<agent folder>/<Project>`, named the first time.
+pub fn project_folder(conn: &Connection, data: &Path, project: &str) -> Result<PathBuf, Error> {
+    let root = real(&root(conn, data)?);
+    Ok(root.join(named(conn, "projects", project, &root, &[NO_PROJECT])?))
+}
+
 /// The folder name of the project or agent `id` in `table`, chosen once from its name: unique
 /// among the table's, never one of `kept`, and not a folder already in `under`.
 fn named(
