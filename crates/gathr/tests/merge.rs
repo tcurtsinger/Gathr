@@ -289,19 +289,32 @@ fn of_two_prs_on_one_base_the_second_is_refused_once_the_first_merges() {
     assert_eq!(room.main(), room.heads[0]);
 }
 
-/// The work the PR is for, held on its merge, settles when it merges, and its giver hears back,
-/// at once: the PR looks run every 2 minutes, and this doesn't wait for one.
-#[test]
-fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
+/// The work the PR is for, held on its merge, settles when it merges, at once: the PR looks run
+/// every 2 minutes, and this doesn't wait for one. Its giver hears back when another agent merged;
+/// the one that merged gets no turn to be told what it did (G159). How many hear-backs it got.
+fn merged_with_giver(giver_merges: bool) -> usize {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let mut room = room(&data.0, &repos.0, false);
-    room.lead_turn();
-    // Lead's giving turn ends, as it has long before a merge; later turns hold again.
+    let giver = if giver_merges {
+        room.vale.clone()
+    } else {
+        room.lead.clone()
+    };
+    let path = format!("/api/chats/{}/messages", room.chat);
+    let say = |room: &Room, agent: &str| {
+        let sent = room
+            .service
+            .send("POST", &path, json!({ "text": "Go", "agent": agent }));
+        assert_eq!(sent.status, 200, "{}", sent.body);
+    };
+    say(&room, &giver);
+    let giving = room.token();
+    // The giving turn ends, as it has long before a merge; later turns hold again.
     let go = room.data.join("go");
     std::fs::write(&go, "").unwrap();
     let history = room
         .service
-        .wait_for(&room.chat, 20, "Lead's turn to end", |h| {
+        .wait_for(&room.chat, 20, "the giving turn to end", |h| {
             h["turns"][0]["status"] == "done"
         });
     std::fs::remove_file(&go).unwrap();
@@ -313,45 +326,27 @@ fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
                                    finish, reviewed, created_ts, updated_ts)
                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 5, ?9, 'done', ?10, 1, 1)";
     let held = "done, waiting on #5 to merge";
-    db.execute(
-        task,
-        rusqlite::params![
-            1,
-            room.chat,
-            room.lead,
-            room.ann,
-            "work",
-            "Build it",
-            "held",
-            held,
-            gave,
-            None::<String>
-        ],
-    )
-    .unwrap();
-    db.execute(
-        task,
-        rusqlite::params![
-            2,
-            room.chat,
-            room.lead,
-            room.vale,
-            "review",
-            "Review #5",
-            "done",
-            None::<String>,
-            None::<String>,
-            room.heads[0]
-        ],
-    )
-    .unwrap();
-    let path = format!("/api/chats/{}/messages", room.chat);
-    room.service.send(
-        "POST",
-        &path,
-        json!({ "text": "Merge it", "agent": room.vale }),
-    );
-    let vale = room.token();
+    let none = None::<String>;
+    let work = rusqlite::params![
+        1, room.chat, giver, room.ann, "work", "Build it", "held", held, gave, none
+    ];
+    db.execute(task, work).unwrap();
+    let review = rusqlite::params![
+        2,
+        room.chat,
+        giver,
+        room.vale,
+        "review",
+        "Review #5",
+        "done",
+        none,
+        none,
+        room.heads[0]
+    ];
+    db.execute(task, review).unwrap();
+    say(&room, &room.vale);
+    // Vale's engine stays up between its turns: a giver that merges uses the same one.
+    let vale = if giver_merges { giving } else { room.token() };
 
     let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
     assert_eq!(merged["isError"], false, "{}", text(&merged));
@@ -366,10 +361,23 @@ fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
         .call("GET", &format!("/api/chats/{}", room.chat))
         .json();
     let turns = history["turns"].as_array().unwrap().iter();
-    let back: Vec<&Value> = turns
-        .filter(|t| t["agent"] == room.lead.as_str() && t["answers"] == gave.as_str())
-        .collect();
-    assert_eq!(back.len(), 1, "Lead didn't hear back: {history}");
+    turns
+        .filter(|t| t["agent"] == giver.as_str() && t["answers"] == gave.as_str())
+        .count()
+}
+
+#[test]
+fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
+    assert_eq!(merged_with_giver(false), 1, "the giver didn't hear back");
+}
+
+#[test]
+fn the_agent_that_merged_isnt_woken_to_hear_of_its_own_merge() {
+    assert_eq!(
+        merged_with_giver(true),
+        0,
+        "the merger got a turn to hear of its own merge"
+    );
 }
 
 #[test]

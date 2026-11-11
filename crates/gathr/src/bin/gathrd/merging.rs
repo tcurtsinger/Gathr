@@ -349,9 +349,12 @@ async fn squash(pr: i64, head: &str, repo: &Path) -> Result<String, String> {
     Ok(head.to_string())
 }
 
-/// The PR's tasks in the chat, settled now as a PR look would after its merge (#100's path).
+/// The PR's tasks in the chat, settled now as a PR look would after its merge (#100's path). Their
+/// givers hear back, but never the agent that merged: it knows (G159), so the turn saved to tell
+/// it goes with the same step, before anything starts it.
 async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) {
     let (chat, h) = (caller.chat.clone(), head.to_string());
+    let merger = caller.agent.clone();
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
     let starts = chats
         .writer
@@ -369,7 +372,13 @@ async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) {
             for number in numbers {
                 starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), &trace)?);
             }
-            Ok(starts)
+            let (told, own): (Vec<_>, Vec<_>) =
+                starts.into_iter().partition(|s| Some(&s.agent) != merger.as_ref());
+            for start in own {
+                c.execute("DELETE FROM messages WHERE turn_id = ?1", [&start.turn])?;
+                c.execute("DELETE FROM turns WHERE id = ?1", [&start.turn])?;
+            }
+            Ok(told)
         })
         .await;
     if let Some(Ok(starts)) = starts {
