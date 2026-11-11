@@ -103,6 +103,10 @@ struct Running {
     signed_out: bool,
     /// Tools it has started: a turn cut off after one never runs again from its ask (F10).
     tools_started: u32,
+    /// The engine began it itself, for a notice or a message sent into the last one.
+    engine_began: bool,
+    /// It has said something or started a tool: a turn that ends without either did nothing (G167).
+    said: bool,
     /// The engine said the account is out of usage during it.
     limited: bool,
     /// When it last showed progress, and whether it was flagged for showing none.
@@ -780,6 +784,8 @@ impl Task {
             save_failed: None,
             signed_out: false,
             tools_started: 0,
+            engine_began: false,
+            said: false,
             limited: false,
             progress_at: Instant::now(),
             stalled: false,
@@ -828,6 +834,9 @@ impl Task {
             self.record(event.attr("why", e.to_string()));
         }
         self.open_turn(ids.clone(), login::Hold::default(), ask_chars);
+        if let Some(turn) = self.turn.as_mut() {
+            turn.engine_began = true;
+        }
         self.set_turn(&ids, "running", None).await;
     }
 

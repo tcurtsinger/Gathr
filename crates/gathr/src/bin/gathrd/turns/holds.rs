@@ -365,6 +365,9 @@ impl Task {
                 .ok(),
         );
         self.open_turn(ids.clone(), gathr::claude::login::Hold::default(), 0);
+        if let Some(turn) = self.turn.as_mut() {
+            turn.engine_began = true;
+        }
         self.set_turn(&ids, "running", None).await;
     }
 

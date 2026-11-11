@@ -16,9 +16,18 @@ export function useEdges(viewport: RefObject<HTMLElement | null>) {
     const sizes = new ResizeObserver(measure);
     sizes.observe(el);
     for (const child of el.children) sizes.observe(child);
+    // Content can arrive after this ran (main's WebKit run, c301c38): each new child is watched too,
+    // or the chat could grow with nothing measuring it.
+    const added = new MutationObserver((changes) => {
+      for (const change of changes)
+        for (const node of change.addedNodes) if (node instanceof Element) sizes.observe(node);
+      measure();
+    });
+    added.observe(el, { childList: true });
     el.addEventListener('scroll', measure, { passive: true });
     return () => {
       sizes.disconnect();
+      added.disconnect();
       el.removeEventListener('scroll', measure);
     };
   }, [viewport]);

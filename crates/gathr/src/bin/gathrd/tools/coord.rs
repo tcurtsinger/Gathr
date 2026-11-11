@@ -182,13 +182,15 @@ impl Tools {
                     commit: ask.commit.as_deref(),
                 };
                 let t = tasks::finish(c, &agent, task, how, &said)?;
-                Ok((
+                let line = if t.state == tasks::State::Held && t.kind == Kind::Review {
+                    format!("Review on task #{} recorded.", t.number)
+                } else {
                     format!(
                         "Task #{} will be marked {} when this turn ends.",
                         t.number, ask.how
-                    ),
-                    Vec::new(),
-                ))
+                    )
+                };
+                Ok((line, Vec::new()))
             })
             .await;
         Ok(self.answer(&caller, "finish_task", started, finished).await)

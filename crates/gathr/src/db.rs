@@ -33,6 +33,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0023_setting_sources.sql"),
     include_str!("../migrations/0024_pr_cleanup.sql"),
     include_str!("../migrations/0025_agent_context.sql"),
+    include_str!("../migrations/0026_completed_reviews.sql"),
 ];
 
 /// The schema version this build writes.

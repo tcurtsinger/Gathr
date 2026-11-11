@@ -2,6 +2,8 @@
 //! and what a task is held on.
 
 mod common;
+#[path = "tasks/reviews.rs"]
+mod review_evidence;
 
 use common::TempDir;
 use gathr::Error;

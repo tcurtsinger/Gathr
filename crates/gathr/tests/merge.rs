@@ -3,6 +3,8 @@
 //! the default branch is in it. One merge per repository at a time; the PR's tasks settle at once.
 
 mod common;
+#[path = "merge/review_updates.rs"]
+mod review_updates;
 
 use std::path::{Path, PathBuf};
 
@@ -12,10 +14,21 @@ use common::{
 use serde_json::{Value, json};
 
 /// Lets the held engines go however a test ends: dropped first, before the service.
-struct Release(PathBuf);
+struct Release(PathBuf, bool);
 
 impl Drop for Release {
     fn drop(&mut self) {
+        if self.1 {
+            let starts =
+                std::fs::read_to_string(self.0.with_file_name("env.jsonl")).unwrap_or_default();
+            for line in starts.lines() {
+                if let Ok(start) = serde_json::from_str::<Value>(line)
+                    && let Some(cwd) = start["cwd"].as_str()
+                {
+                    let _ = std::fs::write(Path::new(cwd).join("go"), "");
+                }
+            }
+        }
         let _ = std::fs::write(&self.0, "");
     }
 }
@@ -44,6 +57,11 @@ struct Room {
 /// `feature.txt`, #6 `other.txt`, or `tests/check.sh` with `test_change`), the project's checks
 /// passed on main and on both heads, and `gh` answering for both PRs.
 fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
+    room_replay(data, repos, test_change, false)
+}
+
+/// In the CI-wake fixture, each engine consumes its own gate and can hold a second turn.
+fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Room {
     let (folder, _) = project(repos);
     // A merge commit is made as the person who owns the checkout.
     git(&folder, &["config", "user.name", "Test"]);
@@ -83,16 +101,32 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
         json!({ "args": ["pr", "view", (n + 5).to_string()], "out": pr("OPEN"), "out_merged": pr("MERGED"), "merged_if": when })
     };
     std::fs::write(&answers, json!([view(0), view(1)]).to_string()).unwrap();
+    let recording = held_recording(data);
+    if waking {
+        let held = std::fs::read_to_string(&recording)
+            .unwrap()
+            .replace("{\"dir\":\"hold\"}", "{\"dir\":\"hold\",\"line\":\"take\"}");
+        std::fs::write(&recording, format!("{}\n{}", held.trim_end(), held)).unwrap();
+    }
+    let gate = if waking {
+        PathBuf::from("go")
+    } else {
+        data.join("go")
+    };
     let service = TestService::with_engine(
         data,
         &[
-            ("GATHR_REPLAY", &held_recording(data)),
-            ("GATHR_REPLAY_HOLD", &data.join("go")),
+            ("GATHR_REPLAY", &recording),
+            ("GATHR_REPLAY_HOLD", &gate),
             ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
             ("GATHR_GH_PATH", &fake_gh()),
             ("GATHR_FAKE_GH", &answers),
             // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
             ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
+            (
+                "GATHR_WAIT_EVERY_MS",
+                Path::new(if waking { "100" } else { "120000" }),
+            ),
         ],
     );
     let account = service.add_account("Team");
@@ -123,7 +157,7 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
         .unwrap()
         .to_string();
     let room = Room {
-        _release: Release(data.join("go")),
+        _release: Release(data.join("go"), waking),
         service,
         data: data.to_path_buf(),
         chat,
@@ -201,7 +235,8 @@ impl Room {
 
     /// A review finished done on `commit` in a turn not running here, as its turn would record it.
     fn review_done(&self, task: i64, commit: &str) {
-        let done = "UPDATE tasks SET finish = 'done', reviewed = ?2 WHERE number = ?1";
+        let done =
+            "UPDATE tasks SET finish = 'done', reviewed = ?2, review_done = 1 WHERE number = ?1";
         self.db()
             .execute(done, rusqlite::params![task, commit])
             .unwrap();
@@ -332,8 +367,8 @@ fn merged_with_giver(giver_merges: bool) -> (usize, usize) {
     let db = room.db();
     let task =
         "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reason, pr, given_in,
-                                   finish, reviewed, created_ts, updated_ts)
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 5, ?9, 'done', ?10, 1, 1)";
+                                   finish, reviewed, review_done, created_ts, updated_ts)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 5, ?9, 'done', ?10, ?5 = 'review', 1, 1)";
     let held = "done, waiting on #5 to merge";
     let none = None::<String>;
     let work = rusqlite::params![
