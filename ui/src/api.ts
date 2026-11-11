@@ -91,6 +91,8 @@ export interface Task {
   /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
   kind: 'work' | 'review' | 'person' | 'person_request';
   what: string;
+  /** Why it was given, and its details. */
+  why?: string | null;
   state: TaskState;
   reason: string | null;
   /** Tasks it waits for before it starts. */
@@ -98,6 +100,8 @@ export interface Task {
   /** Its last move, once it has gone the stale days without one (F11). */
   stale_us?: number | null;
   created_us: number;
+  /** The turn its giver heard it was settled in: a person task's answer shows there. */
+  heard_in?: string | null;
 }
 
 /** An agent's stale task, on the person's list across chats. */
