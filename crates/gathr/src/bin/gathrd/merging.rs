@@ -1,5 +1,5 @@
 //! Agents don't merge; Gathr does (0036 points 3-4, C4). A PR's reviewer asks with `merge`, and
-//! Gathr refuses, saying why, unless the review is done on the PR's head H, the checks the project
+//! Gathr refuses, saying why, unless a done review covers the PR's head H, the checks the project
 //! asks for passed on H, and the default branch's commit B is in H. A PR that changes tests or check
 //! settings, or that brings a project its first passing checks, also needs the reviewer's sign-off.
 //! One merge per repository at a time, by the project's method; a push git rejects (B moved) is
@@ -16,6 +16,8 @@ use gathr::tasks;
 use rusqlite::OptionalExtension;
 use serde_json::Value;
 use tokio::sync::Mutex;
+
+mod review;
 
 use crate::chats::Chats;
 use crate::tools::Caller;
@@ -68,7 +70,7 @@ pub async fn merge(
             "{head} isn't fetched from origin: a PR from a fork isn't merged here"
         ));
     }
-    reviewed_is_head(repo, &asked.reviewed, &head, pr, &vars).await?;
+    reviewed_is_head(repo, &asked.reviewed, &head, &b, pr, &vars).await?;
     if !ancestor(repo, &b, &head, &vars).await {
         return Err(format!(
             "#{pr} isn't up to date with {base}: update it, then its checks run again"
@@ -226,11 +228,12 @@ async fn confirmed(pr: i64, repo: &Path, head: &str, base: &str) -> Result<(), S
     }
 }
 
-/// The reviewed commit, resolved in the project, is exactly the head: never matched as text.
+/// Resolve the recorded review, then prove any later changes came only from the base.
 async fn reviewed_is_head(
     repo: &Path,
     reviewed: &str,
     head: &str,
+    base: &str,
     pr: i64,
     vars: &Vars,
 ) -> Result<(), String> {
@@ -249,7 +252,11 @@ async fn reviewed_is_head(
         .ok_or_else(|| {
             format!("the reviewed commit {reviewed} isn't a commit the project has (or names more than one)")
         })?;
-    if resolved != head {
+    if resolved != head
+        && !review::base_updates_only(repo, &resolved, head, base, vars)
+            .await
+            .unwrap_or(false)
+    {
         return Err(format!(
             "you reviewed {}, and #{pr}'s head is now {}: review it again",
             short(&resolved),
@@ -280,22 +287,21 @@ async fn asked(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<Asked, St
             let Some(found) = gathr::projects::get(c, &project)? else {
                 return Ok(Err("the project is gone".into()));
             };
-            let review: Option<(Option<String>, String, Option<String>, bool)> = c
+            let review: Option<(bool, Option<String>)> = c
                 .query_row(
-                    "SELECT finish, state, reviewed, outdated FROM tasks
+                    "SELECT review_done, reviewed FROM tasks
                      WHERE chat_id = ?1 AND kind = 'review' AND pr = ?2 AND owner = ?3
                      ORDER BY number DESC LIMIT 1",
                     rusqlite::params![chat, pr, agent],
-                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                    |r| Ok((r.get(0)?, r.get(1)?)),
                 )
                 .optional()?;
-            let Some((finish, state, reviewed, outdated)) = review else {
+            let Some((done, reviewed)) = review else {
                 return Ok(Err(format!(
                     "only #{pr}'s reviewer merges it, and you have no review of it here"
                 )));
             };
-            let done = finish.as_deref() == Some("done") || state == "done";
-            let Some(reviewed) = reviewed.filter(|_| done && !outdated) else {
+            let Some(reviewed) = reviewed.filter(|_| done) else {
                 return Ok(Err(format!(
                     "your review of #{pr} isn't done: finish it on the commit you reviewed"
                 )));
