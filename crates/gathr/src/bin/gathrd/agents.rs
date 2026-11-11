@@ -146,8 +146,8 @@ pub async fn change_as(
     by: Option<String>,
 ) -> Answer {
     const ERROR: &str = "Save failed";
-    let agent = find(s, t, id, ERROR).await?.changed(change);
-    save(s, t, ("change", ERROR), agent, by).await
+    let agent = find(s, t, id, ERROR).await?.changed(change.clone());
+    save(s, t, ("change", ERROR), agent, Some((change, by))).await
 }
 
 async fn remove(
@@ -196,14 +196,16 @@ async fn remove(
     Ok(Json(json!({ "removed": true })))
 }
 
-/// Checks the model and effort against the account's engine, then writes the agent.
+/// Checks the model and effort against the account's engine, then writes the agent: a new one, or
+/// `edit`'s change and who made it, applied to the agent as saved at the write.
 async fn save(
     s: &Arc<State>,
     t: &Trace,
     (change, error): (&'static str, &'static str),
     agent: Agent,
-    by: Option<String>,
+    edit: Option<(Change, Option<String>)>,
 ) -> Answer {
+    let by = edit.as_ref().and_then(|(_, by)| by.clone());
     let refused = |status, why: &str| Err(fail(status, error, why, &t.0));
     if agent.model.is_some() || agent.effort.is_some() {
         let account = match find_account(s, t, &agent.account, error).await {
@@ -221,15 +223,16 @@ async fn save(
         }
     }
     let chats = s.chats.clone();
-    let adding = change == "add";
     let saved = s
         .writer
         .call(move |conn| {
             // Read in the write's own call, so a removal that began first is always seen.
             let removing = chats.being_removed();
-            match adding {
-                true => agents::add(conn, &agent, &removing),
-                false => agents::update(conn, &agent, &removing),
+            match edit {
+                Some((change, by)) => {
+                    agents::change(conn, &agent.id, change, by.is_some(), &removing)
+                }
+                None => agents::add(conn, &agent, &removing),
             }
         })
         .await;

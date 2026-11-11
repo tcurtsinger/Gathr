@@ -28,8 +28,9 @@ pub struct SetSettings {
     cancel_days: Option<i64>,
     /// The agent folder: a full path, for new work.
     agent_folder: Option<String>,
-    /// How many hand-offs a chain of agent messages may make.
-    handoff_limit: Option<i64>,
+    /// How many hand-offs a chain of agent messages may make; null for no limit.
+    #[serde(default, deserialize_with = "crate::coord::present")]
+    handoff_limit: Option<Option<i64>>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -72,7 +73,6 @@ pub struct AnswerPerson {
 
 const OWN_APPROVAL: &str =
     "it's its own approval: an agent never answers its own approval, the person does";
-const PUSHES: &str = "Full approvals decide which pushes ask, which only the person changes";
 
 #[tool_router(router = settings_router, vis = "pub(super)")]
 impl Tools {
@@ -106,7 +106,7 @@ impl Tools {
             stale_days: ask.stale_days,
             cancel_days: ask.cancel_days,
             agent_folder: ask.agent_folder,
-            handoff_limit: ask.handoff_limit.map(Some),
+            handoff_limit: ask.handoff_limit,
         };
         let t = trace(&caller);
         let set = crate::coord::change_settings_as(&self.state, &t, change, caller.agent.clone());
@@ -195,10 +195,6 @@ impl Tools {
             ),
             None => None,
         };
-        let full = Approvals::Full;
-        if approvals.is_some_and(|a| (a == full) != (agent.approvals == full)) {
-            return Err(PUSHES.into());
-        }
         let default = |v: Option<String>| v.map(|v| Some(v).filter(|v| !v.trim().is_empty()));
         let change = Change {
             name: ask.name,

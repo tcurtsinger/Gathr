@@ -87,7 +87,7 @@ pub struct Change {
 }
 
 /// A field that's there, `null` included, apart from one that's left out.
-fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+pub fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
     Option::<i64>::deserialize(d).map(Some)
 }
 

@@ -6,7 +6,9 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{TempDir, TestService, call_tool, gathr, held_recording, nth, team, text, until};
+use common::{
+    TempDir, TestService, call_tool, gathr, held_recording, nth, sign_in_account, team, text, until,
+};
 use serde_json::{Value, json};
 
 /// Lets the held engines go when the test ends, passing or not.
@@ -97,6 +99,19 @@ fn an_agent_reads_the_settings_and_changes_them_as_itself() {
     assert!(ok, "{said}");
     let shown = t.service.call("GET", "/api/settings").json();
     assert_eq!(shown["stale_days"], 5, "{shown}");
+    // No limit, as Settings > General offers it, kept by a change that doesn't name it.
+    for limit in [
+        json!({ "handoff_limit": 10 }),
+        json!({ "handoff_limit": null }),
+    ] {
+        let (ok, said) = tool(&t, ann_token, "set_settings", limit);
+        assert!(ok, "{said}");
+    }
+    let (ok, said) = tool(&t, ann_token, "set_settings", json!({ "cancel_days": 9 }));
+    assert!(ok, "{said}");
+    let shown = t.service.call("GET", "/api/settings").json();
+    assert_eq!(shown["handoff_limit"], Value::Null, "{shown}");
+    assert_eq!(shown["cancel_days"], 9, "{shown}");
     let (ok, said) = tool(
         &t,
         ann_token,
@@ -109,7 +124,7 @@ fn an_agent_reads_the_settings_and_changes_them_as_itself() {
 
     let sql = "SELECT name, json_extract(attrs, '$.by') AS by FROM event_log
                WHERE name IN ('gathr.settings.change', 'gathr.agent.change') AND status = 'ok'
-               AND json_extract(attrs, '$.by') IS NOT NULL ORDER BY time";
+               AND json_extract(attrs, '$.by') IS NOT NULL GROUP BY name ORDER BY min(time)";
     let rows = query(&data.0, sql);
     let by: Vec<(&str, &str)> = rows
         .iter()
@@ -199,4 +214,78 @@ fn an_agent_never_answers_its_own_approval_nor_its_own_question_nor_changes_whic
         reason.contains("answered by Ann for the person"),
         "{answered}"
     );
+}
+
+/// An agent's change is applied to the agent as saved when it's written: the person moving it into
+/// or out of Full meanwhile (here while the agent's model is checked) stands (#138's review).
+fn a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(was_full: bool) {
+    let data = TempDir::new();
+    let asked = data.0.join("models-go");
+    std::fs::write(&asked, "").unwrap();
+    let (service, chat, lead) = team(
+        &data.0,
+        &held_recording(&data.0),
+        &[("GATHR_REPLAY_INIT_HOLD", &asked)],
+    );
+    let _release = Release(data.0.join("go"));
+    // Lead on an account of its own, so its model check doesn't wait on Ann's turn's login.
+    let other = service.add_account("Other");
+    sign_in_account(&data.0, &other);
+    let agent = format!("/api/agents/{lead}");
+    let moved = service.send("PATCH", &agent, json!({ "account": other }));
+    assert_eq!(moved.status, 200, "{}", moved.body);
+    let (before, after) = match was_full {
+        true => ("full", "auto"),
+        false => ("auto", "full"),
+    };
+    let set = service.send("PATCH", &agent, json!({ "approvals": before }));
+    assert_eq!(set.status, 200, "{}", set.body);
+    let history = service
+        .send("GET", &format!("/api/chats/{chat}"), json!(null))
+        .json();
+    let ann = history["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["role"] == "member")
+        .map(|m| m["agent"].as_str().unwrap().to_string())
+        .unwrap();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Hold on", "agent": ann }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let env = data.0.join("env.jsonl");
+    let token = nth(&env, 0)["GATHR_AGENT_TOKEN"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    std::fs::remove_file(&asked).unwrap();
+
+    let port = service.info.port;
+    let changing = std::thread::spawn(move || {
+        let change = json!({ "agent": "Lead", "model": "opus" });
+        call_tool(port, &token, "set_agent", change)
+    });
+    nth(&env, 1);
+    let set = service.send("PATCH", &agent, json!({ "approvals": after }));
+    assert_eq!(set.status, 200, "{}", set.body);
+    std::fs::write(&asked, "").unwrap();
+    let result = changing.join().unwrap();
+    assert_ne!(result["isError"], true, "{result}");
+
+    let saved = service.call("GET", &agent).json();
+    assert_eq!(saved["model"], "opus", "{saved}");
+    assert_eq!(
+        saved["approvals"], after,
+        "the person's move was undone: {saved}"
+    );
+}
+
+#[test]
+fn an_agents_change_keeps_the_persons_move_into_full_made_meanwhile() {
+    a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(false);
+}
+
+#[test]
+fn an_agents_change_keeps_the_persons_move_out_of_full_made_meanwhile() {
+    a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(true);
 }
