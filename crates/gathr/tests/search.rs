@@ -272,12 +272,18 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
         "DROP TRIGGER message_search_insert; DROP TRIGGER message_search_delete;
          DROP TRIGGER message_search_update; DROP TABLE message_search;
          DROP TABLE project_checks; DROP TABLE project_check_allowed; ALTER TABLE projects DROP COLUMN ci;
-         ALTER TABLE projects DROP COLUMN merge_method; ALTER TABLE tasks DROP COLUMN heard_in; ALTER TABLE tasks DROP COLUMN pr_head;
-         DROP TABLE check_steps; DROP TABLE check_runs; DROP TABLE check_caches;
+         ALTER TABLE projects DROP COLUMN merge_method; ALTER TABLE tasks DROP COLUMN heard_in;
+         ALTER TABLE tasks DROP COLUMN pr_head;
+         DROP TABLE handoffs; DROP TABLE check_steps; DROP TABLE check_runs; DROP TABLE check_caches;
          PRAGMA user_version = 14;",
     )
     .unwrap();
     let newer = say(&conn, "road", "user", "gravel saved before the upgrade too");
+    // Last, as saving a message reads the column.
+    conn.execute_batch(
+        "ALTER TABLE messages DROP COLUMN to_agent; ALTER TABLE messages DROP COLUMN copy_of;",
+    )
+    .unwrap();
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
     assert_eq!(found(&conn, "gravel"), [newer, old]);

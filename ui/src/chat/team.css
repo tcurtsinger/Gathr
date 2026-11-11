@@ -16,6 +16,11 @@
 .speaker .attention + time {
   margin-left: 0;
 }
+/* An agent's message to one member: whom it's for, after the sender. */
+.reply-to {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 
 .assignment,
 .answered {

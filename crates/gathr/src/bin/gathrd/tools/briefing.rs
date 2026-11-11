@@ -142,10 +142,13 @@ pub fn text(facts: &Facts) -> String {
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
-         cancel_task and restart_task for tasks; wait and end_wait instead of polling in a loop; \
-         ask_person for anything you need from the person."
+         cancel_task and restart_task for tasks; message for one member of a team chat; wait and \
+         end_wait instead of polling in a loop; ask_person for anything you need from the person."
             .to_string(),
         "End a task turn with finish_task. Assign work with give_task and ask the person with ask_person. Writing it in chat does not create a task."
+            .to_string(),
+        "For a quick ask or a heads-up to one member, use message: it wakes them once. Work to be done and heard back on \
+         is a task."
             .to_string(),
         format!(
             "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",

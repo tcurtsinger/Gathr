@@ -211,7 +211,7 @@ const groupBy = groupPartByType({ 'tool-call': ['group-tool'] });
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, role, time, notice, approvals } = own;
+  const { agent, role, to, time, notice, approvals } = own;
   const actions = useActions();
   const fresh = useContext(FreshContext).has(useAuiState((s) => s.message.id));
   return (
@@ -230,6 +230,7 @@ function AssistantMessage() {
               },
             ]}
           />
+          {to && <span className="reply-to">To {to}</span>}
           {fresh && <i className="attention" role="img" aria-label="New" />}
           {time && <time dateTime={time}>{clock(time)}</time>}
         </header>

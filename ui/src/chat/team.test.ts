@@ -253,3 +253,38 @@ test('a member hearing back on a task it gave stays in the team column', () => {
   const { team } = view(state);
   expect(ids(team).slice(-3)).toEqual(['a-sub', 'heard-gathr', 'a-heard']);
 });
+
+test("the lead's message to a member is in the team column as the lead's, to that member; the member's turn it woke follows, without Gathr's copy", () => {
+  const state = round();
+  // Mira, on her main-line turn, messages Kit, then carries on; Kit's turn on no task answers hers.
+  const sent: Message = { ...said('ask', 'assistant', 'Heads up: main moved'), id: 'sent', to: 'kit' };
+  state.messages.splice(2, 0, sent);
+  state.messages.splice(3, 0, said('ask', 'assistant', 'Over to you both'));
+  state.turns.told = { ...turn('told', 'kit', { answers: 'ask' }), position: 5 };
+  state.messages.push({
+    ...said('told', 'gathr', 'Mira wrote to you: Heads up: main moved'),
+    copy_of: 'sent',
+  });
+  state.messages.push(said('told', 'assistant', 'Rebased'));
+  const { main, team } = view(state);
+
+  expect(main.map(text)).not.toContain('Heads up: main moved');
+  expect(text(main.find((m) => m.id === 'a-ask'))).toBe('Rowan and Kit, over to you');
+  expect(main.map(text)).toContain('Over to you both');
+  expect(ids(team)).toEqual(['sent', 'rowan-gathr', 'a-rowan', 'kit-gathr', 'a-kit', 'a-told']);
+  expect(byId(team, 'sent')).toMatchObject({ agent: 'Mira', role: 'supervisor', to: 'Kit' });
+  expect(text(team[0])).toBe('Heads up: main moved');
+  expect(text(team.at(-1))).toBe('Rebased');
+});
+
+test('a message into a member’s running turn shows once, as the sender’s', () => {
+  const state = round();
+  const sent: Message = { ...said('ask', 'assistant', 'Use the new cursor'), id: 'sent', to: 'rowan' };
+  state.messages.splice(2, 0, sent);
+  state.messages.splice(9, 0, {
+    ...said('rowan', 'gathr', 'Mira wrote to you: Use the new cursor'),
+    copy_of: 'sent',
+  });
+  const { team } = view(state);
+  expect(team.map(text).filter((t) => t.includes('Use the new cursor'))).toEqual(['Use the new cursor']);
+});

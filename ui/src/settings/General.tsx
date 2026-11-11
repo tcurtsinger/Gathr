@@ -5,6 +5,7 @@ import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
 import { AgentFolder } from './AgentFolder';
+import { HandoffLimit } from './HandoffLimit';
 import { StaleDays } from './StaleDays';
 
 /** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
@@ -92,6 +93,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
       )}
       <AgentFolder onReference={onReference} />
       <StaleDays onReference={onReference} />
+      <HandoffLimit onReference={onReference} />
     </section>
   );
 }

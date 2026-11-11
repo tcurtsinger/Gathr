@@ -28,6 +28,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0018_check_approvals.sql"),
     include_str!("../migrations/0019_up_to_date_wait.sql"),
     include_str!("../migrations/0020_check_runs.sql"),
+    include_str!("../migrations/0021_agent_messages.sql"),
     include_str!("../migrations/0022_task_pr_head.sql"),
 ];
 
