@@ -161,6 +161,9 @@ pub struct Start {
     pub trace: String,
     /// Gathr's message, as the live socket sends it.
     pub message: serde_json::Value,
+    /// It's a hear-back: what became of the tasks its agent gave (`held::hear_backs`), which a
+    /// merge doesn't send the agent that merged (G159).
+    pub hear_back: bool,
 }
 
 impl Start {
@@ -180,6 +183,7 @@ impl Start {
             turn,
             trace,
             message,
+            hear_back: false,
         })
     }
 

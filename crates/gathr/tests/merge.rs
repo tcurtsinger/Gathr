@@ -353,19 +353,27 @@ fn merged_with_giver(giver_merges: bool) -> (usize, usize) {
         room.heads[0]
     ];
     db.execute(task, review).unwrap();
-    // Vale's own next work waits on the merged work: it becomes ready, and must start (Vale, #120).
-    let next = "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
-                VALUES (3, ?1, ?2, ?3, 'work', 'Follow up', 'waiting', 1, 1)";
-    db.execute(next, rusqlite::params![room.chat, room.lead, room.vale])
-        .unwrap();
-    db.execute(
-        "INSERT INTO task_after (task, after_task) VALUES (3, 1)",
-        [],
-    )
-    .unwrap();
     say(&room, &room.vale);
     // Vale's engine stays up between its turns: a giver that merges uses the same one.
     let vale = if giver_merges { giving } else { room.token() };
+    // Vale's own task, given to itself in this turn and blocked on the merged work, carries on
+    // once that work settles: its start answers this turn, where Vale gave tasks, yet it's work,
+    // not a hear-back, and must start (Vale, #120). A task merely after #1 is ready already, as #1
+    // has only its merge left.
+    let running: String = room
+        .db()
+        .query_row(
+            "SELECT id FROM turns WHERE agent_id = ?1 AND status = 'running'",
+            [&room.vale],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let blocked = "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reason, blocked_on,
+                                      given_in, heard, created_ts, updated_ts)
+                   VALUES (3, ?1, ?2, ?2, 'work', 'Follow up', 'blocked', 'waiting on #1', 1, ?3, 1, 1, 1)";
+    room.db()
+        .execute(blocked, rusqlite::params![room.chat, room.vale, running])
+        .unwrap();
 
     let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
     assert_eq!(merged["isError"], false, "{}", text(&merged));
