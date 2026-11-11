@@ -79,6 +79,7 @@ async fn history(
         let mut history = store::history(conn, &id)?;
         gathr::pauses::with_run(conn, &pauses, &id, &mut history)?;
         crate::team::with_folders(conn, &data, &id, &mut history)?;
+        gathr::context::on_members(conn, &id, &mut history)?;
         Ok(history)
     })
     .await?;

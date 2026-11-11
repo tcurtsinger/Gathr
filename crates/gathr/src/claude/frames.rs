@@ -69,6 +69,21 @@ pub enum Frame {
         parent: String,
         frame: Box<Frame>,
     },
+    /// How full the context is after a model call: its prompt in tokens, cached and cache-written
+    /// ones included, and the model (Claude names it; Codex doesn't). The last call's, never a sum.
+    Fill {
+        used: i64,
+        model: Option<String>,
+    },
+    /// Each model's context window, as the engine reports it (never a table of ours).
+    Windows(Vec<(Option<String>, i64)>),
+    /// The engine compacted the conversation (`manual` or `auto`), with its size before and after
+    /// when the engine says (Claude Code does; Codex doesn't).
+    Compacted {
+        trigger: String,
+        before: Option<i64>,
+        after: Option<i64>,
+    },
     /// Anything else, by its type: recorded raw, not acted on.
     Other(String),
 }
@@ -139,6 +154,14 @@ fn read_own(value: &Value) -> Vec<Frame> {
             tools: strings(value.get("tools")),
             permission_mode: text(value, "permissionMode"),
         }],
+        "system" if text(value, "subtype") == "compact_boundary" => {
+            let meta = &value["compact_metadata"];
+            vec![Frame::Compacted {
+                trigger: meta["trigger"].as_str().unwrap_or("auto").to_string(),
+                before: meta["pre_tokens"].as_i64(),
+                after: meta["post_tokens"].as_i64(),
+            }]
+        }
         "system" if text(value, "subtype") == "permission_denied" => vec![Frame::Blocked {
             tool: text(value, "tool_name"),
             by: text(value, "decision_reason_type"),
@@ -188,7 +211,17 @@ fn read_own(value: &Value) -> Vec<Frame> {
             request_id: text(&value["response"], "request_id"),
             ok: value["response"]["subtype"] == "success",
         }],
-        "result" => vec![Frame::TurnEnd(turn_end(value))],
+        "result" => {
+            let windows = value["modelUsage"].as_object().into_iter().flatten();
+            let windows: Vec<_> = windows
+                .filter_map(|(model, u)| Some((Some(model.clone()), u["contextWindow"].as_i64()?)))
+                .collect();
+            let mut frames = vec![Frame::TurnEnd(turn_end(value))];
+            if !windows.is_empty() {
+                frames.insert(0, Frame::Windows(windows));
+            }
+            frames
+        }
         other => vec![Frame::Other(other.to_string())],
     }
 }
@@ -211,16 +244,21 @@ fn assistant(value: &Value) -> Vec<Frame> {
             message: joined_text(content),
         }];
     }
-    blocks(content)
-        .filter_map(|b| match b["type"].as_str() {
-            Some("text") => Some(Frame::Text(b["text"].as_str().unwrap_or("").to_string())),
-            Some("tool_use") => Some(Frame::ToolStart {
-                id: b["id"].as_str().unwrap_or("").to_string(),
-                name: b["name"].as_str().unwrap_or("").to_string(),
-            }),
-            _ => None,
-        })
-        .collect()
+    let usage = &value["message"]["usage"];
+    let n = |key: &str| usage[key].as_i64().unwrap_or(0);
+    let fill = usage.is_object().then(|| Frame::Fill {
+        used: n("input_tokens") + n("cache_read_input_tokens") + n("cache_creation_input_tokens"),
+        model: value["message"]["model"].as_str().map(String::from),
+    });
+    let said = blocks(content).filter_map(|b| match b["type"].as_str() {
+        Some("text") => Some(Frame::Text(b["text"].as_str().unwrap_or("").to_string())),
+        Some("tool_use") => Some(Frame::ToolStart {
+            id: b["id"].as_str().unwrap_or("").to_string(),
+            name: b["name"].as_str().unwrap_or("").to_string(),
+        }),
+        _ => None,
+    });
+    said.chain(fill).collect()
 }
 
 fn turn_end(value: &Value) -> TurnEnd {
@@ -342,6 +380,51 @@ mod tests {
             frames.contains(&Frame::Read("Say hi".into())),
             "the echo of the message read is missing"
         );
+    }
+
+    /// How full the agent's context is: each main-session call's prompt (input, cache read and cache
+    /// write), and the window of its model from the turn's result (compaction plan, K1).
+    #[test]
+    fn each_call_says_how_full_the_context_is_and_the_result_gives_its_window() {
+        let frames = replayed("signed_in");
+        let fill = Frame::Fill {
+            used: 2 + 23_627 + 1_711,
+            model: Some("claude-opus-5-5".into()),
+        };
+        assert!(frames.contains(&fill), "{frames:?}");
+        let windows = Frame::Windows(vec![(Some("claude-opus-5-5".into()), 1_000_000)]);
+        assert!(frames.contains(&windows), "{frames:?}");
+    }
+
+    /// A compaction, read once from its boundary, with the sizes before and after (recorded with
+    /// `/compact` on a test account, Claude Code 2.1.318).
+    #[test]
+    fn a_compaction_reads_once_with_its_sizes() {
+        let frames = replayed("compact_claude");
+        let compacted: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Compacted { .. }))
+            .collect();
+        let once = Frame::Compacted {
+            trigger: "manual".into(),
+            before: Some(23_042),
+            after: Some(3_611),
+        };
+        assert_eq!(compacted, [&once]);
+    }
+
+    /// A sub-agent's calls fill its own context, never the agent's.
+    #[test]
+    fn a_sub_agents_calls_never_count_as_the_agents_fill() {
+        let frames = replayed("subagent");
+        let own: Vec<i64> = frames
+            .iter()
+            .filter_map(|f| match f {
+                Frame::Fill { used, .. } => Some(*used),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(own, [34_315, 34_758]);
     }
 
     /// The macOS gate lets the next start go on this, so it must come before the reply's words,
