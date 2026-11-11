@@ -3,7 +3,8 @@
 //! was recorded; an `exit` line ends it with that code. So the service's driver meets the engine's real frames, in their real order.
 //! A `sleep` row pauses that many milliseconds, for a stream at a real pace (timings, not tests).
 //! A `hold` row waits until the file `GATHR_REPLAY_HOLD` names exists, so a test decides when
-//! the engine goes on; without that variable it's skipped.
+//! the engine goes on; without that variable it's skipped. A `hold` row whose `line` is `take`
+//! also uses the file up, so each one the test makes lets exactly one held turn go on.
 //!
 //! `GATHR_REPLAY` names the recording, else a file `replay-recording` beside it; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
@@ -39,6 +40,15 @@ mod codex;
 
 /// The recording named in `replay-recording` beside this program: an installed service passes
 /// engines no `GATHR_*` variable, so a check on one puts the replay engine in as its copy with this.
+/// Past the hold: the file exists, or with `take`, this engine moved it away first.
+fn let_go(file: &std::path::Path, take: bool) -> bool {
+    if !take {
+        return file.exists();
+    }
+    let taken = file.with_extension(format!("taken-{}", std::process::id()));
+    std::fs::rename(file, taken).is_ok()
+}
+
 fn recording_beside_me() -> std::io::Result<String> {
     let file = std::env::current_exe()?.with_file_name("replay-recording");
     Ok(std::fs::read_to_string(file)?.trim().to_string())
@@ -157,7 +167,8 @@ fn main() {
             }
             Some("hold") => {
                 let file = std::env::var_os("GATHR_REPLAY_HOLD").unwrap_or_default();
-                while !file.is_empty() && !std::path::Path::new(&file).exists() {
+                let file = std::path::Path::new(&file);
+                while !file.as_os_str().is_empty() && !let_go(file, line == "take") {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             }

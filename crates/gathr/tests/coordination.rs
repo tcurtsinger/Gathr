@@ -491,3 +491,136 @@ fn a_turn_whose_task_is_cancelled_then_restarted_still_stops() {
     let on_it = history["turns"].as_array().unwrap().iter();
     assert_eq!(on_it.filter(|t| t["task"] == 1).count(), 2, "{history}");
 }
+
+/// The signed-in turn held until the test lets it go, twice, for an agent's two turns. Each hold
+/// takes `go`, so one `go` lets one held turn on, whichever it is.
+fn one_at_a_time(dir: &Path) -> std::path::PathBuf {
+    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let (first, rest) = frames.split_once('\n').unwrap();
+    let held = format!(
+        "{first}\n{{\"dir\":\"hold\",\"line\":\"take\"}}\n{}",
+        rest.trim_end()
+    );
+    let path = dir.join("one-at-a-time.jsonl");
+    std::fs::write(&path, format!("{held}\n{held}\n")).unwrap();
+    path
+}
+
+/// Waits until the `n`th turn on `task` runs: until then, its engine has no turn to call tools in.
+fn running_on(team: &Team, task: i64, n: usize) {
+    let what = format!("turn {n} on task #{task}");
+    team.service.wait_for(&team.chat, 20, &what, |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        let mine: Vec<&Value> = turns.iter().filter(|t| t["task"] == task).collect();
+        mine.len() == n && mine[n - 1]["status"] == "running"
+    });
+}
+
+/// Adds Rev to the team as its Reviewer.
+fn with_reviewer(team: &Team) {
+    let lead = team
+        .service
+        .call("GET", &format!("/api/agents/{}", team.lead));
+    let account = lead.json()["account"].clone();
+    let made = team.service.send(
+        "POST",
+        "/api/agents",
+        json!({ "name": "Rev", "account": account }),
+    );
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = team
+        .service
+        .call("GET", &format!("/api/chats/{}", team.chat));
+    let mut members: Vec<Value> = chat.json()["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| json!({ "agent": m["agent"], "role": m["role"] }))
+        .collect();
+    members.push(json!({ "agent": made.json()["id"], "role": "reviewer" }));
+    let path = format!("/api/chats/{}", team.chat);
+    let changed = team
+        .service
+        .send("PATCH", &path, json!({ "members": members }));
+    assert_eq!(changed.status, 200, "{}", changed.body);
+}
+
+// Found live (#85, #86): Ann's work was reviewed and held on its merge, and Lead, who gave it,
+// never heard, so nobody saw it was ready to merge.
+#[test]
+fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
+    let data = TempDir::new();
+    let team = team(&data.0, &one_at_a_time(&data.0));
+    with_reviewer(&team);
+    let port = team.service.info.port;
+    let lead = lead_turn(&team, &data.0, 0);
+    let fix = json!({ "to": "Ann", "what": "Fix the summary", "pr": 85 });
+    let given = text(&call_tool(port, &lead, "give_task", fix));
+    assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
+    // A task given mid-turn starts its owner's turn at once, so several turns hold together and
+    // any of them may take a `go`: each makes its calls first, then all are let go.
+    running_on(&team, 1, 1);
+    let ann = token(&data.0, 1);
+    let review = json!({ "to": "Rev", "what": "Review #85", "kind": "review", "pr": 85 });
+    let given = text(&call_tool(port, &ann, "give_task", review));
+    assert!(given.starts_with("Task #2 for Rev: ready."), "{given}");
+    call_tool(port, &ann, "finish_task", json!({ "how": "done" }));
+    running_on(&team, 2, 1);
+    let rev = token(&data.0, 2);
+    let done = json!({ "how": "done", "commit": "abc1234" });
+    call_tool(port, &rev, "finish_task", done);
+    // Ann's turn on the review says nothing more: with only the merge open her task stays held on it.
+    let go = data.0.join("go");
+    let history = until(20, "Lead hears back", || {
+        let history = team
+            .service
+            .call("GET", &format!("/api/chats/{}", team.chat))
+            .json();
+        let turns = history["turns"].as_array().cloned().unwrap_or_default();
+        let lead = team.lead.as_str();
+        if turns
+            .iter()
+            .any(|t| t["agent"] == lead && !t["answers"].is_null())
+        {
+            return Some(history);
+        }
+        if !go.exists() {
+            std::fs::write(&go, "").unwrap();
+        }
+        None
+    });
+    let listed = tasks(&team);
+    let held = &listed["tasks"][1];
+    assert_eq!(held["state"], "held", "{listed}");
+    assert_eq!(held["reason"], "done, waiting on #85 to merge", "{listed}");
+    let back = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .rfind(|m| m["role"] == "gathr")
+        .and_then(|m| m["body"].as_str())
+        .unwrap();
+    let line = "#1 Ann, Fix the summary: held: done, waiting on #85 to merge";
+    assert!(
+        back.starts_with("Where the task you gave stands:"),
+        "{back}"
+    );
+    assert!(back.contains(line), "{back}");
+    let sql = format!(
+        "SELECT ref FROM event_log WHERE name = 'gathr.task.hear_back'
+         AND json_extract(attrs, '$.\"gen_ai.agent.id\"') = '{}'",
+        team.lead
+    );
+    let (ok, rows) = gathr(&data.0, &["diag", "query", &sql]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"].as_array().unwrap().len(), 1, "{rows}");
+    let reference = rows["rows"][0]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{trace}");
+    let trace = trace.to_string();
+    // On the trace of whichever turn settled the round last: Ann's, Rev's or Lead's own.
+    assert!(trace.contains("gathr.task.hear_back"), "{trace}");
+    // The PR's proof: `cargo test --test coordination work_held -- --nocapture`.
+    println!("diag trace {reference}: {trace}");
+    std::fs::write(&go, "").unwrap();
+}

@@ -15,6 +15,44 @@ const IDLE_LEFTS: i64 = 2;
 pub(super) const ONLY_ITS_MERGE: &str = "(t.state = 'held' AND t.pr IS NOT NULL
     AND t.reason IS 'done, waiting on #' || t.pr || ' to merge')";
 
+/// The task is held only on its merge and no review of its PR is open: nobody on the team is on it
+/// but whoever merges, so its giver hears where it stands (backlog "Stall": #85 and #86 sat
+/// reviewed and unmerged while the giver, the one to see them merged, heard nothing). A review
+/// that gave this task doesn't count: it waits on this hear-back (found in #100's own review).
+fn only_its_merge_left(conn: &Connection, task: i64) -> Result<bool, Error> {
+    let sql = format!(
+        "SELECT EXISTS (SELECT 1 FROM tasks t WHERE t.number = ?1 AND {ONLY_ITS_MERGE}
+         AND NOT EXISTS (SELECT 1 FROM tasks r WHERE r.chat_id = t.chat_id AND r.pr = t.pr
+             AND r.kind = 'review' AND r.state NOT IN {}
+             AND NOT EXISTS (SELECT 1 FROM turns u WHERE u.id = t.given_in AND u.task = r.number)))",
+        super::SETTLED
+    );
+    Ok(conn.query_row(&sql, [task], |r| r.get(0))?)
+}
+
+/// A review settled: the givers of the work held only on the same PR's merge may hear back now.
+pub(super) fn after_review(
+    tx: &Transaction,
+    review: i64,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    let turns: Vec<String> = {
+        let sql = format!(
+            "SELECT DISTINCT t.given_in FROM tasks r JOIN tasks t ON t.chat_id = r.chat_id
+             AND t.pr = r.pr AND t.kind = 'work' AND t.heard = 0 AND t.given_in IS NOT NULL
+             WHERE r.number = ?1 AND r.kind = 'review' AND {ONLY_ITS_MERGE}"
+        );
+        let mut stmt = tx.prepare_cached(&sql)?;
+        let rows = stmt.query_map([review], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut starts = Vec::new();
+    for turn in turns {
+        starts.extend(hear_backs(tx, &turn, trace)?);
+    }
+    Ok(starts)
+}
+
 /// What the task still has open, each in a few words: its waits, the tasks given in its turns that
 /// aren't settled, and its PR.
 pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error> {
@@ -174,7 +212,11 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
             .into_iter()
             .map(|n| super::read(tx, n))
             .collect::<Result<Vec<_>, _>>()?;
-        if settled.iter().any(|t| !t.state.settled()) {
+        let mut pending = false;
+        for t in &settled {
+            pending |= !t.state.settled() && !only_its_merge_left(tx, t.number)?;
+        }
+        if pending {
             continue;
         }
         tx.execute(

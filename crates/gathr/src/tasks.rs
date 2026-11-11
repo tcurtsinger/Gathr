@@ -854,6 +854,9 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
     if let Some(turn) = given_in {
         starts.extend(held::hear_backs(tx, &turn, trace)?);
     }
+    if state.settled() {
+        starts.extend(held::after_review(tx, task, trace)?);
+    }
     Ok(starts)
 }
 
