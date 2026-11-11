@@ -57,7 +57,7 @@ impl Approvals {
 }
 
 /// A change to an agent: each field left out stays; `Some(None)` clears a model or effort.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Change {
     pub name: Option<String>,
     pub account: Option<String>,
@@ -93,6 +93,10 @@ pub enum Refused {
     NoAccount,
     /// The account is being removed.
     Removing,
+    /// An agent moved one into or out of Full approvals, which decide which pushes ask.
+    Pushes,
+    /// The account, model or effort it was checked with changed before it was saved.
+    Moved,
 }
 
 impl Refused {
@@ -103,6 +107,12 @@ impl Refused {
             Refused::Unknown => "no such agent",
             Refused::NoAccount => "no such account",
             Refused::Removing => "The account is being removed",
+            Refused::Moved => {
+                "The agent's account, model or effort changed while it was checked. Try again."
+            }
+            Refused::Pushes => {
+                "Full approvals decide which pushes ask, which only the person changes"
+            }
         }
     }
 }
@@ -172,6 +182,32 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
         ],
     );
     saved(added.map(|_| Agent { name, ..agent }))
+}
+
+/// Applies `change` to the agent as saved now, and saves it: in one call on the writer, so nothing
+/// saved since a read is lost. `checked` is the agent the model and effort were checked as: one
+/// whose account, model or effort came out otherwise is refused, never saved unchecked. An agent
+/// (`by_agent`) never moves one into or out of Full, which decides which pushes ask (0036 C5a).
+pub fn change(
+    conn: &Connection,
+    checked: &Agent,
+    change: Change,
+    by_agent: bool,
+    removing: &HashSet<String>,
+) -> Saved {
+    let Some(current) = get(conn, &checked.id)? else {
+        return Ok(Err(Refused::Unknown));
+    };
+    let next = current.changed(change);
+    let engine = |a: &Agent| (a.account.clone(), a.model.clone(), a.effort.clone());
+    if engine(&next) != engine(checked) {
+        return Ok(Err(Refused::Moved));
+    }
+    let full = |a: &Agent| a.approvals == Approvals::Full;
+    if by_agent && full(&next) != full(&current) {
+        return Ok(Err(Refused::Pushes));
+    }
+    update(conn, &next, removing)
 }
 
 /// Saves `agent` over the one with its id.

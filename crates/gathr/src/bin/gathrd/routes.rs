@@ -46,6 +46,13 @@ impl IntoResponse for Fail {
     }
 }
 
+impl Fail {
+    /// Why it failed, as the error JSON's `why` says it.
+    pub fn why(&self) -> &str {
+        &self.2
+    }
+}
+
 pub fn fail(status: StatusCode, error: &'static str, why: &str, trace: &str) -> Fail {
     Fail(status, error, why.to_string(), trace.to_string())
 }

@@ -211,6 +211,17 @@ pub struct Sent {
 /// its own, so one that's wrong stays open and the rest go. Each giver hears back once on what
 /// this Send answered.
 pub fn answer(conn: &mut Connection, answers: &[Answer], trace: &str) -> Result<Sent, Error> {
+    answer_as(conn, answers, None, trace)
+}
+
+/// `answer`, by the person (`by` none) or by an agent for the person (0036 C5a): never one the
+/// agent asked itself, or asked the Supervisor to file.
+pub fn answer_as(
+    conn: &mut Connection,
+    answers: &[Answer],
+    by: Option<&str>,
+    trace: &str,
+) -> Result<Sent, Error> {
     let tx = conn.transaction()?;
     let mut sent = Sent::default();
     let mut numbers: Vec<i64> = Vec::new();
@@ -220,7 +231,7 @@ pub fn answer(conn: &mut Connection, answers: &[Answer], trace: &str) -> Result<
                 .push((a.task, format!("#{} is answered twice", a.task)));
             continue;
         }
-        match answer_one(&tx, a, trace) {
+        match answer_one(&tx, a, by, trace) {
             Ok(()) => numbers.push(a.task),
             Err(Error::Refused(why)) => {
                 Event::point("gathr.task.answer")
@@ -228,6 +239,7 @@ pub fn answer(conn: &mut Connection, answers: &[Answer], trace: &str) -> Result<
                     .task(a.task)
                     .error("refused")
                     .attr("why", why.as_str())
+                    .attr("by", by)
                     .insert(&tx)?;
                 sent.refused.push((a.task, why));
             }
@@ -246,7 +258,7 @@ pub fn answer(conn: &mut Connection, answers: &[Answer], trace: &str) -> Result<
     Ok(sent)
 }
 
-fn answer_one(tx: &Transaction, a: &Answer, trace: &str) -> Result<(), Error> {
+fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Result<(), Error> {
     let t = read(tx, a.task).map_err(|_| refused(format!("there's no task #{}", a.task)))?;
     if t.kind != Kind::Person {
         return Err(refused(format!("#{} isn't yours to answer", a.task)));
@@ -255,8 +267,27 @@ fn answer_one(tx: &Transaction, a: &Answer, trace: &str) -> Result<(), Error> {
         let state = t.state.as_str();
         return Err(refused(format!("#{} is already {state}", a.task)));
     }
-    let line = answer_line(&t, a)?;
-    let sent = json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text });
+    let mut line = answer_line(&t, a)?;
+    if let Some(agent) = by {
+        let member = match t.request {
+            Some(r) => read(tx, r)?.giver,
+            None => None,
+        };
+        if [&t.giver, &member]
+            .iter()
+            .any(|g| g.as_deref() == Some(agent))
+        {
+            return Err(refused(format!(
+                "#{} is its own question to the person: an agent never answers its own question to the person,                  the person does",
+                a.task
+            )));
+        }
+        line = format!(
+            "{line} (answered by {} for the person)",
+            words::name_of(tx, agent)?
+        );
+    }
+    let sent = json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text, "by": by });
     tx.execute(
         "UPDATE tasks SET answer = ?2 WHERE number = ?1",
         params![a.task, sent.to_string()],

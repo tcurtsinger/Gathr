@@ -67,22 +67,27 @@ async fn file(
 /// Settings > General: the stale days (F11), after how many days without a move a task is stale and
 /// cancelled, the agent folder (0034) and the hand-off limit (plans/agent-messages.md).
 async fn settings(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    let data = s.data.path().to_path_buf();
-    db(&s, &t, "Settings failed", move |c| shown(c, &data)).await
+    settings_shown(&s, &t).await
 }
 
-#[derive(Deserialize)]
+/// Settings > General as `GET /api/settings` answers it.
+pub async fn settings_shown(s: &Arc<State>, t: &Trace) -> Answer {
+    let data = s.data.path().to_path_buf();
+    db(s, t, "Settings failed", move |c| shown(c, &data)).await
+}
+
+#[derive(Deserialize, Default)]
 pub struct Change {
-    stale_days: Option<i64>,
-    cancel_days: Option<i64>,
-    agent_folder: Option<String>,
+    pub stale_days: Option<i64>,
+    pub cancel_days: Option<i64>,
+    pub agent_folder: Option<String>,
     /// Set to a number, or `null` for no limit; left out, unchanged.
     #[serde(default, deserialize_with = "present")]
-    handoff_limit: Option<Option<i64>>,
+    pub handoff_limit: Option<Option<i64>>,
 }
 
 /// A field that's there, `null` included, apart from one that's left out.
-fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
+pub fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Option<i64>>, D::Error> {
     Option::<i64>::deserialize(d).map(Some)
 }
 
@@ -90,6 +95,16 @@ async fn change_settings(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Json(body): Json<Change>,
+) -> Answer {
+    change_settings_as(&s, &t, body, None).await
+}
+
+/// A change by the person (`by` none) or by an agent through its settings tool (0036 C5a).
+pub async fn change_settings_as(
+    s: &Arc<State>,
+    t: &Trace,
+    body: Change,
+    by: Option<String>,
 ) -> Answer {
     let trace = t.0.clone();
     let folder = body
@@ -101,13 +116,17 @@ async fn change_settings(
         let refused = checked.unwrap_or_else(|e| Err(format!("the folder wasn't checked: {e}")));
         if let Err(why) = refused {
             let event = Event::point("gathr.settings.change").trace(&trace);
-            s.writer
-                .record(event.error("refused").attr("why", why.clone()));
+            s.writer.record(
+                event
+                    .error("refused")
+                    .attr("why", why.clone())
+                    .attr("by", by),
+            );
             return Err(fail(StatusCode::BAD_REQUEST, "Save failed", &why, &trace));
         }
     }
     let data = s.data.path().to_path_buf();
-    db(&s, &t, "Save failed", move |c| {
+    db(s, t, "Save failed", move |c| {
         let was = stale::days(c)?;
         let days = stale::Days {
             stale: body.stale_days.unwrap_or(was.stale),
@@ -126,6 +145,7 @@ async fn change_settings(
             Err(e) => event.error("refused").attr("why", e.to_string()),
         };
         event
+            .attr("by", by)
             .attr("stale_days", days.stale)
             .attr("cancel_days", days.cancel)
             .attr("handoff_limit", gathr::handoffs::limit(c)?)

@@ -952,7 +952,7 @@ impl Task {
         });
         let open = open.map(|(request_id, (tool, input, why))| {
             json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input,
-                "why": why })
+                "why": why, "agent": turn.ids.agent })
         });
         open.collect()
     }

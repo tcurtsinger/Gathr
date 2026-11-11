@@ -125,7 +125,7 @@ async fn add(
         approvals: Approvals::default(),
     };
     let agent = blank.changed(body.change());
-    save(&s, &t, ("add", ERROR), agent).await
+    save(&s, &t, ("add", ERROR), agent, None).await
 }
 
 async fn change(
@@ -134,9 +134,20 @@ async fn change(
     Path(id): Path<String>,
     Json(body): Json<Body>,
 ) -> Answer {
+    change_as(&s, &t, &id, body.change(), None).await
+}
+
+/// A change by the person (`by` none) or by an agent through its settings tool (0036 C5a).
+pub async fn change_as(
+    s: &Arc<State>,
+    t: &Trace,
+    id: &str,
+    change: Change,
+    by: Option<String>,
+) -> Answer {
     const ERROR: &str = "Save failed";
-    let agent = find(&s, &t, &id, ERROR).await?.changed(body.change());
-    save(&s, &t, ("change", ERROR), agent).await
+    let agent = find(s, t, id, ERROR).await?.changed(change.clone());
+    save(s, t, ("change", ERROR), agent, Some((change, by))).await
 }
 
 async fn remove(
@@ -181,17 +192,20 @@ async fn remove(
             ));
         }
     }
-    record(&s, &t, "remove", &agent);
+    record(&s, &t, "remove", &agent, None);
     Ok(Json(json!({ "removed": true })))
 }
 
-/// Checks the model and effort against the account's engine, then writes the agent.
+/// Checks the model and effort against the account's engine, then writes the agent: a new one, or
+/// `edit`'s change and who made it, applied to the agent as saved at the write.
 async fn save(
     s: &Arc<State>,
     t: &Trace,
     (change, error): (&'static str, &'static str),
     agent: Agent,
+    edit: Option<(Change, Option<String>)>,
 ) -> Answer {
+    let by = edit.as_ref().and_then(|(_, by)| by.clone());
     let refused = |status, why: &str| Err(fail(status, error, why, &t.0));
     if agent.model.is_some() || agent.effort.is_some() {
         let account = match find_account(s, t, &agent.account, error).await {
@@ -209,15 +223,14 @@ async fn save(
         }
     }
     let chats = s.chats.clone();
-    let adding = change == "add";
     let saved = s
         .writer
         .call(move |conn| {
             // Read in the write's own call, so a removal that began first is always seen.
             let removing = chats.being_removed();
-            match adding {
-                true => agents::add(conn, &agent, &removing),
-                false => agents::update(conn, &agent, &removing),
+            match edit {
+                Some((change, by)) => agents::change(conn, &agent, change, by.is_some(), &removing),
+                None => agents::add(conn, &agent, &removing),
             }
         })
         .await;
@@ -225,6 +238,7 @@ async fn save(
         Some(Ok(Ok(agent))) => agent,
         Some(Ok(Err(why @ Refused::Taken))) => return refused(StatusCode::CONFLICT, why.why()),
         Some(Ok(Err(why @ Refused::Removing))) => return refused(StatusCode::CONFLICT, why.why()),
+        Some(Ok(Err(why @ Refused::Moved))) => return refused(StatusCode::CONFLICT, why.why()),
         Some(Ok(Err(why @ Refused::Unknown))) => return refused(StatusCode::NOT_FOUND, why.why()),
         Some(Ok(Err(why))) => return refused(StatusCode::BAD_REQUEST, why.why()),
         Some(Err(e)) => return refused(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
@@ -235,12 +249,12 @@ async fn save(
             );
         }
     };
-    record(s, t, change, &agent);
+    record(s, t, change, &agent, by);
     Ok(Json(json!(agent)))
 }
 
 /// Records the change and tells every window.
-fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent) {
+fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent, by: Option<String>) {
     let event = Event::point("gathr.agent.change")
         .trace(&t.0)
         .ok()
@@ -249,7 +263,8 @@ fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent) {
         .attr("model", agent.model.clone())
         .attr("effort", agent.effort.clone())
         .attr("approvals", agent.approvals.as_str())
-        .attr("change", change);
+        .attr("change", change)
+        .attr("by", by);
     s.writer.record(event);
     s.chats.publish(json!({ "type": "agents" }));
 }

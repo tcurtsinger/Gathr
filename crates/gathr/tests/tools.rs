@@ -112,6 +112,8 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         .filter_map(|t| t["name"].as_str())
         .collect();
     let all = [
+        "answer_approval",
+        "answer_person",
         "ask_person",
         "cancel_task",
         "checks",
@@ -123,7 +125,10 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "message",
         "read_chat",
         "restart_task",
+        "set_agent",
         "set_checks",
+        "set_settings",
+        "settings",
         "wait",
     ];
     assert_eq!(names, all, "{tools}");

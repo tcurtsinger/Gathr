@@ -14,7 +14,7 @@ use crate::chats::Chats;
 mod api;
 mod looks;
 
-pub use api::routes;
+pub use api::{Change as SettingsChange, change_settings_as, present, routes, settings_shown};
 pub use looks::fresh;
 
 /// How often waits are looked at, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).

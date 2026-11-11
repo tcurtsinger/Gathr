@@ -30,7 +30,8 @@
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
 //! `GATHR_REPLAY_INIT=silent` never answers it; `linger` stays a minute after its input closes
-//! (`GATHR_REPLAY_LINGER_MS` sets how long). `GATHR_REPLAY_CHILD` names a file: the engine starts a
+//! (`GATHR_REPLAY_LINGER_MS` sets how long); `GATHR_REPLAY_INIT_HOLD` names a file it waits for
+//! (a minute at most) before it answers, so a test can act while a model list is asked. `GATHR_REPLAY_CHILD` names a file: the engine starts a
 //! child holding its output pipes, which lives while the file does (a minute at most), as an
 //! engine's own children can outlive it.
 
@@ -205,6 +206,12 @@ fn answered_initialize(line: &str, stdout: &mut impl Write) -> bool {
     }
     if std::env::var("GATHR_REPLAY_INIT").as_deref() == Ok("silent") {
         return true;
+    }
+    if let Some(held) = std::env::var_os("GATHR_REPLAY_INIT_HOLD") {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while !std::path::Path::new(&held).exists() && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
     }
     let recorded: serde_json::Value =
         serde_json::from_str(include_str!("../tests/frames/initialize.json")).unwrap();
