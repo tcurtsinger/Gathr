@@ -4,7 +4,6 @@ import { render } from 'vitest-browser-react';
 import type { PersonTask } from '../api';
 import { type Draft, toAnswer } from './model';
 import { type Refusal, TasksTab } from './TasksTab';
-import '../theme.css';
 
 const ask = (number: number, what: string, form: PersonTask['form'], labels: string[] = []): PersonTask => ({
   number,
