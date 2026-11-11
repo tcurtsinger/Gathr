@@ -20,6 +20,7 @@ pub fn set(
     // closed or cancelled: its giver's own task is still held on it.
     let chat: String = tx.query_row(
         "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL,
+             review_done = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE review_done END,
              heard = CASE WHEN state = 'held' AND ?5 THEN 0 ELSE heard END
          WHERE number = ?1 RETURNING chat_id",
         params![task, state.as_str(), reason, now_us(), state.settled()],
