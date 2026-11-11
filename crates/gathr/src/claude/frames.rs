@@ -99,6 +99,8 @@ pub struct TurnEnd {
     pub usage: Usage,
     pub cost_usd: Option<f64>,
     pub duration_ms: Option<i64>,
+    /// The result answers a notice about a background command (`origin.kind`), not a message.
+    pub notice: bool,
 }
 
 /// Token totals for the turn as the engine reports them, never estimated.
@@ -277,6 +279,7 @@ fn turn_end(value: &Value) -> TurnEnd {
         },
         cost_usd: value["total_cost_usd"].as_f64(),
         duration_ms: value["duration_ms"].as_i64(),
+        notice: value["origin"]["kind"] == "task-notification",
     }
 }
 
