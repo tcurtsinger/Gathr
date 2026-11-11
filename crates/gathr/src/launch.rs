@@ -38,16 +38,14 @@ pub fn find_or_start(data: &DataDir, installed: &Path) -> Result<Found, Error> {
     // Before finding a running service too: a window that updated itself, or moved, comes back to
     // the service it left running.
     Copies::new(data).note_installed(installed)?;
-    match data.take_lock() {
-        Ok(lock) => drop(lock),
-        Err(Error::AlreadyRunning) => {
-            let info = running(data)?;
+    match take_or_find(data)? {
+        Holder::Free(lock) => drop(lock),
+        Holder::Service(info) => {
             return Ok(Found {
                 info,
                 started: false,
             });
         }
-        Err(e) => return Err(e),
     }
     Copies::new(data).adopt(installed).map_err(|e| {
         let into = Copies::new(data).root().display().to_string();
@@ -102,16 +100,14 @@ enum Locked<T> {
 /// Runs `change` holding the folder's lock, so a service another start just began (on trial and
 /// running) is never taken for one that died; while one holds the lock, it's the one found.
 fn locked<T>(data: &DataDir, change: impl FnOnce() -> io::Result<T>) -> Result<Locked<T>, Error> {
-    let lock = match data.take_lock() {
-        Ok(lock) => lock,
-        Err(Error::AlreadyRunning) => {
-            let info = running(data)?;
+    let lock = match take_or_find(data)? {
+        Holder::Free(lock) => lock,
+        Holder::Service(info) => {
             return Ok(Locked::Running(Found {
                 info,
                 started: false,
             }));
         }
-        Err(e) => return Err(e),
     };
     let done = change()?;
     drop(lock);
@@ -154,9 +150,8 @@ fn start(data: &DataDir, gathrd: &Path, env: Env) -> Result<Found, Error> {
             });
         }
         if let Some(status) = child.try_wait()? {
-            // Another start may have taken the folder first: then its lock is held.
-            if let Err(Error::AlreadyRunning) = data.take_lock() {
-                let info = running(data)?;
+            // Another start may have taken the folder first: then its service answers.
+            if let Ok(Holder::Service(info)) = take_or_find(data) {
                 return Ok(Found {
                     info,
                     started: false,
@@ -178,14 +173,27 @@ fn start(data: &DataDir, gathrd: &Path, env: Env) -> Result<Found, Error> {
     }
 }
 
-/// The service holding the folder's lock, once it answers `/health`.
-fn running(data: &DataDir) -> Result<ServiceInfo, Error> {
+/// The data folder's lock, or the service holding it.
+pub enum Holder {
+    Free(std::fs::File),
+    Service(ServiceInfo),
+}
+
+/// The folder's lock, else the service holding it once it answers `/health`. A lock held with no
+/// service behind it is waited for, never taken for one: on macOS, a process another thread is
+/// starting keeps a copy of the lock file open until its program runs (CI saw it, 2026-11-11).
+pub fn take_or_find(data: &DataDir) -> Result<Holder, Error> {
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
+        match data.take_lock() {
+            Ok(lock) => return Ok(Holder::Free(lock)),
+            Err(Error::AlreadyRunning) => {}
+            Err(e) => return Err(e),
+        }
         if let Ok(info) = ServiceInfo::read(data)
             && http::call(info.port, &info.token, "GET", "/health").is_ok_and(|r| r.status == 200)
         {
-            return Ok(info);
+            return Ok(Holder::Service(info));
         }
         if Instant::now() > deadline {
             return Err(Error::Other(not_answering(data)));

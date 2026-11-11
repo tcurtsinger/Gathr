@@ -89,6 +89,29 @@ fn a_second_service_on_the_same_folder_exits() {
     );
 }
 
+/// The folder's lock held for a moment with no service behind it (on macOS, a process another
+/// thread is starting keeps a copy of the lock file open until its program runs): the service
+/// waits for it, and starts once it's let go.
+#[test]
+fn a_service_waits_for_a_lock_held_by_no_service() {
+    let dir = TempDir::new();
+    let data = DataDir::new(&dir.0);
+    let held = data.take_lock().unwrap();
+    let mut service = gathrd(&dir.0).spawn().unwrap();
+    std::thread::sleep(Duration::from_secs(1));
+    let exited = service.try_wait().unwrap();
+    drop(held);
+    let up = common::until(20, "the service to answer", || {
+        let info = ServiceInfo::read(&data).ok()?;
+        let health = http::call(info.port, &info.token, "GET", "/health").ok()?;
+        (health.status == 200).then_some(info)
+    });
+    let _ = http::call(up.port, &up.token, "POST", "/api/shutdown");
+    service.wait().unwrap();
+    assert_eq!(exited, None, "gathrd exited while the folder was held");
+    assert_eq!(up.pid, service.id());
+}
+
 /// So a copy of a stopped data folder is whole in `gathr.db` (hand check 10 replaces that file).
 #[test]
 fn a_stopped_service_leaves_everything_in_the_database_file() {
