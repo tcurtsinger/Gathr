@@ -181,7 +181,7 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
 /// A `git push` run in the worktree as the agent's engine would: with its environment, through
 /// `args` (an alias, say), on a thread: whether git said it pushed, and what it said.
 fn push_as_engine(started: &Value, args: &[&str]) -> std::thread::JoinHandle<(bool, String)> {
-    let mut command = std::process::Command::new("git");
+    let mut command = common::git_command();
     command
         .args(args)
         .current_dir(started["cwd"].as_str().unwrap());
@@ -336,7 +336,7 @@ fn a_push_to_the_default_branch_waits_for_the_persons_answer_however_it_is_run()
         !pushed && !has("no-token"),
         "a push without the engine's token went through: {said}"
     );
-    let shared = std::process::Command::new("git")
+    let shared = common::git_command()
         .args(["config", "--local", "--get", "core.hooksPath"])
         .current_dir(&project_dir)
         .output()

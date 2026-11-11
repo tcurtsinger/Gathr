@@ -308,7 +308,11 @@ function AskApproval({
         statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
         title={`Allow ${a.tool}?`}
         command={typeof input?.command === 'string' ? input.command : undefined}
-        description={a.tool === 'wait check' ? 'Runs outside the engine sandbox.' : undefined}
+        description={
+          a.tool === 'wait check'
+            ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.'
+            : undefined
+        }
         style={{ overflowWrap: 'anywhere' }}
         subtitle={agent}
         allowOnceLabel="Allow"
