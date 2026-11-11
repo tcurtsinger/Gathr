@@ -675,6 +675,10 @@ pub fn pr_looked(
     if !t.state.settled() || t.state == State::Blocked {
         match pr_state.as_str() {
             "MERGED" => {
+                // Heard while it waited on this merge: its giver, still held on it, hears again.
+                if t.state == State::Held {
+                    tx.execute("UPDATE tasks SET heard = 0 WHERE number = ?1", [task])?;
+                }
                 set(
                     &tx,
                     task,
@@ -853,6 +857,9 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
     )?;
     if let Some(turn) = given_in {
         starts.extend(held::hear_backs(tx, &turn, trace)?);
+    }
+    if state.settled() {
+        starts.extend(held::after_review(tx, task, trace)?);
     }
     Ok(starts)
 }

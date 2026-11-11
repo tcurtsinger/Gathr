@@ -786,3 +786,110 @@ fn a_wait_on_an_agent_doing_your_task_is_refused_since_the_hear_back_covers_it()
         )
     );
 }
+
+/// Ann's work on `pr`, given in Lead's turn, which has ended: Lead is the one to hear back.
+fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
+    turn(conn, "lead-turn", "lead", None, "running");
+    let fix = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "ann",
+        given_in: Some("lead-turn"),
+        parent: None,
+        kind: Kind::Work,
+        what: "Fix the summary",
+        why: None,
+        after: &[],
+        pr: Some(pr),
+    };
+    let fix = tasks::give(conn, &fix, T).unwrap().0.number;
+    conn.execute(
+        "UPDATE turns SET status = 'done' WHERE id = 'lead-turn'",
+        [],
+    )
+    .unwrap();
+    assert!(tasks::turn_ended(conn, "lead-turn", T).unwrap().is_empty());
+    fix
+}
+
+/// Bo's review of `pr`, given by Ann in `given_in`.
+fn review_by_bo(conn: &mut Connection, pr: i64, given_in: &str) -> i64 {
+    let review = Give {
+        chat: "c",
+        giver: Some("ann"),
+        owner: "bo",
+        given_in: Some(given_in),
+        parent: None,
+        kind: Kind::Review,
+        what: "Review the fix",
+        why: None,
+        after: &[],
+        pr: Some(pr),
+    };
+    tasks::give(conn, &review, T).unwrap().0.number
+}
+
+fn reviewed(conn: &mut Connection, review: i64) -> Vec<Start> {
+    tasks::started(conn, review, T).unwrap();
+    let said = Said {
+        commit: Some("abc1234"),
+        ..Said::default()
+    };
+    tasks::finish(conn, "bo", review, Finish::Done, &said).unwrap();
+    tasks::ended(conn, review, Outcome::Ok { tools: 3 }, T).unwrap()
+}
+
+fn to(starts: &[Start], agent: &str) -> Vec<String> {
+    let mine = starts.iter().filter(|s| s.agent == agent);
+    mine.map(|s| s.text.clone()).collect()
+}
+
+// Found live (#85, #86): the work was held on its merge after its review, and its giver, the one
+// to see it merged, never heard.
+#[test]
+fn a_task_held_only_on_its_merge_wakes_its_giver_once_its_review_is_done() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let fix = work_on_pr(&mut conn, 85);
+    tasks::started(&mut conn, fix, T).unwrap();
+    turn(&conn, "ann-turn", "ann", Some(fix), "running");
+    let review = review_by_bo(&mut conn, 85, "ann-turn");
+    tasks::finish(&mut conn, "ann", fix, Finish::Done, &Said::default()).unwrap();
+    tasks::ended(&mut conn, fix, Outcome::Ok { tools: 2 }, T).unwrap();
+    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-turn'", [])
+        .unwrap();
+    let starts = reviewed(&mut conn, review);
+    assert_eq!(to(&starts, "ann").len(), 1, "Ann hears back on the review");
+    let starts = work(&mut conn, fix, Some(Finish::Done), 1);
+    let held = Some("done, waiting on #85 to merge".to_string());
+    assert_eq!(state(&conn, fix), (State::Held, held));
+    let lead = to(&starts, "lead");
+    assert_eq!(
+        lead.len(),
+        1,
+        "Lead hears it waits on the merge: {starts:?}"
+    );
+    assert!(lead[0].contains("waiting on #85 to merge"), "{}", lead[0]);
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
+    let lead = to(&merged, "lead");
+    assert_eq!(lead.len(), 1, "Lead hears the merge too: {merged:?}");
+    assert!(lead[0].contains("#85 merged"), "{}", lead[0]);
+}
+
+#[test]
+fn a_review_still_open_holds_the_hear_back_until_it_settles() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let fix = work_on_pr(&mut conn, 86);
+    turn(&conn, "ann-other", "ann", None, "running");
+    let review = review_by_bo(&mut conn, 86, "ann-other");
+    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    assert!(
+        to(&starts, "lead").is_empty(),
+        "the review leads to the merge"
+    );
+    let starts = reviewed(&mut conn, review);
+    let lead = to(&starts, "lead");
+    assert_eq!(lead.len(), 1, "{starts:?}");
+    assert!(lead[0].contains("waiting on #86 to merge"), "{}", lead[0]);
+}

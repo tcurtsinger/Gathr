@@ -51,9 +51,13 @@ pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
 
 /// What became of each task the giver gave in one turn.
 pub fn hear_back(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
-    let mut lines = vec![match settled.len() {
-        1 => "The task you gave is settled:".to_string(),
-        n => format!("The {n} tasks you gave are settled:"),
+    // A task held only on its merge comes back too (held.rs): not settled yet.
+    let all = settled.iter().all(|t| t.state.settled());
+    let mut lines = vec![match (settled.len(), all) {
+        (1, true) => "The task you gave is settled:".to_string(),
+        (n, true) => format!("The {n} tasks you gave are settled:"),
+        (1, false) => "Where the task you gave stands:".to_string(),
+        (n, false) => format!("Where the {n} tasks you gave stand:"),
     }];
     for t in settled {
         let how = match (t.state, &t.reason) {
