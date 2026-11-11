@@ -17,11 +17,42 @@
   margin-left: 0;
 }
 
-.assignment {
-  margin-bottom: -12px;
-  padding: 0 8px;
+.assignment,
+.answered {
   color: var(--muted-foreground);
   font-size: 12px;
+}
+.assignment {
+  margin-bottom: -12px;
+}
+/* A hand-off or the person's answer: one quiet line, cut with …; open, it reads whole (ux-issues 26, 27). */
+.task-line {
+  display: block;
+  width: 100%;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.task-line:hover {
+  background: var(--hover-tint);
+  color: var(--foreground);
+}
+.task-line[data-state="open"] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.task-line-more {
+  padding: 2px 8px 4px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 .gathr-line {
   display: flex;

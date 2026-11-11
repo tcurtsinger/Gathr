@@ -32,7 +32,9 @@ export type Custom = {
   /** What Gathr told an agent outside a task: a wake-up. */
   gathr?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
-  assignment?: { from?: string; to?: string; what: string };
+  assignment?: { from?: string; to?: string; what: string; why?: string };
+  /** The person's answers its giver heard in this turn: "You answered #26 · B", and the question. */
+  answered?: { line: string; asked: string }[];
 };
 
 /** The chat's two columns: the Supervisor's conversation, and the team's work on hand-offs. */
@@ -92,7 +94,8 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   for (const g of grouped(state, inTeam)) {
     if (g.person || !inTeam(g.turn)) {
       // What Gathr told the lead when a round settled: the team column and Summary already show it.
-      if (g.gathr && state.turns[g.turn ?? '']?.answers) continue;
+      // The person's own answers aren't shown there, so they keep their line.
+      if (g.gathr && state.turns[g.turn ?? '']?.answers && !answered(state, g.turn).length) continue;
       main.push(cached(cache, g, state, crew));
       shown.push(g);
     } else work.push(g);
@@ -177,13 +180,14 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
   const parts = group.msgs.map((m) => `${m.id}:${m.kind === 'tool' ? (m.body as ToolBody).status : ''}`);
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
-  const who = `${agent}|${role}|${JSON.stringify(task)}`;
+  const heard = group.gathr ? answered(state, id) : [];
+  const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(heard)}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const value = group.gathr
-    ? toGathr(group.msgs[0], task)
+    ? toGathr(group.msgs[0], heard.length ? { answered: heard } : task && { assignment: task })
     : group.reply
       ? toReply(group, partial, group.last ? turn : undefined, approvals, {
           agent,
@@ -199,7 +203,12 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
 function taskLine(turn: Turn | undefined, state: ChatState, crew: Team): Custom['assignment'] {
   const task = turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task);
   if (!task) return undefined;
-  return { from: crew.name(task.giver), to: crew.name(task.owner), what: task.what };
+  return {
+    from: crew.name(task.giver),
+    to: crew.name(task.owner),
+    what: task.what,
+    why: task.why ?? undefined,
+  };
 }
 
 function toUser(m: Message): ThreadMessageLike {
@@ -211,9 +220,17 @@ function toUser(m: Message): ThreadMessageLike {
   };
 }
 
-function toGathr(m: Message, assignment: Custom['assignment']): ThreadMessageLike {
+/** The person's answers that a hear-back in this turn told their asker, one line each. */
+function answered(state: ChatState, turn: string | null): NonNullable<Custom['answered']> {
+  if (!turn) return [];
+  return state.tasks
+    .filter((t) => t.kind === 'person' && t.state === 'done' && t.heard_in === turn)
+    .map((t) => ({ line: `You answered #${t.number} · ${t.reason ?? 'Done'}`, asked: t.what }));
+}
+
+function toGathr(m: Message, line: Custom | undefined): ThreadMessageLike {
   const text = m.body as string;
-  const custom: Custom = assignment ? { assignment } : { gathr: text };
+  const custom: Custom = line ?? { gathr: text };
   return { id: m.id, role: 'system', content: [{ type: 'text', text }], metadata: { custom } };
 }
 

@@ -231,6 +231,11 @@ fn each_answer_in_a_send_is_answered_or_refused_on_its_own() {
         sent.starts[0].text
     );
     assert!(!sent.starts[0].text.contains("Sign the release"));
+    // The chat shows the answer on the turn its giver hears it in.
+    assert_eq!(
+        sent.answered[0].heard_in.as_deref(),
+        Some(sent.starts[0].turn.as_str())
+    );
     let open: Vec<i64> = person::open(&conn, Some("c"))
         .unwrap()
         .iter()
