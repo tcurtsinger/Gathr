@@ -227,6 +227,8 @@ test('the chat fades only at an edge with more of it beyond', async () => {
   expect(fades()).toBe('');
 
   await screen.rerender(<View state={{ ...empty, messages: made(40) }} />);
+  // The new messages are drawn before the scroll, so it lands at their bottom.
+  await expect.element(screen.getByText('Made-up message 39', { exact: true })).toBeInTheDocument();
   viewport.scrollTop = viewport.scrollHeight;
   await expect.poll(fades).toBe('above');
   // The wheel, as a person scrolls: it stops assistant-ui following the bottom. A scrollTop jump didn't
