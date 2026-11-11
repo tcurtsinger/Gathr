@@ -23,10 +23,14 @@ export function team(state: ChatState, names: Map<string, string>): Team {
     if (t?.task == null) return undefined;
     return tasks.get(t.task)?.given_in ?? t.answers ?? undefined;
   };
+  // Turns the person's answers woke (each answered question's `heard_in`): the Supervisor answering
+  // the person, on the main line whatever task it runs on (G158). What it hands on from there is team work.
+  const heard = new Set(state.tasks.filter((t) => t.kind === 'person' && t.heard_in).map((t) => t.heard_in));
   const roots = new Map<string, string | undefined>();
   const rootOf = (turn: string): string | undefined => {
     if (roots.has(turn)) return roots.get(turn);
     roots.set(turn, undefined); // a loop of links ends here
+    if (heard.has(turn)) return undefined;
     const above = givenIn(turn);
     // A turn on no task that answers one inside a thread (a member hearing back, or woken) stays
     // in that thread; one that answers the agent's own main-line turn is the lead's word, on the main
