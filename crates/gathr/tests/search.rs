@@ -267,10 +267,12 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
     let conn = store(&dir);
     let old = say(&conn, "road", "user", "gravel from before");
     say(&conn, "road", "assistant", "tool-free reply");
-    // The schema as 0014 left it: no index, no triggers.
+    // The schema as 0014 left it: no index, no triggers, and none of the later migrations' columns.
     conn.execute_batch(
         "DROP TRIGGER message_search_insert; DROP TRIGGER message_search_delete;
-         DROP TRIGGER message_search_update; DROP TABLE message_search; PRAGMA user_version = 14;",
+         DROP TRIGGER message_search_update; DROP TABLE message_search;
+         DROP TABLE project_checks; ALTER TABLE projects DROP COLUMN ci;
+         ALTER TABLE projects DROP COLUMN merge_method; PRAGMA user_version = 14;",
     )
     .unwrap();
     let newer = say(&conn, "road", "user", "gravel saved before the upgrade too");
