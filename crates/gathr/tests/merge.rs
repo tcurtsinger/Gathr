@@ -240,14 +240,22 @@ fn each_unmet_condition_refuses_with_a_reference_and_merges_nothing() {
 
     room.refused(&room.call(&lead, "merge", five.clone()), "reviewer");
     room.refused(&room.call(&vale, "merge", five.clone()), "isn't done");
-    room.reviewed(&vale, 1, "abc1234");
+    room.reviewed(&vale, 1, &room.base.clone());
     room.refused(&room.call(&vale, "merge", five.clone()), "review it again");
-    room.db()
-        .execute(
-            "UPDATE tasks SET reviewed = ?1 WHERE number = 1",
-            [&room.heads[0]],
-        )
-        .unwrap();
+    // Vale, #120: the reviewed commit is resolved, never matched as text.
+    let reviewed = |commit: &str| {
+        let sql = "UPDATE tasks SET reviewed = ?1 WHERE number = 1";
+        room.db().execute(sql, [commit]).unwrap();
+    };
+    for (commit, why) in [
+        (&room.heads[0][..5], "too short"),
+        ("zzzzzzz", "isn't a commit"),
+        (&format!("{}0", room.heads[0])[..], "isn't a commit"),
+    ] {
+        reviewed(commit);
+        room.refused(&room.call(&vale, "merge", five.clone()), why);
+    }
+    reviewed(&room.heads[0][..7]);
     room.db()
         .execute("DELETE FROM check_runs WHERE head = ?1", [&room.heads[0]])
         .unwrap();
@@ -442,7 +450,7 @@ fn a_project_merges_by_its_own_method() {
             let answers = room.data.join("gh.json");
             let mut all: Vec<Value> =
                 serde_json::from_str(&std::fs::read_to_string(&answers).unwrap()).unwrap();
-            all.push(json!({ "args": ["api"], "out": "{\"merged\": true}" }));
+            all.push(json!({ "args": ["api"], "out": "{\"merged\": true, \"sha\": \"5a5a5a5\"}" }));
             std::fs::write(&answers, Value::Array(all).to_string()).unwrap();
         }
         let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
@@ -474,4 +482,106 @@ fn a_project_merges_by_its_own_method() {
             }
         }
     }
+}
+
+/// Vale, #120: only the latest run at the head counts, and only one that ran the checks as set now.
+#[test]
+fn an_older_pass_never_outweighs_a_newer_run_or_changed_checks() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    room.reviewed(&vale, 1, &room.heads[0].clone());
+    let five = json!({ "pr": 5 });
+    for (state, why) in [("failed", "failed"), ("running", "still running")] {
+        let newer = "INSERT INTO check_runs (id, project_id, head, state, trace_id, started_ts) VALUES (?1, ?2, ?3, ?4, 't', 5)";
+        room.db()
+            .execute(
+                newer,
+                rusqlite::params![format!("newer-{state}"), room.project, room.heads[0], state],
+            )
+            .unwrap();
+        room.refused(&room.call(&vale, "merge", five.clone()), why);
+        room.db()
+            .execute(
+                "DELETE FROM check_runs WHERE id = ?1",
+                [format!("newer-{state}")],
+            )
+            .unwrap();
+    }
+    room.db()
+        .execute("UPDATE project_checks SET set_ts = 9", [])
+        .unwrap();
+    room.refused(&room.call(&vale, "merge", five), "changed");
+    assert_eq!(room.main(), room.base, "a refusal merged something");
+}
+
+/// Vale, #120: a PR whose head moves while Gathr merges it is refused before the push; once the
+/// push is made, a head that moved after it leaves the PR open, so nothing is settled as merged.
+#[test]
+fn a_head_that_moves_during_a_merge_is_refused_or_left_unsettled() {
+    for moved_after_push in [false, true] {
+        let (data, repos) = (TempDir::new(), TempDir::new());
+        let mut room = room(&data.0, &repos.0, false);
+        let lead = room.lead_turn();
+        let vale = room.reviews(&lead, &[5]);
+        room.reviewed(&vale, 1, &room.heads[0].clone());
+        let view = |head: &str| {
+            json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [] }).to_string()
+        };
+        let (h, moved) = (room.heads[0].clone(), room.base.clone());
+        let outs = match moved_after_push {
+            false => json!([view(&h), view(&moved)]),
+            true => json!([view(&h), view(&h), view(&moved)]),
+        };
+        let answers = json!([{ "args": ["pr", "view", "5"], "outs": outs }]);
+        std::fs::write(room.data.join("gh.json"), answers.to_string()).unwrap();
+        let answer = room.call(&vale, "merge", json!({ "pr": 5 }));
+        if moved_after_push {
+            let said = text(&answer);
+            assert_eq!(answer["isError"], false, "{said}");
+            assert!(
+                said.contains("moved") && !said.contains("settled."),
+                "{said}"
+            );
+            assert_eq!(room.main(), h, "the checked head wasn't pushed");
+        } else {
+            room.refused(&answer, "moved");
+            assert_eq!(room.main(), room.base, "a moved head was merged");
+        }
+        let closed: bool = room
+            .db()
+            .query_row("SELECT pr_closed FROM tasks WHERE number = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(!closed, "a PR still open was settled as merged");
+    }
+}
+
+/// Vale, #120: settling the tasks can fail after the merge, which can't be undone: the answer says
+/// so, with a reference, instead of claiming them settled.
+#[test]
+fn tasks_that_fail_to_settle_after_a_merge_are_reported_with_a_reference() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    room.reviewed(&vale, 1, &room.heads[0].clone());
+    let refuse = "CREATE TRIGGER no_settling BEFORE UPDATE OF pr_closed ON tasks BEGIN SELECT RAISE(ABORT, 'forced'); END";
+    room.db().execute(refuse, []).unwrap();
+    let answer = room.call(&vale, "merge", json!({ "pr": 5 }));
+    let said = text(&answer);
+    assert_eq!(room.main(), room.heads[0], "{said}");
+    assert!(
+        said.contains("weren't settled") && said.contains("(ref "),
+        "{said}"
+    );
+    let reference = said
+        .rsplit("(ref ")
+        .next()
+        .unwrap()
+        .trim_end_matches([')', '.']);
+    let (ok, trace) = gathr(&room.data, &["diag", "trace", reference]);
+    assert!(ok && trace.to_string().contains("forced"), "{trace}");
 }

@@ -50,35 +50,8 @@ pub async fn merge(
     };
     let _one = lock.lock().await;
     let vars = crate::coord::fresh().await;
-    let view = crate::coord::github(
-        &[
-            "pr",
-            "view",
-            &pr.to_string(),
-            "--json",
-            "state,headRefOid,baseRefName,statusCheckRollup",
-        ],
-        &asked.folder,
-    )
-    .await
-    .map_err(|why| format!("#{pr} wasn't read from GitHub: {why}"))?;
-    let view: Value = serde_json::from_str(&view)
-        .map_err(|_| format!("GitHub's answer for #{pr} wasn't read"))?;
-    let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
-    let (state, head, base) = (text("state"), text("headRefOid"), text("baseRefName"));
-    if state != "OPEN" {
-        return Err(format!("#{pr} is {}", state.to_lowercase()));
-    }
-    if !(head.starts_with(&asked.reviewed) || asked.reviewed.starts_with(&head)) || head.is_empty()
-    {
-        let short = |c: &str| c.get(..7).unwrap_or(c).to_string();
-        return Err(format!(
-            "you reviewed {}, and #{pr}'s head is now {}: review it again",
-            short(&asked.reviewed),
-            short(&head)
-        ));
-    }
     let repo = &asked.folder;
+    let (view, head, base) = open_pr(pr, repo).await?;
     let remotes = git(repo, &["remote"], &vars).await?;
     if !remotes.lines().any(|r| r == "origin") {
         return Err("the project has no origin to merge into".into());
@@ -95,6 +68,7 @@ pub async fn merge(
             "{head} isn't fetched from origin: a PR from a fork isn't merged here"
         ));
     }
+    reviewed_is_head(repo, &asked.reviewed, &head, pr, &vars).await?;
     if !ancestor(repo, &b, &head, &vars).await {
         return Err(format!(
             "#{pr} isn't up to date with {base}: update it, then its checks run again"
@@ -119,17 +93,22 @@ pub async fn merge(
             needs_sign_off.join("; and ")
         ));
     }
+    // The head as GitHub has it right before the push: a push made after it moved would merge a
+    // commit the PR no longer is (Vale, #120).
+    let (_, now, _) = open_pr(pr, repo).await?;
+    if now != head {
+        return Err(format!(
+            "#{pr}'s head moved to {} while it was being merged: review the new head",
+            short(&now)
+        ));
+    }
     let merged = match asked.method.as_str() {
         "squash" => squash(pr, &head, repo).await?,
         "merge" => {
             let tree = format!("{head}^{{tree}}");
             let message = format!("Merge pull request #{pr}");
-            let m = git(
-                repo,
-                &["commit-tree", &tree, "-p", &b, "-p", &head, "-m", &message],
-                &vars,
-            )
-            .await?;
+            let args = ["commit-tree", &tree, "-p", &b, "-p", &head, "-m", &message];
+            let m = git(repo, &args, &vars).await?;
             push(repo, &m, &base, pr, &vars).await?;
             m
         }
@@ -138,24 +117,120 @@ pub async fn merge(
             head.clone()
         }
     };
-    settle(chats, caller, pr, &head).await;
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
     let event = Event::point("gathr.merge.done")
         .trace(&trace)
         .chat(&caller.chat)
-        .ok();
-    chats.writer.record(
-        event
-            .attr("gathr.project.id", asked.project.clone())
-            .attr("pr", pr)
-            .attr("head", head.clone())
-            .attr("method", asked.method.clone())
-            .attr("merged", merged.clone()),
-    );
-    Ok(format!(
-        "Merged #{pr} into {base} ({}): its tasks are settled.",
+        .attr("gathr.project.id", asked.project.clone())
+        .attr("pr", pr)
+        .attr("head", head.clone())
+        .attr("method", asked.method.clone())
+        .attr("merged", merged.clone());
+    let merged_line = format!(
+        "Merged #{pr}'s {} into {base} ({})",
+        short(&head),
         asked.method
-    ))
+    );
+    let reference = gathr::ids::reference(&trace).to_string();
+    // Settled only for the head merged: a PR that moved after the push stays open on GitHub.
+    let after = open_pr_head(pr, repo).await;
+    if after.as_deref() != Some(head.as_str()) {
+        let now = after
+            .as_deref()
+            .map_or("a head that wasn't read".to_string(), short);
+        let why = format!("#{pr} moved to {now} after the push");
+        chats
+            .writer
+            .record_now(event.error("moved").attr("why", why))
+            .await;
+        return Ok(format!(
+            "{merged_line}, but #{pr} moved to {now} meanwhile, so it stays open and its tasks aren't marked \
+             merged: its new head needs a review and its checks (ref {reference})."
+        ));
+    }
+    match settle(chats, caller, pr, &head).await {
+        Ok(()) => {
+            chats.writer.record(event.ok());
+            Ok(format!("{merged_line}: its tasks are settled."))
+        }
+        Err(why) => {
+            chats
+                .writer
+                .record_now(event.error("settle").attr("why", why.clone()))
+                .await;
+            Ok(format!(
+                "{merged_line}, but its tasks weren't settled ({why}): the PR looks settle them once GitHub \
+                 reports it merged (ref {reference})."
+            ))
+        }
+    }
+}
+
+fn short(commit: &str) -> String {
+    commit.get(..7).unwrap_or(commit).to_string()
+}
+
+/// The PR as GitHub has it, open: its view, head and base, or why it can't be merged.
+async fn open_pr(pr: i64, repo: &Path) -> Result<(Value, String, String), String> {
+    let fields = "state,headRefOid,baseRefName,statusCheckRollup";
+    let view = crate::coord::github(&["pr", "view", &pr.to_string(), "--json", fields], repo)
+        .await
+        .map_err(|why| format!("#{pr} wasn't read from GitHub: {why}"))?;
+    let view: Value = serde_json::from_str(&view)
+        .map_err(|_| format!("GitHub's answer for #{pr} wasn't read"))?;
+    let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
+    let (state, head, base) = (text("state"), text("headRefOid"), text("baseRefName"));
+    if state != "OPEN" {
+        return Err(format!("#{pr} is {}", state.to_lowercase()));
+    }
+    if head.is_empty() || base.is_empty() {
+        return Err(format!("GitHub gave no head or base for #{pr}"));
+    }
+    Ok((view, head, base))
+}
+
+/// The PR's head as GitHub has it now, whatever its state.
+async fn open_pr_head(pr: i64, repo: &Path) -> Option<String> {
+    let args = ["pr", "view", &pr.to_string(), "--json", "headRefOid"];
+    let view = crate::coord::github(&args, repo).await.ok()?;
+    let view: Value = serde_json::from_str(&view).ok()?;
+    view["headRefOid"]
+        .as_str()
+        .filter(|h| !h.is_empty())
+        .map(String::from)
+}
+
+/// The reviewed commit, resolved in the project, is exactly the head: never matched as text.
+async fn reviewed_is_head(
+    repo: &Path,
+    reviewed: &str,
+    head: &str,
+    pr: i64,
+    vars: &Vars,
+) -> Result<(), String> {
+    if reviewed.len() < 7 {
+        return Err(format!(
+            "the reviewed commit {reviewed} is too short: finish the review with at least 7 characters of it"
+        ));
+    }
+    // Git resolves an id with more than 40 characters to its first 40: only a true prefix counts.
+    let hex = reviewed.len() <= 40 && reviewed.chars().all(|c| c.is_ascii_hexdigit());
+    let commit = format!("{reviewed}^{{commit}}");
+    let resolved = git(repo, &["rev-parse", "--verify", "--quiet", &commit], vars)
+        .await
+        .ok()
+        .filter(|r| hex && r.starts_with(&reviewed.to_ascii_lowercase()))
+        .ok_or_else(|| {
+            format!("the reviewed commit {reviewed} isn't a commit the project has (or names more than one)")
+        })?;
+    if resolved != head {
+        return Err(format!(
+            "you reviewed {}, and #{pr}'s head is now {}: review it again",
+            short(&resolved),
+            short(head)
+        ));
+    }
+    Ok(())
 }
 
 /// The chat's project and the caller's review of the PR, or why there's nothing to merge.
@@ -254,8 +329,11 @@ async fn checks_passed(
         .writer
         .call(move |c| -> Result<Option<String>, gathr::Error> {
             Ok(c.query_row(
-                "SELECT state FROM check_runs WHERE project_id = ?1 AND head = ?2
-                 ORDER BY state = 'passed' DESC, started_ts DESC LIMIT 1",
+                "SELECT CASE WHEN r.state = 'passed' AND r.started_ts <
+                        (SELECT max(set_ts) FROM project_checks WHERE project_id = ?1)
+                        THEN 'changed' ELSE r.state END
+                 FROM check_runs r WHERE r.project_id = ?1 AND r.head = ?2
+                 ORDER BY r.started_ts DESC LIMIT 1",
                 rusqlite::params![project, h],
                 |r| r.get(0),
             )
@@ -265,6 +343,9 @@ async fn checks_passed(
     match latest.and_then(Result::ok).flatten().as_deref() {
         Some("passed") => Ok(()),
         Some("running") => Err(format!("Gathr's checks are still running on {short}")),
+        Some("changed") => Err(format!(
+            "the project's checks changed since they passed on {short}: run them again"
+        )),
         Some(_) => Err(format!(
             "Gathr's checks failed on {short}: see its run for why"
         )),
@@ -343,16 +424,20 @@ async fn squash(pr: i64, head: &str, repo: &Path) -> Result<String, String> {
         "-f",
         &sha,
     ];
-    crate::coord::github(&args, repo)
+    let answer = crate::coord::github(&args, repo)
         .await
         .map_err(|why| format!("GitHub didn't squash #{pr}: {why}"))?;
-    Ok(head.to_string())
+    let answer: Value = serde_json::from_str(&answer).unwrap_or_default();
+    match (answer["merged"].as_bool(), answer["sha"].as_str()) {
+        (Some(true), Some(sha)) => Ok(sha.to_string()),
+        _ => Err(format!("GitHub didn't say #{pr} was squashed: {answer}")),
+    }
 }
 
 /// The PR's tasks in the chat, settled now as a PR look would after its merge (#100's path). Their
 /// givers hear back, but never the agent that merged: it knows (G159), so the turn saved to tell
 /// it goes with the same step, before anything starts it.
-async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) {
+async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) -> Result<(), String> {
     let (chat, h) = (caller.chat.clone(), head.to_string());
     let merger = caller.agent.clone();
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
@@ -381,8 +466,13 @@ async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) {
             Ok(told)
         })
         .await;
-    if let Some(Ok(starts)) = starts {
-        chats.start(starts);
+    match starts {
+        Some(Ok(starts)) => {
+            chats.start(starts);
+            Ok(())
+        }
+        Some(Err(e)) => Err(e.to_string()),
+        None => Err("the database didn't answer".into()),
     }
 }
 
