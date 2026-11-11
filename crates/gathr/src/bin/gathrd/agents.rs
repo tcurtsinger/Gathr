@@ -229,9 +229,7 @@ async fn save(
             // Read in the write's own call, so a removal that began first is always seen.
             let removing = chats.being_removed();
             match edit {
-                Some((change, by)) => {
-                    agents::change(conn, &agent.id, change, by.is_some(), &removing)
-                }
+                Some((change, by)) => agents::change(conn, &agent, change, by.is_some(), &removing),
                 None => agents::add(conn, &agent, &removing),
             }
         })
@@ -240,6 +238,7 @@ async fn save(
         Some(Ok(Ok(agent))) => agent,
         Some(Ok(Err(why @ Refused::Taken))) => return refused(StatusCode::CONFLICT, why.why()),
         Some(Ok(Err(why @ Refused::Removing))) => return refused(StatusCode::CONFLICT, why.why()),
+        Some(Ok(Err(why @ Refused::Moved))) => return refused(StatusCode::CONFLICT, why.why()),
         Some(Ok(Err(why @ Refused::Unknown))) => return refused(StatusCode::NOT_FOUND, why.why()),
         Some(Ok(Err(why))) => return refused(StatusCode::BAD_REQUEST, why.why()),
         Some(Err(e)) => return refused(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),

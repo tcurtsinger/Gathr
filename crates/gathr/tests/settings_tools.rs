@@ -216,9 +216,12 @@ fn an_agent_never_answers_its_own_approval_nor_its_own_question_nor_changes_whic
     );
 }
 
-/// An agent's change is applied to the agent as saved when it's written: the person moving it into
-/// or out of Full meanwhile (here while the agent's model is checked) stands (#138's review).
-fn a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(was_full: bool) {
+/// The tool's `set_agent {model: opus}` for Lead, with Lead's model check held while the person
+/// makes `before` then, once the check is under way, `meanwhile`: the tool's answer and Lead as saved.
+fn held_model_change(
+    before: Value,
+    meanwhile: impl FnOnce(&TestService) -> Value,
+) -> (Value, Value) {
     let data = TempDir::new();
     let asked = data.0.join("models-go");
     std::fs::write(&asked, "").unwrap();
@@ -234,12 +237,10 @@ fn a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(was_full: bool) {
     let agent = format!("/api/agents/{lead}");
     let moved = service.send("PATCH", &agent, json!({ "account": other }));
     assert_eq!(moved.status, 200, "{}", moved.body);
-    let (before, after) = match was_full {
-        true => ("full", "auto"),
-        false => ("auto", "full"),
-    };
-    let set = service.send("PATCH", &agent, json!({ "approvals": before }));
-    assert_eq!(set.status, 200, "{}", set.body);
+    if before != json!({}) {
+        let set = service.send("PATCH", &agent, before);
+        assert_eq!(set.status, 200, "{}", set.body);
+    }
     let history = service
         .send("GET", &format!("/api/chats/{chat}"), json!(null))
         .json();
@@ -266,13 +267,19 @@ fn a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(was_full: bool) {
         call_tool(port, &token, "set_agent", change)
     });
     nth(&env, 1);
-    let set = service.send("PATCH", &agent, json!({ "approvals": after }));
+    let set = service.send("PATCH", &agent, meanwhile(&service));
     assert_eq!(set.status, 200, "{}", set.body);
     std::fs::write(&asked, "").unwrap();
     let result = changing.join().unwrap();
-    assert_ne!(result["isError"], true, "{result}");
+    (result, service.call("GET", &agent).json())
+}
 
-    let saved = service.call("GET", &agent).json();
+/// An agent's change is applied to the agent as saved when it's written: the person moving it into
+/// or out of Full meanwhile stands (#138's review).
+fn keeps_the_persons_move(before: &str, after: &str) {
+    let meanwhile = |_: &TestService| json!({ "approvals": after });
+    let (result, saved) = held_model_change(json!({ "approvals": before }), meanwhile);
+    assert_ne!(result["isError"], true, "{result}");
     assert_eq!(saved["model"], "opus", "{saved}");
     assert_eq!(
         saved["approvals"], after,
@@ -282,10 +289,35 @@ fn a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(was_full: bool) {
 
 #[test]
 fn an_agents_change_keeps_the_persons_move_into_full_made_meanwhile() {
-    a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(false);
+    keeps_the_persons_move("auto", "full");
 }
 
 #[test]
 fn an_agents_change_keeps_the_persons_move_out_of_full_made_meanwhile() {
-    a_change_by_an_agent_keeps_the_persons_move_made_meanwhile(true);
+    keeps_the_persons_move("full", "auto");
+}
+
+/// A model checked against one account is never saved on another the person picked meanwhile:
+/// the change is refused, with a reference, and the person's account stands (#138's second look).
+#[test]
+fn a_model_checked_on_one_account_is_never_saved_on_another() {
+    let mut codex = String::new();
+    let (result, saved) = held_model_change(json!({}), |service| {
+        let made = service.send(
+            "POST",
+            "/api/accounts",
+            json!({ "engine": "codex", "name": "Codex" }),
+        );
+        assert_eq!(made.status, 200, "{}", made.body);
+        codex = made.json()["id"].as_str().unwrap().to_string();
+        json!({ "account": codex })
+    });
+    assert_eq!(result["isError"], true, "{result}");
+    let said = text(&result);
+    assert!(
+        said.contains("changed while") && said.contains("(ref "),
+        "{said}"
+    );
+    assert_eq!(saved["account"], codex.as_str(), "{saved}");
+    assert_eq!(saved["model"], Value::Null, "{saved}");
 }
