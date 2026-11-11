@@ -22,7 +22,7 @@ done < <(git ls-files '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.cs
 # A NUL byte in a text file makes tools read it as binary and refuse it (S35). One perl for all.
 nul=$(git ls-files -z '*.rs' '*.ts' '*.tsx' '*.js' '*.jsx' '*.mjs' '*.cjs' '*.css' '*.html' '*.sh' \
   '*.md' '*.json' '*.jsonl' '*.toml' '*.sql' '*.yml' '*.yaml' '*.txt' |
-  xargs -0 perl -ne 'if (/\x00/) { print "$ARGV: holds a NUL byte, first at line $.\n"; close ARGV }')
+  xargs -0 perl -ne 'print "$ARGV: holds a NUL byte, first at line $.\n" if /\x00/; close ARGV if /\x00/ || eof')
 if [ -n "$nul" ]; then
   echo "$nul"
   status=1
