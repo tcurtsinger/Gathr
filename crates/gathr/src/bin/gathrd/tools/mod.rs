@@ -16,7 +16,7 @@ mod person;
 mod server;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
-pub use server::service;
+pub use server::{names, service};
 
 /// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.
 #[derive(Clone)]

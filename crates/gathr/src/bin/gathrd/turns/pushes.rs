@@ -11,7 +11,9 @@ use super::Task;
 impl Task {
     /// Full bypasses both asks. A push that isn't risky never asks, and one that is inherits an
     /// allowed push command; a check does not.
-    /// Claude checks use its native hook; Codex checks always ask here before being stored.
+    /// In Auto a check was the engine's own to judge before the call reached Gathr: Claude Code's
+    /// classifier, Codex's automatic reviewer. Else Claude checks use its native hook, and Codex
+    /// checks ask here before being stored.
     pub(super) fn ask_service(
         &mut self,
         kind: &'static str,
@@ -21,7 +23,9 @@ impl Task {
     ) {
         let native_hook =
             kind == "check" && self.assigned.as_ref().is_some_and(|a| a.engine == "claude");
-        let full = self.assigned.as_ref().map(|a| a.approvals) == Some(Approvals::Full);
+        let approvals = self.assigned.as_ref().map(|a| a.approvals);
+        let full = approvals == Some(Approvals::Full);
+        let auto = kind == "check" && approvals == Some(Approvals::Auto);
         let turn = self.turn.as_mut().filter(|t| t.ids.chat == chat);
         let trace = turn.as_ref().map(|t| t.ids.trace.clone());
         let event = Event::point(&format!("gathr.approvals.{kind}"))
@@ -40,8 +44,13 @@ impl Task {
         }
         // Claude already asked through its native hook. Keep that path valid even if its
         // completed turn ended just before the MCP request reached us.
-        if native_hook {
-            self.record(event.ok().attr("allowed_by", "Claude Code PreToolUse"));
+        if native_hook || auto {
+            let by = match (auto, native_hook) {
+                (true, true) => "Claude Code auto mode",
+                (true, false) => "Codex auto review",
+                _ => "Claude Code PreToolUse",
+            };
+            self.record(event.ok().attr("allowed_by", by));
             let _ = reply.send(true);
             return;
         }

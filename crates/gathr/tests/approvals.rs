@@ -7,7 +7,9 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use common::{TempDir, TestService, gathr, git, hook, nth, project, recording, sign_in_account};
+use common::{
+    TempDir, TestService, gathr, git, hook, hook_at, nth, project, recording, sign_in_account,
+};
 use serde_json::{Value, json};
 
 /// `signed_in` with the engine held after the message arrives, until `go` exists.
@@ -79,7 +81,8 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
     let port = service.info.port;
     assert_eq!(
         given["url"],
-        format!("http://127.0.0.1:{port}/hook").as_str(),
+        // The agent is in auto mode, and the hook's address says so.
+        format!("http://127.0.0.1:{port}/hook?auto").as_str(),
         "{settings}"
     );
     assert_eq!(
@@ -134,8 +137,42 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
         check["hookSpecificOutput"]["permissionDecision"], "ask",
         "Gathr runs a check outside Claude Code's checks: {check}"
     );
+    // `wait` isn't on Claude Code's allow list, so the hook allows the ones with nothing to ask about.
     let on_pr = wait(json!({ "pr": 5, "then": "go on" }));
-    assert_eq!(on_pr, json!({}), "a wait without a check asked");
+    assert_eq!(
+        on_pr["hookSpecificOutput"]["permissionDecision"], "allow",
+        "a wait without a check: {on_pr}"
+    );
+    let read_only = wait(json!({ "check": "gh pr checks 5", "then": "go on" }));
+    assert_eq!(
+        read_only["hookSpecificOutput"]["permissionDecision"], "allow",
+        "a read-only check: {read_only}"
+    );
+    // In auto mode the check is left to Claude Code's classifier, as the agent's commands are.
+    let auto = |input: Value| hook_at(port, "/hook?auto", token, WAIT_TOOL, input).json();
+    let left = auto(json!({ "check": "printf x > ../out", "then": "go on" }));
+    assert_eq!(
+        left,
+        json!({}),
+        "auto mode's check wasn't left to the engine"
+    );
+    let on_pr = auto(json!({ "pr": 5, "then": "go on" }));
+    assert_eq!(
+        on_pr["hookSpecificOutput"]["permissionDecision"], "allow",
+        "auto mode, a wait without a check: {on_pr}"
+    );
+    let pushed = hook_at(
+        port,
+        "/hook?auto",
+        token,
+        "Bash",
+        json!({ "command": "git push --force origin room/x" }),
+    )
+    .json();
+    assert_eq!(
+        pushed["hookSpecificOutput"]["permissionDecision"], "ask",
+        "auto mode stopped asking for a risky push: {pushed}"
+    );
     let refused = hook(
         port,
         &service.info.token,
