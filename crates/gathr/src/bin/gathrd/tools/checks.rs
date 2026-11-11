@@ -26,7 +26,11 @@ pub struct NoArguments {}
 pub struct SetChecks {
     /// The project's checks, in the order they run: each a command run by `sh` in a clean
     /// checkout of the PR's head. Replaces the list.
-    checks: Vec<String>,
+    checks: Option<Vec<String>>,
+    /// Whose result a merge needs: `ci` (GitHub's CI), `gathr` (these checks) or `both`.
+    ci: Option<String>,
+    /// How Gathr merges: `fast-forward`, `merge` (a merge commit) or `squash`.
+    merge: Option<String>,
 }
 
 /// The project a Supervisor's call is about.
@@ -56,10 +60,14 @@ impl Tools {
                 let found = tokio::task::spawn_blocking(move || gathr::checks::found(&folder));
                 let found = found.await.unwrap_or_default();
                 let project = mine.project.clone();
-                self.db(move |c| Ok(gathr::projects::get(c, &project)?.map(|p| p.checks)))
+                self.db(move |c| gathr::projects::get(c, &project))
                     .await
-                    .and_then(|checks| checks.ok_or_else(|| "the project is gone".to_string()))
-                    .map(|checks| json!({ "checks": checks, "found": found }).to_string())
+                    .and_then(|p| p.ok_or_else(|| "the project is gone".to_string()))
+                    .map(|p| {
+                        let listed = json!({ "checks": p.checks, "found": found, "ci": p.ci,
+                            "ci_by": p.ci_by, "merge": p.merge, "merge_by": p.merge_by });
+                        listed.to_string()
+                    })
             }
             Err(why) => Err(why),
         };
@@ -67,8 +75,9 @@ impl Tools {
     }
 
     #[tool(
-        description = "Supervisor only: replace the project's checks, in order. A command the project's files name \
-                       runs freely; any other asks the person once for this project."
+        description = "Supervisor only: set the project's checks (replaced, in order), whose result a merge needs \
+                       (ci) and how it merges (merge); any of them. A check the project's files name runs freely; \
+                       any other asks the person once for this project."
     )]
     async fn set_checks(
         &self,
@@ -77,7 +86,7 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let set = self.set(&caller, ask.checks).await;
+        let set = self.set_all(&caller, ask).await;
         Ok(self.respond(&caller, "set_checks", started, set).await)
     }
 }
@@ -113,6 +122,59 @@ impl Tools {
             })
         })
         .await
+    }
+
+    /// Each of Checks & merge the Supervisor named, saved with it as who set it (Orin's task #88).
+    async fn set_all(&self, caller: &Caller, ask: SetChecks) -> Result<String, String> {
+        let one_of = |value: &Option<String>, allowed: &[&str], what: &str| match value {
+            Some(v) if !allowed.contains(&v.as_str()) => {
+                Err(format!("{v} isn't a {what}: {}", allowed.join(", ")))
+            }
+            _ => Ok(()),
+        };
+        one_of(&ask.ci, &gathr::projects::CI, "choice of required checks")?;
+        one_of(&ask.merge, &gathr::projects::MERGE, "merge method")?;
+        if ask.checks.is_none() && ask.ci.is_none() && ask.merge.is_none() {
+            return Err("nothing to set: give checks, ci or merge".into());
+        }
+        let mine = self.mine(caller).await?;
+        let mut said = Vec::new();
+        if let Some(checks) = ask.checks {
+            said.push(self.set(caller, checks).await?);
+        }
+        if ask.ci.is_some() || ask.merge.is_some() {
+            let (project, by) = (mine.project.clone(), caller.agent.clone());
+            let change = gathr::projects::Change {
+                ci: ask.ci.clone(),
+                merge: ask.merge.clone(),
+                by,
+                ..Default::default()
+            };
+            self.db(move |c| gathr::projects::update(c, &project, change))
+                .await?;
+            let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
+            let event = Event::point("gathr.project.change")
+                .trace(&trace)
+                .chat(&caller.chat)
+                .ok();
+            self.chats.writer.record(
+                event
+                    .attr("gathr.project.id", mine.project.clone())
+                    .attr("gen_ai.agent.id", caller.agent.clone())
+                    .attr("ci", ask.ci.clone())
+                    .attr("merge", ask.merge.clone()),
+            );
+            self.chats.publish(
+                json!({ "type": "project", "project": mine.project, "change": "changed" }),
+            );
+            let named = [("required checks", &ask.ci), ("merge method", &ask.merge)];
+            for (what, value) in named {
+                if let Some(value) = value {
+                    said.push(format!("Set the {what} to {value}."));
+                }
+            }
+        }
+        Ok(said.join(" "))
     }
 
     async fn set(&self, caller: &Caller, checks: Vec<String>) -> Result<String, String> {

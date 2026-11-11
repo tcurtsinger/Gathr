@@ -144,6 +144,7 @@ fn only_the_supervisor_lists_or_sets_a_projects_checks() {
     let port = room.service.info.port;
     for (tool, arguments) in [
         ("checks", json!({})),
+        ("set_checks", json!({ "ci": "both" })),
         ("set_checks", json!({ "checks": ["cargo test"] })),
     ] {
         let refused = call_tool(port, &token, tool, arguments);
@@ -171,7 +172,8 @@ fn the_supervisor_starts_from_what_gathr_finds_and_an_own_runner_runs_without_as
         "cargo clippy",
         "cd ui && npx vitest run"
     ]);
-    assert_eq!(listed, json!({ "checks": [], "found": found }));
+    assert_eq!(listed["checks"], json!([]), "{listed}");
+    assert_eq!(listed["found"], found, "{listed}");
 
     let (asked, result) = set(&room, &token, json!(["cargo test", " npm test "]), true);
     assert!(!asked && result["isError"] != true, "{}", text(&result));
@@ -216,4 +218,59 @@ fn another_command_asks_the_person_once_per_project_and_a_no_saves_nothing() {
         text(&result)
     );
     assert_eq!(saved(&room)[0]["command"], "make check");
+}
+
+fn settings_of(room: &Room) -> Value {
+    let projects = room.service.call("GET", "/api/projects").json();
+    let mut found = projects["projects"].as_array().unwrap().iter();
+    found
+        .find(|p| p["id"] == room.project.as_str())
+        .unwrap()
+        .clone()
+}
+
+/// Owner, 2026-11-11 (Orin's task #88): the Supervisor sets all of Checks & merge, the required
+/// checks and the merge method too, each recorded with who set it and when.
+#[test]
+fn the_supervisor_sets_the_required_checks_and_the_merge_method_too() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let room = room(&data.0, &repos.0);
+    let token = turn_of(&room, &data.0, &room.lead);
+    let port = room.service.info.port;
+    let set = call_tool(
+        port,
+        &token,
+        "set_checks",
+        json!({ "ci": "both", "merge": "squash" }),
+    );
+    assert_eq!(set["isError"], false, "{}", text(&set));
+    let saved = settings_of(&room);
+    assert_eq!(
+        (&saved["ci"], &saved["merge"]),
+        (&json!("both"), &json!("squash")),
+        "{saved}"
+    );
+    for by in [&saved["ci_by"], &saved["merge_by"]] {
+        assert_eq!(by["source"], room.lead.as_str(), "{saved}");
+        assert!(by["set"].is_string(), "{saved}");
+    }
+    let listed = call_tool(port, &token, "checks", json!({}));
+    let listed: Value = serde_json::from_str(&text(&listed)).unwrap();
+    assert_eq!(
+        (&listed["ci"], &listed["merge"]),
+        (&json!("both"), &json!("squash")),
+        "{listed}"
+    );
+    for (ask, why) in [
+        (json!({ "ci": "travis" }), "travis"),
+        (json!({}), "nothing"),
+    ] {
+        let refused = call_tool(port, &token, "set_checks", ask);
+        let said = text(&refused);
+        assert!(
+            refused["isError"] == true && said.contains(why) && said.contains("(ref "),
+            "{said}"
+        );
+    }
+    assert_eq!(settings_of(&room)["ci"], "both", "a refusal changed it");
 }
