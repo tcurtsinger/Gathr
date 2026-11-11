@@ -105,3 +105,32 @@ test("a refused load says why; the next live event's load clears it", async () =
   await expect.element(page.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
   await expect.element(page.getByText('made-up refusal')).not.toBeInTheDocument();
 });
+
+test("when the task's head moves, an older head's late answer never replaces the new one's", async () => {
+  const newer = 'e3ee3060000000000000000000000000000000aa';
+  const answers = new Map<string, (r: Response) => void>();
+  vi.stubGlobal(
+    'fetch',
+    (path: string) =>
+      new Promise<Response>((done) =>
+        answers.set(new URL(path, 'http://x').searchParams.get('head') ?? '', done),
+      ),
+  );
+  const answer = (at: string, state: CheckRun['state']) =>
+    answers.get(at)?.(
+      new Response(
+        JSON.stringify({ runs: [run({ head: at, state, ref: state === 'failed' ? 'r' : null })] }),
+      ),
+    );
+  const screen = await render(<TaskChecks project="p" head={head} onReference={() => {}} />);
+  await expect.poll(() => answers.has(head)).toBe(true);
+
+  await screen.rerender(<TaskChecks project="p" head={newer} onReference={() => {}} />);
+  await expect.poll(() => answers.has(newer)).toBe(true);
+  answer(newer, 'passed');
+  await expect.element(page.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
+  answer(head, 'failed');
+  await new Promise((r) => setTimeout(r, 100));
+  await expect.element(page.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
+  await expect.element(page.getByText(newer.slice(0, 7), { exact: true })).toBeVisible();
+});

@@ -1,5 +1,5 @@
 import { Check, CircleAlert, LoaderCircle } from 'lucide-react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { api, type CheckRun, type Failure } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
@@ -28,25 +28,35 @@ export function TaskChecks({ project, head, onReference }: Props) {
   const [runs, setRuns] = useState<CheckRun[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const title = useId();
-  const load = useCallback(
-    () =>
-      api.checkRuns(project, head).then((found) => {
-        setRuns(found);
-        setFailure(null);
-      }, setFailure),
-    [project, head],
-  );
+  // Each project and head has its own answer: a change starts afresh, and a late answer for the
+  // head before is dropped, never shown over the new one's (Vale, #121).
   useEffect(() => {
+    let current = true;
+    setRuns(null);
+    setFailure(null);
+    const load = () =>
+      api.checkRuns(project, head).then(
+        (found) => {
+          if (!current) return;
+          setRuns(found);
+          setFailure(null);
+        },
+        (f: Failure) => current && setFailure(f),
+      );
     load();
-    return listen((e) => {
+    const off = listen((e) => {
       if (e.type === 'lagged' || (e.type === 'checks' && e.project === project && e.head === head)) load();
     });
-  }, [load, project, head]);
+    return () => {
+      current = false;
+      off();
+    };
+  }, [project, head]);
 
   if (failure) return <FailureNotice failure={failure} onReference={onReference} />;
   if (runs === null) return null;
   // Newest first: a commit run again after a stop shows its latest run.
-  const run = runs[0];
+  const run = runs.find((r) => r.head === head);
   if (!run) return <p className="muted task-checks">No checks run at this commit yet</p>;
   const Icon = icons[run.state];
   const total = run.steps.reduce((sum, s) => sum + s.duration_ms, 0);
