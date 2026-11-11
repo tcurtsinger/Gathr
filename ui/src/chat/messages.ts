@@ -37,6 +37,8 @@ export type Custom = {
   assignment?: { number: number; from?: string; to?: string; what: string; why?: string };
   /** The person's answers its giver heard in this turn: "You answered #26 · B", and the question. */
   answered?: { line: string; asked: string }[];
+  /** Questions to the person asked in a team turn: "Mira asked you #95 · Ship it?", and why (G160). */
+  questions?: { line: string; why?: string }[];
 };
 
 /** The chat's two columns: the Supervisor's conversation, and the team's work on hand-offs. */
@@ -96,7 +98,15 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const main: ThreadMessageLike[] = [];
   const shown: Group[] = [];
   const work: Group[] = [];
+  // A question to the person is the main column's, wherever it was asked: one asked in a team turn
+  // leaves its line there, where that turn began (G160). Its answer line is the wake-up's, already there.
+  const asked = new Set<string>();
   for (const g of grouped(state, inTeam)) {
+    if (g.turn && !g.person && inTeam(g.turn) && !asked.has(g.turn)) {
+      asked.add(g.turn);
+      const line = questions(state, g.turn, crew, cache);
+      if (line) main.push(line);
+    }
     if (g.to) work.push(g);
     else if (g.person || !inTeam(g.turn)) {
       // What Gathr told the lead when a round settled: the team column and Summary already show it.
@@ -232,6 +242,31 @@ function toUser(m: Message): ThreadMessageLike {
     content: [{ type: 'text', text: m.body as string }],
     metadata: { custom: {} },
   };
+}
+
+/** The questions to the person this turn asked, as one quiet line each in the main column. */
+function questions(state: ChatState, turn: string, crew: Team, cache: Cache): ThreadMessageLike | undefined {
+  const lines = state.tasks
+    .filter((t) => t.kind === 'person' && t.given_in === turn)
+    .map((t) => ({
+      line: `${crew.name(t.giver) ?? 'An agent'} asked you #${t.number} · ${t.what}`,
+      why: t.why ?? undefined,
+    }));
+  if (!lines.length) return undefined;
+  const key = `asked-${turn}`;
+  const sig = JSON.stringify(lines);
+  const hit = cache.get(key);
+  if (hit?.sig === sig) return hit.value;
+  const text = lines.map((l) => l.line).join('\n');
+  const custom: Custom = { questions: lines };
+  const value: ThreadMessageLike = {
+    id: key,
+    role: 'system',
+    content: [{ type: 'text', text }],
+    metadata: { custom },
+  };
+  cache.set(key, { sig, value });
+  return value;
 }
 
 /** The person's answers that a hear-back in this turn told their asker, one line each. */

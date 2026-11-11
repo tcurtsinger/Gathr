@@ -10,6 +10,8 @@ use serde_json::{Value, json};
 
 use super::{Queued, Task, login_stamp};
 
+const EMPTY: &str = "the engine ended the turn with no reply and no tool call";
+
 impl Task {
     pub(super) async fn on_line(&mut self, line: Line) {
         let pid = self.engine.as_ref().map_or(0, |e| e.pid);
@@ -103,10 +105,15 @@ impl Task {
         }
         if matches!(
             frame,
-            Frame::TextDelta(_) | Frame::Text(_) | Frame::ToolStart { .. } | Frame::ToolEnd { .. }
+            Frame::TextDelta(_)
+                | Frame::Text(_)
+                | Frame::ToolStart { .. }
+                | Frame::ToolEnd { .. }
+                | Frame::Compacted { .. }
         ) && let Some(turn) = self.turn.as_mut()
         {
             turn.progress_at = std::time::Instant::now();
+            turn.said = true;
         }
         match frame {
             Frame::Replied => {}
@@ -381,6 +388,17 @@ impl Task {
     }
 
     pub(super) async fn turn_ended(&mut self, end: TurnEnd) {
+        // A resumed session can answer a notice about a background command before Gathr's
+        // message: that result is the notice's, so Gathr's turn runs on (G167).
+        if end.notice
+            && let Some(turn) = self.turn.as_ref().filter(|t| !t.engine_began)
+        {
+            let event = Event::point("gathr.turn.notice")
+                .trace(&turn.ids.trace)
+                .chat(&turn.ids.chat)
+                .ok();
+            return self.record(event.attr("gathr.turn.id", turn.ids.turn.clone()));
+        }
         self.keep_what_was_shown().await;
         let Some(mut turn) = self.turn.take() else {
             return;
@@ -388,15 +406,19 @@ impl Task {
         // Ended, so the login needs no guarding: the next start mustn't wait on this one.
         turn.gate.release();
         self.idle_since = std::time::Instant::now();
+        // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
+        let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
         let status = match () {
             _ if turn.save_failed.is_some() => "failed",
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
+            _ if empty => "failed",
             _ if end.ok => "done",
             _ => "failed",
         };
         let why = match status {
             "failed" if turn.save_failed.is_some() => turn.save_failed.clone(),
+            "failed" if empty => Some(EMPTY.to_string()),
             "failed" => Some(
                 end.message
                     .clone()

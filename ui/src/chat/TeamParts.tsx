@@ -12,7 +12,15 @@ import './team.css';
  * wake-up in Gathr's own voice.
  */
 export function GathrLine({ custom, onOpenTask }: { custom: Custom; onOpenTask?: (task: number) => void }) {
-  const { assignment, answered } = custom;
+  const { assignment, answered, questions } = custom;
+  if (questions)
+    return (
+      <MessagePrimitive.Root className="answered">
+        {questions.map(({ line, why }) => (
+          <TaskLine key={line} line={line} more={why} />
+        ))}
+      </MessagePrimitive.Root>
+    );
   if (answered)
     return (
       <MessagePrimitive.Root className="answered">
