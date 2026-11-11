@@ -1,4 +1,4 @@
-﻿-- Finished PR cleanup survives service restarts and retries skipped work without deleting a
+-- Finished PR cleanup survives service restarts and retries skipped work without deleting a
 -- reused branch: its tip must still be the head GitHub reported as merged or closed.
 CREATE TABLE pr_cleanup (
     project TEXT NOT NULL,

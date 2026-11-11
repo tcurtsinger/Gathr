@@ -20,8 +20,22 @@ pub struct Project {
     pub ci: String,
     /// How Gathr merges: one of `MERGE`.
     pub merge: String,
+    /// Who set `ci` and when, once someone has.
+    pub ci_by: Option<SetBy>,
+    /// Who set `merge` and when, once someone has.
+    pub merge_by: Option<SetBy>,
     pub created: String,
 }
+
+/// Who set one of Checks & merge and when: the Supervisor's id through Gathr's tool, or `person`.
+#[derive(Debug, Clone, Serialize)]
+pub struct SetBy {
+    pub source: String,
+    pub set: String,
+}
+
+/// How the person is named as who set something.
+pub const PERSON: &str = "person";
 
 /// A check as saved: the person never types one (owner, task 1455).
 #[derive(Debug, Clone, Serialize)]
@@ -45,6 +59,8 @@ pub struct Change {
     pub team: Option<Vec<(String, Role)>>,
     pub ci: Option<String>,
     pub merge: Option<String>,
+    /// Who sets `ci` and `merge`: the person or an agent's id.
+    pub by: Option<String>,
 }
 
 /// The name as saved, trimmed, or why it can't be one.
@@ -90,15 +106,21 @@ pub fn update(conn: &mut Connection, id: &str, change: Change) -> Result<Option<
         );
         name_taken(renamed)?;
     }
-    let fields = [
-        ("folder", change.folder),
-        ("ci", change.ci),
-        ("merge_method", change.merge),
-    ];
-    for (column, value) in fields {
+    if let Some(folder) = &change.folder {
+        tx.execute(
+            "UPDATE projects SET folder = ?2 WHERE id = ?1",
+            params![id, folder],
+        )?;
+    }
+    let by = change.by.as_deref().unwrap_or(PERSON);
+    let now = crate::ids::now_us();
+    for (column, value) in [("ci", change.ci), ("merge", change.merge)] {
         if let Some(value) = value {
-            let sql = format!("UPDATE projects SET {column} = ?2 WHERE id = ?1");
-            tx.execute(&sql, params![id, value])?;
+            let stored = if column == "ci" { "ci" } else { "merge_method" };
+            let sql = format!(
+                "UPDATE projects SET {stored} = ?2, {column}_source = ?3, {column}_set_ts = ?4 WHERE id = ?1"
+            );
+            tx.execute(&sql, params![id, value, by, now])?;
         }
     }
     if let Some(team) = &change.team {
@@ -148,17 +170,47 @@ pub fn list(conn: &Connection) -> Result<Vec<Project>, Error> {
         .collect()
 }
 
-type Row = (String, String, i64, String, String);
+type Row = (
+    String,
+    String,
+    i64,
+    String,
+    String,
+    Option<SetBy>,
+    Option<SetBy>,
+);
+
+/// Who set a setting, from its source and time columns.
+fn set_by(r: &rusqlite::Row, at: usize) -> rusqlite::Result<Option<SetBy>> {
+    let source: Option<String> = r.get(at)?;
+    let ts: Option<i64> = r.get(at + 1)?;
+    Ok(source.zip(ts).map(|(source, ts)| SetBy {
+        source,
+        set: crate::ids::utc(ts),
+    }))
+}
 
 pub fn get(conn: &Connection, id: &str) -> Result<Option<Project>, Error> {
     let found: Option<Row> = conn
         .query_row(
-            "SELECT name, folder, created_ts, ci, merge_method FROM projects WHERE id = ?1",
+            "SELECT name, folder, created_ts, ci, merge_method, ci_source, ci_set_ts, merge_source,
+                    merge_set_ts FROM projects WHERE id = ?1",
             [id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            |r| {
+                let by = (set_by(r, 5)?, set_by(r, 7)?);
+                Ok((
+                    r.get(0)?,
+                    r.get(1)?,
+                    r.get(2)?,
+                    r.get(3)?,
+                    r.get(4)?,
+                    by.0,
+                    by.1,
+                ))
+            },
         )
         .optional()?;
-    let Some((name, folder, created, ci, merge)) = found else {
+    let Some((name, folder, created, ci, merge, ci_by, merge_by)) = found else {
         return Ok(None);
     };
     let mut stmt = conn.prepare_cached(
@@ -195,6 +247,8 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Project>, Error> {
         checks,
         ci,
         merge,
+        ci_by,
+        merge_by,
         created: crate::ids::utc(created),
     }))
 }
