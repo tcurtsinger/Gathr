@@ -77,7 +77,7 @@ fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
 }
 
 #[test]
-fn codex_wait_checks_require_one_approval_before_the_service_saves_or_runs_them() {
+fn codex_wait_checks_ask_once_in_ask_and_edits_and_are_codexs_own_in_auto_and_full() {
     for mode in ["ask", "edits", "auto", "full"] {
         let data = TempDir::new();
         let (service, chat) = setup(&data.0, &held(&data.0), mode);
@@ -102,9 +102,13 @@ fn codex_wait_checks_require_one_approval_before_the_service_saves_or_runs_them(
                 json!({"check":check,"then":"Continue"}),
             )
         };
-        if mode == "full" {
+        // Full admits it; in Auto it was Codex's own reviewer's to judge before the call got here.
+        if mode == "full" || mode == "auto" {
             let answer = ask();
-            assert!(text(&answer).starts_with("Waiting"), "Full asked: {answer}");
+            assert!(
+                text(&answer).starts_with("Waiting"),
+                "{mode} asked: {answer}"
+            );
         } else {
             let request = std::thread::spawn(ask.clone());
             let history = service.wait_for(&chat, 5, "wait check to ask before it runs", |h| {
@@ -157,8 +161,10 @@ fn codex_wait_checks_require_one_approval_before_the_service_saves_or_runs_them(
             );
         }
         std::fs::write(data.0.join("go"), "").unwrap();
-        if mode == "full" {
-            until(5, "Full check to execute", || marker.exists().then_some(()));
+        if mode == "full" || mode == "auto" {
+            until(5, "the admitted check to execute", || {
+                marker.exists().then_some(())
+            });
         }
     }
 }
@@ -373,7 +379,8 @@ fn shutdown_refuses_a_wait_check_whose_approval_is_still_open() {
 #[test]
 fn a_known_read_only_wait_check_saves_without_asking() {
     let data = TempDir::new();
-    let (service, chat) = setup(&data.0, &held(&data.0), "auto");
+    // Edits, where any other check asks: in Auto none does.
+    let (service, chat) = setup(&data.0, &held(&data.0), "edits");
     let path = format!("/api/chats/{chat}/messages");
     let send = service.send("POST", &path, json!({"text":"Wait for the check"}));
     assert_eq!(send.status, 200, "{}", send.body);

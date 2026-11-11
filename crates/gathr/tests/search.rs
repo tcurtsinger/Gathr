@@ -264,32 +264,37 @@ fn archived_chats_are_in_by_default_and_marked() {
 #[test]
 fn a_folder_from_before_search_is_found_after_the_upgrade() {
     let dir = TempDir::new();
-    let conn = store(&dir);
-    let old = say(&conn, "road", "user", "gravel from before");
-    say(&conn, "road", "assistant", "tool-free reply");
-    // The schema as 0014 left it: no index, no triggers, and none of the later migrations' columns.
+    // The schema as 0014 left it, from the migration files themselves in the order `db::open`
+    // runs them, so a later migration never needs undoing here.
+    let folder = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+    let mut files: Vec<_> = std::fs::read_dir(folder)
+        .unwrap()
+        .map(|file| file.unwrap().path())
+        .collect();
+    files.sort();
+    assert!(
+        files[13].ends_with("0014_agent_folder.sql"),
+        "the 14th migration is {:?}",
+        files[13]
+    );
+    let conn = Connection::open(dir.0.join("gathr.db")).unwrap();
+    for file in &files[..14] {
+        conn.execute_batch(&std::fs::read_to_string(file).unwrap())
+            .unwrap();
+    }
     conn.execute_batch(
-        "DROP TRIGGER message_search_insert; DROP TRIGGER message_search_delete;
-         DROP TRIGGER message_search_update; DROP TABLE message_search;
-         DROP TABLE project_checks; DROP TABLE project_check_allowed; ALTER TABLE projects DROP COLUMN ci;
-         ALTER TABLE projects DROP COLUMN merge_method;
-         ALTER TABLE projects DROP COLUMN ci_source; ALTER TABLE projects DROP COLUMN ci_set_ts;
-         ALTER TABLE projects DROP COLUMN merge_source; ALTER TABLE projects DROP COLUMN merge_set_ts; ALTER TABLE tasks DROP COLUMN heard_in;
-         ALTER TABLE tasks DROP COLUMN pr_head;
-         DROP TABLE handoffs; DROP TABLE check_steps; DROP TABLE check_runs; DROP TABLE check_caches;
-         DROP TABLE pr_cleanup; DROP TABLE agent_context;
-         PRAGMA user_version = 14;",
-    )
-    .unwrap();
-    let newer = say(&conn, "road", "user", "gravel saved before the upgrade too");
-    // Last, as saving a message reads the column.
-    conn.execute_batch(
-        "ALTER TABLE messages DROP COLUMN to_agent; ALTER TABLE messages DROP COLUMN copy_of;",
+        "PRAGMA user_version = 14;
+         INSERT INTO chats (id, title, created_ts) VALUES ('road', 'Gravel road', 1);
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts) VALUES ('t1', 'road', 'x', 'done', 1);
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES
+             ('old', 'road', 't1', 1, 'user', 'text', 'gravel from before'),
+             ('reply', 'road', 't1', 2, 'assistant', 'text', 'tool-free reply'),
+             ('newer', 'road', 't1', 3, 'user', 'text', 'gravel saved before the upgrade too');",
     )
     .unwrap();
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
-    assert_eq!(found(&conn, "gravel"), [newer, old]);
+    assert_eq!(found(&conn, "gravel"), ["newer", "old"]);
     index_matches_messages(&conn);
 }
 
