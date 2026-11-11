@@ -153,7 +153,7 @@ pub async fn merge(
              if it moved or was retargeted, its new head needs a review and its checks (ref {reference})."
         ));
     }
-    match settle(chats, caller, pr, &head).await {
+    match settle(chats, caller, pr, &head, &view).await {
         Ok(()) => {
             chats.writer.record(event.ok());
             Ok(format!("{merged_line}: its tasks are settled."))
@@ -177,7 +177,7 @@ fn short(commit: &str) -> String {
 
 /// The PR as GitHub has it, open: its view, head and base, or why it can't be merged.
 async fn open_pr(pr: i64, repo: &Path) -> Result<(Value, String, String), String> {
-    let fields = "state,headRefOid,baseRefName,statusCheckRollup";
+    let fields = "state,headRefOid,baseRefName,statusCheckRollup,headRefName,isCrossRepository";
     let view = crate::coord::github(&["pr", "view", &pr.to_string(), "--json", fields], repo)
         .await
         .map_err(|why| format!("#{pr} wasn't read from GitHub: {why}"))?;
@@ -463,9 +463,16 @@ async fn squash(pr: i64, head: &str, repo: &Path) -> Result<String, String> {
 /// The PR's tasks in the chat, settled now as a PR look would after its merge (#100's path). Their
 /// givers hear back, but never the agent that merged: it knows (G159), so the turn saved to tell
 /// it goes with the same step, before anything starts it.
-async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) -> Result<(), String> {
+async fn settle(
+    chats: &Arc<Chats>,
+    caller: &Caller,
+    pr: i64,
+    head: &str,
+    view: &Value,
+) -> Result<(), String> {
     let (chat, h) = (caller.chat.clone(), head.to_string());
     let merger = caller.agent.clone();
+    let view = view.clone();
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
     let starts = chats
         .writer
@@ -479,6 +486,7 @@ async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) -> Res
                 .query_map(rusqlite::params![chat, pr], |r| r.get(0))?
                 .collect::<Result<_, _>>()?;
             drop(stmt);
+            crate::cleanup::queue(c, &chat, &view, &trace)?;
             let mut starts = Vec::new();
             for number in numbers {
                 starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), &trace)?);
@@ -499,6 +507,10 @@ async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) -> Res
         .await;
     match starts {
         Some(Ok(starts)) => {
+            let clean = chats.clone();
+            tokio::spawn(async move {
+                crate::cleanup::sweep(&clean, None).await;
+            });
             chats.start(starts);
             Ok(())
         }

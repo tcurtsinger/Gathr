@@ -156,6 +156,7 @@ async fn change(
         team,
         ci,
         merge,
+        by: Some(projects::PERSON.to_string()),
     };
     let key = id.clone();
     let saved = db(&s, &t, ERROR, move |conn| {
