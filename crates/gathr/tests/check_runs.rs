@@ -279,3 +279,25 @@ fn runs_of_one_project_never_overlap() {
         .replace('\r', "");
     assert_eq!(seen, "start\nend\nstart\nend\n", "two runs overlapped");
 }
+
+#[test]
+fn a_commits_runs_are_found_however_many_newer_runs_the_project_has() {
+    let dir = TempDir::new();
+    let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
+    let made = gathr::projects::create(&mut conn, "Made-up", "C:/made-up", &[], "gathr").unwrap();
+    let old = gathr::check_runs::start(&conn, &made.id, "0ld0000", "t").unwrap();
+    gathr::check_runs::step(&conn, &old, (0, "npm test"), Some(1), 27_000, "Expected 42").unwrap();
+    gathr::check_runs::end(&conn, &old, Some("npm test: exit 1")).unwrap();
+    for n in 0..55 {
+        let run = gathr::check_runs::start(&conn, &made.id, &format!("new{n:04}"), "t").unwrap();
+        gathr::check_runs::end(&conn, &run, None).unwrap();
+    }
+
+    let all = gathr::check_runs::list(&conn, &made.id, None).unwrap();
+    assert_eq!(all.len(), 50, "the project's newest 50");
+    assert!(!all.iter().any(|r| r["head"] == "0ld0000"));
+    let at = gathr::check_runs::list(&conn, &made.id, Some("0ld0000")).unwrap();
+    assert_eq!(at.len(), 1, "{at:?}");
+    assert_eq!(at[0]["state"], "failed");
+    assert_eq!(logs(&at[0]), "Expected 42");
+}

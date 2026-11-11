@@ -34,10 +34,17 @@ const run = (more: Partial<CheckRun>): CheckRun => ({
   ...more,
 });
 let runs: CheckRun[] = [];
+let refuse = false;
+/** The service answers one commit's runs, as the task asks for them (Vale, #121: never the newest 50). */
 const served = () =>
-  vi.stubGlobal('fetch', async (path: string) =>
-    path === '/api/projects/p/checks/runs' ? new Response(JSON.stringify({ runs })) : new Response('{}'),
-  );
+  vi.stubGlobal('fetch', async (path: string) => {
+    if (path !== `/api/projects/p/checks/runs?head=${head}`) return new Response('{}');
+    if (refuse) {
+      const error = { error: 'Checks failed', why: 'made-up refusal', ref: 'made-up-ref' };
+      return new Response(JSON.stringify(error), { status: 500 });
+    }
+    return new Response(JSON.stringify({ runs: runs.filter((r) => r.head === head) }));
+  });
 
 test("a failed run says so with its reference, each command's exit and time, the failing one's log open", async () => {
   runs = [
@@ -85,4 +92,16 @@ test('a run at the commit shows as it goes: none yet, running, then passed when 
   for (const on of live) on({ type: 'checks', project: 'p', head, run: 'r1', state: 'passed' });
   await expect.element(page.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
   await expect.element(page.getByText('2 commands · 2m 15s')).toBeVisible();
+});
+
+test("a refused load says why; the next live event's load clears it", async () => {
+  runs = [run({})];
+  refuse = true;
+  served();
+  const screen = await render(<TaskChecks project="p" head={head} onReference={() => {}} />);
+  await expect.element(screen.getByText('made-up refusal')).toBeVisible();
+  refuse = false;
+  for (const on of live) on({ type: 'checks', project: 'p', head, run: 'r1', state: 'passed' });
+  await expect.element(page.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
+  await expect.element(page.getByText('made-up refusal')).not.toBeInTheDocument();
 });

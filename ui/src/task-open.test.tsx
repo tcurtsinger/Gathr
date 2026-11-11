@@ -73,7 +73,7 @@ function service() {
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     if (path === '/api/chats/c/tasks') return json({ tasks: [task], waits: [] });
-    if (path === '/api/projects/p/checks/runs') return json({ runs: [run] });
+    if (path === `/api/projects/p/checks/runs?head=${head}`) return json({ runs: [run] });
     if (path === '/api/chats/c') return json(history);
     return json({});
   });

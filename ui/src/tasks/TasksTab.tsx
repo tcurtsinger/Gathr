@@ -166,9 +166,31 @@ type Opened = NonNullable<Props['opened']> &
 
 /** An agent's task the person opened, kept live as the chat's tasks change. */
 function OpenedTask({ chat, task: number, project, onBack, name, onSettle, onReference }: Opened) {
-  const { task, failure } = useTask(chat, number);
-  if (failure) return <FailureNotice failure={failure} onReference={onReference} />;
-  if (!task) return null;
+  const { tasks, task, failure } = useTask(chat, number);
+  // Loading, refused or gone, Back still leads out.
+  if (!task)
+    return (
+      <section className="tasks" aria-label={`Task #${number}`}>
+        <div className="tasks-scroll">
+          <div className="tasks-page">
+            {failure ? (
+              <FailureNotice failure={failure} onReference={onReference} />
+            ) : (
+              <p className="muted" role="status">
+                {tasks ? `Task #${number} isn't in this chat` : 'Loading'}
+              </p>
+            )}
+          </div>
+        </div>
+        <footer className="tasks-footer">
+          <div className="tasks-pager">
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back
+            </Button>
+          </div>
+        </footer>
+      </section>
+    );
   return (
     <TaskView
       key={task.number}

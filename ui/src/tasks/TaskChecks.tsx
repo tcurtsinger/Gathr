@@ -28,7 +28,14 @@ export function TaskChecks({ project, head, onReference }: Props) {
   const [runs, setRuns] = useState<CheckRun[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const title = useId();
-  const load = useCallback(() => api.checkRuns(project).then(setRuns, setFailure), [project]);
+  const load = useCallback(
+    () =>
+      api.checkRuns(project, head).then((found) => {
+        setRuns(found);
+        setFailure(null);
+      }, setFailure),
+    [project, head],
+  );
   useEffect(() => {
     load();
     return listen((e) => {
@@ -39,7 +46,7 @@ export function TaskChecks({ project, head, onReference }: Props) {
   if (failure) return <FailureNotice failure={failure} onReference={onReference} />;
   if (runs === null) return null;
   // Newest first: a commit run again after a stop shows its latest run.
-  const run = runs.find((r) => r.head === head);
+  const run = runs[0];
   if (!run) return <p className="muted task-checks">No checks run at this commit yet</p>;
   const Icon = icons[run.state];
   const total = run.steps.reduce((sum, s) => sum + s.duration_ms, 0);

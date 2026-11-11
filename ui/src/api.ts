@@ -343,9 +343,12 @@ export const api = {
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
   saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
-  /** The project's newest 50 checks runs, newest first. */
-  checkRuns: (id: string) =>
-    call<{ runs: CheckRun[] }>('GET', `/api/projects/${id}/checks/runs`).then((r) => r.runs),
+  /** One commit's checks runs, newest first, however many the project has had since. */
+  checkRuns: (id: string, head: string) =>
+    call<{ runs: CheckRun[] }>(
+      'GET',
+      `/api/projects/${id}/checks/runs?head=${encodeURIComponent(head)}`,
+    ).then((r) => r.runs),
   caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),

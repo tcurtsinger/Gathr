@@ -50,14 +50,22 @@ pub fn routes() -> Router<Arc<State>> {
         )
 }
 
+#[derive(serde::Deserialize)]
+struct At {
+    /// One commit's runs, however old, rather than the project's newest.
+    head: Option<String>,
+}
+
 async fn runs(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
     Id(project): Id<String>,
+    axum::extract::Query(at): axum::extract::Query<At>,
 ) -> Answer {
     crate::projects::find(&s, &t, &project, "Checks failed").await?;
     db(&s, &t, "Checks failed", move |c| {
-        Ok(json!({ "runs": gathr::check_runs::list(c, &project)? }))
+        let listed = gathr::check_runs::list(c, &project, at.head.as_deref())?;
+        Ok(json!({ "runs": listed }))
     })
     .await
 }

@@ -95,21 +95,28 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
   );
 }
 
-/** The chat's task by number, live: it moves with each change to the chat's tasks. */
-export function useTask(chat: string, number: number | null) {
+/** The chat's task by number, live: it moves with each change to the chat's tasks. A load that works,
+ * or a live list, clears an earlier failure; another task starts afresh. */
+export function useTask(chat: string, number: number) {
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   useEffect(() => {
-    if (number === null) return;
     let current = true;
+    setTasks(null);
+    setFailure(null);
+    const got = (list: Task[]) => {
+      if (!current) return;
+      setTasks(list);
+      setFailure(null);
+    };
     const load = () =>
       api.tasks(chat).then(
-        (t) => current && setTasks(t.tasks),
+        (t) => got(t.tasks),
         (f: Failure) => current && setFailure(f),
       );
     load();
     const off = listen((e) => {
-      if (e.type === 'tasks' && e.chat === chat) setTasks(e.tasks);
+      if (e.type === 'tasks' && e.chat === chat) got(e.tasks);
       if (e.type === 'lagged') load();
     });
     return () => {
@@ -117,5 +124,5 @@ export function useTask(chat: string, number: number | null) {
       off();
     };
   }, [chat, number]);
-  return { task: tasks?.find((t) => t.number === number) ?? null, failure };
+  return { tasks, task: tasks?.find((t) => t.number === number) ?? null, failure };
 }
