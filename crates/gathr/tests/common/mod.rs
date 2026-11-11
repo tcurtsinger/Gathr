@@ -352,8 +352,18 @@ pub fn next_live(socket: &mut std::net::TcpStream) -> Value {
     }
 }
 
+/// `git` without the repository the tests themselves may run inside (a hook, `git bisect run`):
+/// with its `GIT_DIR`, a test's `git init` would act on the real repository (S37).
+pub fn git_command() -> Command {
+    let mut command = Command::new("git");
+    for var in gathr::platform::env::LOCAL_GIT_VARS {
+        command.env_remove(var);
+    }
+    command
+}
+
 pub fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
+    let out = git_command()
         .args([
             "-c",
             "user.name=Test",

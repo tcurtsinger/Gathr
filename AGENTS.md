@@ -23,7 +23,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
   - `cargo fmt --all --check`
   - `cargo clippy --workspace --all-targets --locked -- -D warnings`
   - `cargo test --workspace --locked`. A failing test that started a service prints the service's last 50 events, and with `GATHR_TEST_KEEP=<folder>` set keeps a copy of its data folder there; in CI, a failed Rust job keeps them as the artifact `rust-failures-<Windows|macOS>`. A request that times out names itself, how long it waited and how many bytes came back.
-  - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters). Stage new source files first: this check reads `git ls-files`.
+  - `bash scripts/check-file-size.sh` (source files up to 1,000 lines, lines up to 200 characters, and no NUL byte in any tracked text file). Stage new source files first: this check reads `git ls-files`.
   - `node scripts/scrub-frames.check.mjs` (a recording's scrub keeps the person's own names out)
   - `node scripts/registry.check.mjs` (the files in `ui/src/registry` are as published, [0030](docs/decisions/0030-ui-foundation.md))
   - in `ui/`: `npx biome ci`, `npx tsc --noEmit`, `npx vitest run`, `npx vite build`. The tests run in a real browser: Edge on Windows (already installed), WebKit on macOS (`npx playwright install webkit` once). A failing test leaves its screenshot in `ui/.vitest/`; in CI, a failed UI job keeps that folder as the artifact `ui-failures-<Windows|macOS>`.
@@ -33,6 +33,7 @@ Status: early. Product, design and architecture come first; see `docs/`.
 - **On a Mac without Rust:** each macOS run keeps its build for 7 days as the artifact `gathr-macos` (`gh run download <run> -n gathr-macos`). Start `gathrd` in the Mac's login session, not an SSH shell: over SSH the Keychain is locked, so every account reads as signed out. From SSH, run it as a launchd job in that session (`launchctl bootstrap gui/$(id -u) <plist>`, with `RunAtLoad`), and `launchctl bootout` it after. To run it installed, download the same run's `gathr-ui` artifact too, as a folder named `ui` beside the binaries, and open `gathr-app` (no Node needed). For the dev window: copy the same commit's `ui/` and `designs/tokens.css` (the UI imports it) beside the build, keeping their folders, run `npm ci` in it, then from that folder `./gathr dev --port <port> --data <folder> --window` in Terminal (it uses the `ui` folder it's started in, as the build came from another computer).
 - **Commit messages on Windows:** write the message to a file and use `git commit -F <file>`; the same for scripts, write them to a file and run that. Inline multi-line strings get mangled by the shell.
 - **PR screenshots:** attach them with `gh pr edit <n> --attach <file>`.
+- **Git in tests:** run it through `common::git_command()` (or `common::git`), which drops git's repository variables (`gathr::platform::env::LOCAL_GIT_VARS`), so a test run from a git hook or `git bisect run` never touches the real repository (S37). The service drops them from every child's environment the same way (`env::fresh`).
 - **Flaky is broken.** A test that fails at random is fixed or deleted the day it's seen, never rerun until green. A failing test says which test it is, what it expected and what it got ([docs/testing.md](docs/testing.md)).
 
 ## Run, use and check it

@@ -283,3 +283,21 @@ test('a wait check approval keeps its exact command through live updates and rel
     await expect.element(card.getByRole('button', { name: 'Deny', exact: true })).toBeEnabled();
   }
 });
+
+test("a Claude agent's wait check gets the wait check card, with its command and note", async () => {
+  const check = 'gh pr view 104 --json mergeStateStatus -q .mergeStateStatus | grep -qv BEHIND';
+  const state = fromHistory({
+    chat: 'c',
+    messages: [said('u', 'user', 'Wait for it')],
+    turns: Object.values(turn('running')),
+    members: [],
+    approvals: [{ turn: 't', request_id: 'hook-1', tool: 'mcp__gathr__wait', input: { check } }],
+  });
+  const screen = await render(<View state={state} />);
+  const card = screen.getByRole('group', { name: 'Allow wait check?' });
+  await expect.element(card.getByText(check, { exact: true })).toBeVisible();
+  await expect
+    .element(card.getByText('Runs in sh (Git Bash on Windows), outside the engine sandbox.'))
+    .toBeVisible();
+  expect(card.getByText(/mcp__gathr__wait/).query()).toBeNull();
+});
