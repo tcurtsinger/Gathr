@@ -47,15 +47,17 @@ pub fn ask(
 }
 
 /// The rule that lets a wait's check run without asking (owner, task 1450): one of a few commands
-/// that only read, alone, by its plain name, with nothing the shell would chain, redirect, expand or
-/// substitute, and none of their options that write a file, open a browser, reach another repo or
-/// run a program the repository's config names (a diff driver, textconv, gpg). It runs with
-/// `READ_ONLY_CONFIG` over the repository's own. Anything else is `None` and asks as before.
+/// that only read, by its plain name, made only of letters, digits, spaces and `-_./:=%,@+^~` (it
+/// runs as these words, without a shell), with none of their options that write a file, open a browser,
+/// reach another repo or run a program the repository names (a diff driver, textconv, gpg). It
+/// runs with `read_only_env` over the repository's own config. Anything else is `None` and asks.
 pub fn read_only_check(command: &str) -> Option<&'static str> {
-    const SHELL: [char; 14] = [
-        ';', '&', '|', '<', '>', '`', '$', '(', ')', '{', '}', '\n', '\r', '\\',
-    ];
-    if command.contains(SHELL) {
+    let plain =
+        |c: char| c.is_ascii_alphanumeric() || c.is_ascii_whitespace() && c != '\n' && c != '\r';
+    if !command
+        .chars()
+        .all(|c| plain(c) || "-_./:=%,@+^~".contains(c))
+    {
         return None;
     }
     let words: Vec<&str> = command.split_whitespace().collect();
@@ -68,11 +70,14 @@ pub fn read_only_check(command: &str) -> Option<&'static str> {
         _ => return None,
     };
     let fine = |word: &&str| match rule {
-        // No diff, stat or signature: those run what the repository's config names.
+        // No diff, stat or signature: those run what the repository names.
         "git log" => {
-            let name = word.split('=').next().unwrap_or(word);
+            let (name, value) = word.split_once('=').unwrap_or((word, ""));
             let count = word.len() > 1 && word[1..].chars().all(|c| c.is_ascii_digit());
-            !word.contains("%G") && (!word.starts_with('-') || count || LOG_OPTIONS.contains(&name))
+            let format = matches!(name, "--format" | "--pretty");
+            !word.contains("%G")
+                && (!word.starts_with('-') || count || LOG_OPTIONS.contains(&name))
+                && (!format || own_format(value))
         }
         "gh pr view" | "gh pr checks" => {
             let lower = word.to_lowercase();
@@ -83,6 +88,25 @@ pub fn read_only_check(command: &str) -> Option<&'static str> {
         _ => true,
     };
     rest.iter().all(fine).then_some(rule)
+}
+
+/// A `git log` format that is git's own, never a `pretty.<name>` the repository's config defines
+/// (which may verify signatures with `%G`).
+fn own_format(value: &str) -> bool {
+    const BUILT_IN: [&str; 8] = [
+        "oneline",
+        "short",
+        "medium",
+        "full",
+        "fuller",
+        "reference",
+        "email",
+        "raw",
+    ];
+    BUILT_IN.contains(&value)
+        || value.starts_with("format:")
+        || value.starts_with("tformat:")
+        || value.contains('%')
 }
 
 /// `git log`'s options a read-only check may use: which commits, and how each is named.
@@ -115,15 +139,25 @@ const LOG_OPTIONS: [&str; 26] = [
     "--",
 ];
 
-/// Config a read-only check runs with, over the repository's own (which an agent can change):
-/// no fsmonitor hook, no pager, no signature check. As `GIT_CONFIG_*` pairs.
-pub fn read_only_config() -> Vec<(String, String)> {
+/// The empty tree's id (SHA-1): attributes read from it name no filter, textconv or diff driver.
+const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+/// What a read-only check runs with, over what the repository says (which an agent can change):
+/// no fsmonitor hook, pager, signature check or configured default format, and attributes from the
+/// empty tree, so no filter or diff driver runs (`GIT_ATTR_SOURCE`, checked on git 2.55; an older
+/// git ignores it). A repository on SHA-256 has no such tree: git refuses the check, which then
+/// never passes.
+pub fn read_only_env() -> Vec<(String, String)> {
     let pairs = [
         ("core.fsmonitor", "false"),
         ("core.pager", "cat"),
         ("log.showSignature", "false"),
+        ("format.pretty", "medium"),
     ];
-    let mut vars = vec![("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string())];
+    let mut vars = vec![
+        ("GIT_ATTR_SOURCE".to_string(), EMPTY_TREE.to_string()),
+        ("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string()),
+    ];
     for (i, (key, value)) in pairs.iter().enumerate() {
         vars.push((format!("GIT_CONFIG_KEY_{i}"), key.to_string()));
         vars.push((format!("GIT_CONFIG_VALUE_{i}"), value.to_string()));
@@ -571,6 +605,8 @@ mod tests {
             ("git status --porcelain", "git status"),
             ("git log -1 --format=%H origin/main", "git log"),
             ("git log --oneline -n 5 --first-parent main", "git log"),
+            ("git log --pretty=oneline HEAD~1..HEAD", "git log"),
+            ("git log --format=format:%h@%an", "git log"),
             ("git rev-parse HEAD", "git rev-parse"),
             ("  git rev-parse   HEAD  ", "git rev-parse"),
         ] {
@@ -596,6 +632,13 @@ mod tests {
             "git log --stat",
             "git log --show-signature",
             "git log --format=%G?",
+            "git log --oneline *",
+            "git log --oneline ?",
+            "git status [ab]",
+            "git log \"--output=x\"",
+            "git log '--output=x'",
+            "git log --pretty=mine",
+            "git log --format=mine",
             "gh pr view 1 --web",
             "gh pr checks 1 -w",
             "gh pr view 1 --repo other/repo",
@@ -609,10 +652,11 @@ mod tests {
         }
     }
 
-    /// A repository's own config can name a program git runs (here `core.fsmonitor` for `git
-    /// status`). An agent can set it, so a read-only check runs with `read_only_config` over it.
+    /// A repository's own config and attributes can name programs git runs: `core.fsmonitor` and a
+    /// clean filter, each on `git status`. An agent can set both, so a read-only check runs with
+    /// `read_only_env` over them.
     #[test]
-    fn a_read_only_check_never_runs_a_program_the_repositorys_config_names() {
+    fn a_read_only_check_never_runs_a_program_the_repository_names() {
         let root = std::env::temp_dir().join(format!("gathr-c11-{}", crate::ids::span_id()));
         std::fs::create_dir_all(&root).unwrap();
         let git = |args: &[&str], over: &[(String, String)]| {
@@ -626,23 +670,61 @@ mod tests {
                 .envs(over.iter().cloned());
             command.output().unwrap()
         };
+        let marks = || ["fsmonitor", "filter"].map(|m| root.join(m).exists());
         git(&["init", "-q"], &[]);
-        git(
-            &["config", "core.fsmonitor", "echo ran > marker; exit 1"],
-            &[],
+        for (key, value) in [
+            ("user.name", "t"),
+            ("user.email", "t@example.invalid"),
+            ("core.autocrlf", "false"),
+            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
+            ("filter.x.clean", "echo > filter; cat"),
+        ] {
+            git(&["config", key, value], &[]);
+        }
+        std::fs::write(
+            root.join(".gitattributes"),
+            "*.txt filter=x
+",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("a.txt"),
+            "a
+",
+        )
+        .unwrap();
+        git(&["add", "."], &[]);
+        git(&["commit", "-qm", "a"], &[]);
+        let change = |text: &str| {
+            for m in ["fsmonitor", "filter"] {
+                let _ = std::fs::remove_file(root.join(m));
+            }
+            // The same size, a second later: only reading the file tells git it changed.
+            std::thread::sleep(std::time::Duration::from_millis(1100));
+            std::fs::write(root.join("a.txt"), text).unwrap();
+        };
+        change(
+            "b
+",
         );
-        git(&["status"], &read_only_config());
-        let after_guarded = root.join("marker").exists();
-        git(&["status"], &[]);
-        let after_plain = root.join("marker").exists();
+        git(&["status", "--porcelain"], &read_only_env());
+        let guarded = marks();
+        change(
+            "c
+",
+        );
+        git(&["status", "--porcelain"], &[]);
+        let plain = marks();
         let _ = std::fs::remove_dir_all(&root);
-        assert!(
-            after_plain,
-            "the hook didn't run even unguarded: the test proves nothing"
+        assert_eq!(
+            plain,
+            [true, true],
+            "unguarded, git didn't run them: the test proves nothing"
         );
-        assert!(
-            !after_guarded,
-            "a read-only check ran the repository's fsmonitor hook"
+        assert_eq!(
+            guarded,
+            [false, false],
+            "a read-only check ran a program the repository names"
         );
     }
 }

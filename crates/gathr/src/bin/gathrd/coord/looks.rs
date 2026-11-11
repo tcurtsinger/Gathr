@@ -343,13 +343,21 @@ async fn moved_past(
 /// A check's command: exit 0 is met; any other exit is "not yet" (G69); one that can't run or
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
-    let (shell, mut vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
-    // A check let through unasked as read-only runs with git's own programs switched off (C11).
-    if gathr::approvals::read_only_check(command).is_some() {
-        let config = gathr::approvals::read_only_config();
-        vars.extend(config.into_iter().map(|(k, v)| (k.into(), v.into())));
-    }
-    let ran = gathr::run::script(&shell, command, dir, &vars, LIMIT).await?;
+    let ran = match gathr::approvals::read_only_check(command) {
+        // Let through unasked (C11): run as the very words that were checked, with no shell to
+        // expand them, and with what the repository names switched off.
+        Some(_) => {
+            let words: Vec<&str> = command.split_whitespace().collect();
+            let mut vars = vars.clone();
+            let guard = gathr::approvals::read_only_env().into_iter();
+            vars.extend(guard.map(|(k, v)| (k.into(), v.into())));
+            run(Path::new(words[0]), &words[1..], dir, &vars, LIMIT).await?
+        }
+        None => {
+            let (shell, vars) = platform::shell(vars).ok_or("Git Bash wasn't found beside git")?;
+            gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
+        }
+    };
     if ran.code != Some(0) {
         return Ok(Look::NotYet { head: None });
     }
@@ -446,5 +454,52 @@ mod tests {
             unreachable!()
         };
         assert_eq!(said, "#7 is up to date with main");
+    }
+
+    /// Vale, #116: a check let through as read-only runs as its checked words, not through `sh`,
+    /// with the repository's own programs off. Here `git status` on a repository whose
+    /// fsmonitor hook and clean filter each leave a mark.
+    #[tokio::test]
+    async fn a_read_only_check_runs_as_its_words_with_the_repositorys_programs_off() {
+        let root = std::env::temp_dir().join(format!("gathr-c11-run-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let git = |args: &[&str]| {
+            let mut command = std::process::Command::new("git");
+            command
+                .args(args)
+                .current_dir(&root)
+                .env_clear()
+                .envs(vars.iter().cloned());
+            assert!(command.output().unwrap().status.success(), "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        for (key, value) in [
+            ("user.name", "t"),
+            ("user.email", "t@example.invalid"),
+            ("core.autocrlf", "false"),
+            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
+            ("filter.x.clean", "echo > filter; cat"),
+        ] {
+            git(&["config", key, value]);
+        }
+        std::fs::write(root.join(".gitattributes"), "*.txt filter=x\n").unwrap();
+        std::fs::write(root.join("a.txt"), "a\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "a"]);
+        for mark in ["fsmonitor", "filter"] {
+            let _ = std::fs::remove_file(root.join(mark));
+        }
+        std::thread::sleep(Duration::from_millis(1100));
+        std::fs::write(root.join("a.txt"), "b\n").unwrap();
+        let looked = check("git status --porcelain", &root, &vars).await;
+        let marks = ["fsmonitor", "filter"].map(|m| root.join(m).exists());
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(matches!(looked, Ok(Look::Met(_))), "{:?}", looked.err());
+        assert_eq!(
+            marks,
+            [false, false],
+            "the check ran a program the repository names"
+        );
     }
 }
