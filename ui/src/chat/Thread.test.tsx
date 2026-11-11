@@ -85,6 +85,56 @@ test('a reply is formatted, and the HTML or script links in it do nothing', asyn
   expect((window as { ran?: number }).ran).toBeUndefined();
 });
 
+/** The words of an element's text that the layout broke across lines. */
+function brokenWords(element: Element) {
+  const broken: string[] = [];
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    for (const word of (node.textContent ?? '').matchAll(/\S+/g)) {
+      const range = document.createRange();
+      range.setStart(node, word.index);
+      range.setEnd(node, word.index + word[0].length);
+      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top)));
+      if (lines.size > 1) broken.push(word[0]);
+    }
+  }
+  return broken;
+}
+
+test('a table shows whole at 640px: words unbroken, header in view, sideways scroll only when too wide', async () => {
+  // The owner's table (ux-issues 24), headers as long as the ones that squeezed its first column.
+  const owners = [
+    '| | Case 1: the PR head pushed to main as a fast-forward | Case 2: a merge commit of the head pushed onto main |',
+    '|---|---|---|',
+    '| Merged by | the account that pushed | the account that pushed |',
+    "| Merge commit | the PR's own head commit | the pushed merge commit |",
+  ].join('\n');
+  const wide = [
+    '| Check | Windows | macOS | Notes | Link |',
+    '|---|---|---|---|---|',
+    '| `cargo clippy --workspace --all-targets` | passed | passed | the macOS runner took 14 minutes |',
+  ].join('\n');
+  const link = ' `https://github.com/tcurtsinger/Gathr/actions/runs/123456789` |';
+  const body = `${owners}\n\n${wide}${link}`;
+  const message: Message = { id: 'm', turn: 't', time: '', role: 'assistant', kind: 'text', body };
+  const screen = await render(
+    <div style={{ width: 640 }}>
+      <View state={{ ...empty, messages: [message] }} />
+    </div>,
+  );
+  await expect.element(screen.getByRole('cell', { name: 'Merged by' })).toBeVisible();
+  const [table, tooWide] = document.querySelectorAll('.reply table');
+  const box = (t: Element) => t.parentElement as HTMLElement;
+  for (const t of [table, tooWide]) {
+    expect(brokenWords(t)).toEqual([]);
+    expect(box(t).scrollHeight).toBe(box(t).clientHeight);
+  }
+  expect(box(table).scrollWidth).toBe(box(table).clientWidth);
+  expect(box(tooWide).scrollWidth).toBeGreaterThan(box(tooWide).clientWidth);
+  // The wide one scrolls in its frame, not by pushing the chat wider than its 640px.
+  expect(box(tooWide).getBoundingClientRect().right).toBeLessThanOrEqual(640);
+});
+
 test('an engine that exits mid-reply keeps the text shown and fails with its reference', async () => {
   const screen = await render(<View state={replay(exitsMidReply)} />);
   await expect.element(screen.getByText('Already visible answer')).toBeVisible();
