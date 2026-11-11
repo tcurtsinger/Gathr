@@ -69,7 +69,7 @@ pub struct WaitFor {
     up_to_date: Option<bool>,
     /// Until this command exits 0, run every few minutes in your folder by `sh` (Git Bash on
     /// Windows, never PowerShell or cmd): write it for that shell. One read-only command alone
-    /// (`gh pr view`, `gh pr checks`, `git status`, `git log`, `git rev-parse`) runs without
+    /// (`gh pr view`, `gh pr checks`, `git log`, `git rev-parse`) runs without
     /// asking the person; anything else asks first.
     check: Option<String>,
     /// What you'll do then: you're told it when woken.

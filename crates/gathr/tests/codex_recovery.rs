@@ -380,16 +380,16 @@ fn a_known_read_only_wait_check_saves_without_asking() {
     let (port, token) = (service.info.port, first_token(&data.0));
 
     let wait = |check: &str| json!({"check": check, "then": "Continue"});
-    let answer = call_tool(port, &token, "wait", wait("git status --porcelain"));
+    let answer = call_tool(port, &token, "wait", wait("git log -1 --oneline"));
     assert!(text(&answer).starts_with("Waiting"), "{answer}");
     let history = service.call("GET", &format!("/api/chats/{chat}")).json();
     assert_eq!(history["approvals"], json!([]), "a read-only check asked");
     let query = "SELECT attrs FROM event_log WHERE name = 'gathr.approvals.check'";
     let (ok, rows) = common::gathr(&data.0, &["diag", "query", query]);
     let allowed = rows["rows"][0]["attrs"]["allowed_by"].clone();
-    assert!(ok && allowed == "read-only: git status", "{rows}");
+    assert!(ok && allowed == "read-only: git log", "{rows}");
 
-    let redirected = wait("git status --porcelain > out.txt");
+    let redirected = wait("git log -1 --oneline > out.txt");
     let asking = std::thread::spawn(move || call_tool(port, &token, "wait", redirected));
     let history = service.wait_for(&chat, 5, "the redirected check to ask", |h| {
         !h["approvals"].as_array().unwrap().is_empty()

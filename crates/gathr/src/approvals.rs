@@ -64,7 +64,6 @@ pub fn read_only_check(command: &str) -> Option<&'static str> {
     let (rule, rest) = match words.as_slice() {
         ["gh", "pr", "view", rest @ ..] => ("gh pr view", rest),
         ["gh", "pr", "checks", rest @ ..] => ("gh pr checks", rest),
-        ["git", "status", rest @ ..] => ("git status", rest),
         ["git", "log", rest @ ..] => ("git log", rest),
         ["git", "rev-parse", rest @ ..] => ("git rev-parse", rest),
         _ => return None,
@@ -139,25 +138,17 @@ const LOG_OPTIONS: [&str; 26] = [
     "--",
 ];
 
-/// The empty tree's id (SHA-1): attributes read from it name no filter, textconv or diff driver.
-const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-
-/// What a read-only check runs with, over what the repository says (which an agent can change):
-/// no fsmonitor hook, pager, signature check or configured default format, and attributes from the
-/// empty tree, so no filter or diff driver runs (`GIT_ATTR_SOURCE`, checked on git 2.55; an older
-/// git ignores it). A repository on SHA-256 has no such tree: git refuses the check, which then
-/// never passes.
+/// What a read-only check runs with, over what the repository's config says (which an agent can
+/// change): no pager, signature check or configured default format. `git status` isn't read-only
+/// here: it runs any filter the repository names, from places outside the tree as well
+/// (`.git/info/attributes`, `core.attributesFile`), so it asks.
 pub fn read_only_env() -> Vec<(String, String)> {
     let pairs = [
-        ("core.fsmonitor", "false"),
         ("core.pager", "cat"),
         ("log.showSignature", "false"),
         ("format.pretty", "medium"),
     ];
-    let mut vars = vec![
-        ("GIT_ATTR_SOURCE".to_string(), EMPTY_TREE.to_string()),
-        ("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string()),
-    ];
+    let mut vars = vec![("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string())];
     for (i, (key, value)) in pairs.iter().enumerate() {
         vars.push((format!("GIT_CONFIG_KEY_{i}"), key.to_string()));
         vars.push((format!("GIT_CONFIG_VALUE_{i}"), value.to_string()));
@@ -602,7 +593,6 @@ mod tests {
         for (check, rule) in [
             ("gh pr view 12 --json state", "gh pr view"),
             ("gh pr checks 12", "gh pr checks"),
-            ("git status --porcelain", "git status"),
             ("git log -1 --format=%H origin/main", "git log"),
             ("git log --oneline -n 5 --first-parent main", "git log"),
             ("git log --pretty=oneline HEAD~1..HEAD", "git log"),
@@ -635,6 +625,8 @@ mod tests {
             "git log --oneline *",
             "git log --oneline ?",
             "git status [ab]",
+            "git status --porcelain",
+            "git status",
             "git log \"--output=x\"",
             "git log '--output=x'",
             "git log --pretty=mine",
@@ -650,81 +642,5 @@ mod tests {
             assert_eq!(read_only_check(check), None, "{check}");
             assert!(wait(check).is_some(), "{check}");
         }
-    }
-
-    /// A repository's own config and attributes can name programs git runs: `core.fsmonitor` and a
-    /// clean filter, each on `git status`. An agent can set both, so a read-only check runs with
-    /// `read_only_env` over them.
-    #[test]
-    fn a_read_only_check_never_runs_a_program_the_repository_names() {
-        let root = std::env::temp_dir().join(format!("gathr-c11-{}", crate::ids::span_id()));
-        std::fs::create_dir_all(&root).unwrap();
-        let git = |args: &[&str], over: &[(String, String)]| {
-            let mut command = std::process::Command::new("git");
-            for var in crate::platform::env::LOCAL_GIT_VARS {
-                command.env_remove(var);
-            }
-            command
-                .args(args)
-                .current_dir(&root)
-                .envs(over.iter().cloned());
-            command.output().unwrap()
-        };
-        let marks = || ["fsmonitor", "filter"].map(|m| root.join(m).exists());
-        git(&["init", "-q"], &[]);
-        for (key, value) in [
-            ("user.name", "t"),
-            ("user.email", "t@example.invalid"),
-            ("core.autocrlf", "false"),
-            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
-            ("filter.x.clean", "echo > filter; cat"),
-        ] {
-            git(&["config", key, value], &[]);
-        }
-        std::fs::write(
-            root.join(".gitattributes"),
-            "*.txt filter=x
-",
-        )
-        .unwrap();
-        std::fs::write(
-            root.join("a.txt"),
-            "a
-",
-        )
-        .unwrap();
-        git(&["add", "."], &[]);
-        git(&["commit", "-qm", "a"], &[]);
-        let change = |text: &str| {
-            for m in ["fsmonitor", "filter"] {
-                let _ = std::fs::remove_file(root.join(m));
-            }
-            // The same size, a second later: only reading the file tells git it changed.
-            std::thread::sleep(std::time::Duration::from_millis(1100));
-            std::fs::write(root.join("a.txt"), text).unwrap();
-        };
-        change(
-            "b
-",
-        );
-        git(&["status", "--porcelain"], &read_only_env());
-        let guarded = marks();
-        change(
-            "c
-",
-        );
-        git(&["status", "--porcelain"], &[]);
-        let plain = marks();
-        let _ = std::fs::remove_dir_all(&root);
-        assert_eq!(
-            plain,
-            [true, true],
-            "unguarded, git didn't run them: the test proves nothing"
-        );
-        assert_eq!(
-            guarded,
-            [false, false],
-            "a read-only check ran a program the repository names"
-        );
     }
 }

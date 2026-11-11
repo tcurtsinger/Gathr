@@ -456,11 +456,11 @@ mod tests {
         assert_eq!(said, "#7 is up to date with main");
     }
 
-    /// Vale, #116: a check let through as read-only runs as its checked words, not through `sh`,
-    /// with the repository's own programs off. Here `git status` on a repository whose
-    /// fsmonitor hook and clean filter each leave a mark.
+    /// Vale, #116: git takes a filter from places outside the tree (here `.git/info/attributes`)
+    /// and runs it on `git status`, so `git status` asks; a read-only check runs as its checked
+    /// words, not through `sh`, and runs nothing the repository names.
     #[tokio::test]
-    async fn a_read_only_check_runs_as_its_words_with_the_repositorys_programs_off() {
+    async fn a_read_only_check_runs_nothing_the_repository_names() {
         let root = std::env::temp_dir().join(format!("gathr-c11-run-{}", gathr::ids::span_id()));
         std::fs::create_dir_all(&root).unwrap();
         let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
@@ -483,23 +483,40 @@ mod tests {
         ] {
             git(&["config", key, value]);
         }
-        std::fs::write(root.join(".gitattributes"), "*.txt filter=x\n").unwrap();
         std::fs::write(root.join("a.txt"), "a\n").unwrap();
         git(&["add", "."]);
         git(&["commit", "-qm", "a"]);
-        for mark in ["fsmonitor", "filter"] {
-            let _ = std::fs::remove_file(root.join(mark));
-        }
-        std::thread::sleep(Duration::from_millis(1100));
-        std::fs::write(root.join("a.txt"), "b\n").unwrap();
-        let looked = check("git status --porcelain", &root, &vars).await;
-        let marks = ["fsmonitor", "filter"].map(|m| root.join(m).exists());
+        std::fs::write(root.join(".git/info/attributes"), "*.txt filter=x\n").unwrap();
+        let marks = || ["fsmonitor", "filter"].map(|m| root.join(m).exists());
+        let change = |text: &str| {
+            for mark in ["fsmonitor", "filter"] {
+                let _ = std::fs::remove_file(root.join(mark));
+            }
+            // The same size, a second later: only reading the file tells git it changed.
+            std::thread::sleep(Duration::from_millis(1100));
+            std::fs::write(root.join("a.txt"), text).unwrap();
+        };
+        change("b\n");
+        let looked = check("git log -1 --oneline", &root, &vars).await;
+        let read_only = marks();
+        change("c\n");
+        git(&["status", "--porcelain"]);
+        let status = marks();
         let _ = std::fs::remove_dir_all(&root);
+        assert_eq!(
+            status,
+            [true, true],
+            "git status didn't run them: the test proves nothing"
+        );
+        assert_eq!(
+            gathr::approvals::read_only_check("git status --porcelain"),
+            None
+        );
         assert!(matches!(looked, Ok(Look::Met(_))), "{:?}", looked.err());
         assert_eq!(
-            marks,
+            read_only,
             [false, false],
-            "the check ran a program the repository names"
+            "a read-only check ran a program the repository names"
         );
     }
 }
