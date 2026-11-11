@@ -919,3 +919,46 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
     let cancelled = tasks::cancel(&mut conn, None, fix, "not needed", T).unwrap();
     assert_eq!(to(&cancelled, "lead").len(), 1, "{cancelled:?}");
 }
+
+// Found in #100's own review: Vale's review gave the fix on the same PR. The fix, held on the merge,
+// waited on that open review while the review waited to hear back on the fix.
+#[test]
+fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let review = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "bo",
+        given_in: None,
+        parent: None,
+        kind: Kind::Review,
+        what: "Review #90",
+        why: None,
+        after: &[],
+        pr: Some(90),
+    };
+    let review = tasks::give(&mut conn, &review, T).unwrap().0.number;
+    tasks::started(&mut conn, review, T).unwrap();
+    turn(&conn, "bo-turn", "bo", Some(review), "running");
+    let fix = Give {
+        chat: "c",
+        giver: Some("bo"),
+        owner: "ann",
+        given_in: Some("bo-turn"),
+        parent: None,
+        kind: Kind::Work,
+        what: "Fix the note",
+        why: None,
+        after: &[],
+        pr: Some(90),
+    };
+    let fix = tasks::give(&mut conn, &fix, T).unwrap().0.number;
+    tasks::ended(&mut conn, review, Outcome::Ok { tools: 2 }, T).unwrap();
+    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'bo-turn'", [])
+        .unwrap();
+    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let held = Some("done, waiting on #90 to merge".to_string());
+    assert_eq!(state(&conn, fix), (State::Held, held));
+    assert_eq!(to(&starts, "bo").len(), 1, "Bo hears back: {starts:?}");
+}

@@ -17,12 +17,14 @@ pub(super) const ONLY_ITS_MERGE: &str = "(t.state = 'held' AND t.pr IS NOT NULL
 
 /// The task is held only on its merge and no review of its PR is open: nobody on the team is on it
 /// but whoever merges, so its giver hears where it stands (backlog "Stall": #85 and #86 sat
-/// reviewed and unmerged while the giver, the one to see them merged, heard nothing).
+/// reviewed and unmerged while the giver, the one to see them merged, heard nothing). A review
+/// that gave this task doesn't count: it waits on this hear-back (found in #100's own review).
 fn only_its_merge_left(conn: &Connection, task: i64) -> Result<bool, Error> {
     let sql = format!(
         "SELECT EXISTS (SELECT 1 FROM tasks t WHERE t.number = ?1 AND {ONLY_ITS_MERGE}
          AND NOT EXISTS (SELECT 1 FROM tasks r WHERE r.chat_id = t.chat_id AND r.pr = t.pr
-             AND r.kind = 'review' AND r.state NOT IN {}))",
+             AND r.kind = 'review' AND r.state NOT IN {}
+             AND NOT EXISTS (SELECT 1 FROM turns u WHERE u.id = t.given_in AND u.task = r.number)))",
         super::SETTLED
     );
     Ok(conn.query_row(&sql, [task], |r| r.get(0))?)
