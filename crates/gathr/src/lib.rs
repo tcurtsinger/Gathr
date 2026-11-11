@@ -23,6 +23,7 @@ pub mod launch;
 pub mod pauses;
 pub mod platform;
 pub mod projects;
+pub mod pushes;
 pub mod redact;
 pub mod run;
 pub mod search;

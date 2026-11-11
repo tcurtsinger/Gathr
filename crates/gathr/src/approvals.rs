@@ -32,7 +32,10 @@ pub fn ask(
             let inside_one = folders.iter().any(|folder| inside(&path, folder));
             (!inside_one).then_some("it writes outside the agent's folders")
         }
-        "Bash" | "PowerShell" => runs_push(tool, input).then_some("it pushes"),
+        "Bash" | "PowerShell" => {
+            let command = text("command").filter(|_| runs_push(tool, input))?;
+            pushes_risky(command).then_some("it may force, delete or skip Gathr's push hook")
+        }
         // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
         // classifier: asked here, the call waits for the person as long as they take.
         "mcp__gathr__wait" => text("check")
@@ -139,15 +142,43 @@ fn lexical(path: &Path) -> PathBuf {
 /// Whether a shell command runs `git … push`: any `git` word followed by `push` in the same
 /// command, so `git -C <dir> push` and `git -c k=v push` count too. A false match only asks.
 fn pushes(command: &str) -> bool {
-    command
-        .split([';', '&', '|', '\n', '(', ')', '{', '}'])
-        .any(|part| {
-            let mut words = part.split_whitespace().map(|w| w.trim_matches(['"', '\'']));
-            words.any(|w| {
-                let name = w.rsplit(['/', '\\']).next().unwrap_or(w).to_lowercase();
-                name == "git" || name == "git.exe"
-            }) && words.any(|w| w == "push")
+    push_words(command).next().is_some()
+}
+
+/// The words of each `git … push` in a command, from `git` on.
+fn push_words(command: &str) -> impl Iterator<Item = Vec<&str>> {
+    let parts = command.split([';', '&', '|', '\n', '(', ')', '{', '}']);
+    parts.filter_map(|part| {
+        let words: Vec<&str> = part
+            .split_whitespace()
+            .map(|w| w.trim_matches(['"', '\'']))
+            .collect();
+        let git = words.iter().position(|w| {
+            let name = w.rsplit(['/', '\\']).next().unwrap_or(w).to_lowercase();
+            name == "git" || name == "git.exe"
+        })?;
+        let words = words[git..].to_vec();
+        words[1..].contains(&"push").then_some(words)
+    })
+}
+
+/// Whether a push command asks for what its worktree's `pre-push` hook can't see or stop: a force
+/// (`--force`, `-f`, a `+` refspec), a deletion (`--delete`, `-d`, `:branch`), `--mirror`, or a
+/// way past the hook (`--no-verify`, another `core.hooksPath`). The hook still sees the refs of
+/// what goes through and asks for the rest (`crate::pushes`).
+fn pushes_risky(command: &str) -> bool {
+    push_words(command).any(|words| {
+        words.iter().any(|w| {
+            let lower = w.to_lowercase();
+            let short = w.strip_prefix('-').filter(|f| !f.starts_with('-'));
+            lower.starts_with("--force")
+                || ["--delete", "--mirror", "--no-verify"].contains(&lower.as_str())
+                || lower.contains("hookspath")
+                || short.is_some_and(|f| f.contains(['f', 'd']))
+                || w.starts_with('+')
+                || w.starts_with(':')
         })
+    })
 }
 
 #[cfg(test)]
@@ -376,29 +407,18 @@ mod tests {
         assert_eq!(write("X:/work/tree/a.rs"), None);
         assert!(write("X:/work/other/a.rs").is_some());
     }
+
     #[test]
-    fn a_push_asks_however_it_is_written() {
-        let tree = at(&["w"]);
-        let folders = [tree];
-        let run = |command: &str| {
-            ask(
-                "Bash",
-                &json!({ "command": command }),
-                &folders,
-                &data(),
-                false,
-            )
-        };
-        for push in [
+    fn a_push_reads_as_one_however_it_is_written() {
+        let push = |command: &str| runs_push("Bash", &json!({ "command": command }));
+        for yes in [
             "git push",
-            "git push origin main",
             "cargo fmt && git push -u origin room/x",
-            "git -C ../other push --force",
             "git -c credential.helper= push",
             "/usr/bin/git push",
-            "& 'C:\\Program Files\\Git\\cmd\\git.exe' push",
+            r"& 'C:\Program Files\Git\cmd\git.exe' push",
         ] {
-            assert_eq!(run(push), Some("it pushes"), "{push}");
+            assert!(push(yes), "{yes}");
         }
         for not in [
             "git status",
@@ -406,15 +426,48 @@ mod tests {
             "echo push; git log",
             "git log --grep=x",
         ] {
-            assert_eq!(run(not), None, "{not}");
+            assert!(!push(not), "{not}");
         }
-        let ps = ask(
-            "PowerShell",
-            &json!({ "command": "git push" }),
-            &folders,
-            &data(),
-            false,
-        );
-        assert_eq!(ps, Some("it pushes"));
+    }
+
+    #[test]
+    fn only_a_push_that_may_force_delete_or_skip_the_hook_asks() {
+        let tree = at(&["w"]);
+        let folders = [tree];
+        let run = |tool: &str, command: &str| {
+            ask(
+                tool,
+                &json!({ "command": command }),
+                &folders,
+                &data(),
+                false,
+            )
+        };
+        for risky in [
+            "git push --force",
+            "cargo fmt && git push -fu origin room/x",
+            "git -C ../other push --force-with-lease",
+            "git push origin +room/x",
+            "git push origin :room/x",
+            "git push -d origin room/x",
+            "git push --mirror",
+            "/usr/bin/git push --no-verify",
+            "git -c core.hooksPath=/dev/null push",
+            r"& 'C:\Program Files\Git\cmd\git.exe' push --force",
+        ] {
+            assert!(run("Bash", risky).is_some(), "{risky}");
+        }
+        assert!(run("PowerShell", "git push -f").is_some());
+        for not in [
+            "git push",
+            "git push origin main",
+            "git push -u origin room/x",
+            "git -C ../other push origin HEAD:refs/heads/room/x",
+            "git status -f",
+            "echo --force; git log",
+            "cargo test -- --force",
+        ] {
+            assert_eq!(run("Bash", not), None, "{not}");
+        }
     }
 }
