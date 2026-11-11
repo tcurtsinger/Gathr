@@ -10,6 +10,7 @@ pub mod briefing;
 mod checks;
 mod coord;
 mod hook;
+mod merge;
 mod message;
 mod person;
 mod server;

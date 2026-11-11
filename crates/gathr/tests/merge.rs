@@ -1,0 +1,469 @@
+//! 0036 C4: agents don't merge; a PR's reviewer calls `merge`, which Gathr refuses, with a
+//! reference, unless the review is done on the PR's head, the project's checks passed there and
+//! the default branch is in it. One merge per repository at a time; the PR's tasks settle at once.
+
+mod common;
+
+use std::path::{Path, PathBuf};
+
+use common::{
+    TempDir, TestService, call_tool, fake_gh, gathr, git, held_recording, nth, project, text,
+};
+use serde_json::{Value, json};
+
+/// Lets the held engines go however a test ends: dropped first, before the service.
+struct Release(PathBuf);
+
+impl Drop for Release {
+    fn drop(&mut self) {
+        let _ = std::fs::write(&self.0, "");
+    }
+}
+
+struct Room {
+    _release: Release,
+    service: TestService,
+    data: PathBuf,
+    chat: String,
+    project: String,
+    lead: String,
+    vale: String,
+    ann: String,
+    /// The clone that pushes PR branches and moves main, as other people would.
+    other: PathBuf,
+    origin: PathBuf,
+    /// The default branch's commit the PRs start from.
+    base: String,
+    /// Each PR's head: #5 and #6.
+    heads: [String; 2],
+    /// Every engine started so far.
+    started: usize,
+}
+
+/// A project with a Supervisor (Lead) and a Reviewer (Vale), two PRs on origin (#5 adds
+/// `feature.txt`, #6 `other.txt`, or `tests/check.sh` with `test_change`), the project's checks
+/// passed on main and on both heads, and `gh` answering for both PRs.
+fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
+    let (folder, _) = project(repos);
+    // A merge commit is made as the person who owns the checkout.
+    git(&folder, &["config", "user.name", "Test"]);
+    git(&folder, &["config", "user.email", "test@example.invalid"]);
+    let other = repos.join("other");
+    let base = git(&other, &["rev-parse", "HEAD"]).trim().to_string();
+    let mut heads = Vec::new();
+    for (branch, file) in [
+        ("room/five", "feature.txt"),
+        (
+            "room/six",
+            if test_change {
+                "tests/check.sh"
+            } else {
+                "other.txt"
+            },
+        ),
+    ] {
+        git(&other, &["checkout", "-q", "-b", branch, &base]);
+        let path = other.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "made up\n").unwrap();
+        git(&other, &["add", "."]);
+        git(&other, &["commit", "-q", "-m", file]);
+        git(&other, &["push", "-q", "origin", branch]);
+        heads.push(git(&other, &["rev-parse", "HEAD"]).trim().to_string());
+    }
+    git(&other, &["checkout", "-q", "main"]);
+    let answers = data.join("gh.json");
+    let view = |n: usize| {
+        let pr = json!({ "state": "OPEN", "headRefOid": heads[n], "baseRefName": "main", "statusCheckRollup": [] });
+        json!({ "args": ["pr", "view", (n + 5).to_string()], "out": pr.to_string() })
+    };
+    std::fs::write(&answers, json!([view(0), view(1)]).to_string()).unwrap();
+    let service = TestService::with_engine(
+        data,
+        &[
+            ("GATHR_REPLAY", &held_recording(data)),
+            ("GATHR_REPLAY_HOLD", &data.join("go")),
+            ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
+            ("GATHR_GH_PATH", &fake_gh()),
+            ("GATHR_FAKE_GH", &answers),
+        ],
+    );
+    let account = service.add_account("Team");
+    common::sign_in_account(data, &account);
+    let agent = |name: &str| {
+        let made = service.send(
+            "POST",
+            "/api/agents",
+            json!({ "name": name, "account": account }),
+        );
+        made.json()["id"].as_str().unwrap().to_string()
+    };
+    let (lead, vale, ann) = (agent("Lead"), agent("Vale"), agent("Ann"));
+    let members = json!([
+        { "agent": lead, "role": "supervisor" },
+        { "agent": vale, "role": "reviewer" },
+        { "agent": ann, "role": "member" }
+    ]);
+    let body = json!({ "name": "Site", "folder": folder, "members": members });
+    let project = service.send("POST", "/api/projects", body).json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let chat = service
+        .send("POST", "/api/chats", json!({ "project": project }))
+        .json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let room = Room {
+        _release: Release(data.join("go")),
+        service,
+        data: data.to_path_buf(),
+        chat,
+        project,
+        lead,
+        vale,
+        ann,
+        other,
+        origin: repos.join("origin.git"),
+        base,
+        heads: [heads[0].clone(), heads[1].clone()],
+        started: 0,
+    };
+    room.checks_passed(&room.base);
+    room.checks_passed(&room.heads[0]);
+    room.checks_passed(&room.heads[1]);
+    room
+}
+
+impl Room {
+    fn db(&self) -> rusqlite::Connection {
+        rusqlite::Connection::open(self.data.join("gathr.db")).unwrap()
+    }
+
+    /// The project's checks, passed at `head`, as a run of Gathr's (C3) leaves them.
+    fn checks_passed(&self, head: &str) {
+        let db = self.db();
+        db.execute(
+            "INSERT OR IGNORE INTO project_checks (project_id, position, command, source, set_ts)
+             VALUES (?1, 0, 'cargo test', 'found', 1)",
+            [&self.project],
+        )
+        .unwrap();
+        let id = format!("run-{head}");
+        db.execute(
+            "INSERT INTO check_runs (id, project_id, head, state, trace_id, started_ts, ended_ts)
+             VALUES (?1, ?2, ?3, 'passed', 't', 1, 2)",
+            rusqlite::params![id, self.project, head],
+        )
+        .unwrap();
+    }
+
+    fn token(&mut self) -> String {
+        let started = nth(&self.data.join("env.jsonl"), self.started);
+        self.started += 1;
+        started["GATHR_AGENT_TOKEN"].as_str().unwrap().to_string()
+    }
+
+    /// Lead's turn: its engine's token.
+    fn lead_turn(&mut self) -> String {
+        let path = format!("/api/chats/{}/messages", self.chat);
+        let sent = self.service.send(
+            "POST",
+            &path,
+            json!({ "text": "Ship it", "agent": self.lead }),
+        );
+        assert_eq!(sent.status, 200, "{}", sent.body);
+        self.token()
+    }
+
+    /// Lead gives Vale the review of each PR; Vale's token, once its first review runs.
+    fn reviews(&mut self, lead: &str, prs: &[i64]) -> String {
+        let port = self.service.info.port;
+        for pr in prs {
+            let review = json!({ "to": "Vale", "what": format!("Review #{pr}"), "kind": "review", "pr": pr });
+            let given = text(&call_tool(port, lead, "give_task", review));
+            assert!(given.starts_with("Task #"), "{given}");
+        }
+        self.token()
+    }
+
+    fn call(&self, token: &str, tool: &str, arguments: Value) -> Value {
+        call_tool(self.service.info.port, token, tool, arguments)
+    }
+
+    /// A review finished done on `commit` in a turn not running here, as its turn would record it.
+    fn review_done(&self, task: i64, commit: &str) {
+        let done = "UPDATE tasks SET finish = 'done', reviewed = ?2 WHERE number = ?1";
+        self.db()
+            .execute(done, rusqlite::params![task, commit])
+            .unwrap();
+    }
+
+    /// The reviewer's review of task `task` done on `commit`.
+    fn reviewed(&self, vale: &str, task: i64, commit: &str) {
+        let done = json!({ "how": "done", "task": task, "commit": commit });
+        let finished = self.call(vale, "finish_task", done);
+        assert_eq!(finished["isError"], false, "{finished}");
+    }
+
+    fn main(&self) -> String {
+        git(&self.origin, &["rev-parse", "refs/heads/main"])
+            .trim()
+            .to_string()
+    }
+
+    fn tasks(&self) -> Value {
+        self.service
+            .call("GET", &format!("/api/chats/{}/tasks", self.chat))
+            .json()
+    }
+
+    /// A refusal that says `why` and whose reference traces.
+    fn refused(&self, answer: &Value, why: &str) {
+        let said = text(answer);
+        assert_eq!(answer["isError"], true, "{said}");
+        assert!(said.contains(why), "expected \"{why}\": {said}");
+        let reference = said.rsplit("(ref ").next().unwrap().trim_end_matches(')');
+        let (ok, trace) = gathr(&self.data, &["diag", "trace", reference]);
+        assert!(ok && trace.to_string().contains("merge"), "{trace}");
+    }
+}
+
+#[test]
+fn each_unmet_condition_refuses_with_a_reference_and_merges_nothing() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    let five = json!({ "pr": 5 });
+
+    room.refused(&room.call(&lead, "merge", five.clone()), "reviewer");
+    room.refused(&room.call(&vale, "merge", five.clone()), "isn't done");
+    room.reviewed(&vale, 1, "abc1234");
+    room.refused(&room.call(&vale, "merge", five.clone()), "review it again");
+    room.db()
+        .execute(
+            "UPDATE tasks SET reviewed = ?1 WHERE number = 1",
+            [&room.heads[0]],
+        )
+        .unwrap();
+    room.db()
+        .execute("DELETE FROM check_runs WHERE head = ?1", [&room.heads[0]])
+        .unwrap();
+    room.refused(&room.call(&vale, "merge", five.clone()), "checks");
+    room.checks_passed(&room.heads[0]);
+    std::fs::write(room.other.join("moved.txt"), "main moved\n").unwrap();
+    git(&room.other, &["add", "."]);
+    git(&room.other, &["commit", "-q", "-m", "moved"]);
+    git(&room.other, &["push", "-q", "origin", "main"]);
+    room.refused(&room.call(&vale, "merge", five.clone()), "up to date");
+    git(
+        &room.other,
+        &[
+            "push",
+            "-q",
+            "--force",
+            "origin",
+            &format!("{}:main", room.base),
+        ],
+    );
+    assert_eq!(room.main(), room.base, "a refusal merged something");
+
+    let merged = room.call(&vale, "merge", five);
+    assert_eq!(merged["isError"], false, "{}", text(&merged));
+    assert_eq!(room.main(), room.heads[0], "main isn't the PR's head");
+}
+
+#[test]
+fn of_two_prs_on_one_base_the_second_is_refused_once_the_first_merges() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5, 6]);
+    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(2, &room.heads[1]);
+    let first = room.call(&vale, "merge", json!({ "pr": 5 }));
+    assert_eq!(first["isError"], false, "{}", text(&first));
+    room.refused(&room.call(&vale, "merge", json!({ "pr": 6 })), "up to date");
+    assert_eq!(room.main(), room.heads[0]);
+}
+
+/// The work the PR is for, held on its merge, settles when it merges, and its giver hears back,
+/// at once: the PR looks run every 2 minutes, and this doesn't wait for one.
+#[test]
+fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    room.lead_turn();
+    // Lead's giving turn ends, as it has long before a merge; later turns hold again.
+    let go = room.data.join("go");
+    std::fs::write(&go, "").unwrap();
+    let history = room
+        .service
+        .wait_for(&room.chat, 20, "Lead's turn to end", |h| {
+            h["turns"][0]["status"] == "done"
+        });
+    std::fs::remove_file(&go).unwrap();
+    let gave = history["turns"][0]["id"].as_str().unwrap().to_string();
+    // Ann's work on #5, done and held on its merge; Vale's review of it, done on its head.
+    let db = room.db();
+    let task =
+        "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reason, pr, given_in,
+                                   finish, reviewed, created_ts, updated_ts)
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 5, ?9, 'done', ?10, 1, 1)";
+    let held = "done, waiting on #5 to merge";
+    db.execute(
+        task,
+        rusqlite::params![
+            1,
+            room.chat,
+            room.lead,
+            room.ann,
+            "work",
+            "Build it",
+            "held",
+            held,
+            gave,
+            None::<String>
+        ],
+    )
+    .unwrap();
+    db.execute(
+        task,
+        rusqlite::params![
+            2,
+            room.chat,
+            room.lead,
+            room.vale,
+            "review",
+            "Review #5",
+            "done",
+            None::<String>,
+            None::<String>,
+            room.heads[0]
+        ],
+    )
+    .unwrap();
+    let path = format!("/api/chats/{}/messages", room.chat);
+    room.service.send(
+        "POST",
+        &path,
+        json!({ "text": "Merge it", "agent": room.vale }),
+    );
+    let vale = room.token();
+
+    let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
+    assert_eq!(merged["isError"], false, "{}", text(&merged));
+    assert_eq!(
+        room.tasks()["tasks"][0]["state"],
+        "done",
+        "{}",
+        room.tasks()
+    );
+    let history = room
+        .service
+        .call("GET", &format!("/api/chats/{}", room.chat))
+        .json();
+    let turns = history["turns"].as_array().unwrap().iter();
+    let back: Vec<&Value> = turns
+        .filter(|t| t["agent"] == room.lead.as_str() && t["answers"] == gave.as_str())
+        .collect();
+    assert_eq!(back.len(), 1, "Lead didn't hear back: {history}");
+}
+
+#[test]
+fn a_pr_that_changes_tests_or_brings_the_first_checks_needs_the_reviewers_sign_off() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, true);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[6, 5]);
+    room.reviewed(&vale, 1, &room.heads[1].clone());
+    room.review_done(2, &room.heads[0]);
+    room.refused(
+        &room.call(&vale, "merge", json!({ "pr": 6 })),
+        "tests/check.sh",
+    );
+    let signed = room.call(&vale, "merge", json!({ "pr": 6, "signed_off": true }));
+    assert_eq!(signed["isError"], false, "{}", text(&signed));
+
+    // A project with no passed checks on its main yet: its first PR is the baseline.
+    room.db()
+        .execute("DELETE FROM check_runs WHERE head = ?1", [&room.heads[1]])
+        .unwrap();
+    room.db()
+        .execute("DELETE FROM check_runs WHERE head = ?1", [&room.base])
+        .unwrap();
+    git(&room.other, &["fetch", "-q", "origin"]);
+    git(&room.other, &["checkout", "-q", "room/five"]);
+    git(&room.other, &["merge", "-q", "--no-edit", "origin/main"]);
+    git(&room.other, &["push", "-q", "origin", "room/five"]);
+    let head = git(&room.other, &["rev-parse", "HEAD"]).trim().to_string();
+    room.checks_passed(&head);
+    room.db()
+        .execute("UPDATE tasks SET reviewed = ?1 WHERE number = 2", [&head])
+        .unwrap();
+    let answers = room.data.join("gh.json");
+    let pr = json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [] });
+    std::fs::write(
+        &answers,
+        json!([{ "args": ["pr", "view", "5"], "out": pr.to_string() }]).to_string(),
+    )
+    .unwrap();
+    room.refused(&room.call(&vale, "merge", json!({ "pr": 5 })), "first");
+    let signed = room.call(&vale, "merge", json!({ "pr": 5, "signed_off": true }));
+    assert_eq!(signed["isError"], false, "{}", text(&signed));
+}
+
+#[test]
+fn a_project_merges_by_its_own_method() {
+    for method in ["merge", "squash"] {
+        let (data, repos) = (TempDir::new(), TempDir::new());
+        let mut room = room(&data.0, &repos.0, false);
+        let path = format!("/api/projects/{}", room.project);
+        assert_eq!(
+            room.service
+                .send("PATCH", &path, json!({ "merge": method }))
+                .status,
+            200
+        );
+        let lead = room.lead_turn();
+        let vale = room.reviews(&lead, &[5]);
+        room.reviewed(&vale, 1, &room.heads[0].clone());
+        if method == "squash" {
+            let answers = room.data.join("gh.json");
+            let mut all: Vec<Value> =
+                serde_json::from_str(&std::fs::read_to_string(&answers).unwrap()).unwrap();
+            all.push(json!({ "args": ["api"], "out": "{\"merged\": true}" }));
+            std::fs::write(&answers, Value::Array(all).to_string()).unwrap();
+        }
+        let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
+        assert_eq!(merged["isError"], false, "{method}: {}", text(&merged));
+        match method {
+            "merge" => {
+                let parents = git(
+                    &room.origin,
+                    &["rev-list", "--parents", "-n", "1", "refs/heads/main"],
+                );
+                let expected = format!("{} {}", room.base, room.heads[0]);
+                assert!(
+                    parents.trim().ends_with(&expected),
+                    "not a merge commit of the head onto the base: {parents}"
+                );
+            }
+            _ => {
+                let calls = std::fs::read_to_string(room.data.join("gh.json.calls")).unwrap();
+                let api = calls
+                    .lines()
+                    .find(|l| l.contains("\"api\""))
+                    .unwrap_or_default();
+                assert!(
+                    api.contains("merge_method=squash")
+                        && api.contains(&format!("sha={}", room.heads[0])),
+                    "{calls}"
+                );
+                assert_eq!(room.main(), room.base, "a squash pushed the branch itself");
+            }
+        }
+    }
+}

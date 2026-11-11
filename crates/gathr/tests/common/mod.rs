@@ -266,6 +266,17 @@ pub fn replay_engine() -> PathBuf {
     path
 }
 
+/// The stand-in for GitHub's `gh` (`examples/fake_gh.rs`), which `cargo test` builds too.
+pub fn fake_gh() -> PathBuf {
+    let path = replay_engine().with_file_name(format!("fake_gh{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        path.is_file(),
+        "{} isn't built: run the tests with cargo test",
+        path.display()
+    );
+    path
+}
+
 /// A recorded engine session in `tests/frames`.
 pub fn recording(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

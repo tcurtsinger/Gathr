@@ -41,7 +41,8 @@ pub fn service(
                 + Tools::coord_router()
                 + Tools::person_router()
                 + Tools::checks_router()
-                + Tools::message_router(),
+                + Tools::message_router()
+                + Tools::merge_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)
