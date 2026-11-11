@@ -1,6 +1,7 @@
 //! Gathr removes what it made for agents' work (0034): an engine's temporary files once it has
 //! closed, a chat's worktrees once it's archived (Restore checks them out again from their
-//! branches, which stay), and all of its folders once it's deleted.
+//! branches, which stay), and all of its folders once it's deleted. A task's finished PR also
+//! removes its recorded worktrees and local branch, once clean and no longer in use (0036 C10).
 //! Never a folder a running engine or wait check uses, nor, while the chat is only archived, a
 //! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
 //! again at the next sweep, which runs with the service's looks (0010).
@@ -14,6 +15,9 @@ use gathr::platform::env::Vars;
 use gathr::worktree;
 
 use crate::chats::Chats;
+
+mod prs;
+pub use prs::queue;
 
 /// One sweep at a time, and none while an engine's folders are made: an archive's and the looks'
 /// would remove the same folder at once, and a sweep could remove a folder made again meanwhile.
@@ -64,11 +68,11 @@ pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {
         }
         None => return Vec::new(),
     };
-    if found.is_empty() {
-        return Vec::new();
-    }
     let env = crate::coord::fresh().await;
-    let mut left = Vec::new();
+    let mut left = prs::sweep(chats, &env, chat).await;
+    if found.is_empty() {
+        return left;
+    }
     for clean in found {
         // Not on the chat's own record: a delete removes that, and the reference must still find it.
         let event = |name: &str| {

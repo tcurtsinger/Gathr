@@ -76,7 +76,7 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
     let origin = repos.join("origin.git");
     let view = |n: usize| {
         let pr = |state: &str| {
-            json!({ "state": state, "headRefOid": heads[n], "baseRefName": "main", "statusCheckRollup": [] })
+            json!({ "state": state, "headRefOid": heads[n], "baseRefName": "main", "statusCheckRollup": [], "headRefName": if n == 0 { "room/five" } else { "room/six" }, "isCrossRepository": false })
                 .to_string()
         };
         let when = json!({ "repo": origin, "base": "main", "head": heads[n] });
@@ -445,7 +445,7 @@ fn a_pr_that_changes_tests_or_brings_the_first_checks_needs_the_reviewers_sign_o
         .execute("UPDATE tasks SET reviewed = ?1 WHERE number = 2", [&head])
         .unwrap();
     let answers = room.data.join("gh.json");
-    let pr = json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [] });
+    let pr = json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [], "headRefName": "room/five", "isCrossRepository": false });
     std::fs::write(
         &answers,
         json!([{ "args": ["pr", "view", "5"], "out": pr.to_string() }]).to_string(),
@@ -552,7 +552,7 @@ fn a_head_that_moves_during_a_merge_is_refused_or_left_unsettled() {
         let vale = room.reviews(&lead, &[5]);
         room.reviewed(&vale, 1, &room.heads[0].clone());
         let view = |head: &str| {
-            json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [] }).to_string()
+            json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [], "headRefName": "room/five", "isCrossRepository": false }).to_string()
         };
         let (h, moved) = (room.heads[0].clone(), room.base.clone());
         let outs = match moved_after_push {
@@ -652,4 +652,33 @@ fn a_pr_retargeted_during_a_merge_is_refused_or_left_unsettled() {
             .unwrap();
         assert!(!closed, "a PR still open was settled as merged");
     }
+}
+
+#[test]
+fn merge_queues_cleanup_at_once_without_waiting_for_a_pr_look() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    let cwd = PathBuf::from(nth(&data.0.join("env.jsonl"), 1)["cwd"].as_str().unwrap());
+    git(&cwd, &["checkout", "-q", "-b", "room/five", &room.heads[0]]);
+    room.reviewed(&vale, 1, &room.heads[0].clone());
+    let merged = room.call(&vale, "merge", json!({"pr":5}));
+    assert_eq!(merged["isError"], false, "{}", text(&merged));
+    // The replay engine still holds this worktree. No periodic PR look runs in this fixture.
+    let sql = "SELECT ref FROM event_log WHERE name='gathr.cleanup.skip' AND error_type='in_use'
+        AND json_extract(attrs,'$.branch')='room/five'";
+    common::until(
+        20,
+        "immediate merge cleanup protects the reviewer's running engine",
+        || {
+            let (ok, rows) = gathr(&data.0, &["diag", "query", sql]);
+            assert!(ok, "{rows}");
+            rows["rows"][0]["ref"].as_str().map(String::from)
+        },
+    );
+    assert!(
+        cwd.join(".git").is_file(),
+        "a live engine's folder was removed"
+    );
 }

@@ -102,7 +102,13 @@ pub async fn once(chats: &Arc<Chats>) {
             Some(folder) if folder.exists() => folder,
             _ => project_of(chats, &chat).await,
         };
-        let args = ["pr", "view", &pr.to_string(), "--json", "state,headRefOid"];
+        let args = [
+            "pr",
+            "view",
+            &pr.to_string(),
+            "--json",
+            "state,headRefOid,headRefName,baseRefName,isCrossRepository",
+        ];
         let Ok(answer) = gh(&args, &dir, &vars).await else {
             continue;
         };
@@ -112,8 +118,12 @@ pub async fn once(chats: &Arc<Chats>) {
         if state == "OPEN" && !head.is_empty() {
             crate::check_runs::for_review(chats, &chat, task, &head).await;
         }
+        let view: Value = serde_json::from_str(&answer).unwrap_or_default();
         let t = trace.clone();
         apply(chats, "gathr.task.pr", &trace, move |c| {
+            if matches!(state.as_str(), "MERGED" | "CLOSED") {
+                crate::cleanup::queue(c, &chat, &view, &t)?;
+            }
             tasks::pr_looked(
                 c,
                 task,
@@ -124,6 +134,7 @@ pub async fn once(chats: &Arc<Chats>) {
         })
         .await;
     }
+    crate::cleanup::sweep(chats, None).await;
 }
 
 /// Whether the wait is still open: a wait that can't be read isn't.

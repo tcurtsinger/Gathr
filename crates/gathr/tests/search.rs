@@ -277,6 +277,7 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
          ALTER TABLE projects DROP COLUMN merge_source; ALTER TABLE projects DROP COLUMN merge_set_ts; ALTER TABLE tasks DROP COLUMN heard_in;
          ALTER TABLE tasks DROP COLUMN pr_head;
          DROP TABLE handoffs; DROP TABLE check_steps; DROP TABLE check_runs; DROP TABLE check_caches;
+         DROP TABLE pr_cleanup;
          PRAGMA user_version = 14;",
     )
     .unwrap();
