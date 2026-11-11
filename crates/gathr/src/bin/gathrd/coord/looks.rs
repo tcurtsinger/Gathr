@@ -392,13 +392,19 @@ pub async fn fresh() -> Vars {
 pub(super) async fn gh(args: &[&str], dir: &Path, vars: &Vars) -> Result<String, String> {
     let mut why = String::new();
     for _ in 0..2 {
-        match run(Path::new("gh"), args, dir, vars, LIMIT).await {
+        match run(&gh_program(), args, dir, vars, LIMIT).await {
             Ok(ran) if ran.code == Some(0) => return Ok(ran.out),
             Ok(ran) => why = format!("gh {} failed: {}", args[0], ran.reason()),
             Err(e) => why = e,
         }
     }
     Err(why)
+}
+
+/// GitHub's `gh`, or what `GATHR_GH_PATH` names in its place, in dev and tests only (the replay
+/// harness's `fake_gh`).
+pub fn gh_program() -> PathBuf {
+    std::env::var_os("GATHR_GH_PATH").map_or_else(|| PathBuf::from("gh"), PathBuf::from)
 }
 
 fn json_text(answer: &str, key: &str) -> String {

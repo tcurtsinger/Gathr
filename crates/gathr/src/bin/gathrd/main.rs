@@ -11,6 +11,7 @@ mod check_runs;
 mod cleanup;
 mod coord;
 mod logs;
+mod merging;
 mod models;
 mod pauses;
 mod projects;
