@@ -276,7 +276,7 @@ Only the Supervisor asks the person (the sole agent in a one-agent chat).
 Inline OptionList stages single/multiple choices. ElicitationForm supplies the
 optional Notes field or the open-ended answer. There is no duplicate Confirm or
 automatic Next. Back/Next retain drafts; final Send submits ready answers only.
-Notes alone do not make a structured answer ready. Unanswered tasks remain open.
+Notes alone make any question ready and go as the answer in words, so "none of these" can be said. Unanswered tasks remain open.
 Lifecycle/history policy and persistence are service work, not prototype rules.
 
 ### Archive and stale (F11)

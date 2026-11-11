@@ -23,16 +23,18 @@ export function options(task: PersonTask): { id: string; label: string; descript
   }));
 }
 
-/** Whether Send would answer it. Notes alone never answer a pick (DESIGN.md "Human tasks"). */
+/** Whether Send would answer it. Notes alone answer any question in words: "none of these" is an answer (G152). */
 export function ready(task: PersonTask, draft: Draft | undefined): boolean {
   if (!draft) return false;
-  return task.form === 'text' ? !!draft.values[0]?.trim() : draft.values.length > 0;
+  if (task.form === 'text') return !!draft.values[0]?.trim();
+  return draft.values.length > 0 || !!draft.notes.trim();
 }
 
 /** The staged draft as the service takes it; notes go with a pick as its text. */
 export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   const notes = draft.notes.trim() ? { text: draft.notes.trim() } : {};
   if (task.form === 'text') return { task: task.number, text: draft.values[0].trim() };
+  if (draft.values.length === 0) return { task: task.number, text: draft.notes.trim() };
   if (task.form === 'yesno') return { task: task.number, yes: draft.values[0] === 'Yes', ...notes };
   if (task.form === 'done') return { task: task.number, done: true, ...notes };
   return { task: task.number, pick: draft.values, ...notes };
