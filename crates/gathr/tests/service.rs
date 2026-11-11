@@ -276,3 +276,31 @@ fn requests_answer_at_once_with_the_service_on_one_cpu() {
         assert!(took < Duration::from_secs(2), "request {n} took {took:?}");
     }
 }
+
+/// Whatever a connection still holds, a stop waits for it only a few seconds, and says so (G162).
+#[test]
+fn a_stop_waits_only_a_little_for_a_connection_that_never_ends() {
+    use std::io::Write;
+
+    let dir = TempDir::new();
+    let mut service = TestService::start(&dir.0);
+    let port = service.info.port;
+    let mut held = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let part = format!("GET /health HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n");
+    held.write_all(part.as_bytes()).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    let asked = std::time::Instant::now();
+    let _ = service.call("POST", "/api/shutdown");
+    while asked.elapsed() < Duration::from_secs(40) && service.child.try_wait().unwrap().is_none() {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let took = asked.elapsed();
+    assert!(took < Duration::from_secs(30), "the stop took {took:?}");
+    drop(held);
+    let sql = "SELECT ref, json_extract(attrs, '$.open') AS open FROM event_log
+               WHERE name = 'gathr.service.connections' AND status = 'error'";
+    let (ok, answer) = gathr(&dir.0, &["diag", "query", sql]);
+    assert!(ok, "{answer}");
+    assert_eq!(answer["rows"][0]["open"], 1, "{answer}");
+    assert!(answer["rows"][0]["ref"].is_string(), "{answer}");
+}

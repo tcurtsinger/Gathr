@@ -164,7 +164,10 @@ impl Task {
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
         let first = if codex {
-            args = gathr::codex::command::args(Some(&url));
+            args = gathr::codex::command::args(
+                Some(&url),
+                assigned.approvals == gathr::agents::Approvals::Auto,
+            );
             let opening = gathr::codex::rpc::Opening {
                 resume: session.clone(),
                 cwd: cwd.display().to_string(),
@@ -181,7 +184,7 @@ impl Task {
             Some(first)
         } else {
             self.driver = Default::default();
-            args.extend(command::given(&url, &pass.briefing));
+            args.extend(command::given(&url, &pass.briefing, &crate::tools::names()));
             args.extend(command::folders(&beside));
             None
         };

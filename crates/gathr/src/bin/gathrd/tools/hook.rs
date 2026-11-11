@@ -1,13 +1,17 @@
 //! Gathr's hook (0029): Claude Code asks it before each file write and command, with the engine's
 //! own token. It answers "ask" before a push or a write outside the agent's folders (0034), which
 //! sends the call to the person as an approval whatever the agent's mode or a project's rules allow.
+//! A `wait` isn't on Claude Code's allow list, so the hook answers each one: "allow" with no check
+//! or a read-only one, "ask" for any other check, and nothing in auto mode, where Claude Code's own
+//! classifier reads the check as it reads the agent's commands (owner, 2026-11-11).
 
 use std::sync::Arc;
 
-use axum::extract::{Extension, State as Extract};
+use axum::extract::{Extension, RawQuery, State as Extract};
 use axum::http::HeaderMap;
 use axum::routing::post;
 use axum::{Json, Router};
+use gathr::claude::command::{AUTO_QUERY, WAIT_TOOL};
 use gathr::event::Event;
 use serde_json::{Value, json};
 
@@ -64,9 +68,16 @@ async fn pre_push(
 async fn pre_tool_use(
     Extract(s): Extract<Arc<State>>,
     Extension(caller): Extension<Caller>,
+    RawQuery(query): RawQuery,
     Json(input): Json<Value>,
 ) -> Json<Value> {
     let tool = input["tool_name"].as_str().unwrap_or("");
+    let decide = |decision: &str, reason: String| {
+        Json(
+            json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+        "permissionDecision": decision, "permissionDecisionReason": reason } }),
+        )
+    };
     let Some(why) = gathr::approvals::ask(
         tool,
         &input["tool_input"],
@@ -74,9 +85,20 @@ async fn pre_tool_use(
         s.chats.data.path(),
         caller.from_before,
     ) else {
-        // Empty: the agent's mode decides.
-        return Json(json!({}));
+        return match tool == WAIT_TOOL {
+            true => decide(
+                "allow",
+                "Gathr allows a wait with no check to ask about".into(),
+            ),
+            // Empty: the agent's mode decides.
+            false => Json(json!({})),
+        };
     };
+    if tool == WAIT_TOOL && query.as_deref() == Some(AUTO_QUERY) {
+        // Empty: auto mode's classifier decides, and `gathr.approvals.check` says so once the
+        // call arrives.
+        return Json(json!({}));
+    }
     let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
     let event = Event::point("gathr.approvals.ask")
         .trace(&trace)
@@ -86,9 +108,5 @@ async fn pre_tool_use(
         .attr("gen_ai.agent.id", caller.agent.clone())
         .attr("why", why);
     s.writer.record(event);
-    let reason = format!("Gathr asks because {why}");
-    Json(
-        json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
-        "permissionDecision": "ask", "permissionDecisionReason": reason } }),
-    )
+    decide("ask", format!("Gathr asks because {why}"))
 }

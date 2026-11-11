@@ -37,15 +37,16 @@ pub fn service(
         Ok(Tools {
             chats: chats.clone(),
             stopping: stopping.clone(),
-            tool_router: Tools::tool_router()
-                + Tools::coord_router()
-                + Tools::person_router()
-                + Tools::checks_router()
-                + Tools::message_router()
-                + Tools::merge_router(),
+            tool_router: Tools::every_router(),
         })
     };
     StreamableHttpService::new(tools, Default::default(), config)
+}
+
+/// Every tool's name, for an engine's own allow list.
+pub fn names() -> Vec<String> {
+    let tools = Tools::every_router().list_all();
+    tools.into_iter().map(|t| t.name.to_string()).collect()
 }
 
 #[derive(Clone)]
@@ -63,6 +64,17 @@ pub struct ReadChat {
     limit: Option<u32>,
     /// One message, whole, by its id: for one that came back cut.
     message: Option<String>,
+}
+
+impl Tools {
+    fn every_router() -> ToolRouter<Self> {
+        Tools::tool_router()
+            + Tools::coord_router()
+            + Tools::person_router()
+            + Tools::checks_router()
+            + Tools::message_router()
+            + Tools::merge_router()
+    }
 }
 
 #[tool_router]

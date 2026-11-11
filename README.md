@@ -8,12 +8,12 @@ Early, with a working Windows/macOS desktop window and local browser UI. Claude 
 
 ## Build and check
 
-Needs [Rust](https://rustup.rs) (`rust-toolchain.toml` pins the version) and Node 24 (`ui/.node-version`). Run `npm ci` in `ui/` first; repeat it when the lockfile changes.
+Needs [Rust](https://rustup.rs) (`rust-toolchain.toml` pins the version), Node 24 (`ui/.node-version`) and [cargo-nextest](https://nexte.st) (`cargo install cargo-nextest --locked`). Run `npm ci` in `ui/` first; repeat it when the lockfile changes.
 
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-cargo test --workspace --locked
+cargo nextest run --workspace --locked
 bash scripts/check-file-size.sh
 node scripts/scrub-frames.check.mjs
 node scripts/registry.check.mjs

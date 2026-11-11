@@ -106,3 +106,30 @@ original composition; the new type contract supersedes their sizing. See
 [Title first](search/v1.html), selected 2026-11-10, extends the existing Tasks
 flyout shell. Snippet first (v2) is retired. system.html#search-preview shows the
 selected rows and fixture states. See [Search checks](search/README.md).
+
+## Preview checks
+
+
+The current reference and retired pages are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root.
+`node designs/check-focus.cjs` checks keyboard panel focus against hover in installed Edge on Windows or WebKit on macOS
+(uses the UI dependencies).
+Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
+Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
+`designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
+The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
+Team messages use 0015's split conversation with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
+split retention, independent scrolling, plan/Summary progress, keyboard controls and draft retention in both sizes and themes (uses the UI dependencies).
+No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
+
+Archive and stale uses `designs/archive-stale/v3.html`, refining the selected folded group from v1.
+`node designs/archive-stale/check-selected.cjs <absolute evidence folder outside the repo>` checks it and
+`system.html` at 1440 and 1024px in both themes, including confirms, Help, Idle labels and day limits.
+The original v1/v2 proposals stay unchanged; the v2 archive flyout is retired.
+
+Typography: `node designs/check-typography.cjs <absolute evidence folder outside the repo>`
+checks the self-hosted face, 450 weight, size scale, message baselines, split plus
+workspace, Summary and overflow at 1440, 1024 and 390px in both themes.
+
+Search reference: `node designs/check-search.cjs <absolute evidence folder outside the repo>`
+checks the selected and retired rows, shared Tasks shell, retained query, keyboard cursor,
+Archived label and fixture states at 1440, 1024 and 390px in both themes.

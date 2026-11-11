@@ -93,7 +93,13 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         server["headers"]["Authorization"], "Bearer ${GATHR_AGENT_TOKEN}",
         "the token went into the arguments, where any process can read it"
     );
-    assert_eq!(engine.after("--allowedTools"), "mcp__gathr");
+    // Each tool by name but `wait`: its check is auto mode's classifier's to read, or the hook's (0029).
+    let allowed: Vec<&str> = engine.after("--allowedTools").split(',').collect();
+    assert!(allowed.contains(&"mcp__gathr__give_task"), "{allowed:?}");
+    assert!(
+        !allowed.contains(&"mcp__gathr__wait") && !allowed.contains(&"mcp__gathr"),
+        "wait is allowed without a look: {allowed:?}"
+    );
 
     let port = service.info.port;
     let listed = mcp(port, &engine.token, "tools/list", json!({}), None);
@@ -396,4 +402,82 @@ fn a_follow_up_read_during_a_turn_counts_in_what_the_turn_was_given_however_it_e
             "exits {exits}: the follow-up isn't counted"
         );
     }
+}
+
+/// G162: Codex keeps an older revision's session open on a `GET /mcp` stream, which rmcp ends only
+/// after 300 idle seconds. A stop waited for it, the listener already gone, for up to 5 minutes.
+#[test]
+fn a_stop_ends_an_engines_open_tool_stream_at_once() {
+    use std::io::{Read, Write};
+    use std::time::{Duration, Instant};
+
+    let data = TempDir::new();
+    let (args, env) = (data.0.join("args.jsonl"), data.0.join("env.jsonl"));
+    let mut service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("signed_in")),
+            ("GATHR_REPLAY_ARGS", &args),
+            ("GATHR_REPLAY_ENV", &env),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    send(&service, &chat, &orin, "Say hi");
+    let token = started(&args, &env).token;
+    let port = service.info.port;
+
+    let auth = format!("Bearer {token}");
+    let initialize = json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": { "name": "test", "version": "1.0" } } });
+    let headers = [
+        ("Authorization", auth.as_str()),
+        ("Content-Type", "application/json"),
+        ("Accept", "application/json, text/event-stream"),
+    ];
+    let opened = gathr::http::post(port, "/mcp", &headers, &initialize.to_string()).unwrap();
+    assert_eq!(opened.status, 200, "{}", opened.body);
+    let session = opened
+        .headers
+        .lines()
+        .find_map(|l| {
+            let (name, value) = l.split_once(':')?;
+            name.eq_ignore_ascii_case("mcp-session-id")
+                .then(|| value.trim().to_string())
+        })
+        .unwrap_or_else(|| panic!("no session: {}", opened.headers));
+    let mut with_session = headers.to_vec();
+    with_session.push(("Mcp-Session-Id", session.as_str()));
+    let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
+    let noted = gathr::http::post(port, "/mcp", &with_session, &initialized.to_string()).unwrap();
+    assert_eq!(noted.status, 202, "{}", noted.body);
+
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let get = format!(
+        "GET /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: {auth}\r\n\
+         Accept: text/event-stream\r\nMcp-Session-Id: {session}\r\n\r\n"
+    );
+    stream.write_all(get.as_bytes()).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let mut head = [0u8; 12];
+    stream.read_exact(&mut head).unwrap();
+    assert_eq!(&head, b"HTTP/1.1 200", "the stream didn't open");
+
+    let asked = Instant::now();
+    let _ = service.call("POST", "/api/shutdown");
+    while asked.elapsed() < Duration::from_secs(30) {
+        if service.child.try_wait().unwrap().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let took = asked.elapsed();
+    assert!(
+        took < Duration::from_secs(15),
+        "the service took {took:?} to stop with a tool stream open"
+    );
+    drop(stream);
 }

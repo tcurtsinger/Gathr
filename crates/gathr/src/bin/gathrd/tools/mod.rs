@@ -16,7 +16,7 @@ mod person;
 mod server;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
-pub use server::service;
+pub use server::{names, service};
 
 /// Who a tool call comes from: the engine's agent and chat, and the trace of the turn it's on.
 #[derive(Clone)]
@@ -144,5 +144,41 @@ impl Drop for Pass {
             .expect("never poisoned")
             .remove(&self.token);
         let _ = std::fs::remove_file(&self.briefing);
+    }
+}
+
+/// An older revision's session holds a `GET /mcp` stream open (Codex's does), carrying only what
+/// the server sends unasked, which Gathr never does; rmcp ends it after 300 idle seconds. A stop
+/// waited that long for it (G162), so it ends as the service starts stopping. Calls answer on their
+/// own requests, which finish as they would.
+pub fn until_stop(
+    response: axum::response::Response,
+    stopping: tokio::sync::watch::Receiver<bool>,
+) -> axum::response::Response {
+    let (parts, body) = response.into_parts();
+    let stopped = Box::pin(async move {
+        let mut stopping = stopping;
+        let _ = stopping.wait_for(|stop| *stop).await;
+    });
+    axum::response::Response::from_parts(parts, axum::body::Body::new(UntilStop { body, stopped }))
+}
+
+struct UntilStop {
+    body: axum::body::Body,
+    stopped: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>>,
+}
+
+impl axum::body::HttpBody for UntilStop {
+    type Data = axum::body::Bytes;
+    type Error = axum::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+        if self.stopped.as_mut().poll(cx).is_ready() {
+            return std::task::Poll::Ready(None);
+        }
+        std::pin::Pin::new(&mut self.body).poll_frame(cx)
     }
 }
