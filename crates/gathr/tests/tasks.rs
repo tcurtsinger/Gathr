@@ -626,11 +626,16 @@ fn a_task_is_refused_with_why() {
         "that agent isn't in this chat: its agents are Lead, Ann, Bo"
     );
     g.owner = "ann";
-    let long = "x".repeat(201);
+    let long = "x".repeat(81);
     g.what = &long;
     assert_eq!(
         refusal(tasks::give(&mut conn, &g, T)),
-        "`what` is one line of 1 to 200 characters"
+        "`what` is 81 characters: cut 1 to fit 80, and put the details in `why`"
+    );
+    g.what = "Fix it\nnow";
+    assert_eq!(
+        refusal(tasks::give(&mut conn, &g, T)),
+        "`what` is one line of 1 to 80 characters"
     );
     g.what = "Fix it";
     g.chat = "other";

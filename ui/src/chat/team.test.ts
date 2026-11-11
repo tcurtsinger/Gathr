@@ -225,7 +225,9 @@ test("the person's answers the lead heard show as one quiet line each where it h
   expect(ids(main)).not.toContain('back-gathr');
   const line = main.find((m) => m.id?.startsWith('heard-gathr')) as ThreadMessageLike;
   expect(line.role).toBe('system');
-  expect(custom(line)).toEqual({ answered: ['You answered #5 · B: two sections'] });
+  expect(custom(line)).toEqual({
+    answered: [{ line: 'You answered #5 · B: two sections', asked: 'Which notice?' }],
+  });
 });
 
 test("Gathr's wake-up reads as Gathr's, not as the agent's reply", () => {

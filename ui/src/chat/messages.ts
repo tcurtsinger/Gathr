@@ -32,9 +32,9 @@ export type Custom = {
   /** What Gathr told an agent outside a task: a wake-up. */
   gathr?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
-  assignment?: { from?: string; to?: string; what: string };
-  /** The person's answers its giver heard in this turn: "You answered #26 · B". */
-  answered?: string[];
+  assignment?: { from?: string; to?: string; what: string; why?: string };
+  /** The person's answers its giver heard in this turn: "You answered #26 · B", and the question. */
+  answered?: { line: string; asked: string }[];
 };
 
 /** The chat's two columns: the Supervisor's conversation, and the team's work on hand-offs. */
@@ -181,7 +181,7 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
   const heard = group.gathr ? answered(state, id) : [];
-  const who = `${agent}|${role}|${JSON.stringify(task)}|${heard.join('\n')}`;
+  const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(heard)}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
@@ -203,7 +203,12 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
 function taskLine(turn: Turn | undefined, state: ChatState, crew: Team): Custom['assignment'] {
   const task = turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task);
   if (!task) return undefined;
-  return { from: crew.name(task.giver), to: crew.name(task.owner), what: task.what };
+  return {
+    from: crew.name(task.giver),
+    to: crew.name(task.owner),
+    what: task.what,
+    why: task.why ?? undefined,
+  };
 }
 
 function toUser(m: Message): ThreadMessageLike {
@@ -216,11 +221,11 @@ function toUser(m: Message): ThreadMessageLike {
 }
 
 /** The person's answers that a hear-back in this turn told their asker, one line each. */
-function answered(state: ChatState, turn: string | null): string[] {
+function answered(state: ChatState, turn: string | null): NonNullable<Custom['answered']> {
   if (!turn) return [];
   return state.tasks
     .filter((t) => t.kind === 'person' && t.state === 'done' && t.heard_in === turn)
-    .map((t) => `You answered #${t.number} · ${t.reason ?? 'Done'}`);
+    .map((t) => ({ line: `You answered #${t.number} · ${t.reason ?? 'Done'}`, asked: t.what }));
 }
 
 function toGathr(m: Message, line: Custom | undefined): ThreadMessageLike {

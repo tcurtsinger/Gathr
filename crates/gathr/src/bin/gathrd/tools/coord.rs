@@ -20,9 +20,9 @@ use super::server::{Tools, caller_of};
 pub struct GiveTask {
     /// The agent who does it, by name: one of this chat's.
     to: String,
-    /// What to do, in one line (at most 200 characters).
+    /// A short title, at most 80 characters: the details go in `why`.
     what: String,
-    /// Why, and anything the owner needs to know.
+    /// Why, the details, and anything the owner needs to know.
     why: Option<String>,
     /// Task numbers that must be done before this one starts.
     after: Option<Vec<i64>>,

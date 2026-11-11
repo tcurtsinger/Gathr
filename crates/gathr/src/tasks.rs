@@ -20,8 +20,10 @@ use records::{OptionalTask, read, set, state_of};
 
 pub use words::{name_of, owner_name, wait_name};
 
-/// The longest `what`: one line, read at a glance.
+/// The longest `what` of a question for the person: one line, read at a glance.
 pub const WHAT_MOST: usize = 200;
+/// The longest title of a task an agent gives: its hand-off line reads whole (ux-issues 27).
+pub const TITLE_MOST: usize = 80;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -263,9 +265,16 @@ fn refused(why: impl Into<String>) -> Error {
 /// Gives a task: `waiting` while its `after` tasks aren't all done, else `ready` with its turn.
 pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
     let what = g.what.trim();
-    if what.is_empty() || what.contains('\n') || what.chars().count() > WHAT_MOST {
+    if what.is_empty() || what.contains('\n') {
         return Err(refused(format!(
-            "`what` is one line of 1 to {WHAT_MOST} characters"
+            "`what` is one line of 1 to {TITLE_MOST} characters"
+        )));
+    }
+    let long = what.chars().count();
+    if long > TITLE_MOST {
+        return Err(refused(format!(
+            "`what` is {long} characters: cut {} to fit {TITLE_MOST}, and put the details in `why`",
+            long - TITLE_MOST
         )));
     }
     let tx = conn.transaction()?;

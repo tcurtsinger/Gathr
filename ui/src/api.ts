@@ -91,6 +91,8 @@ export interface Task {
   /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
   kind: 'work' | 'review' | 'person' | 'person_request';
   what: string;
+  /** Why it was given, and its details. */
+  why?: string | null;
   state: TaskState;
   reason: string | null;
   /** Tasks it waits for before it starts. */
