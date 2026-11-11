@@ -62,7 +62,8 @@ test("a failed run says so with its reference, each command's exit and time, the
   await expect.element(screen.getByText('npm test exited with 1')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
-  await expect.element(screen.getByText('Exit 0 · 1m 48s')).toBeVisible();
+  // A closed step's summary line: WebKit's toBeVisible counts all but the <summary> itself as hidden there.
+  await expect.element(screen.getByText('Exit 0 · 1m 48s')).toBeInTheDocument();
   await expect.element(screen.getByText('Exit 1 · 27.0 s')).toBeVisible();
   await expect.element(screen.getByText('Expected cursor 42; received 41')).toBeVisible();
   await expect.element(screen.getByText('test result: ok. 36 passed')).not.toBeVisible();
