@@ -61,16 +61,18 @@ pub fn ran_at(conn: &Connection, project: &str, head: &str) -> Result<bool, Erro
     )?)
 }
 
-/// The project's runs, newest first, each with its steps and, once it failed, its reference.
-pub fn list(conn: &Connection, project: &str) -> Result<Vec<Value>, Error> {
+/// The project's newest 50 runs, or with `head` that commit's, newest first: each with its steps
+/// and, once it failed, its reference. A task asks for its PR's head, however old.
+pub fn list(conn: &Connection, project: &str, head: Option<&str>) -> Result<Vec<Value>, Error> {
     let mut runs = conn.prepare_cached(
         "SELECT id, head, state, why, trace_id, started_ts, ended_ts FROM check_runs
-         WHERE project_id = ?1 ORDER BY started_ts DESC LIMIT 50",
+         WHERE project_id = ?1 AND (?2 IS NULL OR head = ?2)
+         ORDER BY started_ts DESC, rowid DESC LIMIT 50",
     )?;
     let mut steps = conn.prepare_cached(
         "SELECT command, exit_code, duration_ms, log FROM check_steps WHERE run_id = ?1 ORDER BY position",
     )?;
-    let rows = runs.query_map([project], |r| {
+    let rows = runs.query_map(params![project, head], |r| {
         let (id, trace): (String, String) = (r.get(0)?, r.get(4)?);
         let state: String = r.get(2)?;
         Ok(json!({

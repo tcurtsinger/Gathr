@@ -1,10 +1,10 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { PersonTask, StaleTask } from '../api';
-import { Notice } from '../components/Notice';
+import type { PersonTask, StaleTask, Task } from '../api';
+import { FailureNotice, Notice } from '../components/Notice';
 import { type Draft, ready } from './model';
-import { StaleTaskView } from './StaleTaskView';
 import { TaskAnswer } from './TaskAnswer';
+import { TaskView, useTask } from './TaskView';
 import './tasks.css';
 
 /** A question Send didn't settle: it stays open, with why and its reference. */
@@ -29,7 +29,9 @@ interface Props {
   onReference: (ref: string) => void;
   /** The chat's stale agent tasks (F11): each opens as its own view, outside the questions' pager. */
   stale?: StaleTask[];
-  onSettle?: (task: StaleTask, action: 'cancel' | 'restart') => Promise<unknown>;
+  onSettle?: (task: Task, action: 'cancel' | 'restart') => Promise<unknown>;
+  /** An agent's task opened from Summary or a hand-off line, shown until Back. */
+  opened?: { chat: string; task: number; project?: string | null; onBack: () => void };
 }
 
 /**
@@ -71,12 +73,15 @@ export function TasksTab(props: Props) {
     if (refusals.length) onSelect(refusals[0].task);
   };
 
+  if (props.opened && props.onSettle)
+    return <OpenedTask {...props.opened} name={name} onSettle={props.onSettle} onReference={onReference} />;
   const agentTask = props.stale?.find((t) => t.number === selected) ?? (task ? undefined : props.stale?.[0]);
   if (agentTask && props.onSettle)
     return (
-      <StaleTaskView
+      <TaskView
         key={agentTask.number}
         task={agentTask}
+        chatTitle={agentTask.chat_title}
         name={name}
         onSettle={props.onSettle}
         onReference={onReference}
@@ -151,5 +156,50 @@ export function TasksTab(props: Props) {
         </div>
       </footer>
     </section>
+  );
+}
+
+type Opened = NonNullable<Props['opened']> &
+  Pick<Props, 'name' | 'onReference'> & {
+    onSettle: NonNullable<Props['onSettle']>;
+  };
+
+/** An agent's task the person opened, kept live as the chat's tasks change. */
+function OpenedTask({ chat, task: number, project, onBack, name, onSettle, onReference }: Opened) {
+  const { tasks, task, failure } = useTask(chat, number);
+  // Loading, refused or gone, Back still leads out.
+  if (!task)
+    return (
+      <section className="tasks" aria-label={`Task #${number}`}>
+        <div className="tasks-scroll">
+          <div className="tasks-page">
+            {failure ? (
+              <FailureNotice failure={failure} onReference={onReference} />
+            ) : (
+              <p className="muted" role="status">
+                {tasks ? `Task #${number} isn't in this chat` : 'Loading'}
+              </p>
+            )}
+          </div>
+        </div>
+        <footer className="tasks-footer">
+          <div className="tasks-pager">
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back
+            </Button>
+          </div>
+        </footer>
+      </section>
+    );
+  return (
+    <TaskView
+      key={task.number}
+      task={task}
+      project={project}
+      name={name}
+      onSettle={onSettle}
+      onReference={onReference}
+      onBack={onBack}
+    />
   );
 }

@@ -45,6 +45,8 @@ export function App() {
   const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
   // Each chat's team column, open until the person hides it (the owner's split chat design).
   const [splits, setSplits] = useState<Record<string, boolean>>({});
+  // An agent's task opened in a chat's Tasks tab, from Summary or a hand-off line (room task 70).
+  const [opened, setOpened] = useState<Record<string, number | undefined>>({});
   // Each chat's plan bar, folded until the person opens it.
   const [plans, setPlans] = useState<Record<string, boolean>>({});
   // A search hit's message (none for a title: the latest), until its chat shows it.
@@ -238,6 +240,7 @@ export function App() {
               name={name}
               onOpen={(t) =>
                 openChat(t.chat, () => {
+                  setOpened((all) => ({ ...all, [t.chat]: undefined }));
                   person.select(t.chat, t.number);
                   person.setOpen(t.chat, true);
                   setTab(t.chat, () => ({ selected: 'tasks' }));
@@ -275,6 +278,11 @@ export function App() {
           onRestore={() => restore(chat)}
           restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
           onReference={openReference}
+          onOpenTask={(task) => {
+            setOpened((all) => ({ ...all, [chat.id]: task }));
+            person.setOpen(chat.id, true);
+            setTab(chat.id, () => ({ selected: 'tasks' }));
+          }}
           split={splits[chat.id] ?? true}
           onSplit={(open) => setSplits((all) => ({ ...all, [chat.id]: open }))}
           plan={!!plans[chat.id]}
@@ -325,6 +333,16 @@ export function App() {
               onReference={openReference}
               stale={person.stale.filter((t) => t.chat === chat.id)}
               onSettle={(t, action) => person.settle(t.number, action)}
+              opened={
+                opened[chat.id] === undefined
+                  ? undefined
+                  : {
+                      chat: chat.id,
+                      task: opened[chat.id] as number,
+                      project: chat.project,
+                      onBack: () => setOpened((all) => ({ ...all, [chat.id]: undefined })),
+                    }
+              }
             />
           }
         />

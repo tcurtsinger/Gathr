@@ -30,6 +30,8 @@ export type LiveEvent =
   // A chat was made, archived, restored (unarchived) or deleted.
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
   | { type: 'project'; project: string; change: 'created' | 'changed' }
+  // A checks run of the project started or ended (0036 C3).
+  | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.

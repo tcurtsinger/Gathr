@@ -41,6 +41,7 @@ export interface Actions {
   resend: (failed: SendFailure) => void;
   carryOn: () => void;
   approve: (request: string, allow: boolean) => void;
+  openTask: (task: number) => void;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
@@ -110,6 +111,7 @@ export function Thread(props: Props) {
       resend: (failed) => latest.current.resend(failed),
       carryOn: () => latest.current.carryOn(),
       approve: (request, allow) => latest.current.approve(request, allow),
+      openTask: (task) => latest.current.openTask(task),
     }),
     [],
   );
@@ -172,7 +174,7 @@ const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } 
 
 /** What Gathr told an agent. */
 function SystemItem() {
-  return <GathrLine custom={useAuiState(custom)} />;
+  return <GathrLine custom={useAuiState(custom)} onOpenTask={useActions().openTask} />;
 }
 
 function UserMessage() {

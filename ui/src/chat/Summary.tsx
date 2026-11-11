@@ -51,6 +51,8 @@ interface Props {
   /** How the chat runs: its own pause or the app's. */
   run: Run;
   onPause: (action: PauseAction, scope: PauseScope) => void;
+  /** Opens a task in the workspace's Tasks tab. */
+  onOpenTask?: (task: number) => void;
 }
 
 /**
@@ -58,7 +60,7 @@ interface Props {
  * "Summary"), with Pause or Resume for each agent alone. The prototype's Radix popover from the chat
  * header, so an agent's menu opens above it; Escape or a click outside closes it.
  */
-export function Summary({ state, pauses, run, onPause }: Props) {
+export function Summary({ state, pauses, run, onPause, onOpenTask }: Props) {
   const members = [...state.members].sort((a, b) => rank(a) - rank(b));
   // A null owner is the person: a question the Supervisor put to them.
   const name = (agent: string | null) =>
@@ -125,7 +127,14 @@ export function Summary({ state, pauses, run, onPause }: Props) {
             renderAgentTasks={(row) => {
               const { todos } = row as Row;
               if (todos.length === 0) return <p className="summary-none">No assigned tasks</p>;
-              return <TodoList className="summary-todos" items={todos} maxVisible={FOLD} />;
+              return (
+                <TodoList
+                  className="summary-todos"
+                  items={todos}
+                  maxVisible={FOLD}
+                  onItemSelect={onOpenTask && ((item) => onOpenTask(Number(item.id)))}
+                />
+              );
             }}
             renderAgentActions={(row) => {
               const { member } = row as Row;

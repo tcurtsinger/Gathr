@@ -487,10 +487,10 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     };
     assert!(followed(&conn), "its PR is still followed for G73");
     tasks::pr_looked(&mut conn, task.number, "OPEN", Some("def5678aaaa"), T).unwrap();
-    assert!(
-        tasks::get(&conn, task.number).unwrap().unwrap().outdated,
-        "G73"
-    );
+    let looked = tasks::get(&conn, task.number).unwrap().unwrap();
+    assert!(looked.outdated, "G73");
+    // The head the look saw, so the window shows the checks run at that commit (0036 C6).
+    assert_eq!(looked.pr_head.as_deref(), Some("def5678aaaa"));
     tasks::pr_looked(&mut conn, task.number, "MERGED", Some("def5678aaaa"), T).unwrap();
     assert_eq!(state(&conn, task.number).0, State::Done);
     assert!(!followed(&conn), "a merged PR is looked at no more");

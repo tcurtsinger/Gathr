@@ -1,0 +1,129 @@
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { api, type Failure, type Task } from '../api';
+import { FailureNotice } from '../components/Notice';
+import { listen } from '../live';
+import { idle } from './model';
+import { TaskChecks } from './TaskChecks';
+
+/** Only a settled task starts again (0010); an open one the person can only cancel. */
+const restartable = new Set(['failed', 'stopped', 'blocked', 'cancelled']);
+
+interface Props {
+  task: Task;
+  chatTitle?: string;
+  /** The chat's project: Gathr's checks run there, so a task with a PR shows its run (0036 C6). */
+  project?: string | null;
+  name: (agent: string | null) => string;
+  /** Settles once the service has done it; a refusal stays on this view with its reference. */
+  onSettle: (task: Task, action: 'cancel' | 'restart') => Promise<unknown>;
+  onReference: (ref: string) => void;
+  /** Back to the chat's questions, for a task opened from Summary or a hand-off line. */
+  onBack?: () => void;
+}
+
+/**
+ * An agent's task (archive-stale/v1, the task-pass and task-fail mock-ups): who has it, its state and
+ * reason, how long it's been idle once stale, its PR's checks run, and Cancel and Restart.
+ */
+export function TaskView({ task, chatTitle, project, name, onSettle, onReference, onBack }: Props) {
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const settle = (action: 'cancel' | 'restart') => {
+    setBusy(true);
+    setFailure(null);
+    onSettle(task, action)
+      .catch(setFailure)
+      .finally(() => setBusy(false));
+  };
+  const meta = [
+    name(task.giver),
+    chatTitle,
+    task.pr ? `PR #${task.pr}` : undefined,
+    task.stale_us ? idle(task.stale_us) : undefined,
+  ].filter(Boolean);
+  return (
+    <section className="tasks" aria-label={`Task #${task.number}`}>
+      <div className="tasks-scroll">
+        <div className="tasks-page">
+          {failure && <FailureNotice failure={failure} onReference={onReference} />}
+          <p className="task-number">Task #{task.number}</p>
+          <h2>{task.what}</h2>
+          <p className="tasks-meta">{meta.join(' · ')}</p>
+          <dl className="task-fields">
+            <dt>Assigned to</dt>
+            <dd>{name(task.owner)}</dd>
+            <dt>State</dt>
+            <dd>{task.state}</dd>
+            {task.reason && (
+              <>
+                <dt>Reason</dt>
+                <dd>{task.reason}</dd>
+              </>
+            )}
+          </dl>
+          {project && task.pr_head && (
+            <TaskChecks project={project} head={task.pr_head} onReference={onReference} />
+          )}
+        </div>
+      </div>
+      <footer className="tasks-footer">
+        <div className="tasks-pager">
+          {onBack ? (
+            <Button size="sm" variant="ghost" onClick={onBack}>
+              Back
+            </Button>
+          ) : (
+            <span />
+          )}
+          <span role="status">{busy ? 'Saving' : ''}</span>
+          <div>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => settle('cancel')}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={busy || !restartable.has(task.state)}
+              onClick={() => settle('restart')}
+            >
+              Restart
+            </Button>
+          </div>
+        </div>
+      </footer>
+    </section>
+  );
+}
+
+/** The chat's task by number, live: it moves with each change to the chat's tasks. A load that works,
+ * or a live list, clears an earlier failure; another task starts afresh. */
+export function useTask(chat: string, number: number) {
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: another task starts afresh, without the last one's failure
+  useEffect(() => {
+    let current = true;
+    setTasks(null);
+    setFailure(null);
+    const got = (list: Task[]) => {
+      if (!current) return;
+      setTasks(list);
+      setFailure(null);
+    };
+    const load = () =>
+      api.tasks(chat).then(
+        (t) => got(t.tasks),
+        (f: Failure) => current && setFailure(f),
+      );
+    load();
+    const off = listen((e) => {
+      if (e.type === 'tasks' && e.chat === chat) got(e.tasks);
+      if (e.type === 'lagged') load();
+    });
+    return () => {
+      current = false;
+      off();
+    };
+  }, [chat, number]);
+  return { tasks, task: tasks?.find((t) => t.number === number) ?? null, failure };
+}
