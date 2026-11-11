@@ -44,8 +44,12 @@ jobs:
         run: cargo fmt --all --check
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # Runs every test binary at once: the suite's time is its tests', one binary after another.
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
       - name: test
-        run: cargo test --workspace --locked
+        run: cargo nextest run --workspace --locked --no-fail-fast
         env:
           GATHR_TEST_KEEP: ${{ runner.temp }}/gathr-test-failures
       # A failing test that ran a service keeps its data folder (tests/common): kept here.
