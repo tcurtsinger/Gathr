@@ -164,3 +164,5 @@ mod tests {
         assert!(!text.contains(['\u{E000}', '\u{E001}']));
     }
 }
+
+// A probe comment for the docs-only CI check.
