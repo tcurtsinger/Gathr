@@ -380,7 +380,14 @@ agent's name, or Found in the project) and when: the Supervisor sets them, the
 person never types one. Required checks (CI, Gathr's checks, Both) and Merge method
 (Fast-forward, Merge commit, Squash via GitHub API) are editable, each with one line
 saying what it means. A project's More in the sidebar has Project settings, which
-opens Projects at that project.
+opens Projects at that project. Checks & merge ends with the checks cache: its size,
+"Unused caches are removed after 14 days" and Clear, which acts at once, apart from Save.
+
+An agent's task opens in the workspace's Tasks tab from its title in Summary's task
+list or Open task in its hand-off line: who has it, its state and reason, and, with a
+PR, Gathr's checks run at the PR's head (passed, failed with its reference, or
+running), each command with its exit, time and log, the failing one's open. Back
+returns to the person's questions.
 
 Diagnostics stays a Settings category: a 210px turn list beside the independently
 scrolling timeline. Failure links open its matching turn and reset conflicting

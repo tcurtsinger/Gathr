@@ -107,3 +107,71 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* Gathr's checks run on a task (0036 C6, the task-pass and task-fail mock-ups). */
+.task-checks {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.task-checks h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.task-checks h3 svg,
+.task-step summary svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.task-checks[data-state="failed"] h3 {
+  color: var(--danger);
+}
+.task-checks p {
+  margin: 0;
+  font-size: 13px;
+}
+.task-checks .mono,
+.task-step code,
+.task-step pre {
+  font-family: ui-monospace, monospace;
+}
+.task-step {
+  border-bottom: 1px solid var(--border);
+}
+.task-step summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 13px;
+}
+.task-step summary small {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.task-step pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  overflow: auto;
+  max-height: 320px;
+  border-radius: 7px;
+  background: var(--raised);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.task-number {
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

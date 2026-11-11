@@ -23,6 +23,7 @@ export function TodoList({
   description,
   maxVisible,
   className,
+  onItemSelect,
   ...props
 }: Omit<ComponentProps<"div">, "children" | "items" | "revision" | "title"> & {
   items: readonly TodoItem[];
@@ -30,6 +31,8 @@ export function TodoList({
   title?: string | undefined;
   description?: string | undefined;
   maxVisible?: number | undefined;
+  /** Gathr: each item's title opens it (Summary's tasks, room task 70). */
+  onItemSelect?: ((item: TodoItem) => void) | undefined;
 }) {
   const done = items.filter((item) => item.status === "done").length;
   const total = items.filter((item) => item.status !== "cancelled").length;
@@ -119,7 +122,17 @@ export function TodoList({
                       "text-muted-foreground line-through decoration-[1.5px]",
                   )}
                 >
-                  {item.text}
+                  {onItemSelect ? (
+                    <button
+                      type="button"
+                      className="cursor-pointer text-left hover:underline"
+                      onClick={() => onItemSelect(item)}
+                    >
+                      {item.text}
+                    </button>
+                  ) : (
+                    item.text
+                  )}
                 </span>
                 {item.status === "failed" ? (
                   item.reason ? (

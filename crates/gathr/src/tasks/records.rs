@@ -56,7 +56,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     let mut t = conn.query_row(
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
-                stale_ts, heard_in
+                stale_ts, heard_in, pr_head
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -88,6 +88,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 created_us: r.get(20)?,
                 stale_us: r.get(21)?,
                 heard_in: r.get(22)?,
+                pr_head: r.get(23)?,
             })
         },
     )?;

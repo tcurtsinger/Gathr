@@ -34,7 +34,7 @@ export type Custom = {
   /** Whom an agent's message is for: "To Pia". */
   to?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
-  assignment?: { from?: string; to?: string; what: string; why?: string };
+  assignment?: { number: number; from?: string; to?: string; what: string; why?: string };
   /** The person's answers its giver heard in this turn: "You answered #26 · B", and the question. */
   answered?: { line: string; asked: string }[];
 };
@@ -217,6 +217,7 @@ function taskLine(turn: Turn | undefined, state: ChatState, crew: Team): Custom[
   const task = turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task);
   if (!task) return undefined;
   return {
+    number: task.number,
     from: crew.name(task.giver),
     to: crew.name(task.owner),
     what: task.what,

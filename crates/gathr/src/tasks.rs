@@ -144,6 +144,8 @@ pub struct Task {
     pub stale_us: Option<i64>,
     /// The turn its giver heard it was settled in: the chat shows the person's answer there.
     pub heard_in: Option<String>,
+    /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0036 C6).
+    pub pr_head: Option<String>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -679,6 +681,12 @@ pub fn pr_looked(
         tx.execute(
             "UPDATE tasks SET outdated = ?2 WHERE number = ?1",
             params![task, past],
+        )?;
+    }
+    if let Some(head) = head {
+        tx.execute(
+            "UPDATE tasks SET pr_head = ?2 WHERE number = ?1",
+            params![task, head],
         )?;
     }
     let pr = t.pr.unwrap_or_default();

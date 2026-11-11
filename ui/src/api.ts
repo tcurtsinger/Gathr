@@ -106,6 +106,9 @@ export interface Task {
   created_us: number;
   /** The turn its giver heard it was settled in: a person task's answer shows there. */
   heard_in?: string | null;
+  /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
+  pr?: number | null;
+  pr_head?: string | null;
 }
 
 /** An agent's stale task, on the person's list across chats. */
@@ -161,6 +164,27 @@ export interface ProjectCheck {
   /** The agent that set it, by id, or `found` when Gathr found it in the project. */
   source: string;
   set: string;
+}
+
+/** A run of a project's checks at one commit (0036 C3): its commands in order, stopping at the first failure. */
+export interface CheckRun {
+  run: string;
+  head: string;
+  state: 'running' | 'passed' | 'failed';
+  why: string | null;
+  /** Once it failed: the reference its events trace from. */
+  ref: string | null;
+  started: string;
+  ended: string | null;
+  steps: CheckStep[];
+}
+
+export interface CheckStep {
+  command: string;
+  exit: number | null;
+  duration_ms: number;
+  /** The end of what it printed. */
+  log: string;
 }
 
 /** What a project's settings change: only what it names; the team whole. */
@@ -319,6 +343,14 @@ export const api = {
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
   saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
+  /** One commit's checks runs, newest first, however many the project has had since. */
+  checkRuns: (id: string, head: string) =>
+    call<{ runs: CheckRun[] }>(
+      'GET',
+      `/api/projects/${id}/checks/runs?head=${encodeURIComponent(head)}`,
+    ).then((r) => r.runs),
+  caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
+  clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   /** The person's open questions, and agents' stale tasks across chats. */

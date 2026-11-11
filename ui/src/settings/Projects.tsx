@@ -5,6 +5,7 @@ import { type Agent, api, type Failure, type Project, type ProjectChange, type R
 import { began } from '../chat/waits';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
+import { ChecksCache } from './ChecksCache';
 import { Team } from './ProjectTeam';
 import './agents.css';
 import './projects.css';
@@ -164,7 +165,7 @@ function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps
           <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
         </>
       ) : (
-        <Checks project={project} agents={agents} fields={fields} edit={edit} />
+        <Checks project={project} agents={agents} fields={fields} edit={edit} onReference={onReference} />
       )}
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
@@ -187,10 +188,11 @@ interface ChecksProps {
   agents: Agent[];
   fields: Fields;
   edit: (more: Partial<Fields>) => void;
+  onReference: Open;
 }
 
 /** The checks as the Supervisor set them (the person never types one), then what gates a merge. */
-function Checks({ project, agents, fields, edit }: ChecksProps) {
+function Checks({ project, agents, fields, edit, onReference }: ChecksProps) {
   const heading = useId();
   const who = (source: string) =>
     source === 'found'
@@ -231,6 +233,7 @@ function Checks({ project, agents, fields, edit }: ChecksProps) {
         value={fields.merge}
         onChange={(merge) => edit({ merge: merge as Project['merge'] })}
       />
+      <ChecksCache project={project.id} onReference={onReference} />
     </>
   );
 }
