@@ -46,6 +46,14 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   Without it this PC's readiness is `notConfigured` and `workspace-write` runs `readOnly`; with it
   readiness is `ready` and the thread runs `workspaceWrite`. The legacy backends (`elevated` needs
   an administrator prompt and its own Windows users) are never set up by Gathr.
+- **Network (owner's call, 2026-11-10):** `edits` and `auto` open the thread with
+  `config.sandbox_workspace_write.network_access = true`, beside the writable roots. Writes stay in the agent's
+  folders and every push still asks. Why: since the reviewer merges (#96), a Codex reviewer must reach GitHub; with
+  the network off, Vale's `gh pr view 85` failed ("error connecting to api.github.com") and no escalation was asked
+  for, so #85 and #86 waited. Claude agents already have the network (no sandbox on Windows, 0029). Turned down:
+  keeping it off and telling agents to escalate (Auto's reviewer decides each time, and in Edits each one asks the
+  person); a Gathr merge tool (more code); Full approvals for the reviewer (no sandbox at all). `ask` stays
+  `read-only` with no network.
 - **Gathr's tools (0005):** `-c mcp_servers.gathr.url=…`, `bearer_token_env_var =
   "GATHR_AGENT_TOKEN"`, `default_tools_approval_mode = "approve"` (one of `auto`, `prompt`,
   `writes`, `approve`, [MCP](https://learn.chatgpt.com/codex/extend/mcp)), and `tool_timeout_sec`

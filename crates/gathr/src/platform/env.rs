@@ -98,7 +98,7 @@ pub(super) fn export(key: &str) -> Result<Vec<u8>, String> {
     let ran = run(command, Duration::from_secs(10));
     let read = std::fs::read(&file);
     let _ = std::fs::remove_file(&file);
-    ran?;
+    ran.map_err(|e| format!("{key} wasn't exported: {e}"))?;
     read.map_err(|e| format!("{key} wasn't read: {e}"))
 }
 

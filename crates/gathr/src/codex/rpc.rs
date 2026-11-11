@@ -301,9 +301,14 @@ impl Session {
         if let Some(model) = &o.model {
             params["model"] = model.clone().into();
         }
-        if !o.writable.is_empty() {
-            let roots = json!({ "writable_roots": o.writable });
-            params["config"] = json!({ "sandbox_workspace_write": roots });
+        // Edits and Auto: writes stay in the agent's folders, the network is on as for Claude
+        // agents (the owner's call, 2026-11-10), so `gh` and `git fetch` work; pushes still ask.
+        if sandbox == "workspace-write" {
+            let mut table = json!({ "network_access": true });
+            if !o.writable.is_empty() {
+                table["writable_roots"] = json!(o.writable);
+            }
+            params["config"] = json!({ "sandbox_workspace_write": table });
         }
         Some(match &o.resume {
             Some(thread) => {
@@ -573,6 +578,25 @@ mod tests {
             "{}",
             sent[2]
         );
+    }
+
+    /// The owner's call (2026-11-10): a Codex reviewer must reach GitHub to merge, as Claude agents can.
+    #[test]
+    fn edits_and_auto_open_the_thread_with_the_network_on_and_ask_without() {
+        use crate::agents::Approvals;
+        for (approvals, on) in [
+            (Approvals::Edits, Some(true)),
+            (Approvals::Auto, Some(true)),
+            (Approvals::Ask, None),
+        ] {
+            let opening = Opening {
+                policy: crate::codex::command::policy(approvals),
+                ..opening()
+            };
+            let (_, _, sent) = played("codex_signed_out", opening);
+            let network = &sent[2]["params"]["config"]["sandbox_workspace_write"]["network_access"];
+            assert_eq!(network.as_bool(), on, "{approvals:?}: {}", sent[2]);
+        }
     }
 
     #[test]
