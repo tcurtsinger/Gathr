@@ -68,7 +68,7 @@ export function SubagentList({
           const percentage = pct(progress[index] ?? 0, 100);
           const row = (
             <>
-              <span className="flex items-center gap-2.5 pr-7">
+              <span className="flex items-center gap-2.5 pr-(--subagent-actions,1.75rem)">
                 {agent.avatar}
                 <span className="flex min-w-0 flex-1 flex-col leading-[1.4]">
                   <span className="truncate text-[13px] font-medium">

@@ -1,4 +1,15 @@
-import type { Member, Message, Pauses, PersonTask, StaleTask, Task, ToolBody, TurnStatus, Wait } from './api';
+import type {
+  Context,
+  Member,
+  Message,
+  Pauses,
+  PersonTask,
+  StaleTask,
+  Task,
+  ToolBody,
+  TurnStatus,
+  Wait,
+} from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
 export type LiveEvent =
@@ -34,6 +45,8 @@ export type LiveEvent =
   | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
+  // How full an agent's context is, after each model call or compaction.
+  | { type: 'context'; chat: string; agent: string; context: Context }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.
   | ({ type: 'pauses' } & Pauses)
   // An account was added, renamed, or signed in or out: reload accounts.

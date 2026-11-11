@@ -123,6 +123,11 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, tasks: event.tasks, waits: event.waits };
     case 'members':
       return { ...state, members: event.members };
+    case 'context':
+      return {
+        ...state,
+        members: state.members.map((m) => (m.agent === event.agent ? { ...m, context: event.context } : m)),
+      };
     default:
       return state;
   }

@@ -104,3 +104,25 @@ test("each agent's progress counts its done tasks in this chat, cancelled left o
   await page.getByRole('button', { name: /^Made-up Third/ }).click();
   await expect.element(page.getByText('No assigned tasks')).toBeVisible();
 });
+
+test("each agent's context shows beside its name, from the engine's fill and window; none before its first call", async () => {
+  const state = {
+    ...empty,
+    members: [
+      { ...members[0], context: { used: 250_000, window: 1_000_000 } },
+      { ...members[1], context: null },
+    ],
+  };
+  const screen = await render(
+    <Summary
+      state={state}
+      pauses={{ pauses: [], usage: [] }}
+      run={{ state: 'running', by: null, scope: null }}
+      onPause={() => {}}
+    />,
+  );
+  await screen.getByRole('button', { name: 'Summary' }).click();
+  const bars = page.getByRole('dialog', { name: 'Summary' }).getByRole('button', { name: 'Context usage' });
+  await expect.element(bars).toHaveTextContent('250k (25%)');
+  expect(bars.elements()).toHaveLength(1);
+});
