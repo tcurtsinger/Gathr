@@ -133,12 +133,14 @@ fn block(header: &str, body: &[&str]) -> Option<String> {
         .iter()
         .find(|l| !l.trim().is_empty())
         .map(|l| indent(l))?;
+    // Only the block's indent is layout: every character past it, spaces too, is the script's.
     let mut lines = Vec::new();
     for line in body {
-        match line.trim().is_empty() {
+        let blank = line.trim().is_empty();
+        match line.len() <= base && blank {
             true => lines.push(""),
-            false if indent(line) < base || folded && indent(line) > base => return None,
-            false => lines.push(line[base..].trim_end()),
+            false if indent(line) < base && !blank || folded && indent(line) > base => return None,
+            false => lines.push(&line[base..]),
         }
     }
     while lines.last() == Some(&"") {
@@ -293,6 +295,32 @@ steps:
                 "if true; then\n  echo hi\nfi\n\necho done",
             ],
             "and a block form it doesn't read (`|2`) isn't offered at all"
+        );
+    }
+
+    /// Vale, #112: only YAML's own indent comes off a literal block. A trailing space after `\`
+    /// and a line of spaces in a heredoc are the script's, not layout.
+    #[test]
+    fn a_literal_block_keeps_every_character_past_its_indent() {
+        let workflow = [
+            "steps:",
+            "  - run: |",
+            "      echo a \\ ",
+            "      && echo b",
+            "      cat <<EOF",
+            "        ",
+            "      EOF",
+            "  - run: >",
+            "      echo folded",
+            "        ",
+            "      echo more",
+            "",
+        ]
+        .join("\n");
+        assert_eq!(
+            run_steps(&workflow),
+            ["echo a \\ \n&& echo b\ncat <<EOF\n  \nEOF"],
+            "and a folded block with a line of spaces past its indent isn't offered"
         );
     }
 }
