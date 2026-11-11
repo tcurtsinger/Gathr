@@ -65,7 +65,8 @@ impl Task {
         let (tool, why) = if kind == "check" {
             (
                 "wait check".to_string(),
-                "Gathr runs this check outside the engine sandbox".to_string(),
+                "Gathr runs this check in sh (Git Bash on Windows), outside the engine sandbox"
+                    .to_string(),
             )
         } else {
             let risk = risk.unwrap_or_default();

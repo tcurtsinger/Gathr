@@ -19,8 +19,39 @@ pub struct Fresh {
     pub why: Option<String>,
 }
 
-#[cfg(windows)]
+/// What git reads to find its repository instead of the folder it runs in (`git rev-parse
+/// --local-env-vars`, as git 2.55 lists them). A service started from a git hook or `git bisect run` inherits
+/// some: every git it ran, and its agents', acted on that repository (S37: a test's `git init`
+/// turned the shared repo bare).
+pub const LOCAL_GIT_VARS: [&str; 15] = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
+];
+
+/// The environment a new sign-in would give, without `LOCAL_GIT_VARS`.
 pub fn fresh(inherited: Vars) -> Fresh {
+    let local = |name: &OsString| {
+        let name = name.to_string_lossy();
+        LOCAL_GIT_VARS.iter().any(|v| v.eq_ignore_ascii_case(&name))
+    };
+    read(inherited.into_iter().filter(|(k, _)| !local(k)).collect())
+}
+
+#[cfg(windows)]
+fn read(inherited: Vars) -> Fresh {
     const MACHINE: &str = r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
     const USER: &str = r"HKCU\Environment";
     match (registry(MACHINE), registry(USER)) {
@@ -38,7 +69,7 @@ pub fn fresh(inherited: Vars) -> Fresh {
 }
 
 #[cfg(target_os = "macos")]
-pub fn fresh(mut inherited: Vars) -> Fresh {
+fn read(mut inherited: Vars) -> Fresh {
     match login_path() {
         Ok(login) => {
             let old = get(&inherited, "PATH", false);
@@ -58,7 +89,7 @@ pub fn fresh(mut inherited: Vars) -> Fresh {
 }
 
 #[cfg(not(any(windows, target_os = "macos")))]
-pub fn fresh(inherited: Vars) -> Fresh {
+fn read(inherited: Vars) -> Fresh {
     Fresh {
         vars: inherited,
         from: "inherited",
@@ -294,6 +325,38 @@ fn set(vars: &mut Vars, name: &str, value: String, ignore_case: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// S37: a service started inside a git hook or `git bisect run` inherits `GIT_DIR`; git run
+    /// with it acts on that repository whatever folder it's in.
+    #[test]
+    fn git_finds_its_own_repository_whatever_the_service_inherited() {
+        let root = std::env::temp_dir().join(format!("gathr-s37-{}", crate::ids::span_id()));
+        let (decoy, fresh_repo) = (root.join("decoy"), root.join("fresh"));
+        std::fs::create_dir_all(&fresh_repo).unwrap();
+        let mut init = Command::new("git");
+        for var in LOCAL_GIT_VARS {
+            init.env_remove(var);
+        }
+        let init = init.args(["init", "-q"]).arg(&decoy).status();
+        assert!(init.unwrap().success());
+        let mut inherited: Vars = std::env::vars_os().collect();
+        inherited.push(("GIT_DIR".into(), decoy.join(".git").into()));
+        inherited.push(("git_work_tree".into(), decoy.clone().into()));
+        let vars = fresh(inherited).vars;
+        let made = Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(&fresh_repo)
+            .env_clear()
+            .envs(vars.iter().cloned())
+            .status();
+        assert!(made.unwrap().success());
+        let found = fresh_repo.join(".git").is_dir();
+        let _ = std::fs::remove_dir_all(&root);
+        assert!(
+            found,
+            "git init went to the inherited GIT_DIR, not the folder it ran in"
+        );
+    }
 
     /// UTF-16 with its byte-order mark, as `reg export` writes it.
     fn utf16(text: &str) -> Vec<u8> {
