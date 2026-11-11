@@ -675,10 +675,6 @@ pub fn pr_looked(
     if !t.state.settled() || t.state == State::Blocked {
         match pr_state.as_str() {
             "MERGED" => {
-                // Heard while it waited on this merge: its giver, still held on it, hears again.
-                if t.state == State::Held {
-                    tx.execute("UPDATE tasks SET heard = 0 WHERE number = ?1", [task])?;
-                }
                 set(
                     &tx,
                     task,

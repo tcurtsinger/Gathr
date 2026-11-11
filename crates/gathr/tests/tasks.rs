@@ -789,12 +789,13 @@ fn a_wait_on_an_agent_doing_your_task_is_refused_since_the_hear_back_covers_it()
 
 /// Ann's work on `pr`, given in Lead's turn, which has ended: Lead is the one to hear back.
 fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
-    turn(conn, "lead-turn", "lead", None, "running");
+    let giving = format!("lead-{pr}");
+    turn(conn, &giving, "lead", None, "running");
     let fix = Give {
         chat: "c",
         giver: Some("lead"),
         owner: "ann",
-        given_in: Some("lead-turn"),
+        given_in: Some(&giving),
         parent: None,
         kind: Kind::Work,
         what: "Fix the summary",
@@ -803,12 +804,9 @@ fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
         pr: Some(pr),
     };
     let fix = tasks::give(conn, &fix, T).unwrap().0.number;
-    conn.execute(
-        "UPDATE turns SET status = 'done' WHERE id = 'lead-turn'",
-        [],
-    )
-    .unwrap();
-    assert!(tasks::turn_ended(conn, "lead-turn", T).unwrap().is_empty());
+    conn.execute("UPDATE turns SET status = 'done' WHERE id = ?1", [&giving])
+        .unwrap();
+    assert!(tasks::turn_ended(conn, &giving, T).unwrap().is_empty());
     fix
 }
 
@@ -892,4 +890,32 @@ fn a_review_still_open_holds_the_hear_back_until_it_settles() {
     let lead = to(&starts, "lead");
     assert_eq!(lead.len(), 1, "{starts:?}");
     assert!(lead[0].contains("waiting on #86 to merge"), "{}", lead[0]);
+}
+
+/// Ann's work on `pr` held only on its merge, already heard by Lead (Vale's #100 review).
+fn heard_while_held(conn: &mut Connection, pr: i64) -> i64 {
+    let fix = work_on_pr(conn, pr);
+    let starts = work(conn, fix, Some(Finish::Done), 2);
+    assert_eq!(to(&starts, "lead").len(), 1, "{starts:?}");
+    fix
+}
+
+#[test]
+fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let fix = heard_while_held(&mut conn, 87);
+    let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, T).unwrap();
+    let lead = to(&closed, "lead");
+    assert_eq!(lead.len(), 1, "{closed:?}");
+    assert!(
+        lead[0].contains("#87 was closed without merging"),
+        "{}",
+        lead[0]
+    );
+    let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, T).unwrap();
+    assert!(to(&again, "lead").is_empty(), "heard once: {again:?}");
+    let fix = heard_while_held(&mut conn, 88);
+    let cancelled = tasks::cancel(&mut conn, None, fix, "not needed", T).unwrap();
+    assert_eq!(to(&cancelled, "lead").len(), 1, "{cancelled:?}");
 }

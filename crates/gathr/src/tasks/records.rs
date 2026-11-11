@@ -16,10 +16,13 @@ pub fn set(
     reason: Option<&str>,
     trace: &str,
 ) -> Result<(), Error> {
+    // A task heard while held only on its merge (held.rs) is heard again when it settles, merged,
+    // closed or cancelled: its giver's own task is still held on it.
     let chat: String = tx.query_row(
-        "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL WHERE number = ?1
-         RETURNING chat_id",
-        params![task, state.as_str(), reason, now_us()],
+        "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL,
+             heard = CASE WHEN state = 'held' AND ?5 THEN 0 ELSE heard END
+         WHERE number = ?1 RETURNING chat_id",
+        params![task, state.as_str(), reason, now_us(), state.settled()],
         |r| r.get(0),
     )?;
     let event = Event::point("gathr.task.state").trace(trace).chat(&chat);
