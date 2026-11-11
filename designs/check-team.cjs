@@ -364,7 +364,7 @@ async function check() {
 				);
 				assert.equal(await page.locator("#team-sent-messages b").count(), 0);
 				assert.equal(await draft.inputValue(), "");
-				await page.getByRole("button", { name: "New", exact: true }).click();
+				await page.locator("#new-message").click();
 				assert.equal(await page.locator("#team-sent-messages").innerText(), "");
 				results.push({
 					width,

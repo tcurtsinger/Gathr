@@ -36,7 +36,7 @@ button:where(:not([data-slot])):hover,
 select:where(:not([data-slot])):hover {
   background: var(--raised);
 }
-button:disabled {
+:is(button, select):disabled {
   opacity: 0.5;
   cursor: default;
 }

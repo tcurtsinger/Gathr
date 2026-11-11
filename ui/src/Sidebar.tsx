@@ -15,6 +15,8 @@ interface Props {
   /** A new chat, in the project given. */
   onNew: (project?: string) => void;
   onSettings: (opener: HTMLElement) => void;
+  /** Settings > Projects, at this project. */
+  onProjectSettings: (project: string, opener: HTMLElement | null) => void;
   /** Under New: the Tasks flyout. */
   actions?: ReactNode;
   onArchive: (chat: Chat, opener: HTMLElement | null) => void;
@@ -98,6 +100,11 @@ export function Sidebar(props: Props) {
                     >
                       <Plus aria-hidden="true" />
                     </button>
+                    <ChatMenu
+                      label={`More for ${p.name}`}
+                      className="row-more"
+                      onProjectSettings={(opener) => props.onProjectSettings(p.id, opener)}
+                    />
                   </div>
                   {open && (
                     <div className="project-chats">{chats.filter((c) => c.project === p.id).map(row)}</div>

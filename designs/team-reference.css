@@ -171,10 +171,40 @@
 	margin-top: 24px;
 	margin-bottom: 0;
 }
-.ds-team-message .ds-assignment {
+.ds-assignment,
+.ds-answered {
 	color: var(--muted-foreground);
 	font-size: 12px;
 	margin: 0 0 12px;
+}
+.ds-task-line {
+	display: block;
+	width: 100%;
+	padding: 0 8px;
+	border-radius: 6px;
+	text-align: left;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	list-style: none;
+}
+.ds-task-line::-webkit-details-marker {
+	display: none;
+}
+.ds-task-line:is(:hover, :focus-visible) {
+	outline: none;
+	background: color-mix(in oklab, var(--foreground) 7%, transparent);
+	color: var(--foreground);
+}
+details[open] > .ds-task-line {
+	white-space: normal;
+	overflow-wrap: anywhere;
+}
+.ds-task-line-more {
+	padding: 2px 8px 4px;
+	white-space: pre-line;
+	overflow-wrap: anywhere;
 }
 .ds-team-message .ds-tool-disclosure {
 	margin-top: 8px;

@@ -1,0 +1,82 @@
+/* Settings > Projects (0036, option B): the Agents layout, with two sections in one form. */
+.agent-form .project-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+/* Save and Cancel at the editor's foot, as in the mock-up, however long the section. */
+.project-form > .agent-actions {
+  position: sticky;
+  bottom: -24px;
+  margin: auto -24px -24px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+/* Each group after the first opens with a rule. */
+.project-team,
+.project-form .project-gate {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.project-sections {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+}
+.project-sections button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+.project-sections button[aria-current] {
+  background: var(--raised);
+}
+.project-form h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.project-form p {
+  margin: 0;
+}
+.project-folder,
+.project-checks code {
+  font-family: ui-monospace, monospace;
+}
+.project-checks {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.project-checks li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.project-checks code {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.project-seat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px auto;
+  align-items: center;
+  gap: 12px;
+}
+.project-team .project-add {
+  justify-self: start;
+  width: auto;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+}

@@ -4,7 +4,6 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { ChatView } from './ChatView';
 import type { SendFailure } from './messages';
-import '../theme.css';
 
 /** Two chats and what the app keeps for each while another is open. */
 function TwoChats() {
@@ -250,7 +249,17 @@ test('a new chat is made with its first message, in its project, to its Supervis
       onUnsent={() => {}}
       openSettings={() => {}}
       onNamed={() => {}}
-      projects={[{ id: 'p', name: 'Made-up project', folder: 'x', members }]}
+      projects={[
+        {
+          id: 'p',
+          name: 'Made-up project',
+          folder: 'x',
+          members,
+          checks: [],
+          ci: 'gathr',
+          merge: 'fast-forward',
+        },
+      ]}
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={(text, agent) => started.push({ text, agent })}
