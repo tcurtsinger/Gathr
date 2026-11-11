@@ -213,12 +213,6 @@ impl Room {
             .to_string()
     }
 
-    fn tasks(&self) -> Value {
-        self.service
-            .call("GET", &format!("/api/chats/{}/tasks", self.chat))
-            .json()
-    }
-
     /// A refusal that says `why` and whose reference traces.
     fn refused(&self, answer: &Value, why: &str) {
         let said = text(answer);
@@ -300,7 +294,7 @@ fn of_two_prs_on_one_base_the_second_is_refused_once_the_first_merges() {
 /// The work the PR is for, held on its merge, settles when it merges, at once: the PR looks run
 /// every 2 minutes, and this doesn't wait for one. Its giver hears back when another agent merged;
 /// the one that merged gets no turn to be told what it did (G159). How many hear-backs it got.
-fn merged_with_giver(giver_merges: bool) -> usize {
+fn merged_with_giver(giver_merges: bool) -> (usize, usize) {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let mut room = room(&data.0, &repos.0, false);
     let giver = if giver_merges {
@@ -352,39 +346,55 @@ fn merged_with_giver(giver_merges: bool) -> usize {
         room.heads[0]
     ];
     db.execute(task, review).unwrap();
+    // Vale's own next work waits on the merged work: it becomes ready, and must start (Vale, #120).
+    let next = "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
+                VALUES (3, ?1, ?2, ?3, 'work', 'Follow up', 'waiting', 1, 1)";
+    db.execute(next, rusqlite::params![room.chat, room.lead, room.vale])
+        .unwrap();
+    db.execute(
+        "INSERT INTO task_after (task, after_task) VALUES (3, 1)",
+        [],
+    )
+    .unwrap();
     say(&room, &room.vale);
     // Vale's engine stays up between its turns: a giver that merges uses the same one.
     let vale = if giver_merges { giving } else { room.token() };
 
     let merged = room.call(&vale, "merge", json!({ "pr": 5 }));
     assert_eq!(merged["isError"], false, "{}", text(&merged));
-    assert_eq!(
-        room.tasks()["tasks"][0]["state"],
-        "done",
-        "{}",
-        room.tasks()
-    );
+    let state: String = room
+        .db()
+        .query_row("SELECT state FROM tasks WHERE number = 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(state, "done", "the merged work isn't settled");
     let history = room
         .service
         .call("GET", &format!("/api/chats/{}", room.chat))
         .json();
-    let turns = history["turns"].as_array().unwrap().iter();
-    turns
-        .filter(|t| t["agent"] == giver.as_str() && t["answers"] == gave.as_str())
-        .count()
+    let turns = history["turns"].as_array().unwrap();
+    let heard = turns
+        .iter()
+        .filter(|t| t["agent"] == giver.as_str() && t["answers"] == gave.as_str());
+    let follow_up = turns
+        .iter()
+        .filter(|t| t["agent"] == room.vale.as_str() && t["task"] == 3);
+    (heard.count(), follow_up.count())
 }
 
 #[test]
 fn a_merged_pr_settles_the_work_held_on_it_and_wakes_its_giver_at_once() {
-    assert_eq!(merged_with_giver(false), 1, "the giver didn't hear back");
+    let (heard, follow_up) = merged_with_giver(false);
+    assert_eq!(heard, 1, "the giver didn't hear back");
+    assert_eq!(follow_up, 1, "the merger's next work didn't start");
 }
 
 #[test]
 fn the_agent_that_merged_isnt_woken_to_hear_of_its_own_merge() {
+    let (heard, follow_up) = merged_with_giver(true);
+    assert_eq!(heard, 0, "the merger got a turn to hear of its own merge");
     assert_eq!(
-        merged_with_giver(true),
-        0,
-        "the merger got a turn to hear of its own merge"
+        follow_up, 1,
+        "the merger's next work was dropped with its hear-back"
     );
 }
 

@@ -457,13 +457,27 @@ async fn settle(chats: &Arc<Chats>, caller: &Caller, pr: i64, head: &str) -> Res
             for number in numbers {
                 starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), &trace)?);
             }
-            let (told, own): (Vec<_>, Vec<_>) =
-                starts.into_iter().partition(|s| Some(&s.agent) != merger.as_ref());
-            for start in own {
-                c.execute("DELETE FROM messages WHERE turn_id = ?1", [&start.turn])?;
-                c.execute("DELETE FROM turns WHERE id = ?1", [&start.turn])?;
+            // Only the merger's hear-backs go: each answers a turn the merger gave tasks in. Work
+            // of its own that the merge readied (a task after the merged one) still starts.
+            let mut kept = Vec::new();
+            for start in starts {
+                let heard_by_merger = Some(&start.agent) == merger.as_ref()
+                    && match &start.answers {
+                        Some(gave) => c.query_row(
+                            "SELECT EXISTS (SELECT 1 FROM tasks WHERE given_in = ?1 AND giver = ?2)",
+                            [gave, &start.agent],
+                            |r| r.get::<_, bool>(0),
+                        )?,
+                        None => false,
+                    };
+                if heard_by_merger {
+                    c.execute("DELETE FROM messages WHERE turn_id = ?1", [&start.turn])?;
+                    c.execute("DELETE FROM turns WHERE id = ?1", [&start.turn])?;
+                } else {
+                    kept.push(start);
+                }
             }
-            Ok(told)
+            Ok(kept)
         })
         .await;
     match starts {
