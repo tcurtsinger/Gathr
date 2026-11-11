@@ -19,7 +19,7 @@ const members = [
 const project: Project = {
   id: 'p',
   name: 'Made-up project',
-  folder: 'C:\made-up',
+  folder: 'C:/made-up',
   members: members.map((m) => ({ ...m, role: m.role as 'supervisor' | 'reviewer' })),
   checks: [],
   ci: 'gathr',
