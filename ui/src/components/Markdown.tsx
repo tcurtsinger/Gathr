@@ -67,6 +67,8 @@ export function MarkdownText() {
       components={components}
       linkSafety={{ enabled: false }}
       controls={controls}
+      // Streamdown caps a table at 300px and scrolls it, which hid its header row; it shows whole.
+      tableMaxHeight={Number.POSITIVE_INFINITY}
       plugins={plugins}
       containerClassName="markdown"
     />
