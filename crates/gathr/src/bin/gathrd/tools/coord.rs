@@ -64,7 +64,8 @@ pub struct WaitFor {
     ci: Option<String>,
     /// Until this PR merges or closes.
     pr: Option<i64>,
-    /// Until this shell command exits 0, run every few minutes in your folder.
+    /// Until this command exits 0, run every few minutes in your folder by `sh` (Git Bash on
+    /// Windows, never PowerShell or cmd): write it for that shell.
     check: Option<String>,
     /// What you'll do then: you're told it when woken.
     then: String,
