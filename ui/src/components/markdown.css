@@ -4,6 +4,23 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+/* A reply breaks a long word anywhere, but in a table that shrank a column to one letter: a cell keeps
+   its words whole, and a table too wide for the column scrolls sideways in its frame. */
+.markdown [data-streamdown="table"] {
+  overflow-wrap: normal;
+}
+/* Its width comes from the column, never from the table, so a wide one can't push the chat wider. */
+.markdown :has(> [data-streamdown="table"]) {
+  contain: inline-size;
+}
+/* A header wraps between words like any cell (Streamdown keeps it on one line). */
+.markdown [data-streamdown="table-header-cell"] {
+  white-space: normal;
+}
+/* A command breaks after each hyphen too, so code in a cell stays on one line. */
+.markdown [data-streamdown="table"] code {
+  white-space: nowrap;
+}
 /* A code block's Copy and Download keep Streamdown's size, not Gathr's 32px buttons. */
 .markdown [data-streamdown="code-block-actions"] button {
   min-height: 0;
