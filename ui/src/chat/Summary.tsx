@@ -1,5 +1,6 @@
 import { Popover } from 'radix-ui';
 import { useState } from 'react';
+import { ContextDisplay } from '@/components/assistant-ui/elements/context-display';
 import { type SubagentItem, SubagentList } from '@/components/assistant-ui/elements/subagent-list';
 import { type TodoItem, TodoList } from '@/components/assistant-ui/elements/todo-list';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
@@ -140,16 +141,27 @@ export function Summary({ state, pauses, run, onPause, onOpenTask }: Props) {
               const { member } = row as Row;
               const own = agentPause(pauses, member.agent);
               const agent: PauseScope = { scope: 'agent', target: member.agent };
+              const { used, window } = member.context ?? {};
               return (
-                <ChatMenu
-                  label={`More for ${member.name}`}
-                  side="left"
-                  pause={{
-                    state: own.paused ? 'paused' : 'running',
-                    onPause: () => onPause('pause', agent),
-                    onResume: () => onPause('resume', agent),
-                  }}
-                />
+                <span className="summary-actions">
+                  {/* How full its context is (compaction plan, K2): none until the engine has said. */}
+                  {used != null && window ? (
+                    <ContextDisplay.Bar
+                      modelContextWindow={window}
+                      usage={{ totalTokens: used }}
+                      side="bottom"
+                    />
+                  ) : null}
+                  <ChatMenu
+                    label={`More for ${member.name}`}
+                    side="left"
+                    pause={{
+                      state: own.paused ? 'paused' : 'running',
+                      onPause: () => onPause('pause', agent),
+                      onResume: () => onPause('resume', agent),
+                    }}
+                  />
+                </span>
               );
             }}
           />

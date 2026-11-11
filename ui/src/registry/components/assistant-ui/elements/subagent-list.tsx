@@ -71,7 +71,7 @@ export function SubagentList({
               <span className="flex items-center gap-2.5 pr-7">
                 {agent.avatar}
                 <span className="flex min-w-0 flex-1 flex-col leading-[1.4]">
-                  <span className="truncate text-[13px] font-medium">
+                  <span className="truncate pr-(--subagent-actions,0px) text-[13px] font-medium">
                     {agent.name}
                   </span>
                   <span className="text-muted-foreground text-[11px]">

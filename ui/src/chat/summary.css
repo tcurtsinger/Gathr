@@ -73,3 +73,12 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+/* The context bar beside the More menu (compaction plan, K2): the name's line keeps room for both. */
+.summary [data-slot="subagent-list"] {
+  --subagent-actions: 9.5rem;
+}
+.summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}

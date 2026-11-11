@@ -353,6 +353,14 @@ impl Session {
                     });
                 }
             }
+            // Once, as it completes; Codex 0.166.0 sent no deprecated `thread/compacted` with it.
+            "item/completed" if item["type"] == "contextCompaction" => {
+                read.frames.push(Frame::Compacted {
+                    trigger: "auto".into(),
+                    before: None,
+                    after: None,
+                });
+            }
             "item/completed" if item["type"] == "agentMessage" => {
                 read.frames.push(Frame::Text(text(&item["text"])));
             }
@@ -367,6 +375,14 @@ impl Session {
                 let usage = &params["tokenUsage"];
                 self.total = Some(usage_of(&usage["total"]));
                 add(&mut self.summed, &usage_of(&usage["last"]));
+                // A compaction's usage reads as a call with no input (Codex 0.166.0): no call ran, so
+                // the last real call's fill stands until the next one.
+                if let Some(used) = usage["last"]["inputTokens"].as_i64().filter(|&u| u > 0) {
+                    read.frames.push(Frame::Fill { used, model: None });
+                }
+                if let Some(window) = usage["modelContextWindow"].as_i64() {
+                    read.frames.push(Frame::Windows(vec![(None, window)]));
+                }
             }
             "account/rateLimits/updated" => self.limits = windows(&params["rateLimits"]),
             "error" if params["willRetry"] != true => {
@@ -538,6 +554,15 @@ mod tests {
 
     /// Plays a recording's `out` lines through a session opened as the recording's was.
     fn played(name: &str, opening: Opening) -> (Session, Vec<Frame>, Vec<Value>) {
+        played_until(name, opening, |_| false)
+    }
+
+    /// `played`, ending after the first line the engine sent that `last` picks.
+    fn played_until(
+        name: &str,
+        opening: Opening,
+        last: impl Fn(&Value) -> bool,
+    ) -> (Session, Vec<Frame>, Vec<Value>) {
         let path = format!("{}/tests/frames/{name}.jsonl", env!("CARGO_MANIFEST_DIR"));
         let (mut session, first) = Session::open(opening);
         let (mut frames, mut sent) = (Vec::new(), vec![first]);
@@ -546,9 +571,13 @@ mod tests {
             if row["dir"] != "out" {
                 continue;
             }
-            let read = session.read(&serde_json::from_str(row["line"].as_str().unwrap()).unwrap());
+            let line: Value = serde_json::from_str(row["line"].as_str().unwrap()).unwrap();
+            let read = session.read(&line);
             frames.extend(read.frames);
             sent.extend(read.send);
+            if last(&line) {
+                break;
+            }
         }
         (session, frames, sent)
     }
@@ -560,6 +589,64 @@ mod tests {
             instructions: Some("briefing".into()),
             ..Opening::default()
         }
+    }
+
+    /// A compaction reads once, as its item completes (recorded on a test account, Codex 0.166.0,
+    /// compacting by itself); Codex gives no sizes.
+    #[test]
+    fn a_context_compaction_item_reads_once() {
+        let (_, frames, _) = played("compact_codex", opening());
+        let compacted: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Compacted { .. }))
+            .collect();
+        let once = Frame::Compacted {
+            trigger: "auto".into(),
+            before: None,
+            after: None,
+        };
+        assert_eq!(compacted, [&once]);
+    }
+
+    /// Codex 0.166.0 reports a compaction's usage as a call with no input and no output: no call ran,
+    /// so the fill stays the last real call's, followed or not by a call after it (#125's review).
+    #[test]
+    fn a_compactions_empty_usage_is_no_fill() {
+        let fills = |frames: Vec<Frame>| -> Vec<i64> {
+            frames
+                .into_iter()
+                .filter_map(|f| match f {
+                    Frame::Fill { used, .. } => Some(used),
+                    _ => None,
+                })
+                .collect()
+        };
+        let (_, frames, _) = played("compact_codex", opening());
+        assert_eq!(fills(frames), [14_577, 14_835]);
+        let (_, frames, _) = played_until("compact_codex", opening(), |line| {
+            line["method"] == "item/completed"
+                && line["params"]["item"]["type"] == "contextCompaction"
+        });
+        assert!(frames.iter().any(|f| matches!(f, Frame::Compacted { .. })));
+        assert_eq!(fills(frames), [14_577]);
+    }
+
+    /// Each call's prompt (`last.inputTokens`) and the model's window (compaction plan, K1).
+    #[test]
+    fn token_usage_says_how_full_the_context_is_and_its_window() {
+        let (_, frames, _) = played("codex_signed_in", opening());
+        let fills: Vec<&Frame> = frames
+            .iter()
+            .filter(|f| matches!(f, Frame::Fill { .. }))
+            .collect();
+        assert_eq!(
+            fills.last(),
+            Some(&&Frame::Fill {
+                used: 16_291,
+                model: None
+            })
+        );
+        assert!(frames.contains(&Frame::Windows(vec![(None, 475_000)])));
     }
 
     /// Codex 0.166.0's `thread/start` answered these back as its sandbox's `writableRoots` (0034).

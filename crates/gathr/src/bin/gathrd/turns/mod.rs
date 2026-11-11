@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod context;
 mod driver;
 mod ended;
 mod given;
@@ -133,6 +134,8 @@ struct Task {
     refused: Option<(PathBuf, Option<std::time::SystemTime>, Instant)>,
     /// Messages sent into a turn under way that the engine hasn't read yet: their id and text.
     unread: Vec<(String, String)>,
+    /// The model the agent's last main-session call named: whose window its context is in.
+    context_model: Option<String>,
     /// An engine closed the gentle way that hasn't exited yet; nothing new starts until it has.
     closing: Option<process::Closing>,
     /// Account removals waiting for the closing engine to exit.
@@ -175,6 +178,7 @@ pub async fn run(
         queue: VecDeque::new(),
         refused: None,
         unread: Vec::new(),
+        context_model: None,
         closing: None,
         leaving: Vec::new(),
         idle_since: Instant::now(),
