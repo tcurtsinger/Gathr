@@ -7,6 +7,7 @@ pub mod app;
 pub mod approvals;
 pub mod archive;
 pub mod background;
+pub mod check_runs;
 pub mod checks;
 pub mod claude;
 pub mod codex;

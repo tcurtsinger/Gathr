@@ -273,7 +273,8 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
          DROP TRIGGER message_search_update; DROP TABLE message_search;
          DROP TABLE project_checks; DROP TABLE project_check_allowed; ALTER TABLE projects DROP COLUMN ci;
          ALTER TABLE projects DROP COLUMN merge_method; ALTER TABLE tasks DROP COLUMN heard_in;
-         DROP TABLE handoffs; PRAGMA user_version = 14;",
+         DROP TABLE handoffs; DROP TABLE check_steps; DROP TABLE check_runs; DROP TABLE check_caches;
+         PRAGMA user_version = 14;",
     )
     .unwrap();
     let newer = say(&conn, "road", "user", "gravel saved before the upgrade too");
