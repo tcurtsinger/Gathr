@@ -283,9 +283,11 @@ impl Task {
                 chat,
                 ask,
                 answers,
+                copy_of,
                 reply,
             } => {
-                let _ = reply.send(self.take_message(chat, ask, answers).await);
+                let taken = self.take_message(chat, ask, answers, copy_of).await;
+                let _ = reply.send(taken);
             }
             Cmd::AskService {
                 kind,

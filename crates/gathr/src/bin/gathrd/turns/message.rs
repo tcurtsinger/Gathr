@@ -3,6 +3,7 @@
 //! else into its turn queued there that hasn't started; else one turn of its own, answering the
 //! sender's, which a pause holds as it holds every turn Gathr queues.
 
+use gathr::event::Event;
 use gathr::tasks::Start;
 use serde_json::json;
 
@@ -14,15 +15,17 @@ impl Task {
         chat: String,
         ask: String,
         answers: String,
+        copy_of: String,
     ) -> &'static str {
         let running = self
             .turn
             .as_ref()
             .filter(|t| !t.stopping && t.ids.chat == chat);
         if let Some(ids) = running.map(|t| t.ids.clone()) {
-            let Ok(message) = self.db_message(&ids, "gathr", "text", &ask).await else {
+            let Ok(mut message) = self.db_message(&ids, "gathr", "text", &ask).await else {
                 return "failed";
             };
+            self.mark_copy(&ids, &mut message, &copy_of).await;
             if self.write_user(&ask, Some(&ids.turn)).await.is_err() {
                 return "failed";
             }
@@ -38,9 +41,10 @@ impl Task {
         if let Some(queued) = waiting {
             queued.text = format!("{}\n\n{ask}", queued.text);
             let ids = queued.ids.clone();
-            let Ok(message) = self.db_message(&ids, "gathr", "text", &ask).await else {
+            let Ok(mut message) = self.db_message(&ids, "gathr", "text", &ask).await else {
                 return "failed";
             };
+            self.mark_copy(&ids, &mut message, &copy_of).await;
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             return "joined";
         }
@@ -53,9 +57,19 @@ impl Task {
             .writer
             .call(move |conn| Start::queue(conn, (&c, &agent), (None, Some(&answers)), text))
             .await;
-        let Some(Ok(start)) = saved else {
+        let Some(Ok(mut start)) = saved else {
             return "failed";
         };
+        let marking = Ids {
+            chat: start.chat.clone(),
+            turn: start.turn.clone(),
+            trace: start.trace.clone(),
+            agent: None,
+            task: None,
+            answers: None,
+            person: false,
+        };
+        self.mark_copy(&marking, &mut start.message, &copy_of).await;
         let ids = Ids {
             chat: start.chat.clone(),
             turn: start.turn.clone(),
@@ -68,5 +82,33 @@ impl Task {
         let held = self.holder(&ids).is_some();
         self.given(start).await;
         if held { "held" } else { "queued" }
+    }
+
+    /// Marks what the agent is told as a copy of the sender's message, saved and as sent live, so
+    /// the chat shows the words once. Only how it's shown: a failure is recorded, never fails delivery.
+    async fn mark_copy(&self, ids: &Ids, message: &mut serde_json::Value, copy_of: &str) {
+        let (id, of) = (
+            message["id"].as_str().unwrap_or_default().to_string(),
+            copy_of.to_string(),
+        );
+        let marked = self
+            .chats
+            .writer
+            .call(move |conn| {
+                conn.execute("UPDATE messages SET copy_of = ?2 WHERE id = ?1", [&id, &of])
+            })
+            .await;
+        let why = match marked {
+            Some(Ok(_)) => return message["copy_of"] = json!(copy_of),
+            Some(Err(e)) => e.to_string(),
+            None => "the database didn't answer".to_string(),
+        };
+        self.record(
+            Event::point("gathr.message.copy")
+                .trace(&ids.trace)
+                .chat(&ids.chat)
+                .error("sqlite")
+                .attr("why", why),
+        );
     }
 }

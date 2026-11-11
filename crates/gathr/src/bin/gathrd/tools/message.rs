@@ -167,6 +167,7 @@ impl Tools {
             chat: caller.chat.clone(),
             ask,
             answers: sent.answers.clone(),
+            copy_of: sent.shown["id"].as_str().unwrap_or_default().to_string(),
             reply,
         };
         let _ = task.send(command);

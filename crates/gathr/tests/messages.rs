@@ -88,6 +88,17 @@ impl Room {
         .collect()
     }
 
+    /// What Gathr told the member in its turn points at the sender's message, so the chat shows it once.
+    fn told_once(&self, turn: &Value, sent: &Value) {
+        let history = self.history();
+        let messages = history["messages"].as_array().unwrap().iter();
+        let told: Vec<&Value> = messages
+            .filter(|m| m["turn"] == turn["id"] && m["role"] == "gathr")
+            .collect();
+        let copies: Vec<&&Value> = told.iter().filter(|m| m["copy_of"] == *sent).collect();
+        assert_eq!(copies.len(), 1, "no copy marked: {told:?}");
+    }
+
     /// The bodies of the messages saved on a turn.
     fn said_in(&self, turn: &Value) -> Vec<String> {
         let history = self.history();
@@ -129,6 +140,7 @@ fn a_message_to_an_idle_member_shows_and_wakes_it_once_answering_the_senders_tur
         "{asked}"
     );
     assert_eq!(room.delivered(), ["queued"]);
+    room.told_once(&anns[0], &shown[0]["id"]);
 }
 
 #[test]
@@ -189,6 +201,10 @@ fn a_member_mid_turn_reads_the_message_in_that_turn() {
     let asked = room.said_in(&anns[0]).join("\n");
     assert!(asked.contains("Heads up: main moved"), "{asked}");
     assert_eq!(room.delivered(), ["in_turn"]);
+    let history = room.history();
+    let mut shown = history["messages"].as_array().unwrap().iter();
+    let sent = shown.rfind(|m| m["to"] == room.ann.as_str()).unwrap();
+    room.told_once(&anns[0], &sent["id"]);
 }
 
 #[test]

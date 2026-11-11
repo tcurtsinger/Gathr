@@ -130,8 +130,9 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
 }
 
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
-const MESSAGE: &str = "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent
-     FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+const MESSAGE: &str =
+    "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
+     m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// A message as the API shows it; tool messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
@@ -150,6 +151,8 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "agent": r.get::<_, Option<String>>(6)?,
         // A message an agent sent one member: whom it's for.
         "to": r.get::<_, Option<String>>(7)?,
+        // Gathr's copy of such a message, told to the member in its own turn: the message it carries.
+        "copy_of": r.get::<_, Option<String>>(8)?,
     }))
 }
 

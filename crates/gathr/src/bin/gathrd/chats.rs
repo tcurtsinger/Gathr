@@ -66,6 +66,8 @@ pub enum Cmd {
         ask: String,
         /// The sender's turn, which a turn of its own answers.
         answers: String,
+        /// The sender's message, which what the agent is told is a copy of.
+        copy_of: String,
         reply: oneshot::Sender<&'static str>,
     },
     /// Closes the task's engine if it runs in this account folder, answering once it has exited;

@@ -1,6 +1,9 @@
 -- Agents message each other (plans/agent-messages.md): a message an agent sent to one member is
 -- saved as the sender's, on its turn, with whom it's for.
 ALTER TABLE messages ADD COLUMN to_agent TEXT;
+-- What Gathr told the member, in its own turn, points at the message it carries, so the chat shows
+-- the words once.
+ALTER TABLE messages ADD COLUMN copy_of TEXT;
 
 -- Each message between agents is a hand-off (0010's counter). Its depth is the sender's chain
 -- plus one; a chain starts over after the person's message in the chat or a task there settling.

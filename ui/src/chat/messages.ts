@@ -31,6 +31,8 @@ export type Custom = {
   unsent?: SendFailure;
   /** What Gathr told an agent outside a task: a wake-up. */
   gathr?: string;
+  /** Whom an agent's message is for: "To Pia". */
+  to?: string;
   /** The task a member's turn works on: "Mira to Rowan · Cursor commit". */
   assignment?: { from?: string; to?: string; what: string; why?: string };
   /** The person's answers its giver heard in this turn: "You answered #26 · B", and the question. */
@@ -66,6 +68,8 @@ interface Group {
   gathr?: boolean;
   /** The turn's last reply: the one its streaming text, notice and approvals go on. */
   last?: boolean;
+  /** An agent's message to one member: their id. */
+  to?: string;
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
@@ -82,8 +86,9 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  * convert it again.
  *
  * Work on a hand-off (a turn on a task, or one hearing back inside it) goes to the team column, in the
- * order its turns began, so replies streaming at once never interleave (0015, 0028). The person's own
- * messages all stay in the main column.
+ * order its turns began, so replies streaming at once never interleave (0015, 0028). So does an agent's
+ * message to one member, at its turn's place, even from the lead's main-line turn; Gathr's copy of it in
+ * the member's turn isn't shown. The person's own messages all stay in the main column.
  */
 export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[], cache: Cache): Columns {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
@@ -92,7 +97,8 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const shown: Group[] = [];
   const work: Group[] = [];
   for (const g of grouped(state, inTeam)) {
-    if (g.person || !inTeam(g.turn)) {
+    if (g.to) work.push(g);
+    else if (g.person || !inTeam(g.turn)) {
       // What Gathr told the lead when a round settled: the team column and Summary already show it.
       // The person's own answers aren't shown there, so they keep their line.
       if (g.gathr && state.turns[g.turn ?? '']?.answers && !answered(state, g.turn).length) continue;
@@ -145,9 +151,13 @@ function grouped(state: ChatState, inTeam: (turn: string | null) => boolean): Gr
     if (m.role === 'user') {
       groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, person: true });
       for (const turn of open.keys()) if (!inTeam(turn)) open.delete(turn);
-    } else if (m.role === 'gathr')
-      groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, gathr: true });
-    else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
+    } else if (m.role === 'gathr') {
+      if (!m.copy_of) groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: false, gathr: true });
+    } else if (m.to) {
+      // Its own reply, so the sender's words before and after it stay one reply each.
+      groups.push({ key: m.id, turn: m.turn, msgs: [m], reply: true, to: m.to });
+      if (m.turn) open.delete(m.turn);
+    } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
     else if (m.turn) {
       const g = { ...reply(m.turn), msgs: [m] };
       groups.push(g);
@@ -158,7 +168,8 @@ function grouped(state: ChatState, inTeam: (turn: string | null) => boolean): Gr
   // has one, right after that message.
   const waiting = new Set(state.approvals.map((a) => a.turn));
   for (const t of Object.values(state.turns)) {
-    const at = groups.findLastIndex((g) => g.turn === t.id);
+    // A message to a member never takes the turn's streaming text or notice.
+    const at = groups.findLastIndex((g) => g.turn === t.id && !g.to);
     const last = open.get(t.id) ?? groups[at];
     if (last?.reply) {
       last.last = true;
@@ -181,7 +192,8 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
   const task = group.gathr ? taskLine(turn, state, crew) : undefined;
   const heard = group.gathr ? answered(state, id) : [];
-  const who = `${agent}|${role}|${JSON.stringify(task)}|${JSON.stringify(heard)}`;
+  const to = crew.name(group.to);
+  const who = `${agent}|${role}|${to}|${JSON.stringify(task)}|${JSON.stringify(heard)}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
@@ -192,6 +204,7 @@ function cached(cache: Cache, group: Group, state: ChatState, crew: Team) {
       ? toReply(group, partial, group.last ? turn : undefined, approvals, {
           agent,
           role,
+          to,
           time: role ? (group.msgs[0]?.time ?? turn?.created) : undefined,
         })
       : toUser(group.msgs[0]);

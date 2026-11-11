@@ -278,8 +278,10 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
     .unwrap();
     let newer = say(&conn, "road", "user", "gravel saved before the upgrade too");
     // Last, as saving a message reads the column.
-    conn.execute_batch("ALTER TABLE messages DROP COLUMN to_agent;")
-        .unwrap();
+    conn.execute_batch(
+        "ALTER TABLE messages DROP COLUMN to_agent; ALTER TABLE messages DROP COLUMN copy_of;",
+    )
+    .unwrap();
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
     assert_eq!(found(&conn, "gravel"), [newer, old]);
