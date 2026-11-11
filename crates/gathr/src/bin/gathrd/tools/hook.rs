@@ -25,8 +25,9 @@ pub fn routes() -> Router<Arc<State>> {
         .route(PUSH_PATH, post(pre_push))
 }
 
-/// A `git push` from the engine's worktree, however it was run: `allow` once the person allows
-/// it (or the agent's mode is Full, or they just allowed the command that runs it), else `deny`.
+/// A `git push` from the engine's worktree, however it was run: `allow` at once when it isn't
+/// risky (`gathr::pushes`), else once the person allows it (or the agent's mode is Full, or they
+/// just allowed the command that runs it); `deny` otherwise.
 /// It waits as long as the person takes; a push whose hook gives up is ended by git.
 async fn pre_push(
     Extract(s): Extract<Arc<State>>,
@@ -40,8 +41,15 @@ async fn pre_push(
     };
     let (remote, url) = (header("gathr-remote"), header("gathr-url"));
     let refs: Vec<&str> = refs.lines().filter(|l| !l.trim().is_empty()).collect();
+    let env = tokio::task::spawn_blocking(|| {
+        gathr::platform::env::fresh(std::env::vars_os().collect()).vars
+    });
+    let risk = match env.await {
+        Ok(env) => gathr::pushes::why_ask(&caller.cwd, &remote, &url, &refs, &env).await,
+        Err(_) => Some("Gathr couldn't read the person's environment".into()),
+    };
     let input = json!({ "command": format!("git push {remote}"), "remote": remote, "url": url,
-        "refs": refs });
+        "refs": refs, "risk": risk });
     // A service that stops refuses the push rather than wait: its server waits on this request.
     let allowed = tokio::select! {
         allowed = s.chats.ask_push(&caller, input) => allowed,

@@ -9,7 +9,8 @@ use tokio::sync::oneshot;
 use super::Task;
 
 impl Task {
-    /// Full bypasses both asks. A push also inherits an allowed push command; a check does not.
+    /// Full bypasses both asks. A push that isn't risky never asks, and one that is inherits an
+    /// allowed push command; a check does not.
     /// Claude checks use its native hook; Codex checks always ask here before being stored.
     pub(super) fn ask_service(
         &mut self,
@@ -35,6 +36,15 @@ impl Task {
             let _ = reply.send(true);
             return;
         }
+        // An ordinary push goes through (the owner's "Ask only for risky pushes"); `risk` is why
+        // the hook found one risky.
+        let risk = input["risk"].as_str().map(String::from);
+        if kind == "push" && risk.is_none() {
+            self.record(event.ok().attr("allowed_by", "an ordinary push"));
+            let _ = reply.send(true);
+            return;
+        }
+        let event = event.attr("why", risk.clone());
         let Some(turn) = turn else {
             let why = "no turn of the agent's is running in the chat";
             self.record(event.error(&format!("{kind}_refused")).attr("why", why));
@@ -55,10 +65,11 @@ impl Task {
         let (tool, why) = if kind == "check" {
             (
                 "wait check".to_string(),
-                "Gathr runs this check outside the engine sandbox",
+                "Gathr runs this check outside the engine sandbox".to_string(),
             )
         } else {
-            ("git push".to_string(), "Gathr asks because it pushes")
+            let risk = risk.unwrap_or_default();
+            ("git push".to_string(), format!("Gathr asks because {risk}"))
         };
         let asked = (tool.clone(), input.clone(), Some(why.to_string()));
         turn.approvals.insert(request_id.clone(), asked);

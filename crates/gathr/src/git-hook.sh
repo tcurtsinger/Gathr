@@ -1,7 +1,7 @@
 #!/bin/sh
 # Gathr's git hooks in an agent's worktree (0029), one script under each hook's name. A push
-# waits for the person's answer through Gathr, whatever command ran it; then, as every hook here,
-# it runs the project's own hook of that name, if there is one.
+# goes through Gathr, whatever command ran it, which asks the person before a risky one; then, as
+# every hook here, it runs the project's own hook of that name, if there is one.
 name=$(basename "$0")
 own=$(git config --get gathr.hooks)
 if [ "$name" = pre-push ]; then
