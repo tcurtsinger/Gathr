@@ -213,7 +213,8 @@ const HOOK_NAMES: &[&str] = &[
     "post-index-change",
 ];
 
-/// Makes every `git push` from the worktree at `folder` wait for the person's answer (0029): a
+/// Sends every `git push` from the worktree at `folder` through Gathr (0029), which asks the person
+/// before a risky one: a
 /// `pre-push` hook in `hooks`, set for this worktree alone (`extensions.worktreeConfig`), so the
 /// project's own checkout and other worktrees keep theirs. The project's hooks folder is kept as
 /// `gathr.hooks`, and Gathr's runs the project's hook of each name after its own part.
