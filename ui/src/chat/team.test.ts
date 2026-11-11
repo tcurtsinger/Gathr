@@ -288,3 +288,39 @@ test('a message into a member’s running turn shows once, as the sender’s', (
   const { team } = view(state);
   expect(team.map(text).filter((t) => t.includes('Use the new cursor'))).toEqual(['Use the new cursor']);
 });
+
+test("G158: the Supervisor's reply to the person's answer is in the main column, though it runs on a member's task", () => {
+  const state = round();
+  // Rowan, on task 1, gives Mira task 7; Mira, on 7, asks the person 8; the answer wakes Mira on 7 again.
+  state.turns.mira7 = turn('mira7', 'mira', { task: 7, answers: 'rowan' });
+  state.turns.woken = turn('woken', 'mira', { task: 7, answers: 'mira7' });
+  state.tasks.push(
+    task(7, 'mira', 'rowan', { giver: 'rowan', state: 'working' }),
+    task(8, 'mira', 'mira7', {
+      owner: null,
+      kind: 'person',
+      what: 'Which notice?',
+      reason: 'B',
+      heard_in: 'woken',
+    }),
+  );
+  state.messages.push(
+    said('mira7', 'gathr', 'Task #7 from Rowan: Task 7'),
+    said('mira7', 'assistant', 'Asking the person'),
+    said('woken', 'gathr', 'The person answered:\n- #8 Which notice?: B'),
+    said('woken', 'assistant', 'Thanks, B it is'),
+  );
+  // In that reply Mira hands Kit a task: Kit's work stays in the team column.
+  state.turns.kit9 = turn('kit9', 'kit', { task: 9 });
+  state.tasks.push(task(9, 'kit', 'woken', { state: 'working' }));
+  state.messages.push(said('kit9', 'assistant', 'On it'));
+  const { main, team } = view(state);
+
+  expect(ids(main).slice(-2)).toEqual(['woken-gathr', 'a-woken']);
+  expect(custom(main.at(-2) as ThreadMessageLike).answered).toEqual([
+    { line: 'You answered #8 · B', asked: 'Which notice?' },
+  ]);
+  expect(ids(team)).toContain('a-mira7');
+  expect(ids(team)).not.toContain('a-woken');
+  expect(ids(team).at(-1)).toBe('a-kit9');
+});
