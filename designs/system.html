@@ -243,7 +243,9 @@ class="ds-role">Supervisor</span>
 <p>Rowan, fix the cursor commit. Kit, replay interruptions and check the shortcuts. Lane, check reconnect and stopped states.
 I’ll reconcile the results and ask Sol to review.</p>
 </article>
-<div class="ds-user-message" data-id="mid-round-message">Keep the partial answer visible if I stop it.</div>
+<details class="ds-answered" data-id="answer-line">
+<summary class="ds-task-line">You answered #26 · Keep the partial answer visible if I stop it.</summary>
+<div class="ds-task-line-more">Should Stop keep the partial answer visible?</div></details>
 <article class="ds-team-message" data-id="status-without-thread">
 <header
 class="ds-speaker">
@@ -387,7 +389,9 @@ The keyboard shortcuts are unchanged.</p>
 <div class="ds-column-scroll" id="team-column" tabindex="0" aria-label="Team conversation">
 <div class="ds-column-label">Team</div><div class="ds-thread-column" id="team-replies">
 <article class="ds-team-message" data-id="thread-rowan">
-<p class="ds-assignment">Mira to Rowan · Cursor commit</p>
+<details class="ds-assignment" data-id="assignment-rowan">
+<summary class="ds-task-line">Mira to Rowan · Cursor commit: preserve partial output and replay interrupted reconnects</summary>
+<div class="ds-task-line-more">Save the cursor only after a complete event, keep partial output visible on Stop, and replay reconnect interruptions without duplicate output.</div></details>
 <header
 class="ds-speaker">
 <span
@@ -423,7 +427,9 @@ started after that reply finished, without replacing its text or borrowing its t
 The cursor change is ready for their results.</p>
 </article>
 <article class="ds-team-message" data-id="thread-kit">
-<p class="ds-assignment">Mira to Kit · Interruptions and shortcuts</p>
+<details class="ds-assignment" data-id="assignment-kit">
+<summary class="ds-task-line">Mira to Kit · Interruptions and shortcuts</summary>
+<div class="ds-task-line-more">Replay interruptions before and during output, then check that the existing keyboard shortcuts still work.</div></details>
 <header
 class="ds-speaker">
 <span
@@ -445,7 +451,9 @@ Checked Tab, Enter and Escape</pre></details>
 <p id="kit-result">The interrupted tool result stays in its original row. I’m checking the last shortcut case now.</p>
 </article>
 <article class="ds-team-message" data-id="thread-lane">
-<p class="ds-assignment">Mira to Lane · Reconnect and stopped states</p>
+<details class="ds-assignment" data-id="assignment-lane">
+<summary class="ds-task-line">Mira to Lane · Reconnect and stopped states</summary>
+<div class="ds-task-line-more">Check reconnect and Stop states, keeping the draft and partial answer visible through Retry.</div></details>
 <header
 class="ds-speaker">
 <span
@@ -463,7 +471,9 @@ class="ds-role">Member</span>
 <p id="lane-result">The partial reply stays visible after Stop. I’m checking its Retry action at the narrower window size.</p>
 </article>
 <article class="ds-team-message" id="late-member" hidden data-id="thread-sol">
-<p class="ds-assignment">Mira to Sol · Review the cursor change</p>
+<details class="ds-assignment" data-id="assignment-sol">
+<summary class="ds-task-line">Mira to Sol · Review the cursor change</summary>
+<div class="ds-task-line-more">Review the cursor commit and replay results before merging.</div></details>
 <header
 class="ds-speaker">
 <span

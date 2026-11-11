@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import '../theme.css';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
 

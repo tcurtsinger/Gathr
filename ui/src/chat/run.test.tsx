@@ -2,7 +2,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import '../theme.css';
 import type { Pauses } from '../api';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';

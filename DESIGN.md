@@ -160,11 +160,19 @@ its HTML or third-party runtime.
 The main column holds the person's messages, the Supervisor's hand-offs and final
 words, and direct @member exchanges. A header MessagesSquare toggle opens one running
 team conversation on the right. Both columns get half the chat width, with
-min-width:0 and independent scrolling. No per-hand-off disclosures or return
-links remain. Every hand-off reply goes in the shared team column, in 0028's
+min-width:0 and independent scrolling. No inline team threads or return links
+remain. Every hand-off reply goes in the shared team column, in 0028's
 turn-start order, with each turn's text and tools kept together. Keep the
 assignment line above each reply. A late reply appears in that same chronology;
 the Supervisor's next word stays at the bottom of the main column.
+
+Hand-off and answer lines share one quiet disclosure. Closed, each stays on one
+line, with an ellipsis (…) for overflow. Click or Enter opens the full line, wrapping long
+text. A hand-off reads "Mira to Rowan · Cursor commit" and opens to the full task
+title and its reason, when present. An answer reads "You answered #26 · Keep the
+partial answer visible" and opens to the full answer and the original question.
+Click or Enter again closes it. Keyboard focus uses the hover highlight, without
+an outline or ring. This disclosure reveals task text, not a nested team thread.
 
 While split, sticky overlay labels name the Supervisor and Team. Each has a
 44px height, a negative 44px bottom margin, 12px 24px top/side padding and a
@@ -276,7 +284,10 @@ Only the Supervisor asks the person (the sole agent in a one-agent chat).
 Inline OptionList stages single/multiple choices. ElicitationForm supplies the
 optional Notes field or the open-ended answer. There is no duplicate Confirm or
 automatic Next. Back/Next retain drafts; final Send submits ready answers only.
-Notes alone do not make a structured answer ready. Unanswered tasks remain open.
+Notes alone make any question ready and go as the answer in words, so "none of these" can be said. Unanswered tasks remain open.
+After an accepted answer, show the shared answer line at the asker's wake-up turn
+in that agent's column. It stays after reload. Main-column team completion reports
+stay hidden.
 Lifecycle/history policy and persistence are service work, not prototype rules.
 
 ### Archive and stale (F11)
