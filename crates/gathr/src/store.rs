@@ -130,8 +130,9 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
 }
 
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
-const MESSAGE: &str = "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id
-     FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+const MESSAGE: &str =
+    "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
+     m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// A message as the API shows it; tool messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
@@ -148,6 +149,10 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "kind": kind,
         "body": body,
         "agent": r.get::<_, Option<String>>(6)?,
+        // A message an agent sent one member: whom it's for.
+        "to": r.get::<_, Option<String>>(7)?,
+        // Gathr's copy of such a message, told to the member in its own turn: the message it carries.
+        "copy_of": r.get::<_, Option<String>>(8)?,
     }))
 }
 
@@ -281,8 +286,9 @@ pub struct Waiting {
     pub person: bool,
 }
 
-/// Turns that were waiting when the service last stopped, oldest first. Turns that were
-/// running then can't be continued: they're marked failed, with why.
+/// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
+/// a message another agent sent before it started joined it. Turns that were running then can't
+/// be continued: they're marked failed, with why.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     conn.execute(
         "UPDATE turns SET status = 'failed', why = 'the service stopped during this turn', ended_ts = ?1
@@ -296,8 +302,8 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     )?;
     let mut stmt = conn.prepare(
         "SELECT t.id, t.chat_id, t.trace_id, t.status,
-                (SELECT body FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
-                 ORDER BY ts LIMIT 1),
+                (SELECT group_concat(body, char(10) || char(10) ORDER BY ts) FROM messages m
+                 WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')),
                 t.agent_id, t.task, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
                  ORDER BY ts LIMIT 1) = 'user'

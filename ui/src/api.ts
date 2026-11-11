@@ -17,6 +17,10 @@ export interface Message {
   role: 'user' | 'assistant' | 'gathr';
   kind: string;
   body: string | ToolBody;
+  /** A message an agent sent one member: that member's id, shown in the team column. */
+  to?: string | null;
+  /** What Gathr told the member in its turn: the message it carries, already shown as the sender's. */
+  copy_of?: string | null;
 }
 
 export interface Turn {
@@ -204,6 +208,8 @@ export interface StaleDays {
 /** Settings > General: the stale rules, and the folder that holds every project's Shared and agent folders (M1). */
 export interface Settings extends StaleDays {
   agent_folder: string;
+  /** Messages between agents in a row before the chat pauses; null for no limit. */
+  handoff_limit: number | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */

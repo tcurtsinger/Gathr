@@ -19,6 +19,7 @@ pub mod error;
 pub mod event;
 pub mod fetch;
 pub mod folders;
+pub mod handoffs;
 pub mod http;
 pub mod ids;
 pub mod launch;

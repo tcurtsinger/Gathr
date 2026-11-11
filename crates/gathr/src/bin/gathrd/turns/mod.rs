@@ -22,6 +22,7 @@ mod driver;
 mod ended;
 mod given;
 mod holds;
+mod message;
 mod process;
 mod pushes;
 mod reading;
@@ -277,6 +278,16 @@ impl Task {
                 reply,
             } => {
                 let _ = reply.send(self.approve(&chat, &request_id, allow).await);
+            }
+            Cmd::Message {
+                chat,
+                ask,
+                answers,
+                copy_of,
+                reply,
+            } => {
+                let taken = self.take_message(chat, ask, answers, copy_of).await;
+                let _ = reply.send(taken);
             }
             Cmd::AskService {
                 kind,
