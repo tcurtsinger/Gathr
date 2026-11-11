@@ -61,13 +61,13 @@ function Tab({ refuse = [] }: { refuse?: Refusal[] }) {
   );
 }
 
-test('Back and Next keep drafts, and Send answers only the ready questions', async () => {
+test('Back and Next keep drafts, and notes alone answer a question in words', async () => {
   const screen = await render(<Tab />);
   await screen.getByRole('button', { name: /Start fresh/ }).click();
   await screen.getByRole('button', { name: 'Next' }).click();
   // Both questions have Notes: wait for the second before typing.
   await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
-  // Notes alone don't answer a pick: this one stays open.
+  // Notes alone answer it in words: "none of these" is an answer (owner, G152).
   await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('not sure yet');
   await screen.getByRole('button', { name: 'Back' }).click();
   await expect
@@ -77,13 +77,13 @@ test('Back and Next keep drafts, and Send answers only the ready questions', asy
   await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
   await screen.getByRole('button', { name: 'Next' }).click();
   await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
-  await expect.element(screen.getByText('2 ready')).toBeVisible();
+  await expect.element(screen.getByText('3 ready')).toBeVisible();
   await screen.getByRole('button', { name: 'Send' }).click();
   await expect
     .element(screen.getByLabelText('Sent'))
-    .toHaveTextContent('[{"task":1,"pick":["Start fresh"]},{"task":3,"text":"Reconnecting"}]');
-  await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
-  await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
+    .toHaveTextContent(
+      '[{"task":1,"pick":["Start fresh"]},{"task":2,"text":"not sure yet"},{"task":3,"text":"Reconnecting"}]',
+    );
 });
 
 // Focus that lands a frame later can take it from the field being typed in: WebKit lost the answer
