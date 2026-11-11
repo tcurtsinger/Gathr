@@ -402,6 +402,26 @@ fn a_hand_over_that_finds_the_new_copy_already_started_leaves_its_trial() {
     assert_eq!(now["refused"], json!([]), "{now}");
 }
 
+/// The window opens a folder whose lock is held for a moment by no service: it starts the
+/// service once the lock is let go, rather than waiting for one to answer.
+#[test]
+fn a_start_takes_a_folder_held_by_no_service_once_it_is_let_go() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    std::fs::create_dir_all(&data).unwrap();
+    let folder = DataDir::new(&data);
+    let _next = Successor(data.clone());
+    let held = folder.take_lock().unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(1));
+        drop(held);
+    });
+    let installed = Path::new(env!("CARGO_BIN_EXE_gathrd"));
+    let found = gathr::launch::find_or_start(&folder, installed);
+    release.join().unwrap();
+    assert!(found.unwrap().started);
+}
+
 /// A release whose program says the right version but isn't a service (the command line packed
 /// as `gathrd`): its start fails, and the copy before comes back with the database as it was.
 #[test]

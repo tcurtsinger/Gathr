@@ -95,7 +95,10 @@ fn start(
     ui: PathBuf,
 ) -> Result<Option<String>, Error> {
     std::fs::create_dir_all(data.path())?;
-    let _lock = data.take_lock()?;
+    let _lock = match launch::take_or_find(data)? {
+        launch::Holder::Free(lock) => lock,
+        launch::Holder::Service(_) => return Err(Error::AlreadyRunning),
+    };
     let conn =
         db::open(&data.db()).map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let early_lines = crash_log.take();
