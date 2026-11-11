@@ -95,11 +95,16 @@ pub async fn merge(
     }
     // The head as GitHub has it right before the push: a push made after it moved would merge a
     // commit the PR no longer is (Vale, #120).
-    let (_, now, _) = open_pr(pr, repo).await?;
+    let (_, now, now_base) = open_pr(pr, repo).await?;
     if now != head {
         return Err(format!(
             "#{pr}'s head moved to {} while it was being merged: review the new head",
             short(&now)
+        ));
+    }
+    if now_base != base {
+        return Err(format!(
+            "#{pr} was retargeted from {base} to {now_base} while it was being merged: merge it again"
         ));
     }
     let merged = match asked.method.as_str() {
@@ -132,20 +137,20 @@ pub async fn merge(
         asked.method
     );
     let reference = gathr::ids::reference(&trace).to_string();
-    // Settled only for the head merged: a PR that moved after the push stays open on GitHub.
-    let after = open_pr_head(pr, repo).await;
-    if after.as_deref() != Some(head.as_str()) {
-        let now = after
-            .as_deref()
-            .map_or("a head that wasn't read".to_string(), short);
-        let why = format!("#{pr} moved to {now} after the push");
+    // Settled only once GitHub says the PR merged, at the head and base checked: one that moved
+    // or was retargeted after the push stays open, and its tasks aren't this merge's (Vale, #120).
+    if let Err(seen) = confirmed(pr, repo, &head, &base).await {
+        let why = format!(
+            "GitHub doesn't show #{pr} merged at {} into {base}: {seen}",
+            short(&head)
+        );
         chats
             .writer
-            .record_now(event.error("moved").attr("why", why))
+            .record_now(event.error("unconfirmed").attr("why", why))
             .await;
         return Ok(format!(
-            "{merged_line}, but #{pr} moved to {now} meanwhile, so it stays open and its tasks aren't marked \
-             merged: its new head needs a review and its checks (ref {reference})."
+            "{merged_line}, but GitHub doesn't show #{pr} merged ({seen}), so its tasks aren't marked merged: \
+             if it moved or was retargeted, its new head needs a review and its checks (ref {reference})."
         ));
     }
     match settle(chats, caller, pr, &head).await {
@@ -189,15 +194,36 @@ async fn open_pr(pr: i64, repo: &Path) -> Result<(Value, String, String), String
     Ok((view, head, base))
 }
 
-/// The PR's head as GitHub has it now, whatever its state.
-async fn open_pr_head(pr: i64, repo: &Path) -> Option<String> {
-    let args = ["pr", "view", &pr.to_string(), "--json", "headRefOid"];
-    let view = crate::coord::github(&args, repo).await.ok()?;
-    let view: Value = serde_json::from_str(&view).ok()?;
-    view["headRefOid"]
-        .as_str()
-        .filter(|h| !h.is_empty())
-        .map(String::from)
+/// GitHub shows the PR merged at `head` into `base`, within a short wait: it marks a pushed
+/// merge within a few seconds (Shared/evidence/merge-probe). What it showed last, if not.
+async fn confirmed(pr: i64, repo: &Path, head: &str, base: &str) -> Result<(), String> {
+    let wait_ms = std::env::var("GATHR_MERGE_CONFIRM_MS")
+        .ok()
+        .and_then(|ms| ms.parse().ok())
+        .unwrap_or(20_000u64);
+    let until = std::time::Instant::now() + Duration::from_millis(wait_ms);
+    let fields = "state,headRefOid,baseRefName";
+    let mut seen = "nothing read".to_string();
+    loop {
+        let args = ["pr", "view", &pr.to_string(), "--json", fields];
+        if let Ok(view) = crate::coord::github(&args, repo).await {
+            let view: Value = serde_json::from_str(&view).unwrap_or_default();
+            let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
+            let (state, now, now_base) = (text("state"), text("headRefOid"), text("baseRefName"));
+            if state == "MERGED" && now == head && now_base == base {
+                return Ok(());
+            }
+            seen = format!(
+                "{} at {} into {now_base}",
+                state.to_lowercase(),
+                short(&now)
+            );
+        }
+        if std::time::Instant::now() >= until {
+            return Err(seen);
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
 }
 
 /// The reviewed commit, resolved in the project, is exactly the head: never matched as text.

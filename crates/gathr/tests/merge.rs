@@ -73,9 +73,14 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
     }
     git(&other, &["checkout", "-q", "main"]);
     let answers = data.join("gh.json");
+    let origin = repos.join("origin.git");
     let view = |n: usize| {
-        let pr = json!({ "state": "OPEN", "headRefOid": heads[n], "baseRefName": "main", "statusCheckRollup": [] });
-        json!({ "args": ["pr", "view", (n + 5).to_string()], "out": pr.to_string() })
+        let pr = |state: &str| {
+            json!({ "state": state, "headRefOid": heads[n], "baseRefName": "main", "statusCheckRollup": [] })
+                .to_string()
+        };
+        let when = json!({ "repo": origin, "base": "main", "head": heads[n] });
+        json!({ "args": ["pr", "view", (n + 5).to_string()], "out": pr("OPEN"), "out_merged": pr("MERGED"), "merged_if": when })
     };
     std::fs::write(&answers, json!([view(0), view(1)]).to_string()).unwrap();
     let service = TestService::with_engine(
@@ -86,6 +91,8 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
             ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
             ("GATHR_GH_PATH", &fake_gh()),
             ("GATHR_FAKE_GH", &answers),
+            // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
+            ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
         ],
     );
     let account = service.add_account("Team");
@@ -594,4 +601,47 @@ fn tasks_that_fail_to_settle_after_a_merge_are_reported_with_a_reference() {
         .trim_end_matches([')', '.']);
     let (ok, trace) = gathr(&room.data, &["diag", "trace", reference]);
     assert!(ok && trace.to_string().contains("forced"), "{trace}");
+}
+
+/// Vale, #120: a PR retargeted to another base with the same head is refused before the push; one
+/// retargeted after it isn't shown merged, so nothing is settled as merged.
+#[test]
+fn a_pr_retargeted_during_a_merge_is_refused_or_left_unsettled() {
+    for after_push in [false, true] {
+        let (data, repos) = (TempDir::new(), TempDir::new());
+        let mut room = room(&data.0, &repos.0, false);
+        let lead = room.lead_turn();
+        let vale = room.reviews(&lead, &[5]);
+        room.reviewed(&vale, 1, &room.heads[0].clone());
+        let view = |base: &str| {
+            let h = &room.heads[0];
+            json!({ "state": "OPEN", "headRefOid": h, "baseRefName": base, "statusCheckRollup": [] })
+                .to_string()
+        };
+        let outs = match after_push {
+            false => json!([view("main"), view("release")]),
+            true => json!([view("main"), view("main"), view("release")]),
+        };
+        let answers = json!([{ "args": ["pr", "view", "5"], "outs": outs }]);
+        std::fs::write(room.data.join("gh.json"), answers.to_string()).unwrap();
+        let answer = room.call(&vale, "merge", json!({ "pr": 5 }));
+        if after_push {
+            let said = text(&answer);
+            assert!(
+                said.contains("doesn't show #5 merged") && said.contains("(ref "),
+                "{said}"
+            );
+            assert_eq!(room.main(), room.heads[0], "the checked head wasn't pushed");
+        } else {
+            room.refused(&answer, "retargeted");
+            assert_eq!(room.main(), room.base, "a retargeted PR was merged");
+        }
+        let closed: bool = room
+            .db()
+            .query_row("SELECT pr_closed FROM tasks WHERE number = 1", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert!(!closed, "a PR still open was settled as merged");
+    }
 }

@@ -1,7 +1,9 @@
 //! Stands in for GitHub's `gh` in tests (`GATHR_GH_PATH`): no network, no login. It answers from
 //! the JSON file `GATHR_FAKE_GH` names, `[{"args": [...], "out": "...", "code": 0}]`: the first
 //! answer whose `args` begin the call's. An answer with `outs` instead gives its next one on each
-//! call that matches it, then its last again, for a PR that changes between two looks. Each call
+//! call that matches it, then its last again, for a PR that changes between two looks. One with
+//! `merged_if` (`{"repo", "base", "head"}`) gives `out_merged` once that head is in that base, as
+//! GitHub marks a pushed PR merged. Each call
 //! is appended to `<file>.calls`, one JSON array of its arguments a line, so a test sees what
 //! Gathr asked.
 
@@ -35,6 +37,7 @@ fn main() {
                     .cloned()
                     .unwrap_or_default()
             }
+            None if merged(&answer["merged_if"]) => answer["out_merged"].clone(),
             None => answer["out"].clone(),
         };
         print!("{}", out.as_str().unwrap_or_default());
@@ -42,6 +45,27 @@ fn main() {
     }
     eprintln!("fake gh: no answer for {args:?}");
     std::process::exit(1);
+}
+
+/// Whether `{"repo", "base", "head"}` holds: the head reachable from the base in that repository,
+/// which is when GitHub marks a pushed PR merged.
+fn merged(when: &serde_json::Value) -> bool {
+    let text = |k: &str| when[k].as_str().unwrap_or_default().to_string();
+    let (repo, base, head) = (text("repo"), text("base"), text("head"));
+    if repo.is_empty() {
+        return false;
+    }
+    let is = std::process::Command::new("git")
+        .args([
+            "-C",
+            &repo,
+            "merge-base",
+            "--is-ancestor",
+            &head,
+            &format!("refs/heads/{base}"),
+        ])
+        .status();
+    is.is_ok_and(|s| s.success())
 }
 
 /// How many times answer `i` was given before, counted in `<file>.seen`.
