@@ -1,6 +1,7 @@
 //! Projects through the API (F8b): saved with a name, a git folder and a team; a new chat made in
-//! one copies its folder and team (`POST /api/chats {"project"}`). Each setting, its checks, CI
-//! choice and merge method too (0036), changes on its own (`PATCH /api/projects/<id>`).
+//! one copies its folder and team (`POST /api/chats {"project"}`). Each setting, its CI choice and
+//! merge method too (0036), changes on its own (`PATCH /api/projects/<id>`); its checks are the
+//! Supervisor's to set, never the person's (owner, task 1455).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -87,7 +88,8 @@ struct Settings {
     name: Option<String>,
     folder: Option<PathBuf>,
     members: Option<Vec<Seat>>,
-    checks: Option<Vec<String>>,
+    /// Refused: only the Supervisor sets checks (owner, task 1455).
+    checks: Option<serde_json::Value>,
     ci: Option<String>,
     merge: Option<String>,
 }
@@ -111,10 +113,10 @@ async fn change(
     };
     let ci = one_of(body.ci, &projects::CI, "CI choice")?;
     let merge = one_of(body.merge, &projects::MERGE, "merge method")?;
-    let checks = match body.checks {
-        Some(list) => Some(projects::checks(list).map_err(|why| bad(&t, ERROR, why))?),
-        None => None,
-    };
+    if body.checks.is_some() {
+        let why = "The project's Supervisor sets its checks, with Gathr's checks tool";
+        return Err(bad(&t, ERROR, why));
+    }
     let name = match &body.name {
         Some(name) => Some(
             projects::name(name)
@@ -135,7 +137,6 @@ async fn change(
         ("name", name.is_some()),
         ("folder", folder.is_some()),
         ("members", team.is_some()),
-        ("checks", checks.is_some()),
         ("ci", ci.is_some()),
         ("merge", merge.is_some()),
     ]
@@ -147,14 +148,12 @@ async fn change(
         .ok()
         .attr("gathr.project.id", id.clone())
         .attr("changed", changed)
-        .attr("checks", checks.as_ref().map(Vec::len))
         .attr("ci", ci.clone())
         .attr("merge", merge.clone());
     let change = Change {
         name,
         folder,
         team,
-        checks,
         ci,
         merge,
     };

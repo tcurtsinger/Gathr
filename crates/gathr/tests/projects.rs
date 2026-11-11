@@ -287,8 +287,8 @@ fn a_project_that_fails_to_save_is_found_from_its_reference() {
     assert!(ok && trace.to_string().contains("forced"), "{trace}");
 }
 
-/// 0036: a project's name, folder, team, checks, CI choice and merge method are each changed on
-/// their own, each window hears of it, and it's recorded.
+/// 0036: a project's name, folder, team, CI choice and merge method are each changed on their own,
+/// each window hears of it, and it's recorded.
 #[test]
 fn each_project_setting_is_changed_on_its_own_and_heard_live() {
     let data = TempDir::new();
@@ -318,7 +318,6 @@ fn each_project_setting_is_changed_on_its_own_and_heard_live() {
         json!({ "name": "Gathr app" }),
         json!({ "folder": other }),
         json!({ "members": [member(&ids[0], "supervisor"), member(&ids[1], "reviewer")] }),
-        json!({ "checks": ["cargo test --workspace", "npm test"] }),
         json!({ "ci": "both" }),
         json!({ "merge": "merge" }),
     ];
@@ -340,10 +339,6 @@ fn each_project_setting_is_changed_on_its_own_and_heard_live() {
         [pair(&ids[0], "supervisor"), pair(&ids[1], "reviewer")]
     );
     assert_eq!(
-        listed["checks"],
-        json!(["cargo test --workspace", "npm test"])
-    );
-    assert_eq!(
         (&listed["ci"], &listed["merge"]),
         (&json!("both"), &json!("merge"))
     );
@@ -353,7 +348,7 @@ fn each_project_setting_is_changed_on_its_own_and_heard_live() {
 
     let query = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.project.change'";
     let (_, rows) = gathr(&data.0, &["diag", "query", query]);
-    assert_eq!(rows["rows"][0]["n"], 7, "one event per change: {rows}");
+    assert_eq!(rows["rows"][0]["n"], 6, "one event per change: {rows}");
 }
 
 /// A repo whose checkout has GitHub Actions workflows uses their CI unless the person picks.
@@ -422,9 +417,9 @@ fn a_bad_project_setting_is_refused_with_a_reference_and_changes_nothing() {
         ),
         (json!({ "members": [] }), 400, "no agents"),
         (
-            json!({ "checks": ["cargo test", "  "] }),
+            json!({ "checks": ["cargo test"] }),
             400,
-            "an empty check",
+            "checks, which only the Supervisor sets (task 1455)",
         ),
         (json!({ "ci": "travis" }), 400, "an unknown CI choice"),
         (json!({ "merge": "rebase" }), 400, "an unknown merge method"),
@@ -452,4 +447,39 @@ fn a_bad_project_setting_is_refused_with_a_reference_and_changes_nothing() {
     assert_eq!(missing.status, 404, "{}", missing.body);
     let after = service.call("GET", "/api/projects").json();
     assert_eq!(before, after, "a refused change changed the project");
+}
+
+/// Owner's call, task 1455: the person never types a check. Each one reads back with who set it
+/// (an agent, or `found` by Gathr) and when, in its order.
+#[test]
+fn each_check_reads_back_with_who_set_it_and_when() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+    let body =
+        json!({ "name": "Gathr", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let made = service.send("POST", "/api/projects", body);
+    let id = made.json()["id"].as_str().unwrap().to_string();
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    let set = "INSERT INTO project_checks (project_id, position, command, source, set_ts)
+               VALUES (?1, ?2, ?3, ?4, ?5)";
+    db.execute(
+        set,
+        rusqlite::params![id, 1, "npm test", "found", 1_794_000_000_000_000_i64],
+    )
+    .unwrap();
+    db.execute(
+        set,
+        rusqlite::params![id, 0, "cargo test", ids[0], 1_794_000_001_000_000_i64],
+    )
+    .unwrap();
+
+    let listed = service.call("GET", "/api/projects").json()["projects"][0].clone();
+    let expected = json!([
+        { "command": "cargo test", "source": ids[0], "set": "2026-11-06T21:20:01.000Z" },
+        { "command": "npm test", "source": "found", "set": "2026-11-06T21:20:00.000Z" },
+    ]);
+    assert_eq!(listed["checks"], expected, "{listed}");
 }

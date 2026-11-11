@@ -15,12 +15,21 @@ pub struct Project {
     pub folder: String,
     pub members: Vec<Member>,
     /// The commands Gathr runs on a PR's head, in order.
-    pub checks: Vec<String>,
+    pub checks: Vec<Check>,
     /// Whose result gates a merge: one of `CI`.
     pub ci: String,
     /// How Gathr merges: one of `MERGE`.
     pub merge: String,
     pub created: String,
+}
+
+/// A check as saved: the person never types one (owner, task 1455).
+#[derive(Debug, Clone, Serialize)]
+pub struct Check {
+    pub command: String,
+    /// The agent that set it, by id, or `found` when Gathr found it in the project.
+    pub source: String,
+    pub set: String,
 }
 
 /// GitHub's CI, Gathr's own checks, or both.
@@ -34,7 +43,6 @@ pub struct Change {
     pub name: Option<String>,
     pub folder: Option<String>,
     pub team: Option<Vec<(String, Role)>>,
-    pub checks: Option<Vec<String>>,
     pub ci: Option<String>,
     pub merge: Option<String>,
 }
@@ -42,15 +50,6 @@ pub struct Change {
 /// The name as saved, trimmed, or why it can't be one.
 pub fn name(name: &str) -> Result<&str, &'static str> {
     crate::accounts::checked(name).map_err(|refused| refused.why())
-}
-
-/// The check commands as saved, each trimmed, or why they can't be.
-pub fn checks(commands: Vec<String>) -> Result<Vec<String>, &'static str> {
-    let trimmed: Vec<String> = commands.iter().map(|c| c.trim().to_string()).collect();
-    match trimmed.iter().any(String::is_empty) {
-        true => Err("A check needs a command"),
-        false => Ok(trimmed),
-    }
 }
 
 /// Saves a project whose name, folder and team are already checked. A name another project has,
@@ -91,13 +90,8 @@ pub fn update(conn: &mut Connection, id: &str, change: Change) -> Result<Option<
         );
         name_taken(renamed)?;
     }
-    let checks = change.checks.map(|c| serde_json::to_string(&c));
-    let checks = checks
-        .transpose()
-        .map_err(|e| Error::Other(e.to_string()))?;
     let fields = [
         ("folder", change.folder),
-        ("checks", checks),
         ("ci", change.ci),
         ("merge_method", change.merge),
     ];
@@ -154,30 +148,31 @@ pub fn list(conn: &Connection) -> Result<Vec<Project>, Error> {
         .collect()
 }
 
-type Row = (String, String, i64, String, String, String);
+type Row = (String, String, i64, String, String);
 
 pub fn get(conn: &Connection, id: &str) -> Result<Option<Project>, Error> {
     let found: Option<Row> = conn
         .query_row(
-            "SELECT name, folder, created_ts, checks, ci, merge_method FROM projects WHERE id = ?1",
+            "SELECT name, folder, created_ts, ci, merge_method FROM projects WHERE id = ?1",
             [id],
-            |r| {
-                Ok((
-                    r.get(0)?,
-                    r.get(1)?,
-                    r.get(2)?,
-                    r.get(3)?,
-                    r.get(4)?,
-                    r.get(5)?,
-                ))
-            },
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
         )
         .optional()?;
-    let Some((name, folder, created, checks, ci, merge)) = found else {
+    let Some((name, folder, created, ci, merge)) = found else {
         return Ok(None);
     };
-    // The column's CHECK keeps it an array; one holding anything but text reads as none.
-    let checks = serde_json::from_str(&checks).unwrap_or_default();
+    let mut stmt = conn.prepare_cached(
+        "SELECT command, source, set_ts FROM project_checks WHERE project_id = ?1 ORDER BY position",
+    )?;
+    let checks = stmt
+        .query_map([id], |r| {
+            Ok(Check {
+                command: r.get(0)?,
+                source: r.get(1)?,
+                set: crate::ids::utc(r.get(2)?),
+            })
+        })?
+        .collect::<Result<_, _>>()?;
     let mut stmt = conn.prepare_cached(
         "SELECT m.agent_id, a.name, m.role FROM project_members m JOIN agents a ON a.id = m.agent_id
          WHERE m.project_id = ?1 ORDER BY m.role != 'supervisor', m.position",

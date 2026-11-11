@@ -271,7 +271,7 @@ fn a_folder_from_before_search_is_found_after_the_upgrade() {
     conn.execute_batch(
         "DROP TRIGGER message_search_insert; DROP TRIGGER message_search_delete;
          DROP TRIGGER message_search_update; DROP TABLE message_search;
-         ALTER TABLE projects DROP COLUMN checks; ALTER TABLE projects DROP COLUMN ci;
+         DROP TABLE project_checks; ALTER TABLE projects DROP COLUMN ci;
          ALTER TABLE projects DROP COLUMN merge_method; PRAGMA user_version = 14;",
     )
     .unwrap();
