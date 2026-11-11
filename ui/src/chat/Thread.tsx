@@ -299,19 +299,21 @@ function AskApproval({
     const slot = a.answer?.allow ? 'approval-card-allow-once' : 'approval-card-deny';
     card.current?.querySelector<HTMLElement>(`[data-slot="${slot}"]`)?.focus();
   }, [failure, a.answer?.allow]);
-  const input = a.input as { command?: unknown } | null | undefined;
+  const input = a.input as { command?: unknown; check?: unknown } | null | undefined;
+  // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
+  const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
+  const tool = typeof claudeCheck === 'string' ? 'wait check' : a.tool;
+  const command = tool === a.tool ? input?.command : claudeCheck;
   return (
     <>
       <ApprovalCard
         ref={card}
         state={sending ? 'running' : 'request'}
         statusLabel={a.answer?.allow ? 'Allowing…' : 'Denying…'}
-        title={`Allow ${a.tool}?`}
-        command={typeof input?.command === 'string' ? input.command : undefined}
+        title={`Allow ${tool}?`}
+        command={typeof command === 'string' ? command : undefined}
         description={
-          a.tool === 'wait check'
-            ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.'
-            : undefined
+          tool === 'wait check' ? 'Runs in sh (Git Bash on Windows), outside the engine sandbox.' : undefined
         }
         style={{ overflowWrap: 'anywhere' }}
         subtitle={agent}
