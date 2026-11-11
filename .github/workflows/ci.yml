@@ -17,6 +17,29 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
+  # A pull request that changes only Markdown files runs the four jobs `main` requires with the
+  # file size check alone. The jobs still run, so each required name reports: a skipped matrix
+  # job reports under no name `main` knows. A push to `main` always runs everything.
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.find.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - id: find
+        shell: bash
+        run: |
+          code=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # The checkout is the pull request merged into its base, so its first parent is the base.
+            git diff --name-only HEAD^1 HEAD | tee changed.txt
+            grep -qvE '\.md$' changed.txt || code=false
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   rust:
     name: Rust (${{ matrix.name }})
     strategy:
@@ -27,28 +50,37 @@ jobs:
             os: windows-latest
           - name: macOS
             os: macos-latest
+    needs: changes
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install the pinned toolchain
+      - if: needs.changes.outputs.code != 'false'
+        name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
-      - uses: Swatinem/rust-cache@v2
+      - if: needs.changes.outputs.code != 'false'
+        uses: Swatinem/rust-cache@v2
       - name: file size
         shell: bash
         run: bash scripts/check-file-size.sh
-      - name: recording scrub
+      - if: needs.changes.outputs.code != 'false'
+        name: recording scrub
         run: node scripts/scrub-frames.check.mjs
-      - name: registry files unchanged
+      - if: needs.changes.outputs.code != 'false'
+        name: registry files unchanged
         run: node scripts/registry.check.mjs
-      - name: fmt
+      - if: needs.changes.outputs.code != 'false'
+        name: fmt
         run: cargo fmt --all --check
-      - name: clippy
+      - if: needs.changes.outputs.code != 'false'
+        name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       # Runs every test binary at once: the suite's time is its tests', one binary after another.
-      - uses: taiki-e/install-action@v2
+      - if: needs.changes.outputs.code != 'false'
+        uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-      - name: test
+      - if: needs.changes.outputs.code != 'false'
+        name: test
         run: cargo nextest run --workspace --locked --no-fail-fast
         env:
           GATHR_TEST_KEEP: ${{ runner.temp }}/gathr-test-failures
@@ -63,10 +95,10 @@ jobs:
           retention-days: 7
       # The Mac checks run CI's build, so nothing gets built on the Mac.
       - name: build the window
-        if: matrix.name == 'macOS'
+        if: needs.changes.outputs.code != 'false' && matrix.name == 'macOS'
         run: cargo build -p gathr-app --locked
       - name: keep the macOS build
-        if: matrix.name == 'macOS'
+        if: needs.changes.outputs.code != 'false' && matrix.name == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: gathr-macos
@@ -86,24 +118,30 @@ jobs:
             os: windows-latest
           - name: macOS
             os: macos-latest
+    needs: changes
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         working-directory: ui
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v7
+      - if: needs.changes.outputs.code != 'false'
+        uses: actions/setup-node@v7
         with:
           node-version-file: ui/.node-version
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - run: npm ci
+      - if: needs.changes.outputs.code != 'false'
+        run: npm ci
       # Windows tests run in the runner's own Edge (WebView2's engine), so only macOS downloads one.
-      - if: runner.os == 'macOS'
+      - if: needs.changes.outputs.code != 'false' && runner.os == 'macOS'
         run: npx playwright install webkit
-      - run: npx biome ci
-      - run: npx tsc --noEmit
-      - run: npx vitest run
+      - if: needs.changes.outputs.code != 'false'
+        run: npx biome ci
+      - if: needs.changes.outputs.code != 'false'
+        run: npx tsc --noEmit
+      - if: needs.changes.outputs.code != 'false'
+        run: npx vitest run
       # A failing test leaves its screenshot in ui/.vitest: kept, so a failure on the other system shows.
       - name: keep failing tests' screenshots
         if: failure()
@@ -113,10 +151,11 @@ jobs:
           path: ui/.vitest
           include-hidden-files: true
           retention-days: 7
-      - run: npx vite build
+      - if: needs.changes.outputs.code != 'false'
+        run: npx vite build
       # The built UI, which gathrd serves from a `ui` folder beside it (AGENTS.md "Run it installed").
       - name: keep the built UI
-        if: runner.os == 'macOS'
+        if: needs.changes.outputs.code != 'false' && runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: gathr-ui
