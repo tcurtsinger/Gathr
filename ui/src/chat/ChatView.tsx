@@ -55,6 +55,8 @@ interface Props {
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;
+  /** Opens an agent's task in the workspace's Tasks tab (owner's pick A, room task 70). */
+  onOpenTask?: (task: number) => void;
   /** The team chat beside the Supervisor's, in a chat with more than one agent; kept per chat. */
   split: boolean;
   onSplit: (open: boolean) => void;
@@ -145,6 +147,7 @@ export function ChatView(props: Props) {
       input.current?.focus();
     },
     approve,
+    openTask: (task) => props.onOpenTask?.(task),
   };
 
   return (
@@ -171,7 +174,9 @@ export function ChatView(props: Props) {
           {archived && <small className="topbar-state">Archived</small>}
         </div>
         <div className="topbar-actions">
-          {team && <Summary state={state} pauses={pauses} run={run} onPause={act} />}
+          {team && (
+            <Summary state={state} pauses={pauses} run={run} onPause={act} onOpenTask={props.onOpenTask} />
+          )}
           {team && (
             <TooltipIconButton
               tooltip={split ? 'Hide team chat' : 'Show team chat'}

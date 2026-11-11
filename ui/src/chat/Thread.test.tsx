@@ -14,6 +14,7 @@ import { apply, type ChatState, empty, fromHistory } from './state';
 import { type Actions, Thread } from './Thread';
 
 const none: Actions = {
+  openTask: () => {},
   diagnostics: () => {},
   reference: () => {},
   signIn: () => {},

@@ -112,7 +112,9 @@
     {
       "path": "components/assistant-ui/elements/todo-list.tsx",
       "url": "https://r.assistant-ui.com/elements-todo-list.json",
-      "sha256": "0090df0bec2350d1e9992a5446d89267abcf4e1145a7603269c07236f295c518"
+      "sha256": "0090df0bec2350d1e9992a5446d89267abcf4e1145a7603269c07236f295c518",
+      "adapted": "63a148bbd1649be77bf4346d241e01f7ce222ebd403828ca8483c649439932ab",
+      "why": "An optional onItemSelect makes each item's title a button, so Summary's tasks open in the Tasks tab (owner's pick A, room task 70). Without it, items render as published."
     },
     {
       "path": "lib/utils.ts",

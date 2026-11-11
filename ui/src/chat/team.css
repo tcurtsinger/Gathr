@@ -54,6 +54,11 @@
   white-space: pre-line;
   overflow-wrap: anywhere;
 }
+/* A hand-off's task opens in the Tasks tab (room task 70). */
+.task-line-more .task-open {
+  display: block;
+  margin-top: 4px;
+}
 .gathr-line {
   display: flex;
   gap: 8px;

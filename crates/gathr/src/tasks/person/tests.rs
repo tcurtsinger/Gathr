@@ -32,6 +32,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         created_us: 0,
         stale_us: None,
         heard_in: None,
+        pr_head: None,
     }
 }
 

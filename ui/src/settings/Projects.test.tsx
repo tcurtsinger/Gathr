@@ -156,3 +156,38 @@ test("a check's setter keeps its name after leaving the team", async () => {
       `npm testMade-up Third · ${new Date(set).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
     );
 });
+
+test('the checks cache shows its size; Clear empties it at once, and a refused Clear says why', async () => {
+  let bytes = 2_400_000_000;
+  let refuse = false;
+  const cleared: string[] = [];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/projects') return new Response(JSON.stringify({ projects: [project] }));
+    if (path === '/api/agents') return new Response(JSON.stringify({ agents: [] }));
+    if (path === '/api/projects/p/caches' && init?.method === 'DELETE') {
+      cleared.push(path);
+      if (refuse) {
+        const error = { error: 'Remove failed', why: 'made-up refusal', ref: 'made-up-ref' };
+        return new Response(JSON.stringify(error), { status: 500 });
+      }
+      bytes = 0;
+      return new Response(JSON.stringify({ removed: true }));
+    }
+    if (path === '/api/projects/p/caches') return new Response(JSON.stringify({ bytes }));
+    return new Response('{}');
+  });
+  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Checks & merge' }).click();
+  await expect.element(screen.getByText('2.4 GB')).toBeVisible();
+
+  refuse = true;
+  await screen.getByRole('button', { name: 'Clear' }).click();
+  await expect.element(screen.getByText('made-up refusal')).toBeVisible();
+  await expect.element(screen.getByText('2.4 GB')).toBeVisible();
+
+  refuse = false;
+  await screen.getByRole('button', { name: 'Clear' }).click();
+  await expect.element(screen.getByText('0 B')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
+  expect(cleared).toHaveLength(2);
+});
