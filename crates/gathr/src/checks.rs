@@ -96,20 +96,20 @@ fn run_steps(text: &str) -> Vec<String> {
                         || lines[i].trim_start().starts_with("- ") && indent(lines[i]) + 2 == keys)
             })
             .unwrap_or(lines.len());
-        let script: Vec<&str> = match value.starts_with('|') || value.starts_with('>') {
-            true => (at + 1..end)
-                .take_while(|&i| lines[i].trim().is_empty() || indent(lines[i]) > keys)
-                .map(|i| lines[i].trim())
-                .filter(|l| !l.is_empty())
-                .collect(),
-            false => vec![value.trim_matches(['"', '\''])],
+        let command = match value.starts_with('|') || value.starts_with('>') {
+            true => {
+                let body = (at + 1..end)
+                    .take_while(|&i| lines[i].trim().is_empty() || indent(lines[i]) > keys)
+                    .map(|i| lines[i]);
+                block(value, &body.collect::<Vec<_>>())
+            }
+            false => Some(value.trim_matches(['"', '\'']).to_string()),
         };
         let folder = lines[start..end]
             .iter()
             .filter(|l| indent(l) == keys || l.trim_start().starts_with("- "))
             .find_map(|l| key(l, "working-directory"));
-        let command = script.join("\n");
-        if !command.is_empty() {
+        if let Some(command) = command.filter(|c| !c.is_empty()) {
             found.push(match folder {
                 Some(folder) => format!("cd {folder} && {command}"),
                 None => command,
@@ -117,6 +117,45 @@ fn run_steps(text: &str) -> Vec<String> {
         }
     }
     found
+}
+
+/// A block scalar's text as YAML reads it, for the forms read here: `|` keeps each line, with the
+/// indent inside the block and its blank lines; `>` joins lines with a space, a blank line making
+/// a line break. `None` for what isn't read (an indent indicator such as `|2`, a more-indented
+/// line in a folded block), so a command is never offered changed.
+fn block(header: &str, body: &[&str]) -> Option<String> {
+    let header = header.split(" #").next().unwrap_or(header).trim();
+    let folded = header.starts_with('>');
+    if !matches!(&header[1..], "" | "-" | "+") {
+        return None;
+    }
+    let base = body
+        .iter()
+        .find(|l| !l.trim().is_empty())
+        .map(|l| indent(l))?;
+    let mut lines = Vec::new();
+    for line in body {
+        match line.trim().is_empty() {
+            true => lines.push(""),
+            false if indent(line) < base || folded && indent(line) > base => return None,
+            false => lines.push(line[base..].trim_end()),
+        }
+    }
+    while lines.last() == Some(&"") {
+        lines.pop();
+    }
+    if !folded {
+        return Some(lines.join("\n"));
+    }
+    let mut text = String::new();
+    for (i, line) in lines.iter().enumerate() {
+        match (line.is_empty(), i > 0 && !lines[i - 1].is_empty()) {
+            (true, _) => text.push('\n'),
+            (false, true) => text.extend([" ", line]),
+            (false, false) => text.push_str(line),
+        }
+    }
+    Some(text)
 }
 
 fn indent(line: &str) -> usize {
@@ -226,6 +265,34 @@ jobs:
                 "cd ui && npx tsc --noEmit\nnpx vitest run",
                 "cargo test --workspace --locked",
             ]
+        );
+    }
+
+    /// Vale, #112: a block keeps YAML's meaning. A folded one's lines are one command; a literal
+    /// one keeps its blank lines and the indent inside it.
+    #[test]
+    fn a_block_step_keeps_its_folded_or_literal_meaning() {
+        let workflow = "\
+steps:
+  - run: >-
+      cargo test
+      --workspace
+  - run: |
+      if true; then
+        echo hi
+      fi
+
+      echo done
+  - run: |2
+        echo kept
+";
+        assert_eq!(
+            run_steps(workflow),
+            [
+                "cargo test --workspace",
+                "if true; then\n  echo hi\nfi\n\necho done",
+            ],
+            "and a block form it doesn't read (`|2`) isn't offered at all"
         );
     }
 }
