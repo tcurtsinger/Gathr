@@ -7,6 +7,7 @@ mod api;
 mod app_update;
 mod archive;
 mod chats;
+mod check_runs;
 mod cleanup;
 mod coord;
 mod logs;
@@ -215,6 +216,7 @@ async fn serve(
     writer.record(health_event(data, port, early_lines));
     chats.pick_account().await;
     coord::recover(&chats).await;
+    check_runs::recover(&chats).await;
     // Before the queues fill: what a pause holds stays held after a restart.
     chats.pauses_changed().await;
     chats.take_over().await;

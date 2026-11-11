@@ -62,6 +62,7 @@ pub async fn once(chats: &Arc<Chats>) {
     })
     .await;
     crate::cleanup::sweep(chats, None).await;
+    crate::check_runs::sweep(chats, day_us()).await;
     let found = chats.writer.call(|c| waits::to_look_at(c)).await;
     let prs = chats.writer.call(|c| tasks::with_prs(c)).await;
     let (Some(Ok(found)), Some(Ok(prs))) = (found, prs) else {
@@ -107,6 +108,10 @@ pub async fn once(chats: &Arc<Chats>) {
         };
         let state = json_text(&answer, "state");
         let head = json_text(&answer, "headRefOid");
+        // A review's PR: Gathr runs the project's checks at each head it sees (0036 C3).
+        if state == "OPEN" && !head.is_empty() {
+            crate::check_runs::for_review(chats, &chat, task, &head).await;
+        }
         let t = trace.clone();
         apply(chats, "gathr.task.pr", &trace, move |c| {
             tasks::pr_looked(
