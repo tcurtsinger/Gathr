@@ -127,6 +127,26 @@
       "url": null,
       "sha256": "26530427a082fb27260941741a37194a33235d39a6988e540859b25319f77b8f",
       "why": "The css records of tool-group and tool-fallback (and surfaces' tw-shimmer import), as the registry publishes them."
+    },
+    {
+      "path": "components/assistant-ui/elements/context-display.tsx",
+      "url": "https://r.assistant-ui.com/elements-context-display.json",
+      "sha256": "a4c74b3429d8fc3afbd80733acaee7c9578bf827cda6eb01de864ebbb4ea5530"
+    },
+    {
+      "path": "components/assistant-ui/utils/tokens.ts",
+      "url": "https://r.assistant-ui.com/elements-tokens.json",
+      "sha256": "009b617a40b7bdc6df50b249274d777d09385eb8581a0e72b90fdd96610a14cb"
+    },
+    {
+      "path": "components/assistant-ui/utils/context-usage.ts",
+      "url": "https://r.assistant-ui.com/elements-context-usage.json",
+      "sha256": "efda3c0fd48be1a65a24ab30b9c0c22f5276651348f3c77bb0334d1401369aa8"
+    },
+    {
+      "path": "components/assistant-ui/utils/context-display-state.ts",
+      "url": "https://r.assistant-ui.com/elements-context-display-state.json",
+      "sha256": "7e24cb5f3a5acf1f223b6f06ff20fb868ec23678fdb4577efff15f4a50618ca1"
     }
   ]
 }
