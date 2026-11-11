@@ -124,11 +124,13 @@ impl Tools {
                 })
             })
             .await?;
+        // Each names its chat: a window keeps only the live events of its own (G161).
+        let chat = caller.chat.clone();
         self.chats
-            .publish(json!({ "type": "message", "message": saved.shown }));
+            .publish(json!({ "type": "message", "chat": chat, "message": saved.shown }));
         if let Some(line) = &saved.paused {
             self.chats
-                .publish(json!({ "type": "message", "message": line }));
+                .publish(json!({ "type": "message", "chat": chat, "message": line }));
         }
         let delivered = match saved.over {
             Some(_) => "paused",

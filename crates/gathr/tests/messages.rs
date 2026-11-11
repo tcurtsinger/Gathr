@@ -438,4 +438,24 @@ fn the_pause_line_a_chain_adds_reaches_every_open_window() {
         .iter()
         .find(|m| m["body"] == line);
     assert_eq!(saved, Some(&heard["message"]), "live and history differ");
+    // A window keeps only the live events that name its chat (G161).
+    assert_eq!(heard["chat"], room.chat.as_str(), "{heard}");
+}
+
+/// G161: the owner's window showed an agent's message only after a reload. A window keeps only the
+/// live events that name its chat, and the message went out without one.
+#[test]
+fn a_message_goes_out_live_naming_its_chat_and_whom_its_for() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let lead = room.turn_of(&room.lead, 0);
+    let mut live = room.service.live();
+    room.message(&lead, "Ann", "Heads up: main moved");
+    let heard = until(10, "the message, live", || {
+        let event = common::next_live(&mut live);
+        (event["type"] == "message" && event["message"]["body"] == "Heads up: main moved")
+            .then_some(event)
+    });
+    assert_eq!(heard["chat"], room.chat.as_str(), "{heard}");
+    assert_eq!(heard["message"]["to"], room.ann.as_str(), "{heard}");
 }
