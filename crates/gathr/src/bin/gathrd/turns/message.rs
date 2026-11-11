@@ -34,10 +34,7 @@ impl Task {
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             return "in_turn";
         }
-        let waiting = self
-            .queue
-            .iter_mut()
-            .find(|q| q.ids.chat == chat && !q.ids.person);
+        let waiting = self.queue.iter_mut().find(|q| q.ids.chat == chat);
         if let Some(queued) = waiting {
             queued.text = format!("{}\n\n{ask}", queued.text);
             let ids = queued.ids.clone();

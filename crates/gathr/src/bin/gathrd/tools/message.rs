@@ -37,6 +37,8 @@ struct Sent {
     from_name: String,
     depth: i64,
     over: Option<i64>,
+    /// The pause line a chain past the limit adds, as saved.
+    paused: Option<Value>,
     answers: String,
 }
 
@@ -102,10 +104,13 @@ impl Tools {
                 let mut shown = shown;
                 shown["to"] = json!(member.agent);
                 let counted = gathr::handoffs::record(c, &chat, &from, &member.agent)?;
+                let mut paused = None;
                 if let Some(limit) = counted.over {
                     gathr::pauses::pause(c, "chat", &chat, false, &on.trace)?;
                     let line = gathr::handoffs::paused_line(limit);
-                    gathr::store::add_message(c, &chat, &on.turn, "gathr", "text", &line)?;
+                    paused = Some(gathr::store::add_message(
+                        c, &chat, &on.turn, "gathr", "text", &line,
+                    )?);
                 }
                 Ok(Sent {
                     shown,
@@ -113,6 +118,7 @@ impl Tools {
                     to_name: member.name.clone(),
                     from_name,
                     depth: counted.depth,
+                    paused,
                     over: counted.over,
                     answers: on.turn.clone(),
                 })
@@ -120,6 +126,10 @@ impl Tools {
             .await?;
         self.chats
             .publish(json!({ "type": "message", "message": saved.shown }));
+        if let Some(line) = &saved.paused {
+            self.chats
+                .publish(json!({ "type": "message", "message": line }));
+        }
         let delivered = match saved.over {
             Some(_) => "paused",
             None => self.deliver(caller, &saved, ask.text.trim()).await,

@@ -10,6 +10,7 @@ use common::{TempDir, TestService, call_tool, gathr, held_recording, nth, team, 
 use serde_json::{Value, json};
 
 struct Room {
+    _release: Release,
     service: TestService,
     chat: String,
     lead: String,
@@ -31,6 +32,7 @@ fn room(data: &Path) -> Room {
         .unwrap()
         .to_string();
     Room {
+        _release: Release(data.join("go")),
         service,
         chat,
         lead,
@@ -39,9 +41,12 @@ fn room(data: &Path) -> Room {
     }
 }
 
-impl Drop for Room {
+/// Lets the held engines go however a test ends.
+struct Release(std::path::PathBuf);
+
+impl Drop for Release {
     fn drop(&mut self) {
-        let _ = std::fs::write(self.data.join("go"), "");
+        let _ = std::fs::write(&self.0, "");
     }
 }
 
@@ -354,4 +359,83 @@ fn a_queued_turn_a_message_joined_keeps_its_whole_ask_across_a_stop() {
         waiting[0].text,
         "Lead wrote to you: First\n\nLead wrote to you: Then"
     );
+}
+
+/// Vale, #118: a turn the person queued for a member that hasn't started (the member is busy in
+/// another chat) takes the message too: one turn, never a second, and its ask outlasts a stop.
+#[test]
+fn a_message_joins_the_persons_queued_turn_and_both_outlast_a_stop() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let elsewhere = room.service.send(
+        "POST",
+        "/api/chats",
+        json!({ "members": [{ "agent": room.ann, "role": "supervisor" }] }),
+    );
+    let elsewhere = elsewhere.json()["id"].as_str().unwrap().to_string();
+    let body = json!({ "text": "Busy here", "agent": room.ann });
+    let path = format!("/api/chats/{elsewhere}/messages");
+    assert_eq!(room.service.send("POST", &path, body).status, 200);
+    nth(&room.data.join("env.jsonl"), 0);
+    let lead = room.turn_of(&room.lead, 1);
+    let path = format!("/api/chats/{}/messages", room.chat);
+    let queued = room.service.send(
+        "POST",
+        &path,
+        json!({ "text": "Your turn next", "agent": room.ann }),
+    );
+    assert_eq!(queued.json()["status"], "queued", "{}", queued.body);
+
+    room.message(&lead, "Ann", "And look at #12");
+    let anns = room.turns_of(&room.ann);
+    assert_eq!(anns.len(), 1, "the message made a second turn: {anns:?}");
+    let asked = room.said_in(&anns[0]).join("\n");
+    assert!(
+        asked.contains("Your turn next") && asked.contains("And look at #12"),
+        "{asked}"
+    );
+    assert_eq!(room.delivered(), ["joined"]);
+
+    let Room { service, .. } = room;
+    service.stop();
+    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    let waiting = gathr::store::take_over(&conn).unwrap();
+    let ann = waiting
+        .iter()
+        .find(|w| w.turn == anns[0]["id"].as_str().unwrap())
+        .unwrap();
+    assert!(
+        ann.text.contains("Your turn next") && ann.text.contains("And look at #12"),
+        "{}",
+        ann.text
+    );
+}
+
+/// Vale, #118: the line a chain past the limit adds reaches every open window, as history has it.
+#[test]
+fn the_pause_line_a_chain_adds_reaches_every_open_window() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    room.service
+        .send("PATCH", "/api/settings", json!({ "handoff_limit": 1 }));
+    let lead = room.turn_of(&room.lead, 0);
+    room.message(&lead, "Ann", "One");
+    let ann = nth(&room.data.join("env.jsonl"), 1)["GATHR_AGENT_TOKEN"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let mut live = room.service.live();
+    room.message(&ann, "Lead", "Two");
+    let line = "Paused after 1 hand-offs between agents. Resume to carry on.";
+    let heard = until(10, "the pause line, live", || {
+        let event = common::next_live(&mut live);
+        (event["type"] == "message" && event["message"]["body"] == line).then_some(event)
+    });
+    let history = room.history();
+    let saved = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["body"] == line);
+    assert_eq!(saved, Some(&heard["message"]), "live and history differ");
 }
