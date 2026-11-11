@@ -296,6 +296,8 @@ test("a Claude agent's wait check gets the wait check card, with its command and
   const screen = await render(<View state={state} />);
   const card = screen.getByRole('group', { name: 'Allow wait check?' });
   await expect.element(card.getByText(check, { exact: true })).toBeVisible();
-  await expect.element(card.getByText('Runs outside the engine sandbox.')).toBeVisible();
+  await expect
+    .element(card.getByText('Runs in sh (Git Bash on Windows), outside the engine sandbox.'))
+    .toBeVisible();
   expect(card.getByText(/mcp__gathr__wait/).query()).toBeNull();
 });
