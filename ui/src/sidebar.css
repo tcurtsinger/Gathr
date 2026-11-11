@@ -79,6 +79,10 @@
 .archive-group {
   margin-top: 24px;
 }
+/* The open lid lifts past the top of the viewBox. */
+.archive-icon {
+  overflow: visible;
+}
 .archive-lid {
   transform-box: view-box;
   transform-origin: 2px 8px;
