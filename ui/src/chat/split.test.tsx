@@ -173,6 +173,35 @@ test('a team reply with a long line that cannot wrap stays inside its half of th
   expect(team.getBoundingClientRect().right).toBeLessThanOrEqual(Math.ceil(column?.right ?? 0));
 });
 
+test('a hand-off line stays one line, cut with …, and a click shows it whole with why it was given', async () => {
+  const what = `Made-up hand-off ${'with a long title '.repeat(12)}end`;
+  const why = 'Made-up reason the lead gave.';
+  const handed = { id: 'g11', turn: 'w11', time: '', role: 'gathr', kind: 'text', body: what };
+  const messages = [...history.messages.slice(0, -1), handed, reply(11)];
+  const given = tasks.map((t) => (t.number === 11 ? { ...t, what, why } : t));
+  vi.stubGlobal('fetch', async (path: string) =>
+    json(
+      path.endsWith('/tasks')
+        ? { tasks: given, waits: [] }
+        : path === '/api/pauses'
+          ? { pauses: [], usage: [] }
+          : { ...history, messages },
+    ),
+  );
+  const screen = await render(<Chat />);
+  const line = screen.getByRole('button', { name: /Made-up hand-off/ });
+  await expect.element(line).toBeVisible();
+  const row = line.element() as HTMLElement;
+  const height = row.clientHeight;
+  expect(row.scrollWidth).toBeGreaterThan(row.clientWidth);
+  await expect.element(screen.getByText(why)).not.toBeInTheDocument();
+
+  await line.click();
+  await expect.element(screen.getByText(why)).toBeVisible();
+  expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
+  expect(row.clientHeight).toBeGreaterThan(height * 2);
+});
+
 test('a team column following the latest reply follows one that came while it was hidden', async () => {
   const { viewport, toggle } = await open();
   await toggle();
