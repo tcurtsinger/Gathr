@@ -362,6 +362,15 @@ behind Help beside the label. The shared ? opens an in-window popover; Escape
 closes Help before Settings and preserves focus. Switch remains the existing
 accessible immediate setting, with pending save and referenced failure states.
 
+Projects (0036, option B) lists projects as Agents lists agents. A project's page has
+two sections in one draft with one Save: General (name, folder, default team) and
+Checks & merge. Checks are read only, in run order, each with who set it (the
+agent's name, or Found in the project) and when: the Supervisor sets them, the
+person never types one. Required checks (CI, Gathr's checks, Both) and Merge method
+(Fast-forward, Merge commit, Squash via GitHub API) are editable, each with one line
+saying what it means. A project's More in the sidebar has Project settings, which
+opens Projects at that project.
+
 Diagnostics stays a Settings category: a 210px turn list beside the independently
 scrolling timeline. Failure links open its matching turn and reset conflicting
 filters. Preserve category/filter state and make long turns usable. No normal

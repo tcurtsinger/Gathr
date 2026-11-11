@@ -47,11 +47,13 @@ one("#startup").onclick = (event) => {
 	button.setAttribute("aria-checked", String(button.getAttribute("aria-checked") !== "true"));
 };
 one("#add-account").onclick = () => notify("Account action previewed");
-one("#agent-form").onsubmit = (event) => {
-	event.preventDefault();
-	notify("Saved locally");
-	dialog.close();
-};
+all("#agent-form, #project-form").forEach((form) => {
+	form.onsubmit = (event) => {
+		event.preventDefault();
+		notify("Saved locally");
+		dialog.close();
+	};
+});
 const tabs = all("[role=tab]");
 function selectTab(tab) {
 	tabs.forEach((button) => {

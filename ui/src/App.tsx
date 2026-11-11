@@ -214,6 +214,13 @@ export function App() {
         onSelect={choose}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
+        onProjectSettings={(project, opener) =>
+          setSettings({
+            page: 'projects',
+            project,
+            opener: opener ?? (document.activeElement as HTMLElement),
+          })
+        }
         actions={
           <>
             <SearchFlyout

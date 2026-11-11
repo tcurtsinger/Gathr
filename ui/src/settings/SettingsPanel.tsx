@@ -3,14 +3,17 @@ import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
 import { General } from './General';
+import { Projects } from './Projects';
 import './settings.css';
 
-export type Page = 'general' | 'engines' | 'agents' | 'diagnostics';
+export type Page = 'general' | 'engines' | 'agents' | 'projects' | 'diagnostics';
 
 export interface SettingsTarget {
   page: Page;
   /** Agents opens at this agent. */
   agent?: string;
+  /** Projects opens at this project. */
+  project?: string;
   /** Diagnostics opens at this chat, and this turn when one is given. */
   chat?: string;
   title?: string;
@@ -33,6 +36,7 @@ const pages: [Page, string][] = [
   ['general', 'General'],
   ['engines', 'Engines'],
   ['agents', 'Agents'],
+  ['projects', 'Projects'],
   ['diagnostics', 'Diagnostics'],
 ];
 
@@ -68,6 +72,8 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
               <Engines onReference={onReference} />
             ) : target.page === 'agents' ? (
               <Agents start={target.agent} onReference={onReference} />
+            ) : target.page === 'projects' ? (
+              <Projects start={target.project} onReference={onReference} />
             ) : (
               <Diagnostics
                 chat={target.chat}

@@ -141,7 +141,24 @@ export interface Project {
   name: string;
   folder: string;
   members: Member[];
+  /** Run in order on a PR's head; only the Supervisor sets them (0036, owner's call 1455). */
+  checks: ProjectCheck[];
+  /** Whose result gates a merge. */
+  ci: 'ci' | 'gathr' | 'both';
+  merge: 'fast-forward' | 'merge' | 'squash';
 }
+
+export interface ProjectCheck {
+  command: string;
+  /** The agent that set it, by id, or `found` when Gathr found it in the project. */
+  source: string;
+  set: string;
+}
+
+/** What a project's settings change: only what it names; the team whole. */
+export type ProjectChange = Partial<Pick<Project, 'name' | 'folder' | 'ci' | 'merge'>> & {
+  members?: { agent: string; role: Role }[];
+};
 
 export interface Chat {
   id: string;
@@ -291,6 +308,7 @@ export const api = {
   projects: () => call<{ projects: Project[] }>('GET', '/api/projects').then((p) => p.projects),
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
+  saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
   /** The person's open questions, and agents' stale tasks across chats. */
