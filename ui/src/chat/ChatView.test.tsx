@@ -249,7 +249,17 @@ test('a new chat is made with its first message, in its project, to its Supervis
       onUnsent={() => {}}
       openSettings={() => {}}
       onNamed={() => {}}
-      projects={[{ id: 'p', name: 'Made-up project', folder: 'x', members }]}
+      projects={[
+        {
+          id: 'p',
+          name: 'Made-up project',
+          folder: 'x',
+          members,
+          checks: [],
+          ci: 'gathr',
+          merge: 'fast-forward',
+        },
+      ]}
       onProject={() => {}}
       onNewProject={() => {}}
       onStart={(text, agent) => started.push({ text, agent })}

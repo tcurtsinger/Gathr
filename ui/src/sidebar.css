@@ -73,6 +73,7 @@
   opacity: 0;
 }
 .chatrow:is(:hover, :focus-within, [data-current]) .row-more,
+.project-row:is(:hover, :focus-within) .row-more,
 .row-more[data-state="open"] {
   opacity: 1;
 }

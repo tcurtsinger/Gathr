@@ -49,7 +49,15 @@ function service() {
   });
 }
 
-const project: Project = { id: 'p1', name: 'Made-up project', folder: 'C:\\made-up', members: [] };
+const project: Project = {
+  id: 'p1',
+  name: 'Made-up project',
+  folder: 'C:\\made-up',
+  members: [],
+  checks: [],
+  ci: 'gathr',
+  merge: 'fast-forward',
+};
 const chat: Chat = { id: 'c1', title: 'Made-up round', project: 'p1' };
 const question: PersonTask = {
   number: 1,

@@ -589,6 +589,7 @@ Conversation layout and navigation review for the upcoming desktop release</butt
 <button aria-current="page" data-section="General" data-id="category-general">General</button>
 <button data-section="Engines" data-id="category-engines">Engines</button>
 <button data-section="Agents" data-id="category-agents">Agents</button>
+<button data-section="Projects" data-id="category-projects">Projects</button>
 <button data-section="Diagnostics" data-id="category-diagnostics">Diagnostics</button></nav>
 <div class="ds-settings-content">
 <h3 id="settings-heading">General</h3>
@@ -613,6 +614,14 @@ aria-describedby="startup-scope" id="startup"><span></span></button></div><div c
 <label>Model<select class="ds-field"><option>Engine default</option></select></label>
 <label>Effort<select class="ds-field"><option>Engine default</option></select></label>
 <label>Approvals<select class="ds-field"><option>Auto</option><option>Ask</option><option>Edits</option><option>Full</option></select></label>
+<footer><button class="ds-button" type="reset">Cancel</button><button class="ds-button" data-variant="primary">Save</button></footer>
+</form></div>
+<div data-settings="Projects" hidden><form class="ds-settings-form" id="project-form" data-id="project-form">
+<p><strong>Checks</strong><br><small>Set by the project’s Supervisor. They run in order on the reviewed commit.</small></p>
+<ol class="ds-project-checks" aria-label="Checks"><li><span class="ds-mono">cargo test</span><small>Found in the project · Nov 8</small></li>
+<li><span class="ds-mono">npm test</span><small>Mira · Nov 9</small></li></ol>
+<label>Required checks<select class="ds-field"><option>CI</option><option selected>Gathr’s checks</option><option>Both</option></select></label>
+<label>Merge method<select class="ds-field"><option>Fast-forward (default)</option><option>Merge commit</option><option>Squash via GitHub API</option></select></label>
 <footer><button class="ds-button" type="reset">Cancel</button><button class="ds-button" data-variant="primary">Save</button></footer>
 </form></div>
 <div data-settings="Diagnostics" hidden><p class="ds-mono">sample-01</p><p>Send failed</p><details class="ds-tool-disclosure">

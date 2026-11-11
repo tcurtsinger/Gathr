@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, MoreHorizontal, Pause, Play, Settings, Trash2 } from 'lucide-react';
 import { Fragment, type ReactElement, useRef } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import {
@@ -27,6 +27,8 @@ interface Props {
   onArchive?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
   onDelete?: (opener: HTMLElement | null) => void;
+  /** A project's row: its settings (0036). */
+  onProjectSettings?: (opener: HTMLElement | null) => void;
   className?: string;
   /** Where the menu lines up with its button: 'start' beside the chat title, 'end' at a row's end. */
   align?: 'start' | 'end';
@@ -36,8 +38,8 @@ interface Props {
 
 /**
  * A More menu (the prototype's ChatActions): the pause item, then Archive or Restore, then Delete,
- * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, and each
- * agent's row in Summary only the pause item, for that agent alone.
+ * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, each
+ * agent's row in Summary only the pause item, for that agent alone, and a project's row Project settings.
  */
 export function ChatMenu({
   label = 'More',
@@ -46,6 +48,7 @@ export function ChatMenu({
   onArchive,
   onRestore,
   onDelete,
+  onProjectSettings,
   className,
   align = 'end',
   side,
@@ -76,6 +79,14 @@ export function ChatMenu({
       <DropdownMenuItem key="archive" onSelect={() => onArchive(trigger.current)}>
         <Archive />
         Archive
+      </DropdownMenuItem>,
+    ]);
+  if (onProjectSettings)
+    items.push([
+      'project',
+      <DropdownMenuItem key="project" onSelect={() => onProjectSettings(trigger.current)}>
+        <Settings />
+        Project settings
       </DropdownMenuItem>,
     ]);
   if (onDelete)
