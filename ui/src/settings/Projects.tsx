@@ -164,7 +164,7 @@ function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps
           <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
         </>
       ) : (
-        <Checks project={project} fields={fields} edit={edit} />
+        <Checks project={project} agents={agents} fields={fields} edit={edit} />
       )}
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
@@ -184,17 +184,20 @@ function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps
 
 interface ChecksProps {
   project: Project;
+  agents: Agent[];
   fields: Fields;
   edit: (more: Partial<Fields>) => void;
 }
 
 /** The checks as the Supervisor set them (the person never types one), then what gates a merge. */
-function Checks({ project, fields, edit }: ChecksProps) {
+function Checks({ project, agents, fields, edit }: ChecksProps) {
   const heading = useId();
   const who = (source: string) =>
     source === 'found'
       ? 'Found in the project'
-      : (project.members.find((m) => m.agent === source)?.name ?? 'An agent no longer in the team');
+      : (agents.find((a) => a.id === source)?.name ??
+        project.members.find((m) => m.agent === source)?.name ??
+        'A removed agent');
   return (
     <>
       <div className="agent-field">

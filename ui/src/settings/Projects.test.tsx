@@ -110,3 +110,49 @@ test('a refused save says why with its reference, and keeps the draft', async ()
   await expect.element(screen.getByRole('textbox', { name: 'Folder' })).toHaveValue('X:\\made-up\\elsewhere');
   expect(sent.map((s) => s.body)).toEqual([{ folder: 'X:\\made-up\\elsewhere' }]);
 });
+
+test('the team keeps one Supervisor and at least one agent; a new Supervisor or Reviewer makes the one before a Member', async () => {
+  service((body) => new Response(JSON.stringify({ ...project, ...body, members: project.members })));
+  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
+  const remove = (name: string) => screen.getByRole('button', { name: `Remove ${name}` });
+
+  // The Supervisor isn't demoted directly: another is picked in its place.
+  await expect.element(role('Made-up Lead')).toBeDisabled();
+  await role('Made-up Member').selectOptions('supervisor');
+  await expect.element(role('Made-up Lead')).toHaveValue('member');
+  await expect.element(role('Made-up Member')).toBeDisabled();
+
+  // One Reviewer: a second one makes the first a Member.
+  await screen.getByRole('combobox', { name: 'Add agent' }).selectOptions('c');
+  await role('Made-up Third').selectOptions('reviewer');
+  await role('Made-up Lead').selectOptions('reviewer');
+  await expect.element(role('Made-up Third')).toHaveValue('member');
+
+  // Removing the Supervisor makes the next agent it; the last agent stays.
+  await remove('Made-up Member').click();
+  await expect.element(role('Made-up Lead')).toHaveValue('supervisor');
+  await remove('Made-up Third').click();
+  await expect.element(remove('Made-up Lead')).toBeDisabled();
+
+  await screen.getByRole('button', { name: 'Save' }).click();
+  await expect.element(screen.getByRole('status')).toHaveTextContent('Saved');
+  expect(sent.map((s) => s.body)).toEqual([{ members: [{ agent: 'a', role: 'supervisor' }] }]);
+});
+
+test("a check's setter keeps its name after leaving the team", async () => {
+  const left = { ...project, checks: [{ command: 'npm test', source: 'c', set }] };
+  vi.stubGlobal('fetch', async (path: string) => {
+    if (path === '/api/projects') return new Response(JSON.stringify({ projects: [left] }));
+    if (path === '/api/agents')
+      return new Response(JSON.stringify({ agents: [agent('c', 'Made-up Third')] }));
+    return new Response('{}');
+  });
+  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Checks & merge' }).click();
+  await expect
+    .element(screen.getByRole('list', { name: 'Checks' }))
+    .toHaveTextContent(
+      `npm testMade-up Third · ${new Date(set).toLocaleDateString([], { month: 'short', day: 'numeric' })}`,
+    );
+});

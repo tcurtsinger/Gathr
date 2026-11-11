@@ -16,8 +16,9 @@ interface Props {
 }
 
 /**
- * A project's default team (0028): one Supervisor, at most one Reviewer, up to five agents. Picking a
- * Supervisor or Reviewer makes the one before a Member; removing the Supervisor makes the next one it.
+ * A project's default team (0028): one Supervisor, at most one Reviewer, up to five agents, never none.
+ * The Supervisor changes only by picking another, which makes the one before a Member, as a new Reviewer
+ * does; removing the Supervisor makes the next one it; the last agent can't be removed.
  */
 export function Team({ seats, agents, onChange }: Props) {
   const heading = useId();
@@ -53,6 +54,7 @@ export function Team({ seats, agents, onChange }: Props) {
           />
           <select
             aria-label={`Role of ${name(agent)}`}
+            disabled={role === 'supervisor'}
             value={role}
             onChange={(e) => setRole(agent, e.target.value as Role)}
           >
@@ -66,6 +68,7 @@ export function Team({ seats, agents, onChange }: Props) {
             type="button"
             tooltip={`Remove ${name(agent)}`}
             side="left"
+            disabled={seats.length === 1}
             onClick={() => remove(agent)}
           >
             <X />
