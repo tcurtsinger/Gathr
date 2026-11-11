@@ -106,8 +106,8 @@
       "path": "components/assistant-ui/elements/subagent-list.tsx",
       "url": "https://r.assistant-ui.com/elements-subagent-list.json",
       "sha256": "45b41b2621c1ed3e0b1268aaa21987b80bb8f3404e0685014f60091d084d83f8",
-      "adapted": "27f763941e226e1a63825aa209d386dea0e1c177fb44168b0e78a2ed693c4266",
-      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle; the room the row keeps for what's outside it is --subagent-actions (1.75rem by default), as Summary's context bar needs more. The card presentation is unchanged."
+      "adapted": "8c565a7f924ee69efef6239b24e01d3262eadc9525b0ce35e6dd716f853f2824",
+      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle; the name's line keeps --subagent-actions (none by default) for what sits beside it outside the toggle, as Summary's context bar does. The card presentation is unchanged."
     },
     {
       "path": "components/assistant-ui/elements/todo-list.tsx",
