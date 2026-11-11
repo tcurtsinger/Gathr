@@ -3,7 +3,6 @@ import { expect, test } from 'vitest';
 import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer } from './Composer';
-import '../theme.css';
 
 /** The composer as a chat holds it: sending clears the draft and lists what was sent. */
 function Chat({ running = false }: { running?: boolean }) {

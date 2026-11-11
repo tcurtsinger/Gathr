@@ -4,7 +4,6 @@ import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { AgentFolder } from './AgentFolder';
 import { SettingsPanel } from './SettingsPanel';
-import '../theme.css';
 
 const settings = { stale_days: 3, cancel_days: 7, agent_folder: 'X:\\Made\\Up' };
 

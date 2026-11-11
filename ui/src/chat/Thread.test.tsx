@@ -6,7 +6,6 @@ import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { type Agent, Failure, type History, type Message, type Turn } from '../api';
 import type { LiveEvent } from '../live';
-import '../theme.css';
 import { type SendFailure, toThread } from './messages';
 import approval from './recorded/approval.json';
 import exitsMidReply from './recorded/exits-mid-reply.json';

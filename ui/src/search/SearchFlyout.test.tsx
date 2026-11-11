@@ -3,7 +3,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import '../theme.css';
 import { SearchFlyout } from './SearchFlyout';
 
 afterEach(() => vi.unstubAllGlobals());

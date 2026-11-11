@@ -4,7 +4,6 @@ import { expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import { ChatView } from './ChatView';
 import type { SendFailure } from './messages';
-import '../theme.css';
 
 /** Two chats and what the app keeps for each while another is open. */
 function TwoChats() {
