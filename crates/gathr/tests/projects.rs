@@ -483,3 +483,25 @@ fn each_check_reads_back_with_who_set_it_and_when() {
     ]);
     assert_eq!(listed["checks"], expected, "{listed}");
 }
+
+/// Each of Checks & merge says who set it: the person, through Settings, here.
+#[test]
+fn the_persons_ci_choice_and_merge_method_say_the_person_set_them() {
+    let data = TempDir::new();
+    let repos = TempDir::new();
+    let (folder, _) = project(&repos.0);
+    let service = TestService::start(&data.0);
+    let ids = agents(&service, &data.0, &["Orin"]);
+    let body =
+        json!({ "name": "Gathr", "folder": folder, "members": [member(&ids[0], "supervisor")] });
+    let made = service.send("POST", "/api/projects", body).json();
+    assert_eq!(made["ci_by"], Value::Null, "nobody set it yet: {made}");
+    let path = format!("/api/projects/{}", made["id"].as_str().unwrap());
+    let changed = service
+        .send("PATCH", &path, json!({ "ci": "both", "merge": "merge" }))
+        .json();
+    for by in [&changed["ci_by"], &changed["merge_by"]] {
+        assert_eq!(by["source"], "person", "{changed}");
+        assert!(by["set"].is_string(), "{changed}");
+    }
+}
