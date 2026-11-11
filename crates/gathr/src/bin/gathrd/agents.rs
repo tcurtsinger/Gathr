@@ -125,7 +125,7 @@ async fn add(
         approvals: Approvals::default(),
     };
     let agent = blank.changed(body.change());
-    save(&s, &t, ("add", ERROR), agent).await
+    save(&s, &t, ("add", ERROR), agent, None).await
 }
 
 async fn change(
@@ -134,9 +134,20 @@ async fn change(
     Path(id): Path<String>,
     Json(body): Json<Body>,
 ) -> Answer {
+    change_as(&s, &t, &id, body.change(), None).await
+}
+
+/// A change by the person (`by` none) or by an agent through its settings tool (0036 C5a).
+pub async fn change_as(
+    s: &Arc<State>,
+    t: &Trace,
+    id: &str,
+    change: Change,
+    by: Option<String>,
+) -> Answer {
     const ERROR: &str = "Save failed";
-    let agent = find(&s, &t, &id, ERROR).await?.changed(body.change());
-    save(&s, &t, ("change", ERROR), agent).await
+    let agent = find(s, t, id, ERROR).await?.changed(change);
+    save(s, t, ("change", ERROR), agent, by).await
 }
 
 async fn remove(
@@ -181,7 +192,7 @@ async fn remove(
             ));
         }
     }
-    record(&s, &t, "remove", &agent);
+    record(&s, &t, "remove", &agent, None);
     Ok(Json(json!({ "removed": true })))
 }
 
@@ -191,6 +202,7 @@ async fn save(
     t: &Trace,
     (change, error): (&'static str, &'static str),
     agent: Agent,
+    by: Option<String>,
 ) -> Answer {
     let refused = |status, why: &str| Err(fail(status, error, why, &t.0));
     if agent.model.is_some() || agent.effort.is_some() {
@@ -235,12 +247,12 @@ async fn save(
             );
         }
     };
-    record(s, t, change, &agent);
+    record(s, t, change, &agent, by);
     Ok(Json(json!(agent)))
 }
 
 /// Records the change and tells every window.
-fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent) {
+fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent, by: Option<String>) {
     let event = Event::point("gathr.agent.change")
         .trace(&t.0)
         .ok()
@@ -249,7 +261,8 @@ fn record(s: &State, t: &Trace, change: &'static str, agent: &Agent) {
         .attr("model", agent.model.clone())
         .attr("effort", agent.effort.clone())
         .attr("approvals", agent.approvals.as_str())
-        .attr("change", change);
+        .attr("change", change)
+        .attr("by", by);
     s.writer.record(event);
     s.chats.publish(json!({ "type": "agents" }));
 }

@@ -16,6 +16,7 @@ use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
 use rusqlite::{Connection, OptionalExtension};
 
 use super::Caller;
+use crate::api::State;
 use crate::chats::Chats;
 
 /// A message longer than this is cut, with its id to read the whole of it (0020: a tool returns
@@ -26,17 +27,15 @@ const MOST: u32 = 100;
 
 /// The service to mount at `/mcp`. Answers are plain JSON where the call allows it, and the old
 /// revisions with sessions still work (0005).
-pub fn service(
-    chats: Arc<Chats>,
-    stopping: tokio::sync::watch::Receiver<bool>,
-) -> StreamableHttpService<Tools, LocalSessionManager> {
+pub fn service(state: Arc<State>) -> StreamableHttpService<Tools, LocalSessionManager> {
     let config = StreamableHttpServerConfig::default()
         .with_json_response(true)
         .with_sse_keep_alive(None);
     let tools = move || {
         Ok(Tools {
-            chats: chats.clone(),
-            stopping: stopping.clone(),
+            chats: state.chats.clone(),
+            stopping: state.stopping.subscribe(),
+            state: state.clone(),
             tool_router: Tools::every_router(),
         })
     };
@@ -53,6 +52,8 @@ pub fn names() -> Vec<String> {
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
     pub(super) stopping: tokio::sync::watch::Receiver<bool>,
+    /// The service's own state, so a settings tool changes them as the API does (0036 C5a).
+    pub(super) state: Arc<State>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -74,6 +75,7 @@ impl Tools {
             + Tools::checks_router()
             + Tools::message_router()
             + Tools::merge_router()
+            + Tools::settings_router()
     }
 }
 
