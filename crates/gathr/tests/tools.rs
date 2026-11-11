@@ -93,7 +93,13 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         server["headers"]["Authorization"], "Bearer ${GATHR_AGENT_TOKEN}",
         "the token went into the arguments, where any process can read it"
     );
-    assert_eq!(engine.after("--allowedTools"), "mcp__gathr");
+    // Each tool by name but `wait`: its check is auto mode's classifier's to read, or the hook's (0029).
+    let allowed: Vec<&str> = engine.after("--allowedTools").split(',').collect();
+    assert!(allowed.contains(&"mcp__gathr__give_task"), "{allowed:?}");
+    assert!(
+        !allowed.contains(&"mcp__gathr__wait") && !allowed.contains(&"mcp__gathr"),
+        "wait is allowed without a look: {allowed:?}"
+    );
 
     let port = service.info.port;
     let listed = mcp(port, &engine.token, "tools/list", json!({}), None);

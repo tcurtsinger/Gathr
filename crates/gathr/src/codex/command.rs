@@ -30,8 +30,10 @@ pub const SWITCHES: &[(&str, &str)] = &[
 /// Gathr's tools may hold a call while the person answers (`ask_person`, a wait's check).
 const TOOL_TIMEOUT_SEC: u32 = 3600;
 
-/// `app-server` with Gathr's switches, and its tools at `mcp` when the engine runs a turn.
-pub fn args(mcp: Option<&str>) -> Vec<String> {
+/// `app-server` with Gathr's switches, and its tools at `mcp` when the engine runs a turn. In
+/// Auto (`auto`) a `wait` asks Codex for approval, which its automatic reviewer answers with the
+/// check in front of it, as it answers the agent's own commands (0029; owner, 2026-11-11).
+pub fn args(mcp: Option<&str>, auto: bool) -> Vec<String> {
     let mut args = vec!["app-server".to_string()];
     let mut set = |key: &str, value: String| {
         args.push("-c".into());
@@ -48,6 +50,12 @@ pub fn args(mcp: Option<&str>) -> Vec<String> {
             "mcp_servers.gathr.default_tools_approval_mode",
             quoted("approve"),
         );
+        if auto {
+            set(
+                "mcp_servers.gathr.tools.wait.approval_mode",
+                quoted("prompt"),
+            );
+        }
         set(
             "mcp_servers.gathr.tool_timeout_sec",
             TOOL_TIMEOUT_SEC.to_string(),
@@ -128,6 +136,19 @@ pub fn usable(user_agent: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Only in Auto does `wait` ask Codex, whose automatic reviewer answers; in the other modes
+    /// the service asks the person, and a prompt from Codex would reach nobody.
+    #[test]
+    fn a_wait_asks_codex_for_approval_only_in_auto() {
+        let prompt = "mcp_servers.gathr.tools.wait.approval_mode=\"prompt\"".to_string();
+        assert!(args(Some("http://x/mcp"), true).contains(&prompt));
+        assert!(!args(Some("http://x/mcp"), false).contains(&prompt));
+        assert!(
+            !args(None, true).contains(&prompt),
+            "no tools, nothing to set"
+        );
+    }
 
     #[test]
     fn version_comes_from_the_user_agent_and_old_ones_are_refused() {

@@ -111,6 +111,9 @@ pub fn mode(approvals: Approvals) -> &'static str {
     }
 }
 
+/// What the hook's address ends in for an engine in auto mode.
+pub const AUTO_QUERY: &str = "auto";
+
 /// `SETTINGS`, plus, in every mode but Full, Gathr's hook at `hook`, if there is one, before
 /// each file write and command, and each `wait` (its check is a command Gathr runs) (0029). It
 /// asks with the engine's own token, and a hook that fails blocks the call, so a Gathr that can't
@@ -119,8 +122,13 @@ fn settings(approvals: Approvals, hook: Option<&str>) -> String {
     let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
     if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
         let auth = format!("Bearer ${TOKEN_VAR}");
+        // The hook leaves a wait's check to auto mode's classifier, so it's told the mode.
+        let hook = match approvals {
+            Approvals::Auto => format!("{hook}?{AUTO_QUERY}"),
+            _ => hook.to_string(),
+        };
         settings["hooks"] = serde_json::json!({ "PreToolUse": [{
-            "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell|mcp__gathr__wait",
+            "matcher": format!("Write|Edit|NotebookEdit|Bash|PowerShell|{WAIT_TOOL}"),
             "hooks": [{ "type": "http", "url": hook, "timeout": 30, "onFailure": "block",
                 "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] }] }] });
     }
@@ -178,9 +186,22 @@ pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 /// Where the worktree's `pre-push` hook asks Gathr, with the token above (0029).
 pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
-/// Gathr's tools at `url` with the engine's token, allowed without asking, and the briefing in
-/// `briefing`, a file for the same reason as the token (0005, 0021).
-pub fn given(url: &str, briefing: &Path) -> Vec<String> {
+/// The tool whose check is a command Gathr runs: never on the allow list, so in auto mode Claude
+/// Code's own classifier reads the call, and Gathr's hook answers for it in the other modes (0029).
+pub const WAIT_TOOL: &str = "mcp__gathr__wait";
+
+/// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking but
+/// for `wait`, and the briefing in `briefing`, a file for the same reason as the token (0005, 0021).
+pub fn given(url: &str, briefing: &Path, tools: &[String]) -> Vec<String> {
+    let allowed: Vec<String> = tools
+        .iter()
+        .map(|name| format!("mcp__gathr__{name}"))
+        .collect();
+    let allowed: Vec<&str> = allowed
+        .iter()
+        .map(String::as_str)
+        .filter(|name| *name != WAIT_TOOL)
+        .collect();
     let auth = format!("Bearer ${{{TOKEN_VAR}}}");
     let servers = serde_json::json!({ "mcpServers": { "gathr": {
         "type": "http", "url": url, "headers": { "Authorization": auth } } } });
@@ -188,7 +209,7 @@ pub fn given(url: &str, briefing: &Path) -> Vec<String> {
         "--mcp-config".into(),
         servers.to_string(),
         "--allowedTools".into(),
-        "mcp__gathr".into(),
+        allowed.join(","),
         "--append-system-prompt-file".into(),
         briefing.display().to_string(),
     ]
@@ -342,6 +363,24 @@ fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The hook leaves a wait's check to the classifier only when told the engine is in auto mode.
+    #[test]
+    fn only_an_auto_engines_hook_address_says_auto() {
+        let url = |approvals| {
+            let settings: serde_json::Value =
+                serde_json::from_str(&settings(approvals, Some("http://x/hook"))).unwrap();
+            settings["hooks"]["PreToolUse"][0]["hooks"][0]["url"].clone()
+        };
+        assert_eq!(url(Approvals::Auto), "http://x/hook?auto");
+        assert_eq!(url(Approvals::Edits), "http://x/hook");
+        assert_eq!(url(Approvals::Ask), "http://x/hook");
+        assert_eq!(
+            url(Approvals::Full),
+            serde_json::Value::Null,
+            "Full has no hook"
+        );
+    }
 
     #[test]
     fn a_version_is_usable_from_the_oldest_proven_one_on_compared_by_number() {
