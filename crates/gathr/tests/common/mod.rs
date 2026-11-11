@@ -548,11 +548,16 @@ pub fn nth(file: &Path, n: usize) -> Value {
 
 /// Gathr's hook (0029), asked as Claude Code asks it before `tool`, with the engine's `token`.
 pub fn hook(port: u16, token: &str, tool: &str, input: Value) -> Response {
+    hook_at(port, "/hook", token, tool, input)
+}
+
+/// The same at `path`: `/hook?auto` is how an engine in auto mode asks.
+pub fn hook_at(port: u16, path: &str, token: &str, tool: &str, input: Value) -> Response {
     let body = json!({ "hook_event_name": "PreToolUse", "tool_name": tool, "tool_input": input });
     let auth = format!("Bearer {token}");
     let headers = [
         ("Authorization", auth.as_str()),
         ("Content-Type", "application/json"),
     ];
-    http::post(port, "/hook", &headers, &body.to_string()).unwrap()
+    http::post(port, path, &headers, &body.to_string()).unwrap()
 }

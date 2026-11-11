@@ -19,7 +19,7 @@ impl Client {
     pub async fn start(program: &Path, folder: &Path) -> Result<Self, String> {
         std::fs::create_dir_all(folder).map_err(|e| e.to_string())?;
         let env = command::env(std::env::vars_os(), folder);
-        let (engine, lines) = Engine::start(program, &command::args(None), env, folder)
+        let (engine, lines) = Engine::start(program, &command::args(None, false), env, folder)
             .map_err(|e| format!("Codex did not start from {}: {e}", program.display()))?;
         let (session, first) = Session::handshake();
         let mut client = Self {
