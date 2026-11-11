@@ -24,6 +24,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0014_agent_folder.sql"),
     include_str!("../migrations/0015_search.sql"),
     include_str!("../migrations/0016_project_settings.sql"),
+    include_str!("../migrations/0017_check_approvals.sql"),
 ];
 
 /// The schema version this build writes.
