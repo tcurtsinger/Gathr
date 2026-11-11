@@ -66,3 +66,24 @@ test('a chat opened mid-stream shows each streamed piece once, whatever the hist
   expect(both.messages.map((m) => m.body)).toEqual(['First block.', 'Follow-up']);
   expect(both.partial.t).toBe('Second partial.');
 });
+
+test("a live context update moves that member's fill and window alone", () => {
+  const state = {
+    ...empty,
+    members: [
+      { agent: 'a', name: 'Made-up A', role: 'supervisor' as const, context: null },
+      { agent: 'b', name: 'Made-up B', role: 'member' as const, context: { used: 10, window: 100 } },
+    ],
+  };
+  const event: LiveEvent = {
+    type: 'context',
+    chat: 'c',
+    agent: 'a',
+    context: { used: 3_611, window: 1_000_000 },
+  };
+  const next = apply(state, event);
+  expect(next.members.map((m) => m.context)).toEqual([
+    { used: 3_611, window: 1_000_000 },
+    { used: 10, window: 100 },
+  ]);
+});

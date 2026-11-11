@@ -47,6 +47,14 @@ export interface Member {
   agent: string;
   name: string;
   role: Role;
+  /** How full its context is in this chat (compaction plan, K1); none before its first call. */
+  context?: Context | null;
+}
+
+/** The engine's last model call's prompt in tokens, and its model's window: either null until said. */
+export interface Context {
+  used: number | null;
+  window: number | null;
 }
 
 /** The whole app, or one chat or agent. */

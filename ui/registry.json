@@ -106,8 +106,8 @@
       "path": "components/assistant-ui/elements/subagent-list.tsx",
       "url": "https://r.assistant-ui.com/elements-subagent-list.json",
       "sha256": "45b41b2621c1ed3e0b1268aaa21987b80bb8f3404e0685014f60091d084d83f8",
-      "adapted": "6bfecd5e483b9deaf7c509f9a5034bf1075fb5d0b4734035ef542139b9381bac",
-      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle. The card presentation is unchanged."
+      "adapted": "8c565a7f924ee69efef6239b24e01d3262eadc9525b0ce35e6dd716f853f2824",
+      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle; the name's line keeps --subagent-actions (none by default) for what sits beside it outside the toggle, as Summary's context bar does. The card presentation is unchanged."
     },
     {
       "path": "components/assistant-ui/elements/todo-list.tsx",
@@ -127,6 +127,26 @@
       "url": null,
       "sha256": "26530427a082fb27260941741a37194a33235d39a6988e540859b25319f77b8f",
       "why": "The css records of tool-group and tool-fallback (and surfaces' tw-shimmer import), as the registry publishes them."
+    },
+    {
+      "path": "components/assistant-ui/elements/context-display.tsx",
+      "url": "https://r.assistant-ui.com/elements-context-display.json",
+      "sha256": "a4c74b3429d8fc3afbd80733acaee7c9578bf827cda6eb01de864ebbb4ea5530"
+    },
+    {
+      "path": "components/assistant-ui/utils/tokens.ts",
+      "url": "https://r.assistant-ui.com/elements-tokens.json",
+      "sha256": "009b617a40b7bdc6df50b249274d777d09385eb8581a0e72b90fdd96610a14cb"
+    },
+    {
+      "path": "components/assistant-ui/utils/context-usage.ts",
+      "url": "https://r.assistant-ui.com/elements-context-usage.json",
+      "sha256": "efda3c0fd48be1a65a24ab30b9c0c22f5276651348f3c77bb0334d1401369aa8"
+    },
+    {
+      "path": "components/assistant-ui/utils/context-display-state.ts",
+      "url": "https://r.assistant-ui.com/elements-context-display-state.json",
+      "sha256": "7e24cb5f3a5acf1f223b6f06ff20fb868ec23678fdb4577efff15f4a50618ca1"
     }
   ]
 }
