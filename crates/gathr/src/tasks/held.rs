@@ -2,7 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
-use super::{Finish, Start, State, Task, ready, set, words};
+use super::{Finish, Start, State, Task, cascade, read, ready, set, words};
 use crate::Error;
 use crate::event::Event;
 
@@ -236,5 +236,69 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
         start.hear_back = true;
         starts.push(start);
     }
+    Ok(starts)
+}
+
+/// Commands that ended: the turn that started each, and that turn's task.
+pub type Ended = Vec<(String, Option<i64>)>;
+
+/// What the engine lists as running in the background now, saved; with `release`, each task held on
+/// a command that ended and left nothing open settles (G174). Released when the engine is at work on
+/// another turn: Claude Code says a command ended inside that turn and begins none for the task.
+/// With the engine idle, the turn it begins on the task settles it, as any turn on it does.
+pub fn background_changed(
+    conn: &mut Connection,
+    engine: (&str, Option<&str>),
+    listed: &[(String, String)],
+    turn: Option<&str>,
+    release: bool,
+    trace: &str,
+) -> Result<(Ended, Vec<Start>), Error> {
+    let tx = conn.transaction()?;
+    let ended = crate::background::set(&tx, engine, listed, turn)?;
+    let mut starts = Vec::new();
+    if release {
+        let mut tasks: Vec<i64> = ended.iter().filter_map(|(_, task)| *task).collect();
+        tasks.dedup();
+        for task in tasks {
+            starts.extend(released(&tx, task, trace)?);
+        }
+    }
+    tx.commit()?;
+    Ok((ended, starts))
+}
+
+/// A held task's hold may be over: settled as its owner last finished it, else as the turn that held
+/// it said ("done, waiting on …", "left, waiting on …"). Nothing while anything is still open.
+pub fn release(conn: &mut Connection, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
+    let tx = conn.transaction()?;
+    let starts = released(&tx, task, trace)?;
+    tx.commit()?;
+    Ok(starts)
+}
+
+fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
+    let Ok(t) = read(tx, task) else {
+        return Ok(Vec::new());
+    };
+    if t.state != State::Held || !open_on(tx, task)?.is_empty() {
+        return Ok(Vec::new());
+    }
+    let (finish, note): (Option<String>, Option<String>) = tx.query_row(
+        "SELECT finish, finish_note FROM tasks WHERE number = ?1",
+        [task],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    tx.execute(
+        "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
+        [task],
+    )?;
+    let said = match t.reason.as_deref() {
+        Some(r) if r.starts_with("left,") => Finish::Left,
+        _ => Finish::Done,
+    };
+    let finish = finish.as_deref().and_then(Finish::named).unwrap_or(said);
+    let mut starts = settle(tx, &t, Some(finish), note, 1, trace)?;
+    starts.extend(cascade(tx, task, trace)?);
     Ok(starts)
 }
