@@ -5,12 +5,30 @@ use gathr::claude::engine::Line;
 use gathr::claude::frames::{Frame, TurnEnd};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id};
+use gathr::steps::StepInput;
 use gathr::store;
 use serde_json::{Value, json};
 
-use super::{Queued, Task, login_stamp};
+use super::{OpenTool, Queued, Task, login_stamp};
 
 const EMPTY: &str = "the engine ended the turn with no reply and no tool call";
+
+/// A tool message's body: `input` only when the step kept what it ran (0041).
+fn tool_body(
+    tool: &str,
+    status: &str,
+    duration_ms: Option<i64>,
+    input: Option<&StepInput>,
+) -> Value {
+    let mut body = json!({ "tool": tool, "status": status });
+    if let Some(ms) = duration_ms {
+        body["duration_ms"] = ms.into();
+    }
+    if let Some(input) = input {
+        body["input"] = json!(input);
+    }
+    body
+}
 
 impl Task {
     pub(super) async fn on_line(&mut self, line: Line) {
@@ -173,9 +191,22 @@ impl Task {
                 let ids = turn.ids.clone();
                 self.save_reply(&ids, text, false).await;
             }
-            Frame::ToolStart { id, name } => self.tool_started(id, name).await,
-            Frame::ToolEnd { id, ok } => {
-                self.tool_ended(&id, if ok { "ok" } else { "error" }).await
+            Frame::ToolStart { id, name, input } => self.tool_started(id, name, input).await,
+            Frame::ToolEnd { id, ok, input } => {
+                self.tool_ended(&id, if ok { "ok" } else { "error" }, input)
+                    .await
+            }
+            Frame::ToolShape { tool, field } => {
+                let Some(turn) = self.turn.as_ref() else {
+                    return;
+                };
+                let event = Event::point("gathr.engine.tool_input")
+                    .trace(&turn.ids.trace)
+                    .chat(&chat)
+                    .error("shape_changed")
+                    .attr("gen_ai.tool.name", tool)
+                    .attr("field", field);
+                self.record(event);
             }
             Frame::Read(text) => {
                 let unread = self.unread.iter().position(|(_, t)| *t == text);
@@ -322,12 +353,17 @@ impl Task {
         }
     }
 
-    pub(super) async fn tool_started(&mut self, id: String, name: String) {
+    pub(super) async fn tool_started(
+        &mut self,
+        id: String,
+        name: String,
+        input: Option<StepInput>,
+    ) {
         let Some(turn) = self.turn.as_ref() else {
             return;
         };
         let ids = turn.ids.clone();
-        let body = json!({ "tool": name, "status": "running" }).to_string();
+        let body = tool_body(&name, "running", None, input.as_ref()).to_string();
         let message = match self.db_message(&ids, "assistant", "tool", &body).await {
             Ok(message) => message,
             Err(why) => return self.save_failed(why, false).await,
@@ -335,22 +371,31 @@ impl Task {
         let message_id = message["id"].as_str().unwrap_or_default().to_string();
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         if let Some(turn) = self.turn.as_mut() {
-            turn.tools.insert(id, (message_id, name, now_us()));
+            let open = OpenTool {
+                message: message_id,
+                name,
+                started_us: now_us(),
+                input,
+            };
+            turn.tools.insert(id, open);
             turn.tools_started += 1;
         }
     }
 
-    pub(super) async fn tool_ended(&mut self, id: &str, status: &str) {
+    /// `said`: what it ran, when the engine says so only as it ends.
+    pub(super) async fn tool_ended(&mut self, id: &str, status: &str, said: Option<StepInput>) {
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
-        let Some((message_id, name, started)) = turn.tools.remove(id) else {
+        let Some(open) = turn.tools.remove(id) else {
             return;
         };
+        let (message_id, name) = (open.message, open.name);
+        let input = said.or(open.input);
         turn.push_allowed = false;
         let (ids, span) = (turn.ids.clone(), turn.span.clone());
-        let duration_us = now_us() - started;
-        let body = json!({ "tool": name, "status": status, "duration_ms": duration_us / 1000 });
+        let duration_us = now_us() - open.started_us;
+        let body = tool_body(&name, status, Some(duration_us / 1000), input.as_ref());
         let (body_text, mid) = (body.to_string(), message_id.clone());
         self.chats
             .writer
@@ -363,6 +408,9 @@ impl Task {
             .chat(&ids.chat)
             .span("end", &span_id())
             .attr("gen_ai.tool.name", name);
+        if let Some(input) = input {
+            event = event.attr("gathr.tool.input", input.text);
+        }
         event.parent_span_id = Some(span);
         event.duration_us = Some(duration_us);
         self.record(if status == "ok" {
@@ -384,7 +432,7 @@ impl Task {
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         self.save_reply(&ids, text, true).await;
         for id in open {
-            self.tool_ended(&id, "stopped").await;
+            self.tool_ended(&id, "stopped", None).await;
         }
     }
 

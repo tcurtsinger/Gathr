@@ -119,6 +119,49 @@ test('a turn’s row opens to its steps and what it wrote between them, and a ta
   expect(opened).toEqual([7]);
 });
 
+test('a step’s chip says what it ran; a long one is cut to the column and shows whole when pointed at', async () => {
+  const long = `cargo nextest run --workspace --locked ${'--made-up-flag '.repeat(12)}`.trim();
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { lead: turn('lead', 'a', 0) },
+    messages: [
+      tool('t1', 'lead', 'Bash', { input: { text: 'git status --short', title: 'Show what changed' } }),
+      tool('t2', 'lead', 'Shell', { input: { text: long }, duration_ms: 48_000 }),
+      tool('t3', 'lead', 'Read'),
+      said('m1', 'lead', 'Made-up final answer'),
+    ],
+  };
+  const screen = await render(
+    <div style={{ width: 520 }}>
+      <View state={state} />
+    </div>,
+  );
+  await screen.getByRole('button', { name: 'Worked for 48s · 3 steps' }).click();
+  const steps = screen.getByRole('listitem');
+  await expect.element(steps.nth(2)).toBeVisible();
+  expect(steps.elements().map((li) => li.textContent)).toEqual([
+    'Show what changedgit status --short',
+    `Ran${long}48s`,
+    'Read a file',
+  ]);
+
+  const list = document.querySelector('.work-steps') as HTMLElement;
+  const [short, cut] = [...list.querySelectorAll<HTMLElement>('.work-detail')];
+  expect(short.scrollWidth, 'a short chip shows whole').toBeLessThanOrEqual(short.clientWidth);
+  expect(cut.scrollWidth, 'the long chip is cut').toBeGreaterThan(cut.clientWidth);
+  expect(list.scrollWidth, 'the chip widened its column').toBeLessThanOrEqual(list.clientWidth);
+  const row = cut.closest('li') as HTMLElement;
+  const time = row.querySelector('.work-time') as HTMLElement;
+  expect(time.getBoundingClientRect().right).toBeLessThanOrEqual(list.getBoundingClientRect().right);
+
+  // Only a chip that's cut has more to show.
+  await screen.getByText('git status --short').hover();
+  await screen.getByText(long).hover();
+  await expect.element(screen.getByRole('tooltip')).toHaveTextContent(long);
+  expect(screen.getByRole('tooltip').elements()).toHaveLength(1);
+});
+
 test('a running turn’s row says what the agent is doing now, with no message under it yet', async () => {
   const state: ChatState = {
     ...empty,

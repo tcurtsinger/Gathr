@@ -347,10 +347,17 @@ impl Session {
             "item/started" => {
                 self.replied(read);
                 if let Some(name) = tool_name(item) {
+                    let input = super::steps::step(item);
+                    let missing = input.as_ref().err().map(|field| Frame::ToolShape {
+                        tool: name.clone(),
+                        field,
+                    });
                     read.frames.push(Frame::ToolStart {
                         id: text(&item["id"]),
                         name,
+                        input: input.unwrap_or(None),
                     });
+                    read.frames.extend(missing);
                 }
             }
             // Once, as it completes; Codex 0.166.0 sent no deprecated `thread/compacted` with it.
@@ -365,10 +372,13 @@ impl Session {
                 read.frames.push(Frame::Text(text(&item["text"])));
             }
             "item/completed" if tool_name(item).is_some() => {
-                let ok = item["status"] == "completed" || item["success"] == true;
+                // A web search and an image view end with neither: they have no way to fail.
+                let unsaid = item.get("status").is_none() && item.get("success").is_none();
+                let ok = item["status"] == "completed" || item["success"] == true || unsaid;
                 read.frames.push(Frame::ToolEnd {
                     id: text(&item["id"]),
                     ok,
+                    input: super::steps::step(item).unwrap_or(None),
                 });
             }
             "thread/tokenUsage/updated" => {

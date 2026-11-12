@@ -10,7 +10,7 @@ import {
   PenLine,
   X,
 } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { createContext, type ReactNode, useContext, useRef, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -18,6 +18,7 @@ import {
 } from '@/components/assistant-ui/elements/collapsible-root';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolGroupContent, ToolGroupRoot } from '@/components/assistant-ui/elements/tool-group.aui';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { clock } from './team';
@@ -99,11 +100,13 @@ export function WorkRow({
         also slides the steps in from 4px above, which moved the hit after it was centred.
       */}
       <ToolGroupContent className={holds ? 'animate-none! [&>*>*]:animate-none!' : undefined}>
-        <ol className="work-steps">
-          {work.steps.map((step) => (
-            <StepLine key={step.id} step={step} found={found} onOpenTask={onOpenTask} />
-          ))}
-        </ol>
+        <TooltipProvider>
+          <ol className="work-steps">
+            {work.steps.map((step) => (
+              <StepLine key={step.id} step={step} found={found} onOpenTask={onOpenTask} />
+            ))}
+          </ol>
+        </TooltipProvider>
       </ToolGroupContent>
     </ToolGroupRoot>
   );
@@ -132,11 +135,11 @@ function StepLine({
           step.state === 'running' ? 'work-mark animate-spin motion-reduce:animate-none' : 'work-mark'
         }
       />
-      <span>{step.label}</span>
+      <span className="work-label">{step.label}</span>
       {step.state === 'error' && <span className="work-failed">Failed</span>}
       {step.detail &&
         (task === undefined ? (
-          <span className="work-detail">{step.detail}</span>
+          <Ran text={step.detail} />
         ) : (
           <button type="button" className="work-detail" onClick={() => onOpenTask(task)}>
             {step.detail}
@@ -144,6 +147,23 @@ function StepLine({
         ))}
       {step.time && <span className="work-time">{step.time}</span>}
     </li>
+  );
+}
+
+/** The chip for what a step ran (0041), in the step's one line; cut short, pointing at it shows it whole. */
+function Ran({ text }: { text: string }) {
+  const chip = useRef<HTMLSpanElement>(null);
+  const [whole, setWhole] = useState(false);
+  const cut = () => !!chip.current && chip.current.scrollWidth > chip.current.clientWidth;
+  return (
+    <Tooltip open={whole} onOpenChange={(open) => setWhole(open && cut())}>
+      <TooltipTrigger asChild>
+        <span ref={chip} className="work-detail" data-ran="">
+          {text}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent className="work-ran-whole">{text}</TooltipContent>
+    </Tooltip>
   );
 }
 

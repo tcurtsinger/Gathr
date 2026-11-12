@@ -57,5 +57,6 @@ recipient rules of 0015 and 0028 stand until their own slices of the redesign.
 
 ## What this slice leaves
 
-Steps show no argument, and no thinking, until the service keeps them. Summary, the plan bar, the agent
+Steps show no thinking until the service keeps it; what a step ran is kept since
+[0041](0041-what-a-step-ran.md). Summary, the plan bar, the agent
 panel, the conversation map and the sidebar's dots are later slices of the same redesign.

@@ -3,7 +3,7 @@
 
 pub mod stream;
 
-/// Flags whose next word is a secret.
+/// Flags whose value is a secret.
 const SECRET_FLAGS: &[&str] = &["token", "key", "secret", "password"];
 
 /// Keys whose string value is a secret whatever it looks like (`refresh_token`, `Authorization`).
@@ -28,9 +28,34 @@ fn ends_word(c: char) -> bool {
         )
 }
 
+/// What's already hidden stays as it is, so text redacted twice (a step's text, then the event
+/// that carries it) reads the same: a mark is passed over whole, and stands for the secret a
+/// `--token` or `Bearer` before it was waiting for.
 pub fn redact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut hide_next: Option<&str> = None;
+    let mut hide_next: Option<&'static str> = None;
+    let mut rest = text;
+    while let Some((at, end)) = mark(rest) {
+        redact_part(&rest[..at], &mut hide_next, &mut out);
+        hide_next = None;
+        out.push_str(&rest[at..end]);
+        rest = &rest[end..];
+    }
+    redact_part(rest, &mut hide_next, &mut out);
+    out
+}
+
+/// Where the next `[redacted:<kind>]` starts and ends.
+fn mark(text: &str) -> Option<(usize, usize)> {
+    const OPENS: &str = "[redacted:";
+    let at = text.find(OPENS)?;
+    let kind = &text[at + OPENS.len()..];
+    let len = kind.find(']')?;
+    let named = len > 0 && kind[..len].bytes().all(|b| b.is_ascii_lowercase());
+    named.then_some((at, at + OPENS.len() + len + 1))
+}
+
+fn redact_part(text: &str, hide_next: &mut Option<&'static str>, out: &mut String) {
     for piece in text.split_inclusive(ends_word) {
         let word = piece.trim_end_matches(ends_word);
         let gap = &piece[word.len()..];
@@ -45,15 +70,15 @@ pub fn redact(text: &str) -> String {
         match classify(word) {
             Some(Shape::Whole(kind)) => out.push_str(&format!("[redacted:{kind}]")),
             Some(Shape::Value(name)) => out.push_str(&format!("{name}=[redacted:env]")),
+            Some(Shape::Flag(flag)) => out.push_str(&format!("{flag}[redacted:flag]")),
             Some(Shape::Next(kind)) => {
-                hide_next = Some(kind);
+                *hide_next = Some(kind);
                 out.push_str(word);
             }
             None => out.push_str(word),
         }
         out.push_str(gap);
     }
-    out
 }
 
 /// Every string in a JSON value redacted, and a secret-named key's string hidden whole. Frames
@@ -87,6 +112,8 @@ enum Shape<'a> {
     Whole(&'static str),
     /// `NAME=value`: keep the name, hide the value.
     Value(&'a str),
+    /// `--flag=value`: keep the flag and its `=`, hide the value.
+    Flag(&'a str),
     /// The next word is a secret.
     Next(&'static str),
 }
@@ -101,13 +128,17 @@ fn classify(word: &str) -> Option<Shape<'_>> {
     if word.eq_ignore_ascii_case("bearer") {
         return Some(Shape::Next("bearer"));
     }
-    if let Some(flag) = word.strip_prefix("--")
-        && !flag.contains('=')
-        && SECRET_FLAGS
-            .iter()
-            .any(|s| flag.to_ascii_lowercase().contains(s))
-    {
-        return Some(Shape::Next("flag"));
+    // The flag's name decides, with its value after a space or an `=`: `--port=47101` stays.
+    if let Some(flag) = word.strip_prefix("--") {
+        let (name, value) = flag.split_once('=').unwrap_or((flag, ""));
+        let lower = name.to_ascii_lowercase();
+        if SECRET_FLAGS.iter().any(|s| lower.contains(s)) {
+            return Some(match value {
+                // `--token abc`, and `--token="abc"`, whose quote ends the word.
+                "" => Shape::Next("flag"),
+                _ => Shape::Flag(&word[..word.len() - value.len()]),
+            });
+        }
     }
     let (name, value) = word.split_once('=')?;
     let env_name = name.len() >= 2
@@ -204,6 +235,40 @@ mod tests {
         for (input, expected) in cases {
             assert_eq!(redact(input), expected, "input: {input:?}");
         }
+    }
+
+    /// A secret flag given its value with `=`: the name decides, as it does for `--flag value`.
+    #[test]
+    fn a_secret_flags_value_after_an_equals_sign_is_redacted() {
+        let cases = [
+            (
+                "gh --token=abc123 pr list",
+                "gh --token=[redacted:flag] pr list",
+            ),
+            ("x --api-key=12345", "x --api-key=[redacted:flag]"),
+            ("x --PASSWORD=hunter2 y", "x --PASSWORD=[redacted:flag] y"),
+            ("x --token=\"abc123\" y", "x --token=\"[redacted:flag]\" y"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(redact(input), expected, "input: {input:?}");
+        }
+        let plain = "cargo run --port=47101 --data=test-data --color=always --jobs=4 -k=v";
+        assert_eq!(redact(plain), plain);
+    }
+
+    /// A step's text is redacted when it's kept, then again on the event that carries it: the
+    /// second pass took "bearer" inside `[redacted:bearer]` for the word before a secret.
+    #[test]
+    fn text_already_redacted_stays_as_it_is() {
+        let text = "curl --token=abc123 -H \"Authorization: Bearer abc.def\" https://example.test \
+                    KEY_ID=x --password hunter2 sk-proj-0123456789abcdefgh done";
+        let once = redact(text);
+        assert_eq!(redact(&once), once);
+        // A mark that came in someone's text ends a wait for a secret too.
+        assert_eq!(
+            redact("--token [redacted:flag] next"),
+            "--token [redacted:flag] next"
+        );
     }
 
     #[test]

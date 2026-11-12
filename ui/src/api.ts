@@ -7,6 +7,11 @@ export interface ToolBody {
   tool: string;
   status: 'running' | 'ok' | 'error' | 'stopped';
   duration_ms?: number;
+  /**
+   * What it ran (0041): a command's first line, a file's path, a search's words, with secrets hidden, and
+   * the engine's own words for it when it gave some. Tools that keep nothing, and messages from before, have none.
+   */
+  input?: { text: string; title?: string };
 }
 
 export interface Message {

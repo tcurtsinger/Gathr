@@ -6,8 +6,9 @@ export type Step =
   | {
       id: string;
       label: string;
-      /** A task it gave: "#119 Open the settings tools PR". */
+      /** Its chip: what it ran ("git merge origin/main"), or a task it gave ("#119 Open the settings tools PR"). */
       detail?: string;
+      /** The task it gave, which its chip opens. */
       task?: number;
       state: ToolBody['status'];
       /** How long it took, once it ended: "27s". */
@@ -47,6 +48,20 @@ const TOOLS: Record<string, [string, string]> = {
   mcp__gathr__checks: ['Read the checks', 'Reading the checks'],
   mcp__gathr__set_checks: ['Set the checks', 'Setting the checks'],
   mcp__gathr__merge: ['Merged a pull request', 'Merging a pull request'],
+};
+
+// The label beside a chip that says what ran, which needs no "a command" or "a file" after it.
+const BESIDE: Record<string, [string, string]> = {
+  Bash: ['Ran', 'Running'],
+  Shell: ['Ran', 'Running'],
+  PowerShell: ['Ran', 'Running'],
+  Read: ['Read', 'Reading'],
+  Edit: ['Edited', 'Editing'],
+  Write: ['Edited', 'Editing'],
+  Grep: ['Searched', 'Searching'],
+  WebFetch: ['Fetched', 'Fetching'],
+  WebSearch: ['Searched the web', 'Searching the web'],
+  Agent: ['Ran a sub-agent', 'Running a sub-agent'],
 };
 
 /**
@@ -97,10 +112,16 @@ export function fold(
     const made = gave.get(m.id);
     if (made) given += 1;
     if (body.status === 'running') doing = now;
+    // What it ran (0041): the engine's own words for it when it gave some, else a short label, then the chip.
+    // A message from before steps kept their input has none, and reads as it did.
+    const ran = made ? undefined : body.input;
+    const [didIt, doingIt] = (ran && BESIDE[body.tool]) || [did, now];
     return {
       id: m.id,
-      label: made?.owner ? `Gave ${made.owner} a task` : body.status === 'running' ? now : did,
-      detail: made && `#${made.task.number} ${made.task.what}`,
+      label: made?.owner
+        ? `Gave ${made.owner} a task`
+        : (ran?.title ?? (body.status === 'running' ? doingIt : didIt)),
+      detail: made ? `#${made.task.number} ${made.task.what}` : ran?.text,
       task: made?.task.number,
       state: body.status,
       time: duration(body.duration_ms ?? 0),
