@@ -486,3 +486,51 @@ fn a_stop_ends_an_engines_open_tool_stream_at_once() {
     );
     drop(stream);
 }
+
+/// G176: agents end a message with "Friction: …", and `read_chat` cut every message at its first
+/// 2,000 characters, so the lead's scans missed it. A long message keeps its start and its end, with
+/// where it was cut and how to read the whole, which `message` still gives.
+#[test]
+fn a_long_message_keeps_its_end_when_read_chat_cuts_it() {
+    let data = TempDir::new();
+    let env = data.0.join("env.jsonl");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("signed_in")),
+            ("GATHR_REPLAY_ENV", &env),
+        ],
+    );
+    let orin = agent(&service, &data.0, "Orin");
+    let chat = service.new_chat();
+    let long = format!("{}\nFriction: x", "word ".repeat(500));
+    assert!(long.chars().count() > 2_500);
+    send(&service, &chat, &orin, &long);
+    let token = until(10, "the engine's token", || {
+        let line = std::fs::read_to_string(&env).ok()?;
+        let line: Value = serde_json::from_str(line.lines().next()?).ok()?;
+        line["GATHR_AGENT_TOKEN"].as_str().map(String::from)
+    });
+    let port = service.info.port;
+
+    let read = text(&call_tool(port, &token, "read_chat", json!({})));
+    let line = read
+        .lines()
+        .find(|l| l.contains("person: word"))
+        .unwrap_or_default();
+    assert!(read.contains("Friction: x"), "{read}");
+    assert!(line.contains("characters cut"), "{line}");
+    assert!(
+        line.chars().count() < 2_200,
+        "{} characters",
+        line.chars().count()
+    );
+    let id = line.split(' ').next().unwrap();
+    let whole = text(&call_tool(
+        port,
+        &token,
+        "read_chat",
+        json!({ "message": id }),
+    ));
+    assert!(whole.contains(&long), "{whole}");
+}
