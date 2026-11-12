@@ -32,15 +32,24 @@ const model = (id: string, name: string, efforts = ['low', 'high']): Model => ({
   efforts,
 });
 
-/** Made-up lists as Claude Code gives them: default first, aliases, then a numbered model. */
+/** A family row and the exact model it means today, as the service lists them. */
+const family = (id: string, exact: string, name: string, efforts?: string[]): Model[] => [
+  { ...model(id, name, efforts), resolved: exact },
+  { ...model(exact, name, efforts), resolved: exact },
+];
+
+/** Made-up lists as the service gives them: default first, families with their exact model, older models. */
 const lists: Record<string, Model[]> = {
   a: [
-    model('default', 'Default'),
+    { ...model('default', 'Default'), resolved: 'made-up-opus-5-5' },
     model('made-up-9-9', 'Made-up 9.9'),
-    model('opus', 'Opus 5.5'),
-    model('sonnet', 'Sonnet'),
+    ...family('opus', 'made-up-opus-5-5', 'Opus 5.5'),
+    ...family('sonnet', 'made-up-sonnet-5-5', 'Sonnet 5.5'),
   ],
-  b: [model('default', 'Default', ['medium']), model('haiku', 'Haiku', ['medium'])],
+  b: [
+    { ...model('default', 'Default', ['medium']), resolved: 'made-up-haiku-5-5' },
+    ...family('haiku', 'made-up-haiku-5-5', 'Haiku 5.5', ['medium']),
+  ],
 };
 const sent: { method: string; path: string; body: unknown }[] = [];
 
@@ -75,31 +84,44 @@ const agent = (over: Partial<Agent>): Agent => ({
   ...over,
 });
 
-test('Latest comes first, then Engine default, then numbered models; a model or effort no longer listed says so', async () => {
+test('only exact models are listed, in the engine’s order; a model or effort no longer listed says so', async () => {
   service([agent({ model: 'made-up-1-0', effort: 'made-up-effort' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
-  await expect.element(list.first()).toHaveTextContent('Opus Latest');
-  expect(list.elements().map((b) => b.textContent)).toEqual([
-    'Opus Latest',
-    'Sonnet Latest',
-    'Engine default',
-    'Made-up 9.9',
-  ]);
+  await expect.element(list.first()).toHaveTextContent('Made-up 9.9');
+  expect(list.elements().map((b) => b.textContent)).toEqual(['Made-up 9.9', 'Opus 5.5', 'Sonnet 5.5']);
   await expect.element(screen.getByText('made-up-1-0 / Unavailable')).toBeVisible();
   await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveValue('made-up-effort');
 });
 
-test('another account resets model and effort to the engine default and lists its own models', async () => {
-  service([agent({ model: 'opus', effort: 'high' })], listed);
+test('an agent saved on a Latest or the engine default shows the model that is today, and picking it keeps it', async () => {
+  const agents = [agent({ model: 'opus' })];
+  service(agents, listed);
+  const screen = await render(<Agents onReference={() => {}} />);
+  const opus = screen.getByRole('button', { name: 'Opus 5.5' });
+  await expect.element(opus).toHaveAttribute('aria-pressed', 'true');
+  await expect.element(screen.getByText('Opus 5.5 / Latest')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+  agents[0] = agent({ model: null });
+  savedElsewhere();
+  await expect.element(screen.getByText('Opus 5.5 / Engine default')).toBeVisible();
+  await expect.element(opus).toHaveAttribute('aria-pressed', 'true');
+
+  await opus.click();
+  await screen.getByRole('button', { name: 'Save' }).click();
+  await expect.poll(() => sent.at(-1)?.body).toMatchObject({ model: 'made-up-opus-5-5' });
+});
+
+test('another account takes that account’s default model, resets effort and lists its own models', async () => {
+  service([agent({ model: 'made-up-opus-5-5', effort: 'high' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   await expect
-    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
   await screen.getByRole('combobox', { name: 'Account' }).selectOptions('b');
-  await expect.element(screen.getByRole('button', { name: 'Haiku Latest' })).toBeVisible();
   await expect
-    .element(screen.getByRole('button', { name: 'Engine default' }))
+    .element(screen.getByRole('button', { name: 'Haiku 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveValue('');
   await screen.getByRole('button', { name: 'Save' }).click();
@@ -109,33 +131,39 @@ test('another account resets model and effort to the engine default and lists it
       {
         method: 'PATCH',
         path: '/api/agents/x',
-        body: { name: 'Made-up agent', account: 'b', model: null, effort: null, approvals: 'auto' },
+        body: {
+          name: 'Made-up agent',
+          account: 'b',
+          model: 'made-up-haiku-5-5',
+          effort: null,
+          approvals: 'auto',
+        },
       },
     ]);
 });
 
 test('a change saved elsewhere shows in the open editor, and Save keeps it unless the field was edited here', async () => {
-  const agents = [agent({ model: 'opus', effort: null })];
+  const agents = [agent({ model: 'made-up-opus-5-5', effort: null })];
   service(agents, listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const effort = screen.getByRole('combobox', { name: 'Effort' });
   await expect
-    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
 
-  agents[0] = agent({ model: 'sonnet', effort: 'high' });
+  agents[0] = agent({ model: 'made-up-sonnet-5-5', effort: 'high' });
   savedElsewhere();
   await expect
-    .element(screen.getByRole('button', { name: 'Sonnet Latest' }))
+    .element(screen.getByRole('button', { name: 'Sonnet 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect.element(effort).toHaveValue('high');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
   await effort.selectOptions('low');
-  agents[0] = agent({ model: 'opus', effort: 'high' });
+  agents[0] = agent({ model: 'made-up-opus-5-5', effort: 'high' });
   savedElsewhere();
   await expect
-    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
   await expect.element(effort).toHaveValue('low');
   await screen.getByRole('button', { name: 'Save' }).click();
@@ -144,7 +172,7 @@ test('a change saved elsewhere shows in the open editor, and Save keeps it unles
     .toEqual({
       name: 'Made-up agent',
       account: 'a',
-      model: 'opus',
+      model: 'made-up-opus-5-5',
       effort: 'low',
       approvals: 'auto',
     });
@@ -160,7 +188,7 @@ test('models that fail to load say so with a reference that opens', async () => 
   expect(opened).toEqual(['made-up-ref']);
 });
 
-test('a new agent takes its account’s first Latest and is saved with it', async () => {
+test('a new agent takes the exact model its account’s engine default means and is saved with it', async () => {
   let release = () => {};
   const slow = new Promise<void>((r) => {
     release = r;
@@ -173,7 +201,7 @@ test('a new agent takes its account’s first Latest and is saved with it', asyn
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   release();
   await expect
-    .element(screen.getByRole('button', { name: 'Opus Latest' }))
+    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
     .toHaveAttribute('aria-pressed', 'true');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.element(screen.getByText('Saved')).toBeVisible();
@@ -181,7 +209,7 @@ test('a new agent takes its account’s first Latest and is saved with it', asyn
     {
       method: 'POST',
       path: '/api/agents',
-      body: { name: 'Made-up new', account: 'a', model: 'opus', effort: null, approvals: 'auto' },
+      body: { name: 'Made-up new', account: 'a', model: 'made-up-opus-5-5', effort: null, approvals: 'auto' },
     },
   ]);
 });
@@ -197,18 +225,20 @@ test('a change of approvals enables Save and is saved', async () => {
   await expect.poll(() => sent.at(-1)?.body).toMatchObject({ approvals: 'ask' });
 });
 
-test('Codex family Latest keeps its display name and a new agent follows the default family', async () => {
+test('Codex lists its exact models without Gathr’s Latest rows, and a new agent takes the default’s', async () => {
   const models = [
     { ...model('default', 'Engine default'), resolved: 'gpt-6.1-sol' },
     { ...model('latest:astra', 'Astra Latest'), latest: true, resolved: 'gpt-6-astra' },
     { ...model('latest:sol', 'Sol Latest'), latest: true, resolved: 'gpt-6.1-sol' },
+    { ...model('gpt-6-astra', 'GPT-6-Astra'), resolved: 'gpt-6-astra' },
     { ...model('gpt-6.1-sol', 'GPT-6.1-Sol'), resolved: 'gpt-6.1-sol' },
   ];
   service([], () => new Response(JSON.stringify({ models })));
   const screen = await render(<Agents onReference={() => {}} />);
   await screen.getByRole('button', { name: 'Add', exact: true }).click();
   await expect
-    .element(screen.getByRole('button', { name: 'Sol Latest', exact: true }))
+    .element(screen.getByRole('button', { name: 'GPT-6.1-Sol', exact: true }))
     .toHaveAttribute('aria-pressed', 'true');
-  await expect.element(screen.getByRole('button', { name: 'Astra Latest', exact: true })).toBeVisible();
+  const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
+  expect(list.elements().map((b) => b.textContent)).toEqual(['GPT-6-Astra', 'GPT-6.1-Sol']);
 });

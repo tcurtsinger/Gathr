@@ -7,7 +7,7 @@ import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
-import { choices, chosen, efforts, firstLatest } from './models';
+import { choices, chosen, efforts, firstChoice, runs } from './models';
 import './agents.css';
 
 type Open = (ref: string) => void;
@@ -116,7 +116,7 @@ interface FormProps {
   onReference: Open;
 }
 
-/** Model is undefined until a new agent's models arrive and it takes the first Latest. */
+/** Model is undefined until its account's models arrive: a new agent, or one moved to another account, takes the first. */
 type Fields = {
   name: string;
   account: string;
@@ -160,7 +160,7 @@ function AgentForm(props: FormProps) {
   const list = models.list ?? [];
   useEffect(() => {
     const loaded = models.list;
-    if (model === undefined && loaded) setEdits((e) => ({ ...e, model: firstLatest(loaded) }));
+    if (model === undefined && loaded) setEdits((e) => ({ ...e, model: firstChoice(loaded) }));
   }, [model, models.list]);
 
   const draft = { name: name.trim(), account, model: model ?? null, effort, approvals };
@@ -174,8 +174,8 @@ function AgentForm(props: FormProps) {
   const offered = efforts(list, draft.model);
   const found = choices(list).filter((c) => c.label.toLowerCase().includes(find.trim().toLowerCase()));
 
-  const pickAccount = (id: string) => edit({ account: id, model: null, effort: null });
-  const pickModel = (id: string | null) =>
+  const pickAccount = (id: string) => edit({ account: id, model: undefined, effort: null });
+  const pickModel = (id: string) =>
     edit(effort && !efforts(list, id).includes(effort) ? { model: id, effort: null } : { model: id });
   const reset = () => {
     if (!agent) return onCancelNew();
@@ -261,8 +261,8 @@ function AgentForm(props: FormProps) {
               {found.map((c) => (
                 <button
                   type="button"
-                  key={c.id ?? ''}
-                  aria-pressed={c.id === (model ?? null)}
+                  key={c.id}
+                  aria-pressed={c.id === runs(list, model ?? null)}
                   onClick={() => pickModel(c.id)}
                 >
                   {c.label}
@@ -357,24 +357,23 @@ function AgentForm(props: FormProps) {
 }
 
 /** The account's models as its engine lists them, asked again when the account changes. */
+const NO_MODELS = { list: null as Model[] | null, failure: null as Failure | null };
+
 function useModels(account: string) {
-  const [state, setState] = useState<{ list: Model[] | null; failure: Failure | null }>({
-    list: null,
-    failure: null,
-  });
+  const [state, setState] = useState({ of: account, ...NO_MODELS });
   useEffect(() => {
     let current = true;
     const started = performance.now();
-    setState({ list: null, failure: null });
+    setState({ of: account, ...NO_MODELS });
     api.models(account).then(
       (list) => {
         if (!current) return;
-        setState({ list, failure: null });
+        setState({ of: account, list, failure: null });
         timeToPaint('gathr.ui.models', started, { account, models: list.length });
       },
       (failure: Failure) => {
         if (!current) return;
-        setState({ list: null, failure });
+        setState({ of: account, list: null, failure });
         report({ name: 'gathr.ui.models', error: failure.error, attrs: { account, ref: failure.ref } });
       },
     );
@@ -382,5 +381,6 @@ function useModels(account: string) {
       current = false;
     };
   }, [account]);
-  return state;
+  // Never the account before's list: a model is picked from it as soon as one is there.
+  return state.of === account ? state : NO_MODELS;
 }

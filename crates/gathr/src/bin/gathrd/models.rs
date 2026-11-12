@@ -245,27 +245,49 @@ async fn answered(lines: &mut tokio::sync::mpsc::UnboundedReceiver<Line>) -> Res
 }
 
 /// What a picker needs from each model: its id, name, line and effort levels, in the engine's order.
+/// Claude Code lists its newest models by family only (`opus`, which it names "Opus 5.5" signed in):
+/// each is followed by a row for the exact model it means today, so that model can be chosen and
+/// kept, by the id the engine resolves the family to.
 fn listed(init: &Value) -> Value {
-    let models: Vec<Value> = init["models"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|m| {
-            // A family's Latest: an alias the engine resolves to its newest model today (0025).
-            let latest = m["value"] != "default"
-                && m["resolvedModel"].is_string()
-                && m["value"] != m["resolvedModel"];
+    let rows: Vec<&Value> = init["models"].as_array().into_iter().flatten().collect();
+    let mut models = Vec::new();
+    for m in &rows {
+        // A family's Latest: an alias the engine resolves to its newest model today (0025).
+        let latest = m["value"] != "default"
+            && m["resolvedModel"].is_string()
+            && m["value"] != m["resolvedModel"];
+        let row = |id: &Value, latest: bool, name: Value| {
             json!({
-                "id": m["value"],
+                "id": id,
                 "resolved": m["resolvedModel"],
                 "latest": latest,
-                "name": m["displayName"],
+                "name": name,
                 "description": m["description"],
                 "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),
             })
-        })
-        .collect();
+        };
+        models.push(row(&m["value"], latest, m["displayName"].clone()));
+        let exact = &m["resolvedModel"];
+        if latest && !rows.iter().any(|other| other["value"] == *exact) {
+            models.push(row(exact, false, exact_name(m).into()));
+        }
+    }
     json!({ "version": init["claude_code_version"], "models": models })
+}
+
+/// The exact model a family row means, as the engine names it: its display name signed in ("Opus
+/// 5.5"); signed out, where that's the family alone, the start of its description ("Opus 5.5 · …");
+/// else its id.
+fn exact_name(m: &Value) -> &str {
+    let versioned = |name: &&str| name.bytes().any(|b| b.is_ascii_digit());
+    let shown = m["displayName"].as_str().filter(versioned);
+    let described = m["description"]
+        .as_str()
+        .and_then(|d| d.split(" · ").next());
+    shown
+        .or(described.filter(versioned))
+        .or(m["resolvedModel"].as_str())
+        .unwrap_or_default()
 }
 
 async fn ask_codex(

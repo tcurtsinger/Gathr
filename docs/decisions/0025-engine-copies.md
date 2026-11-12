@@ -69,6 +69,13 @@ Windows with 2.1.318 signed in: 0.9 s the first time, 2 to 6 ms after. Turned do
 open (0.9 s each time a picker opens) and reading it from a chat's own start (no list until a chat
 has run, and a chat's engine never sends `initialize` today).
 
+Changed 2026-11-12 (the owner): Settings offers exact models only, with no Latest and no Engine default.
+Claude Code lists its newest models by family alone, and Gathr had shown "Opus 5.5" as "Opus Latest", so
+the newest models read as missing and couldn't be kept. The service now follows each family row with the
+exact model it means today, by the engine's own name and the id it resolves to, and that id is what an
+agent is saved with. A model is changed by hand when a new one comes out. Agents saved before on a family
+or the engine's default keep running as they did.
+
 ## Turned down
 
 - **Using the person's own Claude Code (as before).** It can be missing, too old, or updated by its
