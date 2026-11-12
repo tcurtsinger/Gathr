@@ -56,6 +56,12 @@ pub struct Started {
     pub on_trial: bool,
 }
 
+/// The window's own update, downloaded and checked (`{"version"}`), in the data folder: the
+/// service shows it ready beside its own (0032).
+pub const WINDOW_READY: &str = "window-update.json";
+/// Left in the data folder by the person's Update: the window installs its ready update.
+pub const WINDOW_INSTALL: &str = "window-install";
+
 /// How long a copy on trial must run with no finished turn before it passes (0032).
 pub const TRIAL: std::time::Duration = std::time::Duration::from_secs(10 * 60);
 

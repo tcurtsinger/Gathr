@@ -20,14 +20,14 @@ use super::{Ids, Task};
 const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
 
 impl Task {
-    /// What holds the queued turn from starting: a pause (0010) or an update (0032), never the
-    /// person's own message, which starts at once; an update then waits for the next quiet moment.
+    /// What holds the queued turn from starting: the update the person asked for, installing now
+    /// (0032), whose hand-over would cut it off; else a pause (0010), never the person's message.
     pub(super) fn holder(&self, ids: &Ids) -> Option<&'static str> {
-        if ids.person {
-            return None;
-        }
         if self.chats.updating().is_some() {
             return Some("update");
+        }
+        if ids.person {
+            return None;
         }
         let pauses = self.chats.pauses();
         pauses::holding(&pauses, &ids.chat, ids.agent.as_deref()).map(|_| "pause")
@@ -203,7 +203,7 @@ impl Task {
     /// Stop now (the person's alone): the running turn in the scope is interrupted, the engine's
     /// background commands there are ended by its own stop, and a carry-on naming them waits for
     /// Restart. The scope is already paused, stopped, so nothing else starts.
-    pub(super) async fn stop_now(&mut self, scope: String, target: String) {
+    pub(super) async fn stop_now(&mut self, scope: String, target: String, by: &str) {
         let pause = [Pause {
             scope,
             target,
@@ -257,7 +257,7 @@ impl Task {
             (true, n) => format!("your turn and {n} background command(s)"),
             (false, n) => format!("{n} background command(s) of yours"),
         };
-        let said = format!("Stop now ended {ended}. {CHECK_FIRST}");
+        let said = format!("{by} ended {ended}. {CHECK_FIRST}");
         self.carry_on(&ids, said).await;
         self.record(
             Event::point("gathr.pause.stop_now")

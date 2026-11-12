@@ -1,11 +1,16 @@
-# 0032. Gathr updates itself between turns
+# 0032. Gathr updates itself when the person says
 
 Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's updater, its key and its restart approved
-2026-11-09). Date: 2026-11-09. Follows [0025](0025-engine-copies.md)'s way of keeping engine copies.
+2026-11-09). Amended 2026-11-12 (the room's manual-update plan, approved by the owner, room task 109): updates install
+when the person says, no longer between turns by themselves. Date: 2026-11-09. Follows
+[0025](0025-engine-copies.md)'s way of keeping engine copies.
 
 ## Why
 
-The service outlives the window and active engine turns. Separate checked copies let the window update independently and let the service switch only when its work is quiet, with rollback for a failed trial.
+The service outlives the window and active engine turns. Separate checked copies let the window update independently
+and let the service switch when the person says, with rollback for a failed trial. Switching by itself between turns
+held the room's new turns while running ones finished, once for 30 minutes behind a background command that never
+ended (G194); the person would rather choose when.
 
 ## The service
 
@@ -27,15 +32,19 @@ The service outlives the window and active engine turns. Separate checked copies
   Read from `releases/latest/download`, following GitHub's redirects
   over HTTPS only. `GATHR_APP_RELEASES` names another feed at run time, and `GATHR_APP_FEED` when building builds
   one in (a test release, so an installed copy updates as a real one does); a debug build has none unless one is named.
-- **When:** at start, every 10 minutes, and on `POST /api/app/update`.
+- **When it checks:** at start, every 10 minutes, and on `POST /api/app/update`. The newest checked copy is shown
+  ready (`state: "ready"`, `update`) until the person updates; a newer release replaces it.
 - **Checks before a copy is used,** each failure one `gathr.app.update` event with its reference (`feed`,
   `manifest`, `download`, `checksum`, `unpack`, `probe`, `disk`, `platform`): the archive's size and SHA-256, the
   system's own `tar` unpacks it, and its `gathrd --version` names the release's version.
-- **Between turns:** the turns Gathr queues wait (`held: "update"`); the person's own message never does, it starts at
-  once and the update waits for it. When no turn, background command or wait check runs, the service stops the
-  ordinary way (engines closed gently, the database checkpointed and closed), keeps a copy of the database, names the
-  new copy current on trial, and starts it. If something still runs after 30 minutes, the turns go on and the next
-  look tries again (`gathr.app.hold`, `busy`).
+- **Update** (`POST /api/app/update {"install": true}`, the sidebar's button and Settings > General): it stops what
+  runs as Stop now does (F10): running turns are interrupted and their engines' background commands ended, and each
+  agent stopped gets a carry-on ("Gathr's update to 0.1.N ended your turn. …") that starts by itself on the new copy,
+  with no Restart. Meanwhile every new turn waits (`held: "update"`), the person's own too, since the hand-over would
+  cut it off. Once the stopped turns have ended, or after 20 s whatever still runs (`gathr.app.hold`, `busy`, with
+  what ran), the service stops the ordinary way (engines closed gently, the database checkpointed and closed), keeps a
+  copy of the database, names the new copy current on trial, and starts it. While it waits, `GET /api/app` says what
+  on (`running`). Nothing ready is refused (409, with a reference); `gathr.app.install` records each Update.
 - **The hand-over can't hang** (0.1.38 to 0.1.39 did, 2026-11-10): the stopped service waits at most 5 s for its
   runtime's blocking work, then leaves it to end with the process. On Windows, reading an engine's output is blocking
   work, and an engine killed at shutdown can leave children holding that pipe (a Codex engine did), so the wait never
@@ -56,9 +65,9 @@ The service outlives the window and active engine turns. Separate checked copies
   The release is never tried again here. The database copy is put back only when the new copy moved the schema on,
   which the copy before can't open; otherwise what was written on the new copy stays. The service that comes back
   records it as a `gathr.app.update` `start` error with its reference.
-- **What runs:** `GET /api/app` (`version`, `previous`, `state` `off`, `idle`, `checking` or `updating`, `checked`,
-  `failed` with its `ref`, and `update` while it holds), sent live as `{"type": "app"}`. `/health` names the version
-  that runs and the build's own.
+- **What runs:** `GET /api/app` (`version`, `previous`, `state` `off`, `idle`, `checking`, `ready` or `updating`,
+  `checked`, `failed` with its `ref`, `update` when the service's is ready, `window` when the window's is, `running`
+  while Update waits), sent live as `{"type": "app"}`. `/health` names the version that runs and the build's own.
 
 ## The window
 
@@ -67,9 +76,11 @@ The service outlives the window and active engine turns. Separate checked copies
   release); a debug build never checks. The update's minisign signature is checked against the public key in
   `tauri.conf.json` before anything installs. Events: `gathr.ui.update.check` (a refused update names its version and
   carries its reference) and `gathr.ui.update.install`.
-- **When it restarts** (the owner's pick, 2026-11-09): at once if the window is hidden in the tray, else when it's next
-  hidden; meanwhile the tray menu has Restart to update. A window hidden before starts hidden again. Its exit for an
-  update never stops the service.
+- **When it restarts** (amended 2026-11-12): when the person updates, never on hide. A downloaded, checked update is
+  said ready in the data folder (`window-update.json`, `{"version"}`), which the service shows as `window`; Update
+  leaves `window-install` there, and the window, which looks at the folder every second, installs. The tray menu's
+  Restart to update does the same. A window hidden before starts hidden again. Its exit for an update never stops
+  the service; a start clears both files, as nothing is downloaded yet.
 - **Installing:** Windows runs the new NSIS installer quietly (`/S /UPDATE /R`), which checks only for a running
   `gathr-app` and starts it again with its arguments. macOS replaces `Gathr.app` in place, and the window restarts.
 - **After a hand-over:** when `service.json` names a new process that answers, the window signs in to it with a fresh
@@ -98,7 +109,12 @@ The service outlives the window and active engine turns. Separate checked copies
 
 - **Tauri's updater for the service:** it updates the window, which has no reason to restart for a change in the
   service, and `gathrd` must be stopped first anyway.
-- **Holding the person's message during an update:** the owner's word reaches the agent at once, as with a pause (0010).
+- **Updating by itself between turns** (until 2026-11-12): the room's turns waited on whatever still ran, 30 minutes
+  behind a background command that never ended (G194).
+- **Letting the person's message start during an Update:** it was the rule while updates waited for quiet; an Update
+  takes seconds and its hand-over would cut that turn off, so it waits and runs on the new copy.
+- **The page asking the window over Tauri's IPC:** a command and a capability for the page; the window already reads
+  the data folder every second, and the service already shows what's ready.
 - **Starting the new copy only from the window:** nobody may be at the keyboard, and the window may not be running.
   The stopping service starts it itself, after its lock is free, and the window finds whichever runs.
 - **Signing the service's archive:** its SHA-256 comes over HTTPS from the same release as the archive; a signature

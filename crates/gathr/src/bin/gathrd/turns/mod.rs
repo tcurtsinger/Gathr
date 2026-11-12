@@ -386,9 +386,10 @@ impl Task {
             Cmd::StopNow {
                 scope,
                 target,
+                by,
                 done,
             } => {
-                self.stop_now(scope, target).await;
+                self.stop_now(scope, target, &by).await;
                 let _ = done.send(());
             }
             Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,

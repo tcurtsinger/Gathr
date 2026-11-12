@@ -94,7 +94,6 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
                     &attrs,
                     shown.err().map(|e| e.to_string()),
                 );
-                update::hidden(window.app_handle());
             }
         })
         .setup(move |app| {

@@ -1,13 +1,15 @@
-//! The window updates itself (F7): Tauri's updater checks the release feed at start and every
-//! hour, downloads an update and checks its signature with the updater's key. It installs once the
-//! window is hidden in the tray, at once if it already is; until then the tray offers Restart to
-//! update. Only the window restarts: the service runs from its own copy in the data folder (0031),
-//! so the installer never touches it, and it keeps running through the restart.
+//! The window updates itself (F7) when the person says (the room's manual-update plan): Tauri's
+//! updater checks the release feed at start and every hour, downloads an update and checks its
+//! signature with the updater's key, then says it's ready in the data folder (`WINDOW_READY`), which
+//! the service shows beside its own. It installs on Update, which leaves `WINDOW_INSTALL` there, or
+//! on the tray's Restart to update. Only the window restarts: the service runs from its own copy in
+//! the data folder (0031), so the installer never touches it, and it keeps running through it.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use gathr::app::{WINDOW_INSTALL, WINDOW_READY};
 use tauri::menu::{Menu, MenuItem};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_updater::{Update, UpdaterExt};
@@ -34,6 +36,10 @@ pub fn manage(app: &AppHandle, menu: Menu<Wry>) -> tauri::Result<()> {
         menu,
         restart,
     });
+    // This start has nothing downloaded yet, and an ask left from before was for that window.
+    for file in [WINDOW_READY, WINDOW_INSTALL] {
+        let _ = std::fs::remove_file(in_data(app, file));
+    }
     Ok(())
 }
 
@@ -67,7 +73,7 @@ fn check(app: &AppHandle) {
     }
 }
 
-/// Downloads and checks an update, then installs it or offers it in the tray; a failure is
+/// Downloads and checks an update, then says it's ready, for Update and the tray; a failure is
 /// recorded and tried again at the next check.
 fn fetched(app: &AppHandle) {
     let since = Instant::now();
@@ -92,20 +98,26 @@ fn fetched(app: &AppHandle) {
         return;
     };
     let updates = app.state::<Updates>();
+    let said = serde_json::json!({ "version": ready.0.version }).to_string();
+    let said = std::fs::write(in_data(app, WINDOW_READY), said);
     *updates.ready.lock().unwrap() = Some(ready);
-    if shown(app) {
-        let _ = updates.menu.prepend(&updates.restart);
-    } else {
-        install(app, "hidden");
+    let _ = updates.menu.prepend(&updates.restart);
+    if let Err(e) = said {
+        report(
+            app,
+            "gathr.ui.update.ready",
+            since,
+            &attrs,
+            Some(e.to_string()),
+        );
     }
 }
 
-/// The window was hidden: a ready update installs now.
-pub fn hidden(app: &AppHandle) {
-    let ready = app.state::<Updates>().ready.lock().unwrap().is_some();
-    if ready {
+/// The person's Update asked for the window's update: it installs, once.
+pub fn asked(app: &AppHandle) {
+    if std::fs::remove_file(in_data(app, WINDOW_INSTALL)).is_ok() {
         let app = app.clone();
-        std::thread::spawn(move || install(&app, "hide"));
+        std::thread::spawn(move || install(&app, "update"));
     }
 }
 
@@ -116,6 +128,7 @@ pub fn install(app: &AppHandle, via: &str) {
     let Some((update, bytes)) = updates.ready.lock().unwrap().take() else {
         return;
     };
+    let _ = std::fs::remove_file(in_data(app, WINDOW_READY));
     let since = Instant::now();
     let hidden = !shown(app);
     let marker = restart_hidden(app);
@@ -147,8 +160,11 @@ pub fn take_restart_hidden(app: &AppHandle) -> bool {
 }
 
 fn restart_hidden(app: &AppHandle) -> std::path::PathBuf {
-    let service = app.state::<Service>();
-    service.data.path().join("window-restart-hidden")
+    in_data(app, "window-restart-hidden")
+}
+
+fn in_data(app: &AppHandle, file: &str) -> std::path::PathBuf {
+    app.state::<Service>().data.path().join(file)
 }
 
 fn shown(app: &AppHandle) -> bool {
