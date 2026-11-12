@@ -71,10 +71,18 @@ has its test, with look-alikes proven untouched (`crates/gathr/src/redact/tests.
 
 - **A secret flag's whole value,** after a space or an `=`: to the next space outside quotes, whatever
   punctuation it holds (`--auth-token=user:s3cret`, `--token 'a b'`). `--token=abc` was not hidden at all
-  before. The value's own quotes stay, so JSON text stays JSON.
+  before. The value's own quotes stay around the mark.
+- **Raw JSON text stays JSON** in the cases tested (streamed tool input joined, a frame that didn't
+  parse; both go on to `diag turn --raw`): a wait for a secret ends at `}` and `]`, and at a quote after
+  which the text goes on as JSON does (`,` or `:` and the next value, a bracket, or the end). So
+  `{"pattern":"Bearer ","path":"src"}` and `{"command":"x --token"}` are left whole, and
+  `{"args":["--token","abc"]}` hides `abc` inside its quotes. As before this change, a wait still crosses
+  `", "` into the next string (`{"a": "Bearer", "b": "c"}` hides `b`): hidden too much, still JSON.
 - **The flag's name is read word by word,** split at `-`, `_`, `.` and capitals: `token`, `key`, `secret`,
-  `password`, `passwd`, `auth`, `credential(s)`, `apikey`, and `pass` whole. So `--keyboard`, `--monkey`,
-  `--tokenizer` and `--max-tokens` stay. `--key-file=path`, `--sort-key=name` and `sort --key=2,2` are
+  `password`, `passwd`, `auth`, `credential(s)`, and `pass` whole. A word run together counts when it
+  ends in `token`, `secret`, `password` or `passwd` (`--accesstoken`, `--clientsecret`), or is `key` after
+  `api`, `access`, `private`, `secret` or `auth` (`--apikey`, `--secretkey`). So `--keyboard`, `--monkey`,
+  `--hotkey`, `--tokenizer` and `--max-tokens` stay. `--key-file=path`, `--sort-key=name` and `sort --key=2,2` are
   hidden though they hold no secret: hiding too much is the safe side. `--pwd` is left: it is as often a
   folder. `--password-stdin` and `--with-token` take no value, so the word after them stays.
 - **PowerShell parameters,** one dash: `-Token`, `-ApiKey`, `-AccessToken`, `-Password`, `-Secret`,
@@ -82,10 +90,14 @@ has its test, with look-alikes proven untouched (`crates/gathr/src/redact/tests.
 - **`$env:NAME = "value"`** when the name holds a secret word. An upper-case `NAME=value` was hidden
   already, whatever its name; now also when its value is quoted.
 - **A password in a URL or connection string:** `scheme://user:[redacted:url]@host`. The name and host
-  stay. A provider's key standing as the whole login goes too.
+  stay, also where the URL is glued to what comes before it (`--index-url=https://…`, `<https://…>`). A
+  provider's key standing as the whole login goes too. A secret flag's or an environment value that is a
+  URL is hidden whole, as before.
 - **Headers in plain text:** `Authorization` with any scheme (`token`, `Basic`; `Bearer` already), a
   hyphened name with a secret word (`X-Api-Key`, `X-Auth-Token`) and `apikey`. A lone word before a colon
-  (`key: value`, `error: token expired`) is prose, and stays.
+  (`key: value`, `error: token expired`) is prose, and stays. With no space after the colon, as curl
+  takes it, only `Authorization:` and `X-…:` names are read (`re-auth:needed` is prose). In a frame's
+  JSON, a key such as `X-Api-Key` is hidden whole like `api_key`.
 - **Keys by how they start,** at 20 characters or more: `sk-` (already), `sk_live_`, `sk_test_`, `ghp_`,
   `gho_`, `ghu_`, `ghs_`, `github_pat_`, `xoxb-`, `xoxp-`; and `AKIA` with 16 capitals or digits. Also
   after an `=` (`?access=ghp_…`).
@@ -93,9 +105,21 @@ has its test, with look-alikes proven untouched (`crates/gathr/src/redact/tests.
   word before a secret. A mark is passed over whole, wherever it stands, and stands for the secret a
   `--token` or `Bearer` before it was waiting for.
 
-Known limits, left as they are: `-p hunter2`, `mysql -pSECRET`, `curl -u user:pass`, a bare AWS secret
-access key, a private key's body (only the first line is kept anyway), `--pwd`, and `name=value` with a
-lower-case secret name (`?token=abc`, `password=abc`) unless the value is a known key.
+Known limits, left as they are:
+
+- `-p hunter2`, `mysql -pSECRET`, `curl -u user:pass`, a bare AWS secret access key, a private key's body
+  (only the first line is kept anyway), `--pwd`.
+- `name=value` with a lower-case secret name (`?token=abc`, `password=abc`), unless the value is a known
+  key.
+- A value is cut at a backslash and at quotes joined on by the shell: `--password=ab\cd` hides `ab`,
+  `--token="ab"'cd'` hides `"ab"`.
+- Escaped quotes inside raw JSON stream fragments: `--token \"a b\"` hides only `a` there. The finished
+  frame is redacted value by value, and is whole.
+- Run-together names that end in `key` after any other word (`--sshkey`, `--publickey`, `--hostkey`), and
+  plurals (`--tokens`, `--secrets`, `--passwords`), which were hidden when any part of the name matched.
+- A hyphened header name with no space after its colon that doesn't start `X-` (`Api-Key:abc`).
+- Hidden too much: prose such as `re-auth: needed now` reads as a header and loses `needed`; a path or a
+  column after `--key-file`, `--sort-key`; `-Credential $cred`.
 
 ## Why
 

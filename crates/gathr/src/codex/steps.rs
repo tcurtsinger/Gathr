@@ -40,13 +40,19 @@ fn unwrapped(command: &str) -> String {
         let (shell, flags) = words.split_first()?;
         let name = shell.rsplit(['\\', '/']).next()?.to_ascii_lowercase();
         let name = name.strip_suffix(".exe").unwrap_or(&name);
-        // Only what follows a command flag is a script: `-Command`, `-c`, or short flags run
-        // together that end in `c` (`-lc`). After anything else it's a file the shell runs.
+        // Only what follows a command flag is a script: PowerShell's `-Command` or `-c`, a POSIX
+        // shell's `-c` or short flags run together that end in `c` (`-lc`). After anything else
+        // it's a file the shell runs.
         let (last, before) = flags.split_last()?;
         let short = last.strip_prefix('-').unwrap_or_default();
         let run_together = short.len() <= 3 && short.bytes().all(|b| b.is_ascii_lowercase());
-        let command =
-            last.eq_ignore_ascii_case("-command") || (short.ends_with('c') && run_together);
+        let command = match name {
+            // There `-e` and `-ec` are -EncodedCommand: its base64 is no script to show.
+            "pwsh" | "powershell" => ["-command", "-c"]
+                .iter()
+                .any(|c| last.eq_ignore_ascii_case(c)),
+            _ => short.ends_with('c') && run_together,
+        };
         let wraps = SHELLS.contains(&name) && command && before.iter().all(|f| f.starts_with('-'));
         wraps.then_some(script)
     };
@@ -118,6 +124,7 @@ mod tests {
             ("/bin/zsh -lc 'cargo test'".to_string(), "cargo test"),
             ("bash -l -c \"npm test\"".to_string(), "npm test"),
             ("sh -ec 'make all'".to_string(), "make all"),
+            ("pwsh -C 'git fetch'".to_string(), "git fetch"),
             ("pwsh -NoProfile -c 'git log'".to_string(), "git log"),
             ("powershell.exe -NoLogo -COMMAND 'dir'".to_string(), "dir"),
         ];
@@ -132,6 +139,10 @@ mod tests {
             "git status --short",
             "bash build.sh",
             "pwsh -File build.ps1 -Fast",
+            // PowerShell's `-e`, `-ec` and `-enc` are -EncodedCommand: base64, no script to show.
+            "pwsh -ec aGVsbG8=",
+            "pwsh -e aGVsbG8=",
+            "powershell -NoProfile -enc aGVsbG8=",
             // A script file run by a shell: without the shell it would read as a bare name.
             "bash -l build.sh",
             "sh -e deploy.sh",

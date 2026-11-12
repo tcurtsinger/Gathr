@@ -118,6 +118,15 @@ fn a_secret_flags_whole_value_is_redacted() {
         ),
         // A secret waited for is not looked for past the command's end.
         ("x --token | sort", "x --token | sort"),
+        // A value holds what a shell would split at, as it did before: nothing of it is left.
+        ("x --token a|b&c<d y", "x --token [redacted:flag] y"),
+        (
+            "x --token=a|b y; FOO=a&b z",
+            "x --token=[redacted:flag] y; FOO=[redacted:env] z",
+        ),
+        // A quoted value may start like JSON goes on.
+        ("x --token \" 5\" y", "x --token \"[redacted:flag]\" y"),
+        ("x --token \":abc\" y", "x --token \"[redacted:flag]\" y"),
         ("x --pass=hunter2", "x --pass=[redacted:flag]"),
         ("x --pass hunter2 y", "x --pass [redacted:flag] y"),
         ("x --passwd hunter2", "x --passwd [redacted:flag]"),
@@ -335,4 +344,169 @@ fn ordinary_text_is_untouched() {
         "fn key(token: &str) -> Password { secret(token, key = value) }",
         "sorted(items, key=len) and x.password = y",
     ]);
+}
+
+/// A name run together (`--accesstoken`) is a secret's as much as `--access-token`: a word that
+/// ends in `token`, `secret`, `password` or `passwd`, or in `key` after a word that names one.
+#[test]
+fn a_secret_word_at_the_end_of_a_run_together_name_counts() {
+    for name in [
+        "accesstoken",
+        "APITOKEN",
+        "clientsecret",
+        "secretkey",
+        "authtoken",
+        "bottoken",
+        "dbpassword",
+        "rootpasswd",
+        "accesskey",
+        "privatekey",
+        "ApiKey",
+    ] {
+        let spaced = (
+            format!("x --{name} abc y"),
+            format!("x --{name} [redacted:flag] y"),
+        );
+        let equals = (
+            format!("x --{name}=abc y"),
+            format!("x --{name}=[redacted:flag] y"),
+        );
+        reads(&[(&spaced.0, &spaced.1), (&equals.0, &equals.1)]);
+    }
+    untouched(&[
+        "x --tokenizer a --max-tokens 5 --keyboard us --monkey 1 --hotkey f5 --turkey x",
+        "x --secretary bob --passwords-file f --tokens 3 --keyname k --publickey p",
+    ]);
+}
+
+/// Raw JSON text is redacted as text (streamed tool input joined, a frame that didn't parse), and
+/// goes on to Diagnostics and bundles: a wait for a secret that meets the JSON's own quotes and
+/// brackets ends there, and the text stays JSON.
+#[test]
+fn a_wait_for_a_secret_stops_at_json_structure() {
+    let untouched = [
+        r#"{"pattern":"Bearer"}"#,
+        r#"{"command":"x --token"}"#,
+        r#"{"args":["--token"],"cwd":"X"}"#,
+        r#"{"pattern":"Bearer ","path":"src"}"#,
+        r#"{"header":"Authorization: ","n":1}"#,
+        r#"{"header":"X-Api-Key: "}"#,
+        r#"{"command":"export FOO=","n":1}"#,
+        r#"{"command":"x --token=","n":1}"#,
+        r#"{"command":"x --token= ","n":1}"#,
+        r#"{"command":"$env:GH_TOKEN = ","n":1}"#,
+        r#"["x -Token:","next"]"#,
+    ];
+    let hidden = [
+        (
+            r#"{"args":["--token","abc"],"n":1}"#,
+            r#"{"args":["--token","[redacted:flag]"],"n":1}"#,
+        ),
+        (r#"{"--token":"abc"}"#, r#"{"--token":"[redacted:flag]"}"#),
+        (
+            r#"{"command":"x --token abc","n":1}"#,
+            r#"{"command":"x --token [redacted:flag]","n":1}"#,
+        ),
+        (
+            r#"{"command":"export FOO=bar","n":1}"#,
+            r#"{"command":"export FOO=[redacted:env]","n":1}"#,
+        ),
+        (
+            r#"{"header":"Authorization: Basic abc"}"#,
+            r#"{"header":"Authorization: Basic [redacted:header]"}"#,
+        ),
+        // As before this change: the wait goes on past a comma and a space to the next string.
+        (
+            r#"{"a": "Bearer", "b": "c"}"#,
+            r#"{"a": "Bearer", "[redacted:bearer]": "c"}"#,
+        ),
+    ];
+    let same = untouched.iter().map(|text| (*text, *text));
+    for (input, expected) in same.chain(hidden) {
+        let out = redact(input);
+        assert_eq!(out, expected, "input: {input}");
+        serde_json::from_str::<Value>(&out).unwrap_or_else(|e| panic!("{out} is not JSON: {e}"));
+    }
+}
+
+/// The same through the stream's own path: fragments joined, redacted, and put back.
+#[test]
+fn streamed_tool_input_stays_json_when_a_flag_ends_its_string() {
+    let piece = |text: &str| {
+        json!({ "type": "stream_event", "event": { "type": "content_block_delta", "index": 1,
+            "delta": { "type": "input_json_delta", "partial_json": text } } })
+    };
+    let mut run = [
+        piece(r#"{"args":["--token","ab"#),
+        piece(r#"c"],"command":"x --tok"#),
+        piece(r#"en"}"#),
+    ];
+    super::stream::redact_run(&mut run);
+    let joined: String = run
+        .iter()
+        .map(|f| f["event"]["delta"]["partial_json"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        joined,
+        r#"{"args":["--token","[redacted:flag]"],"command":"x --token"}"#
+    );
+    serde_json::from_str::<Value>(&joined).expect("the joined input is still JSON");
+}
+
+/// A URL glued to what comes before it, and what must not get weaker for it: a secret flag or an
+/// environment value that is a URL is still hidden whole.
+#[test]
+fn a_url_inside_a_longer_word_still_loses_its_password() {
+    reads(&[
+        (
+            "pip install --index-url=https://bob:hunter2@pypi.example.test/simple x",
+            "pip install --index-url=https://bob:[redacted:url]@pypi.example.test/simple x",
+        ),
+        (
+            "see <https://bob:hunter2@example.test> now",
+            "see <https://bob:[redacted:url]@example.test> now",
+        ),
+        (
+            "DATABASE_URL=postgres://app:s3cret@db.example.test/main run",
+            "DATABASE_URL=[redacted:env] run",
+        ),
+        (
+            "x --token=https://bob:hunter2@example.test y",
+            "x --token=[redacted:flag] y",
+        ),
+    ]);
+    untouched(&["--index-url=https://pypi.example.test/simple a=b://c 9://x:y@z"]);
+}
+
+/// curl takes a header with no space after its colon. Only `Authorization` and `X-…` names are
+/// read that way: `re-auth:needed` is prose.
+#[test]
+fn a_header_with_no_space_after_its_colon_hides_its_value() {
+    reads(&[
+        (
+            "curl -H \"X-Api-Key:abc123\" x",
+            "curl -H \"X-Api-Key:[redacted:header]\" x",
+        ),
+        (
+            "Authorization:Basic dXNlcjpwYXNz",
+            "Authorization:Basic [redacted:header]",
+        ),
+        (
+            "Authorization:abc123 x",
+            "Authorization:[redacted:header] x",
+        ),
+    ]);
+    untouched(&[
+        "re-auth:needed pre-token:abc x-ray:on X-Request-Id:abc",
+        "x-auth://not-a-header Authorization:",
+    ]);
+}
+
+#[test]
+fn a_hyphened_header_name_is_a_secret_key_in_json_too() {
+    let frame =
+        json!({ "headers": { "X-Api-Key": "abc123", "x-auth-token": "t-1", "Accept": "a/b" } });
+    let expected = json!({ "headers": { "X-Api-Key": "[redacted:named]",
+        "x-auth-token": "[redacted:named]", "Accept": "a/b" } });
+    assert_eq!(redact_json(&frame), expected);
 }

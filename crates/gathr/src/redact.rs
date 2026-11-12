@@ -15,8 +15,13 @@ const SECRET_WORDS: &[&str] = &[
     "auth",
     "credential",
     "credentials",
-    "apikey",
 ];
+
+/// What a secret's name ends in when its words are run together (`accesstoken`, `clientsecret`).
+const SECRET_ENDS: &[&str] = &["token", "secret", "password", "passwd"];
+
+/// `key` ends too many plain words (`monkey`, `hotkey`) to count that way: only after one of these.
+const KEY_OF: &[&str] = &["api", "access", "private", "secret", "auth"];
 
 /// Flags named like a secret that take no value: the word after them is not one.
 const NO_VALUE: &[&str] = &["password-stdin", "with-token"];
@@ -85,11 +90,15 @@ pub fn redact(text: &str) -> String {
             let opens = out.ends_with(|c: char| c.is_whitespace() || c == '=' || c == ':');
             let len = match first {
                 '"' | '\'' if !opens => 0,
-                '[' | '{' | '(' | ',' | ':' | '=' => 0,
+                '[' | '{' | '(' | ',' | ':' | '=' | '}' | ']' => 0,
+                c if ends_command(c) => 0,
                 _ => value_len(rest),
             };
             if len == 0 {
-                if ends_command(first) {
+                // In raw JSON text the wait ends where the JSON closes: at its brackets, and
+                // at the quote that ends the string the flag was the last word of.
+                let closes = matches!(first, '}' | ']') || (opens && closes_json(rest));
+                if ends_command(first) || closes {
                     waiting = None;
                 }
                 out.push(first);
@@ -121,25 +130,41 @@ fn mark_len(text: &str) -> Option<usize> {
     named.then_some(MARK.len() + len + 1)
 }
 
-/// How much of `text`, from its start, is one value as a shell reads it: a quoted run, or up to
-/// whitespace, a quote or what ends a command. 0 when it starts with none, or with a mark.
+/// How much of `text`, from its start, is one value: a quoted run, or up to whitespace, a quote,
+/// `;` or `)`. 0 when it starts with none, or with a mark.
 fn value_len(text: &str) -> usize {
     if text.starts_with(MARK) {
         return 0;
     }
     match text.bytes().next() {
+        Some(b'"' | b'\'') if closes_json(text) => 0,
         // A failed search means no such quote is left, so none is searched for again: one pass.
         Some(quote @ (b'"' | b'\'')) => {
             let close = text.bytes().skip(1).position(|b| b == quote);
             close.map_or(0, |at| at + 2)
         }
         _ => {
-            let ends = |c: char| {
-                c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\') || ends_command(c)
-            };
+            let ends =
+                |c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\' | ';' | ')');
             text.find(ends).unwrap_or(text.len())
         }
     }
+}
+
+/// Whether the quote `text` starts with closes a string of raw JSON text rather than opening a
+/// value: the text ends there, or goes on as JSON does, with `}`, `]`, or `,` or `:` and the next
+/// JSON value. So `"Bearer ","path":…` hides nothing, and a shell's `--token ":abc"` still does.
+fn closes_json(text: &str) -> bool {
+    let after = &text[1..];
+    let goes_on = after.strip_prefix([',', ':']).is_some_and(|next| {
+        let next = next.trim_start();
+        next.starts_with(['"', '{', '[', '-'])
+            || next.starts_with(|c: char| c.is_ascii_digit())
+            || ["true", "false", "null"]
+                .iter()
+                .any(|word| next.starts_with(word))
+    });
+    after.is_empty() || after.starts_with(['}', ']']) || goes_on
 }
 
 /// The mark in place of `value`, inside the value's own quotes when it has them, so JSON text
@@ -170,7 +195,8 @@ fn hide(
 }
 
 /// Whether a name says its value is a secret: one of its words, split at `-`, `_`, `.` and where
-/// a capital follows a small letter (`ApiKey`), is a secret word; or it is `pass` whole.
+/// a capital follows a small letter (`ApiKey`), is a secret word, ends in one (`accesstoken`) or
+/// is a kind of key (`apikey`); or it is `pass` whole.
 fn secret_name(name: &str) -> bool {
     let mut words = String::with_capacity(name.len() + 4);
     let mut small = false;
@@ -181,27 +207,20 @@ fn secret_name(name: &str) -> bool {
         small = c.is_ascii_lowercase() || c.is_ascii_digit();
         words.push(c.to_ascii_lowercase());
     }
-    let mut words = words.split(['-', '_', '.']);
-    words.any(|w| SECRET_WORDS.contains(&w)) || name.eq_ignore_ascii_case("pass")
+    let secret = |word: &str| {
+        SECRET_WORDS.contains(&word)
+            || SECRET_ENDS.iter().any(|end| word.ends_with(end))
+            || word
+                .strip_suffix("key")
+                .is_some_and(|of| KEY_OF.contains(&of))
+    };
+    words.split(['-', '_', '.']).any(secret) || name.eq_ignore_ascii_case("pass")
 }
 
 /// Reads the word `rest[..end]` with what follows it, writes it with its secret hidden, and
 /// answers how much of `rest` that took.
 fn word(rest: &str, end: usize, out: &mut String, waiting: &mut Option<&'static str>) -> usize {
     let (word, after) = rest.split_at(end);
-    if let Some((at, len)) = url_login(rest, end) {
-        out.push_str(&rest[..at]);
-        push_hidden(out, "", "url");
-        return at + len;
-    }
-    if word.eq_ignore_ascii_case("$env")
-        && let Some(value) = powershell_env(after)
-    {
-        return hide(rest, end + value, "env", out, waiting);
-    }
-    if let Some(value) = header(word, after) {
-        return hide(rest, end + value, "header", out, waiting);
-    }
     let named = word.trim_start_matches('-');
     let dashes = word.len() - named.len();
     let name = named.split('=').next().unwrap_or(named);
@@ -220,6 +239,30 @@ fn word(rest: &str, end: usize, out: &mut String, waiting: &mut Option<&'static 
             }
         };
     }
+    // Before the URL: a secret flag's or an environment value that is a URL goes whole.
+    if let Some((name, _)) = word.split_once('=') {
+        let env_name = name.len() >= 2
+            && name.starts_with(|c: char| c.is_ascii_uppercase())
+            && name
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+        if env_name && value_len(&rest[name.len() + 1..]) > 0 {
+            return hide(rest, name.len() + 1, "env", out, waiting);
+        }
+    }
+    if let Some((at, len)) = url_login(rest, end) {
+        out.push_str(&rest[..at]);
+        push_hidden(out, "", "url");
+        return at + len;
+    }
+    if word.eq_ignore_ascii_case("$env")
+        && let Some(value) = powershell_env(after)
+    {
+        return hide(rest, end + value, "env", out, waiting);
+    }
+    if let Some(value) = header(word, after) {
+        return hide(rest, end + value, "header", out, waiting);
+    }
     if word.eq_ignore_ascii_case("bearer") {
         out.push_str(word);
         *waiting = Some("bearer");
@@ -229,20 +272,12 @@ fn word(rest: &str, end: usize, out: &mut String, waiting: &mut Option<&'static 
         push_hidden(out, "", kind);
         return end;
     }
-    if let Some((name, value)) = word.split_once('=') {
-        let env_name = name.len() >= 2
-            && name.starts_with(|c: char| c.is_ascii_uppercase())
-            && name
-                .chars()
-                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
-        if env_name && value_len(&rest[name.len() + 1..]) > 0 {
-            return hide(rest, name.len() + 1, "env", out, waiting);
-        }
-        if let Some(kind) = key_kind(value) {
-            out.push_str(&rest[..=name.len()]);
-            push_hidden(out, "", kind);
-            return end;
-        }
+    if let Some((name, value)) = word.split_once('=')
+        && let Some(kind) = key_kind(value)
+    {
+        out.push_str(&rest[..=name.len()]);
+        push_hidden(out, "", kind);
+        return end;
     }
     out.push_str(word);
     end
@@ -251,10 +286,12 @@ fn word(rest: &str, end: usize, out: &mut String, waiting: &mut Option<&'static 
 /// `scheme://user:password@host`: where the password starts in `rest` and how long it is, the
 /// name kept; or a key standing alone as the login (`https://ghp_…@host`).
 fn url_login(rest: &str, scheme_end: usize) -> Option<(usize, usize)> {
-    let (scheme, after) = rest.split_at(scheme_end);
+    let (word, after) = rest.split_at(scheme_end);
     let host = after.strip_prefix("://")?;
+    // The scheme is the end of the word: `--index-url=https`, `<https`.
     let plain = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.');
-    if !scheme.starts_with(|c: char| c.is_ascii_alphabetic()) || !scheme.chars().all(plain) {
+    let scheme = word.rsplit(|c: char| !plain(c)).next()?;
+    if !scheme.contains(|c: char| c.is_ascii_alphabetic()) {
         return None;
     }
     let ends =
@@ -284,11 +321,19 @@ fn powershell_env(after: &str) -> Option<usize> {
 /// name with a secret word (`X-Api-Key`), `apikey`, or `Authorization` with any scheme but
 /// Bearer, which `Bearer` itself hides. A lone word before a colon is prose (`key: value`).
 fn header(name: &str, after: &str) -> Option<usize> {
-    let value = after.strip_prefix(':')?.strip_prefix([' ', '\t'])?;
+    let value = after.strip_prefix(':')?;
+    let lower = name.to_ascii_lowercase();
+    let authorization = lower == "authorization" || lower.ends_with("-authorization");
+    // curl takes `Name:value` too. Only names that can't be prose are read with no space
+    // (`re-auth:needed` is prose), and never a URL's `x-scheme://`.
+    let tight =
+        (authorization || lower.starts_with("x-")) && !value.is_empty() && !value.starts_with('/');
+    if !value.starts_with([' ', '\t']) && !tight {
+        return None;
+    }
     let value = value.trim_start_matches([' ', '\t']);
     let at = after.len() - value.len();
-    let lower = name.to_ascii_lowercase();
-    if lower == "authorization" || lower.ends_with("-authorization") {
+    if authorization {
         let scheme = value_len(value);
         let named = scheme > 0 && value[..scheme].chars().all(|c| c.is_ascii_alphabetic());
         let then = value[scheme..].strip_prefix(' ');
@@ -322,7 +367,8 @@ fn key_kind(word: &str) -> Option<&'static str> {
 pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
     use serde_json::Value;
     let secret_key = |k: &str| {
-        let k = k.to_ascii_lowercase();
+        // `X-Api-Key` is `api_key` too.
+        let k = k.to_ascii_lowercase().replace('-', "_");
         SECRET_KEYS.iter().any(|s| k.contains(s))
     };
     match value {
