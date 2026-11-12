@@ -10,13 +10,13 @@ import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ApprovalDock } from './ApprovalDock';
 import { ChatMenu } from './ChatMenu';
-import { useTarget } from './found';
+import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { Summary } from './Summary';
 import { running } from './state';
-import { type Actions, type Target, Thread, useStable } from './Thread';
+import { type Actions, Thread, useStable } from './Thread';
 import { roleName } from './team';
 import { type Unsent, useChat } from './useChat';
 import { Working } from './Working';
@@ -110,8 +110,7 @@ export function ChatView(props: Props) {
   const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   // An approval shown from the dock, until a search hit is opened after it.
-  const [shown, setShown] = useState<Target>();
-  const target = shown && shown.at > (hit?.at ?? 0) ? shown : hit;
+  const { target, pick: setShown } = useLatest(hit);
   const show = (request: string) => {
     const asks = (m: (typeof timeline.items)[number]) =>
       (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);

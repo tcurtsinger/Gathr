@@ -78,7 +78,7 @@ const tasks = Array.from({ length: 30 }, (_, n) => ({
 
 type Found = { message?: string; at: number };
 
-function Chat({ found, onFound }: { found: Found; onFound: () => void }) {
+function Chat({ found, onFound }: { found?: Found; onFound: () => void }) {
   return (
     <div style={{ height: 600, display: 'flex', flexDirection: 'column' }}>
       <ChatView
@@ -165,7 +165,13 @@ test("a member's hit opens at its message in the one timeline", async () => {
 test('a hit on what a turn wrote mid-work opens its row at those words', async () => {
   const { hit } = await openAt(team, 'r12');
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
-  expect(hit.closest('.work-steps')).not.toBeNull();
+  const steps = hit.closest('.work-steps') as HTMLElement;
+  expect(steps).not.toBeNull();
+  // Nothing slides the steps in after the hit is centred: it stays where it was put.
+  expect(getComputedStyle(steps).animationName).toBe('none');
+  const placed = hit.getBoundingClientRect().top;
+  await frames(12);
+  expect(hit.getBoundingClientRect().top).toBe(placed);
   expect(hit.textContent).toBe('Made-up start 12');
 });
 
@@ -196,4 +202,36 @@ test('a reply that says the same thing twice opens at the passage the hit is', a
   const passages = [...(hit.closest('[data-message-id]')?.querySelectorAll('.found-part') ?? [])];
   expect(passages).toHaveLength(2);
   expect(passages.indexOf(hit)).toBe(1);
+});
+
+test("a hit opened after the dock's Show stays where it is once it is done", async () => {
+  // The long chat, its latest turn waiting on an approval.
+  const asking = {
+    ...long,
+    messages: [...long.messages, text('uq', 'tq', 'user', 'Made-up ask to run')],
+    turns: [...long.turns, { ...done('tq', 'a', turns), status: 'running' }],
+    approvals: [{ turn: 'tq', request_id: 'q1', tool: 'Bash', input: { command: 'made-up --cmd' } }],
+  };
+  vi.stubGlobal('fetch', async (path: string) =>
+    json(path.endsWith('/tasks') ? { tasks: [], waits: [] } : path.startsWith('/api/chats/') ? asking : {}),
+  );
+  const onFound = vi.fn();
+  const shown = await render(<Chat onFound={onFound} />);
+  await shown.getByRole('button', { name: 'Show', exact: true }).click();
+  await expect
+    .poll(() => document.querySelector('[data-search-hit]')?.getAttribute('data-approval'))
+    .toBe('q1');
+
+  const calls = onFound.mock.calls.length;
+  await shown.rerender(<Chat found={{ message: 'a100', at: performance.now() }} onFound={onFound} />);
+  await expect.poll(() => onFound.mock.calls.length).toBeGreaterThan(calls);
+  await frames(3);
+  const hit = document.querySelector('[data-search-hit]') as HTMLElement;
+  expect(hit.textContent).toBe('Made-up answer 100');
+  const placed = hit.getBoundingClientRect().top;
+  // The app clears the hit once it is shown: the view does not go back to the approval.
+  await shown.rerender(<Chat onFound={onFound} />);
+  await frames(3);
+  expect(document.querySelector('[data-search-hit]')).toBe(hit);
+  expect(hit.getBoundingClientRect().top).toBe(placed);
 });

@@ -94,8 +94,11 @@ export function WorkRow({
           </span>
         </span>
       </CollapsibleTrigger>
-      {/* Opened for a hit, it's whole at once: the hit is centred by where it is. */}
-      <ToolGroupContent className={holds ? 'animate-none!' : undefined}>
+      {/*
+        Opened for a hit, it's whole and in place at once: the hit is centred by where it is. The registry
+        also slides the steps in from 4px above, which moved the hit after it was centred.
+      */}
+      <ToolGroupContent className={holds ? 'animate-none! [&>*>*]:animate-none!' : undefined}>
         <ol className="work-steps">
           {work.steps.map((step) => (
             <StepLine key={step.id} step={step} found={found} onOpenTask={onOpenTask} />

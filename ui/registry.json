@@ -133,6 +133,11 @@
       "path": "components/assistant-ui/utils/context-display-state.ts",
       "url": "https://r.assistant-ui.com/elements-context-display-state.json",
       "sha256": "7e24cb5f3a5acf1f223b6f06ff20fb868ec23678fdb4577efff15f4a50618ca1"
+    },
+    {
+      "path": "components/assistant-ui/elements/conversation-map.tsx",
+      "url": "https://r.assistant-ui.com/elements-conversation-map.json",
+      "sha256": "805ea554059827847e6a6de4b09087037f11777235fc543208139e5e126b58cd"
     }
   ]
 }
