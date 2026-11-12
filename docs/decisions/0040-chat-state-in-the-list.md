@@ -23,8 +23,9 @@ The sidebar's dot is the one 0038 left for a later slice. 0039 is the conversati
   hears it; before, answering sent nothing.
 - **After a restart the state is the list's.** Turns that ran when the service stopped are failed as
   before, approvals went with them, and questions and messages held for a sign-in still need the person.
-- **Found from Diagnostics.** `gathr diag health` lists each chat that works or needs the person, as the
-  list has it; a state that can't be worked out is recorded as `gathr.chat.state` on the turn's or the
+- **Found from Diagnostics.** `gathr diag health` lists each chat that works or needs the person, by id
+  (a title is conversation text, and a bundle is shared), and says who answered: the service, or the
+  database with why the service didn't; a state that can't be worked out is recorded as `gathr.chat.state` on the turn's or the
   request's reference.
 
 ## Why

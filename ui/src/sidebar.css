@@ -64,20 +64,16 @@
   flex: 1;
   min-width: 0;
 }
-/* One mark for a chat with something going on (0040): grey while agents work, attention once it needs the
-   person. It sits in the link's right padding, out of the flow, so the title and More stay where they are. */
+/* One mark for a chat with something going on (0040): the shared attention dot (base.css) once it needs the
+   person, grey while agents only work. It sits in the link's right padding, out of the flow, so the title
+   and More stay where they are. */
 .chat-dot {
-  --dot: color-mix(in oklab, var(--foreground) 55%, transparent);
   position: absolute;
   top: calc(50% - 3px);
   right: 1px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--dot);
 }
-.chat-dot[data-needs] {
-  --dot: var(--attention);
+.chat-dot:not([data-needs]) {
+  background: color-mix(in oklab, var(--foreground) 55%, transparent);
 }
 /* It breathes: a ring grows out of it and fades, every two seconds. Reduced motion keeps the dot, still. */
 .chat-dot::after {
@@ -85,7 +81,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: var(--dot);
+  background: inherit;
   animation: chat-dot-pulse 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
 }
 @keyframes chat-dot-pulse {

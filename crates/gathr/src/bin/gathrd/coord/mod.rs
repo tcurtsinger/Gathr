@@ -72,9 +72,14 @@ pub fn live_tasks(
 ) -> impl FnMut(&mut rusqlite::Connection) + Send + 'static {
     move |conn| {
         let sent = tasks::touched::take(conn).and_then(|chats| {
-            // A question asked or answered changes whether its chat needs the person (0040).
+            // A question asked or answered changes whether its chat needs the person (0040). A
+            // chat whose state can't be read is recorded on its own; the rest still goes out.
             for chat in &chats {
-                states.changed(conn, chat)?;
+                if let Err(e) = states.changed(conn, chat) {
+                    let event = Event::point("gathr.chat.state").trace(&gathr::ids::trace_id());
+                    let event = event.chat(chat).error("sqlite");
+                    let _ = event.attr("why", e.to_string()).insert(conn);
+                }
             }
             if chats.is_empty() || live.receiver_count() == 0 {
                 return Ok(());
@@ -145,5 +150,47 @@ async fn apply(
             chats.writer.record(event.attr("why", e.to_string()));
         }
         None => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 0040: a chat whose state can't be read is recorded with its chat and a reference, and the
+    /// chat's tasks and the person's list still go out live.
+    #[test]
+    fn a_state_that_cant_be_read_holds_no_task_update_back() {
+        let dir = std::env::temp_dir().join(format!("gathr-live-tasks-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut conn = gathr::db::open(&dir.join("gathr.db")).unwrap();
+        tasks::touched::watch(&conn).unwrap();
+        let (live, mut heard) = broadcast::channel(8);
+        let states = Arc::new(crate::chat_state::States::new(live.clone()));
+        conn.execute_batch(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c1', 'Made up', 0);
+             ALTER TABLE turns RENAME TO turns_gone;
+             INSERT INTO tasks (chat_id, owner, kind, what, state, created_ts, updated_ts)
+             VALUES ('c1', 'a', 'work', 'x', 'ready', 0, 0);",
+        )
+        .unwrap();
+
+        live_tasks(live, states)(&mut conn);
+
+        let sent: Vec<Value> = std::iter::from_fn(|| heard.try_recv().ok()).collect();
+        let types: Vec<&str> = sent.iter().filter_map(|e| e["type"].as_str()).collect();
+        assert_eq!(types, ["tasks", "person_tasks"], "{sent:?}");
+        assert_eq!(sent[0]["chat"], "c1");
+        let failed = "SELECT conversation_id, error_type, ref, attrs FROM event_log \
+                      WHERE name = 'gathr.chat.state'";
+        let rows = gathr::diag::query(&conn, failed).unwrap();
+        let row = &rows["rows"][0];
+        assert_eq!(row["conversation_id"], "c1", "{rows}");
+        assert_eq!(row["error_type"], "sqlite", "{rows}");
+        assert!(row["ref"].is_string(), "no reference: {rows}");
+        let why = row["attrs"]["why"].as_str().unwrap_or_default();
+        assert!(why.contains("no such table"), "{rows}");
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

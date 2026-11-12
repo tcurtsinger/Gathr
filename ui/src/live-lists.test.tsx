@@ -255,12 +255,17 @@ test('a state told while the list loads is kept when the older list lands', asyn
   made.hold = new Promise((r) => {
     release = r;
   });
-  // The list was read before the turn started; its answer arrives after the turn's event.
+  // The list was read before the turn started; its answer arrives after the turn's event. It names
+  // the open chat anew: once that shows, the list has landed.
+  made.chats = [{ ...openChat, title: 'Made-up renamed chat' }, other];
   tell({ type: 'lagged' });
   tell({ type: 'chat_state', chat: 'c1', working: true, needs: false });
   await expect.element(dot('Agents working')).toBeVisible();
   release();
-  await new Promise((r) => setTimeout(r, 50));
+  const sidebar = page.getByRole('navigation', { name: 'Chats' });
+  await expect
+    .element(sidebar.getByRole('button', { name: 'Made-up renamed chat', exact: true }))
+    .toBeVisible();
   await expect.element(dot('Agents working')).toBeVisible();
 });
 

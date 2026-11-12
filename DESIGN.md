@@ -254,7 +254,7 @@ Its button in the chat header carries no words. It is the overlapped 18px initia
 cut out of the header with a 2px edge) of every agent with a running turn, each with an attention ring
 turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
 person (a waiting approval, or an open question it asked the person) sits last in the stack with no
-ring, and one 7px attention dot sits on the stack's top right corner, however many need the person.
+ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
 Five agents are one 90px button. With nobody working or needed, the button shows Summary's plain icon.
 Its accessible name and tooltip say the same in words: "Summary: Vale needs you, Juno and Pia working",
 or "Summary".

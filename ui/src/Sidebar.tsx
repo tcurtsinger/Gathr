@@ -42,7 +42,7 @@ export function Sidebar(props: Props) {
         <span>{c.title}</span>
         {(c.needs || c.working) && (
           <i
-            className="chat-dot"
+            className="attention chat-dot"
             role="img"
             data-needs={c.needs || undefined}
             aria-label={c.needs ? 'Needs you' : 'Agents working'}

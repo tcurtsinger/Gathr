@@ -29,7 +29,8 @@ pub fn health(data: &DataDir) -> Value {
         Ok((conn, _)) => coordination(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
         Err(_) => Value::Null,
     };
-    let chats = chats(data, opened.as_ref().ok().map(|(conn, _)| conn));
+    let service = service_now(data);
+    let chats = chats(data, &service, opened.as_ref().ok().map(|(conn, _)| conn));
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -42,7 +43,7 @@ pub fn health(data: &DataDir) -> Value {
     };
     let crash_log = CrashLog::new(data.crash_log());
     json!({
-        "service": service_now(data),
+        "service": service,
         "accounts": accounts,
         "coordination": coordination,
         "chats": chats,
@@ -85,26 +86,37 @@ fn accounts(data: &DataDir, conn: &Connection, held: Value) -> Value {
 }
 
 /// The chats that work or need the person, as the chat list has them (0040): what a dot in the
-/// window is compared against. From the service while it runs, as an approval waiting is only in
-/// its memory; else from the database.
-fn chats(data: &DataDir, conn: Option<&Connection>) -> Value {
-    let asked = ServiceInfo::read(data)
-        .ok()
-        .and_then(|info| http::call(info.port, &info.token, "GET", "/api/chats").ok());
-    let listed = match (asked.filter(|r| r.status == 200), conn) {
-        (Some(answer), _) => answer.json(),
-        (None, Some(conn)) => match crate::store::chats(conn, false) {
-            Ok(listed) => listed,
-            Err(e) => return json!({ "why": e.to_string() }),
-        },
-        (None, None) => return Value::Null,
+/// window is compared against, by chat id (a title is conversation text, and a bundle is shared).
+/// `from` says who answered: the service while it runs, as an approval waiting is only in its
+/// memory; else the database, with why the service didn't.
+fn chats(data: &DataDir, service: &Value, conn: Option<&Connection>) -> Value {
+    let asked = match service["running"] == true {
+        true => ServiceInfo::read(data)
+            .and_then(|info| Ok(http::call(info.port, &info.token, "GET", "/api/chats")?))
+            .map_err(|e| e.to_string())
+            .and_then(|r| match r.status {
+                200 => Ok(r.json()),
+                status => Err(format!("the chat list answered {status}")),
+            }),
+        false => Err("the service isn't running".to_string()),
     };
+    let (from, why, listed) = match (asked, conn) {
+        (Ok(listed), _) => ("service", None, Ok(listed)),
+        (Err(why), Some(conn)) => ("database", Some(why), crate::store::chats(conn, false)),
+        (Err(why), None) => return json!({ "why": why }),
+    };
+    let listed = match listed {
+        Ok(listed) => listed,
+        Err(e) => return json!({ "from": from, "why": e.to_string() }),
+    };
+    // A turn the database still calls running isn't, once the service has stopped.
+    let working = |c: &Value| c["working"] == true && service["running"] == true;
     let rows = listed.as_array().into_iter().flatten();
-    let busy = rows.filter(|c| c["working"] == true || c["needs"] == true);
-    busy.map(|c| {
-        json!({ "chat": c["id"], "title": c["title"], "working": c["working"], "needs": c["needs"] })
-    })
-    .collect()
+    let busy = rows.filter(|c| working(c) || c["needs"] == true);
+    let busy: Vec<Value> = busy
+        .map(|c| json!({ "chat": c["id"], "working": working(c), "needs": c["needs"] }))
+        .collect();
+    json!({ "from": from, "why": why, "chats": busy })
 }
 
 fn service_now(data: &DataDir) -> Value {

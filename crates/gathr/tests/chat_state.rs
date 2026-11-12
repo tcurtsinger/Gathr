@@ -190,7 +190,9 @@ fn a_waiting_approval_needs_the_person_until_it_is_answered_and_every_window_hea
 
     let (ok, health) = gathr(&data.0, &["diag", "health"]);
     assert!(ok, "{health}");
-    let shown = json!([{ "chat": chat, "title": "Say hi", "working": true, "needs": true }]);
+    // From the service, which alone knows of the approval; by id, as a title is conversation text.
+    let shown = json!({ "from": "service", "why": null,
+        "chats": [{ "chat": chat, "working": true, "needs": true }] });
     assert_eq!(health["chats"], shown, "{health}");
 
     let approve = format!("/api/chats/{chat}/approvals/{request}");
@@ -331,6 +333,14 @@ fn a_restart_keeps_what_needs_the_person_and_drops_what_was_running() {
     let (service, chat) = asked_the_person(&data.0);
     until_state(&service, &chat, (true, true));
     service.stop();
+    // With no service to ask, health says the database answered, and why.
+    let (ok, health) = gathr(&data.0, &["diag", "health"]);
+    assert!(ok, "{health}");
+    let shown = &health["chats"];
+    assert_eq!(shown["from"], "database", "{health}");
+    assert_eq!(shown["why"], "the service isn't running", "{health}");
+    let asked = json!([{ "chat": chat, "working": false, "needs": true }]);
+    assert_eq!(shown["chats"], asked, "{health}");
 
     let (replay, go, tokens) = (
         data.0.join("held.jsonl"),
@@ -387,4 +397,110 @@ fn a_state_that_cant_be_read_fails_with_a_reference_that_finds_why() {
     assert_eq!(failed["error_type"], "sqlite", "{failed}");
     let why = failed["attrs"]["why"].as_str().unwrap_or_default();
     assert!(why.contains("no such table"), "{failed}");
+}
+
+/// Gathr's worktree hook asking about a push, as an engine's does: one that isn't to the worktree's
+/// origin, so Gathr asks the person.
+const PUSH: [(&str, &str); 2] = [
+    ("gathr-remote", "elsewhere"),
+    ("gathr-url", "https://example.invalid/made-up.git"),
+];
+
+#[test]
+fn a_push_gathr_asks_about_needs_the_person_until_it_is_answered() {
+    let data = TempDir::new();
+    let (service, chat, _) = team(&data.0, &held_recording(&data.0), &[]);
+    let mut live = service.live();
+    say(&service, &chat, None);
+    let (port, auth) = (
+        service.info.port,
+        format!("Bearer {}", first_token(&data.0)),
+    );
+    let asked = std::thread::spawn(move || {
+        let headers = [("Authorization", auth.as_str()), PUSH[0], PUSH[1]];
+        gathr::http::post(port, "/hook/push", &headers, "")
+            .unwrap()
+            .body
+    });
+    until_state(&service, &chat, (true, true));
+    let open = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(open["approvals"][0]["tool"], "git push", "{open}");
+    let request = open["approvals"][0]["request_id"].as_str().unwrap();
+    let approve = format!("/api/chats/{chat}/approvals/{request}");
+    let answered = service.send("POST", &approve, json!({ "allow": true }));
+    assert_eq!(answered.status, 200, "{}", answered.body);
+    assert_eq!(asked.join().unwrap(), "allow");
+    until_state(&service, &chat, (true, false));
+    let seen = changes(&service, &mut live, &chat);
+    assert_eq!(seen, [(true, false), (true, true), (true, false)]);
+}
+
+#[test]
+fn a_chat_deleted_while_its_turn_runs_stops_working_once() {
+    let data = TempDir::new();
+    let service = held(&data.0);
+    service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let mut live = service.live();
+    say(&service, &chat, None);
+    assert_eq!(state(&service, &chat), (true, false));
+    let (port, token) = (service.info.port, service.info.token.clone());
+    let path = format!("/api/chats/{chat}");
+    let deleting =
+        std::thread::spawn(move || gathr::http::call(port, &token, "DELETE", &path).unwrap());
+    let gone = || {
+        let listed = service.call("GET", "/api/chats").json();
+        let mut ids = listed.as_array().unwrap().iter().map(|c| &c["id"]);
+        !ids.any(|id| *id == chat.as_str())
+    };
+    common::until(10, "the chat to leave the list", || gone().then_some(()));
+    // The delete waits for the chat's engine, and the held stand-in ends only once it streams.
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let deleted = deleting.join().unwrap();
+    assert_eq!(deleted.status, 200, "{}", deleted.body);
+    assert_eq!(changes(&service, &mut live, &chat), WORKED);
+}
+
+#[test]
+fn stop_now_for_everything_ends_a_chats_working_and_its_held_carry_on_isnt_working() {
+    let data = TempDir::new();
+    let service = held(&data.0);
+    service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let mut live = service.live();
+    say(&service, &chat, None);
+    let stopped = service.send("POST", "/api/pauses/stop", json!({ "scope": "app" }));
+    assert_eq!(stopped.status, 200, "{}", stopped.body);
+    // The held stand-in reads its stop only once it streams.
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "the turn to stop", |h| {
+        h["turns"][0]["status"] == "stopped"
+    });
+    until_state(&service, &chat, (false, false));
+    let last = history["turns"].as_array().unwrap().last().unwrap();
+    assert_eq!(last["held"], "pause", "the carry-on waits: {history}");
+    assert_eq!(changes(&service, &mut live, &chat), WORKED);
+}
+
+#[test]
+fn two_agents_turns_in_one_chat_ending_together_end_its_working_once() {
+    let data = TempDir::new();
+    let (service, chat, lead) = team(&data.0, &held_recording(&data.0), &[]);
+    let mut live = service.live();
+    let members = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let members = members["members"].as_array().unwrap().clone();
+    let ann = members
+        .iter()
+        .find(|m| m["agent"] != lead.as_str())
+        .unwrap();
+    say(&service, &chat, Some(&lead));
+    say(&service, &chat, ann["agent"].as_str());
+    service.wait_for(&chat, 10, "both turns running", |h| {
+        let turns = h["turns"].as_array().map_or(&[][..], Vec::as_slice);
+        turns.len() == 2 && turns.iter().all(|t| t["status"] == "running")
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    ended(&service, &chat);
+    until_state(&service, &chat, (false, false));
+    assert_eq!(changes(&service, &mut live, &chat), WORKED);
 }
