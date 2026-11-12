@@ -448,6 +448,75 @@ fn codex_opens_its_thread_with_auto_compact() {
     }
 }
 
+/// #169's review: a result that lists only another model's window than the one the agent's calls
+/// named saves none, so that window never gives the calls' model a point.
+#[test]
+fn a_window_named_for_another_model_than_the_calls_isnt_the_agents() {
+    let data = TempDir::new();
+    let other = std::fs::read_to_string(common::recording("signed_in")).unwrap();
+    let listed = r#"\"modelUsage\":{\"claude-opus-5-5\""#;
+    assert!(other.contains(listed), "{other}");
+    let other = other.replace(listed, r#"\"modelUsage\":{\"claude-haiku-5-5\""#);
+    let recording = data.0.join("other.jsonl");
+    std::fs::write(&recording, other).unwrap();
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording)]);
+    let account = service.signed_in(&data.0);
+    let (chat, agent) = one_turn(&service, &account);
+    let history = service.wait_for(&chat, 10, "the turn's end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let members = history["members"].as_array().unwrap();
+    let member = members.iter().find(|m| m["agent"] == agent.as_str());
+    let expected = json!({ "used": 2 + 23_627 + 1_711, "window": null, "compact_at": null });
+    assert_eq!(member.unwrap()["context"], expected, "{history}");
+}
+
+/// #169's review: the restart for a moved model waits for the engine's background commands, whose
+/// end and the turn it starts would go with the engine: the next turn goes to the same engine. (With
+/// none running, `a_latest_that_moved_to_a_smaller_model_starts_again_with_that_models_point`.)
+#[test]
+fn a_moved_model_never_closes_the_engine_under_its_background_commands() {
+    let data = TempDir::new();
+    let (recording, started, go) = (
+        common::recording("background"),
+        data.0.join("env.jsonl"),
+        data.0.join("go"),
+    );
+    let env = [
+        ("GATHR_REPLAY", recording.as_path()),
+        ("GATHR_REPLAY_ENV", &started),
+        ("GATHR_REPLAY_HOLD", &go),
+    ];
+    let service = TestService::with_engine(&data.0, &env);
+    let account = service.signed_in(&data.0);
+    let ann = agent(&service, &account, None);
+    let set = format!("{account}:claude:default");
+    seen_window(
+        &data.0,
+        &service,
+        &ann,
+        1_000_000,
+        (&set, Some("claude-opus-4")),
+    );
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let send = || service.send("POST", &path, json!({ "text": "Hi", "agent": ann }));
+
+    assert_eq!(send().status, 200);
+    service.wait_for(&chat, 10, "the turn that starts them", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let sql = "SELECT name FROM event_log WHERE name = 'gathr.context.moved'";
+    let (_, moved) = common::gathr(&data.0, &["diag", "query", sql]);
+    assert_eq!(moved["rows"].as_array().unwrap().len(), 1, "{moved}");
+    // Its command still runs: a closed engine would leave the turn queued behind its exit.
+    assert_eq!(send().json()["status"], "running");
+    let starts = std::fs::read_to_string(&started).unwrap();
+    assert_eq!(starts.lines().count(), 1, "{starts}");
+    // Lets the held engine end, so the service stops without waiting for it.
+    std::fs::write(&go, "").unwrap();
+}
+
 /// A window from an engine that named no model never sets a point, even after one that did: the
 /// model an earlier engine named isn't carried over to it.
 #[test]

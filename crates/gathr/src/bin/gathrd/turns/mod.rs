@@ -559,7 +559,8 @@ impl Task {
             self.close(&why).await;
             return Ok(self.hold_back(next, "queued").await);
         }
-        if self.model_moved && self.engine.is_some() {
+        // Never under its background commands: their end and the turn it starts would go with it.
+        if self.model_moved && self.engine.is_some() && self.background == 0 {
             self.close("its model changed, so its compaction point no longer holds")
                 .await;
             return Ok(self.hold_back(next, "queued").await);

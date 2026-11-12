@@ -15,10 +15,10 @@ impl Task {
             .await;
     }
 
-    /// The window of the model the agent's calls run on; with one model listed (Codex), that one.
+    /// The window of the model the agent's calls run on; Codex lists one, unnamed: that one.
     pub(super) async fn context_window(&mut self, windows: Vec<(Option<String>, i64)>) {
         let own = match windows.as_slice() {
-            [(_, window)] => Some(*window),
+            [(None, window)] => Some(*window),
             _ => windows
                 .iter()
                 .find(|(model, _)| model.is_some() && *model == self.context_model)
