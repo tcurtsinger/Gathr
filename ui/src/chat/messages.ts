@@ -54,6 +54,11 @@ export type Custom = {
   /** Messages between agents, one for each text of the block: "Juno to Orin". */
   exchange?: { id: string; from?: string; by?: string; to?: string; time: string }[];
   events?: EventLine[];
+  /**
+   * When it was said, on a block with a tick on the conversation map (0039): the person's message, or
+   * the lead's reply to them, which is the last block of each of its main-line turns once it has ended.
+   */
+  tick?: string;
 };
 
 /** The chat in order, and where a saved message shows in it, for a search hit. */
@@ -287,13 +292,22 @@ function block(
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
-  const who = `${agent}|${role}|${on}|${head}`;
+  // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
+  const lead = state.members.length > 1 ? role === 'supervisor' : true;
+  // A turn still running has no last words yet, so a streamed token never touches the map.
+  // One waiting for sign-in runs again later under the same id.
+  const ended = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
+  const toPerson = group.last && !!id && lead && ended && !crew.rootOf(id);
+  const tick = toPerson
+    ? (group.msgs.findLast((m) => m.kind !== 'tool')?.time ?? turn?.created ?? '')
+    : undefined;
+  const who = `${agent}|${role}|${on}|${head}|${tick}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = role ? (group.msgs[0]?.time ?? turn?.created) : undefined;
-  const custom: Custom = { agent, by: turn?.agent ?? undefined, role, time, on, head, approvals };
+  const custom: Custom = { agent, by: turn?.agent ?? undefined, role, time, on, head, approvals, tick };
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
   cache.set(group.key, { sig, value });
   return value;
@@ -436,7 +450,7 @@ function toUser(m: Message): ThreadMessageLike {
     id: m.id,
     role: 'user',
     content: [{ type: 'text', text: m.body as string }],
-    metadata: { custom: {} },
+    metadata: { custom: { tick: m.time } satisfies Custom },
   };
 }
 

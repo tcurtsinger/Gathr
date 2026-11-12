@@ -25,7 +25,15 @@ export default defineConfig({
     fs: { allow: ['.', '../designs'] },
   },
   // Bundled before the tests start: discovering them mid-run reloads a test (seen in CI).
-  optimizeDeps: { include: ['react', 'react-dom/client', 'react/jsx-dev-runtime', 'vitest-browser-react'] },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom/client',
+      'react/jsx-dev-runtime',
+      'vitest-browser-react',
+      '@base-ui/react/preview-card',
+    ],
+  },
   test: {
     projects: [
       {

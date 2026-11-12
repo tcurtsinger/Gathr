@@ -1,5 +1,6 @@
 /* The one timeline (DESIGN.md: 42rem including 16px padding, so text runs 40rem; the composer at its width). */
 .thread {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;

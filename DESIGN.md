@@ -220,6 +220,31 @@ In a chat with more than one agent the line is a button that opens Summary, and 
 it says it opens a dialog and whether it is open, and who is working is announced from beside it, not by a live
 region around the button.
 
+### Conversation map
+
+The registry's ConversationMap as published ([0039](docs/decisions/0039-conversation-map.md)): a 24px rail
+14px inside the chat pane's left edge. Its length is at most half the pane's height below the header and
+never more than 616px (44 ticks at 14px); it is centred in that height, with the same space above it as
+below it down to the pane's bottom edge. It shows from three ticks up and only with 44px left of the
+column, so it never lies over the text, the composer, the approval dock or the scroll-to-bottom button.
+Only its ticks take the pointer.
+
+- Ticks: 12px long and 2px thick for a message from the person (foreground 22%), 6px for the lead's reply to
+  them (15%), 12px long and 4px thick for a folded day (22%). On screen 50%; current 3px thick at 90%.
+  Pointing at the rail lengthens the ticks on screen by 6px, and the current one and the one under the
+  pointer by 12px; a reply's stays 6px shorter than the others throughout. Reduced motion removes the
+  transition. No other agent's turn, work row, exchange or event has a tick, nor a turn still running.
+- At least 6px a tick, 14px at most, so the rail holds its length divided by 6px. Short of room, the oldest
+  days fold first into one tick each, the latest day's replies go next, then its oldest messages fold
+  into one tick.
+- Card, to the right, on hover or keyboard focus: "You · 16:04" or the lead's name and time, 13px medium,
+  two lines; then the message's first lines as plain text, muted, three lines. A day: "Monday · 14 messages
+  from you" (the date once a week old), "Jumps to the start of that day". The tick's accessible name is
+  the card's title and its description the preview. Escape closes the card.
+- A tick opens its message at the top of the view, 32px under the edge, and focus stays on the tick.
+  Up, Down, Home and End move along the rail. At the end of the chat the latest message on screen is the
+  current tick; elsewhere, the latest at or above the middle of the view.
+
 ### Summary
 
 Summary holds what the plan bar and a status bar would say, so neither exists
