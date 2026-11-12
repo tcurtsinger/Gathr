@@ -79,6 +79,7 @@ fn pause_sets_the_flag_in_the_scheduler() {
   // Good: a known answer.
   assert_eq!(total_tokens(&[turn(1_200), turn(300)]), 1_500);
   ```
+- **A position checked as a boolean:** `expect(atTop(id)).toBe(true)` fails with "expected false to be true", which says nothing about how far off it was. Assert on the measured value (`expect(Math.abs(top - 32)).toBeLessThan(1)`), so a failure prints the number (G177).
 - **Horizontal slicing:** all the tests first, then all the code. Write one test, make it pass, then the next.
 - **Timing-based:** sleeps, fixed timeouts, "usually done by now". The previous app's room tests failed at random for weeks this way, and every builder reran suites to tell flakes from failures. Wait on events and use the injected clock.
 - **Touching the machine:** a test that changes git settings, the person's logins or anything outside its temp folder. A previous-app test once turned the shared repo bare for eight minutes. Tests run in a temp folder with a clean environment.
