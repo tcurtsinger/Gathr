@@ -726,7 +726,12 @@ test('thoughts with nothing between them are one step, with their time together 
   ]);
 
   // The running one's end makes the pair one finished thought.
-  const after = apply(state, { type: 'tool', chat: 'c', message: 'e', body: { status: 'stopped', duration_ms: 2_000 } });
+  const after = apply(state, {
+    type: 'tool',
+    chat: 'c',
+    message: 'e',
+    body: { status: 'stopped', duration_ms: 2_000 },
+  });
   expect(custom(byId(view(after).items, 'a-kit')).work?.steps.at(-1)).toMatchObject({
     id: 'd',
     label: 'Thought for 7s',

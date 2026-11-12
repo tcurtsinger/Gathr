@@ -93,19 +93,21 @@ function thought(id: string, { status, duration_ms }: ThinkingBody): Step | [] {
 
 /**
  * Thoughts with nothing between them, as one: an engine thinks in pieces (Codex's come back to back), and
- * a person reads them as one thought. Its time is theirs together; its state is the last one's.
+ * a person reads them as one thought. Its time is theirs together; its state is the last one's, or running
+ * while any of them is.
  */
 function joined(msgs: Message[]): Message[] {
   const out: Message[] = [];
   for (const m of msgs) {
-    const before = out.at(-1);
-    if (m.kind !== 'thinking' || before?.kind !== 'thinking') {
+    const held = out.at(-1);
+    if (m.kind !== 'thinking' || held?.kind !== 'thinking') {
       out.push(m);
       continue;
     }
-    const [first, last] = [before.body as ThinkingBody, m.body as ThinkingBody];
-    const duration_ms = (first.duration_ms ?? 0) + (last.duration_ms ?? 0);
-    out[out.length - 1] = { ...before, body: { ...last, duration_ms } };
+    const [soFar, piece] = [held.body as ThinkingBody, m.body as ThinkingBody];
+    const duration_ms = (soFar.duration_ms ?? 0) + (piece.duration_ms ?? 0);
+    const status = soFar.status === 'running' ? soFar.status : piece.status;
+    out[out.length - 1] = { ...held, body: { ...piece, status, duration_ms } };
   }
   return out;
 }
