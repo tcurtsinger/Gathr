@@ -280,7 +280,7 @@ export function App() {
             person.setOpen(chat.id, true);
             setTab(chat.id, () => ({ selected: 'tasks' }));
           }}
-          agentOpen={paneOpen ? tabsOf(chat.id).agent : undefined}
+          agentOpen={agentOpen(paneOpen ? tabsOf(chat.id) : undefined)}
           onOpenAgent={(agent) => {
             // Drawn at once, so the keyboard can follow to the agent's tab.
             flushSync(() => {
@@ -394,6 +394,10 @@ export function App() {
     </div>
   );
 }
+
+/** The agent whose tab a chat's workspace has, and whether it is the tab shown. */
+const agentOpen = (tabs?: Tabs) =>
+  tabs?.agent === undefined ? undefined : { agent: tabs.agent, shown: tabs.selected === 'agent' };
 
 /** A chat's workspace tabs: its opened files, the agent whose panel is open, and the tab shown. */
 interface Tabs {

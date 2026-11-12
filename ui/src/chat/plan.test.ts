@@ -118,6 +118,8 @@ test('a finished round stays until the person’s next message, then it is no lo
   // Not finished, the person's messages don't hide it: the hear-back hasn't run, is still running, or a
   // task was restarted after it.
   expect(currentRound(chat([...turns, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
+  const queued = [...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'queued' })];
+  expect(currentRound(chat([...queued, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
   const hearing = [...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'running' })];
   expect(currentRound(chat([...hearing, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
   const restarted = [tasks[0] as Task, task(2, 'kit', 'ask', { state: 'ready' })];

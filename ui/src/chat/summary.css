@@ -67,7 +67,7 @@
   border-radius: 10px;
   text-align: left;
 }
-.plan-step:hover,
+button.plan-step:hover,
 .agent-row:hover {
   background: var(--hover-tint);
 }

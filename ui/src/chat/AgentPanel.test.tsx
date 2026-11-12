@@ -5,12 +5,25 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Member, Message, Task, ToolBody, Turn } from '../api';
+import type { LiveEvent } from '../live';
+import { blocksOf, noneKept } from './AgentPanel';
 import { ChatView } from './ChatView';
+import { toThread } from './messages';
+import { apply, fromHistory } from './state';
 import { clock } from './team';
 
-vi.mock('../live', () => ({ listen: () => () => {} }));
+const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
+vi.mock('../live', () => ({
+  listen: (listener: (event: LiveEvent) => void) => {
+    live.add(listener);
+    return () => live.delete(listener);
+  },
+}));
 beforeEach(() => page.viewport(1280, 800));
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  live.clear();
+});
 
 const members: Member[] = [
   { agent: 'a', name: 'Made-up Lead', role: 'supervisor' },
@@ -90,28 +103,44 @@ const history = {
 };
 const tasks = [task(7, 'b', { state: 'working' }), task(8, 'c'), task(9, 'b')];
 
-function service() {
+function service(more: { history?: object; tasks?: Task[] } = {}) {
   const sent: unknown[] = [];
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (init?.method === 'POST' && path.endsWith('/messages')) {
       sent.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ turn: 'u', status: 'running' }));
     }
-    const body = path.endsWith('/tasks') ? { tasks, waits: [] } : path === '/api/pauses' ? {} : history;
+    const work = { tasks: more.tasks ?? tasks, waits: [] };
+    const body = path.endsWith('/tasks') ? work : path === '/api/pauses' ? {} : (more.history ?? history);
     return new Response(JSON.stringify(body));
   });
   return sent;
 }
 
-/** The chat with a stand-in for the app's workspace: the open agent's name, then its panel. */
-function Chat({ openedTasks = [] }: { openedTasks?: number[] }) {
+// How often the stand-in workspace was drawn, and how often the chat asked it to close.
+const counts = { drawn: 0, closed: 0 };
+beforeEach(() => Object.assign(counts, { drawn: 0, closed: 0 }));
+function Counted() {
+  counts.drawn += 1;
+  return null;
+}
+
+interface Shown {
+  openedTasks?: number[];
+  archived?: boolean;
+  /** The agents the app knows: one not among them can't be sent to. */
+  known?: Agent[];
+}
+
+/** The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. */
+function Chat({ openedTasks = [], archived, known = agents }: Shown) {
   const [agent, setAgent] = useState<string>();
   const [draft, setDraft] = useState('');
   return (
     <div style={{ height: 760, display: 'flex' }}>
       <ChatView
-        chat={{ id: 'c', title: 'Made-up chat' }}
-        agents={agents}
+        chat={{ id: 'c', title: 'Made-up chat', archived: archived ? '2026-11-08T09:00:00Z' : null }}
+        agents={known}
         onEditAgent={() => {}}
         draft={draft}
         onDraft={setDraft}
@@ -126,15 +155,17 @@ function Chat({ openedTasks = [] }: { openedTasks?: number[] }) {
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
         onOpenTask={(n) => openedTasks.push(n)}
-        agentOpen={agent}
+        agentOpen={agent === undefined ? undefined : { agent, shown: true }}
         onOpenAgent={setAgent}
-        workspace={(open) =>
-          open && (
-            <aside aria-label="Made-up workspace" style={{ display: 'flex', width: 440 }}>
-              {open.panel}
-            </aside>
-          )
-        }
+        onCloseWorkspace={() => {
+          counts.closed += 1;
+        }}
+        workspace={(open) => (
+          <aside aria-label="Made-up workspace" style={{ display: 'flex', width: 440 }}>
+            <Counted />
+            {open?.panel}
+          </aside>
+        )}
       />
     </div>
   );
@@ -200,10 +231,15 @@ test('a working agent: when it began, its task, its running row opened, its earl
 });
 
 test('a waiting agent says who it waits for and since when; with no task of its own it has no Task or Now', async () => {
-  service();
+  const earlier = new Date(2026, 10, 8, 16, 20);
+  service({ tasks: [...tasks, task(10, 'c', { state: 'working', created_us: earlier.getTime() * 1000 })] });
   await render(<Chat />);
   await openFromSummary(/^Made-up Lead/);
-  await expect.poll(() => who().textContent).toContain('Supervisor · Waiting for Made-up Member since 09:42');
+  // A wait that began today says its time; one from an earlier day, its date.
+  const day = earlier.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  await expect
+    .poll(() => who().textContent)
+    .toContain(`Supervisor · Waiting for Made-up Member since 09:42 and Made-up Third since ${day}`);
   expect(who().querySelector('.initial[data-busy]')).toBeNull();
   expect(texts('heading')).toEqual(['Made-up Lead', 'Earlier in this chat']);
   await expect.element(panel.getByText('Made-up plan from the lead')).toBeVisible();
@@ -231,6 +267,8 @@ test('Message picks the agent as the recipient and puts the keyboard in the comp
   await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
   await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
   await expect.element(page.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up Third');
+  // Wide enough for the workspace to sit beside the chat: it stays open.
+  expect(counts.closed).toBe(0);
   await userEvent.keyboard('Made-up note{Enter}');
   await expect.poll(() => sent).toEqual([{ text: 'Made-up note', agent: 'c' }]);
 });
@@ -240,8 +278,15 @@ test('the Working line opens Summary and closes it; Escape gives focus back to t
   await render(<Chat />);
   const line = page.getByRole('button', { name: 'Working Made-up Member' });
   const summary = page.getByRole('dialog', { name: 'Summary' });
+  await expect.element(line).toHaveAttribute('aria-haspopup', 'dialog');
+  await expect.element(line).toHaveAttribute('aria-expanded', 'false');
+  // Who is working is announced from beside the button, never by a live region around the control.
+  const status = page.getByRole('status').filter({ hasText: 'Working' });
+  await expect.element(status).toHaveTextContent('Working: Made-up Member');
+  expect(status.element().contains(line.element())).toBe(false);
   await line.click();
   await expect.element(summary).toBeVisible();
+  await expect.element(line).toHaveAttribute('aria-expanded', 'true');
   await userEvent.keyboard('{Escape}');
   await expect.element(summary).not.toBeInTheDocument();
   await expect.element(line).toHaveFocus();
@@ -250,6 +295,14 @@ test('the Working line opens Summary and closes it; Escape gives focus back to t
   await expect.element(summary).toBeVisible();
   await line.click();
   await expect.element(summary).not.toBeInTheDocument();
+
+  // Opened from the line and closed with the header's button: focus stays with the button last used.
+  await line.click();
+  await expect.element(summary).toBeVisible();
+  const button = page.getByRole('button', { name: /^Summary/ });
+  await button.click();
+  await expect.element(summary).not.toBeInTheDocument();
+  await expect.element(button).toHaveFocus();
 });
 
 test('an agent’s initial in the timeline opens its panel', async () => {
@@ -260,4 +313,121 @@ test('an agent’s initial in the timeline opens its panel', async () => {
   // In a talk between agents too.
   await page.getByRole('main').getByRole('button', { name: 'Open Made-up Member' }).first().click();
   await expect.element(panel.getByRole('heading', { name: 'Made-up Member', exact: true })).toBeVisible();
+});
+
+test('Message is left out where it can’t be sent: an archived chat, an agent the app no longer has', async () => {
+  service();
+  const screen = await render(<Chat known={agents.filter((a) => a.id !== 'd')} />);
+  await openFromSummary(/^Kit/);
+  await expect.poll(() => who().textContent).toContain('Member · Ready');
+  expect(panel.getByRole('button', { name: /^Message/ }).query()).toBeNull();
+  await openFromSummary(/^Made-up Third/);
+  await expect.element(panel.getByRole('button', { name: 'Message Made-up Third' })).toBeVisible();
+
+  await screen.rerender(<Chat archived />);
+  await expect.element(page.getByText('Archived', { exact: true }).first()).toBeVisible();
+  expect(panel.getByRole('button', { name: /^Message/ }).query()).toBeNull();
+});
+
+test('where the workspace lies over the chat, Message closes it so the composer is in reach', async () => {
+  await page.viewport(1000, 800);
+  service();
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Third/);
+  await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
+  expect(counts.closed).toBe(1);
+  await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
+});
+
+test("an agent's context shows in its panel, from the engine's fill and window; none before its first call", async () => {
+  const filled = members.map((m) =>
+    m.agent === 'b' ? { ...m, context: { used: 250_000, window: 1_000_000 } } : m,
+  );
+  service({ history: { ...history, members: filled } });
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Member/);
+  await expect.element(panel.getByRole('button', { name: 'Context usage' })).toHaveTextContent('250k (25%)');
+  await openFromSummary(/^Made-up Third/);
+  await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
+  expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();
+});
+
+test('the button over a speaker’s initial sits on the initial, however long the task beside it', async () => {
+  const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
+  service({ tasks: [tasks[0], task(8, 'c', { what }), tasks[2]] });
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Third/);
+  await expect.element(panel.getByText('Made-up review')).toBeVisible();
+  const offsets = () =>
+    [...document.querySelectorAll('.speaker-who')].map((who) => {
+      const avatar = who.querySelector('[data-slot="speaker-identity"] > div > span') as HTMLElement;
+      const a = avatar.getBoundingClientRect();
+      const b = (who.querySelector('.speaker-open') as HTMLElement).getBoundingClientRect();
+      return [Math.round(b.left - a.left), Math.round(b.top - a.top), b.width, b.height];
+    });
+  // In the timeline and in the 440px panel.
+  expect(offsets().length).toBeGreaterThan(4);
+  expect(new Set(offsets().map(String))).toEqual(new Set(['0,0,24,24']));
+  // In a narrow window the time wraps under the name.
+  await page.viewport(520, 800);
+  expect(new Set(offsets().map(String))).toEqual(new Set(['0,0,24,24']));
+});
+
+test('an agent that left the chat keeps its words in the timeline, with nothing to open', async () => {
+  const gone = {
+    ...history,
+    turns: [...history.turns, turn('left', 'z', 4)],
+    messages: [...history.messages, said('m9', 'left', 'Made-up words from an agent that left', { to: 'a' })],
+  };
+  service({ history: gone });
+  await render(<Chat />);
+  const words = page.getByText('Made-up words from an agent that left');
+  await expect.element(words).toBeVisible();
+  expect(words.element().closest('.reply')?.querySelector('.speaker-open')).toBeNull();
+  // The members' own words in the timeline still open them.
+  expect(document.querySelectorAll('.exchange .speaker-open').length).toBe(1);
+});
+
+test('a token streamed into the chat draws the workspace no more', async () => {
+  service();
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Third/);
+  await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
+  const before = counts.drawn;
+  for (const text of ['Made-up ', 'streamed ', 'words'])
+    for (const listener of live) listener({ type: 'delta', chat: 'c', turn: 'now', text });
+  await expect.element(page.getByRole('main').getByText('Made-up streamed words')).toBeVisible();
+  expect(counts.drawn).toBe(before);
+});
+
+test('another agent’s token leaves an agent’s blocks the very same objects; Earlier holds its latest ten', () => {
+  const many = Array.from({ length: 12 }, (_, n) => n);
+  const state = fromHistory({
+    ...history,
+    turns: [...history.turns, ...many.map((n) => turn(`c${n}`, 'c', 10 + n))],
+    messages: [...history.messages, ...many.map((n) => said(`w${n}`, `c${n}`, `Made-up note ${n}`))],
+  } as unknown as Parameters<typeof fromHistory>[0]);
+  const cache = new Map();
+  const kept = noneKept();
+  const first = blocksOf(toThread(state, agents, [], cache).items, 'c', kept);
+  expect(first.earlier.map((b) => (b.content as unknown as { text: string }[])[0].text)).toEqual(
+    many
+      .slice(2)
+      .reverse()
+      .map((n) => `Made-up note ${n}`),
+  );
+
+  // The member's running turn streams a word: the third agent's list and its blocks are untouched.
+  const streamed = apply(state, { type: 'delta', chat: 'c', turn: 'now', text: 'Made-up word' });
+  const next = blocksOf(toThread(streamed, agents, [], cache).items, 'c', kept);
+  expect(next.earlier).toBe(first.earlier);
+  // Its own new block makes a new list, with the blocks it had the same objects.
+  const more = apply(streamed, {
+    type: 'message',
+    chat: 'c',
+    message: said('w99', 'c11', 'Made-up afterthought'),
+  });
+  const grown = blocksOf(toThread(more, agents, [], cache).items, 'c', kept);
+  expect(grown.earlier).not.toBe(first.earlier);
+  expect(grown.earlier[1]).toBe(first.earlier[1]);
 });

@@ -147,12 +147,13 @@ test('the plan lists the current round: each step, who has it, who waits on the 
       task(3, 'b'),
       task(4, 'b', { state: 'failed' }),
       task(5, 'c', { state: 'ready' }),
+      task(6, 'z', { state: 'ready' }),
     ],
   };
   const screen = await render(<Shown state={state} />);
   await screen.getByRole('button', { name: /^Summary/ }).click();
   const plan = page.getByRole('region', { name: 'Plan' });
-  await expect.element(plan.getByRole('heading')).toHaveTextContent('Plan1 of 5 done');
+  await expect.element(plan.getByRole('heading')).toHaveTextContent('Plan1 of 6 done');
   await expect
     .element(plan.getByRole('progressbar', { name: 'Plan progress' }))
     .toHaveAttribute('aria-valuenow', '1');
@@ -169,6 +170,9 @@ test('the plan lists the current round: each step, who has it, who waits on the 
     // Not started: the person isn't holding it up, though its owner waits on them.
     'Made-up task 5, not started, Made-up Third',
   ]);
+  // A step of an agent that left the chat is listed, with no panel to open.
+  const gone = document.querySelectorAll('.plan-step')[5];
+  expect([gone.tagName, gone.textContent]).toEqual(['DIV', 'Made-up task 6, not started, ']);
 
   // No hand-off, no Plan section.
   await screen.rerender(<Shown state={{ ...state, tasks: [] }} />);
@@ -206,11 +210,17 @@ test('the team is one line each: what it is doing and its tasks done, in order o
   // The running turn's activity is what its row in the timeline says; start times are in the panel.
   expect(rows()).toEqual([
     ['MT', 'Made-up Third', 'Needs your approval'],
-    ['MM', 'Made-up Member', 'Running a command', '1/2'],
+    ['MM', 'Made-up Member', 'Running a command', '1/21 of 2 tasks done'],
     ['ML', 'Made-up Lead', 'Waiting for Made-up Member'],
     ['K', 'Kit', 'Ready'],
-    ['L', 'Lane', 'Ready', '1/1'],
+    ['L', 'Lane', 'Ready', '1/11 of 1 tasks done'],
   ]);
+  // "1/2" is for the eye; a screen reader is told "1 of 2 tasks done", not a half.
+  const count = document.querySelectorAll('.agent-count')[1];
+  expect(count.querySelector('[aria-hidden="true"]')?.textContent).toBe('1/2');
+  await expect
+    .element(summary.getByRole('button', { name: 'Made-up Member Running a command 1 of 2 tasks done' }))
+    .toBeVisible();
   expect(document.querySelectorAll('.summary .initial[data-busy]')).toHaveLength(1);
 });
 

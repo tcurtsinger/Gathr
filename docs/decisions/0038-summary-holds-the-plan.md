@@ -25,6 +25,9 @@ Replaces 0015's plan bar above the composer and its Summary of expandable rows.
   row opened, its earlier blocks in this chat (the latest 10) and its tasks. One agent at a time. The row
   and the blocks are the timeline's own components.
 - **The Working line opens Summary** too, so "who is working" leads to what they are doing.
+- **The workspace is not drawn again for a streamed token.** The chat hands the workspace one fixed place
+  for the agent's panel and draws the panel into it only while its tab is shown; the panel is drawn again
+  only when something of that agent's changed.
 - **Pause or resume for one agent** is a menu at Summary's foot. An agent's context bar is in its panel.
 
 ## Why
@@ -43,6 +46,14 @@ Replaces 0015's plan bar above the composer and its Summary of expandable rows.
   as the button's accessible name and tooltip, and beside the Team heading.
 - **A mark on one agent's initial for "needs you",** instead of one dot on the stack. The owner chose one dot
   for the stack, the same dot the sidebar's row is to carry.
+
+## Known limits
+
+- **A question asked on a member's behalf counts against its giver.** "Asked you a question" and the stack's
+  dot go by the task's giver, which is the Supervisor even when it asked for a member: the chat's tasks carry
+  no `for_agent` (only the person's task list does). Naming the member needs the service to send it.
+- **Where the workspace lies over the chat** (1200px and below) it covers the header's right end, Summary's
+  button included, as it did before.
 
 ## What this slice leaves
 

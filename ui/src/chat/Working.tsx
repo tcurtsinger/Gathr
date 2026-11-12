@@ -20,11 +20,20 @@ export function working(state: ChatState): { members: Member[]; since?: number }
 
 /**
  * "Working" after the latest message while a turn runs: who is at work, and for how long (0037). In a
- * team chat it is a button that opens Summary.
+ * team chat it is a button that opens Summary (`summary` says whether it is open).
  */
-export function Working({ state, onOpen }: { state: ChatState; onOpen?: (from: HTMLElement) => void }) {
+export function Working({
+  state,
+  summary,
+  onOpen,
+}: {
+  state: ChatState;
+  summary?: boolean;
+  onOpen?: (from: HTMLElement) => void;
+}) {
   const busy = working(state);
   if (!busy) return null;
+  const who = list(busy.members.map((m) => m.name));
   const line = (
     <>
       <span className="working-spinner">
@@ -35,7 +44,7 @@ export function Working({ state, onOpen }: { state: ChatState; onOpen?: (from: H
       </span>
       Working
       {busy.members.length > 0 && (
-        <span role="img" aria-label={list(busy.members.map((m) => m.name))}>
+        <span role="img" aria-label={who}>
           <InitialStack agents={busy.members} />
         </span>
       )}
@@ -47,17 +56,29 @@ export function Working({ state, onOpen }: { state: ChatState; onOpen?: (from: H
       )}
     </>
   );
+  if (!onOpen)
+    return (
+      <p className="working" role="status">
+        {line}
+      </p>
+    );
   return (
-    <p className="working" role="status">
-      {onOpen ? (
-        // Summary leaves a press here to this button, which opens or closes it.
-        <button type="button" data-summary-opener="" onClick={(e) => onOpen(e.currentTarget)}>
-          {line}
-        </button>
-      ) : (
-        line
-      )}
-    </p>
+    <div className="working">
+      {/* Summary leaves a press here to this button, which opens or closes it. */}
+      <button
+        type="button"
+        data-summary-opener=""
+        aria-haspopup="dialog"
+        aria-expanded={!!summary}
+        onClick={(e) => onOpen(e.currentTarget)}
+      >
+        {line}
+      </button>
+      {/* Beside the button, not around it: a live region would read the control out each time it changed. */}
+      <span className="visually-hidden" role="status">
+        Working: {who}
+      </span>
+    </div>
   );
 }
 

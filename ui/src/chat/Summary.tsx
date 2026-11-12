@@ -44,8 +44,10 @@ interface Props {
   team: Glance[];
   open: boolean;
   onOpen: (open: boolean) => void;
-  /** What opened it other than its own button (the Working line): closing gives focus back to it. */
+  /** What last opened or closed it other than its own button (the Working line): closing gives focus back to it. */
   from?: HTMLElement | null;
+  /** Its own button was pressed, so focus belongs there again. */
+  onOwnButton?: () => void;
   pauses: Pauses;
   onPause: (action: PauseAction, scope: PauseScope) => void;
   /** Opens an agent's panel in the workspace. */
@@ -58,7 +60,8 @@ interface Props {
  * stack. It opens a popover: the Supervisor's current round as Plan, then every agent on one line. A step
  * or an agent opens that agent's panel. Escape or a press outside closes it.
  */
-export function Summary({ state, team, open, onOpen, from, pauses, onPause, onOpenAgent }: Props) {
+export function Summary(props: Props) {
+  const { state, team, open, onOpen, from, onOwnButton, pauses, onPause, onOpenAgent } = props;
   const round = useMemo(() => currentRound(state), [state]);
   const said = headline(team);
   const label = said ? `Summary: ${said}` : 'Summary';
@@ -79,7 +82,7 @@ export function Summary({ state, team, open, onOpen, from, pauses, onPause, onOp
   return (
     <Popover.Root open={open} onOpenChange={onOpen}>
       <Popover.Trigger asChild>
-        <TooltipIconButton tooltip={label} className="head-button summary-button">
+        <TooltipIconButton tooltip={label} className="head-button summary-button" onClick={onOwnButton}>
           {stack.length ? <InitialStack agents={stack} needs={needs.size > 0} /> : <SummaryIcon />}
         </TooltipIconButton>
       </Popover.Trigger>
@@ -107,7 +110,14 @@ export function Summary({ state, team, open, onOpen, from, pauses, onPause, onOp
             went.current = false;
           }}
         >
-          {round && <Plan round={round} needs={needs} onOpenAgent={go} />}
+          {round && (
+            <Plan
+              round={round}
+              needs={needs}
+              // An agent that left the chat still has its step, but no panel to open.
+              opener={(agent) => (team.some((g) => g.member.agent === agent) ? () => go(agent) : undefined)}
+            />
+          )}
           <h3>
             Team<small className="summary-note">{counts(team)}</small>
           </h3>
@@ -124,7 +134,19 @@ export function Summary({ state, team, open, onOpen, from, pauses, onPause, onOp
                 <span className="agent-doing" data-standing={g.standing}>
                   {g.doing}
                 </span>
-                <span className="agent-count">{g.total > 0 && `${g.done}/${g.total}`}</span>
+                <span className="agent-count">
+                  {g.total > 0 && (
+                    // "1/2" would be read out as a half.
+                    <>
+                      <span aria-hidden="true">
+                        {g.done}/{g.total}
+                      </span>
+                      <span className="visually-hidden">
+                        {g.done} of {g.total} tasks done
+                      </span>
+                    </>
+                  )}
+                </span>
               </button>
             ))}
           </div>
@@ -171,11 +193,12 @@ const STEP: Record<StepState, { icon: typeof CircleIcon; spoken: string; mark?: 
 function Plan({
   round,
   needs,
-  onOpenAgent,
+  opener,
 }: {
   round: Round;
   needs: Set<string>;
-  onOpenAgent: (agent: string) => void;
+  /** What opens an agent's panel; none for an agent no longer in the chat. */
+  opener: (agent: string) => (() => void) | undefined;
 }) {
   const { steps, done } = round;
   return (
@@ -202,14 +225,9 @@ function Plan({
         const { icon: Icon, spoken, mark } = STEP[s.state];
         // The person holds up a step only while it is at work.
         const waits = s.state === 'active' && needs.has(s.agent);
-        return (
-          <button
-            type="button"
-            className="plan-step"
-            key={s.task}
-            data-state={s.state}
-            onClick={() => onOpenAgent(s.agent)}
-          >
+        const open = opener(s.agent);
+        const row = (
+          <>
             <Icon
               aria-hidden="true"
               className={s.state === 'active' ? 'animate-spin motion-reduce:animate-none' : undefined}
@@ -220,7 +238,16 @@ function Plan({
               {s.owner}
               {waits ? ' · needs you' : mark && ` · ${mark}`}
             </small>
+          </>
+        );
+        return open ? (
+          <button type="button" className="plan-step" key={s.task} data-state={s.state} onClick={open}>
+            {row}
           </button>
+        ) : (
+          <div className="plan-step" key={s.task} data-state={s.state}>
+            {row}
+          </div>
         );
       })}
     </section>

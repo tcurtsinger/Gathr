@@ -42,14 +42,16 @@ export function Speaker({
 }) {
   return (
     <header className="speaker">
-      <SpeakerIdentity
-        className="w-auto min-w-0"
-        turns={[{ id: 'author', kind: 'agent', name, detail, text: '' }]}
-      />
-      {/* Over the registry's avatar, which takes no handler of its own. */}
-      {onOpen && (
-        <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen} />
-      )}
+      <span className="speaker-who">
+        <SpeakerIdentity
+          className="w-auto min-w-0"
+          turns={[{ id: 'author', kind: 'agent', name, detail, text: '' }]}
+        />
+        {/* Over the registry's avatar, which takes no handler of its own. */}
+        {onOpen && (
+          <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen} />
+        )}
+      </span>
       {time && <time dateTime={time}>{clock(time)}</time>}
     </header>
   );

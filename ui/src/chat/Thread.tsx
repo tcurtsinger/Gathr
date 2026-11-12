@@ -137,7 +137,7 @@ export function Thread(props: Props) {
 }
 
 /** Every message reads the actions, so they keep one identity and call the latest ones. */
-function useStable(actions: Actions): Actions {
+export function useStable(actions: Actions): Actions {
   const latest = useRef(actions);
   latest.current = actions;
   return useMemo<Actions>(

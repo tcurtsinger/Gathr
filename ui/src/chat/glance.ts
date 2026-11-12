@@ -19,26 +19,38 @@ export interface Glance {
   began?: string;
   /** Waiting: the same phrase with when each wait began. Start times show in the agent's panel only. */
   detail?: string;
+  /** The task its running turn works on. */
+  task?: number;
   /** Its tasks in this chat, cancelled ones left out. */
   done: number;
   total: number;
 }
 
+const FIELDS = ['standing', 'doing', 'began', 'detail', 'task', 'done', 'total'] as const;
 const ORDER: Standing[] = ['needs', 'working', 'waiting', 'ready'];
 
 /**
  * Every agent of the chat: who needs the person first, then who works, who waits, who is ready; the
  * Supervisor first among equals. `activity` is what each running turn's row says its agent is doing now.
+ * An agent whose glance reads as it did in `before` keeps that object, so what draws it needn't redraw.
  */
-export function glances(state: ChatState, pauses: Pauses, run: Run, activity: Map<string, string>): Glance[] {
+export function glances(
+  state: ChatState,
+  pauses: Pauses,
+  run: Run,
+  activity: Map<string, string>,
+  before: Glance[] = [],
+): Glance[] {
   const all = state.members.map((member): Glance => {
     const tasks = state.tasks.filter((t) => t.owner === member.agent && t.state !== 'cancelled');
-    return {
+    const now: Glance = {
       member,
       ...standing(member, state, pauses, run, activity),
       done: tasks.filter((t) => t.state === 'done').length,
       total: tasks.length,
     };
+    const was = before.find((g) => g.member === member);
+    return was && FIELDS.every((f) => was[f] === now[f]) ? was : now;
   });
   const lead = (g: Glance) => (g.member.role === 'supervisor' ? 0 : 1);
   return all.sort((a, b) => ORDER.indexOf(a.standing) - ORDER.indexOf(b.standing) || lead(a) - lead(b));
@@ -50,19 +62,21 @@ function standing(
   pauses: Pauses,
   run: Run,
   activity: Map<string, string>,
-): Pick<Glance, 'standing' | 'doing' | 'began' | 'detail'> {
+): Pick<Glance, 'standing' | 'doing' | 'began' | 'detail' | 'task'> {
   const turns = Object.values(state.turns).filter((t) => t.agent === m.agent);
-  if (state.approvals.some((a) => unanswered(a) && state.turns[a.turn]?.agent === m.agent))
-    return { standing: 'needs', doing: 'Needs your approval' };
-  if (state.tasks.some((t) => t.kind === 'person' && t.giver === m.agent && open(t)))
-    return { standing: 'needs', doing: 'Asked you a question' };
   const running = turns.filter((t) => t.status === 'running');
+  const task = running.find((t) => t.task != null)?.task ?? undefined;
+  if (state.approvals.some((a) => unanswered(a) && state.turns[a.turn]?.agent === m.agent))
+    return { standing: 'needs', doing: 'Needs your approval', task };
+  // By its giver: the chat's tasks don't say which member a question was asked for (0038).
+  if (state.tasks.some((t) => t.kind === 'person' && t.giver === m.agent && open(t)))
+    return { standing: 'needs', doing: 'Asked you a question', task };
   if (running.length) {
     const starts = running
       .map((t) => t.created ?? '')
       .filter(Boolean)
       .sort();
-    return { standing: 'working', doing: activity.get(m.agent) ?? 'Working', began: clock(starts[0]) };
+    return { standing: 'working', doing: activity.get(m.agent) ?? 'Working', began: clock(starts[0]), task };
   }
   const own = agentPause(pauses, m.agent);
   const held = (doing: string) => ({ standing: 'waiting' as const, doing });

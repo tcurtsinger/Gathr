@@ -132,8 +132,9 @@ floating surfaces 16px; ComposerBar 24px with 10px padding. User messages have
 Use actual assistant-ui primitives and the recorded official registry components
 after the integration decision is approved. Do not build lookalikes in `ui/`.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
-Six recorded adaptations are FileTree, SpeakerIdentity, Button, ElicitationForm,
-OptionList and TodoList. Retain source notices and original/adapted hashes.
+`ui/registry.json` records each adaptation with its original and adapted hash and why:
+ElicitationForm, OptionList, SpeakerIdentity, Button, Tooltip and TodoList today. Retain source
+notices and both hashes.
 Dependency approval, pinned versions and file splitting belong to the integration
 decision; this design update adds no JavaScript dependency.
 
@@ -215,7 +216,9 @@ Working appears after the latest message while any turn runs: an attention spinn
 overlapping 18px initials for agents with running turns, and the time since the longest-running
 of those turns began, in whole minutes (12m), redrawn once a minute. The time is hidden
 from screen readers, so the status reads only Working and who. Never show a queued or pending task as a working agent.
-In a chat with more than one agent the line is a button that opens Summary, and closes it when pressed again.
+In a chat with more than one agent the line is a button that opens Summary, and closes it when pressed again;
+it says it opens a dialog and whether it is open, and who is working is announced from beside it, not by a live
+region around the button.
 
 ### Summary
 
@@ -232,7 +235,8 @@ Its accessible name and tooltip say the same in words: "Summary: Vale needs you,
 or "Summary".
 
 The button, and the Working line after the latest message, open a 348px popover under the header.
-Escape closes it and returns focus to what opened it; a press outside closes it. Top to bottom:
+Escape closes it and returns focus to whichever of the two was last used to open or close it; a press
+outside closes it. Top to bottom:
 
 - **Plan**, when the Supervisor has a round. The heading's right holds one 12px segment for each step
   (done 80% foreground, at work attention, failed a destructive outline, the rest 12%) and "1 of 3
@@ -243,8 +247,8 @@ Escape closes it and returns focus to what opened it; a press outside closes it.
   circle-exclamation for failed, a square for stopped. A done row is muted.
 - **Team**, with "2 working · 1 needs you" at the heading's right, a part omitted when it is zero.
   One line for each agent: its 24px initial (ringed while it works), its name, what it is doing in one
-  13px phrase, and its tasks in this chat as done/total, cancelled ones left out and nothing when it
-  has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
+  13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done"), cancelled ones left out and
+  nothing when it has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
   command); "Needs your approval" or "Asked you a question" in the attention colour; "Waiting for
   Juno", a wait on CI or a PR by name, Held, Paused, Stopped or a usage limit with its end; else Ready.
   No role, no start time and no chevron: those are in the agent's panel. Order: who needs the person,
@@ -271,6 +275,9 @@ Summary, and from an agent's initial in the timeline. Where the workspace lies o
 and below), so does the panel. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
 this chat yet".
+
+Its initial in the timeline is a button the avatar's size, centred on the avatar. An agent that has
+left the chat keeps its words, and its steps in Plan, but has nothing to open.
 
 - **Header:** the 36px initial (ringed while it works), the name at 20px/600, and under it the role
   and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer

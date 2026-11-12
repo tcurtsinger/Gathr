@@ -327,13 +327,17 @@ function toReply(
   };
 }
 
+/** The agent's id while it is in the chat: one that left it has no panel to open. */
+const member = (state: ChatState, agent?: string | null) =>
+  state.members.some((m) => m.agent === agent) ? (agent ?? undefined) : undefined;
+
 /** Messages between agents that follow each other, as one block: a text and its header for each. */
 function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): ThreadMessageLike {
   const key = groups[0].key;
   const said = groups.map(({ msgs: [m] }) => ({
     id: m.id,
     from: crew.name(state.turns[m.turn ?? '']?.agent),
-    by: state.turns[m.turn ?? '']?.agent ?? undefined,
+    by: member(state, state.turns[m.turn ?? '']?.agent),
     to: crew.name(m.to),
     time: m.time,
   }));

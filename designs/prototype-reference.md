@@ -25,14 +25,15 @@ of its local fixtures. No fixture conversation or account data was copied here.
 | Markdown | StreamdownTextPrimitive, subject to the integration decision |
 | Tool runs | ToolTimeline and ToolFallback, bound to the original turn |
 | Tasks | Inline OptionList plus ElicitationForm, one shared pager |
-| Summary | Inline SubagentList plus TodoList; placement conflict noted above |
+| Summary | As first built: inline SubagentList plus TodoList. Replaced by 0038: a stack button, Plan and one line an agent, with TodoList in the agent's panel |
 | Files/documents | FileTree, Streamdown, SyntaxHighlighter and shared ResizeHandle |
 | Changes/Terminal/Web | CodeDiff, TerminalBlock and WebPreview with real Gathr adapters |
 | Settings | Gathr's existing centred layout, Help, Switch and common agent editor |
 
 The 64-example gallery is a reference library, not the production feature list.
-The manifest records six adaptations: FileTree, SpeakerIdentity, Button,
-ElicitationForm, OptionList and SubagentList. Other registry modules keep their
+The prototype's manifest recorded six adaptations: FileTree, SpeakerIdentity, Button,
+ElicitationForm, OptionList and SubagentList. What `ui/` adapts today is in `ui/registry.json`
+(ElicitationForm, OptionList, SpeakerIdentity, Button, Tooltip and TodoList). Other registry modules keep their
 upstream implementation. Import actual components when approved; do not promote
 the portable HTML's static anatomy into new hand-built React components.
 

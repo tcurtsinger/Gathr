@@ -1,14 +1,13 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import { useMemo, useRef } from 'react';
+import { memo } from 'react';
 import { ContextDisplay } from '@/components/assistant-ui/elements/context-display';
 import { type TodoItem, TodoList } from '@/components/assistant-ui/elements/todo-list';
 import { Button } from '@/components/ui/button';
-import type { Task } from '../api';
+import type { Member, Task } from '../api';
 import type { Work } from './fold';
 import type { Glance } from './glance';
 import { Initial } from './Initial';
 import type { Custom } from './messages';
-import type { ChatState } from './state';
 import { type Actions, Blocks } from './Thread';
 import { WorkRow } from './TurnParts';
 import { roleName } from './team';
@@ -31,20 +30,27 @@ export function todo(t: Task): TodoItem {
   return { id, text: t.what, status: 'pending', description };
 }
 
-type Kept = WeakMap<ThreadMessageLike, ThreadMessageLike>;
+/** What `blocksOf` made on earlier draws, for one agent. */
+export interface Kept {
+  blocks: WeakMap<ThreadMessageLike, ThreadMessageLike>;
+  earlier: ThreadMessageLike[];
+}
+
+export const noneKept = (): Kept => ({ blocks: new WeakMap(), earlier: [] });
 
 /**
- * An agent's part of the timeline: its running turn's row, and its earlier blocks, newest first. A block
- * of its own is headed by its name, as none other sits between them here; of a talk between agents, only
- * what it wrote. A block made on an earlier draw is the same object (`kept`), so it isn't converted again.
+ * An agent's part of the timeline: its running turn's row, and its earlier blocks, newest first, the latest
+ * ten. A block of its own is headed by its name, as none other sits between them here; of a talk between
+ * agents, only what it wrote. A block made on an earlier draw is the same object, and so is the list while
+ * none of its blocks changed (`kept`): another agent's token leaves the panel's inputs as they were.
  */
 export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) {
   let now: Work | undefined;
-  const earlier: ThreadMessageLike[] = [];
+  const all: ThreadMessageLike[] = [];
   const keep = (item: ThreadMessageLike, make: () => ThreadMessageLike) => {
-    const value = kept.get(item) ?? make();
-    kept.set(item, value);
-    earlier.push(value);
+    const value = kept.blocks.get(item) ?? make();
+    kept.blocks.set(item, value);
+    all.push(value);
   };
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
@@ -62,40 +68,43 @@ export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) 
       else keep(item, () => ({ ...item, metadata: { custom: { ...custom, head: true } } }));
     }
   }
-  return { now, earlier: earlier.reverse().slice(0, EARLIER) };
+  const earlier = all.reverse().slice(0, EARLIER);
+  const same = earlier.length === kept.earlier.length && earlier.every((b, at) => b === kept.earlier[at]);
+  if (!same) kept.earlier = earlier;
+  return { now, earlier: kept.earlier };
 }
 
 interface Props {
   glance: Glance;
-  state: ChatState;
-  /** The chat's timeline, from toThread. */
-  items: ThreadMessageLike[];
+  /** The chat's tasks and members, as the chat's state holds them. */
+  tasks: Task[];
+  members: Member[];
+  /** Its running turn's row and its earlier blocks, from blocksOf. */
+  now?: Work;
+  earlier: ThreadMessageLike[];
   actions: Actions;
   /** Picks the agent as the composer's recipient and focuses the composer; none when it can't be sent to. */
-  onMessage?: () => void;
+  onMessage?: (agent: string) => void;
 }
 
 /**
  * One agent beside the chat, as a workspace tab (DESIGN.md "Agent panel", 0038): who it is and how it
  * stands, the task it is on, its running turn's row opened, its earlier blocks in this chat and its
- * tasks. The row and the blocks are the timeline's own components.
+ * tasks. The row and the blocks are the timeline's own components. Drawn again only when something of
+ * its own changed: every prop keeps its identity through another agent's streamed token.
  */
-export function AgentPanel({ glance, state, items, actions, onMessage }: Props) {
+export const AgentPanel = memo(function AgentPanel(props: Props) {
+  const { glance, tasks, members, now, earlier, actions, onMessage } = props;
   const { member, standing } = glance;
-  const kept = useRef<Kept>(new WeakMap());
-  const { now, earlier } = useMemo(() => blocksOf(items, member.agent, kept.current), [items, member.agent]);
-  const running = Object.values(state.turns).filter(
-    (t) => t.agent === member.agent && t.status === 'running',
-  );
-  const mine = state.tasks
+  const mine = tasks
     .filter((t) => t.owner === member.agent && t.state !== 'cancelled')
     .sort((a, b) => a.number - b.number);
   // The task its running turn works on, else its first open one.
-  const task = mine.find((t) => running.some((turn) => turn.task === t.number)) ?? mine.find(open);
+  const task = mine.find((t) => t.number === glance.task) ?? mine.find(open);
   const giver = (t: Task) =>
-    t.giver === null ? 'you' : (state.members.find((m) => m.agent === t.giver)?.name ?? 'an agent');
+    t.giver === null ? 'you' : (members.find((m) => m.agent === t.giver)?.name ?? 'an agent');
   const { used, window } = member.context ?? {};
-  const nothing = !task && !running.length && !earlier.length && !mine.length;
+  const nothing = !task && !now && standing !== 'working' && !earlier.length && !mine.length;
   return (
     <div className="agent-panel">
       <header className="agent-who">
@@ -122,7 +131,7 @@ export function AgentPanel({ glance, state, items, actions, onMessage }: Props) 
             <ContextDisplay.Bar modelContextWindow={window} usage={{ totalTokens: used }} side="bottom" />
           ) : null}
           {onMessage && (
-            <Button type="button" variant="outline" onClick={onMessage}>
+            <Button type="button" variant="outline" onClick={() => onMessage(member.agent)}>
               Message {member.name}
             </Button>
           )}
@@ -174,4 +183,4 @@ export function AgentPanel({ glance, state, items, actions, onMessage }: Props) 
       {nothing && <p className="agent-quiet">Nothing in this chat yet</p>}
     </div>
   );
-}
+});

@@ -1,21 +1,27 @@
 /* The timeline's parts (DESIGN.md "One timeline", 0037): who speaks, a turn's row, talk between agents, events. */
 .speaker {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
-/* The initial opens the agent's panel: a button the avatar's size, laid over it. */
+/* The identity and the button over its avatar: the avatar is centred in this box whatever its height. */
+.speaker-who {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
 .speaker-open {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 0;
   width: 24px;
   height: 24px;
   min-height: 0;
   padding: 0;
   border-radius: 50%;
+  translate: 0 -50%;
 }
 .speaker-open:hover {
   background: var(--hover-tint);
