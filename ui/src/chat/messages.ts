@@ -36,6 +36,8 @@ export interface EventLine {
 /** Gathr's own part of a message, read by the thread's message components. */
 export type Custom = {
   agent?: string;
+  /** The agent's id: its initial opens its panel, and the panel lists its blocks. */
+  by?: string;
   role?: Role;
   /** When the reply began, shown in a team chat. */
   time?: string;
@@ -50,7 +52,7 @@ export type Custom = {
   /** A message that never reached the service. */
   unsent?: SendFailure;
   /** Messages between agents, one for each text of the block: "Juno to Orin". */
-  exchange?: { id: string; from?: string; to?: string; time: string }[];
+  exchange?: { id: string; from?: string; by?: string; to?: string; time: string }[];
   events?: EventLine[];
 };
 
@@ -291,7 +293,7 @@ function block(
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = role ? (group.msgs[0]?.time ?? turn?.created) : undefined;
-  const custom: Custom = { agent, role, time, on, head, approvals };
+  const custom: Custom = { agent, by: turn?.agent ?? undefined, role, time, on, head, approvals };
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
   cache.set(group.key, { sig, value });
   return value;
@@ -331,6 +333,7 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
   const said = groups.map(({ msgs: [m] }) => ({
     id: m.id,
     from: crew.name(state.turns[m.turn ?? '']?.agent),
+    by: state.turns[m.turn ?? '']?.agent ?? undefined,
     to: crew.name(m.to),
     time: m.time,
   }));

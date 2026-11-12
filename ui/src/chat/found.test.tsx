@@ -97,8 +97,6 @@ function Chat({ found, onFound }: { found: Found; onFound: () => void }) {
         onStart={() => {}}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
-        plan={false}
-        onPlan={() => {}}
         found={found}
         onFound={onFound}
       />

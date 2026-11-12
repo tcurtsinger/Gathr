@@ -2,6 +2,7 @@ import { LoaderIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Member } from '../api';
 import { duration } from './fold';
+import { InitialStack } from './Initial';
 import type { ChatState } from './state';
 import { list } from './team';
 import './team.css';
@@ -17,12 +18,15 @@ export function working(state: ChatState): { members: Member[]; since?: number }
   };
 }
 
-/** "Working" after the latest message while a turn runs: who is at work, and for how long (0037). */
-export function Working({ state }: { state: ChatState }) {
+/**
+ * "Working" after the latest message while a turn runs: who is at work, and for how long (0037). In a
+ * team chat it is a button that opens Summary.
+ */
+export function Working({ state, onOpen }: { state: ChatState; onOpen?: (from: HTMLElement) => void }) {
   const busy = working(state);
   if (!busy) return null;
-  return (
-    <p className="working" role="status">
+  const line = (
+    <>
       <span className="working-spinner">
         <LoaderIcon
           aria-hidden="true"
@@ -30,38 +34,32 @@ export function Working({ state }: { state: ChatState }) {
         />
       </span>
       Working
-      <Initials members={busy.members} />
+      {busy.members.length > 0 && (
+        <span role="img" aria-label={list(busy.members.map((m) => m.name))}>
+          <InitialStack agents={busy.members} />
+        </span>
+      )}
       {busy.since !== undefined && (
         // Not read out: the status is who is working, and this is redrawn as time passes.
         <span className="working-time" aria-hidden="true">
           <Elapsed since={busy.since} to="minute" />
         </span>
       )}
+    </>
+  );
+  return (
+    <p className="working" role="status">
+      {onOpen ? (
+        // Summary leaves a press here to this button, which opens or closes it.
+        <button type="button" data-summary-opener="" onClick={(e) => onOpen(e.currentTarget)}>
+          {line}
+        </button>
+      ) : (
+        line
+      )}
     </p>
   );
 }
-
-function Initials({ members }: { members: Member[] }) {
-  if (members.length === 0) return null;
-  return (
-    <span className="working-initials" role="img" aria-label={list(members.map((m) => m.name))}>
-      {members.map((m) => (
-        <span key={m.agent} aria-hidden="true">
-          {initials(m.name)}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-/** As the chat's avatars show them (speaker-identity): the first letters of the first two words. */
-export const initials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => [...w][0]?.toUpperCase())
-    .join('');
 
 /** How long something has run, redrawn as often as it changes: "· 4m 02s" each second, "· 12m" each minute. */
 export function Elapsed({

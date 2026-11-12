@@ -1,9 +1,24 @@
 /* The timeline's parts (DESIGN.md "One timeline", 0037): who speaks, a turn's row, talk between agents, events. */
 .speaker {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+/* The initial opens the agent's panel: a button the avatar's size, laid over it. */
+.speaker-open {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+.speaker-open:hover {
+  background: var(--hover-tint);
 }
 .speaker time {
   margin-left: auto;
@@ -211,17 +226,6 @@ button.work-detail:hover {
   border-radius: 16px;
   background: var(--popover);
 }
-.needs-initial {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
-  font-size: 12px;
-  font-weight: 500;
-}
 .needs-text {
   flex: 1;
   min-width: 0;
@@ -247,19 +251,32 @@ button.work-detail:hover {
   font-weight: 500;
 }
 
-/* Who is at work, after the latest message. */
+/* Who is at work, after the latest message; in a team chat, a button that opens Summary. */
 .working {
-  display: inline-flex;
   align-self: flex-start;
-  align-items: center;
-  gap: 8px;
   /* 24px under the latest message (its list keeps 56px below for the composer's fade). */
   margin: -32px 0 24px;
-  padding: 4px 10px 4px 6px;
-  border-radius: 9999px;
   color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.6;
+}
+.working,
+.working > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 9999px;
+}
+.working:has(> button) {
+  padding: 0;
+}
+.working > button {
+  min-height: 0;
+}
+.working > button:hover {
+  background: var(--hover-tint);
+  color: var(--foreground);
 }
 .working-spinner {
   display: flex;
@@ -271,24 +288,6 @@ button.work-detail:hover {
   display: block;
   width: 12px;
   height: 12px;
-}
-.working-initials {
-  display: flex;
-}
-.working-initials > span {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
-  box-shadow: 0 0 0 2px var(--background);
-  color: var(--foreground);
-  font-size: 9px;
-  font-weight: 500;
-}
-.working-initials > span + span {
-  margin-left: -4px;
 }
 .working-time {
   font-size: 13px;

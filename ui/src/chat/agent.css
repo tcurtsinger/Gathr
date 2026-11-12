@@ -1,0 +1,96 @@
+/* An agent beside the chat, as a workspace tab (DESIGN.md "Agent panel", 0038). */
+.agent-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 32px;
+}
+/* Each part keeps its height: the panel scrolls rather than squeezing them. */
+.agent-panel > * {
+  flex: none;
+}
+.agent-who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.agent-who > div {
+  flex: 1;
+  min-width: 0;
+}
+.agent-who h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-who p {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.agent-who p b {
+  color: var(--attention);
+  font-weight: 500;
+}
+.agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-panel section > h3 {
+  margin: 0 0 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.agent-task {
+  margin: 0;
+  font-size: 15px;
+}
+.agent-task small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.agent-quiet {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+/* The timeline's blocks, closer together and with no room kept below for a composer. */
+.agent-panel .thread-messages {
+  gap: 18px;
+  margin-bottom: 0;
+}
+.agent-panel .reply-body {
+  font-size: 15px;
+}
+/* Its tasks: no header of their own, the heading above says what they are. */
+.agent-todos {
+  max-width: none;
+  gap: 0;
+}
+.agent-todos > div:first-child {
+  display: none;
+}
+.agent-todos ul {
+  gap: 2px;
+}
+.agent-todos li {
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+}
+.agent-todos [data-status="active"] svg {
+  color: var(--attention);
+}

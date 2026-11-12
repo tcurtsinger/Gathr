@@ -2,7 +2,7 @@ import type { Member, Role } from '../api';
 import type { ChatState } from './state';
 
 /**
- * Which round a team's work belongs to (DESIGN.md "Agent plan and Summary"): a turn on a task belongs to
+ * Which round a team's work belongs to (DESIGN.md "Summary"): a turn on a task belongs to
  * the hand-off of the main-line turn that gave it, followed up through tasks its own turns gave. Only
  * the service's links decide it (each turn's `task`, each task's `given_in`), never
  * prose or timing.

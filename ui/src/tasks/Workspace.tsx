@@ -1,6 +1,7 @@
 import { FileText, ListTodo, PanelRight, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { Initial } from '../chat/Initial';
 import { ResizeHandle } from '../components/ResizeHandle';
 import './workspace.css';
 
@@ -23,24 +24,32 @@ interface Props {
   /** A question waits on the person in this chat. */
   waiting: boolean;
   files: FileTab[];
-  /** 'tasks', or a file tab's id. */
+  /** The agent opened from Summary or the timeline: its tab's name and its panel. One at a time. */
+  agent?: { name: string; panel: ReactNode };
+  /** 'tasks', 'agent', or a file tab's id. */
   selected: string;
   onSelect: (id: string) => void;
   onCloseFile: (id: string) => void;
+  onCloseAgent: () => void;
   onClose: () => void;
   tasks: ReactNode;
 }
 
 /**
- * The chat's workspace beside the conversation (DESIGN.md "Navigation and workspace"): Tasks, then a
- * tab for each file opened from a question. The prototype's other tabs come with their features.
+ * The chat's workspace beside the conversation (DESIGN.md "Navigation and workspace"): Tasks, the agent
+ * opened from Summary, then a tab for each file opened from a question. The prototype's other tabs come
+ * with their features.
  */
-export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onClose, tasks }: Props) {
-  const ids = ['tasks', ...files.map(fileId)];
+export function Workspace(props: Props) {
+  const { waiting, files, agent, onSelect, onCloseFile, onCloseAgent, onClose, tasks } = props;
+  // An agent that left the chat takes its tab with it.
+  const selected = props.selected === 'agent' && !agent ? 'tasks' : props.selected;
+  const ids = ['tasks', ...(agent ? ['agent'] : []), ...files.map(fileId)];
+  const close = (id: string) => (id === 'agent' ? onCloseAgent() : onCloseFile(id));
   const keys = (e: KeyboardEvent) => {
     const at = ids.indexOf(selected);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: ids.length - 1 }[e.key];
-    if (e.key === 'Delete' && selected !== 'tasks') onCloseFile(selected);
+    if (e.key === 'Delete' && selected !== 'tasks') close(selected);
     if (to === undefined) return;
     e.preventDefault();
     const id = ids[(to + ids.length) % ids.length];
@@ -68,7 +77,7 @@ export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onC
           type="button"
           className="workspace-tab-close"
           aria-label={`Close ${label}`}
-          onClick={() => onCloseFile(id)}
+          onClick={() => close(id)}
         >
           <X aria-hidden="true" />
         </button>
@@ -87,6 +96,7 @@ export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onC
           onKeyDown={keys}
         >
           {tab('tasks', 'Tasks', <ListTodo aria-hidden="true" />, waiting && <i className="attention" />)}
+          {agent && tab('agent', agent.name, <Initial name={agent.name} size="s" />)}
           {files.map((f) => tab(fileId(f), f.name, <FileText aria-hidden="true" />))}
         </div>
         <TooltipIconButton
@@ -107,6 +117,17 @@ export function Workspace({ waiting, files, selected, onSelect, onCloseFile, onC
       >
         {tasks}
       </section>
+      {agent && (
+        <section
+          id="workspace-view-agent"
+          role="tabpanel"
+          aria-labelledby="workspace-tab-agent"
+          className="workspace-view"
+          hidden={selected !== 'agent'}
+        >
+          {agent.panel}
+        </section>
+      )}
       {files.map((f) => (
         <section
           key={fileId(f)}

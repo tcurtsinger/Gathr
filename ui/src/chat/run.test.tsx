@@ -57,11 +57,16 @@ function service(pauses: Pauses, answer: (path: string) => Promise<Response>) {
 
 const noFailure = () => {};
 
-/**
- * The open Summary, to read its agents' states from. In WebKit, vitest's toBeVisible counts anything inside
- * a closed <details> as hidden unless it is the <summary> itself, so each state is read as the dialog's text.
- */
-const summary = page.getByRole('dialog', { name: 'Summary' });
+/** An agent's row in the open Summary, to read its state from. */
+const row = (name: string) =>
+  page.getByRole('dialog', { name: 'Summary' }).getByRole('button', { name: new RegExp(`^${name}`) });
+const lead = row('Made-up Lead');
+const member = row('Made-up Member');
+/** Pauses an agent from the menu at Summary's foot. */
+async function pause(name: string) {
+  await page.getByRole('button', { name: 'Pause or resume' }).click();
+  await page.getByRole('menuitem', { name: `Pause ${name}` }).click();
+}
 
 /** The chat as the app shows it, with the app's one list of pauses. */
 function Chat() {
@@ -83,8 +88,6 @@ function Chat() {
       onStart={() => {}}
       pauses={pauses}
       onPause={act}
-      plan={false}
-      onPlan={() => {}}
     />
   );
 }
@@ -96,8 +99,8 @@ test('a chat the whole app paused holds its turn, says so, and Resume all resume
   // The held turn isn't under way, so the composer sends rather than stops.
   await expect.element(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(summary).toMatchTextContent('Supervisor · Held');
-  await expect.element(summary).toMatchTextContent('Member · Paused');
+  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
+  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
   await screen.getByRole('button', { name: 'Summary' }).click();
 
   await screen.getByRole('button', { name: 'More', exact: true }).click();
@@ -122,16 +125,19 @@ test('a Pause answer that arrives after a newer live change never undoes it', as
   await expect.element(screen.getByText('Pausing…')).not.toBeInTheDocument();
 });
 
-test('an agent paused from its row in Summary pauses that agent alone', async () => {
+test('an agent paused from Summary pauses that agent alone, and can be resumed there', async () => {
   const posted = service(running, async () => json(paused('agent', 'b')));
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(summary).toMatchTextContent('Member · Ready');
-  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
-  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await expect.element(member).toHaveTextContent('MMMade-up MemberReady');
+  await pause('Made-up Member');
   await expect.poll(() => posted.length).toBe(1);
-  await expect.element(summary).toMatchTextContent('Member · Paused');
+  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
   expect(posted).toEqual([{ path: '/api/pauses', body: { scope: 'agent', target: 'b' } }]);
+  // The menu now offers to resume it, and the other agent still to pause.
+  await screen.getByRole('button', { name: 'Pause or resume' }).click();
+  await expect.element(screen.getByRole('menuitem', { name: 'Resume Made-up Member' })).toBeVisible();
+  await expect.element(screen.getByRole('menuitem', { name: 'Pause Made-up Lead' })).toBeVisible();
   // The chat itself still runs.
   await expect.element(screen.getByText('You paused')).not.toBeInTheDocument();
 });
@@ -141,10 +147,8 @@ test('two agents paused at once, with no live updates, both read paused once bot
   service(running, () => new Promise<Response>((done) => answers.push(done)));
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await screen.getByRole('button', { name: 'More for Made-up Lead' }).click();
-  await screen.getByRole('menuitem', { name: 'Pause' }).click();
-  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
-  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await pause('Made-up Lead');
+  await pause('Made-up Member');
   await expect.poll(() => answers.length).toBe(2);
   const both: Pauses = {
     pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
@@ -153,8 +157,8 @@ test('two agents paused at once, with no live updates, both read paused once bot
   listed = both;
   answers[0](json(paused('agent', 'a')));
   answers[1](json(both));
-  await expect.element(summary).toMatchTextContent('Supervisor · Held');
-  await expect.element(summary).toMatchTextContent('Member · Paused');
+  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
+  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
 });
 
 test('two agents paused at once, reaching the service in reverse order with no live updates, both read paused', async () => {
@@ -162,22 +166,20 @@ test('two agents paused at once, reaching the service in reverse order with no l
   service(running, () => new Promise<Response>((done) => answers.push(done)));
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await screen.getByRole('button', { name: 'More for Made-up Lead' }).click();
-  await screen.getByRole('menuitem', { name: 'Pause' }).click();
-  await screen.getByRole('button', { name: 'More for Made-up Member' }).click();
-  await screen.getByRole('menuitem', { name: 'Pause' }).click();
+  await pause('Made-up Lead');
+  await pause('Made-up Member');
   await expect.poll(() => answers.length).toBe(2);
   // The member's pause reached the service first, so its answer lists the member alone.
   answers[1](json(paused('agent', 'b')));
-  await expect.element(summary).toMatchTextContent('Member · Paused');
+  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
   const both: Pauses = {
     pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
     usage: [],
   };
   listed = both;
   answers[0](json(both));
-  await expect.element(summary).toMatchTextContent('Supervisor · Held');
-  await expect.element(summary).toMatchTextContent('Member · Paused');
+  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
+  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
 });
 
 /** The agents the app's list holds paused, and a button that pauses three at once. */

@@ -5,12 +5,13 @@ import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '
 import { Composer } from '../components/Composer';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
+import { AgentPanel } from './AgentPanel';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ApprovalDock } from './ApprovalDock';
 import { ChatMenu } from './ChatMenu';
 import { useTarget } from './found';
+import { activity, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
-import { PlanBar } from './PlanBar';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { Summary } from './Summary';
 import { running } from './state';
@@ -55,9 +56,14 @@ interface Props {
   onReference?: (ref: string) => void;
   /** Opens an agent's task in the workspace's Tasks tab (owner's pick A, room task 70). */
   onOpenTask?: (task: number) => void;
-  /** The plan bar's steps shown; kept per chat. */
-  plan: boolean;
-  onPlan: (open: boolean) => void;
+  /** The agent whose panel the workspace shows, by id. */
+  agentOpen?: string;
+  /** Opens an agent's panel in the workspace, from Summary or its initial in the timeline. */
+  onOpenAgent?: (agent: string) => void;
+  /** Closes the workspace: it lies over the composer when Message is pressed in a narrow window. */
+  onCloseWorkspace?: () => void;
+  /** The workspace, beside the chat; it is given the open agent's name and panel, which only the chat can draw. */
+  workspace?: (agent?: { name: string; panel: ReactNode }) => ReactNode;
   /** A search hit's message to open at (none: a title, the latest), and when it was picked; done once shown. */
   found?: { message?: string; at: number };
   onFound?: () => void;
@@ -92,6 +98,9 @@ export function ChatView(props: Props) {
   const cache = useRef(new Map());
   const timeline = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
   const team = !fresh && state.members.length > 1;
+  const crew = glances(state, pauses, run, activity(timeline.items));
+  // Summary, and what opened it when that wasn't its own button.
+  const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   // An approval shown from the dock, until a search hit is opened after it.
   const [shown, setShown] = useState<Target>();
@@ -134,128 +143,168 @@ export function ChatView(props: Props) {
     },
     approve,
     openTask: (task) => props.onOpenTask?.(task),
+    openAgent: (id) => props.onOpenAgent?.(id),
+  };
+  const opened = crew.find((g) => g.member.agent === props.agentOpen);
+  const message = (id: string) => {
+    setPicked(id);
+    if (matchMedia('(max-width: 1200px)').matches) props.onCloseWorkspace?.();
+    input.current?.focus();
+  };
+  const panel = opened && {
+    name: opened.member.name,
+    panel: (
+      <AgentPanel
+        key={opened.member.agent}
+        glance={opened}
+        state={state}
+        items={timeline.items}
+        actions={actions}
+        onMessage={
+          !archived && recipients.some((a) => a.id === opened.member.agent)
+            ? () => message(opened.member.agent)
+            : undefined
+        }
+      />
+    ),
   };
 
   return (
-    <main className="chat" aria-label={chat.title}>
-      <header className="topbar">
-        <div className="topbar-title">
-          <h1>{chat.title}</h1>
-          {!fresh && (
-            <ChatMenu
-              pause={{
-                state: run.state,
-                all: run.scope?.scope === 'app',
-                onPause: () => act('pause', thisChat),
-                onResume: () => act('resume', run.scope ?? thisChat),
-              }}
-              archived={archived}
-              onArchive={props.onArchive}
-              onRestore={onRestore}
-              onDelete={props.onDelete}
-              className="head-button"
-              align="start"
-            />
-          )}
-          {archived && <small className="topbar-state">Archived</small>}
-        </div>
-        <div className="topbar-actions">
-          {team && (
-            <Summary state={state} pauses={pauses} run={run} onPause={act} onOpenTask={props.onOpenTask} />
-          )}
-          {headerEnd}
-        </div>
-      </header>
-      {props.notice}
-      <div className="chat-body">
-        <Thread
-          messages={timeline.items}
-          running={!!turn}
-          actions={actions}
-          target={target}
-          onTarget={props.onFound}
-          empty={loaded && state.messages.length === 0 && failed.length === 0}
-          after={
-            !archived && (
-              <>
-                <RunLine run={run} members={state.members} />
-                {run.state === 'running' && <Working state={state} />}
-              </>
-            )
-          }
-          header={
-            loadFailure && (
-              <FailureNotice
-                failure={loadFailure}
-                onReference={actions.reference}
-                action={
-                  <Button type="button" variant="outline" onClick={reload}>
-                    Retry
-                  </Button>
-                }
+    <>
+      <main className="chat" aria-label={chat.title}>
+        <header className="topbar">
+          <div className="topbar-title">
+            <h1>{chat.title}</h1>
+            {!fresh && (
+              <ChatMenu
+                pause={{
+                  state: run.state,
+                  all: run.scope?.scope === 'app',
+                  onPause: () => act('pause', thisChat),
+                  onResume: () => act('resume', run.scope ?? thisChat),
+                }}
+                archived={archived}
+                onArchive={props.onArchive}
+                onRestore={onRestore}
+                onDelete={props.onDelete}
+                className="head-button"
+                align="start"
               />
-            )
-          }
-        >
-          {fresh && (
-            <label className="project-pick">
-              <Folder aria-hidden="true" />
-              <select
-                aria-label="Project"
-                value={chat.project ?? ''}
-                onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
-              >
-                <option value="">No project</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-                <option value="new">New project</option>
-              </select>
-            </label>
-          )}
-          {archived ? (
-            <>
-              {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
-              <div className="archived-line">
-                Archived
-                <Button size="sm" variant="outline" onClick={onRestore}>
-                  Restore
-                </Button>
-              </div>
-            </>
-          ) : (
-            <>
-              {team && <PlanBar state={state} open={props.plan} setOpen={props.onPlan} />}
-              <ApprovalDock
-                approvals={state.approvals}
-                name={(t) => members.find((m) => m.agent === state.turns[t]?.agent)?.name ?? 'An agent'}
-                onShow={(a) => show(a.request)}
-                onAnswer={approve}
+            )}
+            {archived && <small className="topbar-state">Archived</small>}
+          </div>
+          <div className="topbar-actions">
+            {team && (
+              <Summary
+                state={state}
+                team={crew}
+                open={summary.open}
+                onOpen={(open) => setSummary((s) => (open ? { open } : { ...s, open }))}
+                from={summary.from}
+                pauses={pauses}
+                onPause={act}
+                onOpenAgent={actions.openAgent}
               />
-              <Composer
-                draft={draft}
-                onDraft={onDraft}
-                onSend={sendDraft}
-                onStop={turn ? () => act('stop', thisChat) : undefined}
-                inputRef={input}
-                tools={
-                  agent && (
-                    <AgentPicker
-                      agents={recipients}
-                      selected={agent}
-                      onSelect={setPicked}
-                      onEdit={() => onEditAgent(agent)}
+            )}
+            {headerEnd}
+          </div>
+        </header>
+        {props.notice}
+        <div className="chat-body">
+          <Thread
+            messages={timeline.items}
+            running={!!turn}
+            actions={actions}
+            target={target}
+            onTarget={props.onFound}
+            empty={loaded && state.messages.length === 0 && failed.length === 0}
+            after={
+              !archived && (
+                <>
+                  <RunLine run={run} members={state.members} />
+                  {run.state === 'running' && (
+                    <Working
+                      state={state}
+                      onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
                     />
-                  )
-                }
-              />
-            </>
-          )}
-        </Thread>
-      </div>
-    </main>
+                  )}
+                </>
+              )
+            }
+            header={
+              loadFailure && (
+                <FailureNotice
+                  failure={loadFailure}
+                  onReference={actions.reference}
+                  action={
+                    <Button type="button" variant="outline" onClick={reload}>
+                      Retry
+                    </Button>
+                  }
+                />
+              )
+            }
+          >
+            {fresh && (
+              <label className="project-pick">
+                <Folder aria-hidden="true" />
+                <select
+                  aria-label="Project"
+                  value={chat.project ?? ''}
+                  onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
+                >
+                  <option value="">No project</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                  <option value="new">New project</option>
+                </select>
+              </label>
+            )}
+            {archived ? (
+              <>
+                {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
+                <div className="archived-line">
+                  Archived
+                  <Button size="sm" variant="outline" onClick={onRestore}>
+                    Restore
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <ApprovalDock
+                  approvals={state.approvals}
+                  name={(t) => members.find((m) => m.agent === state.turns[t]?.agent)?.name ?? 'An agent'}
+                  onShow={(a) => show(a.request)}
+                  onAnswer={approve}
+                />
+                <Composer
+                  draft={draft}
+                  onDraft={onDraft}
+                  onSend={sendDraft}
+                  onStop={turn ? () => act('stop', thisChat) : undefined}
+                  inputRef={input}
+                  tools={
+                    agent && (
+                      <AgentPicker
+                        agents={recipients}
+                        selected={agent}
+                        onSelect={setPicked}
+                        onEdit={() => onEditAgent(agent)}
+                      />
+                    )
+                  }
+                />
+              </>
+            )}
+          </Thread>
+        </div>
+      </main>
+      {props.workspace?.(panel)}
+    </>
   );
 }
 

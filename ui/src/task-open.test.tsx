@@ -1,5 +1,6 @@
-// An agent's task opens in the Tasks tab with its PR's checks run, from Summary or the row of the turn
-// that gave it (owner's pick A, room task 70; 0036 C6). The service is the edge: fetch answers as it would.
+// An agent's task opens in the Tasks tab with its PR's checks run, from the agent's panel or the row of the
+// turn that gave it (owner's pick A, room task 70; 0036 C6; 0038). The service is the edge: fetch answers
+// as it would.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
@@ -95,19 +96,38 @@ function service() {
   });
 }
 
-test("a task in Summary opens in the Tasks tab with its PR's checks run; Back leaves it", async () => {
+test("an agent in Summary opens as a workspace tab, and its task opens from there with its PR's checks run", async () => {
+  // Wide enough for the workspace to sit beside the chat, so the timeline stays in reach.
+  await page.viewport(1440, 900);
   service();
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
-  await page.getByRole('button', { name: 'Summary' }).click();
+  await page.getByRole('button', { name: /^Summary/ }).click();
   await page.getByRole('button', { name: /^Made-up Sol/ }).click();
-  await page.getByRole('button', { name: 'Verify the reconnect repair' }).click();
+  const tab = page.getByRole('tab', { name: 'Made-up Sol' });
+  await expect.element(tab).toHaveAttribute('aria-selected', 'true');
+  // The keyboard follows to the tab, not back to Summary's button.
+  await expect.element(tab).toHaveFocus();
+  const panel = page.getByRole('tabpanel', { name: 'Made-up Sol' });
+  await expect.element(panel.getByRole('heading', { name: 'Made-up Sol', exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Verify the reconnect repair' }).click();
 
   const opened = page.getByRole('region', { name: 'Task #82' });
   await expect.element(opened.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
   await expect.element(opened.getByText('PR #42', { exact: false })).toBeVisible();
   await opened.getByRole('button', { name: 'Back' }).click();
   await expect.element(opened).not.toBeInTheDocument();
+
+  // The agent's tab is still there beside Tasks; another agent takes it over, and it closes.
+  await expect.element(tab).toHaveAttribute('aria-selected', 'false');
+  await page.getByRole('button', { name: 'Open Made-up Mira' }).click();
+  await expect
+    .element(page.getByRole('tab', { name: 'Made-up Mira' }))
+    .toHaveAttribute('aria-selected', 'true');
+  await expect.element(tab).not.toBeInTheDocument();
+  await page.getByRole('button', { name: 'Close Made-up Mira' }).click();
+  await expect.element(page.getByRole('tab', { name: 'Made-up Mira' })).not.toBeInTheDocument();
+  await expect.element(page.getByRole('tab', { name: 'Tasks' })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('a task opens in the Tasks tab from the row of the turn that gave it', async () => {

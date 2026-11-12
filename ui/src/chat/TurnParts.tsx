@@ -28,13 +28,28 @@ import './team.css';
 export const FoundContext = createContext<string | undefined>(undefined);
 
 /** Who a block is from, and when: "Cass · on Open the settings tools PR", "Juno · to Orin". */
-export function Speaker({ name, detail, time }: { name: string; detail?: string; time?: string }) {
+export function Speaker({
+  name,
+  detail,
+  time,
+  onOpen,
+}: {
+  name: string;
+  detail?: string;
+  time?: string;
+  /** In a team chat: its initial opens the agent's panel. */
+  onOpen?: () => void;
+}) {
   return (
     <header className="speaker">
       <SpeakerIdentity
         className="w-auto min-w-0"
         turns={[{ id: 'author', kind: 'agent', name, detail, text: '' }]}
       />
+      {/* Over the registry's avatar, which takes no handler of its own. */}
+      {onOpen && (
+        <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen} />
+      )}
       {time && <time dateTime={time}>{clock(time)}</time>}
     </header>
   );
@@ -44,11 +59,20 @@ export function Speaker({ name, detail, time }: { name: string; detail?: string;
  * What a turn did before its message, as one row (0037): closed, how long it worked and how much it did,
  * or what it's doing now while it runs; open, each step and what it wrote between them.
  */
-export function WorkRow({ work, onOpenTask }: { work: Work; onOpenTask: (task: number) => void }) {
+export function WorkRow({
+  work,
+  onOpenTask,
+  startOpen = false,
+}: {
+  work: Work;
+  onOpenTask: (task: number) => void;
+  /** Its steps show from the start, as in the agent's panel. */
+  startOpen?: boolean;
+}) {
   const found = useContext(FoundContext);
   // A search hit on something it wrote mid-work opens the row at it.
   const holds = !!found && work.steps.some((s) => 'say' in s && s.say === found);
-  const [open, setOpen] = useState(holds);
+  const [open, setOpen] = useState(holds || startOpen);
   const [held, setHeld] = useState(holds);
   if (holds !== held) {
     setHeld(holds);
@@ -122,15 +146,22 @@ function StepLine({
 export function Exchange({
   said,
   text,
+  onOpenAgent,
 }: {
   said: NonNullable<Custom['exchange']>;
   text: (index: number) => ReactNode;
+  onOpenAgent: (agent: string) => void;
 }) {
   return (
     <MessagePrimitive.Root className="exchange">
-      {said.map((m, index) => (
+      {said.map(({ by, ...m }, index) => (
         <div className="reply" data-speaker="" key={m.id}>
-          <Speaker name={m.from ?? 'An agent'} detail={m.to && `to ${m.to}`} time={m.time} />
+          <Speaker
+            name={m.from ?? 'An agent'}
+            detail={m.to && `to ${m.to}`}
+            time={m.time}
+            onOpen={by ? () => onOpenAgent(by) : undefined}
+          />
           <div className="reply-body">{text(index)}</div>
         </div>
       ))}

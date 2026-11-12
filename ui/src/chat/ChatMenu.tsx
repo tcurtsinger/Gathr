@@ -32,14 +32,12 @@ interface Props {
   className?: string;
   /** Where the menu lines up with its button: 'start' beside the chat title, 'end' at a row's end. */
   align?: 'start' | 'end';
-  /** Where its tooltip shows: left in a list, so it never covers the next row's button. */
-  side?: 'bottom' | 'left';
 }
 
 /**
  * A More menu (the prototype's ChatActions): the pause item, then Archive or Restore, then Delete,
- * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, each
- * agent's row in Summary only the pause item, for that agent alone, and a project's row Project settings.
+ * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, and a
+ * project's row Project settings.
  */
 export function ChatMenu({
   label = 'More',
@@ -51,7 +49,6 @@ export function ChatMenu({
   onProjectSettings,
   className,
   align = 'end',
-  side,
 }: Props) {
   const running = pause?.state === 'running';
   const trigger = useRef<HTMLButtonElement>(null);
@@ -100,7 +97,7 @@ export function ChatMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipIconButton ref={trigger} tooltip={label} side={side} className={className}>
+        <TooltipIconButton ref={trigger} tooltip={label} className={className}>
           <MoreHorizontal />
         </TooltipIconButton>
       </DropdownMenuTrigger>

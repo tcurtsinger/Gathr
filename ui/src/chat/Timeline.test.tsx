@@ -64,6 +64,7 @@ function View({ state, actions }: { state: ChatState; actions?: Partial<Actions>
   const none = () => {};
   const all: Actions = {
     openTask: none,
+    openAgent: none,
     diagnostics: none,
     reference: none,
     signIn: none,
@@ -286,8 +287,6 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
         onStart={() => {}}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
-        plan={false}
-        onPlan={() => {}}
       />
     </div>,
   );
