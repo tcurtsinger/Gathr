@@ -141,9 +141,9 @@ test('the map shows from three ticks up, long for the person and short for the l
 });
 
 /**
- * The map follows a scroll at the page's next frames. WebKit on CI once took over the poll's default second to
- * draw them (main at 9fe0852; 120 runs of this test since didn't): it gets five, and a failure prints what it
- * measured since the scroll, so a slow page (few frames) reads apart from a missed scroll (G177).
+ * The map follows a scroll at the page's next frames. On WebKit on CI it once hadn't within the poll's default
+ * second (main at 9fe0852; 120 runs since didn't), cause unproven: a slow page or a missed scroll. It gets five,
+ * and a failure prints what it measured since the scroll, so few frames read apart from a missed scroll (G177).
  */
 const FOLLOW = { timeout: 5000 };
 function following(id: string, middle: number) {
