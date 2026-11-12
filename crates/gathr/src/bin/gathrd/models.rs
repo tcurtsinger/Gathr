@@ -267,8 +267,11 @@ fn listed(init: &Value) -> Value {
             })
         };
         models.push(row(&m["value"], latest, m["displayName"].clone()));
+        // Once: the engine may list the exact model itself, or two families may mean one model.
         let exact = &m["resolvedModel"];
-        if latest && !rows.iter().any(|other| other["value"] == *exact) {
+        let listed = rows.iter().any(|other| other["value"] == *exact)
+            || models.iter().any(|made| made["id"] == *exact);
+        if latest && !listed {
             models.push(row(exact, false, exact_name(m).into()));
         }
     }
@@ -331,4 +334,43 @@ async fn codex_list(client: &mut gathr::codex::client::Client) -> Result<Value, 
     }
     let models = gathr::codex::models::listed(&all)?;
     Ok(json!({"version":client.version, "models":models}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #171's review: an exact model is listed once, whether two families mean it or the engine
+    /// lists it itself; a family with no model named adds none.
+    #[test]
+    fn an_exact_model_is_listed_once() {
+        let family = |value: &str, exact: Value| json!({ "value": value, "displayName": "Made-up 9", "resolvedModel": exact });
+        let init = json!({ "models": [
+            family("default", "made-up-9".into()),
+            family("one", "made-up-9".into()),
+            family("two", "made-up-9".into()),
+            family("three", "made-up-8".into()),
+            family("made-up-8", "made-up-8".into()),
+            family("four", Value::Null),
+        ] });
+        let listed = listed(&init);
+        let ids: Vec<&str> = listed["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|m| m["id"].as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "default",
+                "one",
+                "made-up-9",
+                "two",
+                "three",
+                "made-up-8",
+                "four"
+            ]
+        );
+    }
 }

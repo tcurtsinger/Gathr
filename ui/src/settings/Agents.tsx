@@ -160,7 +160,9 @@ function AgentForm(props: FormProps) {
   const list = models.list ?? [];
   useEffect(() => {
     const loaded = models.list;
-    if (model === undefined && loaded) setEdits((e) => ({ ...e, model: firstChoice(loaded) }));
+    // With no exact model listed, none is chosen and Save stays off: never the engine's default.
+    const first = loaded && firstChoice(loaded);
+    if (model === undefined && first) setEdits((e) => ({ ...e, model: first }));
   }, [model, models.list]);
 
   const draft = { name: name.trim(), account, model: model ?? null, effort, approvals };

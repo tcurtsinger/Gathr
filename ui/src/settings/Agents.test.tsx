@@ -214,6 +214,16 @@ test('a new agent takes the exact model its account’s engine default means and
   ]);
 });
 
+test('an account that lists no exact model can’t be saved for a new agent', async () => {
+  const none = [{ ...model('default', 'Default'), resolved: null }, model('opus', 'Opus')];
+  service([], () => new Response(JSON.stringify({ models: none })));
+  const screen = await render(<Agents onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Add', exact: true }).click();
+  await screen.getByRole('textbox', { name: 'Name' }).fill('Made-up new');
+  await expect.element(screen.getByText('No models')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+});
+
 test('a change of approvals enables Save and is saved', async () => {
   service([agent({ approvals: 'full' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
