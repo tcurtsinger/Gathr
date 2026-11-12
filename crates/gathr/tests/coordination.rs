@@ -21,6 +21,11 @@ struct Team {
 /// Supervisor (Lead) and a member (Ann).
 fn team(data: &Path, replay: &Path) -> Team {
     let env = data.join("env.jsonl");
+    // GitHub's `gh` stands in with no answers: every look fails at once. The real one fails too
+    // (no login in CI), but in its own time: on Windows CI three failing looks once took 40 s,
+    // past these tests' limit (main at 310556f).
+    let answers = data.join("gh.json");
+    std::fs::write(&answers, "[]").unwrap();
     let service = TestService::with_engine(
         data,
         &[
@@ -28,6 +33,8 @@ fn team(data: &Path, replay: &Path) -> Team {
             ("GATHR_REPLAY_HOLD", &data.join("go")),
             ("GATHR_REPLAY_ENV", &env),
             ("GATHR_WAIT_EVERY_MS", Path::new("100")),
+            ("GATHR_GH_PATH", &common::fake_gh()),
+            ("GATHR_FAKE_GH", &answers),
         ],
     );
     let account = service.add_account("Team");
