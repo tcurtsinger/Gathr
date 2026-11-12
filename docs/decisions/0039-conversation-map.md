@@ -29,7 +29,8 @@ Date: 2026-11-11.
   messages from you", so the whole chat stays in reach. The fold is worked out again when the pane's
   height changes.
 - **The card** says who and when ("You · 16:04", "Orin · 16:05", the time as the chat shows times) over
-  the message's first lines as plain text: Markdown's marks and HTML tags dropped. A day's card has its
+  the message's first lines as plain text: Markdown's marks dropped, anything in angle brackets kept, as
+  the chat shows an agent's HTML as text. A day's card has its
   title and "Jumps to the start of that day". The title is the tick's accessible name and the preview
   its description.
 - **Where the chat is.** The current tick is the latest ticked message at or above the middle of what
