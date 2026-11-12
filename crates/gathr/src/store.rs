@@ -284,6 +284,8 @@ pub fn add_turn(
 
 /// Moves a turn on; an ending status also stamps when it ended. A turn leaving the wait takes
 /// the chat's next place (0028).
+/// A turn that has ended never goes back to waiting: a start under way when its chat was archived
+/// would otherwise put back a turn archiving stopped (F1).
 pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) -> Result<(), Error> {
     let ended = matches!(status, "done" | "stopped" | "failed").then(now_us);
     let placed = !matches!(status, "queued" | "waiting_sign_in");
@@ -293,7 +295,8 @@ pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) ->
              position = CASE WHEN ?5 AND position IS NULL
                  THEN (SELECT COALESCE(max(p.position), 0) + 1 FROM turns p WHERE p.chat_id = turns.chat_id)
                  ELSE position END
-         WHERE id = ?1",
+         WHERE id = ?1
+           AND NOT (?2 IN ('queued', 'waiting_sign_in') AND status IN ('done', 'stopped', 'failed'))",
     )?
     .execute(params![id, status, why, ended, placed])?;
     Ok(())
