@@ -57,8 +57,7 @@ fn a_claude_turn_shows_its_last_calls_fill_and_its_models_window() {
 
     let update = live_context(&mut live, &agent);
     assert_eq!(update["chat"], chat.as_str());
-    let expected =
-        json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000, "compact_at": 500_000 });
+    let expected = json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000, "compact_at": null });
     assert_eq!(update["context"], expected, "{update}");
     let history = service.wait_for(&chat, 10, "the turn's end", |h| {
         h["turns"][0]["status"] == "done"
@@ -109,7 +108,7 @@ fn a_codex_turn_shows_its_last_calls_fill_and_its_window() {
     });
     assert_eq!(
         history["members"][0]["context"],
-        json!({ "used": 16_291, "window": 475_000, "compact_at": 380_000 }),
+        json!({ "used": 16_291, "window": 475_000, "compact_at": null }),
         "{history}"
     );
 }
@@ -202,38 +201,69 @@ fn auto_compact(service: &TestService, at: Value) {
 }
 
 /// A window the agent's model showed in another chat, as a turn there would have saved it.
-fn seen_window(data: &std::path::Path, service: &TestService, agent: &str, window: i64) {
+fn seen_window(data: &std::path::Path, service: &TestService, agent: &str, window: i64, on: &str) {
     let other = service.send("POST", "/api/chats", json!({})).json()["id"]
         .as_str()
         .unwrap()
         .to_string();
     let db = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, 'claude:', 1)",
-        rusqlite::params![other, agent, window],
+        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, ?4, 1)",
+        rusqlite::params![other, agent, window, on],
     )
     .unwrap();
 }
 
-fn agent(service: &TestService, account: &str) -> String {
-    let made = service.send(
-        "POST",
-        "/api/agents",
-        json!({ "name": "Made-up", "account": account }),
-    );
+/// An agent on `account`, on `model` (`None`: the engine's default).
+fn agent(service: &TestService, account: &str, model: Option<&str>) -> String {
+    let body = json!({ "name": "Made-up", "account": account, "model": model });
+    let made = service.send("POST", "/api/agents", body);
+    assert_eq!(made.status, 200, "{}", made.body);
     made.json()["id"].as_str().unwrap().to_string()
 }
 
-/// K3: Claude Code is started with Auto-compact, never past 80% of the window its model showed; with
-/// the engine's own, or no window seen on its model yet, with none (#168's review).
+const OPUS: &str = "claude-opus-5";
+
+/// K3: Claude Code is started with Auto-compact, never past 80% of the window its model showed on
+/// the same account. With the engine's own, an engine default, an alias, another account's window or
+/// none seen yet, with none (#168's review and second look).
 #[test]
 fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
-    for (at, window, expected) in [
-        (json!(300_000), None, Value::Null),
-        (json!(300_000), Some(1_000_000), json!("300000")),
-        (json!(500_000), Some(200_000), json!("160000")),
-        (Value::Null, Some(200_000), Value::Null),
-    ] {
+    let pinned = |account: &str| format!("{account}:claude:{OPUS}");
+    let cases = [
+        (
+            json!(500_000),
+            Some(OPUS),
+            Some(200_000),
+            true,
+            json!("160000"),
+        ),
+        (
+            json!(300_000),
+            Some(OPUS),
+            Some(1_000_000),
+            true,
+            json!("300000"),
+        ),
+        (json!(300_000), Some(OPUS), None, true, Value::Null),
+        (
+            json!(300_000),
+            Some(OPUS),
+            Some(1_000_000),
+            false,
+            Value::Null,
+        ),
+        (json!(300_000), None, Some(1_000_000), true, Value::Null),
+        (
+            json!(300_000),
+            Some("opus"),
+            Some(1_000_000),
+            true,
+            Value::Null,
+        ),
+        (Value::Null, Some(OPUS), Some(200_000), true, Value::Null),
+    ];
+    for (at, model, window, same_account, expected) in cases {
         let data = TempDir::new();
         let env = data.0.join("env.jsonl");
         let service = TestService::with_engine(
@@ -245,9 +275,13 @@ fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
         );
         let account = service.signed_in(&data.0);
         auto_compact(&service, at.clone());
-        let ann = agent(&service, &account);
+        let ann = agent(&service, &account, model);
         if let Some(window) = window {
-            seen_window(&data.0, &service, &ann, window);
+            let on = match same_account {
+                true => pinned(&account),
+                false => pinned("another-account"),
+            };
+            seen_window(&data.0, &service, &ann, window, &on);
         }
         let chat = service.new_chat();
         let sent = service.send(
@@ -256,32 +290,34 @@ fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
             json!({ "text": "Hi", "agent": ann }),
         );
         assert_eq!(sent.status, 200, "{}", sent.body);
-        let started = common::nth(&env, 0);
+        // An agent given a model has the account's models listed first, by an engine of its own.
+        let started = common::nth(&env, usize::from(model.is_some()));
+        let case = format!("{at} on {model:?} with {window:?}, same account {same_account}");
         assert_eq!(
             started["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], expected,
-            "{at} with {window:?}"
+            "{case}"
         );
     }
 }
 
-/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`, once its model's
-/// window is known: capped at 80% of it. Before, the engine's own.
+/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`, once its pinned
+/// model's window is known: capped at 80% of it. Before, the engine's own.
 #[test]
 fn codex_opens_its_thread_with_auto_compact() {
     let data = TempDir::new();
     let (service, account) = codex(&data.0, &common::recording("codex_signed_in"));
     auto_compact(&service, json!(400_000));
-    let (chat, agent) = one_turn(&service, &account);
-    service.wait_for(&chat, 10, "the turn's end", |h| {
-        h["turns"][0]["status"] == "done"
-    });
-    // Another chat: the engine starts again, now knowing the window (475K).
-    let other = service.new_chat();
-    let path = format!("/api/chats/{other}/messages");
-    service.send("POST", &path, json!({ "text": "Hi", "agent": agent }));
-    service.wait_for(&other, 10, "the second turn's end", |h| {
-        h["turns"][0]["status"] == "done"
-    });
+    let ann = agent(&service, &account, Some("gpt-6.1-sol"));
+    for _ in 0..2 {
+        // Each in a chat of its own: the engine starts again, the second time knowing the window.
+        let chat = service.new_chat();
+        let path = format!("/api/chats/{chat}/messages");
+        let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": ann }));
+        assert_eq!(sent.status, 200, "{}", sent.body);
+        service.wait_for(&chat, 10, "the turn's end", |h| {
+            h["turns"][0]["status"] == "done"
+        });
+    }
     let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%' ORDER BY id";
     let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
     assert!(ok, "{rows}");
@@ -305,12 +341,12 @@ fn a_turn_near_the_compaction_point_is_told_to_save_its_notes() {
         &[("GATHR_REPLAY", &common::recording("signed_in"))],
     );
     let account = service.signed_in(&data.0);
-    let ann = agent(&service, &account);
+    let ann = agent(&service, &account, Some(OPUS));
     let chat = service.new_chat();
     let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, updated_ts) VALUES (?1, ?2, 380000, 1000000, 'claude:', 1)",
-        rusqlite::params![chat, ann],
+        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, updated_ts) VALUES (?1, ?2, 380000, 1000000, ?3, 1)",
+        rusqlite::params![chat, ann, format!("{account}:claude:{OPUS}")],
     )
     .unwrap();
     let sent = service.send(

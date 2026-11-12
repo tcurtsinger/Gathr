@@ -340,7 +340,7 @@ impl Task {
         let found = self
             .chats
             .writer
-            .call(move |c| gathr::context::point_for(c, &chat, &agent, &of));
+            .call(move |c| gathr::context::point_for(c, &chat, &agent, of.as_deref()));
         found.await.and_then(Result::ok).flatten()
     }
 

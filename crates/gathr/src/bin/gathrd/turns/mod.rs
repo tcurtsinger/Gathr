@@ -85,9 +85,9 @@ struct Assignment {
 }
 
 impl Assignment {
-    /// The engine and model a window seen now belongs to (Auto-compact, K3).
-    fn model_key(&self) -> String {
-        gathr::context::model_key(&self.engine, self.model.as_deref())
+    /// The account, engine and model a window seen now belongs to, when the model is pinned (K3).
+    fn model_key(&self) -> Option<String> {
+        gathr::context::model_key(&self.account, &self.engine, self.model.as_deref())
     }
 }
 

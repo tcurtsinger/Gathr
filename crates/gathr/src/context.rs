@@ -17,13 +17,14 @@ pub fn filled(conn: &Connection, chat: &str, agent: &str, used: i64) -> Result<V
     Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
 }
 
-/// The agent's model holds this much, seen on `of` (`model_key`): its context as now shown.
+/// The agent's model holds this much, seen on `seen_on` (`model_key`, none for a model that isn't
+/// pinned): its context as now shown.
 pub fn window(
     conn: &Connection,
     chat: &str,
     agent: &str,
     window: i64,
-    seen_on: &str,
+    seen_on: Option<&str>,
 ) -> Result<Value, Error> {
     conn.execute(
         "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, ?5, ?4)
@@ -34,21 +35,44 @@ pub fn window(
 }
 
 /// `{used, window, compact_at}`, each null until known; none before the agent's first call.
+/// `compact_at` is what the agent's engine starts with: none unless the window was seen on the
+/// agent's account and model as they are now.
 pub fn of(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Value>, Error> {
-    let found: Option<(Option<i64>, Option<i64>)> = conn
+    let found: Option<(Option<i64>, Option<i64>, Option<String>)> = conn
         .query_row(
-            "SELECT used, window FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
+            "SELECT used, window, window_of FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
             params![chat, agent],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?;
-    // Unknown until the model's window is: as the engine is started (`point_for`).
-    let window = found.and_then(|(_, window)| window);
-    let at = match window {
-        Some(window) => point(auto_compact(conn)?, Some(window)),
-        None => None,
+    let Some((used, window, seen_on)) = found else {
+        return Ok(None);
     };
-    Ok(found.map(|(used, window)| json!({ "used": used, "window": window, "compact_at": at })))
+    let now = agent_key(conn, agent)?;
+    let at = match (window, seen_on) {
+        (Some(window), Some(seen_on)) if now.as_deref() == Some(seen_on.as_str()) => {
+            point(auto_compact(conn)?, Some(window))
+        }
+        _ => None,
+    };
+    Ok(Some(
+        json!({ "used": used, "window": window, "compact_at": at }),
+    ))
+}
+
+/// The agent's `model_key` as it's set now.
+fn agent_key(conn: &Connection, agent: &str) -> Result<Option<String>, Error> {
+    let Some(agent) = crate::agents::get(conn, agent)? else {
+        return Ok(None);
+    };
+    let Some(account) = crate::accounts::get(conn, &agent.account)? else {
+        return Ok(None);
+    };
+    Ok(model_key(
+        &account.id,
+        &account.engine,
+        agent.model.as_deref(),
+    ))
 }
 
 const SETTING: &str = "auto_compact";
@@ -94,10 +118,17 @@ pub fn point(setting: Option<i64>, window: Option<i64>) -> Option<i64> {
     setting.map(|at| window.map_or(at, |w| at.min(w * 8 / 10)))
 }
 
-/// Which engine and model a window was seen on: the agent's model as set (`None` the engine's own),
-/// so a changed model or account never takes another model's window.
-pub fn model_key(engine: &str, model: Option<&str>) -> String {
-    format!("{engine}:{}", model.unwrap_or_default())
+/// Which account, engine and model a window was seen on, for a pinned model only: the engine's
+/// default and an alias (Claude Code's `opus`, Gathr's `latest:<family>`) may be another model at
+/// the next start, so none of them has a window of its own (#168's second look). Claude Code's own
+/// models are named `claude-…`, its aliases not (`tests/frames/initialize.json`).
+pub fn model_key(account: &str, engine: &str, model: Option<&str>) -> Option<String> {
+    let model = model?;
+    let pinned = match engine {
+        "claude" => model.starts_with("claude-"),
+        _ => !model.starts_with(crate::codex::models::LATEST),
+    };
+    pinned.then(|| format!("{account}:{engine}:{model}"))
 }
 
 /// The point for the agent's engine about to start in `chat` on `of` (`model_key`): with the window
@@ -107,8 +138,11 @@ pub fn point_for(
     conn: &Connection,
     chat: &str,
     agent: &str,
-    of: &str,
+    of: Option<&str>,
 ) -> Result<Option<i64>, Error> {
+    let Some(of) = of else {
+        return Ok(None);
+    };
     let window: Option<i64> = conn
         .query_row(
             "SELECT window FROM agent_context WHERE agent_id = ?2 AND window IS NOT NULL AND window_of = ?3
@@ -129,7 +163,12 @@ pub const SOON: &str = "Your conversation is close to its compaction point: when
 
 /// Whether the agent's next turn in `chat` gets `SOON`: its last call filled 75% of where it compacts,
 /// and it hasn't been told since its last compaction. Marked told when it does.
-pub fn tell_soon(conn: &Connection, chat: &str, agent: &str, of: &str) -> Result<bool, Error> {
+pub fn tell_soon(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    of: Option<&str>,
+) -> Result<bool, Error> {
     let found: Option<(Option<i64>, bool)> = conn
         .query_row(
             "SELECT used, told FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
@@ -221,7 +260,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let conn = crate::db::open(&dir.join("gathr.db")).unwrap();
         conn.execute_batch(
-            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 0), ('d', 'Other', 0);",
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 0), ('d', 'Other', 0);
+             INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('a1', 'claude', 'A', 'a', 0);
+             INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('a2', 'claude', 'B', 'b', 0);
+             INSERT INTO agents (id, name, name_key, account_id, model, created_ts)
+                 VALUES ('ann', 'Ann', 'ann', 'a1', 'claude-opus-5', 0);",
         )
         .unwrap();
         (dir, conn)
@@ -246,14 +289,53 @@ mod tests {
         assert!(set_auto_compact(&conn, Some(250_000)).is_err());
     }
 
-    /// What members show is what an engine starts with: no point until the window is known.
+    const OPUS: &str = "a1:claude:claude-opus-5";
+
+    /// Only a pinned model has a window of its own: an engine's default or an alias can resolve to
+    /// another model at its next start (#168's second look).
     #[test]
-    fn the_point_shown_is_unknown_until_the_window_is() {
+    fn only_a_pinned_model_on_its_account_has_a_key() {
+        assert_eq!(
+            model_key("a1", "claude", Some("claude-opus-5")).as_deref(),
+            Some(OPUS)
+        );
+        assert_eq!(
+            model_key("a1", "claude", None),
+            None,
+            "the engine's default"
+        );
+        assert_eq!(model_key("a1", "claude", Some("opus")), None, "an alias");
+        assert_eq!(
+            model_key("a1", "codex", Some("latest:sol")),
+            None,
+            "Gathr's Latest"
+        );
+        assert!(model_key("a1", "codex", Some("gpt-6.1-sol")).is_some());
+    }
+
+    /// What members show is what an engine starts with: no point until the window seen on the
+    /// agent's account and model is known, and none again once either changes.
+    #[test]
+    fn the_point_shown_is_the_agents_own_models() {
         let (_dir, conn) = db();
         let shown = filled(&conn, "c", "ann", 1_000).unwrap();
         assert!(shown["compact_at"].is_null(), "{shown}");
-        let shown = window(&conn, "c", "ann", 200_000, "claude:").unwrap();
+        let shown = window(&conn, "c", "ann", 200_000, Some(OPUS)).unwrap();
         assert_eq!(shown["compact_at"], 160_000, "{shown}");
+        conn.execute(
+            "UPDATE agents SET model = 'claude-sonnet-5' WHERE id = 'ann'",
+            [],
+        )
+        .unwrap();
+        let shown = of(&conn, "c", "ann").unwrap().unwrap();
+        assert!(shown["compact_at"].is_null(), "another model: {shown}");
+        conn.execute(
+            "UPDATE agents SET model = 'claude-opus-5', account_id = 'a2' WHERE id = 'ann'",
+            [],
+        )
+        .unwrap();
+        let shown = of(&conn, "c", "ann").unwrap().unwrap();
+        assert!(shown["compact_at"].is_null(), "another account: {shown}");
     }
 
     /// The window an engine starts with: its chat's, else the agent's latest anywhere, on its model.
@@ -261,24 +343,29 @@ mod tests {
     fn a_new_chat_takes_the_agents_last_window_on_the_same_model() {
         let (_dir, conn) = db();
         assert_eq!(
-            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            point_for(&conn, "c", "ann", Some(OPUS)).unwrap(),
             None,
             "none seen yet"
         );
-        window(&conn, "d", "ann", 200_000, "claude:").unwrap();
+        window(&conn, "d", "ann", 200_000, Some(OPUS)).unwrap();
         assert_eq!(
-            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            point_for(&conn, "c", "ann", Some(OPUS)).unwrap(),
             Some(160_000)
         );
-        let other = model_key("claude", Some("opus"));
+        let other = model_key("a2", "claude", Some("claude-opus-5"));
         assert_eq!(
-            point_for(&conn, "c", "ann", &other).unwrap(),
+            point_for(&conn, "c", "ann", other.as_deref()).unwrap(),
             None,
-            "another model"
+            "another account"
         );
-        window(&conn, "c", "ann", 1_000_000, "claude:").unwrap();
         assert_eq!(
-            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            point_for(&conn, "c", "ann", None).unwrap(),
+            None,
+            "a default or an alias"
+        );
+        window(&conn, "c", "ann", 1_000_000, Some(OPUS)).unwrap();
+        assert_eq!(
+            point_for(&conn, "c", "ann", Some(OPUS)).unwrap(),
             Some(500_000)
         );
     }
@@ -286,27 +373,27 @@ mod tests {
     #[test]
     fn the_save_notes_line_comes_once_at_75_percent_and_again_after_a_compaction() {
         let (_dir, conn) = db();
-        window(&conn, "c", "ann", 1_000_000, "claude:").unwrap();
+        window(&conn, "c", "ann", 1_000_000, Some(OPUS)).unwrap();
         filled(&conn, "c", "ann", 370_000).unwrap();
         assert!(
-            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            !tell_soon(&conn, "c", "ann", Some(OPUS)).unwrap(),
             "under 75% of 500K"
         );
         filled(&conn, "c", "ann", 380_000).unwrap();
-        assert!(tell_soon(&conn, "c", "ann", "claude:").unwrap());
+        assert!(tell_soon(&conn, "c", "ann", Some(OPUS)).unwrap());
         assert!(
-            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            !tell_soon(&conn, "c", "ann", Some(OPUS)).unwrap(),
             "told once"
         );
         untold(&conn, "c", "ann").unwrap();
         assert!(
-            tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            tell_soon(&conn, "c", "ann", Some(OPUS)).unwrap(),
             "told again after a compaction"
         );
         set_auto_compact(&conn, None).unwrap();
         untold(&conn, "c", "ann").unwrap();
         assert!(
-            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            !tell_soon(&conn, "c", "ann", Some(OPUS)).unwrap(),
             "no point of its own to tell of"
         );
     }
