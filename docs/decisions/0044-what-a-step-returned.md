@@ -19,7 +19,8 @@ row's second slice: assistant-ui's Tool call shows a Request and a Result.
     secrets sit that `redact` doesn't know. When Claude Code doesn't say what kind of step it was (a
     frame that ends several calls has no `tool_use_result` to say whose it is), a step that reads or
     writes a file (`Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`) keeps no result at all: its
-    text could be the file's own lines (#161's review). Other tools keep their first lines.
+    text could be the file's own lines (#161's review). An empty `tool_use_result`, or one with no kind
+    Gathr knows (a count, a patch, command output), tells nothing either. Other tools keep their first lines.
   - **An edit or a new file:** lines added and removed ("+1 −1"; for Codex, one line per file with its
     path).
   - **A search** (`Grep`, `Glob`; Codex's web search): how many it found, then its first hits ("1 file",

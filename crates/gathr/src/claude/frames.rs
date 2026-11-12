@@ -228,12 +228,15 @@ fn read_own(value: &Value, own: bool) -> Vec<Frame> {
             let done = (ended.len() == 1).then(|| &value["tool_use_result"]);
             ended
                 .into_iter()
-                .map(|b| Frame::ToolEnd {
-                    id: text(b, "tool_use_id"),
-                    ok: b.get("is_error") != Some(&Value::Bool(true)),
-                    input: None,
-                    result: own.then(|| super::results::of(b, done)).flatten(),
-                    told: super::results::told(b, done),
+                .map(|b| {
+                    let (result, told) = super::results::of(b, done);
+                    Frame::ToolEnd {
+                        id: text(b, "tool_use_id"),
+                        ok: b.get("is_error") != Some(&Value::Bool(true)),
+                        input: None,
+                        result: result.filter(|_| own),
+                        told,
+                    }
                 })
                 .collect()
         }

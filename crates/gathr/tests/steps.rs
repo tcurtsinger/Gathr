@@ -349,3 +349,51 @@ fn a_read_whose_kind_isnt_said_keeps_nothing_of_its_file() {
         "{history}"
     );
 }
+
+/// #161's second look: a single read whose `tool_use_result` is empty, or holds no count Gathr
+/// knows, is no more told than one with none at all. Its file's text is kept nowhere.
+#[test]
+fn a_read_with_metadata_gathr_doesnt_know_keeps_nothing_of_its_file() {
+    let secret = "hand-made-secret-LM4WQT";
+    let real = std::fs::read_to_string(recording("results_claude")).unwrap();
+    let rows: Vec<&str> = real.lines().collect();
+    let first_in = rows.iter().find(|r| r.contains(r#""dir":"in""#)).unwrap();
+    let init = rows
+        .iter()
+        .find(|r| r.contains(r#"\"subtype\":\"init\""#))
+        .unwrap();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() }).to_string();
+    let session = "6c0d7e1b-0000-4000-8000-000000000001";
+    for metadata in [
+        json!({}),
+        json!({ "type": "text", "file": { "filePath": "notes.txt" } }),
+    ] {
+        let data = TempDir::new();
+        let call = json!({ "type": "assistant", "session_id": session, "parent_tool_use_id": null,
+            "message": { "role": "assistant", "content": [
+                { "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } } ] } });
+        let ended = json!({ "type": "user", "session_id": session, "parent_tool_use_id": null,
+            "tool_use_result": metadata,
+            "message": { "role": "user", "content": [
+                { "type": "tool_result", "tool_use_id": "toolu_read", "content": format!("1\t{secret}") } ] } });
+        let done = json!({ "type": "result", "subtype": "success", "is_error": false, "num_turns": 1,
+            "result": "Done.", "session_id": session, "usage": { "input_tokens": 3, "output_tokens": 2 } });
+        let played = [
+            first_in.to_string(),
+            init.to_string(),
+            out(call),
+            out(ended),
+            out(done),
+        ];
+        let path = data.0.join("one_read");
+        std::fs::write(path.with_extension("jsonl"), played.join("\n") + "\n").unwrap();
+        let (service, account) = service(&data.0, "claude", path.to_str().unwrap());
+        let (history, heard) = one_turn(&service, &account);
+        for said in [history.to_string(), json!(heard).to_string()] {
+            assert!(
+                !said.contains(secret),
+                "{metadata}: the file's text was kept: {said}"
+            );
+        }
+    }
+}

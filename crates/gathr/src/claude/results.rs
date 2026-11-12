@@ -6,21 +6,25 @@ use serde_json::Value;
 
 use crate::steps::{self, StepResult, counted};
 
-/// Whether Claude Code said what kind of step the call was: it failed (its text is the error), or
-/// its `tool_use_result` was read. Without it, the text could be a file's own lines (#161's review),
-/// and the service keeps none of it for a step that reads or writes a file.
-pub(super) fn told(block: &Value, done: Option<&Value>) -> bool {
-    block.get("is_error") == Some(&Value::Bool(true)) || done.is_some_and(Value::is_object)
-}
-
-/// The step's result. `done` is Claude Code's `tool_use_result`, read only when the frame ends one
-/// call: with several, it can't say whose it is, and the text answers alone.
-pub(super) fn of(block: &Value, done: Option<&Value>) -> Option<StepResult> {
+/// The step's result, and whether Claude Code told what kind of step it was: the call failed (its
+/// text is the error), or its `tool_use_result` held a kind Gathr knows. Untold, the text could be a
+/// file's own lines, and the service keeps none of it for a step that reads or writes a file
+/// (#161's review: an empty or unknown object tells nothing either). `done` is read only when the
+/// frame ends one call: with several, it can't say whose it is.
+pub(super) fn of(block: &Value, done: Option<&Value>) -> (Option<StepResult>, bool) {
     let said = content(&block["content"]);
     let failed = block.get("is_error") == Some(&Value::Bool(true));
-    let Some(done) = done.filter(|d| d.is_object() && !failed) else {
-        return steps::first_lines(&said);
-    };
+    let known = done
+        .filter(|d| d.is_object() && !failed)
+        .and_then(|d| kind(d, &said));
+    match known {
+        Some(result) => (result, true),
+        None => (steps::first_lines(&said), failed),
+    }
+}
+
+/// What a `tool_use_result` of a kind Gathr knows says came back; `None` for any other.
+fn kind(done: &Value, said: &str) -> Option<Option<StepResult>> {
     // A command: its output's last lines. Claude Code gives no exit code (not seen live).
     if let Some(out) = done["stdout"].as_str() {
         let err = done["stderr"].as_str().unwrap_or_default();
@@ -29,11 +33,11 @@ pub(super) fn of(block: &Value, done: Option<&Value>) -> Option<StepResult> {
             .filter(|s| !s.is_empty())
             .copied()
             .collect::<Vec<_>>();
-        return steps::last_lines(&all.join("\n"), None);
+        return Some(steps::last_lines(&all.join("\n"), None));
     }
     // A read: how many lines, never what they hold.
     if let Some(n) = done["file"]["numLines"].as_i64() {
-        return Some(steps::said(counted(n, "line", "lines")));
+        return Some(Some(steps::said(counted(n, "line", "lines"))));
     }
     // An edit or a new file: lines added and removed.
     if let Some(patch) = done["structuredPatch"].as_array() {
@@ -41,17 +45,17 @@ pub(super) fn of(block: &Value, done: Option<&Value>) -> Option<StepResult> {
             (true, Some(made)) => (made.lines().count(), 0),
             _ => patch_counts(patch),
         };
-        return Some(steps::said(format!("+{added} −{removed}")));
+        return Some(Some(steps::said(format!("+{added} −{removed}"))));
     }
     // A search: how many it found, then its first hits.
     if let Some(files) = done["numFiles"].as_i64() {
         if done["mode"] == "content" {
             let n = done["numLines"].as_i64().unwrap_or_default();
-            let hits = done["content"].as_str().unwrap_or(&said);
-            return Some(steps::found(
+            let hits = done["content"].as_str().unwrap_or(said);
+            return Some(Some(steps::found(
                 counted(n, "matching line", "matching lines"),
                 hits,
-            ));
+            )));
         }
         let names: Vec<&str> = done["filenames"]
             .as_array()
@@ -59,12 +63,12 @@ pub(super) fn of(block: &Value, done: Option<&Value>) -> Option<StepResult> {
             .flatten()
             .filter_map(Value::as_str)
             .collect();
-        return Some(steps::found(
+        return Some(Some(steps::found(
             counted(files, "file", "files"),
             &names.join("\n"),
-        ));
+        )));
     }
-    steps::first_lines(&said)
+    None
 }
 
 /// The text the model was given: a string, or text blocks joined; an image reads "[image]".
