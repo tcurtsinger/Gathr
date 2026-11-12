@@ -705,3 +705,36 @@ test('while a thought runs the turn’s row says Thinking; its end over the sock
   expect(after).toMatchObject({ running: true, label: 'Working', notes: ['1 step'] });
   expect(after?.steps.at(-1)).toMatchObject({ label: 'Thought for 6s', state: 'ok' });
 });
+
+test('thoughts with nothing between them are one step, with their time together (0042)', () => {
+  const state = round();
+  state.turns.kit.status = 'running';
+  state.messages.push(
+    thought('kit', 'a', { status: 'done', duration_ms: 21_700 }),
+    thought('kit', 'b', { status: 'done', duration_ms: 400 }),
+    thought('kit', 'c', { status: 'done', duration_ms: 40_300 }),
+    tool('kit', 'k1', 'Edit'),
+    thought('kit', 'd', { status: 'done', duration_ms: 5_000 }),
+    thought('kit', 'e', { status: 'running' }),
+  );
+  const work = custom(byId(view(state).items, 'a-kit')).work;
+  expect(work).toMatchObject({ running: true, label: 'Thinking' });
+  expect(work?.steps.slice(-3)).toMatchObject([
+    { id: 'a', label: 'Thought for 1m 02s', state: 'ok' },
+    { id: 'k1' },
+    { id: 'd', label: 'Thinking', state: 'running' },
+  ]);
+
+  // The running one's end makes the pair one finished thought.
+  const after = apply(state, {
+    type: 'tool',
+    chat: 'c',
+    message: 'e',
+    body: { status: 'stopped', duration_ms: 2_000 },
+  });
+  expect(custom(byId(view(after).items, 'a-kit')).work?.steps.at(-1)).toMatchObject({
+    id: 'd',
+    label: 'Thought for 7s',
+    state: 'stopped',
+  });
+});

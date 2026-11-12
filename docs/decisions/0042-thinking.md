@@ -14,7 +14,9 @@ thought starts, so its row says "Thinking" live too.
 - **The window shows it as a step of the turn's row:** "Thought for 9s", in the row's own duration
   format, with nothing to open and no chip. A thought under a second is left out. Thoughts are
   listed in order with the steps and are not counted in "6 steps": that count is what the turn ran.
-  A turn whose only work was a thought under a second has no row.
+  A turn whose only work was a thought under a second has no row. Thoughts with nothing between
+  them show as one step, with their time together (the owner's call, 2026-11-12: a real Codex
+  turn thought in four pieces back to back, and read as a list). The messages stay one a thought.
 - **Claude Code says when a thought starts and ends, so its row says "Thinking" while one runs**
   (shimmer, no spinner, as every running row). The driver reads three frames:
   - a `content_block_start` whose block is `thinking` or `redacted_thinking`, and

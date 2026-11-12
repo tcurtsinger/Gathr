@@ -91,6 +91,27 @@ function thought(id: string, { status, duration_ms }: ThinkingBody): Step | [] {
     : [];
 }
 
+/**
+ * Thoughts with nothing between them, as one: an engine thinks in pieces (Codex's come back to back), and
+ * a person reads them as one thought. Its time is theirs together; its state is the last one's, or running
+ * while any of them is.
+ */
+function joined(msgs: Message[]): Message[] {
+  const out: Message[] = [];
+  for (const m of msgs) {
+    const held = out.at(-1);
+    if (m.kind !== 'thinking' || held?.kind !== 'thinking') {
+      out.push(m);
+      continue;
+    }
+    const [soFar, piece] = [held.body as ThinkingBody, m.body as ThinkingBody];
+    const duration_ms = (soFar.duration_ms ?? 0) + (piece.duration_ms ?? 0);
+    const status = soFar.status === 'running' ? soFar.status : piece.status;
+    out[out.length - 1] = { ...held, body: { ...piece, status, duration_ms } };
+  }
+  return out;
+}
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 /** The task a give_task call made. */
@@ -120,7 +141,7 @@ export function fold(
   let doing: string | undefined;
   let given = 0;
   let tools = 0;
-  const steps = before.flatMap((m): Step | [] => {
+  const steps = joined(before).flatMap((m): Step | [] => {
     if (m.kind === 'text') return { id: m.id, say: m.body as string };
     if (m.kind === 'thinking') {
       const body = m.body as ThinkingBody;
