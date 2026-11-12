@@ -68,6 +68,8 @@ export interface Member {
 export interface Context {
   used: number | null;
   window: number | null;
+  /** Where its engine compacts by itself (Auto-compact, capped at 80% of the window); null for the engine's own. */
+  compact_at?: number | null;
 }
 
 /** The whole app, or one chat or agent. */
@@ -259,6 +261,8 @@ export interface Settings extends StaleDays {
   agent_folder: string;
   /** Messages between agents in a row before the chat pauses; null for no limit. */
   handoff_limit: number | null;
+  /** Tokens an engine compacts at (200000 to 500000); null for each engine's own. */
+  auto_compact: number | null;
 }
 
 /** A reusable agent (0026): its account implies the engine. Null model or effort is the engine's default. */
@@ -394,6 +398,12 @@ export const api = {
     ),
   send: (chat: string, text: string, agent?: string) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
+  /** Compacts the agent's conversation in the chat: a turn of its own, queued behind any it has under way. */
+  compact: (chat: string, agent: string) =>
+    call<{ turn: string; status: TurnStatus; ref: string }>(
+      'POST',
+      `/api/chats/${chat}/agents/${agent}/compact`,
+    ),
   pauses: () => call<Pauses>('GET', '/api/pauses'),
   // Each answers every pause as it is then.
   pause: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses', scope),

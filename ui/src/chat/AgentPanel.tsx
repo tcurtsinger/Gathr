@@ -4,6 +4,7 @@ import { ContextDisplay } from '@/components/assistant-ui/elements/context-displ
 import { type TodoItem, TodoList } from '@/components/assistant-ui/elements/todo-list';
 import { Button } from '@/components/ui/button';
 import type { Member, Task } from '../api';
+import { ChatMenu } from './ChatMenu';
 import type { Work } from './fold';
 import type { Glance } from './glance';
 import { Initial } from './Initial';
@@ -85,6 +86,10 @@ interface Props {
   actions: Actions;
   /** Picks the agent as the composer's recipient and focuses the composer; none when it can't be sent to. */
   onMessage?: (agent: string) => void;
+  /** Compacts its conversation in this chat; none where it can't (an archived chat). */
+  onCompact?: (agent: string) => void;
+  /** A compaction asked for here: queued behind its work, or running. */
+  compaction?: 'queued' | 'running';
 }
 
 /**
@@ -94,7 +99,7 @@ interface Props {
  * its own changed: every prop keeps its identity through another agent's streamed token.
  */
 export const AgentPanel = memo(function AgentPanel(props: Props) {
-  const { glance, tasks, members, now, earlier, actions, onMessage } = props;
+  const { glance, tasks, members, now, earlier, actions, onMessage, onCompact, compaction } = props;
   const { member, standing } = glance;
   const mine = tasks
     .filter((t) => t.owner === member.agent && t.state !== 'cancelled')
@@ -135,8 +140,21 @@ export const AgentPanel = memo(function AgentPanel(props: Props) {
               Message {member.name}
             </Button>
           )}
+          {onCompact && (
+            <ChatMenu
+              label={`More for ${member.name}`}
+              compact={{ asked: !!compaction, onCompact: () => onCompact(member.agent) }}
+            />
+          )}
         </span>
       </header>
+      {compaction && (
+        <p className="agent-quiet">
+          {compaction === 'running'
+            ? 'Compacting'
+            : 'Compaction queued · waits for its turn and background commands'}
+        </p>
+      )}
       {task && (
         <section aria-label="Task">
           <h3>Task</h3>

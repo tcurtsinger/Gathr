@@ -5,6 +5,7 @@ import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
 import { savedTheme, setTheme, type Theme } from '../theme';
 import { AgentFolder } from './AgentFolder';
+import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
 import { StaleDays } from './StaleDays';
 
@@ -94,6 +95,7 @@ export function General({ onReference }: { onReference: (ref: string) => void })
       <AgentFolder onReference={onReference} />
       <StaleDays onReference={onReference} />
       <HandoffLimit onReference={onReference} />
+      <AutoCompact onReference={onReference} />
     </section>
   );
 }
