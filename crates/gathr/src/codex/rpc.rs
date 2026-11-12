@@ -118,7 +118,9 @@ impl Session {
             None => {
                 self.starting = true;
                 let effort = self.opening.as_ref().and_then(|o| o.effort.clone());
-                let mut params = json!({ "threadId": thread, "input": input });
+                // Asked for a summary, Codex starts a reasoning item when the thinking begins
+                // and completes it when it ends (0042). The summary itself is never read.
+                let mut params = json!({ "threadId": thread, "input": input, "summary": "auto" });
                 if let Some(effort) = effort {
                     params["effort"] = effort.into();
                 }
@@ -344,6 +346,10 @@ impl Session {
                 let joined: Vec<&str> = parts.filter_map(|p| p["text"].as_str()).collect();
                 read.frames.push(Frame::Read(joined.join("")));
             }
+            "item/started" if item["type"] == "reasoning" => {
+                self.replied(read);
+                read.frames.push(Frame::Thinking { tokens: None });
+            }
             "item/started" => {
                 self.replied(read);
                 if let Some(name) = tool_name(item) {
@@ -368,8 +374,8 @@ impl Session {
                     after: None,
                 });
             }
-            // A `reasoning` item starts and completes when the thinking is already over, with no
-            // text and its own times under 100 ms apart (0042): one mark, timed by the service.
+            // Without a summary a `reasoning` item starts and completes together, once the
+            // thinking is over (0042): the service tells that mark from a thought it saw run.
             "item/completed" if item["type"] == "reasoning" => read.frames.push(Frame::Thought),
             "item/completed" if item["type"] == "agentMessage" => {
                 read.frames.push(Frame::Text(text(&item["text"])));
@@ -739,23 +745,21 @@ mod tests {
         );
     }
 
-    /// `thinking_codex` is hand-written in the shape of real frames (its first row says so): each
-    /// reasoning item is one mark as it completes, never a start, wherever it falls in the turn.
+    /// `thinking_codex_live` is hand-written in the shape of real frames (its first row says so):
+    /// asked for a summary, Codex starts a reasoning item when the thinking begins and completes
+    /// it when it ends. The summary is never read.
     #[test]
-    fn each_reasoning_item_reads_as_one_mark_as_it_completes() {
-        let (_, frames, _) = played("thinking_codex", opening());
+    fn a_reasoning_item_under_way_reads_as_a_start_then_an_end_and_none_of_its_summary() {
+        let (_, frames, _) = played("thinking_codex_live", opening());
         let kinds = frames.iter().filter_map(|f| match f {
+            Frame::Thinking { tokens: None } => Some("thinking"),
             Frame::Thought => Some("thought"),
-            Frame::ToolStart { .. } => Some("start"),
-            Frame::ToolEnd { .. } => Some("end"),
-            Frame::Text(_) => Some("text"),
-            Frame::Thinking { .. } => Some("thinking"),
+            Frame::Text(_) | Frame::TextDelta(_) => Some("text"),
             _ => None,
         });
-        let expected = [
-            "thought", "thought", "start", "thought", "end", "thought", "text",
-        ];
+        let expected = ["thinking", "thought", "thinking", "thought", "text"];
         assert_eq!(kinds.collect::<Vec<_>>(), expected);
+        assert!(!format!("{frames:?}").contains("made-up"), "{frames:?}");
     }
 
     #[test]
@@ -817,6 +821,8 @@ mod tests {
         assert_eq!(read.send.len(), 1);
         assert_eq!(read.send[0]["method"], "turn/start");
         assert_eq!(read.send[0]["params"]["input"][0]["text"], "first");
+        // Asked for, a summary makes Codex say when its thinking starts and ends (0042).
+        assert_eq!(read.send[0]["params"]["summary"], "auto");
         session.read(&json!({ "method": "turn/started", "params": { "turn": { "id": "u1" } } }));
         let steer = session.user("more").unwrap();
         assert_eq!(steer["method"], "turn/steer");

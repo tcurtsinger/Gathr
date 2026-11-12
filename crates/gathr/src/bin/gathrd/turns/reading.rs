@@ -133,13 +133,17 @@ impl Task {
             turn.progress_at = std::time::Instant::now();
             turn.said = true;
         }
-        // A thought is over once words or a tool follow, whether or not its end was said.
+        // A thought is over once words or a tool follow, whether or not its end was said. One
+        // whose start is still held was over before anyone could have seen it.
         if matches!(
             frame,
             Frame::TextDelta(_) | Frame::Text(_) | Frame::ToolStart { .. }
-        ) && self.turn.as_ref().is_some_and(|t| t.thought.is_some())
+        ) && let Some(turn) = self.turn.as_mut()
         {
-            self.thought("done").await;
+            turn.thought_began = None;
+            if turn.thought.is_some() {
+                self.thought("done").await;
+            }
         }
         match frame {
             Frame::Replied => {}
@@ -301,6 +305,13 @@ impl Task {
             }
             Frame::Thinking { tokens } => self.thinking(tokens).await,
             Frame::Thought => self.thought("done").await,
+            // A Codex thought's summary lines come every few seconds: progress, as Claude Code's
+            // token counts are, so a long thought is no stall. The lines are never read (0042).
+            Frame::Other(method) if method.starts_with("item/reasoning/") => {
+                if let Some(turn) = self.turn.as_mut() {
+                    turn.progress_at = std::time::Instant::now();
+                }
+            }
             Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
     }

@@ -103,6 +103,7 @@ struct Running {
     /// Tool calls under way.
     tools: HashMap<String, OpenTool>,
     thought: Option<thinking::OpenThought>,
+    thought_began: Option<thinking::Began>,
     /// Questions Claude Code asked and nobody has answered: each tool, its input and why it asks.
     approvals: HashMap<String, (String, Value, Option<String>)>,
     /// Service-side asks (pushes and Codex wait checks): where each answer goes.
@@ -230,6 +231,7 @@ pub async fn run(
         };
         let hold_after = task.times.hold_after;
         let usage_at = task.usage_wait.map(tokio::time::Instant::from_std);
+        let thought_at = task.thought_due_at();
         tokio::select! {
             command = commands.recv() => match command {
                 Some(Cmd::Close { done }) => {
@@ -257,6 +259,9 @@ pub async fn run(
                 task.usage_wait = None;
                 task.mark_holds().await;
                 task.try_next().await;
+            }
+            _ = tokio::time::sleep_until(thought_at.unwrap_or_else(tokio::time::Instant::now)), if thought_at.is_some() => {
+                task.thought_due().await;
             }
             _ = stall_look.tick(), if task.turn.is_some() => {
                 task.check_stall();

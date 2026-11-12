@@ -57,6 +57,7 @@ impl Task {
             streamed: false,
             tools: HashMap::new(),
             thought: None,
+            thought_began: None,
             approvals: HashMap::new(),
             service_approvals: HashMap::new(),
             push_allowed: false,

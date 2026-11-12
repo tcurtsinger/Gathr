@@ -1,5 +1,6 @@
 //! That the agent thought, as a time only (0042): a `thinking` message per thought, with no text.
-//! Claude Code says when a thought starts and ends; Codex only that one is over.
+//! Both engines say when a thought starts and ends. Codex may say both at once, when the
+//! thought is already over: that mark is timed by the quiet before it.
 
 use std::time::{Duration, Instant};
 
@@ -9,6 +10,7 @@ use gathr::store;
 use serde_json::{Value, json};
 
 use super::Task;
+use super::driver::Driver;
 
 /// A thought under way: its message, when it began, and the engine's last count of its tokens.
 pub(super) struct OpenThought {
@@ -16,6 +18,16 @@ pub(super) struct OpenThought {
     started_us: i64,
     tokens: Option<i64>,
 }
+
+/// A thought's start, held: its end may come with it, as the mark of one already over.
+pub(super) struct Began {
+    at: Instant,
+    /// How long the turn had shown no progress when it came.
+    quiet: Duration,
+}
+
+/// How long a start is held for its end. A mark's two lines were measured 1 to 4 ms apart.
+const MARK_WITHIN: Duration = Duration::from_millis(250);
 
 /// A thought timed only by the quiet before its mark is kept from this long: a shorter one is
 /// a mark that followed another, not a thought anyone would have seen.
@@ -35,10 +47,13 @@ fn body(status: &str, duration_ms: Option<i64>, tokens: Option<i64>) -> Value {
 impl Task {
     /// The engine is thinking: the first sign of a thought opens its message, later ones bring
     /// its count of tokens. Progress, so a long thought is no stall, but nothing said (G167).
+    /// Codex's first sign is held instead, until its end comes with it or `MARK_WITHIN` passes.
     pub(super) async fn thinking(&mut self, tokens: Option<i64>) {
+        let held = matches!(self.driver, Driver::Codex(_));
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
+        let quiet = turn.progress_at.elapsed();
         turn.progress_at = Instant::now();
         if let Some(open) = turn.thought.as_mut() {
             open.tokens = tokens.or(open.tokens);
@@ -46,13 +61,48 @@ impl Task {
         }
         // A count while the agent's own tool runs may be a sub-agent's, or one that came after
         // its block: nothing would close a thought opened here until the next words or tool.
-        if !turn.tools.is_empty() {
+        if !turn.tools.is_empty() || turn.thought_began.is_some() {
             return;
         }
-        let ids = turn.ids.clone();
+        if held {
+            let at = Instant::now();
+            turn.thought_began = Some(Began { at, quiet });
+            return;
+        }
+        self.open_thought(now_us(), tokens).await;
+    }
+
+    /// When the held start, if there is one, opens its thought.
+    pub(super) fn thought_due_at(&self) -> Option<tokio::time::Instant> {
+        let began = self.turn.as_ref()?.thought_began.as_ref()?;
+        Some(tokio::time::Instant::from_std(began.at + MARK_WITHIN))
+    }
+
+    /// The held start's end didn't come with it: the thought is under way, since the start. A
+    /// line already here is read first, as it may be that end.
+    pub(super) async fn thought_due(&mut self) {
+        if let Some(Ok(line)) = self.lines.as_mut().map(|lines| lines.try_recv()) {
+            return self.on_line(line).await;
+        }
+        let Some(turn) = self.turn.as_mut() else {
+            return;
+        };
+        // Once the person stopped the turn, nothing new opens.
+        let Some(began) = turn.thought_began.take().filter(|_| !turn.stopping) else {
+            return;
+        };
+        let started_us = now_us() - began.at.elapsed().as_micros() as i64;
+        self.open_thought(started_us, None).await;
+    }
+
+    async fn open_thought(&mut self, started_us: i64, tokens: Option<i64>) {
+        let Some(ids) = self.turn.as_ref().map(|t| t.ids.clone()) else {
+            return;
+        };
         let running = body("running", None, None).to_string();
+        let kind = ("assistant", "thinking");
         let message = match self
-            .db_message(&ids, "assistant", "thinking", &running)
+            .db_message_from(&ids, kind, &running, Some(started_us))
             .await
         {
             Ok(message) => message,
@@ -60,7 +110,7 @@ impl Task {
         };
         let open = OpenThought {
             message: message["id"].as_str().unwrap_or_default().to_string(),
-            started_us: now_us(),
+            started_us,
             tokens,
         };
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
@@ -70,13 +120,14 @@ impl Task {
     }
 
     /// A thought ended as `status`. One under way closes with the time it ran. With none under
-    /// way this is the engine's only sign of one (Codex): it lasted the quiet since the turn last
-    /// showed progress, and is kept when no step was running and that was long enough.
+    /// way this is the mark of one already over (Codex, its start still held): it lasted the
+    /// quiet before it, and is kept when no step was running and that was long enough.
     pub(super) async fn thought(&mut self, status: &str) {
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
-        let quiet = turn.progress_at.elapsed();
+        let before = turn.thought_began.take().map(|began| began.quiet);
+        let quiet = turn.progress_at.elapsed() + before.unwrap_or_default();
         turn.progress_at = Instant::now();
         let ids = turn.ids.clone();
         let (duration_us, tokens) = match turn.thought.take() {
