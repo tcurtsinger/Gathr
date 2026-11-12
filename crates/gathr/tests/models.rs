@@ -41,11 +41,14 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
 
     let signed_out = models(&service, &first);
     assert_eq!(signed_out["version"], "2.1.318");
+    // Five rows from the engine, and the exact model each of its four families means today.
     assert_eq!(
         signed_out["models"].as_array().unwrap().len(),
-        5,
+        9,
         "{signed_out}"
     );
+    let exact = model(&signed_out, "claude-opus-5-5");
+    assert_eq!(exact["name"], "Opus 5.5", "named from its description");
     assert_eq!(models(&service, &first), signed_out);
     assert_eq!(runs(&args), 1, "a second ask started the engine again");
 
@@ -54,14 +57,34 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
     assert_eq!(runs(&args), 2, "signing in didn't ask the engine again");
     assert_eq!(
         signed_in["models"].as_array().unwrap().len(),
-        13,
+        17,
         "{signed_in}"
     );
-    let opus = model(&signed_in, "opus");
-    assert_eq!(opus["name"], "Opus 5.5");
+    // The family and, right after it, the exact model it means today, by the engine's own name.
+    for id in ["opus", "claude-opus-5-5"] {
+        let opus = model(&signed_in, id);
+        assert_eq!(opus["name"], "Opus 5.5", "{id}");
+        assert_eq!(opus["resolved"], "claude-opus-5-5", "{id}");
+        assert_eq!(opus["latest"], id == "opus", "{id}");
+        assert_eq!(
+            opus["efforts"],
+            json!(["low", "medium", "high", "xhigh", "max"]),
+            "{id}"
+        );
+    }
+    let ids: Vec<&str> = signed_in["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["id"].as_str())
+        .collect();
+    assert_eq!(ids[..4], ["default", "opus", "claude-opus-5-5", "fable"]);
+    let pinned = json!({ "name": "Made-up", "account": first, "model": "claude-opus-5-5" });
+    let pinned = service.send("POST", "/api/agents", pinned);
     assert_eq!(
-        opus["efforts"],
-        json!(["low", "medium", "high", "xhigh", "max"])
+        pinned.status, 200,
+        "the newest model can't be kept: {}",
+        pinned.body
     );
     assert_eq!(
         model(&signed_in, "claude-haiku-4-5-20251001")["efforts"],
@@ -75,7 +98,7 @@ fn the_list_comes_from_the_engine_once_and_again_after_sign_in() {
     let work_models = service.call("GET", &path).json();
     assert_eq!(
         work_models["models"].as_array().map(Vec::len),
-        Some(5),
+        Some(9),
         "a signed-out account got the signed-in one's list: {work_models}"
     );
     assert_eq!(

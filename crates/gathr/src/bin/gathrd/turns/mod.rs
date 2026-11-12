@@ -85,8 +85,8 @@ struct Assignment {
 }
 
 impl Assignment {
-    /// The account, engine and model a window seen now belongs to, when the model is pinned (K3).
-    fn model_key(&self) -> Option<String> {
+    /// What the agent is set to: whose windows give its compaction point (K3).
+    fn model_key(&self) -> String {
         gathr::context::model_key(&self.account, &self.engine, self.model.as_deref())
     }
 }
@@ -167,6 +167,10 @@ struct Task {
     unread: Vec<(String, String)>,
     /// The model the agent's last main-session call named: whose window its context is in.
     context_model: Option<String>,
+    /// The model the running engine's compaction point is for, when it started with one.
+    point_model: Option<String>,
+    /// The engine named another model than its point was for: it closes before its next turn.
+    model_moved: bool,
     /// An engine closed the gentle way that hasn't exited yet; nothing new starts until it has.
     closing: Option<process::Closing>,
     /// Account removals waiting for the closing engine to exit.
@@ -212,6 +216,8 @@ pub async fn run(
         refused: None,
         unread: Vec::new(),
         context_model: None,
+        point_model: None,
+        model_moved: false,
         closing: None,
         leaving: Vec::new(),
         idle_since: Instant::now(),
@@ -551,6 +557,12 @@ impl Task {
         if let Some(version) = self.copy_moved() {
             let why = format!("Gathr's engine copy is now {version}");
             self.close(&why).await;
+            return Ok(self.hold_back(next, "queued").await);
+        }
+        // Never under its background commands: their end and the turn it starts would go with it.
+        if self.model_moved && self.engine.is_some() && self.background == 0 {
+            self.close("its model changed, so its compaction point no longer holds")
+                .await;
             return Ok(self.hold_back(next, "queued").await);
         }
         let assigned = self.assignment(next).await?;

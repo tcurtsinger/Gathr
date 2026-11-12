@@ -149,13 +149,17 @@ impl Task {
             Frame::Replied => {}
             Frame::Init {
                 session_id,
+                model,
                 tools,
                 permission_mode,
-                ..
             } => {
                 // With no turn and no message waiting to be read, the engine began one itself.
                 if self.turn.is_none() && self.unread.is_empty() && self.closing.is_none() {
                     self.begin_woken_turn().await;
+                }
+                // Codex names its model as the thread opens, never on a call; Claude Code's calls do.
+                if self.engine_name() == "codex" {
+                    self.ran_on(model).await;
                 }
                 self.check_tools(&tools);
                 self.check_mode(&permission_mode);
