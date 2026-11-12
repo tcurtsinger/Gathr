@@ -220,6 +220,7 @@ impl Task {
                     json!({ "type": "approval", "turn": ids.turn,
                     "request_id": request_id, "tool": tool, "input": input, "why": why }),
                 );
+                self.chat_state(&ids).await;
             }
             Frame::Blocked { tool, by, why } => {
                 let trace = self.turn.as_ref().map(|t| t.ids.trace.clone());

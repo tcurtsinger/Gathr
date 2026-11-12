@@ -40,6 +40,7 @@ export function InitialStack({
       {agents.map((a) => (
         <Initial key={a.agent} name={a.name} size="s" busy={a.busy} />
       ))}
+      {needs && <i className="attention" />}
     </span>
   );
 }

@@ -40,6 +40,8 @@ export type LiveEvent =
   | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
   // A chat was made, archived, restored (unarchived) or deleted.
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
+  // A chat started or stopped working, or needing the person (0040): only when either changed.
+  | { type: 'chat_state'; chat: string; working: boolean; needs: boolean }
   | { type: 'project'; project: string; change: 'created' | 'changed' }
   // A checks run of the project started or ended (0036 C3).
   | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }

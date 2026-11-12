@@ -208,6 +208,10 @@ export interface Chat {
   folder?: string | null;
   /** When the person archived it: its work ended then (F11). */
   archived?: string | null;
+  /** A turn of it runs now (0040). An archived chat carries neither this nor `needs`. */
+  working?: boolean;
+  /** It waits on the person: an approval, a question to them, or a sign-in. */
+  needs?: boolean;
 }
 
 /** A chat whose title holds the query (0035). `time` is its last activity. */

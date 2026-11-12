@@ -14,7 +14,7 @@ impl Task {
     /// In Auto a check was the engine's own to judge before the call reached Gathr: Claude Code's
     /// classifier, Codex's automatic reviewer. Else Claude checks use its native hook, and Codex
     /// checks ask here before being stored.
-    pub(super) fn ask_service(
+    pub(super) async fn ask_service(
         &mut self,
         kind: &'static str,
         chat: &str,
@@ -108,6 +108,7 @@ impl Task {
             json!({ "type": "approval", "turn": ids.turn, "request_id": request_id,
             "tool": tool, "input": input, "why": why }),
         );
+        self.chat_state(&ids).await;
     }
 
     /// Answers the service-side action: false when its caller has already given up.

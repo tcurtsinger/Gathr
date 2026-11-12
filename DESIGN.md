@@ -254,7 +254,7 @@ Its button in the chat header carries no words. It is the overlapped 18px initia
 cut out of the header with a 2px edge) of every agent with a running turn, each with an attention ring
 turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
 person (a waiting approval, or an open question it asked the person) sits last in the stack with no
-ring, and one 7px attention dot sits on the stack's top right corner, however many need the person.
+ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
 Five agents are one 90px button. With nobody working or needed, the button shows Summary's plain icon.
 Its accessible name and tooltip say the same in words: "Summary: Vale needs you, Juno and Pia working",
 or "Summary".
@@ -324,7 +324,13 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
 ### Navigation and workspace
 
 New, Search and Tasks sit above projects and their chats. Settings stays bottom
-left. Archived uses Lucide Archive when collapsed and the same icon with its lid
+left. A chat with something going on carries one 6px dot at the end of its title
+(0040): 55% foreground while a turn of it runs, the attention colour once it needs
+the person, which wins when both hold. A ring grows out of the dot to 2.8 times
+its size and fades, every 2 seconds; reduced motion keeps the dot and drops the
+ring. The dot never moves the title or More. Its name is "Agents working" or
+"Needs you". An agent that only waits, a queued turn and a paused chat with
+nothing running carry no dot. Archived uses Lucide Archive when collapsed and the same icon with its lid
 lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
 hinge (2px 8px), translate it up 1.5px, over 160ms ease-out.
 Search and the pending human Tasks list share a contextual flyout, at most

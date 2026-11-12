@@ -6,6 +6,7 @@ mod agents;
 mod api;
 mod app_update;
 mod archive;
+mod chat_state;
 mod chats;
 mod check_runs;
 mod cleanup;
@@ -107,7 +108,9 @@ fn start(
     gathr::tasks::touched::watch(&conn)
         .map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let live = tokio::sync::broadcast::channel(4096).0;
-    let writer = Writer::start(conn, crash_log.clone(), coord::live_tasks(live.clone()));
+    let states = Arc::new(chat_state::States::new(live.clone()));
+    let after = coord::live_tasks(live.clone(), states.clone());
+    let writer = Writer::start(conn, crash_log.clone(), after);
     logs::install(writer.clone(), crash_log.clone());
     if !early_lines.is_empty() {
         writer.record(Event::point("gathr.service.early_log").attr("lines", early_lines.clone()));
@@ -115,7 +118,13 @@ fn start(
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
-    let served = runtime.block_on(serve(data, (writer, live), port, ui, early_lines.len()));
+    let served = runtime.block_on(serve(
+        data,
+        (writer, live, states),
+        port,
+        ui,
+        early_lines.len(),
+    ));
     let copies = Copies::new(data);
     let mut hand_over = match &served {
         Ok(Some(version)) => Some(HandOver::new(&copies.running_version(), version)),
@@ -160,7 +169,11 @@ const SHUTDOWN_WAIT: Duration = Duration::from_secs(5);
 
 async fn serve(
     data: &DataDir,
-    (writer, live): (Writer, tokio::sync::broadcast::Sender<serde_json::Value>),
+    (writer, live, states): (
+        Writer,
+        tokio::sync::broadcast::Sender<serde_json::Value>,
+        Arc<chat_state::States>,
+    ),
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
@@ -179,7 +192,7 @@ async fn serve(
     .write(data)?;
     // Briefings live as long as their engines; any left are from a run that didn't stop cleanly.
     let _ = std::fs::remove_dir_all(data.path().join("briefings"));
-    let chats = chats::Chats::new(writer.clone(), data.clone(), port, live);
+    let chats = chats::Chats::new(writer.clone(), data.clone(), port, (live, states));
     let updates = Arc::new(updates::Updates::new(data.clone(), writer.clone()));
     let codex_updates = Arc::new(updates::Updates::for_engine(
         data.clone(),

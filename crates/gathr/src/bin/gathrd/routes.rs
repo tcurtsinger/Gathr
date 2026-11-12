@@ -68,10 +68,12 @@ async fn list(
     Extension(t): Extension<Trace>,
     Query(q): Query<Listed>,
 ) -> Answer {
-    db(&s, &t, "Chats failed", move |conn| {
+    let listed = db(&s, &t, "Chats failed", move |conn| {
         store::chats(conn, q.archived)
-    })
-    .await
+    });
+    let Json(mut chats) = listed.await?;
+    s.chats.states.on_list(&mut chats);
+    Ok(Json(chats))
 }
 
 async fn history(

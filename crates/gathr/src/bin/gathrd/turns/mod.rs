@@ -18,6 +18,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::chats::{Chats, Cmd, Failed};
 
+mod approvals;
 mod context;
 mod driver;
 mod ended;
@@ -28,6 +29,7 @@ mod process;
 mod pushes;
 mod reading;
 mod records;
+mod state;
 mod workspace;
 
 pub use process::CLOSE_GRACE;
@@ -285,7 +287,9 @@ impl Task {
                 allow,
                 reply,
             } => {
-                let _ = reply.send(self.approve(&chat, &request_id, allow).await);
+                let answered = self.approve(&chat, &request_id, allow).await;
+                self.approvals_changed().await;
+                let _ = reply.send(answered);
             }
             Cmd::Message {
                 chat,
@@ -302,7 +306,7 @@ impl Task {
                 chat,
                 input,
                 reply,
-            } => self.ask_service(kind, &chat, input, reply),
+            } => self.ask_service(kind, &chat, input, reply).await,
             Cmd::Open { chat, reply } => {
                 let _ = reply.send((self.open_approvals(&chat), self.streaming(&chat).await));
             }
@@ -917,44 +921,6 @@ impl Task {
             self.record(event);
         }
         Some(ids.turn)
-    }
-
-    async fn approve(&mut self, chat: &str, request_id: &str, allow: bool) -> bool {
-        let Some(turn) = self.turn.as_mut().filter(|t| t.ids.chat == chat) else {
-            return false;
-        };
-        let Some((tool, input, _)) = turn.approvals.remove(request_id) else {
-            return false;
-        };
-        if let Some((kind, reply)) = turn.service_approvals.remove(request_id) {
-            return self.answer_service(kind, request_id, allow, reply);
-        }
-        if allow && gathr::approvals::runs_push(&tool, &input) {
-            turn.push_allowed = true;
-        }
-        let turn = turn.ids.turn.clone();
-        let Some(answer) = self.driver.approval(request_id, allow, &input) else {
-            return false;
-        };
-        self.write(&answer, Some(&turn)).await.is_ok()
-    }
-
-    /// The chat's questions still open, as the live socket sent them, for a window that opens
-    /// the chat later.
-    fn open_approvals(&self, chat: &str) -> Vec<Value> {
-        let Some(turn) = self.turn.as_ref().filter(|t| t.ids.chat == chat) else {
-            return Vec::new();
-        };
-        // A service action whose caller gave up has no one to answer.
-        let open = turn.approvals.iter().filter(|(request_id, _)| {
-            let push = turn.service_approvals.get(*request_id);
-            push.is_none_or(|(_, reply)| !reply.is_closed())
-        });
-        let open = open.map(|(request_id, (tool, input, why))| {
-            json!({ "turn": turn.ids.turn, "request_id": request_id, "tool": tool, "input": input,
-                "why": why, "agent": turn.ids.agent })
-        });
-        open.collect()
     }
 
     /// The chat's reply still streaming: the text since its last whole block, which isn't saved yet,

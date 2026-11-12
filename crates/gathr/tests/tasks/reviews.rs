@@ -50,8 +50,10 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
     )
     .unwrap();
     // Recreate the prior schema to exercise the real database upgrade boundary.
-    conn.execute_batch("ALTER TABLE tasks DROP COLUMN review_done; PRAGMA user_version = 25;")
-        .unwrap();
+    let before =
+        "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
+                  PRAGMA user_version = 25;";
+    conn.execute_batch(before).unwrap();
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
     for (task, expected) in [(done, true), (unfinished, false)] {
