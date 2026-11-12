@@ -22,7 +22,9 @@ The service outlives the window and active engine turns. Separate checked copies
   held takes the service holding it, so a late hand-over never takes a copy another start just began for a dead one.
 - **The feed:** each GitHub Release carries `gathrd.json`: `{"version": "x.y.z", "platforms": {"<target>": {"file",
   "sha256", "size"}}}`, where target is `win32-x64`, `darwin-arm64` (as Claude Code's feed names them), and the file
-  a `.tar.gz` holding `gathrd(.exe)` and `ui/`. Read from `releases/latest/download`, following GitHub's redirects
+  a `.tar.gz` holding `gathrd(.exe)`, its matching `gathr(.exe)` diagnostics CLI and `ui/`.
+  Installed-copy adoption keeps that CLI too; older installs/archives without it remain compatible.
+  Read from `releases/latest/download`, following GitHub's redirects
   over HTTPS only. `GATHR_APP_RELEASES` names another feed at run time, and `GATHR_APP_FEED` when building builds
   one in (a test release, so an installed copy updates as a real one does); a debug build has none unless one is named.
 - **When:** at start, every 10 minutes, and on `POST /api/app/update`.
