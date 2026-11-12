@@ -72,12 +72,7 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
         .as_array()
         .into_iter()
         .flatten()
-        .filter(|c| {
-            matches!(
-                c["conclusion"].as_str(),
-                Some("FAILURE" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STARTUP_FAILURE")
-            )
-        })
+        .filter(|c| outcome(c).is_some())
         .collect();
     if failed.is_empty() {
         record(chats, caller, "failures", pr, &head);
@@ -88,12 +83,20 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
     }
     let mut said = vec![format!("Failed checks on #{pr}'s head {}:", short(&head))];
     for check in failed {
-        let name = check["name"].as_str().unwrap_or("?");
-        let url = check["detailsUrl"].as_str().unwrap_or_default();
+        // A check run names itself and its page; a commit status (`StatusContext`) its context and
+        // its target (#162's review).
+        let name = check["name"]
+            .as_str()
+            .or(check["context"].as_str())
+            .unwrap_or("?");
+        let url = check["detailsUrl"]
+            .as_str()
+            .or(check["targetUrl"].as_str())
+            .unwrap_or_default();
         said.push(String::new());
         said.push(format!(
             "## {name} ({})",
-            check["conclusion"].as_str().unwrap_or("?").to_lowercase()
+            outcome(check).unwrap_or_default()
         ));
         let Some(job) = job_of(url) else {
             said.push(format!("Not a GitHub Actions job: see {url}"));
@@ -156,16 +159,33 @@ pub async fn update(
             "#{pr} is into {base}, not the default branch {default}"
         ));
     }
+    // GitHub pins the update to the head (`expected_head_sha`), not to the PR's state or base: read
+    // again just before the write, and check what came back after (#162's review). A retarget in the
+    // instant between this read and the write can't be refused; it's caught in what came back.
+    let again = view(pr, &repo).await?;
+    let now_text = |key: &str| again[key].as_str().unwrap_or_default().to_string();
+    if now_text("state") != "OPEN"
+        || now_text("headRefOid") != head
+        || now_text("baseRefName") != default
+    {
+        return Err(changed(pr, &again, default));
+    }
     let path = format!("repos/{{owner}}/{{repo}}/pulls/{pr}/update-branch");
     let pinned = format!("expected_head_sha={head}");
     gh(&["api", "-X", "PUT", &path, "-f", &pinned], &repo).await?;
     let until = std::time::Instant::now() + update_wait();
     let mut now = head.clone();
+    let mut last = again;
     while now == head && std::time::Instant::now() < until {
         tokio::time::sleep(Duration::from_millis(500)).await;
         if let Ok(seen) = view(pr, &repo).await {
             now = seen["headRefOid"].as_str().unwrap_or_default().to_string();
+            last = seen;
         }
+    }
+    let still = last["state"] == "OPEN" && last["baseRefName"].as_str() == Some(default);
+    if !still {
+        return Err(changed(pr, &last, default));
     }
     let event = Event::point("gathr.github.update")
         .trace(&caller.trace().unwrap_or_else(gathr::ids::trace_id))
@@ -187,6 +207,17 @@ pub async fn update(
             short(&now)
         ),
     })
+}
+
+/// The PR isn't as the update needs it: open, at the head given, into the default branch.
+fn changed(pr: i64, seen: &Value, default: &str) -> String {
+    let text = |key: &str| seen[key].as_str().unwrap_or_default().to_string();
+    format!(
+        "#{pr} changed while it was updated: it's {} at {} into {}, not open into {default}. Read it again with `pr`",
+        text("state").to_lowercase(),
+        short(&text("headRefOid")),
+        text("baseRefName")
+    )
 }
 
 /// `GATHR_GITHUB_UPDATE_WAIT_MS` shortens the wait for a new head, in dev and tests only.
@@ -295,6 +326,21 @@ async fn reviewer(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<(), St
         Some(Err(e)) => Err(e.to_string()),
         None => Err("the database didn't answer".into()),
     }
+}
+
+/// How a check failed, if it did: a check run by its conclusion, a commit status by its state.
+fn outcome(check: &Value) -> Option<String> {
+    let failed = |word: &str| {
+        matches!(
+            word,
+            "FAILURE" | "ERROR" | "TIMED_OUT" | "CANCELLED" | "ACTION_REQUIRED" | "STARTUP_FAILURE"
+        )
+    };
+    [&check["conclusion"], &check["state"]]
+        .iter()
+        .filter_map(|v| v.as_str())
+        .find(|w| failed(w))
+        .map(str::to_lowercase)
 }
 
 /// The job id in an Actions check's link (`…/actions/runs/<run>/job/<job>`).

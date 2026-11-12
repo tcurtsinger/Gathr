@@ -13,12 +13,16 @@ so this is 0046.
   - **`ci_failures {"pr"}`:** for each failed check that ran on GitHub Actions, its job's log (`gh run
     view --job <id> --log-failed`) up to its last `##[error]` line, its last 40 lines, each cut to 300
     characters and hidden with `gathr::redact`; then its first 10 annotations (the check run's
-    `annotations`). A check that isn't an Actions job gives its link instead.
+    `annotations`). A check that isn't an Actions job gives its link instead, and so does a failed
+    commit status (another CI's `StatusContext`, by its context and target).
   - **`update_pr {"pr", "head"}`, the PR's reviewer only** (a review task of it in the chat): GitHub's
     Update branch (`pulls/<n>/update-branch` with `expected_head_sha`), refused when the head isn't the
-    one given, when the PR isn't open, or when it isn't into the default branch (retargeted). It
-    waits up to 20 s for the new head, and `gathr.github.update` records the head requested and
-    returned.
+    one given, when the PR isn't open, or when it isn't into the default branch (retargeted). GitHub
+    pins the update to the head only, so the PR is read again just before the write, and what comes
+    back is checked too: a PR closed or retargeted meanwhile is refused, never reported as updated.
+    The instant between that last read and the write can't be closed from outside GitHub, so a
+    retarget there is caught in what comes back. It waits up to 20 s for the new head, and
+    `gathr.github.update` records the head requested and returned.
 - **Merging stays `merge`** (0043 C4), with every gate it has. These tools merge nothing.
 - **The repository is the chat's project's own folder** (its `origin`), never a repository, host,
   folder or command an agent names. Arguments are fixed arrays, with no generic `gh` or `gh api`

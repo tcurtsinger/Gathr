@@ -185,9 +185,10 @@ fn an_agent_reads_a_pr_and_why_its_ci_failed_bounded_and_with_secrets_hidden() {
 fn only_the_reviewer_updates_a_pr_and_never_one_that_moved_closed_or_was_retargeted() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let gh = json!([
-        // Read once for the moved head, once before the update, then the update's first look sees it.
+        // Read once for the moved head, twice before the update (its check, then just before the
+        // write), then the update's first look sees the new head.
         { "args": ["pr", "view", "5"], "outs": [view(HEAD, "main", "OPEN", json!([])), view(HEAD, "main", "OPEN", json!([])),
-            view(NEW, "main", "OPEN", json!([]))] },
+            view(HEAD, "main", "OPEN", json!([])), view(NEW, "main", "OPEN", json!([]))] },
         { "args": ["repo", "view"], "out": r#"{"defaultBranchRef":{"name":"main"}}"# },
         { "args": ["api", "-X", "PUT"], "out": r#"{"message":"Updating pull request branch."}"# }
     ]);
@@ -343,4 +344,62 @@ fn live_reads_of_a_real_pr() {
         println!("--- {tool} ---\n{said}");
         assert_ne!(answer["isError"], true, "{said}");
     }
+}
+
+/// #162's review: the update pins only the head. A PR retargeted just before the write is refused
+/// with nothing written, and one retargeted while GitHub updates it is never reported as updated
+/// with the default branch.
+#[test]
+fn an_update_rechecks_the_base_before_it_writes_and_after() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let default =
+        json!({ "args": ["repo", "view"], "out": r#"{"defaultBranchRef":{"name":"main"}}"# });
+    let put = json!({ "args": ["api", "-X", "PUT"], "out": r#"{"message":"Updating pull request branch."}"# });
+    let gh = json!([
+        { "args": ["pr", "view", "5"], "outs": [view(HEAD, "main", "OPEN", json!([])), view(HEAD, "release", "OPEN", json!([]))] },
+        default, put
+    ]);
+    let room = room(&data.0, &repos.0, gh);
+    let update = json!({ "pr": 5, "head": HEAD });
+    refused(
+        &room.call(&room.vale, "update_pr", update.clone()),
+        "into release",
+    );
+    assert!(
+        room.calls().iter().all(|c| c[0] != "api"),
+        "it wrote: {:?}",
+        room.calls()
+    );
+
+    std::fs::write(
+        &room.answers,
+        json!([
+            { "args": ["pr", "view", "5"], "outs": [view(HEAD, "main", "OPEN", json!([])), view(HEAD, "main", "OPEN", json!([])),
+                view(NEW, "release", "OPEN", json!([]))] },
+            default, put
+        ])
+        .to_string(),
+    )
+    .unwrap();
+    let _ = std::fs::remove_file(room.answers.with_extension("json.seen"));
+    let said = room.call(&room.vale, "update_pr", update);
+    refused(&said, "into release");
+    assert!(!said.1.contains("Updated #5 with main"), "{}", said.1);
+}
+
+/// #162's review: an external status (not a GitHub Actions job) that failed counts, with its link.
+#[test]
+fn a_failed_external_status_is_listed_with_its_link() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let statuses = json!([
+        { "context": "ci/made-up", "state": "FAILURE", "targetUrl": "https://ci.example.test/run/1" },
+        { "context": "ci/other", "state": "SUCCESS", "targetUrl": "https://ci.example.test/run/2" }
+    ]);
+    let gh = json!([{ "args": ["pr", "view", "5"], "out": view(HEAD, "main", "OPEN", statuses) }]);
+    let room = room(&data.0, &repos.0, gh);
+    let (ok, failed) = room.call(&room.vale, "ci_failures", json!({ "pr": 5 }));
+    assert!(ok, "{failed}");
+    assert!(failed.contains("## ci/made-up (failure)"), "{failed}");
+    assert!(failed.contains("https://ci.example.test/run/1"), "{failed}");
+    assert!(!failed.contains("ci/other"), "{failed}");
 }
