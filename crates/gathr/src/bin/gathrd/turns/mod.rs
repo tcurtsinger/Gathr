@@ -2,7 +2,7 @@
 //! its chats, each chat in its own session (docs/decisions/0001-engine-interface.md, 0010
 //! Sessions). Turns sent to no agent get a task per chat, on the chats' account.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,6 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::chats::{Chats, Cmd, Failed};
 
 mod approvals;
+mod compact;
 mod context;
 mod driver;
 mod ended;
@@ -79,6 +80,15 @@ struct Assignment {
     approvals: gathr::agents::Approvals,
     chat: String,
     team: Vec<(String, gathr::team::Role)>,
+    /// Claude Code with its slash commands, for `/compact` only (K4).
+    slash: bool,
+}
+
+impl Assignment {
+    /// The account, engine and model a window seen now belongs to, when the model is pinned (K3).
+    fn model_key(&self) -> Option<String> {
+        gathr::context::model_key(&self.account, &self.engine, self.model.as_deref())
+    }
 }
 
 /// A tool call under way: its message, its name, when it began, and what it ran (0041), kept so
@@ -122,6 +132,8 @@ struct Running {
     engine_began: bool,
     /// It has said something or started a tool: a turn that ends without either did nothing (G167).
     said: bool,
+    /// The engine compacted the conversation during it.
+    compacted: bool,
     /// The engine said the account is out of usage during it.
     limited: bool,
     /// When it last showed progress, and whether it was flagged for showing none.
@@ -174,6 +186,8 @@ struct Task {
     woke_from: Option<(String, Option<i64>)>,
     /// Reply text of ended turns that the database refused, kept until a save works.
     unsaved: Vec<(Ids, String)>,
+    /// The turns, queued or running, that compact the conversation (K4).
+    compactions: HashSet<String>,
     /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
     held_raw: Vec<(Option<String>, u32, &'static str, String)>,
 }
@@ -208,6 +222,7 @@ pub async fn run(
         background: 0,
         woke_from: None,
         unsaved: Vec::new(),
+        compactions: HashSet::new(),
         held_raw: Vec::new(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
@@ -327,6 +342,9 @@ impl Task {
             Cmd::Open { chat, reply } => {
                 let _ = reply.send((self.open_approvals(&chat), self.streaming(&chat).await));
             }
+            Cmd::Compact { chat, trace, reply } => {
+                let _ = reply.send(self.compact(chat, trace).await);
+            }
             Cmd::Resume(w) => {
                 let ids = Ids {
                     chat: w.chat,
@@ -337,9 +355,17 @@ impl Task {
                     answers: w.answers,
                     person: w.person,
                 };
+                // Only a compaction is saved with no ask (K4).
+                let text = match w.text.is_empty() {
+                    true => {
+                        self.compactions.insert(ids.turn.clone());
+                        compact::COMMAND.to_string()
+                    }
+                    false => w.text,
+                };
                 self.queue.push_back(Queued {
                     ids,
-                    text: w.text,
+                    text,
                     held: None,
                 });
                 self.mark_holds().await;
@@ -378,7 +404,8 @@ impl Task {
         let steered = self
             .turn
             .as_ref()
-            .filter(|t| !t.stopping && t.ids.chat == chat && t.ids.agent == agent);
+            .filter(|t| !t.stopping && t.ids.chat == chat && t.ids.agent == agent)
+            .filter(|t| !self.compactions.contains(&t.ids.turn));
         if let Some(running) = steered {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
@@ -494,6 +521,10 @@ impl Task {
             else {
                 return;
             };
+            // Compacting closes the engine or works on its conversation: never under its background work.
+            if self.background > 0 && self.compactions.contains(&next.ids.turn) {
+                return;
+            }
             let taken = |q: &Queued| q.ids.turn != next.ids.turn;
             match self.start(&next).await {
                 Ok("running" | "dropped") => self.queue.retain(taken),
@@ -532,6 +563,10 @@ impl Task {
                     "the next turn runs on another account"
                 }
                 (Some(was), Some(now)) if was.team != now.team => "the chat's roles changed",
+                (Some(was), Some(now)) if was.slash != now.slash => match now.slash {
+                    true => "it compacts its conversation",
+                    false => "it compacted its conversation",
+                },
                 _ => "the next turn runs with another model, effort or approvals",
             };
             self.close(why).await;
@@ -595,7 +630,16 @@ impl Task {
             self.spawn(&program, assigned, &next.ids.trace).await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
-        if let Err(e) = self.write_user(&next.text, Some(&next.ids.turn)).await {
+        let compaction = self.compactions.contains(&next.ids.turn);
+        let text = match !compaction && self.near_compaction(&next.ids).await {
+            true => format!("{}\n\n{}", gathr::context::SOON, next.text),
+            false => next.text.clone(),
+        };
+        let written = match compaction {
+            true => self.write_compact(&next.ids.turn).await,
+            false => self.write_user(&text, Some(&next.ids.turn)).await,
+        };
+        if let Err(e) = written {
             self.turn = None;
             return Err(format!(
                 "{} didn't take the message: {e}",
@@ -706,6 +750,7 @@ impl Task {
                 approvals,
                 chat: next.ids.chat.clone(),
                 team,
+                slash: false,
             }
         };
         let Some(id) = next.ids.agent.clone() else {
@@ -737,7 +782,10 @@ impl Task {
         match self.chats.writer.call(read).await {
             Some(Ok(Some((a, account, team)))) => {
                 let given = (a.model, a.effort, a.approvals);
-                Ok(Some(on(account, Some(a.id), given, team)))
+                let mut assigned = on(account, Some(a.id), given, team);
+                assigned.slash =
+                    assigned.engine == "claude" && self.compactions.contains(&next.ids.turn);
+                Ok(Some(assigned))
             }
             Some(Ok(None)) => Err("its agent was deleted".into()),
             Some(Err(e)) => Err(format!("its agent wasn't read: {e}")),

@@ -154,7 +154,7 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
         // Agents get only what Gathr gives them (0024), as SerenityOS starts Claude Code: no
         // skills or commands, no MCP servers but Gathr's, and no user settings, which is where
         // plugins (synced from claude.ai too), their hooks and the person's sub-agents come from.
-        "--disable-slash-commands",
+        NO_SLASH,
         "--strict-mcp-config",
         "--setting-sources",
         "project,local",
@@ -178,6 +178,9 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
     }
     args
 }
+
+/// Keeps slash commands off: Gathr leaves it out only to run `/compact` (compaction plan, K4).
+pub const NO_SLASH: &str = "--disable-slash-commands";
 
 /// The engine's own token for Gathr's tools, in its environment: never in its arguments, which any
 /// process on the computer can read (0005).
@@ -255,6 +258,8 @@ fn keep(name: &OsString) -> bool {
 /// Stands in for Gathr's copy in dev and tests: the replay engine, or a missing file for a
 /// forced failure. Settings has no path (0026).
 pub const PATH_VAR: &str = "GATHR_CLAUDE_PATH";
+/// Where Claude Code compacts its conversation, in tokens (Auto-compact, compaction plan K3).
+pub const COMPACT_VAR: &str = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
 /// The engine's path: the dev/test override, else Gathr's own copy (0025). Never the person's PATH.
 pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {

@@ -62,6 +62,8 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
     // Recreate the prior schema to exercise the real database upgrade boundary.
     let before =
         "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
+                  ALTER TABLE agent_context DROP COLUMN told;
+                  ALTER TABLE agent_context DROP COLUMN window_of;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);

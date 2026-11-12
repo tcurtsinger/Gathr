@@ -21,6 +21,8 @@ pub struct Opening {
     pub instructions: Option<String>,
     /// The agent's folders beside `cwd` its sandbox writes in (0034): its own and Shared.
     pub writable: Vec<String>,
+    /// Where its conversation compacts, in tokens (Auto-compact, K3); the engine's own when `None`.
+    pub compact_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -47,6 +49,8 @@ pub struct Session {
     stop_pending: bool,
     /// Messages sent before the thread opened, in order.
     held: Vec<String>,
+    /// A compaction asked before the thread opened.
+    compact_held: bool,
     /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id.
     approvals: HashMap<String, Value>,
     replied: bool,
@@ -127,6 +131,17 @@ impl Session {
                 self.request(Asked::Turn, "turn/start", params)
             }
         })
+    }
+
+    /// Compacts the thread, which Codex runs as a turn of its own. Held until the thread is open.
+    pub fn compact(&mut self) -> Option<Value> {
+        let Some(thread) = self.thread.clone().filter(|_| !self.starting) else {
+            self.compact_held = true;
+            return None;
+        };
+        self.starting = true;
+        let params = json!({ "threadId": thread });
+        Some(self.request(Asked::Turn, "thread/compact/start", params))
     }
 
     /// Stop: Codex's own interrupt of the turn under way, never a kill.
@@ -215,6 +230,7 @@ impl Session {
                 if self.stop_pending {
                     self.stop_pending = false;
                     self.held.clear();
+                    self.compact_held = false;
                     read.frames.push(Frame::TurnEnd(ended("interrupted")));
                 } else {
                     self.flush_held(read);
@@ -261,6 +277,9 @@ impl Session {
     }
 
     fn flush_held(&mut self, read: &mut Read) {
+        if std::mem::take(&mut self.compact_held) {
+            read.send.extend(self.compact());
+        }
         for text in std::mem::take(&mut self.held) {
             read.send.extend(self.user(&text));
         }
@@ -305,12 +324,19 @@ impl Session {
         }
         // Edits and Auto: writes stay in the agent's folders, the network is on as for Claude
         // agents (the owner's call, 2026-11-10), so `gh` and `git fetch` work; pushes still ask.
+        let mut config = serde_json::Map::new();
         if sandbox == "workspace-write" {
             let mut table = json!({ "network_access": true });
             if !o.writable.is_empty() {
                 table["writable_roots"] = json!(o.writable);
             }
-            params["config"] = json!({ "sandbox_workspace_write": table });
+            config.insert("sandbox_workspace_write".into(), table);
+        }
+        if let Some(at) = o.compact_at {
+            config.insert("model_auto_compact_token_limit".into(), at.into());
+        }
+        if !config.is_empty() {
+            params["config"] = config.into();
         }
         Some(match &o.resume {
             Some(thread) => {

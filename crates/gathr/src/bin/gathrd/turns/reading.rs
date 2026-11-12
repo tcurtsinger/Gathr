@@ -520,16 +520,21 @@ impl Task {
         self.idle_since = std::time::Instant::now();
         // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
         let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
+        // A compaction that ends without one failed, whatever the engine said (K4).
+        let compaction = self.compactions.contains(&turn.ids.turn);
+        let not_compacted = compaction && !turn.compacted && !turn.stopping && !turn.signed_out;
         let status = match () {
             _ if turn.save_failed.is_some() => "failed",
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
+            _ if not_compacted => "failed",
             _ if empty => "failed",
             _ if end.ok => "done",
             _ => "failed",
         };
         let why = match status {
             "failed" if turn.save_failed.is_some() => turn.save_failed.clone(),
+            "failed" if not_compacted => Some(self.not_compacted(&turn.ids, &end).await),
             "failed" if empty => Some(EMPTY.to_string()),
             "failed" => Some(
                 end.message
@@ -566,6 +571,7 @@ impl Task {
         self.record(event);
         if turn.limited && !end.ok && !turn.stopping && !turn.signed_out {
             self.limited_end(&turn.ids, turn.tools_started).await;
+            self.compaction_ended(&turn.ids.turn);
             return self.try_next().await;
         }
         if turn.signed_out {
@@ -581,11 +587,26 @@ impl Task {
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }
+        if status == "failed" {
+            self.tell_again(&turn.ids).await;
+        }
+        self.compaction_ended(&turn.ids.turn);
         self.set_turn(&turn.ids, status, why.as_deref()).await;
         self.try_next().await;
     }
 
+    /// A compaction's turn stays one while it's queued again (a sign-in, a usage hold), else it's over.
+    fn compaction_ended(&mut self, turn: &str) {
+        if !self.queue.iter().any(|q| q.ids.turn == turn) {
+            self.compactions.remove(turn);
+        }
+    }
+
+    /// The turn's ask, to send it again: a compaction has none, only its command.
     pub(super) async fn text_of(&self, turn: &str) -> String {
+        if self.compactions.contains(turn) {
+            return super::compact::COMMAND.to_string();
+        }
         let turn = turn.to_string();
         self.chats
             .writer

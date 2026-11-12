@@ -134,7 +134,12 @@ fn main() {
             .is_file();
         std::process::exit(if signed_in { 0 } else { 1 });
     }
-    let recording = std::env::var("GATHR_REPLAY")
+    // An engine started with its slash commands on (Compact, K4) plays its own recording.
+    let slash = !args.iter().any(|a| a == "--disable-slash-commands");
+    let recording = std::env::var("GATHR_REPLAY_SLASH")
+        .ok()
+        .filter(|_| slash)
+        .map_or_else(|| std::env::var("GATHR_REPLAY"), Ok)
         .or_else(|_| recording_beside_me())
         .unwrap_or_default();
     record_start(&args);
@@ -299,8 +304,9 @@ fn record_start(args: &[String]) {
         let path = std::env::var("PATH").ok();
         let push = std::env::var("GATHR_PUSH_URL").ok();
         let temp = ["TEMP", "TMP", "TMPDIR"].map(|name| std::env::var(name).ok());
+        let compact = std::env::var("CLAUDE_CODE_AUTO_COMPACT_WINDOW").ok();
         let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
-            "GATHR_PUSH_URL": push, "TEMP": temp });
+            "GATHR_PUSH_URL": push, "TEMP": temp, "CLAUDE_CODE_AUTO_COMPACT_WINDOW": compact });
         append_line(&mut out, start.to_string());
     }
 }

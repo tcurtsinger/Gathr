@@ -103,9 +103,13 @@ const history = {
 };
 const tasks = [task(7, 'b', { state: 'working' }), task(8, 'c'), task(9, 'b')];
 
-function service(more: { history?: object; tasks?: Task[] } = {}) {
+function service(more: { history?: object; tasks?: Task[]; compact?: () => Response } = {}) {
   const sent: unknown[] = [];
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.endsWith('/compact')) {
+      sent.push(path);
+      return more.compact?.() ?? new Response(JSON.stringify({ turn: 'k', status: 'queued', ref: 'k' }));
+    }
     if (init?.method === 'POST' && path.endsWith('/messages')) {
       sent.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ turn: 'u', status: 'running' }));
@@ -361,6 +365,46 @@ test("an agent's context shows in its panel, from the engine's fill and window; 
   await openFromSummary(/^Made-up Third/);
   await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
   expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();
+});
+
+test("Compact, in the agent's More menu, waits as the service queues it and is offered again once it ends", async () => {
+  const sent = service();
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Member/);
+  await panel.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await page.getByRole('menuitem', { name: 'Compact' }).click();
+  await expect.poll(() => sent).toEqual(['/api/chats/c/agents/b/compact']);
+  const line = panel.getByText(/^Compaction queued/);
+  await expect
+    .element(line)
+    .toHaveTextContent('Compaction queued · waits for its turn and background commands');
+  // Asked once: the menu says so, and can't ask again.
+  await panel.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await expect.element(page.getByRole('menuitem', { name: 'Compaction queued' })).toBeDisabled();
+  await userEvent.keyboard('{Escape}');
+
+  for (const listener of live)
+    listener({ type: 'turn', chat: 'c', turn: 'k', status: 'running', ref: 'k', agent: 'b' });
+  await expect.element(panel.getByText('Compacting', { exact: true })).toBeVisible();
+  for (const listener of live)
+    listener({ type: 'turn', chat: 'c', turn: 'k', status: 'done', ref: 'k', agent: 'b' });
+  await expect.element(panel.getByText('Compacting', { exact: true })).not.toBeInTheDocument();
+  await panel.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await expect.element(page.getByRole('menuitem', { name: 'Compact' })).toBeEnabled();
+});
+
+test('a refused Compact shows in the chat with its reference, and Compact is offered again', async () => {
+  const refusal = { error: 'Compact failed', why: 'made-up: compacting already', ref: 'made-up-ref' };
+  service({ compact: () => new Response(JSON.stringify(refusal), { status: 409 }) });
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Member/);
+  await panel.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await page.getByRole('menuitem', { name: 'Compact' }).click();
+  await expect.element(page.getByRole('main').getByText('made-up: compacting already')).toBeVisible();
+  await expect.element(page.getByRole('button', { name: 'Reference made-up-ref' })).toBeVisible();
+  expect(panel.getByText(/^Compaction queued/).query()).toBeNull();
+  await panel.getByRole('button', { name: 'More for Made-up Member' }).click();
+  await expect.element(page.getByRole('menuitem', { name: 'Compact' })).toBeEnabled();
 });
 
 test('an agent that left the chat keeps its words in the timeline, with nothing to open', async () => {

@@ -30,6 +30,13 @@ impl Driver {
             Self::Codex(session) => session.user(text),
         }
     }
+    /// Compacts the conversation: Claude Code's `/compact`, Codex's own request.
+    pub fn compact(&mut self) -> Option<Value> {
+        match self {
+            Self::Claude => Some(frames::user("/compact")),
+            Self::Codex(session) => session.compact(),
+        }
+    }
     pub fn interrupt(&mut self, id: &str) -> Option<Value> {
         match self {
             Self::Claude => Some(frames::interrupt(id)),

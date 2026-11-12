@@ -24,9 +24,15 @@ impl Task {
                 .find(|(model, _)| model.is_some() && *model == self.context_model)
                 .map(|(_, window)| *window),
         };
+        let of = self
+            .assigned
+            .as_ref()
+            .and_then(super::Assignment::model_key);
         if let Some(window) = own {
-            self.save_context(move |c, chat, agent| gathr::context::window(c, chat, agent, window))
-                .await;
+            let save = move |c: &_, chat: &str, agent: &str| {
+                gathr::context::window(c, chat, agent, window, of.as_deref())
+            };
+            self.save_context(save).await;
         }
     }
 
@@ -38,12 +44,28 @@ impl Task {
         before: Option<i64>,
         after: Option<i64>,
     ) {
+        // Compacted, the agent may be told again as the next point nears (K3).
+        if let (Some(agent), Some(chat)) = (
+            self.agent.clone(),
+            self.assigned.as_ref().map(|a| a.chat.clone()),
+        ) {
+            let reset =
+                move |c: &mut rusqlite::Connection| gathr::context::untold(c, &chat, &agent);
+            let _ = self.chats.writer.call(reset).await;
+        }
         if let Some(after) = after {
             self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, after))
                 .await;
         }
-        let Some(ids) = self.turn.as_ref().map(|t| t.ids.clone()) else {
+        let Some(turn) = self.turn.as_mut() else {
             return;
+        };
+        turn.compacted = true;
+        let ids = turn.ids.clone();
+        // Claude Code says how its compaction began; Codex doesn't, so Compact says so (K4).
+        let trigger = match self.compactions.contains(&ids.turn) {
+            true => "manual".to_string(),
+            false => trigger,
         };
         let mut event = Event::point("gathr.context.compact")
             .trace(&ids.trace)
@@ -72,6 +94,41 @@ impl Task {
         if let Ok(message) = self.db_message(&ids, "gathr", "text", &line).await {
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         }
+    }
+
+    /// Whether the turn starting now is told its conversation nears where it compacts (K3): once,
+    /// at 75% of the point, again only after a compaction or a failed turn. Recorded when it is.
+    pub(super) async fn near_compaction(&self, ids: &super::Ids) -> bool {
+        let of = self
+            .assigned
+            .as_ref()
+            .and_then(super::Assignment::model_key);
+        let Some(agent) = ids.agent.clone() else {
+            return false;
+        };
+        let chat = ids.chat.clone();
+        let told = self
+            .chats
+            .writer
+            .call(move |c| gathr::context::tell_soon(c, &chat, &agent, of.as_deref()));
+        let told = told.await.and_then(Result::ok).unwrap_or(false);
+        if told {
+            let event = Event::point("gathr.context.soon")
+                .trace(&ids.trace)
+                .chat(&ids.chat)
+                .ok();
+            self.record(event.attr("gen_ai.agent.id", ids.agent.clone()));
+        }
+        told
+    }
+
+    /// A failed turn may not have saved what it was told to: it's told again.
+    pub(super) async fn tell_again(&self, ids: &super::Ids) {
+        let (Some(agent), chat) = (ids.agent.clone(), ids.chat.clone()) else {
+            return;
+        };
+        let reset = move |c: &mut rusqlite::Connection| gathr::context::untold(c, &chat, &agent);
+        let _ = self.chats.writer.call(reset).await;
     }
 
     async fn save_context(

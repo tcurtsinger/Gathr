@@ -2,7 +2,16 @@ import { Folder } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
+import {
+  type Agent,
+  api,
+  type Chat,
+  type Failure,
+  type Member,
+  type PauseScope,
+  type Pauses,
+  type Project,
+} from '../api';
 import { Composer } from '../components/Composer';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
@@ -175,6 +184,19 @@ export function ChatView(props: Props) {
     [name],
   );
   const beside = useMemo(() => workspace?.(tab), [workspace, tab]);
+  // Each agent's compaction asked for here: its turn, and its status until the live turn says more.
+  const [compacts, setCompacts] = useState<Record<string, { turn: string; status: string }>>({});
+  const compact = useCallback(
+    (agent: string) =>
+      attempt('compact', () =>
+        api
+          .compact(chat.id, agent)
+          .then(({ turn, status }) => setCompacts((c) => ({ ...c, [agent]: { turn, status } }))),
+      ),
+    [attempt, chat.id],
+  );
+  const asked = opened && compacts[opened.member.agent];
+  const compaction = asked && (state.turns[asked.turn]?.status ?? asked.status);
   const kept = useRef(new Map<string, Kept>());
   const drawn = useRef<{ agent: string; panel: ReactNode }>(undefined);
   const panel = () => {
@@ -194,6 +216,8 @@ export function ChatView(props: Props) {
             {...blocksOf(timeline.items, agent, mine)}
             actions={stable}
             onMessage={!archived && recipients.some((a) => a.id === agent) ? message : undefined}
+            onCompact={archived ? undefined : compact}
+            compaction={compaction === 'queued' || compaction === 'running' ? compaction : undefined}
           />
         ),
       };

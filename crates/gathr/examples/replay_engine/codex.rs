@@ -92,18 +92,23 @@ pub fn run() {
                 result["approvalPolicy"] = p["approvalPolicy"].clone();
                 result
             }
-            "turn/start" => {
+            "turn/start" | "thread/compact/start" => {
                 // Replay the turn segment, past handshake/thread frames. Input rows wait for approvals.
+                let method = v["method"].as_str().unwrap_or_default();
                 let at = rows.iter().position(|r| {
-                    r["dir"] == "in" && r["line"].as_str().is_some_and(|l| l.contains("turn/start"))
+                    r["dir"] == "in" && r["line"].as_str().is_some_and(|l| l.contains(method))
                 });
                 if let Some(at) = at {
+                    let asked: Value =
+                        serde_json::from_str(rows[at]["line"].as_str().unwrap()).unwrap();
                     for row in &rows[at + 1..] {
                         match row["dir"].as_str() {
                             Some("out") => {
                                 let mut frame: Value =
                                     serde_json::from_str(row["line"].as_str().unwrap()).unwrap();
-                                if frame["result"]["turn"].is_object() {
+                                let answer =
+                                    frame["id"] == asked["id"] && frame.get("method").is_none();
+                                if answer || frame["result"]["turn"].is_object() {
                                     frame["id"] = v["id"].clone();
                                 }
                                 send(&frame);
