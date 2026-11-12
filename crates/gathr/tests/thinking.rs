@@ -232,6 +232,8 @@ fn a_restart_stops_the_steps_a_dead_service_left_running() {
     let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
     let running = r#"{"tool":"Bash","status":"running","input":{"text":"cargo check"}}"#;
     gathr::store::add_message(&conn, &chat, turn, "assistant", "tool", running).unwrap();
+    // A step whose body isn't JSON stays as it is, and doesn't stop the others' recovery.
+    gathr::store::add_message(&conn, &chat, turn, "assistant", "tool", "not json").unwrap();
     drop(conn);
 
     let service = TestService::start_with(&data.0, &env);
@@ -245,8 +247,9 @@ fn a_restart_stops_the_steps_a_dead_service_left_running() {
     let stopped = [
         json!({ "status": "stopped" }),
         json!({ "tool": "Bash", "status": "stopped", "input": { "text": "cargo check" } }),
+        json!("not json"),
     ];
-    assert_eq!(steps, [&stopped[0], &stopped[1]], "{history}");
+    assert_eq!(steps, stopped.iter().collect::<Vec<_>>(), "{history}");
 }
 
 /// Codex says only that it thought, once it has: each mark is timed by the quiet before it. Of

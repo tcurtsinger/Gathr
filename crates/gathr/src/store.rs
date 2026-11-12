@@ -339,12 +339,14 @@ pub struct Waiting {
 /// be continued: they're marked failed, with why, and the steps they left running are stopped.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     // By chat first: `messages` has no index on its turn. A thought's time isn't known, so it
-    // gets none.
+    // gets none. `json_valid` first: a body that isn't JSON would fail the statement, and with
+    // it every turn's recovery.
     conn.execute(
         "UPDATE messages SET body = json_set(body, '$.status', 'stopped')
          WHERE chat_id IN (SELECT chat_id FROM turns WHERE status = 'running')
            AND turn_id IN (SELECT id FROM turns WHERE status = 'running')
-           AND kind IN ('tool', 'thinking') AND json_extract(body, '$.status') = 'running'",
+           AND kind IN ('tool', 'thinking')
+           AND CASE WHEN json_valid(body) THEN json_extract(body, '$.status') END = 'running'",
         [],
     )?;
     conn.execute(
