@@ -49,14 +49,17 @@ const TOOLS: Record<string, [string, string]> = {
   mcp__gathr__merge: ['Merged a pull request', 'Merging a pull request'],
 };
 
-/** A length of time as a row shows it: "9s", "1m 49s", "1h 5m"; nothing under a second. */
-export function duration(ms: number): string {
+/**
+ * A length of time: to the second as a row shows it ("9s", "1m 49s", "1h 5m"; nothing under a second), or
+ * in whole minutes for a line redrawn once a minute ("1m" at least, "12m", "1h 5m").
+ */
+export function duration(ms: number, to: 'second' | 'minute' = 'second'): string {
   const seconds = Math.floor(ms / 1000);
-  if (!(seconds >= 1)) return '';
-  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${String(seconds % 60).padStart(2, '0')}s`;
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (to === 'minute') return `${Math.max(1, minutes)}m`;
+  if (!(seconds >= 1)) return '';
+  return minutes ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`;
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;

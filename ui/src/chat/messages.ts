@@ -134,14 +134,16 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
     endTalk();
     if (g.kind === 'person') {
       add(
-        kept(cache, g.key, '', () => toUser(g.msgs[0])),
+        kept(cache, g.key, g.msgs[0].body as string, () => toUser(g.msgs[0])),
         [g],
       );
       speaker = undefined;
       continue;
     }
     const turn = g.turn ? state.turns[g.turn] : undefined;
-    const on = turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task)?.what;
+    // Only a member or the reviewer is headed by its task; the lead always by its role.
+    const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
+    const on = led || turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task)?.what;
     const who = `${turn?.agent}|${on}`;
     add(block(cache, g, state, crew, gave, { on, head: who !== speaker }), [g]);
     speaker = who;
@@ -156,7 +158,11 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
   for (const f of unsent) {
     if (f.failure.ref && told.has(f.failure.ref)) continue;
-    items.push(kept(cache, `f-${f.id}`, `${f.text}|${f.failure.ref}|${f.failure.why}`, () => failed(f)));
+    items.push(
+      kept(cache, `f-${f.id}`, `${f.text}|${f.failure.error}|${f.failure.ref}|${f.failure.why}`, () =>
+        failed(f),
+      ),
+    );
   }
 
   const find = (message: string): Spot | undefined => {

@@ -2,7 +2,7 @@
 // whom, and which of Gathr's notes become one-line events.
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { expect, test } from 'vitest';
-import type { Agent, Message, Task, ToolBody, Turn } from '../api';
+import { type Agent, Failure, type Message, type Task, type ToolBody, type Turn } from '../api';
 import { duration } from './fold';
 import { type Custom, toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
@@ -271,11 +271,18 @@ test('a turn that only wrote once has no row', () => {
 });
 
 test('a row’s times read as a person says them, and nothing under a second shows', () => {
-  expect([400, 9_000, 109_000, 365_000, 3_900_000].map(duration)).toEqual([
+  expect([400, 9_000, 109_000, 365_000, 3_900_000].map((ms) => duration(ms))).toEqual([
     '',
     '9s',
     '1m 49s',
     '6m 05s',
+    '1h 5m',
+  ]);
+  // In whole minutes, for a line that is redrawn once a minute: never less than one.
+  expect([400, 59_000, 109_000, 3_900_000].map((ms) => duration(ms, 'minute'))).toEqual([
+    '1m',
+    '1m',
+    '1m',
     '1h 5m',
   ]);
 });
@@ -525,4 +532,59 @@ test('the questions a split turn asked show once, after its first block', () => 
   state.tasks.push(task(9, 'kit', 'kit', { owner: null, giver: 'kit', kind: 'person', what: 'Ship it?' }));
   state.messages.push(said('kit', 'user', '@Kit one thing'), said('kit', 'assistant', 'Kept'));
   expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'asked-kit', 'kit-user', 'a-kit-1']);
+});
+
+test('a hear-back whose reason runs over lines keeps the reason whole, even a bullet that names a task', () => {
+  const state = round();
+  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(142, 'lane', 'ask')];
+  const body = [
+    'The 2 tasks you gave are settled:',
+    '- #1 Rowan, Task 1: blocked: ',
+    'Two things are in the way:',
+    '- #142 has to merge first',
+    '- #2 is not it either',
+    '- #2 Kit, the second, Task 2: done: merged',
+    'Read replies with read_chat, then continue.',
+  ].join('\n');
+  heardBack(state, 'b1', body, 5);
+  expect(lines(state)).toEqual([
+    [
+      'Rowan is blocked:',
+      'Task 1',
+      // The first reason line was empty; bullets that name a task, one of them reported below, are the reason's.
+      'Task #1. Two things are in the way:\n- #142 has to merge first\n- #2 is not it either',
+    ],
+    // The owner's name had ", " in it when Gathr wrote the line.
+    ['Kit completed:', 'Task 2', 'Task #2. merged'],
+  ]);
+});
+
+test('a hear-back that cannot be read whole is drawn in its own words', () => {
+  const state = round();
+  // Task 7 is not among the chat's tasks, so its line cannot be told apart.
+  const body =
+    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #7 Sol, Task 7: done\nRead replies.';
+  heardBack(state, 'b1', body, 5);
+  expect(lines(state)).toEqual([[body]]);
+});
+
+test('a message that failed to send is drawn again when its failure changes, and kept when it does not', () => {
+  const state = round();
+  const cache = new Map();
+  const unsent = (error: string) => [{ id: '1', text: 'Try', failure: new Failure(error, null, null) }];
+  const first = toThread(state, agents, unsent('Send failed'), cache).items.at(-1);
+  expect(toThread(state, agents, unsent('Send failed'), cache).items.at(-1)).toBe(first);
+  const next = toThread(state, agents, unsent('Connection failed'), cache).items.at(-1);
+  expect(custom(next).unsent?.failure.error).toBe('Connection failed');
+});
+
+test('the lead is headed by its role, whatever task its turn runs on; a member by its task', () => {
+  const state = round();
+  state.turns.mira7 = { ...turn('mira7', 'mira', { task: 7, answers: 'rowan' }), position: 5 };
+  state.tasks.push(task(7, 'mira', 'rowan', { giver: 'rowan', what: 'Which notice?' }));
+  state.messages.push(said('mira7', 'assistant', 'Asking the person'));
+  const { items } = view(state);
+  expect(custom(byId(items, 'a-mira7'))).toMatchObject({ role: 'supervisor', head: true });
+  expect(custom(byId(items, 'a-mira7')).on).toBeUndefined();
+  expect(custom(byId(items, 'a-kit')).on).toBe('Task 2');
 });

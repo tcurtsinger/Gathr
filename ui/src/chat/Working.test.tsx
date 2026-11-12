@@ -17,7 +17,8 @@ const turn = (id: string, agent: string, status: Turn['status'], created?: strin
   ref: id,
   created,
 });
-const nineFifteen = Date.UTC(2026, 10, 10, 9, 15);
+// Twelve minutes and a few seconds ago, as the line is drawn.
+const nineFifteen = Date.now() - 12 * 60_000 - 5_000;
 const iso = (ms: number) => new Date(ms).toISOString();
 
 test('the Working line names every agent with a turn running, since the longest-running one began', async () => {
@@ -35,7 +36,13 @@ test('the Working line names every agent with a turn running, since the longest-
 
   const screen = await render(<Working state={state} />);
   await expect.element(screen.getByRole('img', { name: 'Kit and Lane Ortiz' })).toBeVisible();
-  expect(screen.getByRole('status').element().textContent).toMatch(/^WorkingKLO· \d/);
+  // The status says "Working" and who; the time is for the eye only, in whole minutes, so a screen reader
+  // isn't told it again each time it's redrawn.
+  const time = screen.getByRole('status').element().querySelector('.working-time') as HTMLElement;
+  expect(time.textContent).toBe('· 12m');
+  expect(time.getAttribute('aria-hidden')).toBe('true');
+  const read = [...screen.getByRole('status').element().childNodes].filter((n) => n !== time);
+  expect(read.map((n) => n.textContent).join('')).toBe('WorkingKLO');
 
   // Nobody running: no line.
   const idle = { ...state, turns: { ask: state.turns.ask } };

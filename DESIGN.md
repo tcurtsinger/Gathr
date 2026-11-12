@@ -178,9 +178,9 @@ steps shows as muted lines. Steps have no argument until the service keeps one. 
 last text is the message. A turn that only wrote once has no row.
 
 The lead's words read at 16px/400/1.6. A member's or reviewer's turn reads at 15px. A header
-names the speaker when it changes from the block before: the avatar, the name, then the task
-the turn works on ("on Open the settings tools PR", cut with an ellipsis) or else the role,
-and the time at the right. Bodies, rows and cards indent 34px to align with the speaker name
+names the speaker when it changes from the block before: the avatar, the name, then for a
+member or reviewer the task the turn works on ("on Open the settings tools PR", cut with an
+ellipsis; its role when it has no task) and for the lead always its role, and the time at the right. Bodies, rows and cards indent 34px to align with the speaker name
 (24px avatar plus 10px gap), with or without the header above them.
 
 Messages agents write to each other are their own block: the card surface, a 6% foreground
@@ -211,7 +211,8 @@ focuses it. An answer being sent leaves the dock; a refused answer brings it bac
 
 Working appears after the latest message while any turn runs: an attention spinner, Working,
 overlapping 18px initials for agents with running turns, and the time since the longest-running
-of those turns began, in the format a running row uses (4m 02s). Never show a queued or pending task as a working agent.
+of those turns began, in whole minutes (12m), redrawn once a minute. The time is hidden
+from screen readers, so the status reads only Working and who. Never show a queued or pending task as a working agent.
 
 ### Agent plan and Summary
 

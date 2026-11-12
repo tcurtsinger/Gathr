@@ -32,8 +32,9 @@ export function Working({ state }: { state: ChatState }) {
       Working
       <Initials members={busy.members} />
       {busy.since !== undefined && (
-        <span className="working-time">
-          <Elapsed since={busy.since} />
+        // Not read out: the status is who is working, and this is redrawn as time passes.
+        <span className="working-time" aria-hidden="true">
+          <Elapsed since={busy.since} to="minute" />
         </span>
       )}
     </p>
@@ -62,13 +63,21 @@ export const initials = (name: string) =>
     .map((w) => [...w][0]?.toUpperCase())
     .join('');
 
-/** How long something has run, redrawn each second: "· 4m 02s"; nothing in its first second. */
-export function Elapsed({ since, lead = '' }: { since: number; lead?: string }) {
+/** How long something has run, redrawn as often as it changes: "· 4m 02s" each second, "· 12m" each minute. */
+export function Elapsed({
+  since,
+  to = 'second',
+  lead = '',
+}: {
+  since: number;
+  to?: 'second' | 'minute';
+  lead?: string;
+}) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000);
+    const tick = setInterval(() => setNow(Date.now()), to === 'minute' ? 60_000 : 1000);
     return () => clearInterval(tick);
-  }, []);
-  const took = duration(now - since);
+  }, [to]);
+  const took = duration(now - since, to);
   return took ? `${lead}· ${took}` : null;
 }
