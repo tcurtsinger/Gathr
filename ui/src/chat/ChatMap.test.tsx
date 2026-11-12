@@ -101,8 +101,9 @@ const below = (id: string) => {
   return block ? block.getBoundingClientRect().top - viewport().getBoundingClientRect().top : undefined;
 };
 // At the top of the view: 32px under its edge. WebKit scrolls by whole pixels and blocks sit on
-// fractions of one, so a message can land up to half a pixel off.
-const atTop = (id: string) => Math.abs((below(id) ?? Number.NaN) - 32) < 0.75;
+// fractions of one, so a message can land up to a pixel off: WebKit drops the fraction rather than
+// rounding it (#154's 1.5 line height moved blocks to fractions above a half).
+const atTop = (id: string) => Math.abs((below(id) ?? Number.NaN) - 32) < 1;
 
 test('the map shows from three ticks up, long for the person and short for the lead, in a pane wide enough', async () => {
   const screen = await render(<View state={chat(day(11, 1))} />);
