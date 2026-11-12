@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod feed;
+pub mod update;
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output};
