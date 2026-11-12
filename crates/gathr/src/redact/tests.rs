@@ -510,3 +510,112 @@ fn a_hyphened_header_name_is_a_secret_key_in_json_too() {
         "x-auth-token": "[redacted:named]", "Accept": "a/b" } });
     assert_eq!(redact_json(&frame), expected);
 }
+
+/// A quoted secret may start with what JSON closes with. It reads as JSON's own structure only
+/// when what follows the bracket, or the comma or colon, is what JSON would have there.
+#[test]
+fn a_quoted_secret_that_starts_like_json_structure_is_still_hidden() {
+    reads(&[
+        (
+            "mysql --password \"}Q7x000pw\" db",
+            "mysql --password \"[redacted:flag]\" db",
+        ),
+        (
+            "mytool --password '}Q7x001pw'",
+            "mytool --password '[redacted:flag]'",
+        ),
+        (
+            "mytool --token \"]abc000sq\"",
+            "mytool --token \"[redacted:flag]\"",
+        ),
+        (
+            "mytool --token \":123abc000\"",
+            "mytool --token \"[redacted:flag]\"",
+        ),
+        (
+            "mytool --token \",-abc000c\"",
+            "mytool --token \"[redacted:flag]\"",
+        ),
+        (
+            "mytool --token \":-abc000\"",
+            "mytool --token \"[redacted:flag]\"",
+        ),
+        (
+            "mytool --token \":true00abc\"",
+            "mytool --token \"[redacted:flag]\"",
+        ),
+        (
+            "mytool --token \":1.5e3x\" y",
+            "mytool --token \"[redacted:flag]\" y",
+        ),
+        ("Bearer \"}brr000x\"", "Bearer \"[redacted:bearer]\""),
+        (
+            "echo Bearer \"]brr001x\"",
+            "echo Bearer \"[redacted:bearer]\"",
+        ),
+        (
+            "mytool --password=\"}Q7x003pw\"",
+            "mytool --password=\"[redacted:flag]\"",
+        ),
+        (
+            "export API_KEY=\"}env000x\"",
+            "export API_KEY=\"[redacted:env]\"",
+        ),
+        (
+            "$env:GH_TOKEN = \"}ps000x\"",
+            "$env:GH_TOKEN = \"[redacted:env]\"",
+        ),
+        (
+            "Authorization: \"}auth000x\"",
+            "Authorization: \"[redacted:header]\"",
+        ),
+        // Not quoted, starting with a bracket: the bracket is passed, the rest goes.
+        ("x --password }abc y", "x --password }[redacted:flag] y"),
+        ("x --token=]abc y", "x --token=][redacted:flag] y"),
+    ]);
+}
+
+/// A value with no quotes ends at JSON's closing brackets, so they are still there after it.
+#[test]
+fn a_bare_value_leaves_jsons_closing_brackets() {
+    reads(&[
+        ("[\"Bearer\",5]", "[\"Bearer\",[redacted:bearer]]"),
+        (
+            "{\"args\":[\"--token\",1]}",
+            "{\"args\":[\"--token\",[redacted:flag]]}",
+        ),
+    ]);
+    let nested = r#"{"a":{"b":["x --token"]},"c":["Bearer "],"d":{"e":"FOO="} , "n":1}"#;
+    assert_eq!(redact(nested), nested);
+}
+
+/// A key standing as a URL's whole login, redacted a second time: the mark's own colon was read
+/// as the one between a name and a password.
+#[test]
+fn a_key_as_a_urls_login_reads_the_same_redacted_twice() {
+    for prefix in ["ghp_", "xoxb-"] {
+        let key = format!("{prefix}{}", "0a1B".repeat(9));
+        let once = redact(&format!("git clone https://{key}@example.test/x/y.git"));
+        assert_eq!(
+            once,
+            "git clone https://[redacted:url]@example.test/x/y.git"
+        );
+        assert_eq!(redact(&once), once);
+    }
+}
+
+#[test]
+fn a_key_named_after_a_longer_run_together_word_counts() {
+    reads(&[
+        (
+            "x --secretaccesskey abc",
+            "x --secretaccesskey [redacted:flag]",
+        ),
+        (
+            "x --awssecretaccesskey=abc y",
+            "x --awssecretaccesskey=[redacted:flag] y",
+        ),
+        ("x --myapikey abc", "x --myapikey [redacted:flag]"),
+    ]);
+    untouched(&["x --monkey 1 --hotkey f5 --turkey x --keychain login --donkey d"]);
+}

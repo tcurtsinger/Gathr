@@ -73,15 +73,16 @@ has its test, with look-alikes proven untouched (`crates/gathr/src/redact/tests.
   punctuation it holds (`--auth-token=user:s3cret`, `--token 'a b'`). `--token=abc` was not hidden at all
   before. The value's own quotes stay around the mark.
 - **Raw JSON text stays JSON** in the cases tested (streamed tool input joined, a frame that didn't
-  parse; both go on to `diag turn --raw`): a wait for a secret ends at `}` and `]`, and at a quote after
-  which the text goes on as JSON does (`,` or `:` and the next value, a bracket, or the end). So
+  parse; both go on to `diag turn --raw`): a wait for a secret ends at a `}` or `]` that closes, and at a quote
+  after which the text goes on as JSON does (a closing bracket, the end, or `,` or `:` and a string, an
+  object, an array or a whole literal). A bare value ends at `}` and `]`. So
   `{"pattern":"Bearer ","path":"src"}` and `{"command":"x --token"}` are left whole, and
   `{"args":["--token","abc"]}` hides `abc` inside its quotes. As before this change, a wait still crosses
   `", "` into the next string (`{"a": "Bearer", "b": "c"}` hides `b`): hidden too much, still JSON.
 - **The flag's name is read word by word,** split at `-`, `_`, `.` and capitals: `token`, `key`, `secret`,
   `password`, `passwd`, `auth`, `credential(s)`, and `pass` whole. A word run together counts when it
   ends in `token`, `secret`, `password` or `passwd` (`--accesstoken`, `--clientsecret`), or is `key` after
-  `api`, `access`, `private`, `secret` or `auth` (`--apikey`, `--secretkey`). So `--keyboard`, `--monkey`,
+  a word ending in `api`, `access`, `private`, `secret` or `auth` (`--apikey`, `--secretaccesskey`). So `--keyboard`, `--monkey`,
   `--hotkey`, `--tokenizer` and `--max-tokens` stay. `--key-file=path`, `--sort-key=name` and `sort --key=2,2` are
   hidden though they hold no secret: hiding too much is the safe side. `--pwd` is left: it is as often a
   folder. `--password-stdin` and `--with-token` take no value, so the word after them stays.
@@ -115,8 +116,16 @@ Known limits, left as they are:
   `--token="ab"'cd'` hides `"ab"`.
 - Escaped quotes inside raw JSON stream fragments: `--token \"a b\"` hides only `a` there. The finished
   frame is redacted value by value, and is whole.
-- Run-together names that end in `key` after any other word (`--sshkey`, `--publickey`, `--hostkey`), and
+- Run-together names that end in `key` after any other word (`--sshkey`, `--publickey`, `--hostkey`;
+  a word ending in `api`, `access`, `private`, `secret` or `auth` before `key` counts), and
   plurals (`--tokens`, `--secrets`, `--passwords`), which were hidden when any part of the name matched.
+- A quoted secret that starts `,"`, `,[`, `,{`, `:"`, `:[` or `:{` reads as JSON going on, and stays
+  visible. One that starts with `}` or `]`, or with `,` or `:` and anything else, is hidden.
+- Raw JSON with whitespace before a comma (`"--token " , "b"`) may not stay valid JSON.
+- In raw stream fragments, as before this change: an environment value in escaped quotes
+  (`API_KEY=\"x\"`) and a secret-named JSON key (`"password":"x"`, `"X-Api-Key":"x"`) are not hidden;
+  only a frame redacted value by value has its keys checked.
+- `-Password (ConvertTo-SecureString "x" …)` hides the cmdlet's name, not the value, as before.
 - A hyphened header name with no space after its colon that doesn't start `X-` (`Api-Key:abc`).
 - Hidden too much: prose such as `re-auth: needed now` reads as a header and loses `needed`; a path or a
   column after `--key-file`, `--sort-key`; `-Credential $cred`.

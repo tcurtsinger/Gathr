@@ -97,7 +97,9 @@ pub fn redact(text: &str) -> String {
             if len == 0 {
                 // In raw JSON text the wait ends where the JSON closes: at its brackets, and
                 // at the quote that ends the string the flag was the last word of.
-                let closes = matches!(first, '}' | ']') || (opens && closes_json(rest));
+                // A bracket a secret starts with (`--password }abc`) is passed, not an end.
+                let bracket = matches!(first, '}' | ']') && ends_json_value(&rest[1..]);
+                let closes = bracket || (opens && closes_json(rest));
                 if ends_command(first) || closes {
                     waiting = None;
                 }
@@ -131,7 +133,7 @@ fn mark_len(text: &str) -> Option<usize> {
 }
 
 /// How much of `text`, from its start, is one value: a quoted run, or up to whitespace, a quote,
-/// `;` or `)`. 0 when it starts with none, or with a mark.
+/// `;`, `)`, `}` or `]`. 0 when it starts with none, or with a mark.
 fn value_len(text: &str) -> usize {
     if text.starts_with(MARK) {
         return 0;
@@ -144,27 +146,45 @@ fn value_len(text: &str) -> usize {
             close.map_or(0, |at| at + 2)
         }
         _ => {
-            let ends =
-                |c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\' | ';' | ')');
+            let ends = |c: char| {
+                c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\' | ';' | ')' | '}' | ']')
+            };
             text.find(ends).unwrap_or(text.len())
         }
     }
 }
 
 /// Whether the quote `text` starts with closes a string of raw JSON text rather than opening a
-/// value: the text ends there, or goes on as JSON does, with `}`, `]`, or `,` or `:` and the next
-/// JSON value. So `"Bearer ","path":…` hides nothing, and a shell's `--token ":abc"` still does.
+/// value: the text ends there, or goes on as JSON does. After `}` or `]`, nothing or what can
+/// follow a JSON value; after `,` or `:`, a string, an object, an array, or a whole number,
+/// `true`, `false` or `null`. So `"Bearer ","path":…` hides nothing, and a quoted secret that
+/// starts `}Q7…` or `:123abc` is still one.
 fn closes_json(text: &str) -> bool {
     let after = &text[1..];
-    let goes_on = after.strip_prefix([',', ':']).is_some_and(|next| {
-        let next = next.trim_start();
-        next.starts_with(['"', '{', '[', '-'])
-            || next.starts_with(|c: char| c.is_ascii_digit())
-            || ["true", "false", "null"]
-                .iter()
-                .any(|word| next.starts_with(word))
-    });
-    after.is_empty() || after.starts_with(['}', ']']) || goes_on
+    match after.chars().next() {
+        None => true,
+        Some('}' | ']') => ends_json_value(&after[1..]),
+        Some(',' | ':') => {
+            let next = after[1..].trim_start();
+            let len = next.find(ends_json_value_at).unwrap_or(next.len());
+            let literal = &next[..len];
+            let number = literal.starts_with(|c: char| c.is_ascii_digit() || c == '-')
+                && literal.parse::<f64>().is_ok();
+            next.starts_with(['"', '{', '['])
+                || number
+                || matches!(literal, "true" | "false" | "null")
+        }
+        Some(_) => false,
+    }
+}
+
+/// What may stand right after a JSON value.
+fn ends_json_value_at(c: char) -> bool {
+    c.is_whitespace() || matches!(c, ',' | '}' | ']')
+}
+
+fn ends_json_value(rest: &str) -> bool {
+    rest.is_empty() || rest.starts_with(ends_json_value_at)
 }
 
 /// The mark in place of `value`, inside the value's own quotes when it has them, so JSON text
@@ -212,7 +232,7 @@ fn secret_name(name: &str) -> bool {
             || SECRET_ENDS.iter().any(|end| word.ends_with(end))
             || word
                 .strip_suffix("key")
-                .is_some_and(|of| KEY_OF.contains(&of))
+                .is_some_and(|of| KEY_OF.iter().any(|kind| of.ends_with(kind)))
     };
     words.split(['-', '_', '.']).any(secret) || name.eq_ignore_ascii_case("pass")
 }
@@ -298,6 +318,9 @@ fn url_login(rest: &str, scheme_end: usize) -> Option<(usize, usize)> {
         |c: char| c.is_whitespace() || matches!(c, '/' | '?' | '#' | '"' | '\'' | '`' | '\\');
     let host = &host[..host.find(ends).unwrap_or(host.len())];
     let login = &host[..host.rfind('@')?];
+    if login.starts_with(MARK) {
+        return None;
+    }
     let start = scheme_end + "://".len();
     let secret = match login.find(':') {
         Some(colon) => colon + 1,

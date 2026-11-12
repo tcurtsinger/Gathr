@@ -48,9 +48,10 @@ fn unwrapped(command: &str) -> String {
         let run_together = short.len() <= 3 && short.bytes().all(|b| b.is_ascii_lowercase());
         let command = match name {
             // There `-e` and `-ec` are -EncodedCommand: its base64 is no script to show.
-            "pwsh" | "powershell" => ["-command", "-c"]
-                .iter()
-                .any(|c| last.eq_ignore_ascii_case(c)),
+            // PowerShell takes any start of `-Command`: `-c`, `-com`.
+            "pwsh" | "powershell" => {
+                last.len() >= 2 && "-command".starts_with(&last.to_ascii_lowercase())
+            }
             _ => short.ends_with('c') && run_together,
         };
         let wraps = SHELLS.contains(&name) && command && before.iter().all(|f| f.starts_with('-'));
@@ -125,6 +126,8 @@ mod tests {
             ("bash -l -c \"npm test\"".to_string(), "npm test"),
             ("sh -ec 'make all'".to_string(), "make all"),
             ("pwsh -C 'git fetch'".to_string(), "git fetch"),
+            ("pwsh -NoProfile -Comm 'git pull'".to_string(), "git pull"),
+            ("powershell -co dir".to_string(), "dir"),
             ("pwsh -NoProfile -c 'git log'".to_string(), "git log"),
             ("powershell.exe -NoLogo -COMMAND 'dir'".to_string(), "dir"),
         ];
@@ -143,6 +146,7 @@ mod tests {
             "pwsh -ec aGVsbG8=",
             "pwsh -e aGVsbG8=",
             "powershell -NoProfile -enc aGVsbG8=",
+            "pwsh - x",
             // A script file run by a shell: without the shell it would read as a bare name.
             "bash -l build.sh",
             "sh -e deploy.sh",
