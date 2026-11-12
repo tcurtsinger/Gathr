@@ -140,7 +140,9 @@ test('the map shows from three ticks up, long for the person and short for the l
   await expect.poll(() => ticks().length).toBe(0);
 });
 
-test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', { repeats: 60 }, async () => {
+test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', {
+  repeats: 60,
+}, async () => {
   await render(<View state={chat(day(11, 6, tall))} />);
   const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
   const inView = () => names(ticks().filter((t) => t.hasAttribute('data-in-view')));
@@ -168,7 +170,9 @@ test('the current tick is the latest message at or above the middle of the chat,
   const before = viewport().scrollTop;
   const target = (below('u11-2') as number) - (middle - 30);
   viewport().scrollTop += target;
-  log.push(`set@${at()} from=${before} by=${target} now=${viewport().scrollTop} below=${below('u11-2')} middle=${middle}`);
+  log.push(
+    `set@${at()} from=${before} by=${target} now=${viewport().scrollTop} below=${below('u11-2')} middle=${middle}`,
+  );
   try {
     await expect.poll(current).toEqual([`You · ${hhmm(11, 0)}`]);
   } catch (e) {
