@@ -287,7 +287,8 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
 
 /// F1 (found in #148): a start under way when the chat is archived found the account signed out
 /// and put its turn back to wait for a sign-in, though archiving had just stopped it: restored, the
-/// chat sent it at the next sign-in. It stays stopped, and a sign-in starts nothing there.
+/// chat sent it at the next sign-in. It stays stopped (answered, live and in its history, with no
+/// carry-on), and a sign-in starts nothing there.
 #[test]
 fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
     let data = TempDir::new();
@@ -321,8 +322,10 @@ fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
         assert!(ok, "{rows}");
         rows["rows"][0]["status"].as_str().map(String::from)
     };
-    until(3, "the turn", status);
-    std::thread::sleep(std::time::Duration::from_millis(300));
+    let entered = data.0.join("version-hold.entered");
+    until(5, "the start to wait in the version check", || {
+        entered.exists().then_some(())
+    });
     let archive = format!("/api/chats/{chat}/archive");
     let archiving = std::thread::spawn(move || gathr::http::call(port, &token, "POST", &archive));
     until(3, "archiving to stop the turn", || {

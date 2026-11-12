@@ -286,7 +286,12 @@ pub fn add_turn(
 /// the chat's next place (0028).
 /// A turn that has ended never goes back to waiting: a start under way when its chat was archived
 /// would otherwise put back a turn archiving stopped (F1).
-pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) -> Result<(), Error> {
+pub fn set_turn(
+    conn: &Connection,
+    id: &str,
+    status: &str,
+    why: Option<&str>,
+) -> Result<bool, Error> {
     let ended = matches!(status, "done" | "stopped" | "failed").then(now_us);
     let placed = !matches!(status, "queued" | "waiting_sign_in");
     conn.prepare_cached(
@@ -298,8 +303,9 @@ pub fn set_turn(conn: &Connection, id: &str, status: &str, why: Option<&str>) ->
          WHERE id = ?1
            AND NOT (?2 IN ('queued', 'waiting_sign_in') AND status IN ('done', 'stopped', 'failed'))",
     )?
-    .execute(params![id, status, why, ended, placed])?;
-    Ok(())
+    .execute(params![id, status, why, ended, placed])
+    .map(|n| n > 0)
+    .map_err(Error::from)
 }
 
 /// A turn's place in its chat (none until it starts) and when it was made, as history shows them.
