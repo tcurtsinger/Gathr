@@ -98,7 +98,8 @@ pub fn point_for(conn: &Connection, chat: &str, agent: &str) -> Result<Option<i6
 }
 
 /// The line a turn is given once its agent's conversation nears where it compacts (K3).
-pub const SOON: &str = "Your conversation is close to its compaction point: when it compacts, earlier detail goes.     Write down what you still need (your notes, the task, the plan) in your own folder now.";
+pub const SOON: &str = "Your conversation is close to its compaction point: when it compacts, earlier detail goes. \
+    Write down what you still need (your notes, the task, the plan) in your own folder now.";
 
 /// Whether the agent's next turn in `chat` gets `SOON`: its last call filled 75% of where it compacts,
 /// and it hasn't been told since its last compaction. Marked told when it does.
