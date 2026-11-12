@@ -77,6 +77,7 @@ impl Tools {
             + Tools::checks_router()
             + Tools::message_router()
             + Tools::merge_router()
+            + Tools::github_router()
             + Tools::settings_router()
     }
 }

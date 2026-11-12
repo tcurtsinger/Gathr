@@ -11,6 +11,7 @@ mod chats;
 mod check_runs;
 mod cleanup;
 mod coord;
+mod github;
 mod logs;
 mod merging;
 mod models;
