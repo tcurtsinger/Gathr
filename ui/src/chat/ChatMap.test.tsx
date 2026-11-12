@@ -143,6 +143,12 @@ test('the map shows from three ticks up, long for the person and short for the l
 test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', {
   repeats: 60,
 }, async () => {
+  // As after the first test: a map at 700px wide, then the page widened again.
+  const first = await render(<View state={chat(day(11, 2))} />);
+  await page.viewport(700, 1100);
+  await expect.poll(() => ticks().length).toBe(0);
+  await first.unmount();
+  await page.viewport(1280, 1100);
   await render(<View state={chat(day(11, 6, tall))} />);
   const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
   const inView = () => names(ticks().filter((t) => t.hasAttribute('data-in-view')));
