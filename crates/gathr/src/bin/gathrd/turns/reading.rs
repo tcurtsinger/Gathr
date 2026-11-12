@@ -305,6 +305,13 @@ impl Task {
             }
             Frame::Thinking { tokens } => self.thinking(tokens).await,
             Frame::Thought => self.thought("done").await,
+            // A Codex thought's summary lines come every few seconds: progress, as Claude Code's
+            // token counts are, so a long thought is no stall. The lines are never read (0042).
+            Frame::Other(method) if method.starts_with("item/reasoning/") => {
+                if let Some(turn) = self.turn.as_mut() {
+                    turn.progress_at = std::time::Instant::now();
+                }
+            }
             Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
     }

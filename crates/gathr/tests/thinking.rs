@@ -14,8 +14,19 @@ use serde_json::{Value, json};
 /// A service whose engines replay `name`, with a signed-in account for `engine`, and the chat
 /// of one agent on it.
 fn service(data: &Path, engine: &str, name: &str) -> (TestService, String, Value) {
+    service_stalling_after(data, engine, name, "600000")
+}
+
+/// The same, flagging a turn as stalled after `stall` milliseconds without progress.
+fn service_stalling_after(
+    data: &Path,
+    engine: &str,
+    name: &str,
+    stall: &str,
+) -> (TestService, String, Value) {
     let (replay, played) = (common::replay_engine(), recording(name));
     let env = [
+        ("GATHR_STALL_AFTER_MS", Path::new(stall)),
         ("GATHR_CLAUDE_PATH", replay.as_path()),
         ("GATHR_CODEX_PATH", replay.as_path()),
         ("GATHR_REPLAY", played.as_path()),
@@ -337,4 +348,44 @@ fn a_codex_thought_under_way_opens_live_then_closes_with_its_time_and_none_of_it
             "the summary's {words:?} is in {shown}"
         );
     }
+}
+
+/// A Codex thought's summary lines are progress, as Claude Code's token counts are: a thought of
+/// 2 s whose lines come every 0.5 s is no stall with a stall time of 1.2 s. (The live socket
+/// in these tests gives up after 3 s of nothing, so the thought is kept under that.)
+#[test]
+fn a_long_codex_thought_whose_summary_keeps_coming_is_not_a_stall() {
+    let data = TempDir::new();
+    let (service, chat, agent) =
+        service_stalling_after(&data.0, "codex", "thinking_codex_long", "1200");
+    let (history, _) = one_turn(&service, &chat, &agent, "done");
+    assert_eq!(kinds(&history), ["thinking", "text"], "{history}");
+    let took = thoughts(&history)[0]["body"]["duration_ms"]
+        .as_i64()
+        .unwrap();
+    assert!(took >= 1_500, "it ran 2 s: {history}");
+    let reference = history["turns"][0]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{trace}");
+    let names: Vec<&str> = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["name"].as_str())
+        .collect();
+    assert!(!names.contains(&"gathr.turn.stalled"), "{names:?}");
+    assert!(!format!("{history} {trace}").contains("Made-up step"));
+}
+
+/// A Codex start still held when the reply's words come was a thought nobody could have seen: it
+/// opens nothing, even with the turn left open longer than the hold.
+#[test]
+fn a_codex_start_followed_at_once_by_words_opens_no_thought() {
+    let data = TempDir::new();
+    let (service, chat, agent) = service(&data.0, "codex", "thinking_codex_held");
+    let (history, heard) = one_turn(&service, &chat, &agent, "done");
+    assert_eq!(kinds(&history), ["text"], "{history}");
+    let thinking = |e: &&Value| e["message"]["kind"] == "thinking";
+    assert_eq!(heard.iter().filter(thinking).count(), 0, "{heard:?}");
+    assert!(traced(&data.0, &history).is_empty());
 }

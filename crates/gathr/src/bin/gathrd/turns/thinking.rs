@@ -84,7 +84,11 @@ impl Task {
         if let Some(Ok(line)) = self.lines.as_mut().map(|lines| lines.try_recv()) {
             return self.on_line(line).await;
         }
-        let Some(began) = self.turn.as_mut().and_then(|t| t.thought_began.take()) else {
+        let Some(turn) = self.turn.as_mut() else {
+            return;
+        };
+        // Once the person stopped the turn, nothing new opens.
+        let Some(began) = turn.thought_began.take().filter(|_| !turn.stopping) else {
             return;
         };
         let started_us = now_us() - began.at.elapsed().as_micros() as i64;

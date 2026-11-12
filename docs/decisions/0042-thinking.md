@@ -98,7 +98,7 @@ thought starts, so its row says "Thinking" live too.
   `none`). No default is documented. Until this was amended Gathr sent no `summary` on
   `turn/start`, which fits the empty, instant marks seen in real use. SerenityOS sends none.
 - **Codex with and without a summary** (2026-11-12, `codex app-server` 0.167.2, a signed-in test
-  account, one puzzle that needs no tools, each way once):
+  account, one puzzle that needs no tools, three runs: none, `auto` and `detailed`):
   - no `summary`: reasoning items at 22, 40, 54, 69 and 73 s, each `item/started` and
     `item/completed` 1 to 4 ms apart, `summary: []`, `content: []`.
   - `"summary": "auto"`: `item/started` when the thinking begins (3.3 s) and `item/completed`
@@ -202,9 +202,13 @@ through a debug build.
   measured; `"concise"` was not run.
 - **A Codex thought shorter than the 250 ms hold** reads as a mark, so it is timed by the quiet
   before it, or dropped. None that short was seen with a summary on.
-- **A Codex thought over the stall time (10 minutes).** Only its start counts as progress; the
-  summary's frames are dropped before they could. Such a turn would be flagged once as showing no
-  progress, never stopped.
+- **A Codex thought over the stall time (10 minutes) whose summary stops coming.** Its start and
+  each of the summary's frames count as progress (the frames came every 3 to 12 s in the runs),
+  so a long thought is not flagged. One that sent none for the stall time would be flagged once
+  as showing no progress, never stopped. None was seen.
+- **A real Codex turn through the service,** 2026-11-12, the same account and puzzle: the row
+  read "Thinking" 4 s in, and the turn kept four thoughts of 21, 17, 10 and 14 s, back to back.
+  A second turn that ran two commands in 13 s kept no thought.
 - **Whether `summary` stays set on a resumed thread.** Gathr sends it on every `turn/start`, so
   it does not rely on it.
 - **Whether Claude Code puts `parent_tool_use_id` on a sub-agent's `system/thinking_tokens`.**

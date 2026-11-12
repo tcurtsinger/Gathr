@@ -1,0 +1,21 @@
+{"dir":"note","line":"Made up, not a recording: hand-written Codex frames in the shape of a turn started with a reasoning summary (thinking_codex_live says where the shape is from). One thought of 2 s whose summary lines come every 0.5 s, then a reply: with a stall time of 1.2 s the lines are the only progress there is. Every id and word is invented. docs/decisions/0042-thinking.md."}
+{"dir":"in","line":"{\"id\":3,\"method\":\"turn/start\",\"params\":{\"input\":[{\"text\":\"Think it through\",\"type\":\"text\"}],\"summary\":\"auto\",\"threadId\":\"test-thread\"}}"}
+{"dir":"out","line":"{\"id\":3,\"result\":{\"turn\":{\"id\":\"test-turn\",\"rootTurnId\":\"test-turn\",\"items\":[],\"itemsView\":\"notLoaded\",\"status\":\"inProgress\",\"error\":null,\"startedAt\":1794300000,\"completedAt\":null,\"durationMs\":null}}}"}
+{"dir":"out","line":"{\"method\":\"turn/started\",\"params\":{\"threadId\":\"test-thread\",\"turn\":{\"id\":\"test-turn\",\"rootTurnId\":\"test-turn\",\"items\":[],\"itemsView\":\"notLoaded\",\"status\":\"inProgress\",\"error\":null,\"startedAt\":1794300000,\"completedAt\":null,\"durationMs\":null}}}"}
+{"dir":"out","line":"{\"method\":\"item/started\",\"params\":{\"item\":{\"type\":\"userMessage\",\"id\":\"user-1\",\"content\":[{\"type\":\"text\",\"text\":\"Think it through\",\"text_elements\":[]}]},\"threadId\":\"test-thread\",\"turnId\":\"test-turn\"}}"}
+{"dir":"out","line":"{\"method\":\"item/started\",\"params\":{\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[],\"content\":[]},\"threadId\":\"test-thread\",\"turnId\":\"test-turn\"}}"}
+{"dir":"sleep","line":"500"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"summaryIndex\":0}}"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"delta\":\"**Made-up step 1**\",\"summaryIndex\":0}}"}
+{"dir":"sleep","line":"500"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"summaryIndex\":1}}"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"delta\":\"**Made-up step 2**\",\"summaryIndex\":1}}"}
+{"dir":"sleep","line":"500"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"summaryIndex\":2}}"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"delta\":\"**Made-up step 3**\",\"summaryIndex\":2}}"}
+{"dir":"sleep","line":"500"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryPartAdded\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"summaryIndex\":3}}"}
+{"dir":"out","line":"{\"method\":\"item/reasoning/summaryTextDelta\",\"params\":{\"threadId\":\"test-thread\",\"turnId\":\"test-turn\",\"itemId\":\"rs_1\",\"delta\":\"**Made-up step 4**\",\"summaryIndex\":3}}"}
+{"dir":"out","line":"{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[\"**Made-up step 1**\"],\"content\":[]},\"threadId\":\"test-thread\",\"turnId\":\"test-turn\"}}"}
+{"dir":"out","line":"{\"method\":\"item/completed\",\"params\":{\"item\":{\"type\":\"agentMessage\",\"id\":\"msg-1\",\"text\":\"Thought it through.\",\"phase\":\"final_answer\"},\"threadId\":\"test-thread\",\"turnId\":\"test-turn\"}}"}
+{"dir":"out","line":"{\"method\":\"turn/completed\",\"params\":{\"threadId\":\"test-thread\",\"turn\":{\"id\":\"test-turn\",\"rootTurnId\":\"test-turn\",\"items\":[],\"itemsView\":\"notLoaded\",\"status\":\"completed\",\"error\":null,\"startedAt\":1794300000,\"completedAt\":1794300004,\"durationMs\":4000}}}"}
