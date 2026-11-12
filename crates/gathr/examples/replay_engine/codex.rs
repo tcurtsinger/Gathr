@@ -116,6 +116,12 @@ pub fn run() {
                                     return;
                                 }
                             }
+                            Some("sleep") => {
+                                let ms = row["line"].as_str().and_then(|ms| ms.parse().ok());
+                                std::thread::sleep(std::time::Duration::from_millis(
+                                    ms.unwrap_or(0),
+                                ));
+                            }
                             Some("hold") => {
                                 let held =
                                     std::env::var_os("GATHR_REPLAY_HOLD").unwrap_or_default();

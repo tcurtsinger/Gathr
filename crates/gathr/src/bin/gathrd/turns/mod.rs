@@ -30,6 +30,7 @@ mod pushes;
 mod reading;
 mod records;
 mod state;
+mod thinking;
 mod workspace;
 
 pub use process::CLOSE_GRACE;
@@ -100,6 +101,7 @@ struct Running {
     streamed: bool,
     /// Tool calls under way.
     tools: HashMap<String, OpenTool>,
+    thought: Option<thinking::OpenThought>,
     /// Questions Claude Code asked and nobody has answered: each tool, its input and why it asks.
     approvals: HashMap<String, (String, Value, Option<String>)>,
     /// Service-side asks (pushes and Codex wait checks): where each answer goes.
@@ -789,6 +791,7 @@ impl Task {
             partial_units: 0,
             streamed: false,
             tools: HashMap::new(),
+            thought: None,
             approvals: HashMap::new(),
             service_approvals: HashMap::new(),
             push_allowed: false,

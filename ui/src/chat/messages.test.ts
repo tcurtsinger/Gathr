@@ -2,7 +2,15 @@
 // whom, and which of Gathr's notes become one-line events.
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { expect, test } from 'vitest';
-import { type Agent, Failure, type Message, type Task, type ToolBody, type Turn } from '../api';
+import {
+  type Agent,
+  Failure,
+  type Message,
+  type Task,
+  type ThinkingBody,
+  type ToolBody,
+  type Turn,
+} from '../api';
 import { duration } from './fold';
 import { type Custom, toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
@@ -634,4 +642,64 @@ test('the lead is headed by its role, whatever task its turn runs on; a member b
   expect(custom(byId(items, 'a-mira7'))).toMatchObject({ role: 'supervisor', head: true });
   expect(custom(byId(items, 'a-mira7')).on).toBeUndefined();
   expect(custom(byId(items, 'a-kit')).on).toBe('Task 2');
+});
+
+const thought = (turnId: string, id: string, body: ThinkingBody, time = at()): Message => ({
+  id,
+  turn: turnId,
+  time,
+  role: 'assistant',
+  kind: 'thinking',
+  body,
+});
+
+test('a thought is a step that says how long it took, never counted with what the turn ran; under a second it is left out (0042)', () => {
+  const state = round();
+  const t0 = Date.UTC(2026, 10, 8, 10, 0, 0);
+  const iso = (s: number) => new Date(t0 + s * 1000).toISOString();
+  state.turns.lead = { ...turn('lead', 'mira', { created: iso(0) }), position: 9 };
+  state.messages.push(
+    thought('lead', 'th1', { status: 'done', duration_ms: 9_400, tokens: 204 }, iso(0)),
+    tool('lead', 't1', 'Read', {}, iso(10)),
+    thought('lead', 'th2', { status: 'done', duration_ms: 300 }, iso(11)),
+    tool('lead', 't2', 'Bash', {}, iso(12)),
+    thought('lead', 'th3', { status: 'stopped', duration_ms: 72_000 }, iso(13)),
+  );
+  state.turns.lead.status = 'stopped';
+  const block = byId(view(state).items, 'a-lead');
+  // A thought is never the turn's message, and one that ends the turn still counts in its time.
+  expect(text(block)).toBe('');
+  const work = custom(block).work;
+  expect(work).toMatchObject({ label: 'Worked for 1m 25s', notes: ['2 steps'] });
+  expect(work?.steps).toEqual([
+    { id: 'th1', label: 'Thought for 9s', state: 'ok', time: '' },
+    { id: 't1', label: 'Read a file', state: 'ok', time: '' },
+    { id: 't2', label: 'Ran a command', state: 'ok', time: '' },
+    { id: 'th3', label: 'Thought for 1m 12s', state: 'stopped', time: '' },
+  ]);
+
+  // A turn that only thought, for under a second, has nothing to show: no row.
+  const only = round();
+  only.turns.lead = { ...turn('lead', 'mira', { status: 'failed' }), position: 9 };
+  only.messages.push(thought('lead', 'th1', { status: 'done', duration_ms: 20 }));
+  expect(custom(byId(view(only).items, 'a-lead')).work).toBeUndefined();
+});
+
+test('while a thought runs the turn’s row says Thinking; its end over the socket makes it the step', () => {
+  let state = round();
+  state.turns.kit.status = 'running';
+  state.messages.push(tool('kit', 'k1', 'Edit'), thought('kit', 'th', { status: 'running' }));
+  const running = custom(byId(view(state).items, 'a-kit')).work;
+  expect(running).toMatchObject({ running: true, label: 'Thinking', notes: ['1 step'] });
+  expect(running?.steps.at(-1)).toEqual({ id: 'th', label: 'Thinking', state: 'running', time: '' });
+
+  state = apply(state, {
+    type: 'tool',
+    chat: 'c',
+    message: 'th',
+    body: { status: 'done', duration_ms: 6_000 },
+  });
+  const after = custom(byId(view(state).items, 'a-kit')).work;
+  expect(after).toMatchObject({ running: true, label: 'Working', notes: ['1 step'] });
+  expect(after?.steps.at(-1)).toMatchObject({ label: 'Thought for 6s', state: 'ok' });
 });

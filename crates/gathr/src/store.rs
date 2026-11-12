@@ -163,11 +163,11 @@ const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
-/// A message as the API shows it; tool messages carry their JSON body as an object.
+/// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
     let body = match kind.as_str() {
-        "tool" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
+        "tool" | "thinking" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
     Ok(json!({
@@ -206,7 +206,38 @@ pub fn add_message(
     kind: &str,
     body: &str,
 ) -> Result<Value, Error> {
-    let ts = now_us();
+    add_message_at(conn, chat, turn, role, kind, body, now_us())
+}
+
+/// `add_message` for one that began at `began`, before it could be saved (a thought known only
+/// once it's over, 0042). The chat reads in time order, so it's never put before the turn's
+/// last message.
+pub fn add_message_from(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    (role, kind, body): (&str, &str, &str),
+    began: i64,
+) -> Result<Value, Error> {
+    let last: Option<i64> = conn
+        .prepare_cached(
+            "SELECT ts FROM messages WHERE chat_id = ?1 AND turn_id = ?2 ORDER BY ts DESC LIMIT 1",
+        )?
+        .query_row([chat, turn], |r| r.get(0))
+        .optional()?;
+    let ts = began.max(last.map_or(0, |ts| ts + 1));
+    add_message_at(conn, chat, turn, role, kind, body, ts)
+}
+
+fn add_message_at(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    role: &str,
+    kind: &str,
+    body: &str,
+    ts: i64,
+) -> Result<Value, Error> {
     let id = ulid(ts);
     conn.prepare_cached(
         "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",

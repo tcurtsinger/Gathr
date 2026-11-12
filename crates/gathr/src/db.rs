@@ -35,6 +35,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0025_agent_context.sql"),
     include_str!("../migrations/0026_completed_reviews.sql"),
     include_str!("../migrations/0027_chat_state.sql"),
+    include_str!("../migrations/0028_thinking.sql"),
 ];
 
 /// The schema version this build writes.
@@ -243,6 +244,74 @@ mod tests {
             })
             .unwrap();
         assert_eq!(broken, 0);
+    }
+
+    /// 0028 rebuilds `messages`, which the search index points at by rowid: every message keeps
+    /// its rowid and columns, search finds what it found, and a thinking row is never indexed.
+    #[test]
+    fn messages_keep_their_rowids_and_search_through_the_thinking_rebuild() {
+        let path = temp_db("thinking");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..27] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 27;
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts) VALUES ('t', 'c', 'x', 'done', 1);
+             INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, to_agent, copy_of) VALUES
+                 ('gone', 'c', 't', 1, 'user', 'text', 'gravel deleted', NULL, NULL),
+                 ('asked', 'c', 't', 2, 'user', 'text', 'gravel road', NULL, NULL),
+                 ('ran', 'c', 't', 3, 'assistant', 'tool', '{\"tool\":\"gravel\",\"status\":\"ok\"}', NULL, NULL),
+                 ('sent', 'c', 't', 4, 'assistant', 'text', 'gravel for Bo', 'bo', NULL),
+                 ('told', 'c', NULL, 5, 'gathr', 'text', 'gravel told', NULL, 'sent');
+             DELETE FROM messages WHERE id = 'gone';",
+        )
+        .unwrap();
+        let rows = |conn: &Connection| -> Vec<(i64, String, Option<String>, Option<String>)> {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT rowid, id || role || kind || body || ts || coalesce(turn_id, '-'),
+                                 to_agent, copy_of FROM messages ORDER BY rowid",
+                )
+                .unwrap();
+            let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)));
+            rows.unwrap().map(Result::unwrap).collect()
+        };
+        let found = |conn: &Connection| -> Vec<i64> {
+            let mut stmt = conn
+                .prepare("SELECT rowid FROM message_search WHERE message_search MATCH 'gravel' ORDER BY rowid")
+                .unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        let before = rows(&conn);
+        assert_eq!(found(&conn), [2, 4, 5], "the gap a deleted message left");
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        assert_eq!(rows(&conn), before);
+        assert_eq!(before[2].2.as_deref(), Some("bo"));
+        assert_eq!(before[3].3.as_deref(), Some("sent"));
+        assert_eq!(found(&conn), [2, 4, 5]);
+        // The index still follows the table: a new text is found, a thinking row never is.
+        conn.execute_batch(
+            "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES
+                 ('thought', 'c', 't', 6, 'assistant', 'thinking', '{\"status\":\"gravel\"}'),
+                 ('later', 'c', 't', 7, 'assistant', 'text', 'gravel later');
+             UPDATE messages SET body = 'sand road' WHERE id = 'asked';
+             INSERT INTO message_search (message_search) VALUES ('integrity-check');",
+        )
+        .unwrap();
+        assert_eq!(found(&conn), [4, 5, 7]);
+        let plan: String = conn
+            .query_row(
+                "EXPLAIN QUERY PLAN SELECT id FROM messages WHERE chat_id = 'c' ORDER BY ts",
+                [],
+                |r| r.get(3),
+            )
+            .unwrap();
+        assert!(plan.contains("messages_by_chat"), "{plan}");
     }
 
     #[test]

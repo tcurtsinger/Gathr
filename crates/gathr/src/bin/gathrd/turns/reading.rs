@@ -133,6 +133,14 @@ impl Task {
             turn.progress_at = std::time::Instant::now();
             turn.said = true;
         }
+        // A thought is over once words or a tool follow, whether or not its end was said.
+        if matches!(
+            frame,
+            Frame::TextDelta(_) | Frame::Text(_) | Frame::ToolStart { .. }
+        ) && self.turn.as_ref().is_some_and(|t| t.thought.is_some())
+        {
+            self.thought("done").await;
+        }
         match frame {
             Frame::Replied => {}
             Frame::Init {
@@ -291,6 +299,8 @@ impl Task {
                     self.tool_shape(tool, field);
                 }
             }
+            Frame::Thinking { tokens } => self.thinking(tokens).await,
+            Frame::Thought => self.thought("done").await,
             Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
     }
@@ -428,7 +438,7 @@ impl Task {
     }
 
     /// However the turn ends, what the person already saw stays: text streamed so far is
-    /// saved, and tool calls still open show as stopped.
+    /// saved, and tool calls and a thought still open show as stopped.
     pub(super) async fn keep_what_was_shown(&mut self) {
         let Some(turn) = self.turn.as_mut() else {
             return;
@@ -440,6 +450,9 @@ impl Task {
         self.save_reply(&ids, text, true).await;
         for id in open {
             self.tool_ended(&id, "stopped", None).await;
+        }
+        if self.turn.as_ref().is_some_and(|t| t.thought.is_some()) {
+            self.thought("stopped").await;
         }
     }
 

@@ -1,4 +1,4 @@
-import type { Failure, History, Member, Message, Task, ToolBody, Turn, Wait } from '../api';
+import type { Failure, History, Member, Message, Task, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -95,9 +95,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, messages, partial };
     }
     case 'tool': {
-      const messages = state.messages.map((m) =>
-        m.id === event.message ? { ...m, body: event.body as ToolBody } : m,
-      );
+      const messages = state.messages.map((m) => (m.id === event.message ? { ...m, body: event.body } : m));
       return { ...state, messages };
     }
     case 'turn': {

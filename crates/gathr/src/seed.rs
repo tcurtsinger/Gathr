@@ -104,7 +104,7 @@ struct Turn {
 }
 
 impl Seeder<'_> {
-    /// 500 messages: turns of a question, sometimes tool calls, and an answer.
+    /// 500 messages: turns of a question, sometimes a thought and tool calls, and an answer.
     fn long_chat(&mut self) -> Result<(), Error> {
         let chat = self.chat("Seed: 500 messages")?;
         let mut left = 500;
@@ -117,10 +117,15 @@ impl Seeder<'_> {
             let answer_words = 30 + self.next() % 370;
             let question_words = 5 + self.next() % 35;
             let turn = self.turn(&chat, question_words)?;
+            let thought = tools > 0 && left > tools + 3;
+            if thought {
+                let ms = 1_500 + self.next() % 30_000;
+                self.thought(&turn, ms as i64)?;
+            }
             for _ in 0..tools {
                 self.tool_call(&turn)?;
             }
-            left -= 1 + tools;
+            left -= 1 + tools + u64::from(thought);
             if left > 0 {
                 self.answer(&turn, answer_words as usize)?;
                 left -= 1;
@@ -132,7 +137,14 @@ impl Seeder<'_> {
     fn tool_heavy_chat(&mut self) -> Result<(), Error> {
         let chat = self.chat("Seed: 50 tool calls in a turn")?;
         let turn = self.turn(&chat, 12)?;
-        for _ in 0..50 {
+        for n in 0..50 {
+            // Thoughts between the calls: one too short to show (0042).
+            match n {
+                0 => self.thought(&turn, 9_000)?,
+                20 => self.thought(&turn, 400)?,
+                40 => self.thought(&turn, 72_000)?,
+                _ => {}
+            }
             self.tool_call(&turn)?;
         }
         self.answer(&turn, 120)
@@ -196,6 +208,20 @@ impl Seeder<'_> {
             event.ok()
         };
         event.insert(self.conn)?;
+        self.made.events += 1;
+        Ok(())
+    }
+
+    /// A thought that took `ms`, as the service keeps one (0042): its time and a count of tokens.
+    fn thought(&mut self, turn: &Turn, ms: i64) -> Result<(), Error> {
+        let body = json!({ "status": "done", "duration_ms": ms, "tokens": ms / 20 });
+        self.message(turn, "assistant", "thinking", &body.to_string())?;
+        self.ts += ms * 1_000;
+        let mut event = self
+            .event(turn, "gathr.turn.thinking", "point")
+            .attr("gathr.thinking.tokens_estimate", ms / 20);
+        event.duration_us = Some(ms * 1_000);
+        event.ok().insert(self.conn)?;
         self.made.events += 1;
         Ok(())
     }

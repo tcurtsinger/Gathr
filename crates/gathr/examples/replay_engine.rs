@@ -1,7 +1,8 @@
 //! Stands in for Claude Code in tests: plays back a recorded session (`tests/frames/*.jsonl`).
 //! Each recorded `in` line waits for a line on stdin; each `out` or `err` line is written as it
 //! was recorded; an `exit` line ends it with that code. So the service's driver meets the engine's real frames, in their real order.
-//! A `sleep` row pauses that many milliseconds, for a stream at a real pace (timings, not tests).
+//! A `sleep` row pauses that many milliseconds: a stream at a real pace for timings, and the quiet
+//! a Codex thought is timed by (0042).
 //! A `hold` row waits until the file `GATHR_REPLAY_HOLD` names exists, so a test decides when
 //! the engine goes on; without that variable it's skipped. A `hold` row whose `line` is `take`
 //! also uses the file up, so each one the test makes lets exactly one held turn go on.
