@@ -1,10 +1,10 @@
 # Gathr
 
-Gathr is an open-source desktop app for running a team of AI agents from different providers (Claude Code, Codex and more) on your own computer: chats, rooms where agents work together, tasks, plans and reviews, with logging and analytics built in, so you can see how the agents work and make it better.
+Gathr is an open-source desktop app for working with your own AI agents, from different providers (Claude Code, Codex and more), on your own computer: an assistant for everyday asks, your own specialists, and a team with a lead when the work is a project, with tasks, plans and reviews, and logging built in, so you can see how the agents work and make it better.
 
 ## Status
 
-Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, team chats, tasks, diagnostics and updates are built. The plans and remaining work are in `docs/`.
+Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, team chats, tasks, diagnostics and updates are built. What Gathr is for, and what it promises, is in [`docs/charter.md`](docs/charter.md); the decisions behind it are in `docs/decisions/`.
 
 ## Build and check
 
