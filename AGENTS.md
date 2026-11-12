@@ -1,8 +1,8 @@
 # Gathr
 
-Gathr is an open-source desktop app for running a team of AI agents from different providers (Claude Code, Codex and more) on your own computer: chats, rooms where agents work together, tasks, plans and reviews, with logging and analytics built in, so you can see how the agents work and make it better.
+Gathr is an open-source desktop app for working with your own AI agents, from different providers (Claude Code, Codex and more), on your own computer: an assistant for everyday asks, your own specialists, and a team with a lead when the work is a project, with tasks, plans and reviews, and logging built in, so you can see how the agents work and make it better.
 
-Status: early. Product, design and architecture come first; see `docs/`.
+Status: early. What Gathr is for, the loop work follows and its promises are in [docs/charter.md](docs/charter.md): every plan names the promise it serves. How it's built is in `docs/`.
 
 ## How we build
 
@@ -23,7 +23,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 ### Where you are
 
-- You work inside SerenityOS, the owner's current app, which Gathr replaces one day. Never install, quit or restart SerenityOS, and never stop processes by name (`Stop-Process -Name`, `taskkill /IM`). Stop only what you started, by its process id.
+- You work inside Gathr itself, installed on the owner's PC. SerenityOS, the owner's earlier app, runs beside it until Gathr replaces it. Never install, quit or restart SerenityOS, and never stop processes by name (`Stop-Process -Name`, `taskkill /IM`). Stop only what you started, by its process id.
 - Your own logins only. Never touch the `~/.claude`, `~/.codex` or `~/.serenityos` logins, and never copy a `.credentials.json` or `auth.json`.
 - Ask before installing or downloading anything (its name, source and size), and clean up after trials. No sound without warning. Never read or write the owner's real clipboard.
 - Running many agents at once is normal here; don't flag it as load or a risk.
@@ -60,7 +60,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 ### Friction
 
-At the end of your answer, as "Friction: <what, where>": anything in SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead.
+At the end of your answer, as "Friction: <what, where>": anything in Gathr or SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead.
 
 Friction is how Gathr learns what not to repeat, so it's read all the time, not only logged:
 - Two sources: ours, and SerenityOS's own (`X:\code\serenityos\planning\FRICTION.md`), which the agents maintaining SerenityOS keep adding to.
