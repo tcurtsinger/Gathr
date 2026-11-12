@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckIcon, ChevronRightIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, MinusIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   CollapsibleRoot as Collapsible,
@@ -23,6 +23,8 @@ export interface ToolCallProps {
   result: string;
   running: boolean;
   failed?: boolean;
+  /** Gathr: cut off before it ended (the owner's call, room task 143): a dash and "Stopped", never a check. */
+  stopped?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   className?: string;
@@ -36,6 +38,7 @@ export function ToolCall({
   result,
   running,
   failed = false,
+  stopped = false,
   open,
   onOpenChange,
   className,
@@ -69,15 +72,21 @@ export function ToolCall({
         >
           {query}
         </span>
-        <span className="ms-auto flex w-4 shrink-0 items-center justify-end">
+        {/* Gathr: its own marks (room task 143): done neutral, failed in the destructive colour. */}
+        <span className="ms-auto flex min-w-4 shrink-0 items-center justify-end gap-1">
           {running ? null : failed ? (
             <XIcon
               role="img"
               aria-label="Failed"
-              className="fade-in zoom-in-90 animate-in size-3.5 text-red-500 duration-200"
+              className="fade-in zoom-in-90 animate-in size-3.5 text-destructive duration-200"
             />
+          ) : stopped ? (
+            <>
+              Stopped
+              <MinusIcon aria-hidden="true" className="size-3.5" />
+            </>
           ) : (
-            <CheckIcon className="fade-in zoom-in-90 animate-in size-3.5 text-emerald-500 duration-200" />
+            <CheckIcon className="fade-in zoom-in-90 animate-in size-3.5 duration-200" />
           )}
         </span>
       </CollapsibleTrigger>

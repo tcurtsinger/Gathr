@@ -1,24 +1,14 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import {
-  Bell,
-  Check,
-  ChevronRight,
-  CircleCheck,
-  CircleHelp,
-  LoaderIcon,
-  Minus,
-  PenLine,
-  X,
-} from 'lucide-react';
-import { createContext, type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
+import { Bell, CircleCheck, CircleHelp, PenLine, Send } from 'lucide-react';
+import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
   CollapsibleTrigger,
 } from '@/components/assistant-ui/elements/collapsible-root';
+import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/elements/run-activity';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
-import { ToolGroupContent, ToolGroupRoot } from '@/components/assistant-ui/elements/tool-group.aui';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { clock } from './team';
@@ -59,8 +49,10 @@ export function Speaker({
 }
 
 /**
- * What a turn did before its message, as one row (0037): closed, how long it worked and how much it did,
- * or what it's doing now while it runs; open, each step and what it wrote between them.
+ * What a turn did before its message (0037), as assistant-ui's Run activity (the owner's call, 2026-11-12):
+ * closed, how long it worked and how much it did, or "Working" with its latest step under it while it runs;
+ * open, each tool step as a Tool call, which opens to what it ran and what came back (0044), and Gathr's own
+ * lines between them: what it wrote mid-work, its thoughts, the tasks it gave.
  */
 export function WorkRow({
   work,
@@ -81,40 +73,38 @@ export function WorkRow({
     setHeld(holds);
     if (holds) setOpen(true);
   }
+  const entries: RunActivityEntry[] = work.steps.map((step) => ({
+    id: step.id,
+    kind: 'say' in step ? 'commentary' : 'tool',
+    // The line a running row shows under "Working": its latest step, as it reads now.
+    label:
+      'say' in step
+        ? ''
+        : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
+            .filter(Boolean)
+            .join(' '),
+    content: <StepEntry step={step} found={found} onOpenTask={onOpenTask} />,
+  }));
   return (
-    <ToolGroupRoot variant="ghost" className="work" open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="work-row" data-running={work.running || undefined}>
-        <ChevronRight className="work-chevron" aria-hidden="true" />
-        <span>
-          <span className={work.running ? 'shimmer motion-reduce:animate-none' : undefined}>
-            {work.label}
-          </span>
-          <span className="work-notes">
-            {work.notes.map((note) => ` · ${note}`)}
-            {work.running && work.since !== undefined && <Elapsed since={work.since} lead=" " />}
-          </span>
+    <RunActivity
+      className="work"
+      status={work.running ? 'running' : 'complete'}
+      statusLabel={work.running ? 'Working' : work.label}
+      durationLabel={
+        <span className="work-notes">
+          {work.notes.map((note) => `· ${note}`).join(' ')}
+          {work.running && work.since !== undefined && <Elapsed since={work.since} lead=" " />}
         </span>
-      </CollapsibleTrigger>
-      {/*
-        Opened for a hit, it's whole and in place at once: the hit is centred by where it is. The registry
-        also slides the steps in from 4px above, which moved the hit after it was centred.
-      */}
-      <ToolGroupContent className={holds ? 'animate-none! [&>*>*]:animate-none!' : undefined}>
-        <TooltipProvider>
-          <ol className="work-steps">
-            {work.steps.map((step) => (
-              <StepLine key={step.id} step={step} found={found} onOpenTask={onOpenTask} />
-            ))}
-          </ol>
-        </TooltipProvider>
-      </ToolGroupContent>
-    </ToolGroupRoot>
+      }
+      entries={entries}
+      open={open}
+      onOpenChange={setOpen}
+    />
   );
 }
 
-const MARK = { running: LoaderIcon, ok: Check, error: X, stopped: Minus };
-
-function StepLine({
+/** One step inside the row: a Tool call, or one of Gathr's own lines. */
+function StepEntry({
   step,
   found,
   onOpenTask,
@@ -123,59 +113,43 @@ function StepLine({
   found?: string;
   onOpenTask: (task: number) => void;
 }) {
+  const [open, setOpen] = useState(false);
   if ('say' in step)
-    return <li className={step.say === found ? 'work-say found-part' : 'work-say'}>{step.say}</li>;
-  const Mark = MARK[step.state];
+    return <p className={step.say === found ? 'work-say found-part' : 'work-say'}>{step.say}</p>;
   const { task } = step;
-  return (
-    <li data-state={step.state}>
-      <Mark
-        aria-hidden="true"
-        className={
-          step.state === 'running' ? 'work-mark animate-spin motion-reduce:animate-none' : 'work-mark'
-        }
-      />
-      <span className="work-label">{step.label}</span>
-      {step.state === 'error' && <span className="work-failed">Failed</span>}
-      {step.detail &&
-        (task === undefined ? (
-          <Ran text={step.detail} />
-        ) : (
-          <button type="button" className="work-detail" onClick={() => onOpenTask(task)}>
-            {step.detail}
-          </button>
-        ))}
-      {step.time && <span className="work-time">{step.time}</span>}
-    </li>
-  );
-}
-
-/**
- * The chip for what a step ran (0041), in the step's one line. Cut short, it shows whole when pointed at
- * or focused: a cut chip is a tab stop, so the keyboard reaches its text; a whole one is not.
- */
-function Ran({ text }: { text: string }) {
-  const chip = useRef<HTMLSpanElement>(null);
-  const [cut, setCut] = useState(false);
-  const [whole, setWhole] = useState(false);
-  useLayoutEffect(() => {
-    const el = chip.current;
-    if (!el) return;
-    const measure = () => setCut(el.scrollWidth > el.clientWidth);
-    measure();
-    const watch = new ResizeObserver(measure);
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, []);
-  return (
-    <Tooltip open={whole} onOpenChange={(open) => setWhole(open && cut)}>
-      <TooltipTrigger asChild>
-        <span ref={chip} className="work-detail" data-ran="" tabIndex={cut ? 0 : undefined}>
-          {text}
+  if (task !== undefined)
+    return (
+      <span className="work-line">
+        <Send aria-hidden="true" />
+        <span>{step.label}</span>
+        <button type="button" className="work-task" onClick={() => onOpenTask(task)}>
+          {step.detail}
+        </button>
+      </span>
+    );
+  // A thought: how long, never its text (0042), with nothing to open.
+  if (step.doing === undefined)
+    return (
+      <span className="work-line">
+        <span className={step.state === 'running' ? 'shimmer motion-reduce:animate-none' : undefined}>
+          {step.label}
         </span>
-      </TooltipTrigger>
-      <TooltipContent className="work-ran-whole">{text}</TooltipContent>
-    </Tooltip>
+      </span>
+    );
+  return (
+    <ToolCall
+      className="work-step"
+      label={step.label}
+      activeLabel={step.doing}
+      query={step.detail ?? ''}
+      request={step.request ?? step.label}
+      result={step.result ?? (step.state === 'running' ? '' : 'Nothing to show')}
+      running={step.state === 'running'}
+      failed={step.state === 'error'}
+      stopped={step.state === 'stopped'}
+      open={open}
+      onOpenChange={setOpen}
+    />
   );
 }
 

@@ -47,16 +47,6 @@
       "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa"
     },
     {
-      "path": "components/assistant-ui/elements/tool-fallback.aui.tsx",
-      "url": "https://r.assistant-ui.com/tool-fallback.json",
-      "sha256": "31720ad79fe332a5999cc1873108da740e63c05f4b8f322bde75f8d495cbf853"
-    },
-    {
-      "path": "components/assistant-ui/elements/tool-group.aui.tsx",
-      "url": "https://r.assistant-ui.com/tool-group.json",
-      "sha256": "757caf28ee232d4f500c8af7d6837fe7d6d2b144774a6a0bcdaff8c0c517bd9e"
-    },
-    {
       "path": "components/assistant-ui/elements/tooltip-icon-button.tsx",
       "url": "https://r.assistant-ui.com/tooltip-icon-button.json",
       "sha256": "1ec2af97d22c34c955588c866aba5ddbfc579b1fd9218f68f75010b10e5a7868"
@@ -111,8 +101,8 @@
     {
       "path": "registry.css",
       "url": null,
-      "sha256": "26530427a082fb27260941741a37194a33235d39a6988e540859b25319f77b8f",
-      "why": "The css records of tool-group and tool-fallback (and surfaces' tw-shimmer import), as the registry publishes them."
+      "sha256": "52f6c4b3f3a64fd21a208e08e5b585f2fa309df7565a047d29fe315480f0bb3b",
+      "why": "The data-open and data-closed variants from tool-group's css record, which Run activity and Tool call use, and surfaces' tw-shimmer import, as the registry publishes them."
     },
     {
       "path": "components/assistant-ui/elements/context-display.tsx",
@@ -147,7 +137,9 @@
     {
       "path": "components/assistant-ui/elements/tool-call.tsx",
       "url": "https://r.assistant-ui.com/elements-tool-call.json",
-      "sha256": "ee96c2ba9247910657deace6a3d7e5949c3ef9985d47ad8dd7ea8ec535d51855"
+      "sha256": "ee96c2ba9247910657deace6a3d7e5949c3ef9985d47ad8dd7ea8ec535d51855",
+      "adapted": "6a08d5b0668c2cc8dcd175419cbc7a137afec17b65988fb8e4d7fc74a16e874d",
+      "why": "Gathr's marks (the owner's call, room task 143): a done step's check in the text's own colour, a failed one's cross in the destructive colour, and a stopped step (stopped) shows a dash and \"Stopped\", never a check."
     }
   ]
 }

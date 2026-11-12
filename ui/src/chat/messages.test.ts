@@ -238,19 +238,26 @@ test('a finished turn folds what it did into one row, and its last text is the m
     notes: ['6 steps', 'gave 2 tasks'],
   });
   expect(work?.steps).toEqual([
-    { id: 't1', label: 'Read a file', state: 'ok', time: '' },
-    { id: 't2', label: 'Ran a command', state: 'error', time: '27s' },
+    { id: 't1', label: 'Read a file', doing: 'Reading a file', state: 'ok' },
+    { id: 't2', label: 'Ran a command', doing: 'Running a command', state: 'error' },
     { id: expect.any(String), say: 'Two tasks are stale.' },
-    { id: 't3', label: 'Listed tasks', state: 'ok', time: '' },
-    { id: 't4', label: 'Glob', state: 'ok', time: '' },
-    { id: 't5', label: 'Gave Kit a task', detail: '#7 Open the settings PR', task: 7, state: 'ok', time: '' },
+    { id: 't3', label: 'Listed tasks', doing: 'Listing tasks', state: 'ok' },
+    { id: 't4', label: 'Glob', doing: 'Glob', state: 'ok' },
+    {
+      id: 't5',
+      label: 'Gave Kit a task',
+      doing: 'Giving a task',
+      detail: '#7 Open the settings PR',
+      task: 7,
+      state: 'ok',
+    },
     {
       id: 't6',
       label: 'Gave Rowan a task',
+      doing: 'Giving a task',
       detail: '#8 Bring the fix up to date',
       task: 8,
       state: 'ok',
-      time: '9s',
     },
   ]);
 });
@@ -280,7 +287,10 @@ test('a step shows what it ran as its chip, under the engine’s own words for i
   );
   state.turns.lead.status = 'running';
   const work = custom(byId(view(state).items, 'a-lead')).work;
-  const shown = work?.steps.map((s) => ('say' in s ? s.say : [s.label, s.detail]));
+  // What each step says now: a running one in the present (Tool call swaps between the two).
+  const shown = work?.steps.map((s) =>
+    'say' in s ? s.say : [s.state === 'running' ? s.doing : s.label, s.detail],
+  );
   expect(shown).toEqual([
     ['Show what changed', 'git status --short'],
     ['Ran', 'cargo clippy --workspace'],
@@ -674,10 +684,10 @@ test('a thought is a step that says how long it took, never counted with what th
   const work = custom(block).work;
   expect(work).toMatchObject({ label: 'Worked for 1m 25s', notes: ['2 steps'] });
   expect(work?.steps).toEqual([
-    { id: 'th1', label: 'Thought for 9s', state: 'ok', time: '' },
-    { id: 't1', label: 'Read a file', state: 'ok', time: '' },
-    { id: 't2', label: 'Ran a command', state: 'ok', time: '' },
-    { id: 'th3', label: 'Thought for 1m 12s', state: 'stopped', time: '' },
+    { id: 'th1', label: 'Thought for 9s', state: 'ok' },
+    { id: 't1', label: 'Read a file', doing: 'Reading a file', state: 'ok' },
+    { id: 't2', label: 'Ran a command', doing: 'Running a command', state: 'ok' },
+    { id: 'th3', label: 'Thought for 1m 12s', state: 'stopped' },
   ]);
 
   // A turn that only thought, for under a second, has nothing to show: no row.
@@ -693,7 +703,7 @@ test('while a thought runs the turn’s row says Thinking; its end over the sock
   state.messages.push(tool('kit', 'k1', 'Edit'), thought('kit', 'th', { status: 'running' }));
   const running = custom(byId(view(state).items, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Thinking', notes: ['1 step'] });
-  expect(running?.steps.at(-1)).toEqual({ id: 'th', label: 'Thinking', state: 'running', time: '' });
+  expect(running?.steps.at(-1)).toEqual({ id: 'th', label: 'Thinking', state: 'running' });
 
   state = apply(state, {
     type: 'tool',
@@ -737,4 +747,51 @@ test('thoughts with nothing between them are one step, with their time together 
     label: 'Thought for 7s',
     state: 'stopped',
   });
+});
+
+test('a step opens to what it ran, whole, and the first lines of what came back (0044)', () => {
+  const state = round();
+  state.turns.lead = { ...turn('lead', 'mira'), position: 5 };
+  state.messages.push(
+    tool('lead', 't1', 'Bash', {
+      input: { text: 'cargo nextest run', request: 'cargo nextest run \\n  --workspace --locked' },
+      result: { text: 'Summary 360 tests run: 360 passed', lines: 41, more: true },
+    }),
+    tool('lead', 't2', 'Read', {
+      input: { text: 'AGENTS.md' },
+      result: { text: '212 lines', lines: 1, more: false },
+    }),
+    tool('lead', 't3', 'Bash', { status: 'error', input: { text: 'npx vitest run' } }),
+    { ...said('lead', 'assistant', 'Done.') },
+  );
+  const steps = custom(byId(view(state).items, 'a-lead')).work?.steps;
+  expect(steps).toEqual([
+    {
+      id: 't1',
+      label: 'Ran',
+      doing: 'Running',
+      detail: 'cargo nextest run',
+      state: 'ok',
+      request: 'cargo nextest run \\n  --workspace --locked',
+      result: 'Summary 360 tests run: 360 passed\n…',
+    },
+    {
+      id: 't2',
+      label: 'Read',
+      doing: 'Reading',
+      detail: 'AGENTS.md',
+      state: 'ok',
+      request: 'AGENTS.md',
+      result: '212 lines',
+    },
+    // A step that kept no result says nothing came back rather than inventing one.
+    {
+      id: 't3',
+      label: 'Ran',
+      doing: 'Running',
+      detail: 'npx vitest run',
+      state: 'error',
+      request: 'npx vitest run',
+    },
+  ]);
 });

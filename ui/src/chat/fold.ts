@@ -6,13 +6,17 @@ export type Step =
   | {
       id: string;
       label: string;
+      /** What it says while it runs ("Running"); a thought has none. */
+      doing?: string;
       /** Its chip: what it ran ("git merge origin/main"), or a task it gave ("#119 Open the settings tools PR"). */
       detail?: string;
       /** The task it gave, which its chip opens. */
       task?: number;
       state: ToolBody['status'];
-      /** How long it took, once it ended: "27s". */
-      time: string;
+      /** What it ran, whole (0044): a command's full text, else its chip. */
+      request?: string;
+      /** The first lines of what came back (0044), "…" after them when more did. */
+      result?: string;
     };
 
 /** What a turn did before its message, as the one row above it (0037). */
@@ -84,11 +88,9 @@ const THINKING = 'Thinking';
  * One that took under a second is left out.
  */
 function thought(id: string, { status, duration_ms }: ThinkingBody): Step | [] {
-  if (status === 'running') return { id, label: THINKING, state: 'running', time: '' };
+  if (status === 'running') return { id, label: THINKING, state: 'running' };
   const took = duration(duration_ms ?? 0);
-  return took
-    ? { id, label: `Thought for ${took}`, state: status === 'done' ? 'ok' : 'stopped', time: '' }
-    : [];
+  return took ? { id, label: `Thought for ${took}`, state: status === 'done' ? 'ok' : 'stopped' } : [];
 }
 
 /**
@@ -158,15 +160,21 @@ export function fold(
     // A message from before steps kept their input has none, and reads as it did.
     const ran = made ? undefined : body.input;
     const [didIt, doingIt] = (ran && BESIDE[body.tool]) || [did, now];
+    const result =
+      body.result &&
+      (body.result.more
+        ? `${body.result.text}
+…`
+        : body.result.text);
     return {
       id: m.id,
-      label: made?.owner
-        ? `Gave ${made.owner} a task`
-        : (ran?.title ?? (body.status === 'running' ? doingIt : didIt)),
+      label: made?.owner ? `Gave ${made.owner} a task` : (ran?.title ?? didIt),
+      doing: ran?.title ?? doingIt,
       detail: made ? `#${made.task.number} ${made.task.what}` : ran?.text,
       task: made?.task.number,
       state: body.status,
-      time: duration(body.duration_ms ?? 0),
+      request: ran?.request ?? ran?.text,
+      result,
     };
   });
   if (steps.length === 0) return { text };

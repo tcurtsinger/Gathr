@@ -165,7 +165,7 @@ test("a member's hit opens at its message in the one timeline", async () => {
 test('a hit on what a turn wrote mid-work opens its row at those words', async () => {
   const { hit } = await openAt(team, 'r12');
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
-  const steps = hit.closest('.work-steps') as HTMLElement;
+  const steps = hit.closest('.work ol') as HTMLElement;
   expect(steps).not.toBeNull();
   // Nothing slides the steps in after the hit is centred: it stays where it was put.
   expect(getComputedStyle(steps).animationName).toBe('none');
