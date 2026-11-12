@@ -2,7 +2,7 @@
 // and the approvals docked above the composer.
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
@@ -108,19 +108,16 @@ test('a turn’s row opens to its steps and what it wrote between them, and a ta
   expect(screen.getByText('Made-up remark mid-work').query()).toBeNull();
 
   await screen.getByRole('button', { name: 'Worked for 27s · 3 steps · gave 1 task' }).click();
-  const steps = screen.getByRole('listitem');
-  await expect.element(steps.nth(3)).toBeVisible();
-  expect(steps.elements().map((li) => li.textContent)).toEqual([
-    'Read a file',
-    'Ran a commandFailed27s',
-    'Made-up remark mid-work',
-    'Gave Made-up Member a task#7 Made-up task 7',
-  ]);
+  // Each tool step is assistant-ui's Tool call; what it wrote between them and the task it gave are Gathr's lines.
+  await expect.element(screen.getByText('Made-up remark mid-work')).toBeVisible();
+  expect(screen.getByRole('listitem').elements()).toHaveLength(4);
+  await expect.element(screen.getByRole('button', { name: /Read a file/ })).toBeVisible();
+  await expect.element(screen.getByRole('img', { name: 'Failed' })).toBeVisible();
   await screen.getByRole('button', { name: '#7 Made-up task 7' }).click();
   expect(opened).toEqual([7]);
 });
 
-test('a step’s chip says what it ran; a long one is cut to the column and shows whole when pointed at', async () => {
+test('a step’s chip says what it ran, cut to the column; the step opens to it whole', async () => {
   const long = `cargo nextest run --workspace --locked ${'--made-up-flag '.repeat(12)}`.trim();
   const state: ChatState = {
     ...empty,
@@ -139,41 +136,28 @@ test('a step’s chip says what it ran; a long one is cut to the column and show
     </div>,
   );
   await screen.getByRole('button', { name: 'Worked for 48s · 3 steps' }).click();
-  const steps = screen.getByRole('listitem');
-  await expect.element(steps.nth(2)).toBeVisible();
-  expect(steps.elements().map((li) => li.textContent)).toEqual([
-    'Show what changedgit status --short',
-    `Ran${long}48s`,
-    'Read a file',
-  ]);
-
-  const list = document.querySelector('.work-steps') as HTMLElement;
-  const [short, cut] = [...list.querySelectorAll<HTMLElement>('.work-detail')];
-  expect(short.scrollWidth, 'a short chip shows whole').toBeLessThanOrEqual(short.clientWidth);
-  expect(cut.scrollWidth, 'the long chip is cut').toBeGreaterThan(cut.clientWidth);
+  await expect.element(screen.getByRole('listitem').nth(2)).toBeVisible();
+  const list = document.querySelector('.work ol') as HTMLElement;
+  const chip = screen.getByText(long).element() as HTMLElement;
+  expect(chip.scrollWidth, 'the long chip is cut').toBeGreaterThan(chip.clientWidth);
   expect(list.scrollWidth, 'the chip widened its column').toBeLessThanOrEqual(list.clientWidth);
-  const row = cut.closest('li') as HTMLElement;
-  const time = row.querySelector('.work-time') as HTMLElement;
-  expect(time.getBoundingClientRect().right).toBeLessThanOrEqual(list.getBoundingClientRect().right);
+  // No time per step (the owner's call, room task 142).
+  expect(list.textContent).not.toContain('48s');
 
-  // Only a chip that's cut has more to show: pointing at a whole one opens nothing.
-  await screen.getByText('git status --short').hover();
-  await new Promise((done) => setTimeout(done, 300));
-  expect(screen.getByRole('tooltip').elements()).toHaveLength(0);
-  await screen.getByText(long).hover();
-  await expect.element(screen.getByRole('tooltip')).toHaveTextContent(long);
-  expect(screen.getByRole('tooltip').elements()).toHaveLength(1);
+  await screen.getByRole('button', { name: new RegExp(`^Ran.*${long.slice(0, 20)}`) }).click();
+  const whole = [...list.querySelectorAll('p')].find((p) => p.textContent === long) as HTMLElement;
+  expect(whole, 'the step opens to what it ran, whole').toBeDefined();
+  expect(whole.scrollWidth).toBeLessThanOrEqual(whole.clientWidth);
 });
 
-test('the keyboard reaches a cut chip’s whole text: it takes focus, and a whole chip is no stop', async () => {
+test('the keyboard opens a step: Tab reaches it from its row, Enter shows what it ran', async () => {
   const long = `cargo nextest run --workspace --locked ${'--made-up-flag '.repeat(12)}`.trim();
   const state: ChatState = {
     ...empty,
     members,
     turns: { lead: turn('lead', 'a', 0) },
     messages: [
-      tool('t1', 'lead', 'Bash', { input: { text: 'git status --short' } }),
-      tool('t2', 'lead', 'Shell', { input: { text: long } }),
+      tool('t1', 'lead', 'Shell', { input: { text: long } }),
       said('m1', 'lead', 'Made-up final answer'),
     ],
   };
@@ -182,19 +166,21 @@ test('the keyboard reaches a cut chip’s whole text: it takes focus, and a whol
       <View state={state} />
     </div>,
   );
-  const row = screen.getByRole('button', { name: 'Worked · 2 steps' });
+  const row = screen.getByRole('button', { name: 'Worked · 1 step' });
   await row.click();
-  await expect.element(screen.getByRole('listitem').nth(1)).toBeVisible();
-  const [short, cut] = [...document.querySelectorAll<HTMLElement>('.work-detail')];
-  await expect.poll(() => cut.tabIndex).toBe(0);
-  expect(short.tabIndex).toBe(-1);
+  const step = screen.getByRole('button', { name: new RegExp(`^Ran.*${long.slice(0, 20)}`) });
+  await expect.element(step).toBeVisible();
   (row.element() as HTMLElement).focus();
-  await userEvent.keyboard('{Tab}');
-  expect(document.activeElement).toBe(cut);
-  await expect.element(screen.getByRole('tooltip')).toHaveTextContent(long);
+  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+  await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
+  expect(document.activeElement).toBe(step.element());
+  await userEvent.keyboard('{Enter}');
+  await expect
+    .poll(() => [...document.querySelectorAll('.work ol p')].some((p) => p.textContent === long))
+    .toBe(true);
 });
 
-test('a running turn’s row says what the agent is doing now, with no message under it yet', async () => {
+test('a running turn’s row says Working, with what the agent is doing now under it, and no message yet', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -202,8 +188,8 @@ test('a running turn’s row says what the agent is doing now, with no message u
     messages: [tool('t1', 'lead', 'Read'), tool('t2', 'lead', 'Shell', { status: 'running' })],
   };
   const screen = await render(<View state={state} />);
-  await expect.element(screen.getByRole('button', { name: /^Running a command · 2 steps/ })).toBeVisible();
-  expect(document.querySelector('.work-row .shimmer')?.textContent).toBe('Running a command');
+  await expect.element(screen.getByRole('button', { name: /^Working · 2 steps/ })).toBeVisible();
+  await expect.element(screen.getByText('Running a command', { exact: true })).toBeVisible();
   expect(document.querySelector('.reply-body')?.textContent).toBe('');
 });
 
