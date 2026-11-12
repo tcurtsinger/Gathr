@@ -105,7 +105,7 @@ Each part has its own doc. Read the one your task touches before you start, and 
   - `diag query "<sql>"`: read-only SQL, up to 1,000 rows. Use the `event_log` view: it shows `attrs` as JSON, a readable `time` and each row's `ref`.
   - `diag turn <ref> --raw`: the turns behind a reference, with every engine frame in and out of each, redacted.
   - `diag bundle`: health, a day's failures, recent events and engine frames (no bodies) in one file under `<data>/bundles`.
-  - `diag health` also shows each account's sign-in state, and the messages held on the chats' account.
+  - `diag health` also shows each account's sign-in state, the messages held on the chats' account, and each chat that works or needs the person.
 
 ## Done means used, with proof
 

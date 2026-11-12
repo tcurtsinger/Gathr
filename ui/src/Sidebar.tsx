@@ -40,6 +40,15 @@ export function Sidebar(props: Props) {
         onClick={() => onSelect(c.id)}
       >
         <span>{c.title}</span>
+        {(c.needs || c.working) && (
+          <i
+            className="chat-dot"
+            role="img"
+            data-needs={c.needs || undefined}
+            aria-label={c.needs ? 'Needs you' : 'Agents working'}
+            title={c.needs ? 'Needs you' : 'Agents working'}
+          />
+        )}
       </button>
       <ChatMenu
         label={`More for ${c.title}`}

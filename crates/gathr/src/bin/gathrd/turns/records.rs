@@ -108,6 +108,7 @@ impl Task {
             "agent": ids.agent, "why": why, "ref": reference, "task": ids.task,
             "answers": ids.answers });
         self.publish_turn(ids, update).await;
+        self.chat_state(ids).await;
     }
 
     /// Sends a turn's change live with when it was made and its place once started, read from

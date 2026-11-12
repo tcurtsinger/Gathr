@@ -45,17 +45,29 @@ pub fn put_in_project(
     }
 }
 
-/// The chats in the list, newest first; with rchived, the archived ones, last archived first.
+/// Whether a turn of chat `c` runs (0040). It names the index's own condition first, which is what
+/// lets SQLite read `turns_live` instead of the chat's turns; `NEEDS` does the same.
+const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
+    AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
+
+/// Whether chat `c` waits on the person, as far as the database knows: a turn waits for a sign-in,
+/// or a question to them is open. An approval waiting is the service's to add (it's in no table).
+const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
+        AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
+    OR EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready'))";
+
+/// The chats in the list, newest first, each with whether it's `working` and `needs` the person;
+/// with `archived`, the archived ones, last archived first, which carry neither.
 pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
-    let mut stmt = conn.prepare_cached(
+    let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
-         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC",
-    )?;
+         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
+    ))?;
     let rows = stmt.query_map([archived], |r| {
-        Ok(json!({
+        let mut chat = json!({
             "id": r.get::<_, String>(0)?,
             "title": r.get::<_, String>(1)?,
             "created": crate::ids::utc(r.get(2)?),
@@ -65,9 +77,26 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
             "project": r.get::<_, Option<String>>(5)?,
             "folder": r.get::<_, Option<String>>(6)?,
             "archived": r.get::<_, Option<i64>>(7)?.map(crate::ids::utc),
-        }))
+        });
+        if !archived {
+            chat["working"] = r.get::<_, bool>(8)?.into();
+            chat["needs"] = r.get::<_, bool>(9)?.into();
+        }
+        Ok(chat)
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
+}
+
+/// One chat's `working` and `needs` as its row in the list has them; none for an archived chat, or
+/// one that's gone.
+pub fn chat_state(conn: &Connection, chat: &str) -> Result<Option<(bool, bool)>, Error> {
+    let sql =
+        format!("SELECT {WORKING}, {NEEDS} FROM chats c WHERE c.id = ?1 AND c.archived_ts IS NULL");
+    let row = |r: &rusqlite::Row<'_>| Ok((r.get(0)?, r.get(1)?));
+    Ok(conn
+        .prepare_cached(&sql)?
+        .query_row([chat], row)
+        .optional()?)
 }
 
 pub fn chat_exists(conn: &Connection, chat: &str) -> Result<bool, Error> {

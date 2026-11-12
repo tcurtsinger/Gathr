@@ -68,9 +68,14 @@ pub fn person_listed(
 /// the window's Summary (F8b), then the person's list across chats for the Tasks badge (F9).
 pub fn live_tasks(
     live: broadcast::Sender<Value>,
+    states: Arc<crate::chat_state::States>,
 ) -> impl FnMut(&mut rusqlite::Connection) + Send + 'static {
     move |conn| {
         let sent = tasks::touched::take(conn).and_then(|chats| {
+            // A question asked or answered changes whether its chat needs the person (0040).
+            for chat in &chats {
+                states.changed(conn, chat)?;
+            }
             if chats.is_empty() || live.receiver_count() == 0 {
                 return Ok(());
             }

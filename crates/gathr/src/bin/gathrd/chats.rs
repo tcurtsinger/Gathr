@@ -112,6 +112,8 @@ pub struct Chats {
     pub passes: Arc<crate::tools::Passes>,
     /// Everything live, to every client's WebSocket (0004).
     pub live: broadcast::Sender<Value>,
+    /// Each chat's state in the chat list, and what the windows were last told of it (0040).
+    pub states: Arc<crate::chat_state::States>,
     /// One renewal gate per account folder, for every start on it: chats, sign-ins, model asks.
     gates: Mutex<HashMap<PathBuf, Gate>>,
     /// Each agent's task by `agent:<id>`, and each chat's for turns to no agent by `chat:<id>`.
@@ -136,7 +138,7 @@ impl Chats {
         writer: Writer,
         data: DataDir,
         port: u16,
-        live: broadcast::Sender<Value>,
+        (live, states): (broadcast::Sender<Value>, Arc<crate::chat_state::States>),
     ) -> Arc<Chats> {
         Arc::new(Chats {
             writer,
@@ -144,6 +146,7 @@ impl Chats {
             port,
             passes: Arc::default(),
             live,
+            states,
             gates: Mutex::default(),
             tasks: Mutex::default(),
             holds: Mutex::default(),
@@ -361,7 +364,13 @@ impl Chats {
 
     /// Picks up turns left waiting when the service last stopped.
     pub async fn take_over(self: &Arc<Self>) {
-        let waiting = self.writer.call(|conn| store::take_over(conn)).await;
+        let states = self.states.clone();
+        let waiting = self.writer.call(move |conn| {
+            let waiting = store::take_over(conn)?;
+            states.recover(conn)?;
+            Ok::<_, gathr::Error>(waiting)
+        });
+        let waiting = waiting.await;
         match waiting {
             Some(Ok(waiting)) => {
                 for turn in waiting {

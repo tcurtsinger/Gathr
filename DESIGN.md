@@ -299,7 +299,13 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
 ### Navigation and workspace
 
 New, Search and Tasks sit above projects and their chats. Settings stays bottom
-left. Archived uses Lucide Archive when collapsed and the same icon with its lid
+left. A chat with something going on carries one 6px dot at the end of its title
+(0040): 55% foreground while a turn of it runs, the attention colour once it needs
+the person, which wins when both hold. A ring grows out of the dot to 2.8 times
+its size and fades, every 2 seconds; reduced motion keeps the dot and drops the
+ring. The dot never moves the title or More. Its name is "Agents working" or
+"Needs you". An agent that only waits, a queued turn and a paused chat with
+nothing running carry no dot. Archived uses Lucide Archive when collapsed and the same icon with its lid
 lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
 hinge (2px 8px), translate it up 1.5px, over 160ms ease-out.
 Search and the pending human Tasks list share a contextual flyout, at most

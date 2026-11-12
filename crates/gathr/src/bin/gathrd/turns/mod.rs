@@ -28,6 +28,7 @@ mod process;
 mod pushes;
 mod reading;
 mod records;
+mod state;
 mod workspace;
 
 pub use process::CLOSE_GRACE;
@@ -285,7 +286,9 @@ impl Task {
                 allow,
                 reply,
             } => {
-                let _ = reply.send(self.approve(&chat, &request_id, allow).await);
+                let answered = self.approve(&chat, &request_id, allow).await;
+                self.approvals_changed().await;
+                let _ = reply.send(answered);
             }
             Cmd::Message {
                 chat,
@@ -302,7 +305,7 @@ impl Task {
                 chat,
                 input,
                 reply,
-            } => self.ask_service(kind, &chat, input, reply),
+            } => self.ask_service(kind, &chat, input, reply).await,
             Cmd::Open { chat, reply } => {
                 let _ = reply.send((self.open_approvals(&chat), self.streaming(&chat).await));
             }

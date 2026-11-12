@@ -29,6 +29,7 @@ pub fn health(data: &DataDir) -> Value {
         Ok((conn, _)) => coordination(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
         Err(_) => Value::Null,
     };
+    let chats = chats(data, opened.as_ref().ok().map(|(conn, _)| conn));
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -44,6 +45,7 @@ pub fn health(data: &DataDir) -> Value {
         "service": service_now(data),
         "accounts": accounts,
         "coordination": coordination,
+        "chats": chats,
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
     })
@@ -80,6 +82,29 @@ fn accounts(data: &DataDir, conn: &Connection, held: Value) -> Value {
         })
         .collect();
     json!(shown)
+}
+
+/// The chats that work or need the person, as the chat list has them (0040): what a dot in the
+/// window is compared against. From the service while it runs, as an approval waiting is only in
+/// its memory; else from the database.
+fn chats(data: &DataDir, conn: Option<&Connection>) -> Value {
+    let asked = ServiceInfo::read(data)
+        .ok()
+        .and_then(|info| http::call(info.port, &info.token, "GET", "/api/chats").ok());
+    let listed = match (asked.filter(|r| r.status == 200), conn) {
+        (Some(answer), _) => answer.json(),
+        (None, Some(conn)) => match crate::store::chats(conn, false) {
+            Ok(listed) => listed,
+            Err(e) => return json!({ "why": e.to_string() }),
+        },
+        (None, None) => return Value::Null,
+    };
+    let rows = listed.as_array().into_iter().flatten();
+    let busy = rows.filter(|c| c["working"] == true || c["needs"] == true);
+    busy.map(|c| {
+        json!({ "chat": c["id"], "title": c["title"], "working": c["working"], "needs": c["needs"] })
+    })
+    .collect()
 }
 
 fn service_now(data: &DataDir) -> Value {

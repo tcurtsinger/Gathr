@@ -49,14 +49,38 @@ export function App() {
   // A search hit's message (none for a title: the latest), until its chat shows it.
   const [found, setFound] = useState<{ chat: string; message?: string; at: number } | null>(null);
 
+  // A chat's state told while a list loads may be newer than that list: it is put back on top of it.
+  const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs'>>[]>([]);
+  const loadChats = useCallback(() => {
+    const told = new Map<string, Pick<Chat, 'working' | 'needs'>>();
+    loading.current.push(told);
+    const done = () => {
+      loading.current = loading.current.filter((t) => t !== told);
+    };
+    return api
+      .chats()
+      .then((list) => list.map((c) => ({ ...c, ...told.get(c.id) })))
+      .finally(done);
+  }, []);
+  useEffect(
+    () =>
+      listen((event) => {
+        if (event.type !== 'chat_state') return;
+        const state = { working: event.working, needs: event.needs };
+        for (const told of loading.current) told.set(event.chat, state);
+        setChats((list) => list.map((c) => (c.id === event.chat ? { ...c, ...state } : c)));
+      }),
+    [],
+  );
+
   useEffect(() => {
     const started = performance.now();
-    api.chats().then((list) => {
+    loadChats().then((list) => {
       setChats(list);
       setSelected((s) => s ?? list[0]?.id ?? null);
       timeToPaint('gathr.ui.start', started, { chats: list.length });
     }, setFailure);
-  }, []);
+  }, [loadChats]);
 
   useEffect(() => {
     const load = () => api.agents().then(setAgents, setFailure);
@@ -78,8 +102,8 @@ export function App() {
   current.current = fresh;
   // Made, archived, restored or deleted here or elsewhere: both lists as the service has them.
   const reloadLists = useCallback(
-    () => Promise.all([api.chats().then(setChats), api.archivedChats().then(setArchived)]),
-    [],
+    () => Promise.all([loadChats().then(setChats), api.archivedChats().then(setArchived)]),
+    [loadChats],
   );
   // The open chat, deleted here or in another window, gives way to its neighbour in the sidebar, else New.
   const lists = useRef({ chats, archived, selected });
@@ -127,7 +151,7 @@ export function App() {
           setSelected(made.id);
         }
         api.send(made.id, text, agent).then(
-          () => api.chats().then(setChats, setFailure),
+          () => loadChats().then(setChats, setFailure),
           (e: Failure) => keep(made.id, failed(e)),
         );
       },
@@ -263,7 +287,7 @@ export function App() {
           unsent={unsent[chat.id] ?? []}
           onUnsent={(update) => setUnsent((u) => ({ ...u, [chat.id]: update(u[chat.id] ?? []) }))}
           openSettings={openSettings}
-          onNamed={() => api.chats().then(setChats, setFailure)}
+          onNamed={() => loadChats().then(setChats, setFailure)}
           projects={projects}
           onProject={(project) => setFresh({ project })}
           onStart={start}
