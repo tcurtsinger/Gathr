@@ -12,7 +12,7 @@
   max-width: calc(100vw - 48px);
   min-height: 0;
   border-left: 1px solid var(--border);
-  background: var(--card);
+  background: var(--frame);
 }
 /* Too narrow to share: the pane lies over the chat, which keeps its width. */
 @media (max-width: 1200px) {

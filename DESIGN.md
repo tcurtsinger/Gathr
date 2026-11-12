@@ -3,18 +3,19 @@ name: Gathr
 description: A desktop conversation workspace for a team of agents.
 tokens: designs/tokens.css
 colors:
-  background: "#181818"
-  foreground: "oklch(.985 .002 106)"
-  card: "#202020"
-  popover: "#202020"
+  frame: "#1b1b1b"
+  background: "#232323"
+  foreground: "oklch(.95 .002 106)"
+  card: "#2c2c2c"
+  popover: "#2f2f2f"
   primary: "oklch(.922 .002 106)"
   primary-foreground: "oklch(.215 .003 106)"
-  secondary: "#202020"
-  muted-surface: "#202020"
+  secondary: "#2c2c2c"
+  muted-surface: "#2c2c2c"
   muted-foreground: "oklch(.708 .004 106)"
-  accent-surface: "#202020"
+  accent-surface: "#2c2c2c"
   destructive: "lab(63.7053% 60.745 31.3109)"
-  border: "oklch(.985 .002 106 / 10%)"
+  border: "oklch(.985 .002 106 / 12%)"
   input: "oklch(.985 .002 106 / 15%)"
   ring: "transparent"
   attention: "#60a5fa"
@@ -41,9 +42,12 @@ tokens and static component anatomy, not replacement runtime components.
 
 ## Colors
 
-Dark canvas is #181818; sidebar, workspace, composer and floating surfaces are
-#202020. Light uses the prototype's warm near-white background and neutral muted
-surface. `tokens.css` records both themes. Foreground carries text and primary
+Surfaces take three steps, back to front. `frame` is navigation, the top bar and
+the workspace. `background` is the chat. `card` is what stands on the chat: an
+agent-to-agent block, the person's message, an approval. Dark is #1b1b1b, #232323
+and #2c2c2c, with floating surfaces at #2f2f2f. Light is a white chat with a
+light-grey frame and cards and a border dark enough to see. Each step differs
+from the next in both themes. `tokens.css` records both themes. Foreground carries text and primary
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
 `border` separates regions; `input` bounds inputs; `ring` is transparent.
 Blue is attention, links and active work, not an agent palette.

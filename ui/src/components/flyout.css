@@ -8,6 +8,10 @@
 kbd.nav-count {
   font-family: inherit;
 }
+/* Waiting on the person: the number alone, in the attention colour. */
+.nav-waiting {
+  color: var(--attention);
+}
 /* Just right of navigation, 40px down; the sidebar is its containing block. */
 .flyout-anchor {
   position: absolute;

@@ -1,4 +1,5 @@
-/* Prototype semantic values. Dark is the desktop default; .light selects light. */
+/* Semantic values. Dark is the desktop default; .light selects light.
+   Three steps, back to front: frame (navigation, top bar, workspace), background (the chat), card. */
 @font-face {
 	font-family: "Hanken Grotesk Variable";
 	src: url("./fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2");
@@ -9,22 +10,23 @@
 :root {
 	color-scheme: dark;
 	--font-sans: "Hanken Grotesk Variable", "Hanken Grotesk", ui-sans-serif, sans-serif;
-	--background: #181818;
-	--foreground: oklch(0.985 0.002 106);
-	--card: #202020;
+	--frame: #1b1b1b;
+	--background: #232323;
+	--foreground: oklch(0.95 0.002 106);
+	--card: #2c2c2c;
 	--card-foreground: var(--foreground);
-	--popover: #202020;
+	--popover: #2f2f2f;
 	--popover-foreground: var(--foreground);
 	--primary: oklch(0.922 0.002 106);
 	--primary-foreground: oklch(0.215 0.003 106);
-	--secondary: #202020;
+	--secondary: #2c2c2c;
 	--secondary-foreground: var(--foreground);
-	--muted-surface: #202020;
+	--muted-surface: #2c2c2c;
 	--muted-foreground: oklch(0.708 0.004 106);
-	--accent-surface: #202020;
+	--accent-surface: #2c2c2c;
 	--accent-foreground: var(--foreground);
 	--destructive: lab(63.7053% 60.745 31.3109);
-	--border: oklch(0.985 0.002 106 / 10%);
+	--border: oklch(0.985 0.002 106 / 12%);
 	--input: oklch(0.985 0.002 106 / 15%);
 	--ring: transparent;
 	--radius: 0.5rem;
@@ -50,19 +52,20 @@
 }
 html.light {
 	color-scheme: light;
-	--background: oklch(0.992 0.002 106);
+	--frame: oklch(0.965 0.003 106);
+	--background: #fff;
 	--foreground: oklch(0.145 0.006 106);
-	--card: oklch(0.992 0.002 106);
-	--popover: oklch(0.992 0.002 106);
+	--card: oklch(0.965 0.003 106);
+	--popover: #fff;
 	--primary: oklch(0.205 0.006 106);
 	--primary-foreground: oklch(0.985 0.003 106);
-	--secondary: oklch(0.97 0.004 106);
-	--muted-surface: oklch(0.97 0.004 106);
+	--secondary: oklch(0.965 0.003 106);
+	--muted-surface: oklch(0.955 0.003 106);
 	--muted-foreground: oklch(0.556 0.007 106);
-	--accent-surface: oklch(0.97 0.004 106);
+	--accent-surface: oklch(0.955 0.003 106);
 	--destructive: lab(48.4493% 77.4328 61.5452);
-	--border: oklch(0.922 0.005 106);
-	--input: oklch(0.922 0.005 106);
+	--border: oklch(0.895 0.005 106);
+	--input: oklch(0.86 0.005 106);
 	--ring: transparent;
 	--scrollbar-thumb: #85857f;
 	--attention: #2563eb;
