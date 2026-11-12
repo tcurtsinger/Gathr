@@ -57,7 +57,8 @@ fn a_claude_turn_shows_its_last_calls_fill_and_its_models_window() {
 
     let update = live_context(&mut live, &agent);
     assert_eq!(update["chat"], chat.as_str());
-    let expected = json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000 });
+    let expected =
+        json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000, "compact_at": 500_000 });
     assert_eq!(update["context"], expected, "{update}");
     let history = service.wait_for(&chat, 10, "the turn's end", |h| {
         h["turns"][0]["status"] == "done"
@@ -108,7 +109,7 @@ fn a_codex_turn_shows_its_last_calls_fill_and_its_window() {
     });
     assert_eq!(
         history["members"][0]["context"],
-        json!({ "used": 16_291, "window": 475_000 }),
+        json!({ "used": 16_291, "window": 475_000, "compact_at": 380_000 }),
         "{history}"
     );
 }
@@ -191,4 +192,133 @@ fn a_codex_compaction_keeps_the_last_real_fill() {
         });
         assert_eq!(history["members"][0]["context"]["used"], used, "{history}");
     }
+}
+
+/// Settings > General's Auto-compact, saved.
+fn auto_compact(service: &TestService, at: Value) {
+    let saved = service.send("PATCH", "/api/settings", json!({ "auto_compact": at }));
+    assert_eq!(saved.status, 200, "{}", saved.body);
+    assert_eq!(saved.json()["auto_compact"], at, "{}", saved.body);
+}
+
+/// A window the agent's model showed in another chat, as a turn there would have saved it.
+fn seen_window(data: &std::path::Path, service: &TestService, agent: &str, window: i64) {
+    let other = service.send("POST", "/api/chats", json!({})).json()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let db = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
+    db.execute(
+        "INSERT INTO agent_context (chat_id, agent_id, window, updated_ts) VALUES (?1, ?2, ?3, 1)",
+        rusqlite::params![other, agent, window],
+    )
+    .unwrap();
+}
+
+fn agent(service: &TestService, account: &str) -> String {
+    let made = service.send(
+        "POST",
+        "/api/agents",
+        json!({ "name": "Made-up", "account": account }),
+    );
+    made.json()["id"].as_str().unwrap().to_string()
+}
+
+/// K3: Claude Code is started with Auto-compact, never past 80% of the window its model showed; with
+/// the engine's own, with none.
+#[test]
+fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
+    for (at, window, expected) in [
+        (json!(300_000), None, json!("300000")),
+        (json!(500_000), Some(200_000), json!("160000")),
+        (Value::Null, Some(200_000), Value::Null),
+    ] {
+        let data = TempDir::new();
+        let env = data.0.join("env.jsonl");
+        let service = TestService::with_engine(
+            &data.0,
+            &[
+                ("GATHR_REPLAY", &common::recording("signed_in")),
+                ("GATHR_REPLAY_ENV", &env),
+            ],
+        );
+        let account = service.signed_in(&data.0);
+        auto_compact(&service, at.clone());
+        let ann = agent(&service, &account);
+        if let Some(window) = window {
+            seen_window(&data.0, &service, &ann, window);
+        }
+        let chat = service.new_chat();
+        let sent = service.send(
+            "POST",
+            &format!("/api/chats/{chat}/messages"),
+            json!({ "text": "Hi", "agent": ann }),
+        );
+        assert_eq!(sent.status, 200, "{}", sent.body);
+        let started = common::nth(&env, 0);
+        assert_eq!(
+            started["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], expected,
+            "{at} with {window:?}"
+        );
+    }
+}
+
+/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`.
+#[test]
+fn codex_opens_its_thread_with_auto_compact() {
+    let data = TempDir::new();
+    let (service, account) = codex(&data.0, &common::recording("codex_signed_in"));
+    auto_compact(&service, json!(400_000));
+    let (chat, _) = one_turn(&service, &account);
+    service.wait_for(&chat, 10, "the turn's end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let sql =
+        "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%'";
+    let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{rows}");
+    let opened: Value = serde_json::from_str(rows["rows"][0]["body"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        opened["params"]["config"]["model_auto_compact_token_limit"], 400_000,
+        "{opened}"
+    );
+}
+
+/// K3: a turn whose agent's last call filled 75% of where it compacts is told to save its notes.
+#[test]
+fn a_turn_near_the_compaction_point_is_told_to_save_its_notes() {
+    let data = TempDir::new();
+    let service = TestService::with_engine(
+        &data.0,
+        &[("GATHR_REPLAY", &common::recording("signed_in"))],
+    );
+    let account = service.signed_in(&data.0);
+    let ann = agent(&service, &account);
+    let chat = service.new_chat();
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    db.execute(
+        "INSERT INTO agent_context (chat_id, agent_id, used, window, updated_ts) VALUES (?1, ?2, 380000, 1000000, 1)",
+        rusqlite::params![chat, ann],
+    )
+    .unwrap();
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({ "text": "Hi", "agent": ann }),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    service.wait_for(&chat, 10, "the turn's end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND frame_type = 'user'";
+    let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{rows}");
+    let first = rows["rows"][0]["body"].as_str().unwrap();
+    assert!(
+        first.contains("Your conversation is close to its compaction point"),
+        "{first}"
+    );
+    let sql = "SELECT name FROM event_log WHERE name = 'gathr.context.soon'";
+    let (_, told) = common::gathr(&data.0, &["diag", "query", sql]);
+    assert_eq!(told["rows"].as_array().unwrap().len(), 1, "{told}");
 }

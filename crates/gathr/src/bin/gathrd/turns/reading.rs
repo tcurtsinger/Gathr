@@ -581,6 +581,9 @@ impl Task {
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }
+        if status == "failed" {
+            self.tell_again(&turn.ids).await;
+        }
         self.set_turn(&turn.ids, status, why.as_deref()).await;
         self.try_next().await;
     }

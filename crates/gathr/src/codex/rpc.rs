@@ -21,6 +21,8 @@ pub struct Opening {
     pub instructions: Option<String>,
     /// The agent's folders beside `cwd` its sandbox writes in (0034): its own and Shared.
     pub writable: Vec<String>,
+    /// Where its conversation compacts, in tokens (Auto-compact, K3); the engine's own when `None`.
+    pub compact_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -305,12 +307,19 @@ impl Session {
         }
         // Edits and Auto: writes stay in the agent's folders, the network is on as for Claude
         // agents (the owner's call, 2026-11-10), so `gh` and `git fetch` work; pushes still ask.
+        let mut config = serde_json::Map::new();
         if sandbox == "workspace-write" {
             let mut table = json!({ "network_access": true });
             if !o.writable.is_empty() {
                 table["writable_roots"] = json!(o.writable);
             }
-            params["config"] = json!({ "sandbox_workspace_write": table });
+            config.insert("sandbox_workspace_write".into(), table);
+        }
+        if let Some(at) = o.compact_at {
+            config.insert("model_auto_compact_token_limit".into(), at.into());
+        }
+        if !config.is_empty() {
+            params["config"] = config.into();
         }
         Some(match &o.resume {
             Some(thread) => {

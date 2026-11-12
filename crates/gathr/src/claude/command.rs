@@ -255,6 +255,8 @@ fn keep(name: &OsString) -> bool {
 /// Stands in for Gathr's copy in dev and tests: the replay engine, or a missing file for a
 /// forced failure. Settings has no path (0026).
 pub const PATH_VAR: &str = "GATHR_CLAUDE_PATH";
+/// Where Claude Code compacts its conversation, in tokens (Auto-compact, compaction plan K3).
+pub const COMPACT_VAR: &str = "CLAUDE_CODE_AUTO_COMPACT_WINDOW";
 
 /// The engine's path: the dev/test override, else Gathr's own copy (0025). Never the person's PATH.
 pub fn find(copy: Option<PathBuf>) -> Result<PathBuf, String> {

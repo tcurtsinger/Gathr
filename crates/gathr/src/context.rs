@@ -27,18 +27,112 @@ pub fn window(conn: &Connection, chat: &str, agent: &str, window: i64) -> Result
     Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
 }
 
-/// `{used, window}`, either null until the engine has said; none before its first call.
+/// `{used, window, compact_at}`, each null until known; none before the agent's first call.
 pub fn of(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Value>, Error> {
-    Ok(conn
+    let found: Option<(Option<i64>, Option<i64>)> = conn
         .query_row(
             "SELECT used, window FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
             params![chat, agent],
-            |r| {
-                let (used, window): (Option<i64>, Option<i64>) = (r.get(0)?, r.get(1)?);
-                Ok(json!({ "used": used, "window": window }))
-            },
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
-        .optional()?)
+        .optional()?;
+    let at = point(auto_compact(conn)?, found.and_then(|(_, window)| window));
+    Ok(found.map(|(used, window)| json!({ "used": used, "window": window, "compact_at": at })))
+}
+
+const SETTING: &str = "auto_compact";
+const ENGINES_OWN: &str = "engine";
+/// Auto-compact's choices in Settings > General (compaction plan, K3), 500K unless set.
+pub const AUTO_COMPACT: [i64; 4] = [200_000, 300_000, 400_000, 500_000];
+const DEFAULT: i64 = 500_000;
+
+/// Where agents' conversations compact: one of `AUTO_COMPACT`, or `None` for each engine's own.
+pub fn auto_compact(conn: &Connection) -> Result<Option<i64>, Error> {
+    let saved: Option<String> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            [SETTING],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(match saved.as_deref() {
+        None => Some(DEFAULT),
+        Some(ENGINES_OWN) => None,
+        Some(n) => Some(n.parse().unwrap_or(DEFAULT)),
+    })
+}
+
+/// Saves Auto-compact: one of `AUTO_COMPACT`, or `None` for each engine's own.
+pub fn set_auto_compact(conn: &Connection, at: Option<i64>) -> Result<(), Error> {
+    if at.is_some_and(|n| !AUTO_COMPACT.contains(&n)) {
+        return Err(Error::Refused(
+            "Auto-compact is 200000, 300000, 400000 or 500000 tokens, or null for each engine's own".into(),
+        ));
+    }
+    let value = at.map_or(ENGINES_OWN.to_string(), |n| n.to_string());
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+        params![SETTING, value],
+    )?;
+    Ok(())
+}
+
+/// Where a conversation compacts: the setting, never past 80% of the model's window, so a small
+/// window compacts sooner. `None` leaves it to the engine.
+pub fn point(setting: Option<i64>, window: Option<i64>) -> Option<i64> {
+    setting.map(|at| window.map_or(at, |w| at.min(w * 8 / 10)))
+}
+
+/// The point for an engine of the agent about to start in `chat`: its window there, else the one it
+/// had last anywhere (the same model, most likely), else none known yet.
+pub fn point_for(conn: &Connection, chat: &str, agent: &str) -> Result<Option<i64>, Error> {
+    let window: Option<i64> = conn
+        .query_row(
+            "SELECT window FROM agent_context WHERE agent_id = ?2 AND window IS NOT NULL
+             ORDER BY chat_id = ?1 DESC, updated_ts DESC LIMIT 1",
+            params![chat, agent],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(point(auto_compact(conn)?, window))
+}
+
+/// The line a turn is given once its agent's conversation nears where it compacts (K3).
+pub const SOON: &str = "Your conversation is close to its compaction point: when it compacts, earlier detail goes.     Write down what you still need (your notes, the task, the plan) in your own folder now.";
+
+/// Whether the agent's next turn in `chat` gets `SOON`: its last call filled 75% of where it compacts,
+/// and it hasn't been told since its last compaction. Marked told when it does.
+pub fn tell_soon(conn: &Connection, chat: &str, agent: &str) -> Result<bool, Error> {
+    let found: Option<(Option<i64>, bool)> = conn
+        .query_row(
+            "SELECT used, told FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
+            params![chat, agent],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let Some((Some(used), false)) = found else {
+        return Ok(false);
+    };
+    let Some(at) = point_for(conn, chat, agent)? else {
+        return Ok(false);
+    };
+    if used * 4 < at * 3 {
+        return Ok(false);
+    }
+    conn.execute(
+        "UPDATE agent_context SET told = 1 WHERE chat_id = ?1 AND agent_id = ?2",
+        params![chat, agent],
+    )?;
+    Ok(true)
+}
+
+/// Told again after the conversation compacts, or a turn fails.
+pub fn untold(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
+    conn.execute(
+        "UPDATE agent_context SET told = 0 WHERE chat_id = ?1 AND agent_id = ?2",
+        params![chat, agent],
+    )?;
+    Ok(())
 }
 
 /// Each member of a chat's history with how full its context is (`context`, null before its first call).
@@ -88,5 +182,72 @@ fn tokens(n: i64) -> String {
         n if n < 1_000 => n.to_string(),
         n if n < 1_000_000 => short(n as f64 / 1_000.0, "K"),
         n => short(n as f64 / 1_000_000.0, "M"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn db() -> (std::path::PathBuf, Connection) {
+        let dir = std::env::temp_dir().join(format!("gathr-context-{}", crate::ids::span_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = crate::db::open(&dir.join("gathr.db")).unwrap();
+        conn.execute_batch(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 0), ('d', 'Other', 0);",
+        )
+        .unwrap();
+        (dir, conn)
+    }
+
+    #[test]
+    fn the_point_is_the_setting_never_past_80_percent_of_the_window() {
+        assert_eq!(point(Some(500_000), Some(1_000_000)), Some(500_000));
+        assert_eq!(point(Some(500_000), Some(200_000)), Some(160_000));
+        assert_eq!(point(Some(300_000), None), Some(300_000));
+        assert_eq!(point(None, Some(200_000)), None, "the engine's own");
+    }
+
+    #[test]
+    fn auto_compact_is_one_of_its_choices_or_the_engines_own() {
+        let (_dir, conn) = db();
+        assert_eq!(auto_compact(&conn).unwrap(), Some(500_000));
+        set_auto_compact(&conn, Some(300_000)).unwrap();
+        assert_eq!(auto_compact(&conn).unwrap(), Some(300_000));
+        set_auto_compact(&conn, None).unwrap();
+        assert_eq!(auto_compact(&conn).unwrap(), None);
+        assert!(set_auto_compact(&conn, Some(250_000)).is_err());
+    }
+
+    /// The window an engine starts with: its chat's, else the agent's latest anywhere.
+    #[test]
+    fn a_new_chat_takes_the_agents_last_window() {
+        let (_dir, conn) = db();
+        window(&conn, "d", "ann", 200_000).unwrap();
+        assert_eq!(point_for(&conn, "c", "ann").unwrap(), Some(160_000));
+        window(&conn, "c", "ann", 1_000_000).unwrap();
+        assert_eq!(point_for(&conn, "c", "ann").unwrap(), Some(500_000));
+    }
+
+    #[test]
+    fn the_save_notes_line_comes_once_at_75_percent_and_again_after_a_compaction() {
+        let (_dir, conn) = db();
+        window(&conn, "c", "ann", 1_000_000).unwrap();
+        filled(&conn, "c", "ann", 370_000).unwrap();
+        assert!(!tell_soon(&conn, "c", "ann").unwrap(), "under 75% of 500K");
+        filled(&conn, "c", "ann", 380_000).unwrap();
+        assert!(tell_soon(&conn, "c", "ann").unwrap());
+        assert!(!tell_soon(&conn, "c", "ann").unwrap(), "told once");
+        untold(&conn, "c", "ann").unwrap();
+        assert!(
+            tell_soon(&conn, "c", "ann").unwrap(),
+            "told again after a compaction"
+        );
+        set_auto_compact(&conn, None).unwrap();
+        untold(&conn, "c", "ann").unwrap();
+        assert!(
+            !tell_soon(&conn, "c", "ann").unwrap(),
+            "no point of its own to tell of"
+        );
     }
 }

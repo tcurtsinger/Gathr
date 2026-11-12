@@ -38,6 +38,15 @@ impl Task {
         before: Option<i64>,
         after: Option<i64>,
     ) {
+        // Compacted, the agent may be told again as the next point nears (K3).
+        if let (Some(agent), Some(chat)) = (
+            self.agent.clone(),
+            self.assigned.as_ref().map(|a| a.chat.clone()),
+        ) {
+            let reset =
+                move |c: &mut rusqlite::Connection| gathr::context::untold(c, &chat, &agent);
+            let _ = self.chats.writer.call(reset).await;
+        }
         if let Some(after) = after {
             self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, after))
                 .await;
@@ -72,6 +81,37 @@ impl Task {
         if let Ok(message) = self.db_message(&ids, "gathr", "text", &line).await {
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         }
+    }
+
+    /// Whether the turn starting now is told its conversation nears where it compacts (K3): once,
+    /// at 75% of the point, again only after a compaction or a failed turn. Recorded when it is.
+    pub(super) async fn near_compaction(&self, ids: &super::Ids) -> bool {
+        let Some(agent) = ids.agent.clone() else {
+            return false;
+        };
+        let chat = ids.chat.clone();
+        let told = self
+            .chats
+            .writer
+            .call(move |c| gathr::context::tell_soon(c, &chat, &agent));
+        let told = told.await.and_then(Result::ok).unwrap_or(false);
+        if told {
+            let event = Event::point("gathr.context.soon")
+                .trace(&ids.trace)
+                .chat(&ids.chat)
+                .ok();
+            self.record(event.attr("gen_ai.agent.id", ids.agent.clone()));
+        }
+        told
+    }
+
+    /// A failed turn may not have saved what it was told to: it's told again.
+    pub(super) async fn tell_again(&self, ids: &super::Ids) {
+        let (Some(agent), chat) = (ids.agent.clone(), ids.chat.clone()) else {
+            return;
+        };
+        let reset = move |c: &mut rusqlite::Connection| gathr::context::untold(c, &chat, &agent);
+        let _ = self.chats.writer.call(reset).await;
     }
 
     async fn save_context(

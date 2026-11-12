@@ -84,6 +84,9 @@ pub struct Change {
     /// Set to a number, or `null` for no limit; left out, unchanged.
     #[serde(default, deserialize_with = "present")]
     pub handoff_limit: Option<Option<i64>>,
+    /// Auto-compact (K3): one of 200000 to 500000, or `null` for each engine's own; left out, unchanged.
+    #[serde(default, deserialize_with = "present")]
+    pub auto_compact: Option<Option<i64>>,
 }
 
 /// A field that's there, `null` included, apart from one that's left out.
@@ -136,6 +139,9 @@ pub async fn change_settings_as(
         if let (Ok(()), Some(limit)) = (&saved, body.handoff_limit) {
             saved = gathr::handoffs::set_limit(c, limit);
         }
+        if let (Ok(()), Some(at)) = (&saved, body.auto_compact) {
+            saved = gathr::context::set_auto_compact(c, at);
+        }
         if let (Ok(()), Some(folder)) = (&saved, &folder) {
             folders::set_root(c, folder)?;
         }
@@ -149,6 +155,7 @@ pub async fn change_settings_as(
             .attr("stale_days", days.stale)
             .attr("cancel_days", days.cancel)
             .attr("handoff_limit", gathr::handoffs::limit(c)?)
+            .attr("auto_compact", gathr::context::auto_compact(c)?)
             .attr(
                 "agent_folder",
                 folders::root(c, &data)?.display().to_string(),
@@ -167,9 +174,10 @@ fn shown(
     let days = stale::days(c)?;
     let folder = folders::root(c, data)?.display().to_string();
     let handoff_limit = gathr::handoffs::limit(c)?;
+    let auto_compact = gathr::context::auto_compact(c)?;
     Ok(
         json!({ "stale_days": days.stale, "cancel_days": days.cancel, "agent_folder": folder,
-        "handoff_limit": handoff_limit }),
+        "handoff_limit": handoff_limit, "auto_compact": auto_compact }),
     )
 }
 

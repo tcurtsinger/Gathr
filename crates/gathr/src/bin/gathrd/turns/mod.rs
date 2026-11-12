@@ -595,7 +595,17 @@ impl Task {
             self.spawn(&program, assigned, &next.ids.trace).await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
-        if let Err(e) = self.write_user(&next.text, Some(&next.ids.turn)).await {
+        let text = match self.near_compaction(&next.ids).await {
+            true => format!(
+                "{}
+
+{}",
+                gathr::context::SOON,
+                next.text
+            ),
+            false => next.text.clone(),
+        };
+        if let Err(e) = self.write_user(&text, Some(&next.ids.turn)).await {
             self.turn = None;
             return Err(format!(
                 "{} didn't take the message: {e}",

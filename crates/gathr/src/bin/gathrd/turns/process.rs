@@ -163,6 +163,7 @@ impl Task {
         let pass = self.pass_for(&assigned, worktree, given, trace).await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
+        let compact_at = self.compact_at(&assigned.chat).await;
         let first = if codex {
             args = gathr::codex::command::args(
                 Some(&url),
@@ -178,6 +179,7 @@ impl Task {
                     std::fs::read_to_string(&pass.briefing).map_err(|e| e.to_string())?,
                 ),
                 writable: beside.iter().map(|d| d.display().to_string()).collect(),
+                compact_at,
             };
             let (driver, first) = super::driver::Driver::codex(opening);
             self.driver = driver;
@@ -196,6 +198,11 @@ impl Task {
         };
         if let Some(scratch) = &place.scratch {
             command::scratch(&mut env, scratch);
+        }
+        // Claude Code takes 100K at least (its docs, 2026-11-11).
+        if let (false, Some(at)) = (codex, compact_at) {
+            let at = at.max(100_000).to_string();
+            env.push((command::COMPACT_VAR.into(), at.into()));
         }
         env.push((command::TOKEN_VAR.into(), pass.token.clone().into()));
         let push = format!(
@@ -320,6 +327,17 @@ impl Task {
         let version = current.strip_prefix(copies).ok()?.components().nth(1)?;
         let version = version.as_os_str();
         Some(version.to_string_lossy().into_owned())
+    }
+
+    /// Where the agent's conversation in `chat` compacts (Auto-compact, K3): read at each start, so a
+    /// changed setting applies from the engine's next start.
+    async fn compact_at(&self, chat: &str) -> Option<i64> {
+        let (chat, agent) = (chat.to_string(), self.agent.clone()?);
+        let found = self
+            .chats
+            .writer
+            .call(move |c| gathr::context::point_for(c, &chat, &agent));
+        found.await.and_then(Result::ok).flatten()
     }
 
     /// The gentle close (0001): interrupt a turn under way, close stdin, and let the engine exit
