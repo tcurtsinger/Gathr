@@ -69,3 +69,61 @@ for (const [name, text] of Object.entries(cases)) {
     await expect.poll(() => markdown(stream.container)).toBe(expected);
   });
 }
+
+// The owner's call (room tasks 144, 145; plans/reply-spacing.md): Gathr's own spacing in a reply, not
+// Streamdown's, so a Streamdown update can't loosen it again.
+test('a reply reads tight: bullets hang, items 6px apart, paragraphs 16px, headings 20px, inline code 14px', async () => {
+  const text = [
+    'First paragraph.',
+    'Second paragraph.',
+    '- A first item long enough to wrap onto a second line in this narrow column',
+    '- Two',
+    '## A heading',
+    'Run `cargo test` here.',
+  ]
+    .join('\n\n')
+    .replace('line in this narrow column\n\n- Two', 'line in this narrow column\n- Two');
+  const screen = await render(
+    <div style={{ width: 320 }}>
+      <View state={saved(text)} />
+    </div>,
+  );
+  const root = screen.container.querySelector('.markdown') as HTMLElement;
+  await expect.poll(() => root.querySelectorAll('li').length).toBe(2);
+  const box = (el: Element) => el.getBoundingClientRect();
+
+  const [first, second] = root.querySelectorAll('li');
+  const range = document.createRange();
+  range.selectNodeContents(first);
+  const lines = [...range.getClientRects()].filter((r) => r.width > 0);
+  const tops = [...new Set(lines.map((r) => Math.round(r.top)))];
+  expect(tops.length, 'the first item wraps').toBeGreaterThan(1);
+  const leftOf = (top: number) =>
+    Math.min(...lines.filter((r) => Math.round(r.top) === top).map((r) => r.left));
+  // A wrapped line starts under the item's text, not under its bullet.
+  expect(Math.abs(leftOf(tops[1]) - leftOf(tops[0]))).toBeLessThan(1);
+  expect(Math.round(box(second).top - box(first).bottom)).toBe(6);
+
+  const [one, two] = root.querySelectorAll('p');
+  expect(Math.round(box(two).top - box(one).bottom)).toBe(16);
+
+  const heading = getComputedStyle(root.querySelector('h2') as HTMLElement);
+  expect([heading.fontSize, heading.fontWeight]).toEqual(['20px', '600']);
+  const code = getComputedStyle(root.querySelector('[data-streamdown="inline-code"]') as HTMLElement);
+  expect([code.fontSize, code.fontWeight]).toEqual(['14px', '500']);
+});
+
+// Vale's review of #154: an item written with two paragraphs keeps them as two lines, 6px apart (the plan's
+// choice 2); Streamdown draws an item's paragraphs inline.
+test("a loose list item's paragraphs stay on their own lines, 6px apart", async () => {
+  const text = '- First paragraph of the item.\n\n  Second paragraph of the same item.\n- Two';
+  const screen = await render(
+    <div style={{ width: 600 }}>
+      <View state={saved(text)} />
+    </div>,
+  );
+  const root = screen.container.querySelector('.markdown') as HTMLElement;
+  await expect.poll(() => root.querySelectorAll('li > p').length).toBe(2);
+  const [one, two] = [...root.querySelectorAll('li > p')].map((p) => p.getBoundingClientRect());
+  expect(Math.round(two.top - one.bottom)).toBe(6);
+});

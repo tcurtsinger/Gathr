@@ -25,3 +25,34 @@
 .markdown [data-streamdown="code-block-actions"] button {
   min-height: 0;
 }
+/* A reply reads tight (plans/reply-spacing.md, the owner's call): Gathr's own spacing over Streamdown's.
+   Bullets hang, so a wrapped line lines up with its text; items 6px apart, paragraphs 16px. */
+.markdown ul,
+.markdown ol {
+  list-style-position: outside;
+  padding-left: 20px;
+}
+.markdown li {
+  padding-block: 0;
+}
+/* An item written with two paragraphs keeps them as two (Streamdown draws them inline); one alone is unwrapped. */
+.markdown li > p {
+  display: block;
+}
+.markdown p + p {
+  margin-top: 16px;
+}
+.markdown li + li,
+.markdown li > * + *,
+.markdown li > p + p {
+  margin-top: 6px;
+}
+/* Headings no bigger than a panel's title; inline code a step quieter than the text. */
+.markdown :is(h1, h2, h3) {
+  font-size: 20px;
+  font-weight: 600;
+}
+.markdown [data-streamdown="inline-code"] {
+  font-size: 14px;
+  font-weight: 500;
+}

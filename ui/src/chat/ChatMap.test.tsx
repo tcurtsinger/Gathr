@@ -101,8 +101,10 @@ const below = (id: string) => {
   return block ? block.getBoundingClientRect().top - viewport().getBoundingClientRect().top : undefined;
 };
 // At the top of the view: 32px under its edge. WebKit scrolls by whole pixels and blocks sit on
-// fractions of one, so a message can land up to half a pixel off.
-const atTop = (id: string) => Math.abs((below(id) ?? Number.NaN) - 32) < 0.75;
+// fractions of one, so a message can land up to a pixel off: WebKit drops the fraction rather than
+// rounding it (#154's 1.5 line height moved blocks to fractions above a half).
+/** How far a message is from the top's 32px, in pixels; a failure prints it (G177). */
+const offTop = (id: string) => Math.abs((below(id) ?? Number.NaN) - 32);
 
 test('the map shows from three ticks up, long for the person and short for the lead, in a pane wide enough', async () => {
   const screen = await render(<View state={chat(day(11, 1))} />);
@@ -162,13 +164,13 @@ test('a tick opens its message at the top of the chat, by pointer or keys, and f
   await render(<View state={chat(day(11, 6, tall))} />);
   await expect.poll(() => ticks().length).toBe(12);
   await userEvent.click(tick(`You · ${hhmm(11, 0)}`));
-  await expect.poll(() => atTop('u11-2')).toBe(true);
+  await expect.poll(() => offTop('u11-2')).toBeLessThan(1);
   expect(document.activeElement).toBe(tick(`You · ${hhmm(11, 0)}`));
 
   await userEvent.keyboard('{ArrowDown}');
   expect(document.activeElement).toBe(tick(`Mira · ${hhmm(11, 30)}`));
   await userEvent.keyboard('{Enter}');
-  await expect.poll(() => atTop('a-11-2')).toBe(true);
+  await expect.poll(() => offTop('a-11-2')).toBeLessThan(1);
   expect(document.activeElement).toBe(tick(`Mira · ${hhmm(11, 30)}`));
 
   await userEvent.keyboard('{End}');
@@ -223,7 +225,7 @@ test("a day's tick opens the day's first message, though it was not drawn", asyn
     .toEqual([`${weekday(8)} · 3 messages from you`, `${weekday(9)} · 100 messages from you`]);
   expect(below('u9-0')).toBeUndefined();
   await userEvent.click(tick(`${weekday(9)} · 100 messages from you`));
-  await expect.poll(() => atTop('u9-0')).toBe(true);
+  await expect.poll(() => offTop('u9-0')).toBeLessThan(1);
   await expect
     .poll(() => tick(`${weekday(9)} · 100 messages from you`).getAttribute('aria-current'))
     .toBe('true');
@@ -331,7 +333,7 @@ test('a search hit opened after a tick stays where it is once it is done', async
   const screen = await render(<View state={state} />);
   await expect.poll(() => ticks().length).toBe(12);
   await userEvent.click(tick(`You · ${hhmm(10, 0)}`));
-  await expect.poll(() => atTop('u11-1')).toBe(true);
+  await expect.poll(() => offTop('u11-1')).toBeLessThan(1);
 
   // The hit is shown, tinted, and the app clears it, as it does once a hit is in place.
   const onTarget = vi.fn();

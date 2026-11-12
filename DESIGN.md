@@ -68,11 +68,14 @@ Hanken Grotesk Variable, self-hosted under the SIL Open Font License 1.1, then
 Hanken Grotesk and the platform sans-serif. The unmodified Latin variable file
 comes from `@fontsource-variable/hanken-grotesk` 5.3.0; the face exposes weights
 300 to 700. Other scripts use fallback fonts. No remote font requests.
-Body and messages 15px; composer 16px; navigation and agent names 14px; text
-actions 13px; metadata 12 to 13px monospace, except agent roles, which use the
-normal sans-serif at 12px. Headings remain 26px for a new chat and 20px for a panel.
-Base weight is 450; medium 500 and semibold 600 stay unchanged. Body line-height
-is 1.6, replies 1.7. Code stays monospace. The text scale moves 11 to 12, 12 to 13,
+Replies 16px at weight 400 and line-height 1.5 (15px in a member's block and an
+exchange); composer 16px; navigation and agent names 14px; text actions 13px;
+metadata 12 to 13px monospace, except agent roles, which use the normal sans-serif
+at 12px. Headings remain 26px for a new chat and 20px for a panel. Elsewhere the
+base weight is 450 and body line-height 1.6; medium 500 and semibold 600 stay
+unchanged. Code stays monospace. In a reply (the owner's call, 2026-11-12):
+paragraphs 16px apart, list items 6px apart, bullets hanging so a wrapped line
+lines up with its text, headings 20px/600, inline code 14px/500 on its fill. The text scale moves 11 to 12, 12 to 13,
 13 to 14, 14 to 15 and 15 to 16px; existing larger headings keep their sizes.
 
 In message headers, the name and role share a flex wrapper with baseline
