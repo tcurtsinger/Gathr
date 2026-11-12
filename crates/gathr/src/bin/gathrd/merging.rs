@@ -78,7 +78,8 @@ pub async fn merge(
     }
     checks_passed(chats, &asked, &head, &view).await?;
     let mut needs_sign_off = Vec::new();
-    if asked.ci != "ci" && first_baseline(chats, &asked.project, repo, &b, &vars).await {
+    let gathr_checks = matches!(asked.ci.as_str(), "gathr" | "both");
+    if gathr_checks && first_baseline(chats, &asked.project, repo, &b, &vars).await {
         needs_sign_off.push("it brings the project's first passing checks on its main".to_string());
     }
     let changed = git(repo, &["diff", "--name-only", &b, &head], &vars).await?;
@@ -323,13 +324,17 @@ async fn asked(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<Asked, St
     }
 }
 
-/// The checks the project asks for, passed on `head`: GitHub's CI, Gathr's (C3), or both.
+/// The checks the project asks for, passed on `head`: GitHub's CI, Gathr's (C3), both, or none (a
+/// clean review alone, 0045).
 async fn checks_passed(
     chats: &Arc<Chats>,
     asked: &Asked,
     head: &str,
     view: &Value,
 ) -> Result<(), String> {
+    if asked.ci == "none" {
+        return Ok(());
+    }
     let short = head.get(..7).unwrap_or(head);
     if asked.ci != "gathr" {
         let rollup = view["statusCheckRollup"]

@@ -176,7 +176,7 @@ export interface Project {
   /** Run in order on a PR's head; only the Supervisor sets them (0043, owner's call 1455). */
   checks: ProjectCheck[];
   /** Whose result gates a merge. */
-  ci: 'ci' | 'gathr' | 'both';
+  ci: 'ci' | 'gathr' | 'both' | 'none';
   merge: 'fast-forward' | 'merge' | 'squash';
 }
 

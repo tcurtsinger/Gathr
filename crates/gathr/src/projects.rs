@@ -46,8 +46,8 @@ pub struct Check {
     pub set: String,
 }
 
-/// GitHub's CI, Gathr's own checks, or both.
-pub const CI: [&str; 3] = ["ci", "gathr", "both"];
+/// GitHub's CI, Gathr's own checks, both, or none: a clean review alone (0045).
+pub const CI: [&str; 4] = ["ci", "gathr", "both", "none"];
 /// A fast-forward to the PR's head, a merge commit onto the base, or GitHub's squash.
 pub const MERGE: [&str; 3] = ["fast-forward", "merge", "squash"];
 

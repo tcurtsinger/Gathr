@@ -717,3 +717,43 @@ fn merge_queues_cleanup_at_once_without_waiting_for_a_pr_look() {
         "a live engine's folder was removed"
     );
 }
+
+/// 0045 (owner, room tasks 167-169): with Required checks `none`, a clean review on the head is
+/// enough: CI still pending and no checks run don't hold the merge. Under `ci` the same PR waits.
+#[test]
+fn review_only_merges_on_a_clean_review_while_ci_is_pending() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let answers = room.data.join("gh.json");
+    // GitHub's view of the PR, as the stand-in answers it: CI still running on the head.
+    let pending =
+        r#""statusCheckRollup":[{"name":"Rust (macOS)","status":"IN_PROGRESS","conclusion":null}]"#;
+    let all = std::fs::read_to_string(&answers).unwrap();
+    let all = all.replace(
+        r#"\"statusCheckRollup\":[]"#,
+        &pending.replace('"', r#"\""#),
+    );
+    std::fs::write(&answers, all).unwrap();
+    let set = |room: &Room, ci: &str| {
+        let path = format!("/api/projects/{}", room.project);
+        let changed = room.service.send("PATCH", &path, json!({ "ci": ci }));
+        assert_eq!(changed.status, 200, "{}", changed.body);
+    };
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    room.reviewed(&vale, 1, &room.heads[0].clone());
+    let five = json!({ "pr": 5 });
+
+    set(&room, "ci");
+    room.refused(
+        &room.call(&vale, "merge", five.clone()),
+        "haven't all passed",
+    );
+    set(&room, "none");
+    room.db()
+        .execute("DELETE FROM check_runs WHERE head = ?1", [&room.heads[0]])
+        .unwrap();
+    let merged = room.call(&vale, "merge", five);
+    assert_eq!(merged["isError"], false, "{}", text(&merged));
+    assert_eq!(room.main(), room.heads[0], "main isn't the PR's head");
+}
