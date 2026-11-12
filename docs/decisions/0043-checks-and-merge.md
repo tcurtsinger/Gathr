@@ -31,8 +31,8 @@ an exact-commit checkout practical without admitting an agent's uncommitted file
   changes to folder/team affect new chats. The sidebar's Project settings opens that project.
 - Required checks is **CI**, **Gathr's checks** or **both**. A new project's default is CI if its checkout
   has a GitHub workflow (`.yml` or `.yaml`), otherwise Gathr's checks. Projects migrated before this choice
-  default to Gathr's checks. CI-only projects need no local check commands. Gathr's own project uses CI
-  for Windows and macOS; it does not duplicate those checks locally as a merge requirement.
+  default to Gathr's checks. CI-only projects need no local check commands. Gathr's own project: review
+  and local tests are the gate, CI is information ([0045](0045-review-gates-gathrs-own-repo.md)).
 - Merge method is **fast-forward** by default, **merge commit**, or **squash** through GitHub's API.
 
 ### 2. Run at the commit, reuse only the caches
