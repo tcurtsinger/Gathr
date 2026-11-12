@@ -163,11 +163,11 @@ const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
-/// A message as the API shows it; tool messages carry their JSON body as an object.
+/// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
     let body = match kind.as_str() {
-        "tool" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
+        "tool" | "thinking" => serde_json::from_str(&body).unwrap_or(Value::String(body)),
         _ => Value::String(body),
     };
     Ok(json!({
@@ -206,7 +206,31 @@ pub fn add_message(
     kind: &str,
     body: &str,
 ) -> Result<Value, Error> {
-    let ts = now_us();
+    add_message_at(conn, chat, turn, role, kind, body, now_us())
+}
+
+/// When a message that began at `began` may say it began (a thought known only once it's over,
+/// 0042): the chat reads in time order, so never before the turn's last message.
+pub fn after_last(conn: &Connection, chat: &str, turn: &str, began: i64) -> Result<i64, Error> {
+    let last: Option<i64> = conn
+        .prepare_cached(
+            "SELECT ts FROM messages WHERE chat_id = ?1 AND turn_id = ?2 ORDER BY ts DESC LIMIT 1",
+        )?
+        .query_row([chat, turn], |r| r.get(0))
+        .optional()?;
+    Ok(began.max(last.map_or(0, |ts| ts + 1)))
+}
+
+/// `add_message`, at a time of its own.
+pub fn add_message_at(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    role: &str,
+    kind: &str,
+    body: &str,
+    ts: i64,
+) -> Result<Value, Error> {
     let id = ulid(ts);
     conn.prepare_cached(
         "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -312,8 +336,19 @@ pub struct Waiting {
 
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. Turns that were running then can't
-/// be continued: they're marked failed, with why.
+/// be continued: they're marked failed, with why, and the steps they left running are stopped.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
+    // By chat first: `messages` has no index on its turn. A thought's time isn't known, so it
+    // gets none. `json_valid` first: a body that isn't JSON would fail the statement, and with
+    // it every turn's recovery.
+    conn.execute(
+        "UPDATE messages SET body = json_set(body, '$.status', 'stopped')
+         WHERE chat_id IN (SELECT chat_id FROM turns WHERE status = 'running')
+           AND turn_id IN (SELECT id FROM turns WHERE status = 'running')
+           AND kind IN ('tool', 'thinking')
+           AND CASE WHEN json_valid(body) THEN json_extract(body, '$.status') END = 'running'",
+        [],
+    )?;
     conn.execute(
         "UPDATE turns SET status = 'failed', why = 'the service stopped during this turn', ended_ts = ?1
          WHERE status = 'running'",

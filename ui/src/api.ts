@@ -14,14 +14,22 @@ export interface ToolBody {
   input?: { text: string; title?: string };
 }
 
+/** That the agent thought (0042): how long, and the engine's count of its tokens when it gave one. Never its text. */
+export interface ThinkingBody {
+  status: 'running' | 'done' | 'stopped';
+  duration_ms?: number;
+  tokens?: number;
+}
+
 export interface Message {
   id: string;
   turn: string | null;
   time: string;
   /** `gathr`: what Gathr told an agent (a task, a wake-up, a hear-back), never the agent's own words. */
   role: 'user' | 'assistant' | 'gathr';
+  /** `text`: its body is the words. `tool` and `thinking`: its body is an object. */
   kind: string;
-  body: string | ToolBody;
+  body: string | ToolBody | ThinkingBody;
   /** A message an agent sent one member: that member's id. It shows as its own block (0037). */
   to?: string | null;
   /** What Gathr told the member in its turn: the message it carries, already shown as the sender's. */

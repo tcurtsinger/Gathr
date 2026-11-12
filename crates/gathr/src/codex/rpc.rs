@@ -368,6 +368,9 @@ impl Session {
                     after: None,
                 });
             }
+            // A `reasoning` item starts and completes when the thinking is already over, with no
+            // text and its own times under 100 ms apart (0042): one mark, timed by the service.
+            "item/completed" if item["type"] == "reasoning" => read.frames.push(Frame::Thought),
             "item/completed" if item["type"] == "agentMessage" => {
                 read.frames.push(Frame::Text(text(&item["text"])));
             }
@@ -734,6 +737,25 @@ mod tests {
             session.interrupt().is_none(),
             "no turn is under way after it ended"
         );
+    }
+
+    /// `thinking_codex` is hand-written in the shape of real frames (its first row says so): each
+    /// reasoning item is one mark as it completes, never a start, wherever it falls in the turn.
+    #[test]
+    fn each_reasoning_item_reads_as_one_mark_as_it_completes() {
+        let (_, frames, _) = played("thinking_codex", opening());
+        let kinds = frames.iter().filter_map(|f| match f {
+            Frame::Thought => Some("thought"),
+            Frame::ToolStart { .. } => Some("start"),
+            Frame::ToolEnd { .. } => Some("end"),
+            Frame::Text(_) => Some("text"),
+            Frame::Thinking { .. } => Some("thinking"),
+            _ => None,
+        });
+        let expected = [
+            "thought", "thought", "start", "thought", "end", "thought", "text",
+        ];
+        assert_eq!(kinds.collect::<Vec<_>>(), expected);
     }
 
     #[test]

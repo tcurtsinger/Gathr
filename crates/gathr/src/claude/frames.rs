@@ -38,6 +38,13 @@ pub enum Frame {
         tool: String,
         field: &'static str,
     },
+    /// It is thinking (0042): a thinking block began, or its running count of tokens moved. Sent
+    /// more than once in a thought; `tokens` is the engine's estimate so far, when it gives one.
+    Thinking {
+        tokens: Option<i64>,
+    },
+    /// A thought ended. Claude Code: its block is whole. Codex: the only sign it gives of one.
+    Thought,
     /// A message it has read, said back (`--replay-user-messages`): one sent mid-turn is taken.
     Read(String),
     /// It asks to run a tool (`--permission-prompt-tool stdio`), with why it asks when it says.
@@ -186,6 +193,11 @@ fn read_own(value: &Value, own: bool) -> Vec<Frame> {
             let tasks = tasks.map(|t| (text(t, "task_id"), text(t, "description")));
             vec![Frame::Background(tasks.collect())]
         }
+        // Documented from Claude Code 2.1.153: sent while a thinking block, a redacted one too,
+        // is produced.
+        "system" if text(value, "subtype") == "thinking_tokens" => vec![Frame::Thinking {
+            tokens: value["estimated_tokens"].as_i64(),
+        }],
         "rate_limit_event" => {
             let info = &value["rate_limit_info"];
             vec![Frame::Limit {
@@ -247,6 +259,9 @@ fn delta(value: &Value) -> Option<Frame> {
     if event["type"] == "message_start" {
         return Some(Frame::Replied);
     }
+    if event["type"] == "content_block_start" && thinks(&event["content_block"]) {
+        return Some(Frame::Thinking { tokens: None });
+    }
     (event["type"] == "content_block_delta" && delta["type"] == "text_delta")
         .then(|| Frame::TextDelta(delta["text"].as_str().unwrap_or("").to_string()))
 }
@@ -281,9 +296,18 @@ fn assistant(value: &Value, own: bool) -> Vec<Frame> {
             };
             std::iter::once(start).chain(missing).collect()
         }
+        // The block arrives empty, with a signature: only that it thought is read (0042).
+        _ if thinks(b) => vec![Frame::Thought],
         _ => Vec::new(),
     });
     said.chain(fill).collect()
+}
+
+fn thinks(block: &Value) -> bool {
+    matches!(
+        block["type"].as_str(),
+        Some("thinking" | "redacted_thinking")
+    )
 }
 
 /// What a tool call's step keeps of its input (0041), or the name of the field it's read from
@@ -750,5 +774,62 @@ mod tests {
             })
             .count();
         assert_eq!(hooks, 0, "a hook ran");
+    }
+
+    /// The frames `kinds` picks, in order.
+    fn of(frames: &[Frame], kinds: impl Fn(&Frame) -> bool) -> Vec<&Frame> {
+        frames.iter().filter(|f| kinds(f)).collect()
+    }
+
+    /// 0042, recorded on Opus 5.5: the thinking block starts, then arrives whole (and empty),
+    /// before the reply's text.
+    #[test]
+    fn a_thought_reads_as_its_start_then_its_end_before_the_text() {
+        let frames = replayed("steered_after_turn");
+        let thought = of(&frames, |f| {
+            matches!(f, Frame::Thinking { .. } | Frame::Thought | Frame::Text(_))
+        });
+        let start = Frame::Thinking { tokens: None };
+        assert_eq!(thought[..2], [&start, &Frame::Thought]);
+        assert!(matches!(thought[2], Frame::Text(_)), "{thought:?}");
+        assert_eq!(thought.len(), 4, "one thought, two replies: {thought:?}");
+    }
+
+    /// Recorded on Haiku 5.5: the running count while it thinks, 50 then 204, then the block.
+    #[test]
+    fn a_thought_carries_the_engines_last_count_of_its_tokens() {
+        let frames = replayed("background");
+        let thought = of(&frames, |f| {
+            matches!(f, Frame::Thinking { .. } | Frame::Thought)
+        });
+        let first = Frame::Thinking { tokens: Some(50) };
+        let last = Frame::Thinking { tokens: Some(204) };
+        assert_eq!(thought, [&first, &last, &Frame::Thought]);
+    }
+
+    /// Hand-written in the recorded shape, under an Agent call: a sub-agent's thinking, a redacted
+    /// block too, is never the agent's own (G24).
+    #[test]
+    fn a_sub_agents_thinking_is_never_the_agents() {
+        let block = json!({ "type": "redacted_thinking", "data": "made-up" });
+        let lines = [
+            json!({ "type": "system", "subtype": "thinking_tokens", "estimated_tokens": 12,
+                "parent_tool_use_id": "toolu_agent" }),
+            json!({ "type": "stream_event", "parent_tool_use_id": "toolu_agent",
+                "event": { "type": "content_block_start", "content_block": block } }),
+            json!({ "type": "assistant", "parent_tool_use_id": "toolu_agent",
+                "message": { "content": [block] } }),
+        ];
+        let frames: Vec<Frame> = lines.iter().flat_map(read).collect();
+        let inner: Vec<&Frame> = frames
+            .iter()
+            .map(|f| match f {
+                Frame::Sub { parent, frame } if parent == "toolu_agent" => &**frame,
+                own => panic!("read as the agent's own: {own:?}"),
+            })
+            .collect();
+        let counted = Frame::Thinking { tokens: Some(12) };
+        let start = Frame::Thinking { tokens: None };
+        assert_eq!(inner, [&counted, &start, &Frame::Thought]);
     }
 }

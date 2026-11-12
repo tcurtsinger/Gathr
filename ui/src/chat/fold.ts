@@ -1,6 +1,6 @@
-import type { Message, Task, ToolBody } from '../api';
+import type { Message, Task, ThinkingBody, ToolBody } from '../api';
 
-/** One thing a turn did before its message: a tool call, or words it wrote mid-work. */
+/** One thing a turn did before its message: a tool call, a thought, or words it wrote mid-work. */
 export type Step =
   | { id: string; say: string }
   | {
@@ -21,7 +21,7 @@ export interface Work {
   running: boolean;
   /** Finished: "Worked for 1m 49s". Running: what the agent is doing now. */
   label: string;
-  /** After the label: "6 steps", "gave 2 tasks". */
+  /** After the label: "6 steps" (what it ran, never its thoughts), "gave 2 tasks". */
   notes: string[];
   /** When it began (ms), for a running row's elapsed time. */
   since?: number;
@@ -77,6 +77,20 @@ export function duration(ms: number, to: 'second' | 'minute' = 'second'): string
   return minutes ? `${minutes}m ${String(seconds % 60).padStart(2, '0')}s` : `${seconds}s`;
 }
 
+const THINKING = 'Thinking';
+
+/**
+ * A thought, as its step (0042): "Thinking" while it runs, "Thought for 9s" after, with nothing to open.
+ * One that took under a second is left out.
+ */
+function thought(id: string, { status, duration_ms }: ThinkingBody): Step | [] {
+  if (status === 'running') return { id, label: THINKING, state: 'running', time: '' };
+  const took = duration(duration_ms ?? 0);
+  return took
+    ? { id, label: `Thought for ${took}`, state: status === 'done' ? 'ok' : 'stopped', time: '' }
+    : [];
+}
+
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 /** The task a give_task call made. */
@@ -99,14 +113,21 @@ export function fold(
   began?: string,
 ): { work?: Work; text?: string } {
   const last = msgs.at(-1);
-  const text = streaming || (last && last.kind !== 'tool' ? (last.body as string) : undefined);
+  const text = streaming || (last?.kind === 'text' ? (last.body as string) : undefined);
   const before = streaming || !text ? msgs : msgs.slice(0, -1);
   if (before.length === 0) return { text };
 
   let doing: string | undefined;
   let given = 0;
-  const steps = before.map((m): Step => {
-    if (m.kind !== 'tool') return { id: m.id, say: m.body as string };
+  let tools = 0;
+  const steps = before.flatMap((m): Step | [] => {
+    if (m.kind === 'text') return { id: m.id, say: m.body as string };
+    if (m.kind === 'thinking') {
+      const body = m.body as ThinkingBody;
+      if (body.status === 'running') doing = THINKING;
+      return thought(m.id, body);
+    }
+    tools += 1;
     const body = m.body as ToolBody;
     const [did, now] = TOOLS[body.tool] ?? [body.tool, body.tool];
     const made = gave.get(m.id);
@@ -127,7 +148,7 @@ export function fold(
       time: duration(body.duration_ms ?? 0),
     };
   });
-  const tools = steps.filter((s) => 'label' in s).length;
+  if (steps.length === 0) return { text };
   const notes = [tools && plural(tools, 'step'), given && `gave ${plural(given, 'task')}`].filter(
     (n): n is string => !!n,
   );
@@ -137,7 +158,7 @@ export function fold(
   const since = times.length ? Math.min(...times) : undefined;
   if (running) return { text, work: { steps, running, label: doing ?? 'Working', notes, since } };
   const ends = msgs
-    .map((m) => Date.parse(m.time) + ((m.kind === 'tool' && (m.body as ToolBody).duration_ms) || 0))
+    .map((m) => Date.parse(m.time) + ((m.kind !== 'text' && (m.body as ToolBody).duration_ms) || 0))
     .filter((t) => !Number.isNaN(t));
   const took = since === undefined ? '' : duration(Math.max(...ends) - since);
   return { text, work: { steps, running, label: took ? `Worked for ${took}` : 'Worked', notes } };

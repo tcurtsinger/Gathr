@@ -186,7 +186,12 @@ chip is one line, cut with an ellipsis to the column it is in, never widening it
 label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
 the shared tooltip. A step that kept
 nothing reads as before ("Ran a command"), and the row's own label while it runs does not
-change. The turn's last text is the message. A turn that only wrote once has no row.
+change. A thought ([0042](docs/decisions/0042-thinking.md)) is a step of its own, in order with
+the others: "Thought for 9s", with no chip, no duration at the right and nothing to open; one
+under a second is left out, and thoughts are not counted in "6 steps". While a thought runs the
+row's label is "Thinking"; an engine that says it thought only afterwards (Codex) keeps its
+working label until the step arrives. The turn's last text is the message. A turn that only
+wrote once has no row, nor has one whose only work was a thought under a second.
 
 The lead's words read at 16px/400/1.6. A member's or reviewer's turn reads at 15px. A header
 names the speaker when it changes from the block before: the avatar, the name, then for a

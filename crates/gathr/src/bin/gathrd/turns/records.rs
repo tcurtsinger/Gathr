@@ -18,12 +18,23 @@ impl Task {
         kind: &'static str,
         body: &str,
     ) -> Result<Value, String> {
+        self.db_message_from(ids, (role, kind), body, None).await
+    }
+
+    /// `db_message`, for one whose time is `began` rather than now.
+    pub(super) async fn db_message_from(
+        &self,
+        ids: &Ids,
+        (role, kind): (&'static str, &'static str),
+        body: &str,
+        began: Option<i64>,
+    ) -> Result<Value, String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
-        let added = self
-            .chats
-            .writer
-            .call(move |conn| store::add_message(conn, &chat, &turn, role, kind, &body))
-            .await;
+        let add = move |conn: &mut rusqlite::Connection| match began {
+            Some(began) => store::add_message_at(conn, &chat, &turn, role, kind, &body, began),
+            None => store::add_message(conn, &chat, &turn, role, kind, &body),
+        };
+        let added = self.chats.writer.call(add).await;
         let why = match added {
             Some(Ok(message)) => return Ok(message),
             Some(Err(e)) => e.to_string(),

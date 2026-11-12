@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Agent, Failure, Message, Role, ToolBody, Turn } from '../api';
+import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
 import { fold, type Given, type Work } from './fold';
 import { hearBack, outcome } from './hearback';
 import { place } from './order';
@@ -179,9 +179,9 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
     if (!m) return undefined;
     const own = groups.find((g) => g.msgs.includes(m));
     const at = own && shown.get(own);
-    if (at && m.kind !== 'tool' && own.kind !== 'gathr') {
+    if (at && m.kind === 'text' && own.kind !== 'gathr') {
       const before = at.msgs.slice(0, at.msgs.indexOf(m));
-      const nth = before.filter((x) => x.kind !== 'tool' && x.body === m.body).length;
+      const nth = before.filter((x) => x.kind === 'text' && x.body === m.body).length;
       return { id: at.id, text: m.body as string, nth };
     }
     if (at) return { id: at.id };
@@ -226,7 +226,7 @@ function grouped(state: ChatState): Group[] {
         groups.at(-1) === sender &&
         asked?.kind === 'to' &&
         asked.msgs[0].to === state.turns[m.turn ?? '']?.agent;
-      if (answering && sender?.msgs.every((x) => x.kind === 'tool')) sender.at = at + 0.5;
+      if (answering && sender?.msgs.every((x) => x.kind !== 'text')) sender.at = at + 0.5;
       groups.push({ ...one, key: m.id, kind: 'to', bound: false });
     } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
     else if (m.turn) {
@@ -286,8 +286,8 @@ function block(
   const agent = crew.name(turn?.agent);
   const role = crew.role(turn?.agent);
   const parts = group.msgs.map((m) => {
-    if (m.kind !== 'tool') return m.id;
-    const { status, duration_ms } = m.body as ToolBody;
+    if (m.kind === 'text') return m.id;
+    const { status, duration_ms } = m.body as ToolBody | ThinkingBody;
     const made = gave.get(m.id);
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
@@ -299,7 +299,7 @@ function block(
   const ended = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
   const toPerson = group.last && !!id && lead && ended && !crew.rootOf(id);
   const tick = toPerson
-    ? (group.msgs.findLast((m) => m.kind !== 'tool')?.time ?? turn?.created ?? '')
+    ? (group.msgs.findLast((m) => m.kind === 'text')?.time ?? turn?.created ?? '')
     : undefined;
   const who = `${agent}|${role}|${on}|${head}|${tick}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);

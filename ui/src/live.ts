@@ -6,6 +6,7 @@ import type {
   PersonTask,
   StaleTask,
   Task,
+  ThinkingBody,
   ToolBody,
   TurnStatus,
   Wait,
@@ -16,7 +17,7 @@ export type LiveEvent =
   // `at`: where the text starts in the turn's unsaved reply, in UTF-16 units.
   | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
   | { type: 'message'; chat: string; message: Message }
-  | { type: 'tool'; chat: string; message: string; body: ToolBody }
+  | { type: 'tool'; chat: string; message: string; body: ToolBody | ThinkingBody }
   // `agent`: the agent the turn was sent to, null for none.
   | {
       type: 'turn';
