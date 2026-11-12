@@ -209,27 +209,20 @@ pub fn add_message(
     add_message_at(conn, chat, turn, role, kind, body, now_us())
 }
 
-/// `add_message` for one that began at `began`, before it could be saved (a thought known only
-/// once it's over, 0042). The chat reads in time order, so it's never put before the turn's
-/// last message.
-pub fn add_message_from(
-    conn: &Connection,
-    chat: &str,
-    turn: &str,
-    (role, kind, body): (&str, &str, &str),
-    began: i64,
-) -> Result<Value, Error> {
+/// When a message that began at `began` may say it began (a thought known only once it's over,
+/// 0042): the chat reads in time order, so never before the turn's last message.
+pub fn after_last(conn: &Connection, chat: &str, turn: &str, began: i64) -> Result<i64, Error> {
     let last: Option<i64> = conn
         .prepare_cached(
             "SELECT ts FROM messages WHERE chat_id = ?1 AND turn_id = ?2 ORDER BY ts DESC LIMIT 1",
         )?
         .query_row([chat, turn], |r| r.get(0))
         .optional()?;
-    let ts = began.max(last.map_or(0, |ts| ts + 1));
-    add_message_at(conn, chat, turn, role, kind, body, ts)
+    Ok(began.max(last.map_or(0, |ts| ts + 1)))
 }
 
-fn add_message_at(
+/// `add_message`, at a time of its own.
+pub fn add_message_at(
     conn: &Connection,
     chat: &str,
     turn: &str,
@@ -343,8 +336,17 @@ pub struct Waiting {
 
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. Turns that were running then can't
-/// be continued: they're marked failed, with why.
+/// be continued: they're marked failed, with why, and the steps they left running are stopped.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
+    // By chat first: `messages` has no index on its turn. A thought's time isn't known, so it
+    // gets none.
+    conn.execute(
+        "UPDATE messages SET body = json_set(body, '$.status', 'stopped')
+         WHERE chat_id IN (SELECT chat_id FROM turns WHERE status = 'running')
+           AND turn_id IN (SELECT id FROM turns WHERE status = 'running')
+           AND kind IN ('tool', 'thinking') AND json_extract(body, '$.status') = 'running'",
+        [],
+    )?;
     conn.execute(
         "UPDATE turns SET status = 'failed', why = 'the service stopped during this turn', ended_ts = ?1
          WHERE status = 'running'",

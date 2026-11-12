@@ -664,6 +664,8 @@ test('a thought is a step that says how long it took, never counted with what th
     thought('lead', 'th2', { status: 'done', duration_ms: 300 }, iso(11)),
     tool('lead', 't2', 'Bash', {}, iso(12)),
     thought('lead', 'th3', { status: 'stopped', duration_ms: 72_000 }, iso(13)),
+    // Left running by a service that died, then stopped at the next start: how long isn't known.
+    thought('lead', 'th4', { status: 'stopped' }, iso(14)),
   );
   state.turns.lead.status = 'stopped';
   const block = byId(view(state).items, 'a-lead');

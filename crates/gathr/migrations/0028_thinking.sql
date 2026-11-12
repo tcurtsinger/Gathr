@@ -21,6 +21,8 @@ DROP TABLE messages;
 ALTER TABLE messages_new RENAME TO messages;
 CREATE INDEX messages_by_chat ON messages (chat_id, ts);
 
+-- With every rowid kept the index already matches, so this refill changes nothing: it stays so
+-- the index never rests on that, as 0015 asks of every rebuild.
 INSERT INTO message_search (message_search) VALUES ('delete-all');
 INSERT INTO message_search (rowid, body) SELECT rowid, body FROM messages WHERE kind = 'text';
 

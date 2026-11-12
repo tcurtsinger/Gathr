@@ -304,6 +304,9 @@ mod tests {
         )
         .unwrap();
         assert_eq!(found(&conn), [4, 5, 7]);
+        conn.execute("DELETE FROM messages WHERE id = 'sent'", [])
+            .unwrap();
+        assert_eq!(found(&conn), [5, 7]);
         let plan: String = conn
             .query_row(
                 "EXPLAIN QUERY PLAN SELECT id FROM messages WHERE chat_id = 'c' ORDER BY ts",

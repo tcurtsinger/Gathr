@@ -44,6 +44,11 @@ impl Task {
             open.tokens = tokens.or(open.tokens);
             return;
         }
+        // A count while the agent's own tool runs may be a sub-agent's, or one that came after
+        // its block: nothing would close a thought opened here until the next words or tool.
+        if !turn.tools.is_empty() {
+            return;
+        }
         let ids = turn.ids.clone();
         let running = body("running", None, None).to_string();
         let message = match self
@@ -88,10 +93,23 @@ impl Task {
                 (duration_us, open.tokens)
             }
             None if turn.tools.is_empty() && quiet >= KEPT_FROM => {
-                let duration_us = quiet.as_micros() as i64;
+                // Its time is when the quiet began, but never before the turn's last message:
+                // moved later, it is that much shorter, so it never ends after its mark.
+                let ended = now_us();
+                let quiet_began = ended - quiet.as_micros() as i64;
+                let (chat, id) = (ids.chat.clone(), ids.turn.clone());
+                let after = move |conn: &mut rusqlite::Connection| {
+                    store::after_last(conn, &chat, &id, quiet_began)
+                };
+                let began = self.chats.writer.call(after).await.and_then(Result::ok);
+                let began = began.unwrap_or(quiet_began);
+                let duration_us = ended - began;
+                if duration_us < KEPT_FROM.as_micros() as i64 {
+                    return;
+                }
                 let body = body(status, Some(duration_us / 1000), None).to_string();
-                let (kind, began) = (("assistant", "thinking"), Some(now_us() - duration_us));
-                match self.db_message_from(&ids, kind, &body, began).await {
+                let kind = ("assistant", "thinking");
+                match self.db_message_from(&ids, kind, &body, Some(began)).await {
                     Ok(message) => {
                         self.publish(&ids.chat, json!({ "type": "message", "message": message }))
                     }

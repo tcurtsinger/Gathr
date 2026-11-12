@@ -21,7 +21,7 @@ impl Task {
         self.db_message_from(ids, (role, kind), body, None).await
     }
 
-    /// `db_message`, for one that began at `began` when that is before now.
+    /// `db_message`, for one whose time is `began` rather than now.
     pub(super) async fn db_message_from(
         &self,
         ids: &Ids,
@@ -31,7 +31,7 @@ impl Task {
     ) -> Result<Value, String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
         let add = move |conn: &mut rusqlite::Connection| match began {
-            Some(began) => store::add_message_from(conn, &chat, &turn, (role, kind, &body), began),
+            Some(began) => store::add_message_at(conn, &chat, &turn, role, kind, &body, began),
             None => store::add_message(conn, &chat, &turn, role, kind, &body),
         };
         let added = self.chats.writer.call(add).await;

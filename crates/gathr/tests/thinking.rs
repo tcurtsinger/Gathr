@@ -69,11 +69,16 @@ fn one_turn(service: &TestService, chat: &str, agent: &Value, status: &str) -> (
     (history, heard)
 }
 
-/// A message's time, in milliseconds since its day began (`2026-11-12T07:10:23.180Z`).
-fn ms_of_day(message: &Value) -> i64 {
+/// A message's time (`2026-11-12T07:10:23.180Z`), in milliseconds since 1970.
+fn ms(message: &Value) -> i64 {
     let time = message["time"].as_str().unwrap();
     let n = |at: std::ops::Range<usize>| time[at].parse::<i64>().unwrap();
-    ((n(11..13) * 60 + n(14..16)) * 60 + n(17..19)) * 1000 + n(20..23)
+    // Howard Hinnant's days_from_civil.
+    let (y, m, d) = (n(0..4) - i64::from(n(5..7) <= 2), n(5..7), n(8..10));
+    let (era, yoe) = (y.div_euclid(400), y.rem_euclid(400));
+    let doy = (153 * (m + if m > 2 { -3 } else { 9 }) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    (((days * 24 + n(11..13)) * 60 + n(14..16)) * 60 + n(17..19)) * 1000 + n(20..23)
 }
 
 /// The agent's messages in the history, each as its kind, or its tool's name.
@@ -183,6 +188,67 @@ fn a_turn_that_only_thought_still_fails_as_empty() {
     assert_eq!(thoughts(&history)[0]["body"]["status"], "done", "{history}");
 }
 
+/// A count that arrives while the agent's own tool runs opens no thought: it may be a
+/// sub-agent's, or one that came late, and nothing would close it until the next words or tool.
+#[test]
+fn a_count_inside_a_running_step_opens_no_thought() {
+    let data = TempDir::new();
+    let (service, chat, agent) = service(&data.0, "claude", "thinking_in_a_step");
+    let (history, _) = one_turn(&service, &chat, &agent, "done");
+    assert_eq!(kinds(&history), ["Agent", "text"], "{history}");
+}
+
+/// The service dies mid-turn, as a crash or a kill would end it: the turn fails at the next
+/// start, and its thought and its tool, both left running, are stopped with it. How long the
+/// thought ran is not known, so it says no time.
+#[test]
+fn a_restart_stops_the_steps_a_dead_service_left_running() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let (replay, played) = (common::replay_engine(), recording("thinking_claude"));
+    let env = [
+        ("GATHR_CLAUDE_PATH", replay.as_path()),
+        ("GATHR_REPLAY", played.as_path()),
+        ("GATHR_REPLAY_HOLD", go.as_path()),
+    ];
+    let service = TestService::start_with(&data.0, &env);
+    let account = service.add_account("Thinking test");
+    common::sign_in_account(&data.0, &account);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Think it through" }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let history = service.wait_for(&chat, 10, "the thought to open", |h| {
+        thoughts(h)
+            .first()
+            .is_some_and(|t| t["body"]["status"] == "running")
+    });
+    let turn = history["turns"][0]["id"].as_str().unwrap();
+    common::kill(&service.info.pid.to_string());
+    let mut service = service;
+    service.child.wait().unwrap();
+    // The engine it left goes on and ends; the turn also had a tool under way.
+    std::fs::write(&go, "").unwrap();
+    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    let running = r#"{"tool":"Bash","status":"running","input":{"text":"cargo check"}}"#;
+    gathr::store::add_message(&conn, &chat, turn, "assistant", "tool", running).unwrap();
+    drop(conn);
+
+    let service = TestService::start_with(&data.0, &env);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    assert_eq!(history["turns"][0]["status"], "failed", "{history}");
+    let messages = history["messages"].as_array().unwrap().iter();
+    let steps: Vec<&Value> = messages
+        .filter(|m| m["kind"] != "text")
+        .map(|m| &m["body"])
+        .collect();
+    let stopped = [
+        json!({ "status": "stopped" }),
+        json!({ "tool": "Bash", "status": "stopped", "input": { "text": "cargo check" } }),
+    ];
+    assert_eq!(steps, [&stopped[0], &stopped[1]], "{history}");
+}
+
 /// Codex says only that it thought, once it has: each mark is timed by the quiet before it. Of
 /// the fixture's four, the one after a second of quiet and the one a second after the command
 /// ended are kept; the one right after another and the one while the command ran are not.
@@ -199,19 +265,17 @@ fn a_codex_mark_is_a_thought_as_long_as_the_quiet_before_it_or_nothing() {
     for thought in thoughts(&history) {
         let body = &thought["body"];
         assert_eq!(body["status"], "done", "{thought}");
-        let ms = body["duration_ms"].as_i64().unwrap();
-        // The fixture's quiet is 1.1 s each time, less what a sleep may wake early; a mark that
-        // took the turn's whole time would say 2.2 s.
-        assert!((1_000..2_000).contains(&ms), "{thought}");
+        let took = body["duration_ms"].as_i64().unwrap();
+        assert!(took >= 1_000, "kept under a second: {thought}");
         assert_eq!(body.get("tokens"), None, "Codex gives no count: {thought}");
         // Its time is when it began, as a tool's is: the quiet's start, not the mark.
         let all = history["messages"].as_array().unwrap();
         let at = all.iter().position(|m| m["id"] == thought["id"]).unwrap();
-        let (before, after) = (ms_of_day(&all[at - 1]), ms_of_day(&all[at + 1]));
-        let began = ms_of_day(thought);
+        let (before, after) = (ms(&all[at - 1]), ms(&all[at + 1]));
+        let began = ms(thought);
         assert!(
-            before <= began && began + ms <= after + 50,
-            "{before} {began} +{ms} {after}"
+            before <= began && began + took <= after + 50,
+            "{before} {began} +{took} {after}"
         );
         // It arrives whole: one live message, already done.
         let live = heard.iter().filter(|e| e["message"]["id"] == thought["id"]);
@@ -219,5 +283,15 @@ fn a_codex_mark_is_a_thought_as_long_as_the_quiet_before_it_or_nothing() {
         assert_eq!(live.len(), 1, "{heard:?}");
         assert_eq!(live[0]["message"]["body"], *body, "{live:?}");
     }
+    // Each took its own quiet, not the turn so far: together they fit in the turn's time, which
+    // a second mark timed from the turn's start would not.
+    let kept = thoughts(&history);
+    let took: i64 = kept
+        .iter()
+        .map(|t| t["body"]["duration_ms"].as_i64().unwrap())
+        .sum();
+    let all = history["messages"].as_array().unwrap();
+    let turn_ms = ms(all.last().unwrap()) - ms(&all[0]);
+    assert!(took <= turn_ms + 50, "{took} of {turn_ms}: {history}");
     assert_eq!(traced(&data.0, &history).len(), 2);
 }
