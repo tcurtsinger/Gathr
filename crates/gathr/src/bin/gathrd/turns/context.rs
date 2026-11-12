@@ -8,32 +8,60 @@ use super::Task;
 
 impl Task {
     pub(super) async fn context_filled(&mut self, used: i64, model: Option<String>) {
-        if model.is_some() {
-            self.context_model = model;
+        if let Some(model) = model {
+            self.ran_on(model).await;
         }
         self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, used))
             .await;
     }
 
-    /// The window of the model the agent's calls run on; with one model listed (Codex), that one.
+    /// The window of the model the agent's calls run on; Codex lists one, unnamed: that one.
     pub(super) async fn context_window(&mut self, windows: Vec<(Option<String>, i64)>) {
         let own = match windows.as_slice() {
-            [(_, window)] => Some(*window),
+            [(None, window)] => Some(*window),
             _ => windows
                 .iter()
                 .find(|(model, _)| model.is_some() && *model == self.context_model)
                 .map(|(_, window)| *window),
         };
-        let of = self
-            .assigned
-            .as_ref()
-            .and_then(super::Assignment::model_key);
-        if let Some(window) = own {
+        let set = self.assigned.as_ref().map(super::Assignment::model_key);
+        if let (Some(window), Some(set)) = (own, set) {
+            let ran = self.context_model.clone();
             let save = move |c: &_, chat: &str, agent: &str| {
-                gathr::context::window(c, chat, agent, window, of.as_deref())
+                gathr::context::window(c, chat, agent, window, &set, ran.as_deref())
             };
             self.save_context(save).await;
         }
+    }
+
+    /// The engine named the model the agent's calls run on. When its compaction point was for
+    /// another (a Latest or the engine's default moved), no window seen on that one gives a point
+    /// again, and the engine closes before its next turn, to start without it.
+    pub(super) async fn ran_on(&mut self, model: String) {
+        // Claude Code names a message it wrote itself `<synthetic>`: no model ran.
+        if model.is_empty() || model.starts_with('<') {
+            return;
+        }
+        let was = self.point_model.take_if(|was| *was != model);
+        if let (Some(was), Some(agent), Some(assigned)) =
+            (was, self.agent.clone(), self.assigned.as_ref())
+        {
+            self.model_moved = true;
+            let (set, ran) = (assigned.model_key(), model.clone());
+            let mut event = Event::point("gathr.context.moved").chat(&assigned.chat);
+            if let Some(turn) = &self.turn {
+                event = event.trace(&turn.ids.trace);
+            }
+            event = event.attr("gen_ai.agent.id", agent.clone());
+            let forget =
+                move |c: &mut rusqlite::Connection| gathr::context::moved(c, &agent, &set, &ran);
+            let event = match self.chats.writer.call(forget).await {
+                Some(Ok(())) => event.ok(),
+                failed => event.error("sqlite").attr("why", format!("{failed:?}")),
+            };
+            self.record(event.attr("from", was).attr("to", model.clone()));
+        }
+        self.context_model = Some(model);
     }
 
     /// The engine compacted the conversation: the fill after it, when said, and a quiet line in the
@@ -99,18 +127,15 @@ impl Task {
     /// Whether the turn starting now is told its conversation nears where it compacts (K3): once,
     /// at 75% of the point, again only after a compaction or a failed turn. Recorded when it is.
     pub(super) async fn near_compaction(&self, ids: &super::Ids) -> bool {
-        let of = self
-            .assigned
-            .as_ref()
-            .and_then(super::Assignment::model_key);
-        let Some(agent) = ids.agent.clone() else {
+        let set = self.assigned.as_ref().map(super::Assignment::model_key);
+        let (Some(agent), Some(set)) = (ids.agent.clone(), set) else {
             return false;
         };
         let chat = ids.chat.clone();
         let told = self
             .chats
             .writer
-            .call(move |c| gathr::context::tell_soon(c, &chat, &agent, of.as_deref()));
+            .call(move |c| gathr::context::tell_soon(c, &chat, &agent, &set));
         let told = told.await.and_then(Result::ok).unwrap_or(false);
         if told {
             let event = Event::point("gathr.context.soon")

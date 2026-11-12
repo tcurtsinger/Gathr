@@ -163,7 +163,8 @@ impl Task {
         let pass = self.pass_for(&assigned, worktree, given, trace).await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
-        let compact_at = self.compact_at(&assigned).await;
+        let point = self.compact_at(&assigned).await;
+        let compact_at = point.as_ref().map(|(at, _)| *at);
         let first = if codex {
             args = gathr::codex::command::args(
                 Some(&url),
@@ -180,6 +181,7 @@ impl Task {
                 ),
                 writable: beside.iter().map(|d| d.display().to_string()).collect(),
                 compact_at,
+                compact_for: point.as_ref().map(|(_, model)| model.clone()),
             };
             let (driver, first) = super::driver::Driver::codex(opening);
             self.driver = driver;
@@ -251,6 +253,10 @@ impl Task {
                 self.assigned = Some(assigned);
                 self.lines = Some(lines);
                 self.last_stderr = None;
+                self.point_model = point.map(|(_, model)| model);
+                self.model_moved = false;
+                // Named again by this engine: a window is never kept under an earlier one's model.
+                self.context_model = None;
                 self.idle_since = started;
                 if let Some(first) = first {
                     self.write(&first, None).await.map_err(|e| e.to_string())?;
@@ -332,15 +338,15 @@ impl Task {
         Some(version.to_string_lossy().into_owned())
     }
 
-    /// Where the agent's conversation in `chat` compacts (Auto-compact, K3): read at each start, so a
-    /// changed setting applies from the engine's next start.
-    async fn compact_at(&self, assigned: &Assignment) -> Option<i64> {
+    /// Where the agent's conversation in `chat` compacts (Auto-compact, K3) and the model that
+    /// point is for: read at each start, so a changed setting applies from the engine's next start.
+    async fn compact_at(&self, assigned: &Assignment) -> Option<(i64, String)> {
         let (chat, agent) = (assigned.chat.clone(), self.agent.clone()?);
-        let of = assigned.model_key();
+        let set = assigned.model_key();
         let found = self
             .chats
             .writer
-            .call(move |c| gathr::context::point_for(c, &chat, &agent, of.as_deref()));
+            .call(move |c| gathr::context::point_for(c, &chat, &agent, &set));
         found.await.and_then(Result::ok).flatten()
     }
 
