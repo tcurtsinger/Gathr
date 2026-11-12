@@ -91,3 +91,54 @@ fn its_owner_finishes_a_held_task_from_any_turn() {
     let theirs = tasks::finish(&mut conn, "bo", task, Finish::Done, &said);
     assert_eq!(refusal(theirs), format!("task #{task} isn't yours"));
 }
+
+/// #156's review: work held on its command and its PR's merge, and a review of that PR given after
+/// it. The command ends inside another turn: the hold now names only the merge, which counts as done
+/// for the review (`ONLY_ITS_MERGE`), so the review starts; the owner's finish stays for the merge.
+#[test]
+fn a_command_ending_refreshes_a_hold_that_still_waits_on_its_merge() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let give_pr = |conn: &mut Connection, owner, kind, after: &[i64]| {
+        let g = Give {
+            chat: "c",
+            giver: Some("lead"),
+            owner,
+            given_in: None,
+            parent: None,
+            kind,
+            what: "PR #5",
+            why: None,
+            after,
+            pr: Some(5),
+        };
+        tasks::give(conn, &g, T).unwrap().0.number
+    };
+    let work = give_pr(&mut conn, "ann", Kind::Work, &[]);
+    let review = give_pr(&mut conn, "bo", Kind::Review, &[work]);
+    turn(&conn, "t1", "ann", Some(work), "running");
+    tasks::started(&mut conn, work, T).unwrap();
+    let running = [("b1".to_string(), "cargo test".to_string())];
+    gathr::background::set(&conn, ("c", Some("ann")), &running, Some("t1")).unwrap();
+    let said = Said {
+        note: Some("ready for review"),
+        ..Said::default()
+    };
+    tasks::finish(&mut conn, "ann", work, Finish::Done, &said).unwrap();
+    tasks::ended(&mut conn, work, Outcome::Ok { tools: 3 }, T).unwrap();
+    let (held, why) = state(&conn, work);
+    assert_eq!(held, State::Held);
+    assert!(
+        why.as_deref().unwrap().contains("background command"),
+        "{why:?}"
+    );
+    assert_eq!(state(&conn, review).0, State::Waiting);
+
+    turn(&conn, "t2", "ann", None, "running");
+    let (_, starts) =
+        tasks::background_changed(&mut conn, ("c", Some("ann")), &[], Some("t2"), true, T).unwrap();
+    let reason = Some("done, waiting on #5 to merge".to_string());
+    assert_eq!(state(&conn, work), (State::Held, reason));
+    assert_eq!(state(&conn, review).0, State::Ready);
+    assert!(starts.iter().any(|s| s.task == Some(review)), "{starts:?}");
+}

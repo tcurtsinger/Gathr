@@ -2,6 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
+use super::records::OptionalTask;
 use super::{Finish, Start, State, Task, cascade, read, ready, set, words};
 use crate::Error;
 use crate::event::Event;
@@ -268,8 +269,11 @@ pub fn background_changed(
     Ok((ended, starts))
 }
 
-/// A held task's hold may be over: settled as its owner last finished it, else as the turn that held
-/// it said ("done, waiting on …", "left, waiting on …"). Nothing while anything is still open.
+/// A held task's hold may be over, or narrower: settled as its owner last finished it, else as the
+/// turn that held it said ("done, waiting on …", "left, waiting on …"). Still held on something
+/// else, its reason names only what's left, and what follows it moves on that (#156's review: work
+/// held on its merge alone counts as done for a review of it). The owner's finish is kept until
+/// the hold ends.
 pub fn release(conn: &mut Connection, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let starts = released(&tx, task, trace)?;
@@ -278,10 +282,10 @@ pub fn release(conn: &mut Connection, task: i64, trace: &str) -> Result<Vec<Star
 }
 
 fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
-    let Ok(t) = read(tx, task) else {
+    let Some(t) = read(tx, task).optional_task()? else {
         return Ok(Vec::new());
     };
-    if t.state != State::Held || !open_on(tx, task)?.is_empty() {
+    if t.state != State::Held {
         return Ok(Vec::new());
     }
     let (finish, note): (Option<String>, Option<String>) = tx.query_row(
@@ -289,15 +293,25 @@ fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Erro
         [task],
         |r| Ok((r.get(0)?, r.get(1)?)),
     )?;
-    tx.execute(
-        "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
-        [task],
-    )?;
+    let ends = open_on(tx, task)?.is_empty();
+    if ends {
+        tx.execute(
+            "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
+            [task],
+        )?;
+    }
     let said = match t.reason.as_deref() {
         Some(r) if r.starts_with("left,") => Finish::Left,
         _ => Finish::Done,
     };
-    let finish = finish.as_deref().and_then(Finish::named).unwrap_or(said);
+    // While something is still open, the hold is only renamed: the owner's finish waits for its end.
+    let (finish, note) = match ends {
+        true => (
+            finish.as_deref().and_then(Finish::named).unwrap_or(said),
+            note,
+        ),
+        false => (said, None),
+    };
     let mut starts = settle(tx, &t, Some(finish), note, 1, trace)?;
     starts.extend(cascade(tx, task, trace)?);
     Ok(starts)
