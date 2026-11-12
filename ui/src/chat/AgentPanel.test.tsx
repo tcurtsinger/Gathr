@@ -207,8 +207,11 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
   // The running turn's row, as the timeline draws it, with its steps showing.
   const now = panel.getByRole('region', { name: 'Now' });
-  await expect.element(now.getByRole('button', { name: /^Running a command · 2 steps/ })).toBeVisible();
-  expect(texts('listitem', now)).toEqual(['Read a file', 'Running a command']);
+  await expect.element(now.getByRole('button', { name: /^Working · 2 steps/ })).toBeVisible();
+  // Its steps as assistant-ui's Tool calls: one done, one still running.
+  expect(now.getByRole('listitem').elements()).toHaveLength(2);
+  await expect.element(now.getByRole('button', { name: /Read a file/ })).toBeVisible();
+  await expect.element(now.getByText('Running a command', { exact: true })).toBeVisible();
 
   // Newest first: what it wrote to the lead, then its earlier turn. Nobody else's blocks, nor the running one.
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
@@ -288,7 +291,8 @@ test('the Working line opens Summary and closes it; Escape gives focus back to t
   await expect.element(line).toHaveAttribute('aria-haspopup', 'dialog');
   await expect.element(line).toHaveAttribute('aria-expanded', 'false');
   // Who is working is announced from beside the button, never by a live region around the control.
-  const status = page.getByRole('status').filter({ hasText: 'Working' });
+  // The Working line's own status (each turn's row announces its state too, as assistant-ui's Run activity does).
+  const status = page.getByRole('status').filter({ hasText: 'Working: ' });
   await expect.element(status).toHaveTextContent('Working: Made-up Member');
   expect(status.element().contains(line.element())).toBe(false);
   await line.click();
@@ -445,12 +449,15 @@ test('behind another tab the panel keeps its scroll and its opened rows, and not
   await other.click();
   const next = tool('t9', 'now', 'Edit', { status: 'running' });
   for (const listener of live) listener({ type: 'message', chat: 'c', message: next });
-  await expect.element(page.getByRole('main').getByRole('button', { name: /^Editing a file/ })).toBeVisible();
-  expect(scroller.querySelector('.work-row[data-running]')?.textContent).toContain('Running a command');
+  // A running row shows its latest step under "Working".
+  await expect.element(page.getByRole('main').getByText('Editing a file', { exact: true })).toBeVisible();
+  expect(scroller.querySelector('[data-slot="run-activity"][data-status="running"]')?.textContent).toContain(
+    'Running a command',
+  );
 
   // Shown again, it catches up, the same panel as before.
   await other.click();
-  await expect.element(panel.getByRole('button', { name: /^Editing a file/ })).toBeVisible();
+  await expect.element(panel.getByText('Editing a file', { exact: true })).toBeVisible();
   expect(panel.element().querySelector('.agent-panel')).toBe(scroller);
   await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
 });
