@@ -27,7 +27,8 @@ pub struct SetChecks {
     /// The project's checks, in the order they run: each a command run by `sh` in a clean
     /// checkout of the PR's head. Replaces the list.
     checks: Option<Vec<String>>,
-    /// Whose result a merge needs: `ci` (GitHub's CI), `gathr` (these checks) or `both`.
+    /// Whose result a merge needs: `ci` (GitHub's CI), `gathr` (these checks), `both`, or `none`
+    /// (a clean review alone).
     ci: Option<String>,
     /// How Gathr merges: `fast-forward`, `merge` (a merge commit) or `squash`.
     merge: Option<String>,

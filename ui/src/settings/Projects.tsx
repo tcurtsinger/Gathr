@@ -84,6 +84,7 @@ const required: [Project['ci'], string, string][] = [
   ['ci', 'CI', 'CI must pass on the reviewed commit.'],
   ['gathr', 'Gathr’s checks', 'Gathr’s checks must pass on the reviewed commit.'],
   ['both', 'Both', 'CI and Gathr’s checks must pass on the reviewed commit.'],
+  ['none', 'Review only', 'A clean review of the commit is enough. No checks need to pass.'],
 ];
 const methods: [Project['merge'], string, string][] = [
   ['fast-forward', 'Fast-forward (default)', 'Keeps linear history and pins the checked base.'],
