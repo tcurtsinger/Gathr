@@ -3,6 +3,16 @@
 Part of [AGENTS.md](../AGENTS.md)'s Run, use and check it; the other parts are listed there.
 
 - **The crate:** `crates/gathr` holds the shared library and two binaries: `gathrd`, the service, and `gathr`, the command line. Service code is in `src/bin/gathrd/`, command-line code in `src/bin/gathr/`, and what both use in `src/`.
+- **Installed diagnostics:** Windows ships `gathr.exe` beside `gathrd.exe` and `gathr-app.exe` in
+  `%LOCALAPPDATA%\Gathr` (or the install folder you chose). On macOS it is
+  `/Applications/Gathr.app/Contents/MacOS/gathr` (or that path inside the app wherever you placed it).
+  Run the full path; installation does not add it to PATH. For example, in PowerShell:
+  `& "$env:LOCALAPPDATA\Gathr\gathr.exe" diag health --data C:\Gathr-test`.
+  For your own check, replace that example with your test folder, never the person's real data.
+  Service updates also carry the matching CLI beside `<data>/app/<version>/gathrd`; use
+  `<data>/app/<version>/gathr` (Windows: `.exe`) to diagnose that service version if it updated ahead
+  of the window. `app/current.json` names the active version. Neither diagnostics command starts
+  the window or downloads an engine. Older releases may have no packaged CLI.
 - **Start it with test data:** `cargo dev --port <port> --data <folder> --seed` builds both, adds the made-up chats (500 messages, 50 tool calls in a turn with thoughts between them, a 20,000-word answer, and a team of five over 20 rounds: tasks, hear-backs, reviews and a late reply, on a made-up account "Seed team", and six open questions for the person across two chats, one of each answer form, three with files) and starts the service. Ctrl+C stops it and everything it started. `cargo dev` and `gathr seed` refuse to run without `--data`, so made-up data never reaches the installed Gathr's own folder. Its agent folder is beside the data folder, `<data>-agents`, as for every data folder but the system's own, so made-up projects never reach the person's own `~/Gathr`.
 - **With the window:** add `--window` to `cargo dev`: it also starts the UI's dev server on the port plus 10 and the desktop window on it, and Ctrl+C stops them too. A browser can open the same address (`http://127.0.0.1:<port + 10>/`). The dev server adds the service's token to every `/api` request, so the page never holds it. Its window's title says `Gathr (dev <port>)`.
 - **Without a login:** `examples/replay_engine.rs` stands in for Claude Code. Build it (`cargo build --example replay_engine`), start `cargo dev` with `GATHR_REPLAY` set to a recording in `crates/gathr/tests/frames` and `GATHR_CLAUDE_PATH` set to `target/debug/examples/replay_engine(.exe)`, add an account (`POST /api/accounts`), and put a made-up `.credentials.json` with an `accessToken` and `refreshToken` in its `<data>/accounts/<id>/claude`. Every send then plays that recording. A `{"dir": "sleep", "line": "<ms>"}` row in a recording pauses that long, for a stream at a real pace when timing.

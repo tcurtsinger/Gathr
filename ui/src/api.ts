@@ -11,7 +11,14 @@ export interface ToolBody {
    * What it ran (0041): a command's first line, a file's path, a search's words, with secrets hidden, and
    * the engine's own words for it when it gave some. Tools that keep nothing, and messages from before, have none.
    */
-  input?: { text: string; title?: string };
+  input?: {
+    text: string;
+    title?: string;
+    /** A command's whole text when it says more than `text` (0044): up to 8 lines, secrets hidden. */
+    request?: string;
+  };
+  /** What came back (0044): up to 5 lines, secrets hidden; how many lines there were, and whether more followed. */
+  result?: { text: string; lines: number; more: boolean };
 }
 
 /** That the agent thought (0042): how long, and the engine's count of its tokens when it gave one. Never its text. */

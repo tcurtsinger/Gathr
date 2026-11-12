@@ -3,7 +3,7 @@
   "bundle": {
     "active": true,
     "createUpdaterArtifacts": true,
-    "externalBin": ["binaries/gathrd"],
+    "externalBin": ["binaries/gathrd", "binaries/gathr"],
     "resources": { "../../ui/dist/": "ui/" },
     "windows": { "nsis": { "installMode": "currentUser" } },
     "macOS": { "signingIdentity": "-", "minimumSystemVersion": "13.0" }

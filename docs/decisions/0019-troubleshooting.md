@@ -6,6 +6,9 @@ Status: accepted (the owner's requirement). Date: 2026-11-07.
 
 Health, trace, failures, read-only query, turn/raw frames, support bundles and the UI timeline are built. `diag stalls`, `diag usage`, diagnostics MCP tools and the remaining settings described below are not built yet.
 
+The installer/app and service update archive ship `gathr` beside `gathrd`, built at the same version.
+Use its full installed path ([running](../running.md)); no PATH change or separate CLI installer.
+
 ## Choice
 
 Any problem in Gathr can be diagnosed from Gathr's own data, by an agent or the person, without reading files by hand, guessing, or reproducing it live. The event record ([0011](0011-event-record.md)) is the one place; this decision makes sure everything reaches it, that every error can be found from what the person sees, and that agents can query it directly.

@@ -140,6 +140,38 @@ test('the map shows from three ticks up, long for the person and short for the l
   await expect.poll(() => ticks().length).toBe(0);
 });
 
+/**
+ * The map follows a scroll at the page's next frames. On WebKit on CI it once hadn't within the poll's default
+ * second (main at 9fe0852; 120 runs since didn't), cause unproven: a slow page or a missed scroll. It gets five,
+ * and a failure prints what it measured since the scroll, so few frames read apart from a missed scroll (G177).
+ */
+const FOLLOW = { timeout: 5000 };
+function following(id: string, middle: number) {
+  const el = viewport();
+  const since = { frames: 0, scrolls: 0 };
+  const count = () => {
+    since.frames += 1;
+    if (el.isConnected) requestAnimationFrame(count);
+  };
+  requestAnimationFrame(count);
+  el.addEventListener('scroll', () => since.scrolls++);
+  return () => ({
+    current: names(ticks().filter((t) => t.getAttribute('aria-current'))),
+    scrollTop: el.scrollTop,
+    fromMiddle: (below(id) ?? Number.NaN) - middle,
+    ...since,
+  });
+}
+
+/** The current tick `current`, with what was measured beside it, so a failure prints those values. */
+const measured = (current: string[]) => ({
+  current,
+  scrollTop: expect.any(Number),
+  fromMiddle: expect.any(Number),
+  frames: expect.any(Number),
+  scrolls: expect.any(Number),
+});
+
 test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', async () => {
   await render(<View state={chat(day(11, 6, tall))} />);
   const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
@@ -148,15 +180,15 @@ test('the current tick is the latest message at or above the middle of the chat,
   await expect.poll(current).toEqual([`Mira · ${hhmm(14, 30)}`]);
   expect(inView()).toEqual([`Mira · ${hhmm(14, 30)}`]);
 
+  const footer = document.querySelector('.thread-footer') as HTMLElement;
+  const middle = (footer.getBoundingClientRect().top - viewport().getBoundingClientRect().top) / 2;
   viewport().scrollTop = 0;
-  await expect.poll(current).toEqual([`Mira · ${hhmm(9, 30)}`]);
+  await expect.poll(following('u11-2', middle), FOLLOW).toEqual(measured([`Mira · ${hhmm(9, 30)}`]));
   expect(inView()).toEqual([`You · ${hhmm(9, 0)}`, `Mira · ${hhmm(9, 30)}`]);
 
   // The third ask, just above the middle of what shows over the composer: the answer before it fills the top.
-  const footer = document.querySelector('.thread-footer') as HTMLElement;
-  const middle = (footer.getBoundingClientRect().top - viewport().getBoundingClientRect().top) / 2;
   viewport().scrollTop += (below('u11-2') as number) - (middle - 30);
-  await expect.poll(current).toEqual([`You · ${hhmm(11, 0)}`]);
+  await expect.poll(following('u11-2', middle), FOLLOW).toEqual(measured([`You · ${hhmm(11, 0)}`]));
   expect(inView()).toEqual([`Mira · ${hhmm(10, 30)}`, `You · ${hhmm(11, 0)}`, `Mira · ${hhmm(11, 30)}`]);
 });
 
