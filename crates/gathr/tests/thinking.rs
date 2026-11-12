@@ -298,3 +298,43 @@ fn a_codex_mark_is_a_thought_as_long_as_the_quiet_before_it_or_nothing() {
     assert!(took <= turn_ms + 50, "{took} of {turn_ms}: {history}");
     assert_eq!(traced(&data.0, &history).len(), 2);
 }
+
+/// Asked for a summary, Codex says when a thought starts and when it ends: the row is `running`
+/// while it thinks and closes with the time it ran, as Claude Code's does. The fixture's two
+/// thoughts run 1.2 s each, the second straight after the first. The summary's words reach no
+/// message, no live event and no event on the turn's reference.
+#[test]
+fn a_codex_thought_under_way_opens_live_then_closes_with_its_time_and_none_of_its_summary() {
+    let data = TempDir::new();
+    let (service, chat, agent) = service(&data.0, "codex", "thinking_codex_live");
+    let (history, heard) = one_turn(&service, &chat, &agent, "done");
+    assert_eq!(
+        kinds(&history),
+        ["thinking", "thinking", "text"],
+        "{history}"
+    );
+    for thought in thoughts(&history) {
+        let body = &thought["body"];
+        assert_eq!(body["status"], "done", "{thought}");
+        let took = body["duration_ms"].as_i64().unwrap();
+        assert!(took >= 1_000, "it ran 1.2 s: {thought}");
+        assert_eq!(body.get("tokens"), None, "Codex gives no count: {thought}");
+        let of_thought =
+            |e: &&Value| e["message"]["id"] == thought["id"] || e["message"] == thought["id"];
+        let live: Vec<&Value> = heard.iter().filter(of_thought).collect();
+        assert_eq!(live.len(), 2, "{heard:?}");
+        assert_eq!(live[0]["message"]["body"], json!({ "status": "running" }));
+        assert_eq!((&live[1]["type"], &live[1]["body"]), (&json!("tool"), body));
+    }
+    let reference = history["turns"][0]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{trace}");
+    assert_eq!(traced(&data.0, &history).len(), 2, "{trace}");
+    let shown = format!("{history} {heard:?} {trace}");
+    for words in ["Weighing", "Checking", "Settling"] {
+        assert!(
+            !shown.contains(words),
+            "the summary's {words:?} is in {shown}"
+        );
+    }
+}

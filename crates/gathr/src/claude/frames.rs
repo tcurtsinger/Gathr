@@ -43,7 +43,7 @@ pub enum Frame {
     Thinking {
         tokens: Option<i64>,
     },
-    /// A thought ended. Claude Code: its block is whole. Codex: the only sign it gives of one.
+    /// A thought ended. Claude Code: its block is whole. Codex: its reasoning item completed.
     Thought,
     /// A message it has read, said back (`--replay-user-messages`): one sent mid-turn is taken.
     Read(String),

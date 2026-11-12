@@ -189,8 +189,8 @@ nothing reads as before ("Ran a command"), and the row's own label while it runs
 change. A thought ([0042](docs/decisions/0042-thinking.md)) is a step of its own, in order with
 the others: "Thought for 9s", with no chip, no duration at the right and nothing to open; one
 under a second is left out, and thoughts are not counted in "6 steps". While a thought runs the
-row's label is "Thinking"; an engine that says it thought only afterwards (Codex) keeps its
-working label until the step arrives. The turn's last text is the message. A turn that only
+row's label is "Thinking"; when an engine says it thought only afterwards (Codex, on a model
+that gives no reasoning summary), the row keeps its working label until the step arrives. The turn's last text is the message. A turn that only
 wrote once has no row, nor has one whose only work was a thought under a second.
 
 The lead's words read at 16px/400/1.6. A member's or reviewer's turn reads at 15px. A header
