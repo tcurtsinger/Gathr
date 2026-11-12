@@ -2,7 +2,7 @@
 // and the approvals docked above the composer.
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
@@ -171,7 +171,8 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
   const step = screen.getByRole('button', { name: new RegExp(`^Ran.*${long.slice(0, 20)}`) });
   await expect.element(step).toBeVisible();
   (row.element() as HTMLElement).focus();
-  await userEvent.keyboard('{Tab}');
+  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+  await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
   expect(document.activeElement).toBe(step.element());
   await userEvent.keyboard('{Enter}');
   await expect
