@@ -15,6 +15,36 @@ fn program_name() -> String {
     format!("gathrd{}", std::env::consts::EXE_SUFFIX)
 }
 
+#[test]
+fn adopting_an_install_keeps_its_diagnostics_cli_with_the_service() {
+    let dir = TempDir::new();
+    let installed = dir.0.join("installed");
+    std::fs::create_dir_all(&installed).unwrap();
+    let service = installed.join(program_name());
+    std::fs::copy(env!("CARGO_BIN_EXE_gathrd"), &service).unwrap();
+    let cli_name = format!("gathr{}", std::env::consts::EXE_SUFFIX);
+    std::fs::copy(env!("CARGO_BIN_EXE_gathr"), installed.join(&cli_name)).unwrap();
+    let data = DataDir::new(dir.0.join("data"));
+    let copies = gathr::app::Copies::new(&data);
+    copies.adopt(&service).unwrap();
+    let cli = copies.path(VERSION).with_file_name(cli_name);
+    let output = std::process::Command::new(&cli)
+        .args(["diag", "health", "--data"])
+        .arg(data.path())
+        .output()
+        .unwrap_or_else(|e| panic!("adopted diagnostics CLI {} did not run: {e}", cli.display()));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let health: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        health["database"]["path"],
+        data.db().to_string_lossy().as_ref()
+    );
+}
+
 /// The built `gathrd` as the folder's copy of `version`, named current: what an older install left.
 fn seed_copy(data: &Path, version: &str) -> PathBuf {
     let folder = data.join("app").join(version);
