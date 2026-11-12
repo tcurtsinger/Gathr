@@ -27,7 +27,7 @@ interface Props {
   onArchive?: (opener: HTMLElement | null) => void;
   onRestore?: () => void;
   onDelete?: (opener: HTMLElement | null) => void;
-  /** A project's row: its settings (0036). */
+  /** A project's row: its settings (0043). */
   onProjectSettings?: (opener: HTMLElement | null) => void;
   className?: string;
   /** Where the menu lines up with its button: 'start' beside the chat title, 'end' at a row's end. */

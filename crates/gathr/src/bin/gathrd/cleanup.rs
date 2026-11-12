@@ -1,7 +1,7 @@
 //! Gathr removes what it made for agents' work (0034): an engine's temporary files once it has
 //! closed, a chat's worktrees once it's archived (Restore checks them out again from their
 //! branches, which stay), and all of its folders once it's deleted. A task's finished PR also
-//! removes its recorded worktrees and local branch, once clean and no longer in use (0036 C10).
+//! removes its recorded worktrees and local branch, once clean and no longer in use (0043 C10).
 //! Never a folder a running engine or wait check uses, nor, while the chat is only archived, a
 //! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
 //! again at the next sweep, which runs with the service's looks (0010).

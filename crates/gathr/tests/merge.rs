@@ -1,4 +1,4 @@
-//! 0036 C4: agents don't merge; a PR's reviewer calls `merge`, which Gathr refuses, with a
+//! 0043 C4: agents don't merge; a PR's reviewer calls `merge`, which Gathr refuses, with a
 //! reference, unless the review is done on the PR's head, the project's checks passed there and
 //! the default branch is in it. One merge per repository at a time; the PR's tasks settle at once.
 

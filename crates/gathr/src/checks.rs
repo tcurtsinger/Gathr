@@ -1,4 +1,4 @@
-//! A project's checks (0036, owner's call on task 1455): the Supervisor sets them with Gathr's
+//! A project's checks (0043, owner's call on task 1455): the Supervisor sets them with Gathr's
 //! tool, starting from what Gathr finds in the project; the person never types one. A command the
 //! project's own files name runs freely; any other is the person's to allow, once per project.
 

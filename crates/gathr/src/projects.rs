@@ -1,6 +1,6 @@
 //! Projects (F8b): a name, a git folder and a team of agents with their roles. A new chat made in a
 //! project copies its folder and team; the chat's own are what count after that (0028). Its checks,
-//! CI choice and merge method say what gates a merge and how Gathr does it (0036).
+//! CI choice and merge method say what gates a merge and how Gathr does it (0043).
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;

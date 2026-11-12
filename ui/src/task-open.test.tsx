@@ -1,5 +1,5 @@
 // An agent's task opens in the Tasks tab with its PR's checks run, from the agent's panel or the row of the
-// turn that gave it (owner's pick A, room task 70; 0036 C6; 0038). The service is the edge: fetch answers
+// turn that gave it (owner's pick A, room task 70; 0043 C6; 0038). The service is the edge: fetch answers
 // as it would.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';

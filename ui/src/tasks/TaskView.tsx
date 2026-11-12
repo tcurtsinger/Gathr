@@ -12,7 +12,7 @@ const restartable = new Set(['failed', 'stopped', 'blocked', 'cancelled']);
 interface Props {
   task: Task;
   chatTitle?: string;
-  /** The chat's project: Gathr's checks run there, so a task with a PR shows its run (0036 C6). */
+  /** The chat's project: Gathr's checks run there, so a task with a PR shows its run (0043 C6). */
   project?: string | null;
   name: (agent: string | null) => string;
   /** Settles once the service has done it; a refusal stays on this view with its reference. */

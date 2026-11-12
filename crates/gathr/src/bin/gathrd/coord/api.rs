@@ -99,7 +99,7 @@ async fn change_settings(
     change_settings_as(&s, &t, body, None).await
 }
 
-/// A change by the person (`by` none) or by an agent through its settings tool (0036 C5a).
+/// A change by the person (`by` none) or by an agent through its settings tool (0043 C5a).
 pub async fn change_settings_as(
     s: &Arc<State>,
     t: &Trace,

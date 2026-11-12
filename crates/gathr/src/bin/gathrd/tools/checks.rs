@@ -1,4 +1,4 @@
-//! `checks` and `set_checks` (0036, owner's call on task 1455): the chat's Supervisor sets its
+//! `checks` and `set_checks` (0043, owner's call on task 1455): the chat's Supervisor sets its
 //! project's checks, starting from what Gathr finds in the project; the person never types one.
 //! A command the project's own files don't name is the person's to allow, once per project.
 
