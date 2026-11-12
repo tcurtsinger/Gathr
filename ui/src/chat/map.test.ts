@@ -9,6 +9,14 @@ import { type ChatState, empty } from './state';
 // Local times, so what a tick says doesn't depend on the machine's timezone.
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 10, day, hour, minute).toISOString();
 const now = new Date(2026, 10, 11, 18, 0);
+// Times and days as the reader's locale writes them: the map formats with it too.
+const hhmm = (hour: number, minute: number) =>
+  new Date(2026, 10, 11, hour, minute).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+const weekday = (date: number) => new Date(2026, 10, date).toLocaleDateString([], { weekday: 'long' });
 
 const turn = (id: string, agent: string | null, more: Partial<Turn> = {}): Turn => ({
   id,
@@ -89,6 +97,40 @@ test("the person's messages and the lead's replies to them get ticks; nothing el
   ]);
 });
 
+test("in a team chat only the Supervisor's replies are short ticks, and a turn has none until it ends", () => {
+  const chat = state(
+    [
+      turn('a', 'mira'),
+      // An agent that left the chat, and a turn sent to no agent: neither is the lead.
+      turn('b', 'gone'),
+      turn('c', null),
+      turn('d', 'mira', { status: 'running' }),
+    ],
+    [
+      said('u1', 'a', 'user', 'Made-up ask'),
+      said('a1', 'a', 'assistant', 'From the lead'),
+      said('u2', 'b', 'user', 'Another'),
+      said('b1', 'b', 'assistant', 'From one who left'),
+      said('u3', 'c', 'user', 'A third'),
+      said('c1', 'c', 'assistant', 'From nobody'),
+      said('u4', 'd', 'user', 'A fourth'),
+      said('d1', 'd', 'assistant', 'Still working'),
+    ],
+    { members: team },
+  );
+  const running = [
+    'you You: Made-up ask',
+    'lead Mira: From the lead',
+    'you You: Another',
+    'you You: A third',
+  ];
+  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
+  // Its words so far are not its reply: streamed text adds no tick either.
+  expect(ticks({ ...chat, partial: { d: 'More' } }).map(brief)).toEqual([...running, 'you You: A fourth']);
+  chat.turns.d = { ...chat.turns.d, status: 'done' };
+  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth', 'lead Mira: Still working']);
+});
+
 test("in a chat with one agent its replies are the short ticks, one for each turn's last words", () => {
   const solo = state(
     [turn('a', 'mira'), turn('b', 'mira'), turn('c', 'mira')],
@@ -129,8 +171,8 @@ test("a tick's card says who and when, and the message's first lines without the
   );
   const entries = mapEntries(ticks(solo), 50, now);
   expect(entries.map((e) => [e.kind, e.title, e.preview])).toEqual([
-    ['you', 'You · 16:04', 'Made-up ask'],
-    ['lead', 'Mira · 16:05', 'Plan Keep main_branch green, see the notes Then ship_it later'],
+    ['you', `You · ${hhmm(16, 4)}`, 'Made-up ask'],
+    ['lead', `Mira · ${hhmm(16, 5)}`, 'Plan Keep main_branch green, see the notes Then ship_it later'],
   ]);
 });
 
@@ -139,6 +181,17 @@ test('plain text keeps code as written and a table as its words', () => {
     'Run npm run *.test now Step Time Build 2 s',
   );
   expect(plain('```sh\ngit status\n```\n1. First\n2) Second')).toBe('git status First Second');
+});
+
+test('plain text drops HTML tags, rules, underlines and checkboxes, and keeps a link with brackets in its address', () => {
+  expect(plain('<b>bold</b> and <a href="https://example.com">a link</a><br/>')).toBe('bold and a link');
+  expect(plain('See [the page](https://example.com/a_(b)) now')).toBe('See the page now');
+  expect(plain('Title\n===\nAbove\n\n---\n\nBelow\n* * *\nEnd')).toBe('Title Above Below End');
+  expect(plain('- [ ] to do\n- [x] done\n> - quoted item')).toBe('to do done quoted item');
+  // A table's rule goes with its own line only, and code keeps its angle brackets.
+  expect(plain('| A | B |\n| - | - |\n\nnext - line | here\n`<b>` and a < b')).toBe(
+    'A B next - line here <b> and a < b',
+  );
 });
 
 /** A day of the chat: asks from the person, each with the lead's reply. */
@@ -162,37 +215,38 @@ test('short of room, the oldest days fold first, each to one tick that opens its
   const one = mapEntries(chat, 45, now);
   expect(one).toHaveLength(43);
   expect(one[0]).toMatchObject({ kind: 'day', id: 'u2-0', preview: 'Jumps to the start of that day' });
-  expect(one[0].title).toMatch(/^(2 Nov|Nov 2) · 2 messages from you$/);
+  const date = new Date(2026, 10, 2).toLocaleDateString([], { day: 'numeric', month: 'short' });
+  expect(one[0].title).toBe(`${date} · 2 messages from you`);
   expect(one[1]).toMatchObject({ kind: 'you', id: 'u9-0' });
 
   // Less room: the next day folds too, by its weekday; yesterday and today stay as they were.
   const two = shape(20);
   expect(two).toHaveLength(16);
-  expect(two[1]).toBe('day Monday · 14 messages from you');
-  expect(two[2]).toBe('you You · 09:00');
+  expect(two[1]).toBe(`day ${weekday(9)} · 14 messages from you`);
+  expect(two[2]).toBe(`you You · ${hhmm(9, 0)}`);
 
   // Every earlier day folded; today's ticks are all still there.
   expect(shape(11)).toEqual([
     expect.stringMatching(/^day .* · 2 messages from you$/),
-    'day Monday · 14 messages from you',
-    'day Tuesday · 3 messages from you',
-    'you You · 09:00',
-    'lead Mira · 09:00',
-    'you You · 09:01',
-    'lead Mira · 09:01',
-    'you You · 09:02',
-    'lead Mira · 09:02',
-    'you You · 09:03',
-    'lead Mira · 09:03',
+    `day ${weekday(9)} · 14 messages from you`,
+    `day ${weekday(10)} · 3 messages from you`,
+    `you You · ${hhmm(9, 0)}`,
+    `lead Mira · ${hhmm(9, 0)}`,
+    `you You · ${hhmm(9, 1)}`,
+    `lead Mira · ${hhmm(9, 1)}`,
+    `you You · ${hhmm(9, 2)}`,
+    `lead Mira · ${hhmm(9, 2)}`,
+    `you You · ${hhmm(9, 3)}`,
+    `lead Mira · ${hhmm(9, 3)}`,
   ]);
 });
 
 test("when today alone is too many, its replies go and the person's messages stay", () => {
   expect(shape(10).slice(3)).toEqual([
-    'you You · 09:00',
-    'you You · 09:01',
-    'you You · 09:02',
-    'you You · 09:03',
+    `you You · ${hhmm(9, 0)}`,
+    `you You · ${hhmm(9, 1)}`,
+    `you You · ${hhmm(9, 2)}`,
+    `you You · ${hhmm(9, 3)}`,
   ]);
   // A reply dropped from the rail still belongs to the message before it.
   expect(mapEntries(chat, 10, now).map((e) => e.from)).toEqual([0, 4, 32, 38, 40, 42, 44]);
@@ -209,23 +263,23 @@ test('a folded day with one message, or none from the person, says so', () => {
     mapEntries(lone, 6, now)
       .slice(0, 2)
       .map((e) => e.title),
-  ).toEqual(['Monday · 1 message from you', 'Tuesday · 2 replies']);
+  ).toEqual([`${weekday(9)} · 1 message from you`, `${weekday(10)} · 2 replies`]);
 });
 
 test("a chat last used on an earlier day keeps that day's ticks, and what still can't fit folds as Earlier", () => {
   // Nothing today: Tuesday is the chat's latest day.
   const old = [...day(9, 3), ...day(10, 6)];
   expect(mapEntries(old, 13, now).map((e) => `${e.kind} ${e.title}`)).toEqual([
-    'day Monday · 3 messages from you',
-    ...Array.from({ length: 6 }, (_, n) => [`you You · 09:0${n}`, `lead Mira · 09:0${n}`]).flat(),
+    `day ${weekday(9)} · 3 messages from you`,
+    ...Array.from({ length: 6 }, (_, n) => [`you You · ${hhmm(9, n)}`, `lead Mira · ${hhmm(9, n)}`]).flat(),
   ]);
   // Room for four: Tuesday's replies go, then its oldest messages and Monday fold into one tick.
   const tight = mapEntries(old, 4, now);
   expect(tight.map((e) => `${e.kind} ${e.title}`)).toEqual([
     'day Earlier · 6 messages from you',
-    'you You · 09:03',
-    'you You · 09:04',
-    'you You · 09:05',
+    `you You · ${hhmm(9, 3)}`,
+    `you You · ${hhmm(9, 4)}`,
+    `you You · ${hhmm(9, 5)}`,
   ]);
   expect(tight[0]).toMatchObject({ id: 'u9-0', from: 0, preview: 'Jumps to the first of them' });
 });

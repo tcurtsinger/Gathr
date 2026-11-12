@@ -22,16 +22,24 @@ export interface MapEntry extends ConversationMapEntry {
 
 const LINES = 240;
 
-/** A message's first lines as plain text: Markdown's marks go, its words stay, code as written. */
+// Lines with no words of their own: a code fence, a rule or a heading's underline, a table's rule.
+const BARE = /^\s*(```|~~~)|^\s*[-*_=][-*_=\s]*$|^\s*\|?[ :|-]*-[ :|-]*\|[ :|-]*$/;
+// What opens a line: a heading, a quote, a list item and its checkbox.
+const OPENS = /^(\s*(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+))+(\[[ xX]\]\s+)?/;
+
+/** A message's first lines as plain text: Markdown's marks and HTML tags go, words stay, code as written. */
 export function plain(markdown: string): string {
   const lines = markdown
     .slice(0, 4 * LINES)
-    .replace(/^\s*(```|~~~).*$/gm, '')
-    .replace(/^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$/gm, '')
-    .replace(/^\s*(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, '');
+    .split('\n')
+    .filter((line) => !BARE.test(line))
+    .map((line) => line.replace(OPENS, ''))
+    .join('\n');
   const inline = (text: string) =>
     text
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      // A link or an image is its text; its address may hold one pair of brackets.
+      .replace(/!?\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, '$1')
+      .replace(/<\/?[a-zA-Z][\w-]*(\s[^>]*)?\/?>/g, '')
       .replace(/\*+|~~/g, '')
       .replace(/\|/g, ' ')
       // An underscore inside a word is part of a name, not emphasis.

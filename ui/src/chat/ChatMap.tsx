@@ -6,8 +6,8 @@ import './map.css';
 
 // Ticks never sit closer than this (0039).
 const APART = 6;
-// Clear of the header above and the composer below.
-const EDGE = 8;
+// The rail is at most half the pane's height, and never longer than this: 44 ticks at their widest.
+const LONGEST = 616;
 // What the rail needs left of the column: its 14px inset, its 24px, and 6px before the column.
 const BESIDE = 44;
 const TICK = '[data-slot="conversation-map-tick"]';
@@ -20,7 +20,10 @@ interface Props {
   onJump: (id: string) => void;
 }
 
-/** The chat's ticks: the same list while none of them changed, so a streamed token draws no map again. */
+/**
+ * The chat's ticks: the same list while none of them changed. A turn has no tick until it ends, so a
+ * reply's streamed tokens leave the list, and the map drawn from it, as they were.
+ */
 export function useTicks(items: readonly ThreadMessageLike[]): Tick[] {
   const kept = useRef<Tick[]>([]);
   const next = ticksOf(items);
@@ -45,20 +48,23 @@ function firstWhere(n: number, after: (i: number) => boolean): number {
 }
 
 /**
- * The conversation map (0039): assistant-ui's rail on the chat's left edge, between the header and the
- * composer. A long tick for each message from the person, a short one for each of the lead's replies to
- * them, earlier days folded while the rail is too short for 6px a tick. It shows from three ticks up, in
- * a pane wide enough to hold it beside the column.
+ * The conversation map (0039): assistant-ui's rail on the chat's left edge, centred in the pane's height
+ * and at most half of it. A long tick for each message from the person, a short one for each of the
+ * lead's replies to them, earlier days folded while the rail is too short for 6px a tick. It shows from
+ * three ticks up, in a pane wide enough to hold it beside the column.
  */
 export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props) {
   const rail = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ bottom: 0, most: 0, fits: false });
-  // The ticks on screen, first to last, and the latest one at or above the middle.
+  const [box, setBox] = useState({ most: 0, fits: false });
+  // The ticks on screen, first to last, and the current one.
   const [seen, setSeen] = useState({ first: 0, last: -1, active: -1 });
+  // A day's name and the fold go by today: a draw on a later day works them out again.
   const today = new Date().toDateString();
-  // biome-ignore lint/correctness/useExhaustiveDependencies: folded again when the day turns
+  // biome-ignore lint/correctness/useExhaustiveDependencies: today stands for the date the fold reads
   const entries = useMemo(() => mapEntries(ticks, box.most, new Date()), [ticks, box.most, today]);
   const shown = box.fits && ticks.length >= 3 && entries.length > 0;
+  // Which messages have ticks: what the tracking below goes by, whatever else of a tick changes.
+  const ids = useMemo(() => ticks.map((t) => t.id).join('\n'), [ticks]);
 
   useLayoutEffect(() => {
     const el = viewport.current;
@@ -66,18 +72,17 @@ export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props)
     const footer = el?.querySelector<HTMLElement>('.thread-footer');
     const column = el?.querySelector<HTMLElement>('.thread-column');
     if (!el || !list || !footer || !column) return;
-    const places = new Map(ticks.map((t, i) => [t.id, i]));
+    const places = new Map(ids.split('\n').map((id, i) => [id, i]));
     // The ticked messages that are drawn, in order; read again once messages come or go.
     let drawn: { block: Element; tick: number }[] | undefined;
     let frame = 0;
     const read = () => {
       frame = 0;
-      const bottom = footer.offsetHeight;
-      const most = Math.floor((el.clientHeight - bottom - 2 * EDGE) / APART);
+      const most = Math.floor(Math.min(el.clientHeight / 2, LONGEST) / APART);
       const fits = column.offsetLeft >= BESIDE;
-      setBox((b) => (b.bottom === bottom && b.most === most && b.fits === fits ? b : { bottom, most, fits }));
+      setBox((b) => (b.most === most && b.fits === fits ? b : { most, fits }));
 
-      if (!fits || ticks.length < 3) return;
+      if (!fits || places.size < 3) return;
       drawn ??= [...list.querySelectorAll(':scope > [data-message-id]')].flatMap((block) => {
         const tick = places.get(block.getAttribute('data-message-id') ?? '');
         return tick === undefined ? [] : [{ block, tick }];
@@ -90,8 +95,15 @@ export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props)
       const first = firstWhere(all.length, (i) => rect(i).bottom > top);
       const end = firstWhere(all.length, (i) => rect(i).top >= foot);
       const below = firstWhere(all.length, (i) => rect(i).top > (top + foot) / 2);
-      // Ticks not drawn are further up: with none drawn above the middle, the latest of those.
-      const active = below > 0 ? all[below - 1].tick : Math.max(0, (all[0]?.tick ?? ticks.length) - 1);
+      const atEnd = el.scrollHeight - el.clientHeight - el.scrollTop < 2;
+      const active =
+        // At the chat's end nothing more can reach the middle: the latest message on screen is current.
+        atEnd && end > first
+          ? all[end - 1].tick
+          : below > 0
+            ? all[below - 1].tick
+            : // Ticks not drawn are further up: with none drawn above the middle, the latest of those.
+              Math.max(0, (all[0]?.tick ?? places.size) - 1);
       const next =
         end > first
           ? { first: all[first].tick, last: all[end - 1].tick, active }
@@ -116,13 +128,15 @@ export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props)
       blocks.disconnect();
       el.removeEventListener('scroll', soon);
     };
-  }, [viewport, ticks]);
+  }, [viewport, ids]);
 
-  // The registry's rail draws every tick alike and gives none a mark of its own, so each gets its kind here.
+  // The registry's rail draws every tick alike and names it by its title alone, so each gets its kind
+  // here, for map.css, and its preview as its description, for a screen reader.
   useLayoutEffect(() => {
     if (!shown) return;
     for (const [i, tick] of (rail.current?.querySelectorAll(TICK) ?? []).entries()) {
       tick.setAttribute('data-kind', entries[i]?.kind ?? '');
+      tick.setAttribute('aria-description', entries[i]?.preview ?? '');
     }
   }, [entries, shown]);
 
@@ -132,7 +146,7 @@ export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props)
     .filter((e, i) => e.from <= seen.last && (entries[i + 1]?.from ?? ticks.length) > seen.first)
     .map((e) => e.id);
   return (
-    <div className="chat-map" ref={rail} style={{ bottom: box.bottom }}>
+    <div className="chat-map" ref={rail}>
       <ConversationMap
         entries={entries}
         activeId={active}

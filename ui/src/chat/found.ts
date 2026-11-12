@@ -115,7 +115,9 @@ export function useFound(
 
   const onScroll = () => {
     const el = viewport.current;
-    if (el && centred.current && el.scrollHeight - el.clientHeight - el.scrollTop < 2) release();
+    // Only the target in place: one still on its way there keeps its hold while its pages are drawn.
+    if (el && centred.current === found && found && el.scrollHeight - el.clientHeight - el.scrollTop < 2)
+      release();
   };
   return { held: !!found, text: found?.text, onScroll };
 }
@@ -131,6 +133,21 @@ function place(viewport: HTMLElement, block: Element, top?: boolean) {
   const box = block.getBoundingClientRect();
   const offset = top || box.height > room - TOP ? TOP : (room - box.height) / 2;
   viewport.scrollTop += box.top - view.top - offset;
+}
+
+/**
+ * The target picked last, of one picked here (a tick, the dock's Show) and one handed down (a search hit).
+ * A newer one from above drops the one picked here: when that hit is done and cleared, the view stays on
+ * it instead of going back to what was picked before it.
+ */
+export function useLatest(above: Target | undefined) {
+  const [own, pick] = useState<Target>();
+  const [seen, setSeen] = useState(above);
+  if (above !== seen) {
+    setSeen(above);
+    if (above) pick(undefined);
+  }
+  return { target: own ?? above, own: !!own, pick };
 }
 
 /**

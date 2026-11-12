@@ -56,7 +56,7 @@ export type Custom = {
   events?: EventLine[];
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message, or
-   * the lead's reply to them, which is the last block of each of its main-line turns.
+   * the lead's reply to them, which is the last block of each of its main-line turns once it has ended.
    */
   tick?: string;
 };
@@ -292,7 +292,11 @@ function block(
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
-  const toPerson = group.last && !!id && (!role || role === 'supervisor') && !crew.rootOf(id);
+  // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
+  const lead = state.members.length > 1 ? role === 'supervisor' : true;
+  // A turn still running has no last words yet, so a streamed token never touches the map.
+  const ended = turn?.status !== 'running' && turn?.status !== 'queued';
+  const toPerson = group.last && !!id && lead && ended && !crew.rootOf(id);
   const tick = toPerson
     ? (group.msgs.findLast((m) => m.kind !== 'tool')?.time ?? turn?.created ?? '')
     : undefined;

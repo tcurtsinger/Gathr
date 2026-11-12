@@ -7,16 +7,7 @@ import {
   useExternalStoreRuntime,
 } from '@assistant-ui/react';
 import { ArrowDown } from 'lucide-react';
-import {
-  createContext,
-  type ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
@@ -25,7 +16,7 @@ import { FailureNotice, Notice } from '../components/Notice';
 import { asked } from './ApprovalDock';
 import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
-import { useFound } from './found';
+import { useFound, useLatest } from './found';
 import type { Custom, SendFailure, TurnNotice } from './messages';
 import { useOlder } from './older';
 import type { Approval } from './state';
@@ -97,11 +88,9 @@ export function Thread(props: Props) {
   const viewport = useRef<HTMLDivElement>(null);
   const { messages, onScroll, reach } = useOlder(props.messages, viewport);
   // A tick of the map opens its message as a search hit opens: whichever was picked last.
-  const [jump, setJump] = useState<Target>();
-  const onJump = useCallback((id: string) => setJump({ id, top: true, at: performance.now() }), []);
-  const jumped = jump && jump.at > (props.target?.at ?? 0);
-  const target = jumped ? jump : props.target;
-  const found = useFound(props.messages, viewport, reach, target, jumped ? undefined : props.onTarget);
+  const { target, own, pick } = useLatest(props.target);
+  const onJump = useCallback((id: string) => pick({ id, top: true, at: performance.now() }), [pick]);
+  const found = useFound(props.messages, viewport, reach, target, own ? undefined : props.onTarget);
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,

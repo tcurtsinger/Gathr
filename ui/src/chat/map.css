@@ -1,33 +1,40 @@
 /*
- * The conversation map (0039): the registry's rail in the gutter left of the column, between the header
- * and the composer. Its ticks are drawn alike; ChatMap marks each with its kind, styled here.
+ * The conversation map (0039): the registry's rail in the gutter left of the column. It is at most half
+ * the pane's height and 616px, centred in the pane, so the space above it equals the space below.
+ * Its ticks are drawn alike; ChatMap marks each with its kind, styled here.
  */
 .chat-map {
   position: absolute;
-  top: 0;
+  top: calc(50% - min(25%, 308px));
   left: 14px;
-  padding: 8px 0;
+  height: min(50%, 616px);
+  /* Only the ticks take the pointer: the wheel over the rest of the rail scrolls the chat. */
+  pointer-events: none;
 }
 .chat-map [data-slot="conversation-map-tick"] {
   min-height: 6px;
+  pointer-events: auto;
 }
-.chat-map [data-slot="conversation-map-tick"] > span {
-  transition-property: width, max-width, height, background-color;
+/* Unlayered, this would beat the registry's motion-reduce:transition-none, so it is set only with motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .chat-map [data-slot="conversation-map-tick"] > span {
+    transition-property: width, max-width, height, background-color;
+  }
 }
 .chat-map [data-kind="day"] > span {
   height: 4px;
 }
-/* A reply's tick is half as long, at rest and as the rail's ticks grow under the pointer. */
+/* A reply's tick is half as long at rest, and stays 6px shorter as the rail's ticks grow under the pointer. */
 .chat-map [data-kind="lead"] > span {
   max-width: 6px;
 }
-/* A message from the person reads a step firmer than a reply, before either is on screen. */
-.chat-map [data-kind="you"]:not([data-in-view], :hover, :focus-visible) > span {
+/* A message from the person, or a day of them, reads a step firmer than a reply before it is on screen. */
+.chat-map :is([data-kind="you"], [data-kind="day"]):not([data-in-view], :hover, :focus-visible) > span {
   background: color-mix(in oklab, var(--foreground) 22%, transparent);
 }
 .chat-map:is(:hover, :focus-within) [data-kind="lead"][data-in-view] > span {
   max-width: 12px;
 }
-.chat-map:is(:hover, :focus-within) [data-kind="lead"]:is(:hover, :focus-visible) > span {
+.chat-map:is(:hover, :focus-within) [data-kind="lead"]:is([data-active], :hover, :focus-visible) > span {
   max-width: 18px;
 }

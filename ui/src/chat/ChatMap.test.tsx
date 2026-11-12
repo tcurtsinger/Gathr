@@ -7,7 +7,7 @@ import { render } from 'vitest-browser-react';
 import type { Message, Turn } from '../api';
 import { toThread } from './messages';
 import { type ChatState, empty } from './state';
-import { type Actions, Thread } from './Thread';
+import { type Actions, type Target, Thread } from './Thread';
 
 // Wednesday 11 November 2026, in the machine's own timezone.
 beforeEach(async () => {
@@ -18,6 +18,15 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
 });
+
+// Times and days as the reader's locale writes them: the map formats with it too.
+const hhmm = (hour: number, minute: number) =>
+  new Date(2026, 10, 11, hour, minute).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+const weekday = (date: number) => new Date(2026, 10, date).toLocaleDateString([], { weekday: 'long' });
 
 const none: Actions = {
   openTask: () => {},
@@ -58,7 +67,13 @@ function chat(...days: ReturnType<typeof day>[]): ChatState {
 // Each answer is taller than the chat's view.
 const tall = Array.from({ length: 40 }, (_, n) => `Made-up line ${n} of the answer.`).join('\n\n');
 
-function View({ state, height = 600 }: { state: ChatState; height?: number }) {
+interface ViewProps {
+  state: ChatState;
+  height?: number;
+  target?: Target;
+  onTarget?: () => void;
+}
+function View({ state, height = 600, target, onTarget }: ViewProps) {
   const cache = useRef(new Map());
   return (
     <div style={{ height, display: 'flex' }}>
@@ -67,6 +82,8 @@ function View({ state, height = 600 }: { state: ChatState; height?: number }) {
         running={false}
         actions={none}
         empty={false}
+        target={target}
+        onTarget={onTarget}
       >
         <p style={{ height: 40, margin: 0 }}>Composer</p>
       </Thread>
@@ -90,12 +107,29 @@ test('the map shows from three ticks up, long for the person and short for the l
   expect(ticks()).toHaveLength(0);
 
   await screen.rerender(<View state={chat(day(11, 2))} />);
-  await expect.poll(() => names()).toEqual(['You · 09:00', 'Mira · 09:30', 'You · 10:00', 'Mira · 10:30']);
+  await expect
+    .poll(() => names())
+    .toEqual([
+      `You · ${hhmm(9, 0)}`,
+      `Mira · ${hhmm(9, 30)}`,
+      `You · ${hhmm(10, 0)}`,
+      `Mira · ${hhmm(10, 30)}`,
+    ]);
   const width = (name: string) => getComputedStyle(tick(name).firstElementChild as Element).width;
-  expect([width('You · 09:00'), width('Mira · 09:30')]).toEqual(['12px', '6px']);
+  expect([width(`You · ${hhmm(9, 0)}`), width(`Mira · ${hhmm(9, 30)}`)]).toEqual(['12px', '6px']);
   // Clear of the column's text.
   const column = document.querySelector('.thread-column') as HTMLElement;
-  expect(tick('You · 09:00').getBoundingClientRect().right).toBeLessThan(column.getBoundingClientRect().left);
+  expect(tick(`You · ${hhmm(9, 0)}`).getBoundingClientRect().right).toBeLessThan(
+    column.getBoundingClientRect().left,
+  );
+
+  // A screen reader hears the preview too.
+  expect(tick(`Mira · ${hhmm(9, 30)}`).getAttribute('aria-description')).toBe('Made-up answer');
+  // Four ticks leave most of the rail empty: there the pointer, and so the wheel, reaches the chat.
+  const rail = (document.querySelector('.chat-map') as HTMLElement).getBoundingClientRect();
+  const under = document.elementFromPoint(rail.left + 6, rail.top + 10);
+  expect(under?.closest('.chat-map')).toBeNull();
+  expect(under?.closest('.thread-viewport')).not.toBeNull();
 
   await page.viewport(700, 1100);
   await expect.poll(() => ticks().length).toBe(0);
@@ -106,61 +140,72 @@ test('the current tick is the latest message at or above the middle of the chat,
   const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
   const inView = () => names(ticks().filter((t) => t.hasAttribute('data-in-view')));
   // It opens at its latest message.
-  await expect.poll(current).toEqual(['Mira · 14:30']);
-  expect(inView()).toEqual(['Mira · 14:30']);
+  await expect.poll(current).toEqual([`Mira · ${hhmm(14, 30)}`]);
+  expect(inView()).toEqual([`Mira · ${hhmm(14, 30)}`]);
 
   viewport().scrollTop = 0;
-  await expect.poll(current).toEqual(['Mira · 09:30']);
-  expect(inView()).toEqual(['You · 09:00', 'Mira · 09:30']);
+  await expect.poll(current).toEqual([`Mira · ${hhmm(9, 30)}`]);
+  expect(inView()).toEqual([`You · ${hhmm(9, 0)}`, `Mira · ${hhmm(9, 30)}`]);
 
   // The third ask, just above the middle of what shows over the composer: the answer before it fills the top.
   const footer = document.querySelector('.thread-footer') as HTMLElement;
   const middle = (footer.getBoundingClientRect().top - viewport().getBoundingClientRect().top) / 2;
   viewport().scrollTop += (below('u11-2') as number) - (middle - 30);
-  await expect.poll(current).toEqual(['You · 11:00']);
-  expect(inView()).toEqual(['Mira · 10:30', 'You · 11:00', 'Mira · 11:30']);
+  await expect.poll(current).toEqual([`You · ${hhmm(11, 0)}`]);
+  expect(inView()).toEqual([`Mira · ${hhmm(10, 30)}`, `You · ${hhmm(11, 0)}`, `Mira · ${hhmm(11, 30)}`]);
 });
 
 test('a tick opens its message at the top of the chat, by pointer or keys, and focus stays on the map', async () => {
   await render(<View state={chat(day(11, 6, tall))} />);
   await expect.poll(() => ticks().length).toBe(12);
-  await userEvent.click(tick('You · 11:00'));
+  await userEvent.click(tick(`You · ${hhmm(11, 0)}`));
   await expect.poll(() => Math.round(below('u11-2') ?? -1)).toBe(32);
-  expect(document.activeElement).toBe(tick('You · 11:00'));
+  expect(document.activeElement).toBe(tick(`You · ${hhmm(11, 0)}`));
 
   await userEvent.keyboard('{ArrowDown}');
-  expect(document.activeElement).toBe(tick('Mira · 11:30'));
+  expect(document.activeElement).toBe(tick(`Mira · ${hhmm(11, 30)}`));
   await userEvent.keyboard('{Enter}');
   await expect.poll(() => Math.round(below('a-11-2') ?? -1)).toBe(32);
-  expect(document.activeElement).toBe(tick('Mira · 11:30'));
+  expect(document.activeElement).toBe(tick(`Mira · ${hhmm(11, 30)}`));
 
   await userEvent.keyboard('{End}');
-  expect(document.activeElement).toBe(tick('Mira · 14:30'));
+  expect(document.activeElement).toBe(tick(`Mira · ${hhmm(14, 30)}`));
   await userEvent.keyboard('{ArrowUp}{ArrowUp}');
-  expect(document.activeElement).toBe(tick('Mira · 13:30'));
+  expect(document.activeElement).toBe(tick(`Mira · ${hhmm(13, 30)}`));
   await userEvent.keyboard('{Home}');
-  expect(document.activeElement).toBe(tick('You · 09:00'));
+  expect(document.activeElement).toBe(tick(`You · ${hhmm(9, 0)}`));
 });
 
 test('a shorter pane folds the oldest days first, and its ticks keep their distance', async () => {
   // Sunday to today: 80 ticks.
   const state = chat(day(8, 20), day(9, 10), day(10, 5), day(11, 5));
+  // The rail is half the pane, 83 ticks' worth here, with as much space above it as below.
   const screen = await render(<View state={state} height={1000} />);
   await expect.poll(() => ticks().length).toBe(80);
+  const gaps = () => {
+    const pane = (document.querySelector('.thread') as HTMLElement).getBoundingClientRect();
+    const rail = (document.querySelector('.chat-map') as HTMLElement).getBoundingClientRect();
+    return [rail.top - pane.top, rail.height, pane.bottom - rail.bottom];
+  };
+  expect(gaps()).toEqual([250, 500, 250]);
 
-  await screen.rerender(<View state={state} height={420} />);
+  // Never longer than 616px, however tall the pane.
+  await screen.rerender(<View state={state} height={1400} />);
+  await expect.poll(gaps).toEqual([392, 616, 392]);
+
+  await screen.rerender(<View state={state} height={600} />);
   await expect.poll(() => ticks().length).toBe(41);
-  expect(names()[0]).toBe('Sunday · 20 messages from you');
+  expect(names()[0]).toBe(`${weekday(8)} · 20 messages from you`);
 
-  await screen.rerender(<View state={state} height={260} />);
+  await screen.rerender(<View state={state} height={300} />);
   await expect.poll(() => ticks().length).toBe(22);
   expect(names().slice(0, 3)).toEqual([
-    'Sunday · 20 messages from you',
-    'Monday · 10 messages from you',
-    'You · 09:00',
+    `${weekday(8)} · 20 messages from you`,
+    `${weekday(9)} · 10 messages from you`,
+    `You · ${hhmm(9, 0)}`,
   ]);
   // A day's tick is the thick one.
-  const monday = () => tick('Monday · 10 messages from you').firstElementChild as Element;
+  const monday = () => tick(`${weekday(9)} · 10 messages from you`).firstElementChild as Element;
   await expect.poll(() => getComputedStyle(monday()).height).toBe('4px');
   // Ticks keep 6px each.
   const tops = ticks().map((t) => t.getBoundingClientRect().top);
@@ -172,9 +217,130 @@ test("a day's tick opens the day's first message, though it was not drawn", asyn
   await render(<View state={chat(day(8, 3), day(9, 100), day(10, 5), day(11, 5))} />);
   await expect
     .poll(() => names().slice(0, 2))
-    .toEqual(['Sunday · 3 messages from you', 'Monday · 100 messages from you']);
+    .toEqual([`${weekday(8)} · 3 messages from you`, `${weekday(9)} · 100 messages from you`]);
   expect(below('u9-0')).toBeUndefined();
-  await userEvent.click(tick('Monday · 100 messages from you'));
+  await userEvent.click(tick(`${weekday(9)} · 100 messages from you`));
   await expect.poll(() => Math.round(below('u9-0') ?? -1)).toBe(32);
-  await expect.poll(() => tick('Monday · 100 messages from you').getAttribute('aria-current')).toBe('true');
+  await expect
+    .poll(() => tick(`${weekday(9)} · 100 messages from you`).getAttribute('aria-current'))
+    .toBe('true');
+});
+
+test('at the end of the chat the latest message on screen is current, though it sits below the middle', async () => {
+  await render(<View state={chat(day(11, 6))} />);
+  const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
+  await expect.poll(current).toEqual([`Mira · ${hhmm(14, 30)}`]);
+  const footer = document.querySelector('.thread-footer') as HTMLElement;
+  const middle = (footer.getBoundingClientRect().top - viewport().getBoundingClientRect().top) / 2;
+  expect(below('a-11-5')).toBeGreaterThan(middle);
+});
+
+test('the current tick still follows the chat after an older page is drawn', async () => {
+  // 160 blocks, the latest 100 drawn. The rail holds 50 ticks: Earlier, then the person's latest 49.
+  await render(<View state={chat(day(11, 80))} />);
+  const current = () => ticks().findIndex((t) => t.getAttribute('aria-current'));
+  await expect.poll(current).toBe(49);
+  expect(below('u11-0')).toBeUndefined();
+
+  viewport().scrollTop = 0;
+  await expect.poll(() => below('u11-0')).toBeDefined();
+  // The older page is in: at its top, the first tick is the current one and on screen.
+  viewport().scrollTop = 0;
+  await expect.poll(current).toBe(0);
+  expect(ticks()[0].hasAttribute('data-in-view')).toBe(true);
+  expect(ticks()[49].hasAttribute('data-in-view')).toBe(false);
+});
+
+test('a reply streaming into a running turn leaves the map as it was, until the turn ends', async () => {
+  const state = chat(day(11, 3));
+  const running: ChatState = {
+    ...state,
+    turns: {
+      ...state.turns,
+      next: { id: 'next', agent: 'mira', status: 'running', why: null, ref: 'next', position: 9 },
+    },
+    messages: [
+      ...state.messages,
+      {
+        id: 'un',
+        turn: 'next',
+        time: new Date(2026, 10, 11, 15, 0).toISOString(),
+        role: 'user',
+        kind: 'text',
+        body: 'One more',
+      },
+    ],
+  };
+  const screen = await render(<View state={running} />);
+  await expect.poll(() => ticks().length).toBe(7);
+  const before = ticks();
+  // Every observer made while the reply streams: the map makes none again.
+  const made: string[] = [];
+  const Resize = window.ResizeObserver;
+  const Mutation = window.MutationObserver;
+  window.ResizeObserver = class extends Resize {
+    constructor(callback: ResizeObserverCallback) {
+      super(callback);
+      made.push(new Error().stack?.includes('ChatMap') ? 'map' : 'other');
+    }
+  };
+  window.MutationObserver = class extends Mutation {
+    constructor(callback: MutationCallback) {
+      super(callback);
+      made.push(new Error().stack?.includes('ChatMap') ? 'map' : 'other');
+    }
+  };
+  try {
+    for (const partial of ['A reply', 'A reply that', 'A reply that grows']) {
+      await screen.rerender(<View state={{ ...running, partial: { next: partial } }} />);
+    }
+    await expect.element(screen.getByText('A reply that grows')).toBeVisible();
+    expect(made.filter((by) => by === 'map')).toEqual([]);
+    const after = ticks();
+    expect(after).toHaveLength(7);
+    expect(after.every((t, i) => t === before[i])).toBe(true);
+  } finally {
+    window.ResizeObserver = Resize;
+    window.MutationObserver = Mutation;
+  }
+
+  const done: ChatState = {
+    ...running,
+    turns: { ...running.turns, next: { ...running.turns.next, status: 'done' } },
+    messages: [
+      ...running.messages,
+      {
+        id: 'an',
+        turn: 'next',
+        time: new Date(2026, 10, 11, 15, 1).toISOString(),
+        role: 'assistant',
+        kind: 'text',
+        body: 'A reply that grows',
+      },
+    ],
+  };
+  await screen.rerender(<View state={done} />);
+  await expect.poll(() => names().at(-1)).toBe(`Mira · ${hhmm(15, 1)}`);
+});
+
+test('a search hit opened after a tick stays where it is once it is done', async () => {
+  const state = chat(day(11, 6, tall));
+  const screen = await render(<View state={state} />);
+  await expect.poll(() => ticks().length).toBe(12);
+  await userEvent.click(tick(`You · ${hhmm(10, 0)}`));
+  await expect.poll(() => Math.round(below('u11-1') ?? -1)).toBe(32);
+
+  // The hit is shown, tinted, and the app clears it, as it does once a hit is in place.
+  const onTarget = vi.fn();
+  await screen.rerender(
+    <View state={state} target={{ id: 'u11-4', at: performance.now() }} onTarget={onTarget} />,
+  );
+  await expect.poll(() => onTarget.mock.calls.length).toBe(1);
+  const hit = document.querySelector('[data-message-id="u11-4"]') as HTMLElement;
+  expect(hit.hasAttribute('data-search-hit')).toBe(true);
+  const placed = below('u11-4');
+  await screen.rerender(<View state={state} onTarget={onTarget} />);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  expect(below('u11-4')).toBe(placed);
+  expect(hit.hasAttribute('data-search-hit')).toBe(true);
 });
