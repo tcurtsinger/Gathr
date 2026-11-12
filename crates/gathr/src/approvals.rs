@@ -38,7 +38,7 @@ pub fn ask(
         }
         // Gathr runs a wait's check itself, outside Claude Code's own checks and auto mode's
         // classifier: asked here, the call waits for the person as long as they take. One known
-        // read-only command alone doesn't ask (0036 C11).
+        // read-only command alone doesn't ask (0043 C11).
         "mcp__gathr__wait" => text("check")
             .is_some_and(|c| !c.trim().is_empty() && read_only_check(c).is_none())
             .then_some("Gathr runs this check in sh (Git Bash on Windows) until it exits 0"),
@@ -582,7 +582,7 @@ mod tests {
         }
     }
 
-    /// 0036 C11 (owner, task 1450): a wait's check that is one known read-only command, alone,
+    /// 0043 C11 (owner, task 1450): a wait's check that is one known read-only command, alone,
     /// runs without asking; anything chained, redirected or substituted asks as before.
     #[test]
     fn a_known_read_only_check_alone_runs_without_asking() {

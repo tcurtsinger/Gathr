@@ -1,4 +1,4 @@
-//! Settings tools for agents (0036 C5a): an agent reads and changes Gathr's settings when the person
+//! Settings tools for agents (0043 C5a): an agent reads and changes Gathr's settings when the person
 //! asks, each change recorded with who made it. Never an agent's: answering its own approval or its
 //! own question to the person, or changing which pushes ask.
 

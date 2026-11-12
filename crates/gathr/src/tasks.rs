@@ -18,6 +18,8 @@ mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
+pub use held::{background_changed, release};
+
 pub use words::{name_of, owner_name, wait_name};
 
 /// The longest `what` of a question for the person: one line, read at a glance.
@@ -144,7 +146,7 @@ pub struct Task {
     pub stale_us: Option<i64>,
     /// The turn its giver heard it was settled in: the chat shows the person's answer there.
     pub heard_in: Option<String>,
-    /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0036 C6).
+    /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0043 C6).
     pub pr_head: Option<String>,
 }
 
@@ -407,7 +409,9 @@ pub fn finish(
             [task],
             |r| r.get::<_, bool>(0),
         )?;
-    if t.state != State::Working && !refresh {
+    // A held task's owner finishes it from any turn (G174): kept, and applied once its hold ends.
+    let held = t.state == State::Held && t.kind != Kind::Review;
+    if t.state != State::Working && !refresh && !held {
         let state = t.state.as_str();
         return Err(refused(format!(
             "task #{task} is {state}, not being worked on"
@@ -426,6 +430,8 @@ pub fn finish(
             "Include the reviewed commit when you finish a review",
         ));
     }
+    // A held work task's finish is no review: a commit with it isn't kept as one.
+    let commit = commit.filter(|_| t.state == State::Working || refresh);
     tx.execute(
         "UPDATE tasks SET finish = ?2, finish_note = ?3, blocked_on = COALESCE(?4, blocked_on),
                           pr = COALESCE(?5, pr), reviewed = COALESCE(?6, reviewed),

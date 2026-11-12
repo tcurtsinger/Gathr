@@ -20,7 +20,7 @@ interface Props {
 }
 
 /**
- * Gathr's checks run on a task's PR at its head (0036 C6, the task-pass and task-fail mock-ups): passed,
+ * Gathr's checks run on a task's PR at its head (0043 C6, the task-pass and task-fail mock-ups): passed,
  * failed with its reference, or running, then each command with its exit, time and log, the failing
  * one's open. Live: a run of the project at this commit reloads it.
  */

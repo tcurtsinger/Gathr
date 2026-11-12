@@ -1,4 +1,4 @@
-//! The records of Gathr's checks runs (0036 C3): one per project and commit, with each command's
+//! The records of Gathr's checks runs (0043 C3): one per project and commit, with each command's
 //! exit, duration and the end of its log. The service runs them; this keeps what they found.
 
 use rusqlite::{Connection, params};

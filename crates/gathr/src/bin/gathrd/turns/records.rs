@@ -113,6 +113,11 @@ impl Task {
             trace: &ids.trace,
         };
         crate::coord::turn_moved(&self.chats, moved, status, why).await;
+        self.announce_turn(ids, status, why).await;
+    }
+
+    /// Sends a turn's status live, once it's saved: what pauses wait on may have changed with it.
+    pub(super) async fn announce_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
         self.chats.settle_pauses(false).await;
         let reference = gathr::ids::reference(&ids.trace);
         let update = json!({ "type": "turn", "turn": ids.turn, "status": status,

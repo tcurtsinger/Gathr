@@ -26,7 +26,8 @@
 //! `--version` answers `GATHR_REPLAY_VERSION`, else the version the recordings were made with;
 //! `stall` there answers only after a minute, as a launcher that hangs; `folder` answers the name
 //! of the folder it runs from, as Gathr lays out its copies (0025). While the file
-//! `GATHR_REPLAY_VERSION_HOLD` names exists, `--version` waits, so a test can hold the next start.
+//! `GATHR_REPLAY_VERSION_HOLD` names exists, `--version` waits, so a test can hold the next start;
+//! it writes `<that file>.entered` as it starts waiting.
 //!
 //! An `initialize` request is answered with the models Claude Code listed, and isn't one of the
 //! recording's `in` lines. `GATHR_REPLAY` may name no recording for a run that only asks that.
@@ -90,6 +91,12 @@ fn main() {
     }
     if args == ["--version"] {
         let held = std::env::var_os("GATHR_REPLAY_VERSION_HOLD").unwrap_or_default();
+        if !held.is_empty() && std::path::Path::new(&held).exists() {
+            // Says it's held, so a test acts while it is, not after a guessed wait.
+            let mut entered = held.clone();
+            entered.push(".entered");
+            let _ = std::fs::write(entered, "");
+        }
         while !held.is_empty() && std::path::Path::new(&held).exists() {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

@@ -284,3 +284,76 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
         "never cancelled: {person} {history}"
     );
 }
+
+/// F1 (found in #148): a start under way when the chat is archived found the account signed out
+/// and put its turn back to wait for a sign-in, though archiving had just stopped it: restored, the
+/// chat sent it at the next sign-in. It stays stopped (answered, live and in its history, with no
+/// carry-on), and a sign-in starts nothing there.
+#[test]
+fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
+    let data = TempDir::new();
+    // The engine's version check holds while this file is there: the start waits inside it.
+    let held = data.0.join("version-hold");
+    std::fs::write(&held, "").unwrap();
+    let service = common::TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &common::recording("signed_in")),
+            ("GATHR_REPLAY_VERSION_HOLD", &held),
+        ],
+    );
+    let added = service.send(
+        "POST",
+        "/api/accounts",
+        json!({ "engine": "claude", "name": "Signed out" }),
+    );
+    let account = added.json()["id"].as_str().unwrap().to_string();
+    let chat = service.new_chat();
+    let mut live = service.live();
+    let (port, token) = (service.info.port, service.info.token.clone());
+    // The send answers once the start is through, which waits on the version check: under 5 s.
+    let (path, key) = (format!("/api/chats/{chat}/messages"), token.clone());
+    let sending = std::thread::spawn(move || {
+        gathr::http::send(port, &key, "POST", &path, &json!({ "text": "Say hi" }))
+    });
+    // The chat's history asks the agent's queue, held in the start, so the database is read.
+    let status = || {
+        let (ok, rows) = gathr(&data.0, &["diag", "query", "SELECT status FROM turns"]);
+        assert!(ok, "{rows}");
+        rows["rows"][0]["status"].as_str().map(String::from)
+    };
+    let entered = data.0.join("version-hold.entered");
+    until(5, "the start to wait in the version check", || {
+        entered.exists().then_some(())
+    });
+    let archive = format!("/api/chats/{chat}/archive");
+    let archiving = std::thread::spawn(move || gathr::http::call(port, &token, "POST", &archive));
+    until(3, "archiving to stop the turn", || {
+        (status().as_deref() == Some("stopped")).then_some(())
+    });
+    std::fs::remove_file(&held).unwrap();
+    let sent = sending.join().unwrap().unwrap();
+    assert_ne!(sent.json()["status"], "waiting_sign_in", "{}", sent.body);
+    let archived = archiving.join().unwrap().unwrap();
+    assert_eq!(archived.status, 200, "{}", archived.body);
+    let back = service.call("POST", &format!("/api/chats/{chat}/unarchive"));
+    assert_eq!(back.status, 200, "{}", back.body);
+    common::sign_in_account(&data.0, &account);
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+
+    let mut waited = Vec::new();
+    live.set_read_timeout(Some(std::time::Duration::from_millis(300)))
+        .unwrap();
+    while let Ok(update) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        common::next_live(&mut live)
+    })) {
+        if update["type"] == "turn" && update["status"] != "stopped" {
+            waited.push(update);
+        }
+    }
+    assert!(waited.is_empty(), "the stopped turn came back: {waited:?}");
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let turns = history["turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 1, "{history}");
+    assert_eq!(turns[0]["status"], "stopped", "{history}");
+}

@@ -1,6 +1,6 @@
 //! Projects through the API (F8b): saved with a name, a git folder and a team; a new chat made in
 //! one copies its folder and team (`POST /api/chats {"project"}`). Each setting, its CI choice and
-//! merge method too (0036), changes on its own (`PATCH /api/projects/<id>`); its checks are the
+//! merge method too (0043), changes on its own (`PATCH /api/projects/<id>`); its checks are the
 //! Supervisor's to set, never the person's (owner, task 1455).
 
 use std::path::{Path, PathBuf};

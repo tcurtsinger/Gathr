@@ -1,4 +1,4 @@
-//! `merge` (0036 C4): a PR's reviewer asks Gathr to merge it; agents never merge themselves.
+//! `merge` (0043 C4): a PR's reviewer asks Gathr to merge it; agents never merge themselves.
 
 use std::time::Instant;
 

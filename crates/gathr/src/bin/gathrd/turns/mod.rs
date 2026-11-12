@@ -608,11 +608,19 @@ impl Task {
 
     /// Keeps the turn first in the queue, with `status`.
     async fn hold_back(&mut self, next: &Queued, status: &'static str) -> &'static str {
+        // A start takes a while (the engine's version, its login): its chat may have been archived
+        // meanwhile, its turn stopped. Asked again with the save, so it never comes back to wait
+        // there, queued or said live (F1).
+        if let Some(why) = self.hold(&next.ids, status).await {
+            self.queue.retain(|q| q.ids.turn != next.ids.turn);
+            self.set_turn(&next.ids, "stopped", Some(&why)).await;
+            return "dropped";
+        }
         let first = !self.queue.iter().any(|q| q.ids.turn == next.ids.turn);
         if first {
             self.queue.push_front(next.clone());
         }
-        self.set_turn(&next.ids, status, None).await;
+        self.announce_turn(&next.ids, status, None).await;
         if first {
             self.trace_hold(&next.ids);
         }

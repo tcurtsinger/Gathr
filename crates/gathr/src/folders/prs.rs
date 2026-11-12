@@ -1,4 +1,4 @@
-//! Pending removal of a finished PR's local branch and recorded worktrees (0036 C10).
+//! Pending removal of a finished PR's local branch and recorded worktrees (0043 C10).
 use super::Clean;
 use crate::Error;
 use rusqlite::{Connection, OptionalExtension, params};

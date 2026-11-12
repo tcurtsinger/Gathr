@@ -2,6 +2,8 @@
 //! and what a task is held on.
 
 mod common;
+#[path = "tasks/commands.rs"]
+mod held_commands;
 #[path = "tasks/reviews.rs"]
 mod review_evidence;
 
@@ -491,7 +493,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     tasks::pr_looked(&mut conn, task.number, "OPEN", Some("def5678aaaa"), T).unwrap();
     let looked = tasks::get(&conn, task.number).unwrap().unwrap();
     assert!(looked.outdated, "G73");
-    // The head the look saw, so the window shows the checks run at that commit (0036 C6).
+    // The head the look saw, so the window shows the checks run at that commit (0043 C6).
     assert_eq!(looked.pr_head.as_deref(), Some("def5678aaaa"));
     tasks::pr_looked(&mut conn, task.number, "MERGED", Some("def5678aaaa"), T).unwrap();
     assert_eq!(state(&conn, task.number).0, State::Done);
