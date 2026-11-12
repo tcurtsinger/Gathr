@@ -1,4 +1,4 @@
-/* The conversation column (DESIGN.md: 52rem including 16px padding, the composer at its width). */
+/* The one timeline (DESIGN.md: 42rem including 16px padding, so text runs 40rem; the composer at its width). */
 .thread {
   display: flex;
   flex: 1;
@@ -19,7 +19,7 @@
   flex: 1;
   flex-direction: column;
   width: 100%;
-  max-width: 52rem;
+  max-width: 42rem;
   margin: 0 auto;
   padding: 24px 16px 0;
 }
@@ -38,7 +38,7 @@
 .thread-messages {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 22px;
   margin-bottom: 56px;
 }
 .thread-messages:empty {
@@ -50,6 +50,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: 8px;
   margin-top: auto;
   padding-bottom: 20px;
   background: var(--background);
@@ -107,50 +108,39 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  padding: 0 8px;
 }
 .user-bubble {
   max-width: calc(100% - 72px);
   padding: 8px 16px;
   border-radius: 16px;
   background: var(--muted-surface);
+  font-size: 16px;
+  font-weight: 400;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .reply {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 0 8px;
+  gap: 6px;
 }
+/* The lead's words to the person read at 16px; a member's work one step quieter (0037). */
 .reply-body {
-  line-height: 1.7;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
   overflow-wrap: anywhere;
+}
+.exchange .reply-body,
+.reply[data-team] .reply-body {
+  font-size: 15px;
 }
 .reply-body:empty {
   display: none;
 }
-/* Under the speaker, a reply lines up with the agent's name: its 24px avatar and 10px gap. */
-.speaker ~ * {
+/* A named agent's block lines up with its name, with or without the name above it: a 24px avatar and 10px gap. */
+.reply[data-speaker] > :not(.speaker) {
   margin-left: 34px;
-}
-/* Over the top of a column in the split chat: its name, with the canvas fading out below it. */
-.column-label {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  flex: none;
-  height: 44px;
-  margin-bottom: -44px;
-  padding: 12px 24px 0;
-  background: linear-gradient(to bottom, var(--background) 45%, transparent);
-  font-size: 13px;
-  font-weight: 500;
-  pointer-events: none;
-}
-/* What a label covers starts 4px below it. */
-.column-label + .thread-column {
-  padding-top: 48px;
 }
 /* A search hit opened here: a short attention tint (DESIGN.md "Navigation and workspace"). */
 [data-search-hit] {

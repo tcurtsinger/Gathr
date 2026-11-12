@@ -37,7 +37,12 @@ const streaming = (text: string): ChatState => ({
 
 function View({ state }: { state: ChatState }) {
   return (
-    <Thread messages={toThread(state, [], [], new Map()).main} running={false} actions={none} empty={false} />
+    <Thread
+      messages={toThread(state, [], [], new Map()).items}
+      running={false}
+      actions={none}
+      empty={false}
+    />
   );
 }
 // Newlines between blocks are only whitespace; the saved render keeps them, the streamed one does not.

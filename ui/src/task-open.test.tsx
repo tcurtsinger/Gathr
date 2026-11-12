@@ -1,5 +1,5 @@
-// An agent's task opens in the Tasks tab with its PR's checks run, from Summary or a hand-off line
-// (owner's pick A, room task 70; 0036 C6). The service is the edge: fetch answers as it would.
+// An agent's task opens in the Tasks tab with its PR's checks run, from Summary or the row of the turn
+// that gave it (owner's pick A, room task 70; 0036 C6). The service is the edge: fetch answers as it would.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
@@ -60,7 +60,23 @@ const history = {
   ],
   messages: [
     { id: 'm1', turn: 'ask', time: '2026-11-11T10:00:00Z', role: 'user', kind: 'text', body: 'Review it' },
-    { id: 'm2', turn: 'rev', time: '2026-11-11T10:01:00Z', role: 'gathr', kind: 'text', body: 'Task #82' },
+    {
+      id: 'm2',
+      turn: 'ask',
+      time: '2026-11-11T10:00:30Z',
+      role: 'assistant',
+      kind: 'tool',
+      body: { tool: 'mcp__gathr__give_task', status: 'ok' },
+    },
+    {
+      id: 'm3',
+      turn: 'ask',
+      time: '2026-11-11T10:00:40Z',
+      role: 'assistant',
+      kind: 'text',
+      body: 'Over to Sol',
+    },
+    { id: 'm4', turn: 'rev', time: '2026-11-11T10:01:00Z', role: 'gathr', kind: 'text', body: 'Task #82' },
   ],
 };
 
@@ -94,11 +110,12 @@ test("a task in Summary opens in the Tasks tab with its PR's checks run; Back le
   await expect.element(opened).not.toBeInTheDocument();
 });
 
-test('a hand-off line opens its task in the Tasks tab', async () => {
+test('a task opens in the Tasks tab from the row of the turn that gave it', async () => {
   service();
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
-  await page.getByText('Made-up Mira to Made-up Sol · Verify the reconnect repair').click();
-  await page.getByRole('button', { name: 'Open task' }).click();
+  await page.getByRole('button', { name: /1 step · gave 1 task$/ }).click();
+  await expect.element(page.getByText('Gave Made-up Sol a task')).toBeVisible();
+  await page.getByRole('button', { name: '#82 Verify the reconnect repair' }).click();
   await expect.element(page.getByRole('region', { name: 'Task #82' })).toBeVisible();
 });

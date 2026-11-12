@@ -1,64 +1,51 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { Task, Turn } from '../api';
+import type { Turn } from '../api';
 import { type ChatState, empty } from './state';
-import { leadWait, TeamWait, working } from './Working';
+import { Working, working } from './Working';
 
 const members = [
   { agent: 'mira', name: 'Mira', role: 'supervisor' as const },
   { agent: 'kit', name: 'Kit', role: 'member' as const },
   { agent: 'lane', name: 'Lane Ortiz', role: 'member' as const },
 ];
-const turn = (id: string, agent: string, status: Turn['status'], task?: number): Turn => ({
+const turn = (id: string, agent: string, status: Turn['status'], created?: string): Turn => ({
   id,
   agent,
   status,
   why: null,
   ref: id,
-  task,
+  created,
 });
-const task = (number: number, owner: string, created_us: number, state: Task['state'] = 'working'): Task => ({
-  number,
-  chat: 'c',
-  giver: 'mira',
-  owner,
-  given_in: 'ask',
-  kind: 'work',
-  what: `Task ${number}`,
-  state,
-  reason: null,
-  after: [],
-  created_us,
-});
-const nineFifteen = Date.UTC(2026, 10, 10, 9, 15) * 1000;
+// Twelve minutes and a few seconds ago, as the line is drawn.
+const nineFifteen = Date.now() - 12 * 60_000 - 5_000;
+const iso = (ms: number) => new Date(ms).toISOString();
 
-/** Mira handed Kit and Lane a task each; Kit's turn runs, Lane's waits in the queue. */
-function round(): ChatState {
-  return {
+test('the Working line names every agent with a turn running, since the longest-running one began', async () => {
+  const state: ChatState = {
     ...empty,
     members,
     turns: {
-      ask: turn('ask', 'mira', 'done'),
-      kit: turn('kit', 'kit', 'running', 1),
-      lane: turn('lane', 'lane', 'queued', 2),
+      ask: turn('ask', 'mira', 'done', iso(nineFifteen - 60_000)),
+      kit: turn('kit', 'kit', 'running', iso(nineFifteen + 120_000)),
+      lane: turn('lane', 'lane', 'running', iso(nineFifteen)),
+      next: turn('next', 'mira', 'queued'),
     },
-    tasks: [task(1, 'kit', nineFifteen), task(2, 'lane', nineFifteen + 60_000_000, 'ready')],
   };
-}
+  expect(working(state)).toEqual({ members: [members[1], members[2]], since: nineFifteen });
 
-test("only members whose turn on a hand-off runs are working; the Supervisor waits on its round's open tasks", async () => {
-  const state = round();
-  expect(working(state).map((m) => m.name)).toEqual(['Kit']);
-  expect(leadWait(state)).toMatchObject({ names: ['Kit', 'Lane Ortiz'], since: nineFifteen });
+  const screen = await render(<Working state={state} />);
+  await expect.element(screen.getByRole('img', { name: 'Kit and Lane Ortiz' })).toBeVisible();
+  // The status says "Working" and who; the time is for the eye only, in whole minutes, so a screen reader
+  // isn't told it again each time it's redrawn.
+  const time = screen.getByRole('status').element().querySelector('.working-time') as HTMLElement;
+  expect(time.textContent).toBe('· 12m');
+  expect(time.getAttribute('aria-hidden')).toBe('true');
+  const read = [...screen.getByRole('status').element().childNodes].filter((n) => n !== time);
+  expect(read.map((n) => n.textContent).join('')).toBe('WorkingKLO');
 
-  const screen = await render(<TeamWait state={state} />);
-  await expect.element(screen.getByRole('status')).toBeVisible();
-  expect(screen.getByRole('status').element().textContent).toMatch(/^Waiting on teamK· \d/);
-
-  // The Supervisor at work again isn't waiting; nor is it once its tasks are settled.
-  expect(
-    leadWait({ ...state, turns: { ...state.turns, back: turn('back', 'mira', 'running') } }),
-  ).toBeUndefined();
-  const settled = state.tasks.map((t) => ({ ...t, state: 'done' as const }));
-  expect(leadWait({ ...state, tasks: settled })).toBeUndefined();
+  // Nobody running: no line.
+  const idle = { ...state, turns: { ask: state.turns.ask } };
+  await screen.rerender(<Working state={idle} />);
+  expect(screen.getByRole('status').query()).toBeNull();
 });

@@ -1,17 +1,18 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { report, timeToPaint } from '../report';
-import type { Columns, Spot } from './messages';
+import type { Spot, Timeline } from './messages';
 import { PAGE } from './older';
-import { centre } from './reading';
 import type { Target } from './Thread';
 
 const ABOVE = 20;
+// A block taller than the view starts this far below its top edge, clear of the fade.
+const TOP = 32;
 
 /**
- * A search hit opened in a column (plans/search.md): draws the pages up to it, centres it and tints it,
- * then holds the view there, so neither a stream nor a new turn pulls it to the bottom, until the person
- * scrolls back to the bottom or sends a message.
+ * A search hit opened in the chat (plans/search.md), or an approval shown from the dock: draws the pages
+ * up to it, centres it and tints it, then holds the view there, so neither a stream nor a new turn pulls
+ * it to the bottom, until the person scrolls back to the bottom or sends a message.
  */
 export function useFound(
   all: ThreadMessageLike[],
@@ -20,7 +21,6 @@ export function useFound(
   target: Target | undefined,
   onTarget: (() => void) | undefined,
 ) {
-  // A column drawn for the hit (the team column opened for it) has it from its first draw.
   const [found, setFound] = useState<Target | null>(target ?? null);
   const [seen, setSeen] = useState(target);
   if (target !== seen) {
@@ -31,7 +31,7 @@ export function useFound(
   const spot = useRef<Element | null>(null);
   const lastSent = all.findLast((m) => m.role === 'user')?.id;
   const sent = useRef(lastSent);
-  // Each frame until it's centred: assistant-ui draws the history, and the page it's on, after this column.
+  // Each frame until it's centred: assistant-ui draws the history, and the page it's on, after the thread.
   const [frames, nextFrame] = useState(0);
 
   const release = () => {
@@ -69,10 +69,11 @@ export function useFound(
       const frame = requestAnimationFrame(() => nextFrame((n) => n + 1));
       return () => cancelAnimationFrame(frame);
     }
-    const block = (found.text && message.querySelectorAll('.found-part')[found.nth ?? 0]) || message;
+    const card = found.card && message.querySelector(`[data-approval="${CSS.escape(found.card)}"]`);
+    const block = card || (found.text && message.querySelectorAll('.found-part')[found.nth ?? 0]) || message;
     spot.current?.removeAttribute('data-search-hit');
     centre(el, block);
-    // A column drawn for it may still wrap its text again once its scroll bar shows.
+    // Its text may still wrap again once the scroll bar shows.
     const settle = (left: number) =>
       requestAnimationFrame(() => {
         if (spot.current !== block) return;
@@ -91,10 +92,11 @@ export function useFound(
     sent.current = lastSent;
     nextFrame(0);
     const fromEnd = all.length - Math.max(0, index - ABOVE);
-    timeToPaint('gathr.ui.search.open', found.at, {
-      from_end: fromEnd,
-      older_pages: Math.ceil(Math.max(0, fromEnd - PAGE) / PAGE),
-    });
+    if (!found.card)
+      timeToPaint('gathr.ui.search.open', found.at, {
+        from_end: fromEnd,
+        older_pages: Math.ceil(Math.max(0, fromEnd - PAGE) / PAGE),
+      });
     onTarget?.();
   });
 
@@ -116,32 +118,37 @@ export function useFound(
   return { held: !!found, text: found?.text, onScroll };
 }
 
+/** Scrolls a block to the middle of what shows above the composer; one taller than that starts at the top. */
+function centre(viewport: HTMLElement, block: Element) {
+  const view = viewport.getBoundingClientRect();
+  const footer = viewport.querySelector('.thread-footer')?.getBoundingClientRect().height ?? 0;
+  const room = view.height - footer;
+  const box = block.getBoundingClientRect();
+  const offset = box.height > room - TOP ? TOP : (room - box.height) / 2;
+  viewport.scrollTop += box.top - view.top - offset;
+}
+
 /**
- * Where a hit's message shows, once the chat is loaded: the team column opens for one there. A message
- * no longer in the chat leaves it at the bottom, with `gathr.ui.search.error`. A chat's title, with no
- * message, opens both columns at their latest.
+ * Where a hit's message shows, once the chat is loaded. A message no longer in the chat leaves it at the
+ * bottom, with `gathr.ui.search.error`. A chat's title, with no message, opens at its latest.
  */
 export function useTarget(
   found: { message?: string; at: number } | undefined,
   loaded: boolean,
-  columns: Columns,
-  split: boolean,
-  onSplit: (open: boolean) => void,
+  timeline: Timeline,
   onFound: (() => void) | undefined,
 ): (Partial<Spot> & Target) | undefined {
   // biome-ignore lint/correctness/useExhaustiveDependencies: placed once, as the chat is when it loads
   const target = useMemo<(Partial<Spot> & Target) | undefined>(() => {
     if (!found?.message) return found && { at: found.at };
-    const spot = loaded ? columns.find(found.message) : undefined;
+    const spot = loaded ? timeline.find(found.message) : undefined;
     return spot && { ...spot, at: found.at };
   }, [found, loaded]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per hit
   useEffect(() => {
-    if (!found?.message || !loaded) return;
-    if (!target) {
-      report({ name: 'gathr.ui.search.error', error: 'message_gone', attrs: { message: found.message } });
-      onFound?.();
-    } else if (target.column === 'team' && !split) onSplit(true);
+    if (!found?.message || !loaded || target) return;
+    report({ name: 'gathr.ui.search.error', error: 'message_gone', attrs: { message: found.message } });
+    onFound?.();
   }, [target, loaded]);
   return target;
 }

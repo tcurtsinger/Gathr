@@ -1,25 +1,23 @@
-import { Folder, MessagesSquare } from 'lucide-react';
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { Folder } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Agent, Chat, Failure, Member, PauseScope, Pauses, Project } from '../api';
 import { Composer } from '../components/Composer';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPicker, type Recipient } from './AgentPicker';
+import { ApprovalDock } from './ApprovalDock';
 import { ChatMenu } from './ChatMenu';
 import { useTarget } from './found';
-import { type SendFailure, toThread } from './messages';
+import { type Custom, type SendFailure, toThread } from './messages';
 import { PlanBar } from './PlanBar';
 import { type PauseAction, type Run, runOf } from './pauses';
-import { keepReading, type Reading, readingAt } from './reading';
 import { Summary } from './Summary';
 import { running } from './state';
-import { type Actions, Thread } from './Thread';
+import { type Actions, type Target, Thread } from './Thread';
 import { roleName } from './team';
-import { useUnseen } from './unseen';
 import { type Unsent, useChat } from './useChat';
-import { TeamWait, TeamWorking } from './Working';
+import { Working } from './Working';
 import './chat.css';
 
 interface Props {
@@ -57,9 +55,6 @@ interface Props {
   onReference?: (ref: string) => void;
   /** Opens an agent's task in the workspace's Tasks tab (owner's pick A, room task 70). */
   onOpenTask?: (task: number) => void;
-  /** The team chat beside the Supervisor's, in a chat with more than one agent; kept per chat. */
-  split: boolean;
-  onSplit: (open: boolean) => void;
   /** The plan bar's steps shown; kept per chat. */
   plan: boolean;
   onPlan: (open: boolean) => void;
@@ -95,27 +90,18 @@ export function ChatView(props: Props) {
   const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   const cache = useRef(new Map());
-  const columns = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
-  // A team that shrank to one agent still has its saved hand-offs to read.
-  const team = !fresh && (state.members.length > 1 || columns.team.length > 0);
-  const split = team && props.split;
-  const unseen = useUnseen(chat.id, columns.team, split, loaded);
-  // Drawn from its first opening on, then only hidden, so it keeps its place in the team's work.
-  const [teamDrawn, setTeamDrawn] = useState(split);
-  if (split && !teamDrawn) setTeamDrawn(true);
-  // Hide and Show widen and narrow the main column: the block being read stays where it was.
-  const body = useRef<HTMLDivElement>(null);
-  const reading = useRef<Reading | null>(null);
-  const onSplit = (open: boolean) => {
-    const viewport = body.current?.querySelector<HTMLElement>(':scope > .thread .thread-viewport') ?? null;
-    reading.current = readingAt(viewport, reading.current);
-    props.onSplit(open);
+  const timeline = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
+  const team = !fresh && state.members.length > 1;
+  const hit = useTarget(props.found, loaded, timeline, props.onFound);
+  // An approval shown from the dock, until a search hit is opened after it.
+  const [shown, setShown] = useState<Target>();
+  const target = shown && shown.at > (hit?.at ?? 0) ? shown : hit;
+  const show = (request: string) => {
+    const asks = (m: (typeof timeline.items)[number]) =>
+      (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);
+    const id = timeline.items.find(asks)?.id;
+    if (id) setShown({ id, card: request, at: performance.now() });
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once the column has its new width
-  useLayoutEffect(() => {
-    if (reading.current) keepReading(reading.current);
-  }, [split]);
-  const target = useTarget(props.found, loaded, columns, split, props.onSplit, props.onFound);
 
   useFirstTokenReport(state.partial);
   // A failed send is kept for Retry, so the composer is free for the next message at once.
@@ -177,37 +163,23 @@ export function ChatView(props: Props) {
           {team && (
             <Summary state={state} pauses={pauses} run={run} onPause={act} onOpenTask={props.onOpenTask} />
           )}
-          {team && (
-            <TooltipIconButton
-              tooltip={split ? 'Hide team chat' : 'Show team chat'}
-              aria-pressed={split}
-              className="head-button"
-              onClick={() => onSplit(!split)}
-            >
-              <MessagesSquare />
-              {unseen.dot && <i className="attention" />}
-            </TooltipIconButton>
-          )}
           {headerEnd}
         </div>
       </header>
       {props.notice}
-      <div className="chat-body" ref={body}>
+      <div className="chat-body">
         <Thread
-          messages={columns.main}
+          messages={timeline.items}
           running={!!turn}
           actions={actions}
-          target={target && target.column !== 'team' ? target : undefined}
+          target={target}
           onTarget={props.onFound}
-          label={split ? (state.members.find((m) => m.role === 'supervisor')?.name ?? 'Chat') : undefined}
           empty={loaded && state.messages.length === 0 && failed.length === 0}
           after={
             !archived && (
               <>
                 <RunLine run={run} members={state.members} />
-                {team && run.state === 'running' && (
-                  <TeamWait state={state} onOpen={split ? undefined : () => onSplit(true)} />
-                )}
+                {run.state === 'running' && <Working state={state} />}
               </>
             )
           }
@@ -256,6 +228,12 @@ export function ChatView(props: Props) {
           ) : (
             <>
               {team && <PlanBar state={state} open={props.plan} setOpen={props.onPlan} />}
+              <ApprovalDock
+                approvals={state.approvals}
+                name={(t) => members.find((m) => m.agent === state.turns[t]?.agent)?.name ?? 'An agent'}
+                onShow={(a) => show(a.request)}
+                onAnswer={approve}
+              />
               <Composer
                 draft={draft}
                 onDraft={onDraft}
@@ -276,22 +254,6 @@ export function ChatView(props: Props) {
             </>
           )}
         </Thread>
-        {teamDrawn && (
-          <div className="team-column" data-hidden={!split || undefined}>
-            <Thread
-              messages={columns.team}
-              running={!!turn}
-              actions={actions}
-              target={target && target.column !== 'main' ? target : undefined}
-              onTarget={props.onFound}
-              label="Team"
-              fresh={unseen.highlight}
-              empty={false}
-              header={loaded && columns.team.length === 0 && <p className="empty">No team messages</p>}
-              after={<TeamWorking state={state} />}
-            />
-          </div>
-        )}
       </div>
     </main>
   );

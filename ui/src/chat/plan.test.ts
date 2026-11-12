@@ -145,3 +145,48 @@ test('Done only once every task is settled and the Supervisor heard back; queued
 test('no round without a hand-off of the Supervisor', () => {
   expect(currentRound(chat([turn('ask', 'mira', 0)], []))).toBeUndefined();
 });
+
+test("G158: what the Supervisor hands on after the person's answer is a new round, though it runs on a member's task", () => {
+  // Rowan, on task 1, gives Mira task 7; Mira, on 7, asks the person 8; the answer wakes Mira on 7 again,
+  // and there she gives Kit task 9.
+  const state = chat(
+    [
+      turn('ask', 'mira', 0),
+      turn('rowan', 'rowan', 1, { task: 1, answers: 'ask' }),
+      turn('mira7', 'mira', 2, { task: 7, answers: 'rowan' }),
+      turn('woken', 'mira', 3, { task: 7, answers: 'mira7' }),
+    ],
+    [
+      task(1, 'rowan', 'ask', { state: 'working' }),
+      task(7, 'mira', 'rowan', { giver: 'rowan', state: 'working' }),
+      { ...task(8, 'mira', 'mira7', { kind: 'person', state: 'done', heard_in: 'woken' }), owner: null },
+      task(9, 'kit', 'woken'),
+    ],
+  );
+  const round = currentRound(state);
+  expect(round?.root).toBe('woken');
+  expect(round?.steps.map((s) => s.task)).toEqual([9]);
+
+  // The same turn not woken by an answer stays in the round its task belongs to.
+  const unheard = { ...state, tasks: state.tasks.map((t) => ({ ...t, heard_in: null })) };
+  expect(currentRound(unheard)?.root).toBe('ask');
+  expect(currentRound(unheard)?.steps.map((s) => s.task)).toEqual([1, 7, 9]);
+});
+
+test("a task given in a turn another agent's message woke joins that agent's round; the Supervisor's own next turn starts one", () => {
+  // Kit, on no task, answers Mira's turn (her message woke it) and gives Lane task 5.
+  const woken = chat(
+    [turn('ask', 'mira', 0), turn('told', 'kit', 1, { answers: 'ask' })],
+    [task(1, 'rowan', 'ask'), task(5, 'lane', 'told', { giver: 'kit' })],
+  );
+  expect(currentRound(woken)?.root).toBe('ask');
+  expect(currentRound(woken)?.steps.map((s) => s.task)).toEqual([1, 5]);
+
+  // Mira hearing back on her own turn and handing on from there: her word, a round of its own.
+  const next = chat(
+    [turn('ask', 'mira', 0), turn('back', 'mira', 1, { answers: 'ask' })],
+    [task(1, 'rowan', 'ask', { state: 'done' }), task(6, 'kit', 'back')],
+  );
+  expect(currentRound(next)?.root).toBe('back');
+  expect(currentRound(next)?.steps.map((s) => s.task)).toEqual([6]);
+});

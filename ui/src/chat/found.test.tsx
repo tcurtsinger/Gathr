@@ -1,6 +1,5 @@
-// A search hit opened in its chat (plans/search.md): drawn and centred with only the pages it needs, in the
-// column it's in, and neither a stream nor a new turn pulls the view away from it.
-import { useState } from 'react';
+// A search hit opened in its chat (plans/search.md): drawn and centred with only the pages it needs, and
+// neither a stream nor a new turn pulls the view away from it.
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { History } from '../api';
@@ -79,8 +78,7 @@ const tasks = Array.from({ length: 30 }, (_, n) => ({
 
 type Found = { message?: string; at: number };
 
-function Chat({ found, onFound, split }: { found: Found; onFound: () => void; split: boolean }) {
-  const [open, setOpen] = useState(split);
+function Chat({ found, onFound }: { found: Found; onFound: () => void }) {
   return (
     <div style={{ height: 600, display: 'flex', flexDirection: 'column' }}>
       <ChatView
@@ -99,8 +97,6 @@ function Chat({ found, onFound, split }: { found: Found; onFound: () => void; sp
         onStart={() => {}}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
-        split={open}
-        onSplit={setOpen}
         plan={false}
         onPlan={() => {}}
         found={found}
@@ -116,15 +112,13 @@ const frames = (n: number) =>
     next(n);
   });
 
-/** Opens the chat at the hit; answers the tinted block and its column's viewport once it's centred. */
-async function openAt(history: History, found: string, split = true) {
+/** Opens the chat at the hit; answers the tinted block and the chat's viewport once it's centred. */
+async function openAt(history: History, found: string) {
   vi.stubGlobal('fetch', async (path: string) =>
     json(path.endsWith('/tasks') ? { tasks, waits: [] } : path.startsWith('/api/chats/') ? history : {}),
   );
   const onFound = vi.fn();
-  const shown = await render(
-    <Chat found={{ message: found, at: performance.now() }} onFound={onFound} split={split} />,
-  );
+  const shown = await render(<Chat found={{ message: found, at: performance.now() }} onFound={onFound} />);
   await expect.poll(() => onFound.mock.calls.length).toBe(1);
   await frames(3);
   const hit = document.querySelector('[data-search-hit]') as HTMLElement;
@@ -133,7 +127,7 @@ async function openAt(history: History, found: string, split = true) {
   const view = viewport.getBoundingClientRect();
   const box = hit.getBoundingClientRect();
   expect(Math.abs(box.top + box.height / 2 - (view.top + (view.height - footer) / 2))).toBeLessThan(2);
-  const reopen = (next: Found) => shown.rerender(<Chat found={next} onFound={onFound} split={split} />);
+  const reopen = (next: Found) => shown.rerender(<Chat found={next} onFound={onFound} />);
   return { hit, viewport, reopen, onFound };
 }
 
@@ -164,11 +158,17 @@ test('a hit far up opens centred, and the view holds there while the chat goes o
   expect(Math.abs(hit.getBoundingClientRect().top - held)).toBeLessThan(1);
 });
 
-test("a member's hit opens in the team column, shown for it if it was hidden", async () => {
-  const { hit, viewport } = await openAt(team, 'f12', false);
-  expect(viewport.closest('.team-column')?.hasAttribute('data-hidden')).toBe(false);
+test("a member's hit opens at its message in the one timeline", async () => {
+  const { hit } = await openAt(team, 'f12');
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
   expect(hit.textContent).toBe('Made-up finding 12');
+});
+
+test('a hit on what a turn wrote mid-work opens its row at those words', async () => {
+  const { hit } = await openAt(team, 'r12');
+  expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
+  expect(hit.closest('.work-steps')).not.toBeNull();
+  expect(hit.textContent).toBe('Made-up start 12');
 });
 
 test("the chat's title, after a hit in it, opens at its latest message", async () => {

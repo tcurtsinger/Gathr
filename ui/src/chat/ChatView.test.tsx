@@ -35,8 +35,6 @@ function TwoChats() {
         onStart={() => {}}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
-        split
-        onSplit={() => {}}
         plan={false}
         onPlan={() => {}}
       />
@@ -94,8 +92,6 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
-      split
-      onSplit={() => {}}
       plan={false}
       onPlan={() => {}}
     />,
@@ -147,8 +143,6 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
-      split
-      onSplit={() => {}}
       plan={false}
       onPlan={() => {}}
     />,
@@ -196,8 +190,6 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
-      split
-      onSplit={() => {}}
       plan={false}
       onPlan={() => {}}
     />
@@ -265,8 +257,6 @@ test('a new chat is made with its first message, in its project, to its Supervis
       onStart={(text, agent) => started.push({ text, agent })}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
-      split
-      onSplit={() => {}}
       plan={false}
       onPlan={() => {}}
     />,
@@ -307,8 +297,6 @@ test('an approval stays until the service takes the answer; a refused answer sho
       onStart={() => {}}
       pauses={{ pauses: [], usage: [] }}
       onPause={async () => {}}
-      split
-      onSplit={() => {}}
       plan={false}
       onPlan={() => {}}
       onReference={(ref) => opened.push(ref)}

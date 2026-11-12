@@ -1,5 +1,5 @@
 // The Agent plan bar above the composer: a long round still fits its row, and an opened plan stays open
-// per chat, like the team column (Vale's #94 review).
+// per chat (Vale's #94 review).
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
@@ -67,7 +67,7 @@ const plan = () => page.getByRole('button', { name: /^Plan: / });
 
 test('a twenty-step round in a narrow column keeps Plan, its line, done/total and the chevron in the row', async () => {
   service();
-  await page.viewport(1024, 900);
+  await page.viewport(640, 900);
   await render(<App />);
   await expect.element(plan()).toBeVisible();
   const row = plan().element() as HTMLElement;

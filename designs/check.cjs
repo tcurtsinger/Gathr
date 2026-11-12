@@ -83,7 +83,7 @@ assert(
 	tokens.includes("--frame: #1b1b1b") && tokens.includes("--background: #232323") && tokens.includes("--card: #2c2c2c"),
 	"dark surfaces in three steps",
 );
-assert(design.includes("Team messages: split chat with Summary"), "selected team arrangement");
+assert(design.includes("Team messages: one timeline"), "selected team arrangement");
 assert(design.includes("There is no Everyone option"), "one named recipient, no fan-out");
 assert(
 	design.includes("1024 by 760px") && design.includes("200px category rail"),

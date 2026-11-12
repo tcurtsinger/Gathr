@@ -39,7 +39,7 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
-/* View controls only: Summary, team chat, sidebar, 4px apart. */
+/* View controls only: Summary, sidebar, 4px apart. */
 .topbar-actions {
   display: flex;
   flex: none;
@@ -59,34 +59,11 @@
 .empty {
   color: var(--muted-foreground);
 }
-/* The Supervisor's conversation, and the team chat beside it 50/50 while the split is open. */
 .chat-body {
   position: relative;
   display: flex;
   flex: 1;
   min-height: 0;
-}
-.chat-body > .thread,
-.team-column {
-  flex: 1 1 0;
-  min-width: 0;
-}
-.team-column {
-  display: flex;
-  border-left: 1px solid var(--border);
-}
-/*
- * Hidden, it keeps the size it would have open, out of the flow and unseen, never display: none: at no
- * size its scroll is lost and assistant-ui reads it as at the bottom, so Show would jump to the latest.
- */
-.team-column[data-hidden] {
-  position: absolute;
-  inset: 0 0 0 50%;
-  visibility: hidden;
-}
-.team-column .empty {
-  margin: 24px 8px;
-  font-size: 14px;
 }
 /* Paused or stopped: a current state after the latest content, not a saved event (the prototype). */
 .run-line {

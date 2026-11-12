@@ -15,7 +15,7 @@ const TITLE = 'Plan';
 
 interface Props {
   state: ChatState;
-  /** Kept per chat by the app, like the team column. */
+  /** Kept per chat by the app. */
   open: boolean;
   setOpen: (open: boolean) => void;
 }
