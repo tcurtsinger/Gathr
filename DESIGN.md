@@ -177,8 +177,16 @@ the registry's shimmer and no spinner, then the steps and the elapsed time, mute
 Enter opens it: each tool call as a step in plain words from the tool's name, its duration at
 the right, Failed in the danger colour on a failed one; a task it gave reads "Gave Cass a
 task" with a "#119 Open the settings tools PR" chip that opens the task; what it wrote between
-steps shows as muted lines. Steps have no argument until the service keeps one. The turn's
-last text is the message. A turn that only wrote once has no row.
+steps shows as muted lines. A step that kept what it ran
+([0041](docs/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
+status icon, a short label, the chip, the duration ("Ran" then "git merge origin/main"; also
+Read, Edited, Searched, Fetched, Searched the web, Ran a sub-agent). When the engine gave the
+call its own words, they are the label ("Show what changed" then "git status --short"). The
+chip is one line, cut with an ellipsis to the column it is in, never widening it, before the
+label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
+the shared tooltip. A step that kept
+nothing reads as before ("Ran a command"), and the row's own label while it runs does not
+change. The turn's last text is the message. A turn that only wrote once has no row.
 
 The lead's words read at 16px/400/1.6. A member's or reviewer's turn reads at 15px. A header
 names the speaker when it changes from the block before: the avatar, the name, then for a

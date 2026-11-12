@@ -195,12 +195,7 @@ pub const UNTITLED: &str = "New chat";
 
 /// A chat's name from its first message: the first line with text, up to 60 characters.
 fn title_from(text: &str) -> Option<String> {
-    let line = text.lines().map(str::trim).find(|l| !l.is_empty())?;
-    if line.chars().count() <= 60 {
-        return Some(line.to_string());
-    }
-    let cut: String = line.chars().take(59).collect();
-    Some(format!("{}…", cut.trim_end()))
+    Some(crate::text::cut(crate::text::first_line(text)?, 60, false))
 }
 
 pub fn add_message(

@@ -247,6 +247,53 @@ test('a finished turn folds what it did into one row, and its last text is the m
   ]);
 });
 
+test('a step shows what it ran as its chip, under the engine’s own words for it when it gave some (0041)', () => {
+  const state = round();
+  state.turns.lead = { ...turn('lead', 'mira'), position: 5 };
+  const ran = (text: string, title?: string) => ({ input: { text, title } });
+  state.messages.push(
+    tool('lead', 's1', 'Bash', ran('git status --short', 'Show what changed')),
+    tool('lead', 's2', 'Shell', ran('cargo clippy --workspace')),
+    tool('lead', 's3', 'Read', ran('src/lib.rs')),
+    tool('lead', 's4', 'Write', ran('notes/plan.md')),
+    tool('lead', 's5', 'Grep', ran('fn main')),
+    tool('lead', 's6', 'WebFetch', { ...ran('https://example.test/docs'), status: 'error' }),
+    tool('lead', 's7', 'WebSearch', ran('posix shell quoting')),
+    tool('lead', 's8', 'Agent', ran('Find the tests')),
+    tool('lead', 's9', 'PowerShell', { ...ran('cargo nextest run'), status: 'running' }),
+    // From before steps kept what they ran, and a tool that keeps nothing: the label alone, as it was.
+    tool('lead', 's10', 'Bash'),
+    tool('lead', 's11', 'mcp__gathr__list_tasks'),
+    // With no input (an old message, a sub-agent's kind of tool, a search before Codex names it): words, not the tool's name.
+    tool('lead', 's12', 'Grep'),
+    tool('lead', 's13', 'WebFetch'),
+    tool('lead', 's14', 'Agent'),
+    tool('lead', 's15', 'WebSearch', { status: 'running' }),
+  );
+  state.turns.lead.status = 'running';
+  const work = custom(byId(view(state).items, 'a-lead')).work;
+  const shown = work?.steps.map((s) => ('say' in s ? s.say : [s.label, s.detail]));
+  expect(shown).toEqual([
+    ['Show what changed', 'git status --short'],
+    ['Ran', 'cargo clippy --workspace'],
+    ['Read', 'src/lib.rs'],
+    ['Edited', 'notes/plan.md'],
+    ['Searched', 'fn main'],
+    ['Fetched', 'https://example.test/docs'],
+    ['Searched the web', 'posix shell quoting'],
+    ['Ran a sub-agent', 'Find the tests'],
+    ['Running', 'cargo nextest run'],
+    ['Ran a command', undefined],
+    ['Listed tasks', undefined],
+    ['Searched', undefined],
+    ['Fetched', undefined],
+    ['Ran a sub-agent', undefined],
+    ['Searching the web', undefined],
+  ]);
+  // The row's own label while it runs is the last running step's, in the words it had: no chip in it.
+  expect(work?.label).toBe('Searching the web');
+});
+
 test('a running turn’s row says what the agent is doing now; text streaming last is its message', () => {
   const state = round();
   state.turns.kit.status = 'running';

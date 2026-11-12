@@ -20,6 +20,31 @@ const WORDS: &[&str] = &[
     "behind", "every", "new", "channel", "cut", "through", "clay",
 ];
 const TOOLS: &[&str] = &["Read", "Grep", "Edit", "Bash", "Glob", "Write"];
+/// What a seeded step ran (0041): short, long enough to be cut, and more than one line.
+const PATHS: &[&str] = &[
+    "src/river/delta.rs",
+    "docs/gravel-bars.md",
+    "tests/spring_flood.rs",
+];
+const COMMANDS: &[&str] = &[
+    "git status --short",
+    "cargo nextest run --workspace --locked",
+    "cargo fmt --all --check\ncargo clippy --workspace --all-targets --locked -- -D warnings",
+    "rg --files-with-matches --glob '*.rs' --glob '!target' 'slow water carries silt toward a delta' \
+     src/river src/stone src/current src/bank tests/herons tests/gravel docs/maps docs/channel docs/clay \
+     docs/reeds docs/light docs/flood docs/spring docs/bars docs/shift",
+];
+
+/// What the seeded `tool`'s step kept, picked by `n`; Glob keeps nothing, as an unlisted tool does.
+fn ran(tool: &str, n: usize) -> Option<crate::steps::StepInput> {
+    let text = match tool {
+        "Read" | "Edit" | "Write" => PATHS[n % PATHS.len()],
+        "Bash" => COMMANDS[n % COMMANDS.len()],
+        "Grep" => WORDS[n % WORDS.len()],
+        _ => return None,
+    };
+    crate::steps::input(text, None)
+}
 const DAY_US: i64 = 86_400_000_000;
 
 /// What a seed run made.
@@ -154,7 +179,10 @@ impl Seeder<'_> {
         let duration_us = 5_000 + (self.next() % 3_000_000) as i64;
         let failed = self.next().is_multiple_of(17);
         self.ts += duration_us;
-        let body = json!({ "tool": tool, "status": if failed { "error" } else { "ok" }, "duration_ms": duration_us / 1000 });
+        let mut body = json!({ "tool": tool, "status": if failed { "error" } else { "ok" }, "duration_ms": duration_us / 1000 });
+        if let Some(input) = ran(tool, duration_us as usize) {
+            body["input"] = json!(input);
+        }
         self.message(turn, "assistant", "tool", &body.to_string())?;
         let mut event = self
             .event(turn, &format!("execute_tool {tool}"), "end")

@@ -79,6 +79,15 @@ struct Assignment {
     team: Vec<(String, gathr::team::Role)>,
 }
 
+/// A tool call under way: its message, its name, when it began, and what it ran (0041), kept so
+/// its end writes it back with the status.
+struct OpenTool {
+    message: String,
+    name: String,
+    started_us: i64,
+    input: Option<gathr::steps::StepInput>,
+}
+
 struct Running {
     ids: Ids,
     span: String,
@@ -89,8 +98,8 @@ struct Running {
     /// so a window that read `partial` in a chat's history skips what that already held.
     partial_units: usize,
     streamed: bool,
-    /// Tool calls under way: their message, name and start.
-    tools: HashMap<String, (String, String, i64)>,
+    /// Tool calls under way.
+    tools: HashMap<String, OpenTool>,
     /// Questions Claude Code asked and nobody has answered: each tool, its input and why it asks.
     approvals: HashMap<String, (String, Value, Option<String>)>,
     /// Service-side asks (pushes and Codex wait checks): where each answer goes.
