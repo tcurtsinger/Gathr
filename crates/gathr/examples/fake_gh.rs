@@ -1,5 +1,5 @@
 //! Stands in for GitHub's `gh` in tests (`GATHR_GH_PATH`): no network, no login. It answers from
-//! the JSON file `GATHR_FAKE_GH` names, `[{"args": [...], "out": "...", "code": 0}]`: the first
+//! the JSON file `GATHR_FAKE_GH` names, `[{"args": [...], "out": "...", "err": "...", "code": 0}]`: the first
 //! answer whose `args` begin the call's. An answer with `outs` instead gives its next one on each
 //! call that matches it, then its last again, for a PR that changes between two looks. One with
 //! `merged_if` (`{"repo", "base", "head"}`) gives `out_merged` once that head is in that base, as
@@ -41,6 +41,7 @@ fn main() {
             None => answer["out"].clone(),
         };
         print!("{}", out.as_str().unwrap_or_default());
+        eprint!("{}", answer["err"].as_str().unwrap_or_default());
         std::process::exit(answer["code"].as_i64().unwrap_or(0) as i32);
     }
     eprintln!("fake gh: no answer for {args:?}");

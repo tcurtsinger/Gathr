@@ -117,9 +117,12 @@ pub async fn recover(chats: &Arc<Chats>) {
     }
 }
 
-/// Asks GitHub through `gh` in `dir`, with the person's environment now.
+/// Asks GitHub through `gh` in `dir`, with the person's environment now, but never its debug output:
+/// `GH_DEBUG` prints the HTTP traffic, headers and all, into what an error can show an agent (0046).
 pub async fn github(args: &[&str], dir: &std::path::Path) -> Result<String, String> {
-    looks::gh(args, dir, &looks::fresh().await).await
+    let mut vars = looks::fresh().await;
+    vars.retain(|(name, _)| !name.eq_ignore_ascii_case("GH_DEBUG"));
+    looks::gh(args, dir, &vars).await
 }
 
 /// Looks at every open wait now, then every two minutes, for as long as the service runs.
