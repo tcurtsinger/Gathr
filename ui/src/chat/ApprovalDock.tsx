@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
-import type { Approval } from './state';
-import { initials } from './Working';
+import { Initial } from './Initial';
+import { type Approval, unanswered } from './state';
 
 /** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
 export function asked(a: Approval): { tool: string; command?: string } {
@@ -26,16 +26,14 @@ interface Props {
  * oldest, and how many wait. One being sent has left it; a refused answer brings it back.
  */
 export function ApprovalDock({ approvals, name, onShow, onAnswer }: Props) {
-  const waiting = approvals.filter((a) => !a.answer || a.answer.failure);
+  const waiting = approvals.filter(unanswered);
   const a = waiting[0];
   if (!a) return null;
   const agent = name(a.turn);
   const { tool, command } = asked(a);
   return (
     <section className="needs-dock" aria-label="Needs you">
-      <span className="needs-initial" aria-hidden="true">
-        {initials(agent)}
-      </span>
+      <Initial name={agent} />
       <div className="needs-text">
         <small>Needs you · 1 of {waiting.length}</small>
         <div>

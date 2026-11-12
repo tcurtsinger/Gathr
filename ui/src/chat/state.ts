@@ -10,6 +10,9 @@ export interface Approval {
   answer?: { allow: boolean; failure?: Failure };
 }
 
+/** Still waiting on the person: not answered, or its answer was refused. One being sent isn't. */
+export const unanswered = (a: Approval) => !a.answer || !!a.answer.failure;
+
 /** One chat as the window shows it: saved messages, turns, text still streaming, and its team's work. */
 export interface ChatState {
   messages: Message[];

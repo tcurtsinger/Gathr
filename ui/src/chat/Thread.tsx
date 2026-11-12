@@ -35,6 +35,8 @@ export interface Actions {
   carryOn: () => void;
   approve: (request: string, allow: boolean) => void;
   openTask: (task: number) => void;
+  /** Opens an agent's panel in the workspace. */
+  openAgent: (agent: string) => void;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
@@ -91,22 +93,7 @@ export function Thread(props: Props) {
     // The composer is Gathr's own and sends through useChat, never through the runtime.
     onNew: async () => {},
   });
-  // Every message reads the actions, so they keep one identity and call the latest ones.
-  const latest = useRef(actions);
-  latest.current = actions;
-  const stable = useMemo<Actions>(
-    () => ({
-      diagnostics: (turn) => latest.current.diagnostics(turn),
-      reference: (ref) => latest.current.reference(ref),
-      signIn: () => latest.current.signIn(),
-      retry: (turn) => latest.current.retry(turn),
-      resend: (failed) => latest.current.resend(failed),
-      carryOn: () => latest.current.carryOn(),
-      approve: (request, allow) => latest.current.approve(request, allow),
-      openTask: (task) => latest.current.openTask(task),
-    }),
-    [],
-  );
+  const stable = useStable(actions);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
@@ -144,6 +131,48 @@ export function Thread(props: Props) {
             </ThreadPrimitive.Viewport>
           </ThreadPrimitive.Root>
         </FoundContext>
+      </ActionsContext>
+    </AssistantRuntimeProvider>
+  );
+}
+
+/** Every message reads the actions, so they keep one identity and call the latest ones. */
+export function useStable(actions: Actions): Actions {
+  const latest = useRef(actions);
+  latest.current = actions;
+  return useMemo<Actions>(
+    () => ({
+      diagnostics: (turn) => latest.current.diagnostics(turn),
+      reference: (ref) => latest.current.reference(ref),
+      signIn: () => latest.current.signIn(),
+      retry: (turn) => latest.current.retry(turn),
+      resend: (failed) => latest.current.resend(failed),
+      carryOn: () => latest.current.carryOn(),
+      approve: (request, allow) => latest.current.approve(request, allow),
+      openTask: (task) => latest.current.openTask(task),
+      openAgent: (agent) => latest.current.openAgent(agent),
+    }),
+    [],
+  );
+}
+
+/**
+ * Blocks of the timeline on their own, drawn by the same components: the agent's panel lists an agent's
+ * earlier ones this way.
+ */
+export function Blocks({ messages, actions }: { messages: ThreadMessageLike[]; actions: Actions }) {
+  const runtime = useExternalStoreRuntime({
+    messages,
+    convertMessage: asIs,
+    isRunning: false,
+    onNew: async () => {},
+  });
+  return (
+    <AssistantRuntimeProvider runtime={runtime}>
+      <ActionsContext value={useStable(actions)}>
+        <ThreadPrimitive.Root className="thread-messages">
+          <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+        </ThreadPrimitive.Root>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );
@@ -196,13 +225,14 @@ const parts = { Text: TextPart };
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, role, on, work, notice, approvals } = own;
+  const { agent, by, role, on, work, notice, approvals } = own;
   const actions = useActions();
   if (own.exchange)
     return (
       <Exchange
         said={own.exchange}
         text={(index) => <MessagePrimitive.PartByIndex index={index} components={parts} />}
+        onOpenAgent={actions.openAgent}
       />
     );
   return (
@@ -213,7 +243,13 @@ function AssistantMessage() {
       data-team={(role && role !== 'supervisor') || undefined}
     >
       {agent && own.head && (
-        <Speaker name={agent} detail={on ? `on ${on}` : role && roleName[role]} time={own.time} />
+        <Speaker
+          name={agent}
+          detail={on ? `on ${on}` : role && roleName[role]}
+          time={own.time}
+          // Only a team chat has a panel to open: its agents have roles.
+          onOpen={by && role ? () => actions.openAgent(by) : undefined}
+        />
       )}
       {work && <WorkRow work={work} onOpenTask={actions.openTask} />}
       <div className="reply-body">

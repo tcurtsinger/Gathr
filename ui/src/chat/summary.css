@@ -1,4 +1,17 @@
-/* Summary: the prototype's popover from the chat header (DESIGN.md "Agent plan and Summary"). */
+/* Summary (DESIGN.md "Summary", 0038): the stack in the chat header and its popover. */
+/* With initials it widens to hold them, at the header buttons' height. */
+.head-button.summary-button:has(.initial-stack) {
+  width: auto;
+  padding: 0 8px;
+}
+/* Pressed while Summary is open, as Close is while the workspace is. */
+.head-button.summary-button[aria-expanded="true"] {
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  color: var(--foreground);
+}
+.summary-button .initial-stack {
+  --behind: var(--frame);
+}
 .summary-anchor {
   position: absolute;
   right: 8px;
@@ -9,11 +22,11 @@
 }
 .summary {
   z-index: 40;
-  width: 320px;
+  width: 348px;
   max-width: calc(100vw - 32px);
   max-height: min(560px, var(--radix-popover-content-available-height));
   overflow: auto;
-  padding: 12px;
+  padding: 8px;
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--popover);
@@ -21,64 +34,150 @@
   box-shadow: 0 10px 24px #0003;
 }
 .summary h3 {
-  margin: 0 0 12px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 6px 8px 8px;
   font-size: 14px;
   font-weight: 500;
 }
-.summary-avatar {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+/* Beside a heading: the round's progress, the team's counts. */
+.summary-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
   font-size: 12px;
+  font-weight: 450;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.summary-plan,
+.summary-team {
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.plan-step,
+.agent-row {
+  width: 100%;
+  min-height: 0;
+  border-radius: 10px;
+  text-align: left;
+}
+button.plan-step:hover,
+.agent-row:hover {
+  background: var(--hover-tint);
+}
+.plan-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  font-size: 14px;
+}
+.plan-step[data-state="done"] {
+  color: var(--muted-foreground);
+}
+.plan-step svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+}
+.plan-step[data-state="active"] svg {
+  color: var(--attention);
+}
+.plan-step[data-state="failed"] svg {
+  color: var(--danger);
+}
+.plan-step-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plan-step small {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.plan-step small[data-needs],
+.agent-doing[data-standing="needs"] {
+  color: var(--attention);
   font-weight: 500;
 }
-.summary [data-working] {
-  color: var(--attention);
+/* A long round narrows its segments rather than pushing the count out of the heading. */
+.plan-segments {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
 }
-/* An agent's tasks under its row: no header of their own, the count is on the row. */
-.summary-todos {
-  max-width: none;
-  gap: 0;
-  margin: 2px 0 6px;
-  padding: 0 8px 0 42px;
+.plan-segments i {
+  /* A width, not only a basis: the track's own size comes from its segments' widths. */
+  flex: 0 1 auto;
+  width: 12px;
+  min-width: 2px;
+  height: 4px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--foreground) 12%, transparent);
 }
-.summary-todos > div:first-child {
-  display: none;
+.plan-segments [data-state="done"] {
+  background: color-mix(in oklab, var(--foreground) 80%, transparent);
 }
-.summary-todos ul {
-  gap: 2px;
+.plan-segments [data-state="active"] {
+  background: var(--attention);
 }
-.summary-todos li {
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 13px;
+.plan-segments [data-state="failed"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--destructive);
 }
-.summary-todos li > div {
-  line-height: 18px;
+/* One grid for every row, so what each agent is doing starts at the same place whatever its name. A row is a
+   subgrid, and its 8px padding comes out of the first track: 24px for the initial, 8px for the padding. */
+.summary-team {
+  display: grid;
+  grid-template-columns: 32px fit-content(40%) minmax(0, 1fr) auto;
+  column-gap: 10px;
 }
-.summary-todos li > span:first-child {
-  width: 14px;
-  height: 18px;
+.agent-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 5px 8px;
 }
-.summary-todos [data-status="active"] svg {
-  color: var(--attention);
+.agent-name,
+.agent-doing {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.summary-none {
-  margin: 2px 0 6px;
-  padding: 3px 8px 3px 42px;
+.agent-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.agent-doing {
   color: var(--muted-foreground);
   font-size: 13px;
 }
-/* The context bar beside the More menu (compaction plan, K2): the name's line keeps room for both. */
-.summary [data-slot="subagent-list"] {
-  --subagent-actions: 9.5rem;
+.agent-doing[data-standing="working"] {
+  color: var(--foreground);
+  font-weight: 500;
 }
-.summary-actions {
+.agent-count {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.summary-foot {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  padding: 0 2px;
+}
+.summary-foot > button {
+  color: var(--muted-foreground);
 }

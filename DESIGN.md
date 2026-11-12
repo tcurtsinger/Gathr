@@ -79,7 +79,8 @@ In message headers, the name and role share a flex wrapper with baseline
 alignment and an 8px gap. The avatar stays vertically centred against that
 wrapper. Message text keeps its 34px indent. Do not centre the smaller role
 against the name. The [typography check page](designs/typography/v1.html) shows
-the split, workspace, plan bar and Summary at the new scale.
+the workspace at the new scale. It was drawn before 0037 and 0038, so its split, plan bar and
+Summary are history.
 
 ## Layout
 
@@ -90,7 +91,8 @@ the split, workspace, plan bar and Summary at the new scale.
   with an ellipsis and More stays visible. The right holds view controls only:
   Summary, then Open sidebar. These and the workspace's Close share one
   icon-button style: 30px, 8px radius, 4px apart, 17px Lucide icons at 1.75 stroke
-  (Summary's own icon too; More's dots radius 1.4). Pressed (Close while
+  (Summary's own icon too; More's dots radius 1.4). Summary's button widens to hold
+  its stack of initials, 8px each side, at the same height. Pressed (Close while
   the workspace is open): foreground 9% background, foreground icon,
   12% on hover.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
@@ -114,7 +116,7 @@ controls; they do not create a second mobile product.
 
 Flat chat and navigation. Floating popovers use a tonal surface and a soft shadow.
 Summary anchors 8px below and 8px inside the chat header corner, independently of
-workspace width. Its width is 320px, padding 12px, radius 16px and maximum height
+workspace width. Its width is 348px, padding 8px, radius 16px and maximum height
 560px bounded by the viewport. Navigation flyouts have no dimmed backdrop.
 Blocking Settings uses the shared backdrop. Layers must not clip focused controls.
 
@@ -130,8 +132,9 @@ floating surfaces 16px; ComposerBar 24px with 10px padding. User messages have
 Use actual assistant-ui primitives and the recorded official registry components
 after the integration decision is approved. Do not build lookalikes in `ui/`.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
-Six recorded adaptations are FileTree, SpeakerIdentity, Button, ElicitationForm,
-OptionList and SubagentList. Retain source notices and original/adapted hashes.
+`ui/registry.json` records each adaptation with its original and adapted hash and why:
+ElicitationForm, OptionList, SpeakerIdentity, Button, Tooltip and TodoList today. Retain source
+notices and both hashes.
 Dependency approval, pinned versions and file splitting belong to the integration
 decision; this design update adds no JavaScript dependency.
 
@@ -213,43 +216,85 @@ Working appears after the latest message while any turn runs: an attention spinn
 overlapping 18px initials for agents with running turns, and the time since the longest-running
 of those turns began, in whole minutes (12m), redrawn once a minute. The time is hidden
 from screen readers, so the status reads only Working and who. Never show a queued or pending task as a working agent.
+In a chat with more than one agent the line is a button that opens Summary, and closes it when pressed again;
+it says it opens a dialog and whether it is open, and who is working is announced from beside it, not by a live
+region around the button.
 
-### Agent plan and Summary
+### Summary
 
-The official agent-plan registry element docks above the composer as a collapsible
-bar, max-width 44rem, bottom margin 8px, radius 16px, popover surface and 6%
-foreground border. Its 40px row shows state, title, segmented progress, done/total
-and chevron. Expansion opens above the row, capped at 40vh. Rows show task state,
-label and owner. Working detail is the latest tool call on that task; held or
-blocked detail is the stored reason, omitted when absent. Agents have no free-text
-progress record. A round follows given_in/task/answers links to one main-line
-Supervisor turn, including nested tasks. Exclude person questions and cancelled
-tasks; order by task number. Only done tasks count toward the fraction. Never invent a step
-from prose. Until plan records exist, the title is Plan; afterwards it is the
-recorded plan title. Do not infer titles, progress or review completion from text. The bar says Done
-only after every task is settled and the Supervisor's hear-back has ended;
-settled failures can leave the fraction below total, so the outcome stays visible.
+Summary holds what the plan bar and a status bar would say, so neither exists
+([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
 
-Blocked steps use a static square-minus, Blocked and the stored reason. Failed
-uses a destructive circle-exclamation and Failed. Stopped uses a muted square
-and Stopped. Keep these outcomes separate from pending; none counts done or spins.
-Their segments stay unfilled, with destructive color for failed. A mixed round
-can still show running agents beside a terse outcome count (Lane working, 1 blocked).
-Use stored task states only; never infer success from a finished turn.
+Its button in the chat header carries no words. It is the overlapped 18px initials (4px overlap, each
+cut out of the header with a 2px edge) of every agent with a running turn, each with an attention ring
+turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
+person (a waiting approval, or an open question it asked the person) sits last in the stack with no
+ring, and one 7px attention dot sits on the stack's top right corner, however many need the person.
+Five agents are one 90px button. With nobody working or needed, the button shows Summary's plain icon.
+Its accessible name and tooltip say the same in words: "Summary: Vale needs you, Juno and Pia working",
+or "Summary".
 
-Summary remains a 320px floating popover in the chat header. It is not a workspace tab. Use official SubagentList rows and
-expandable TodoList assignments, without card borders. Each row shows initials,
-name, role, actual state and More. States are Working, Ready or a named wait with
-its recorded start. Indent the 3px progress bar and done/total count 34px; count
-done tasks over that agent's tasks in this chat, excluding cancelled tasks.
-The TodoList shows checked/struck-through done items, active spinners and pending
-empty squares. No tasks says No assigned tasks, without a fabricated fraction.
-Escape/outside click dismisses Summary; Escape returns focus to its trigger.
+The button, and the Working line after the latest message, open a 348px popover under the header.
+Escape closes it and returns focus to whichever of the two was last used to open or close it; a press
+outside closes it. Top to bottom:
 
-All plan steps, counts, working agents, assignments and timing come from
-service tasks, turns and waits. Missing records never become inferred state.
-The portable reference uses explicitly invented records only. Reduced motion
-stops spinners and removes chevron and archive-lid transitions.
+- **Plan**, when the Supervisor has a round. The heading's right holds one 12px segment for each step
+  (done 80% foreground, at work attention, failed a destructive outline, the rest 12%) and "1 of 3
+  done". Then one row for each step: its state's icon, the task's title cut with an ellipsis, and who
+  has it in 12px muted, with " · needs you" in the attention colour while the step is at work and that
+  agent needs the person, or " · blocked", " · failed", " · stopped". Icons: a circle-check for done, an
+  attention spinner at work, an empty circle for not started, a square-minus for blocked, a danger
+  circle-exclamation for failed, a square for stopped. A done row is muted.
+- **Team**, with "2 working · 1 needs you" at the heading's right, a part omitted when it is zero.
+  One line for each agent: its 24px initial (ringed while it works), its name, what it is doing in one
+  13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done", "1 of 1 task done"), cancelled ones left out and
+  nothing when it has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
+  command); "Needs your approval" or "Asked you a question" in the attention colour; "Waiting for
+  Juno", a wait on CI or a PR by name, Held, Paused, Stopped or a usage limit with its end; else Ready.
+  No role, no start time and no chevron: those are in the agent's panel. Order: who needs the person,
+  who works, who waits, who is ready, the Supervisor first among equals.
+- **Pause or resume**, at the foot: a menu with Pause or Resume for each agent alone.
+
+A step or an agent's row is a button that closes Summary and opens that agent's panel, and the
+keyboard follows to the panel's tab.
+
+A round follows given_in/task/answers links to one main-line Supervisor turn, including nested
+tasks. Exclude person questions and cancelled tasks; order by task number. Only done tasks count.
+A round is finished once every task is settled and the Supervisor's hear-back on it has ended; it
+then stays until the person's next message, and after that there is no Plan until the next hand-off.
+Never invent a step from prose, and never infer success from a finished turn: blocked, failed and
+stopped stay their own states and never count done. All steps, counts, working agents, assignments
+and timing come from service tasks, turns, waits and approvals. Missing records never become
+inferred state. Reduced motion stops spinners and rings.
+
+### Agent panel
+
+An agent opens beside the chat as a workspace tab, after Tasks: its 18px initial and name, with a
+close button. One agent at a time: opening another replaces it. While another tab shows, the panel
+keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
+Summary, and from an agent's initial in the timeline. Where the workspace lies over the chat (1200px
+and below), so does the panel. 20px 24px 32px padding, 24px between sections, each under a 13px muted
+heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
+this chat yet".
+
+Its initial in the timeline is a button the avatar's size, centred on the avatar. An agent that has
+left the chat keeps its words, and its steps in Plan, but has nothing to open.
+
+- **Header:** the 36px initial (ringed while it works), the name at 20px/600, and under it the role
+  and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
+  · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Ready". Start times
+  live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
+  picks that agent as the composer's recipient and focuses the composer (closing the workspace first
+  where it lies over the chat). An archived chat, or an agent that can't be sent to, has no Message.
+- **Task:** the task its running turn works on, else its first open one: the title, "From Orin" and
+  Open task, which opens it in the Tasks tab.
+- **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done
+  nothing yet reads Working; one that only waits on the person has no Now.
+- **Earlier in this chat:** its earlier blocks, newest first, drawn by the timeline's own components
+  at 15px, each headed by its name and time: its turns, and what it wrote to other agents. The latest
+  10; older ones stay in the chat.
+- **Tasks in this chat:** the official TodoList, open tasks first, five before Show more: checked and
+  struck-through done items, active spinners, pending empty squares. A title opens the task.
 
 ### Navigation and workspace
 
@@ -276,17 +321,14 @@ canonical document tabs as opened. Plus returns to Home. Each chat retains its
 tabs, selection and tool state; canonical paths reuse a tab, terminals may have
 several instances. Close other tabs retains Home and Recents. Arrow keys,
 Home/End and Delete operate tabs. Summary and the one timeline (0037) replace
-0015's earlier Team tab, inline thread and split. Other tab workflows remain
-governed by their decisions.
+0015's earlier Team tab, inline thread and split. The agent's panel is a tab after
+Tasks (0038). Other tab workflows remain governed by their decisions.
 
 Agents show their initials beside their name, replacing the shared robot icon.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
-Team status appears in Summary. SubagentList rows show chat role and named
-state, with a TodoList disclosure for that agent's assignments in that chat.
-No card borders around the inline rows. Progress must derive from real task
-completion, not a decorative timer. States include Working, Ready and named waits
-with their start times. No assignment says No assigned tasks. Plans have their own
+Team status appears in Summary, and each agent's detail in its panel. Progress must
+derive from real task completion, not a decorative timer. Plans have their own
 identity and tab. A typed note is never approval.
 
 ### Human tasks
@@ -397,8 +439,8 @@ saying what it means. A project's More in the sidebar has Project settings, whic
 opens Projects at that project. Checks & merge ends with the checks cache: its size,
 "Unused caches are removed after 14 days" and Clear, which acts at once, apart from Save.
 
-An agent's task opens in the workspace's Tasks tab from its title in Summary's task
-list or Open task in its hand-off line: who has it, its state and reason, and, with a
+An agent's task opens in the workspace's Tasks tab from its title in the agent
+panel's task list, the panel's Open task, or Open task in its hand-off line: who has it, its state and reason, and, with a
 PR, Gathr's checks run at the PR's head (passed, failed with its reference, or
 running), each command with its exit, time and log, the failing one's open. Back
 returns to the person's questions.

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import type { Message, Task, ToolBody, Turn } from '../api';
+import type { Message, Task, Turn } from '../api';
 import { currentRound } from './plan';
 import { type ChatState, empty } from './state';
 
@@ -30,14 +30,6 @@ const task = (number: number, owner: string, given_in: string, more: Partial<Tas
   after: [],
   created_us: 0,
   ...more,
-});
-const tool = (id: string, turnId: string, body: ToolBody): Message => ({
-  id,
-  turn: turnId,
-  time: '2026-11-10T09:00:00Z',
-  role: 'assistant',
-  kind: 'tool',
-  body,
 });
 const chat = (turns: Turn[], tasks: Task[], messages: Message[] = []): ChatState => ({
   ...empty,
@@ -79,67 +71,59 @@ test("the round is the Supervisor's newest hand-off, with tasks given inside it,
   expect(round?.done).toBe(0);
 });
 
-test('a working step shows its latest tool call; held, blocked and failed steps their stored reason', () => {
+test('a held step is at work; blocked, failed and stopped steps keep their own state, and none counts done', () => {
   const state = chat(
-    [
-      turn('ask', 'mira', 0),
-      turn('kit-old', 'kit', 1, { task: 1 }),
-      turn('kit', 'kit', 2, { task: 1, status: 'running' }),
-      turn('lane', 'lane', 3, { task: 2, status: 'running' }),
-    ],
+    [turn('ask', 'mira', 0)],
     [
       task(1, 'kit', 'ask', { state: 'working' }),
-      task(2, 'lane', 'ask', { state: 'working' }),
-      task(3, 'rowan', 'ask', { state: 'held', reason: 'done, waiting on #12' }),
-      task(4, 'sol', 'ask', { state: 'blocked', reason: 'Waiting for the replay fixture' }),
-      task(5, 'rowan', 'ask', { state: 'failed', reason: 'Replay command failed (ref r-1)' }),
-      task(6, 'sol', 'ask', { state: 'stopped' }),
-    ],
-    [
-      tool('a', 'kit-old', { tool: 'Edit', status: 'ok' }),
-      tool('b', 'kit', { tool: 'Read', status: 'ok' }),
-      tool('c', 'kit', { tool: 'Bash', status: 'running' }),
+      task(2, 'rowan', 'ask', { state: 'held', reason: 'done, waiting on #12' }),
+      task(3, 'sol', 'ask', { state: 'blocked', reason: 'Waiting for the replay fixture' }),
+      task(4, 'rowan', 'ask', { state: 'failed', reason: 'Replay command failed (ref r-1)' }),
+      task(5, 'sol', 'ask', { state: 'stopped' }),
+      task(6, 'lane', 'ask', { state: 'done' }),
     ],
   );
   const round = currentRound(state);
-  expect(round?.steps.map((s) => [s.state, s.detail])).toEqual([
-    ['active', 'Running tool: Bash'],
-    // Running, with no tool call yet: nothing is made up.
-    ['active', undefined],
-    ['active', 'done, waiting on #12'],
-    ['blocked', 'Waiting for the replay fixture'],
-    ['failed', 'Replay command failed (ref r-1)'],
-    ['stopped', undefined],
+  expect(round?.steps.map((s) => [s.agent, s.state])).toEqual([
+    ['kit', 'active'],
+    ['rowan', 'active'],
+    ['sol', 'blocked'],
+    ['rowan', 'failed'],
+    ['sol', 'stopped'],
+    ['lane', 'done'],
   ]);
-  expect(round?.status).toBe('Kit and Lane working, 1 blocked, 1 failed, 1 stopped');
+  expect(round?.done).toBe(1);
 });
 
-test('Done only once every task is settled and the Supervisor heard back; queued turns are not working', () => {
+test('a finished round stays until the person’s next message, then it is no longer the plan (ux-issues 19)', () => {
+  const said = (id: string, turnId: string, role: Message['role']): Message => ({
+    id,
+    turn: turnId,
+    time: '2026-11-10T09:00:00Z',
+    role,
+    kind: 'text',
+    body: 'Made-up words',
+  });
   const turns = [turn('ask', 'mira', 0), turn('rowan', 'rowan', 1, { task: 1 })];
   const tasks = [task(1, 'rowan', 'ask', { state: 'done' }), task(2, 'kit', 'ask', { state: 'failed' })];
+  const asked = [said('m1', 'ask', 'user'), said('m2', 'ask', 'assistant')];
+  const heard = [...turns, turn('hear', 'mira', 2, { answers: 'ask' })];
+  const wrapUp = [...asked, said('m3', 'hear', 'gathr'), said('m4', 'hear', 'assistant')];
+  const next = [...wrapUp, said('m5', 'later', 'user')];
 
-  const settled = currentRound(chat(turns, tasks));
-  expect([settled?.finished, settled?.done, settled?.status]).toEqual([false, 1, '1 failed']);
+  // Settled and heard: still shown, with its failure, until the person writes again.
+  expect(currentRound(chat(heard, tasks, wrapUp))?.done).toBe(1);
+  expect(currentRound(chat([...heard, turn('later', 'mira', 3)], tasks, next))).toBeUndefined();
 
-  const queued = chat([...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'queued' })], tasks);
-  expect(currentRound(queued)?.finished).toBe(false);
-  expect(currentRound(queued)?.busy).toBe(false);
-
-  const hearing = chat([...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'running' })], tasks);
-  expect([currentRound(hearing)?.finished, currentRound(hearing)?.status]).toEqual([
-    false,
-    'Mira working, 1 failed',
-  ]);
-
-  const heard = chat([...turns, turn('hear', 'mira', 2, { answers: 'ask' })], tasks);
-  expect([currentRound(heard)?.finished, currentRound(heard)?.status]).toEqual([true, 'Done, 1 failed']);
-
-  // A task restarted after the hear-back reopens the round.
-  const restarted = chat(
-    [...turns, turn('hear', 'mira', 2, { answers: 'ask' })],
-    [tasks[0] as Task, task(2, 'kit', 'ask', { state: 'ready' })],
-  );
-  expect(currentRound(restarted)?.finished).toBe(false);
+  // Not finished, the person's messages don't hide it: the hear-back hasn't run, is still running, or a
+  // task was restarted after it.
+  expect(currentRound(chat([...turns, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
+  const queued = [...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'queued' })];
+  expect(currentRound(chat([...queued, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
+  const hearing = [...turns, turn('hear', 'mira', 2, { answers: 'ask', status: 'running' })];
+  expect(currentRound(chat([...hearing, turn('later', 'mira', 3)], tasks, next))?.root).toBe('ask');
+  const restarted = [tasks[0] as Task, task(2, 'kit', 'ask', { state: 'ready' })];
+  expect(currentRound(chat([...heard, turn('later', 'mira', 3)], restarted, next))?.root).toBe('ask');
 });
 
 test('no round without a hand-off of the Supervisor', () => {

@@ -96,25 +96,11 @@
       "sha256": "d954efb735f13734751207ad22cb0cddd7f6ec53c59d16675d103dae08cb61fb"
     },
     {
-      "path": "components/assistant-ui/elements/agent-plan.tsx",
-      "url": "https://r.assistant-ui.com/elements-agent-plan.json",
-      "sha256": "4cfc56bbe121fdd8269f4e894bdb60b2acb8d5e23bd7cc8359d47949f57336b2",
-      "adapted": "3fb3569d20156182e2b94e4ca3a3cbc38f04162d3f7cc6702a41d9fa88024528",
-      "why": "Gathr's plan steps are tasks, several at work at once (DESIGN.md Agent plan): each step's own status (blocked, failed and stopped outcomes too) and owner, the design's step icons, and the header left to the docked bar."
-    },
-    {
-      "path": "components/assistant-ui/elements/subagent-list.tsx",
-      "url": "https://r.assistant-ui.com/elements-subagent-list.json",
-      "sha256": "45b41b2621c1ed3e0b1268aaa21987b80bb8f3404e0685014f60091d084d83f8",
-      "adapted": "8c565a7f924ee69efef6239b24e01d3262eadc9525b0ce35e6dd716f853f2824",
-      "why": "Summary's inline rows (DESIGN.md Agent plan and Summary): no card, initials, role and state under the name, done/total after the bar, the agent's TodoList opening below its row, and its More menu outside the toggle; the name's line keeps --subagent-actions (none by default) for what sits beside it outside the toggle, as Summary's context bar does. The card presentation is unchanged."
-    },
-    {
       "path": "components/assistant-ui/elements/todo-list.tsx",
       "url": "https://r.assistant-ui.com/elements-todo-list.json",
       "sha256": "0090df0bec2350d1e9992a5446d89267abcf4e1145a7603269c07236f295c518",
       "adapted": "63a148bbd1649be77bf4346d241e01f7ce222ebd403828ca8483c649439932ab",
-      "why": "An optional onItemSelect makes each item's title a button, so Summary's tasks open in the Tasks tab (owner's pick A, room task 70). Without it, items render as published."
+      "why": "An optional onItemSelect makes each item's title a button, so an agent's tasks in its panel open in the Tasks tab (owner's pick A, room task 70; 0038). Without it, items render as published."
     },
     {
       "path": "lib/utils.ts",

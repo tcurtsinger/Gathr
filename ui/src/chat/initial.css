@@ -1,0 +1,69 @@
+/* An agent's initials (DESIGN.md "Summary"): one circle for the stack, a row, the dock and the agent's panel. */
+.initial {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+}
+.initial[data-size="s"] {
+  width: 18px;
+  height: 18px;
+  font-size: 9px;
+}
+.initial[data-size="l"] {
+  width: 36px;
+  height: 36px;
+  font-size: 15px;
+}
+/* At work: a ring turns around it. Reduced motion keeps the ring and stops it. */
+.initial[data-busy]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid transparent;
+  border-top-color: var(--attention);
+  border-radius: 50%;
+  animation: initial-ring 0.9s linear infinite;
+}
+@keyframes initial-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .initial[data-busy]::after {
+    border-color: var(--attention);
+    animation: none;
+  }
+}
+/* Overlapped, each cut out of the surface behind it (--behind, the chat's own by default). */
+.initial-stack {
+  position: relative;
+  display: flex;
+}
+.initial-stack > .initial {
+  box-shadow: 0 0 0 2px var(--behind, var(--background));
+}
+.initial-stack > .initial + .initial {
+  margin-left: -4px;
+}
+/* Someone needs the person: one dot on the stack's corner, as the sidebar's row will carry. */
+.initial-stack[data-needs]::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--attention);
+  box-shadow: 0 0 0 2px var(--behind, var(--background));
+}
