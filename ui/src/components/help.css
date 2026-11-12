@@ -29,7 +29,7 @@
   overflow: auto;
   padding: 16px;
   color: var(--text);
-  background: var(--surface);
+  background: var(--popover);
   border: 1px solid var(--control);
   border-radius: 7px;
   font-size: 14px;

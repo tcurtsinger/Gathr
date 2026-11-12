@@ -1,11 +1,11 @@
-/* The prototype's navigation (DESIGN.md: 246px, #202020 in dark). */
+/* Navigation (DESIGN.md: 246px, on the frame). */
 .sidebar {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
   padding: 12px 8px;
-  background: var(--muted-surface);
+  background: var(--frame);
   border-right: 1px solid var(--border);
 }
 .brand {

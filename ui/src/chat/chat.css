@@ -14,7 +14,7 @@
   flex-shrink: 0;
   padding: 0 8px 0 24px;
   border-bottom: 1px solid var(--border);
-  background: var(--card);
+  background: var(--frame);
 }
 /* The title, then More 4px after it: the title truncates, More stays. */
 .topbar-title {

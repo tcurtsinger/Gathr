@@ -117,7 +117,6 @@ button.working:hover {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  /* #2a2a2a on the dark canvas, as the design has it; its match in light. */
   background: color-mix(in oklab, var(--foreground) 8%, var(--background));
   box-shadow: 0 0 0 2px var(--background);
   color: var(--foreground);
