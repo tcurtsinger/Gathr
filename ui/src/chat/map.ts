@@ -27,11 +27,14 @@ const BARE = /^\s*(```|~~~)|^\s*[-*_=][-*_=\s]*$|^\s*\|?[ :|-]*-[ :|-]*\|[ :|-]*
 // What opens a line: a heading, a quote, a list item and its checkbox.
 const OPENS = /^(\s*(#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+))+(\[[ xX]\]\s+)?/;
 
-/** A message's first lines as plain text: Markdown's marks and HTML tags go, words stay, code as written. */
+/**
+ * A message's first lines as plain text: Markdown's marks go, words stay, code as written. Anything in
+ * angle brackets stays too: the chat shows an agent's HTML as text (Markdown.tsx), and `Vec<String>` is words.
+ */
 export function plain(markdown: string): string {
   const lines = markdown
     .slice(0, 4 * LINES)
-    .split('\n')
+    .split(/\r?\n/)
     .filter((line) => !BARE.test(line))
     .map((line) => line.replace(OPENS, ''))
     .join('\n');
@@ -39,7 +42,6 @@ export function plain(markdown: string): string {
     text
       // A link or an image is its text; its address may hold one pair of brackets.
       .replace(/!?\[([^\]]*)\]\((?:[^()]|\([^()]*\))*\)/g, '$1')
-      .replace(/<\/?[a-zA-Z][\w-]*(\s[^>]*)?\/?>/g, '')
       .replace(/\*+|~~/g, '')
       .replace(/\|/g, ' ')
       // An underscore inside a word is part of a name, not emphasis.

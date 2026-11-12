@@ -54,7 +54,11 @@ export function useFound(
       return;
     }
     const index = all.findIndex((m) => m.id === found.id);
-    if (index < 0) return;
+    if (index < 0) {
+      // Its message left the chat: nothing to wait for, and a hold on nothing would last until the next send.
+      report({ name: found.top ? 'gathr.ui.map.error' : 'gathr.ui.search.error', error: 'not_drawn' });
+      return release();
+    }
     const message = el.querySelector(`[data-message-id="${CSS.escape(found.id)}"]`);
     if (!message) {
       // With messages above it too, so it can sit in the middle.

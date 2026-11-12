@@ -97,6 +97,16 @@ test("the person's messages and the lead's replies to them get ticks; nothing el
   ]);
 });
 
+test('plain text keeps what is in angle brackets, as the chat shows it', () => {
+  expect(plain('Returns Vec<String> or Option<T>')).toBe('Returns Vec<String> or Option<T>');
+  expect(plain('run it with --data <folder>, if a<b and c>d')).toBe(
+    'run it with --data <folder>, if a<b and c>d',
+  );
+  expect(plain('<b>bold</b> stays as written')).toBe('<b>bold</b> stays as written');
+  // A table from a file with Windows line ends still loses its rule.
+  expect(plain('| A | B |\r\n|---|---|\r\n| 1 | 2 |\r\n\r\n---\r\nEnd')).toBe('A B 1 2 End');
+});
+
 test("in a team chat only the Supervisor's replies are short ticks, and a turn has none until it ends", () => {
   const chat = state(
     [
@@ -127,6 +137,9 @@ test("in a team chat only the Supervisor's replies are short ticks, and a turn h
   expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
   // Its words so far are not its reply: streamed text adds no tick either.
   expect(ticks({ ...chat, partial: { d: 'More' } }).map(brief)).toEqual([...running, 'you You: A fourth']);
+  // Waiting for sign-in, it runs again later under the same id: still not its last words.
+  chat.turns.d = { ...chat.turns.d, status: 'waiting_sign_in' };
+  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
   chat.turns.d = { ...chat.turns.d, status: 'done' };
   expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth', 'lead Mira: Still working']);
 });
@@ -183,8 +196,7 @@ test('plain text keeps code as written and a table as its words', () => {
   expect(plain('```sh\ngit status\n```\n1. First\n2) Second')).toBe('git status First Second');
 });
 
-test('plain text drops HTML tags, rules, underlines and checkboxes, and keeps a link with brackets in its address', () => {
-  expect(plain('<b>bold</b> and <a href="https://example.com">a link</a><br/>')).toBe('bold and a link');
+test('plain text drops rules, underlines and checkboxes, and keeps a link with brackets in its address', () => {
   expect(plain('See [the page](https://example.com/a_(b)) now')).toBe('See the page now');
   expect(plain('Title\n===\nAbove\n\n---\n\nBelow\n* * *\nEnd')).toBe('Title Above Below End');
   expect(plain('- [ ] to do\n- [x] done\n> - quoted item')).toBe('to do done quoted item');

@@ -295,7 +295,8 @@ function block(
   // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;
   // A turn still running has no last words yet, so a streamed token never touches the map.
-  const ended = turn?.status !== 'running' && turn?.status !== 'queued';
+  // One waiting for sign-in runs again later under the same id.
+  const ended = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
   const toPerson = group.last && !!id && lead && ended && !crew.rootOf(id);
   const tick = toPerson
     ? (group.msgs.findLast((m) => m.kind !== 'tool')?.time ?? turn?.created ?? '')

@@ -344,3 +344,23 @@ test('a search hit opened after a tick stays where it is once it is done', async
   expect(below('u11-4')).toBe(placed);
   expect(hit.hasAttribute('data-search-hit')).toBe(true);
 });
+
+test('a target whose message is not in the chat is let go, with a report, and holds nothing', async () => {
+  const reports: string[] = [];
+  vi.stubGlobal('fetch', async (_path: string, init?: RequestInit) => {
+    reports.push(String(init?.body));
+    return new Response('{}');
+  });
+  try {
+    // While a hit is held, the replies with its text are marked as its passage: here, every answer.
+    const target = { id: 'gone', text: 'Made-up answer', at: performance.now() };
+    await render(<View state={chat(day(11, 3))} target={target} />);
+    await expect
+      .poll(() => reports.some((r) => r.includes('gathr.ui.search.error') && r.includes('not_drawn')))
+      .toBe(true);
+    await expect.poll(() => document.querySelectorAll('.found-part').length).toBe(0);
+    expect(document.querySelectorAll('.reply')).toHaveLength(3);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
