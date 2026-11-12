@@ -31,7 +31,11 @@ export function AppVersion({ onReference }: { onReference: (ref: string) => void
       <div>
         <h4>Version {app.version}</h4>
         <p className="muted" role="status">
-          {ready ? `${ready} is ready` : standing[app.state]}
+          {ready
+            ? `${ready} is ready`
+            : app.failed && app.state === 'idle'
+              ? 'The last check failed'
+              : standing[app.state]}
         </p>
       </div>
       {ready ? (

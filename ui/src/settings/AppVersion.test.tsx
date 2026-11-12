@@ -41,6 +41,8 @@ test('the last failure shows with its reference, and a build with no feed offers
   const opened: string[] = [];
   const screen = await render(<AppVersion onReference={(ref) => opened.push(ref)} />);
   await expect.element(screen.getByText('Update failed')).toBeVisible();
+  // Not "Up to date": the check behind it didn't finish.
+  await expect.element(screen.getByText('The last check failed')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
   screen.unmount();

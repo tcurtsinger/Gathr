@@ -20,6 +20,8 @@ export interface TurnNotice {
   turn: Turn;
   /** Some of the reply arrived, so a failure reads "Reply failed", not "Send failed". */
   replied: boolean;
+  /** A stopped turn whose carry-on has started (after an update, or Restart): nothing is left to continue. */
+  carried: boolean;
 }
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
@@ -291,7 +293,12 @@ function block(
     const made = gave.get(m.id);
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
-  const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}` : '';
+  // The turn that answers a stopped one is its carry-on: once it has started, the work goes on there.
+  const waiting = ['queued', 'waiting_sign_in'];
+  const carried =
+    turn?.status === 'stopped' &&
+    Object.values(state.turns).some((t) => t.answers === id && !waiting.includes(t.status));
+  const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}|${carried}` : '';
   // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;
   // A turn still running has no last words yet, so a streamed token never touches the map.
@@ -308,7 +315,7 @@ function block(
   if (hit?.sig === sig) return hit.value;
   const time = role ? (group.msgs[0]?.time ?? turn?.created) : undefined;
   const custom: Custom = { agent, by: turn?.agent ?? undefined, role, time, on, head, approvals, tick };
-  const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
+  const value = toReply(group, partial, group.last ? turn : undefined, custom, gave, carried);
   cache.set(group.key, { sig, value });
   return value;
 }
@@ -319,12 +326,15 @@ function toReply(
   turn: Turn | undefined,
   custom: Custom,
   gave: Map<string, Given>,
+  carried: boolean,
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
   const { work, text } = fold(group.msgs, partial, status === 'running', gave, began);
   if (work) custom.work = work;
-  if (turn && hasNotice(turn)) custom.notice = { turn, replied: group.msgs.length > 0 || !!partial };
+  if (turn && hasNotice(turn)) {
+    custom.notice = { turn, replied: group.msgs.length > 0 || !!partial, carried };
+  }
   return {
     id: group.key,
     role: 'assistant',
