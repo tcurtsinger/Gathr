@@ -154,7 +154,9 @@ impl Tools {
     }
 
     #[tool(
-        description = "Mark your task done, left or blocked when this turn ends. Say what is left or what blocks it. A task with open waits or PRs stays held until they end."
+        description = "Mark your task done, left or blocked when this turn ends. Say what is left or what blocks it. \
+                       A task with open waits or PRs stays held until they end. A held task of yours can be finished \
+                       from any turn: it is marked so once its hold ends."
     )]
     async fn finish_task(
         &self,
@@ -165,6 +167,7 @@ impl Tools {
         let started = Instant::now();
         let agent = caller.agent.clone().unwrap_or_default();
         let current = caller.on().and_then(|o| o.task);
+        let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
         let finished = self
             .db(move |c| {
                 let how = Finish::named(&ask.how).ok_or_else(|| {
@@ -182,6 +185,20 @@ impl Tools {
                     commit: ask.commit.as_deref(),
                 };
                 let t = tasks::finish(c, &agent, task, how, &said)?;
+                if t.state == tasks::State::Held && t.kind != Kind::Review {
+                    // From any turn (G174): kept, and applied once the hold ends, at once if it has.
+                    let starts = tasks::release(c, task, &trace)?;
+                    let now = tasks::get(c, task)?.map(|t| t.state);
+                    let line = match now {
+                        Some(tasks::State::Held) => format!(
+                            "Task #{task} is held: marked {} once what it waits on ends.",
+                            ask.how
+                        ),
+                        Some(state) => format!("Task #{task} is {}.", state.as_str()),
+                        None => format!("Task #{task} is gone."),
+                    };
+                    return Ok((line, starts));
+                }
                 let line = if t.state == tasks::State::Held && t.kind == Kind::Review {
                     format!("Review on task #{} recorded.", t.number)
                 } else {

@@ -25,8 +25,18 @@ fn a_held_work_task_cannot_use_the_review_refresh_exception() {
     tasks::finish(&mut conn, "bo", task, Finish::Done, &said).unwrap();
     tasks::ended(&mut conn, task, Outcome::Ok { tools: 1 }, T).unwrap();
     assert_eq!(state(&conn, task).0, State::Held);
-    let why = refusal(tasks::finish(&mut conn, "bo", task, Finish::Done, &said));
-    assert!(why.contains("not being worked on"), "{why}");
+    // Its owner may finish it from any turn (G174), but a commit with that is no review.
+    let again = Said {
+        commit: Some("def5678"),
+        ..Said::default()
+    };
+    let finished = tasks::finish(&mut conn, "bo", task, Finish::Done, &again).unwrap();
+    assert_eq!(
+        finished.reviewed.as_deref(),
+        Some("abc1234"),
+        "{finished:?}"
+    );
+    assert_eq!(finished.state, State::Held);
 }
 
 #[test]

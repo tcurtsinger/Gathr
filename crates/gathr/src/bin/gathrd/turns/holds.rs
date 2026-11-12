@@ -279,12 +279,18 @@ impl Task {
             self.agent.clone(),
             self.turn.as_ref().map(|t| t.ids.turn.clone()),
         );
+        // At work on a turn, the engine says a command ended inside it and begins none for the
+        // task held on it: the hold is released here (G174). Idle, the turn it begins settles it.
+        let release = turn.is_some();
+        let trace = gathr::ids::trace_id();
         let saved = self.chats.writer.call(move |c| {
-            gathr::background::set(c, (&chat, agent.as_deref()), &listed, turn.as_deref())
+            let engine = (chat.as_str(), agent.as_deref());
+            gathr::tasks::background_changed(c, engine, &listed, turn.as_deref(), release, &trace)
         });
         match saved.await {
-            Some(Ok(ended)) => {
-                if let Some(last) = ended.into_iter().last() {
+            Some(Ok((ended, starts))) => {
+                self.chats.start(starts);
+                if let Some(last) = ended.into_iter().last().filter(|_| !release) {
                     self.woke_from = Some(last);
                 }
             }

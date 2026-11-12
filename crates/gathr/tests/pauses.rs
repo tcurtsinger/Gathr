@@ -350,3 +350,73 @@ fn a_turn_with_no_progress_is_flagged_never_stopped() {
         "never stopped: {history}"
     );
 }
+
+/// G174, live on #139: a task's command ended while its owner's engine ran a turn on something
+/// else, so Claude Code said so inside that turn and began none for the task. The task, held on the
+/// command, settles there and then (its owner had said done), not never.
+#[test]
+fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
+    let data = TempDir::new();
+    let full = std::fs::read_to_string(recording("background")).unwrap();
+    let rows: Vec<&str> = full.lines().collect();
+    let held = rows
+        .iter()
+        .position(|l| l.contains(r#""dir":"hold""#))
+        .unwrap();
+    let init = r#"\"subtype\":\"init\""#;
+    let woken = held + rows[held..].iter().position(|l| l.contains(init)).unwrap();
+    // One engine, three turns: a first one; the task's, which starts the command; the person's,
+    // which hears it end before it replies as the recording's last turn did.
+    let first = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let mut played: Vec<&str> = first.lines().collect();
+    played.extend(&rows[..held]);
+    played.push(rows[0]);
+    played.push(rows[woken]);
+    played.extend(&rows[held + 1..woken]);
+    played.extend(&rows[woken + 1..]);
+    let replay = data.0.join("inside.jsonl");
+    std::fs::write(
+        &replay,
+        played.join(
+            "
+",
+        ) + "
+",
+    )
+    .unwrap();
+    let (service, chat, lead) = team(&data.0, &replay, &[]);
+    send(&service, &chat, "Hi");
+    service.wait_for(&chat, 10, "the lead's first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let given = call_tool(
+        service.info.port,
+        &token(&data.0),
+        "give_task",
+        json!({ "to": "Lead", "what": "Run the pings" }),
+    );
+    assert_ne!(given["isError"], true, "{given}");
+    let tasks = format!("/api/chats/{chat}/tasks");
+    let task = until(10, "the task held on its command", || {
+        let listed = service.call("GET", &tasks).json();
+        let task = listed["tasks"][0].clone();
+        (task["state"] == "held").then_some(task)
+    });
+    assert!(
+        task["reason"]
+            .as_str()
+            .unwrap()
+            .contains("background command"),
+        "{task}"
+    );
+
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": lead }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let settled = until(10, "the task settled", || {
+        let listed = service.call("GET", &tasks).json();
+        let task = listed["tasks"][0].clone();
+        (task["state"] != "held").then_some(task)
+    });
+    assert_eq!(settled["state"], "done", "{settled}");
+}
