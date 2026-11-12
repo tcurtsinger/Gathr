@@ -140,7 +140,7 @@ test('the map shows from three ticks up, long for the person and short for the l
   await expect.poll(() => ticks().length).toBe(0);
 });
 
-test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', async () => {
+test('the current tick is the latest message at or above the middle of the chat, and ticks on screen are in view', { repeats: 60 }, async () => {
   await render(<View state={chat(day(11, 6, tall))} />);
   const current = () => names(ticks().filter((t) => t.getAttribute('aria-current')));
   const inView = () => names(ticks().filter((t) => t.hasAttribute('data-in-view')));
@@ -155,8 +155,26 @@ test('the current tick is the latest message at or above the middle of the chat,
   // The third ask, just above the middle of what shows over the composer: the answer before it fills the top.
   const footer = document.querySelector('.thread-footer') as HTMLElement;
   const middle = (footer.getBoundingClientRect().top - viewport().getBoundingClientRect().top) / 2;
-  viewport().scrollTop += (below('u11-2') as number) - (middle - 30);
-  await expect.poll(current).toEqual([`You · ${hhmm(11, 0)}`]);
+  const log: string[] = [];
+  const t0 = performance.now();
+  const at = () => Math.round(performance.now() - t0);
+  viewport().addEventListener('scroll', () => log.push(`scroll@${at()} top=${viewport().scrollTop}`));
+  let frames = 0;
+  const tickFrames = () => {
+    frames += 1;
+    if (frames < 200) requestAnimationFrame(tickFrames);
+  };
+  requestAnimationFrame(tickFrames);
+  const before = viewport().scrollTop;
+  const target = (below('u11-2') as number) - (middle - 30);
+  viewport().scrollTop += target;
+  log.push(`set@${at()} from=${before} by=${target} now=${viewport().scrollTop} below=${below('u11-2')} middle=${middle}`);
+  try {
+    await expect.poll(current).toEqual([`You · ${hhmm(11, 0)}`]);
+  } catch (e) {
+    const probe = `${log.join(' | ')} | frames=${frames} | end top=${viewport().scrollTop} below=${below('u11-2')} current=${current()}`;
+    throw new Error(`PROBE ${probe}`, { cause: e });
+  }
   expect(inView()).toEqual([`Mira · ${hhmm(10, 30)}`, `You · ${hhmm(11, 0)}`, `Mira · ${hhmm(11, 30)}`]);
 });
 
