@@ -12,8 +12,8 @@ colors:
   primary-foreground: "oklch(.215 .003 106)"
   secondary: "#2c2c2c"
   muted-surface: "#2c2c2c"
-  muted-foreground: "oklch(.708 .004 106)"
-  accent-surface: "#2c2c2c"
+  muted-foreground: "oklch(.74 .004 106)"
+  accent-surface: "#383838"
   destructive: "lab(63.7053% 60.745 31.3109)"
   border: "oklch(.985 .002 106 / 12%)"
   input: "oklch(.985 .002 106 / 15%)"
@@ -44,8 +44,10 @@ tokens and static component anatomy, not replacement runtime components.
 
 Surfaces take three steps, back to front. `frame` is navigation, the top bar and
 the workspace. `background` is the chat. `card` is what stands on the chat: an
-agent-to-agent block, the person's message, an approval. Dark is #1b1b1b, #232323
-and #2c2c2c, with floating surfaces at #2f2f2f. Light is a white chat with a
+approval, a notice. Dark is #1b1b1b, #232323 and #2c2c2c, with floating surfaces
+(the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
+`danger-surface` are tints, so they lift whatever they lie on, and
+`accent-surface`, a menu's highlight, is lighter than the popover. Light is a white chat with a
 light-grey frame and cards and a border dark enough to see. Each step differs
 from the next in both themes. `tokens.css` records both themes. Foreground carries text and primary
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
@@ -285,7 +287,8 @@ identity and tab. A typed note is never approval.
 
 ### Human tasks
 
-The navigation badge counts pending human tasks across chats. The workspace Tasks
+The navigation count shows pending human tasks across chats, in the attention
+colour. The workspace Tasks
 tab shows the current chat's questions, one at a time, with title and source.
 Only the Supervisor asks the person (the sole agent in a one-agent chat).
 Inline OptionList stages single/multiple choices. ElicitationForm supplies the

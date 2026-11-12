@@ -56,7 +56,7 @@
 }
 .workspace-tab[data-selected="true"] {
   border-color: var(--border);
-  background: var(--secondary);
+  background: var(--background);
   color: var(--foreground);
 }
 .workspace-tab:hover {

@@ -8,7 +8,6 @@
 kbd.nav-count {
   font-family: inherit;
 }
-/* Waiting on the person: the number alone, in the attention colour. */
 .nav-waiting {
   color: var(--attention);
 }

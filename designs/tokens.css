@@ -22,8 +22,8 @@
 	--secondary: #2c2c2c;
 	--secondary-foreground: var(--foreground);
 	--muted-surface: #2c2c2c;
-	--muted-foreground: oklch(0.708 0.004 106);
-	--accent-surface: #2c2c2c;
+	--muted-foreground: oklch(0.74 0.004 106);
+	--accent-surface: #383838;
 	--accent-foreground: var(--foreground);
 	--destructive: lab(63.7053% 60.745 31.3109);
 	--border: oklch(0.985 0.002 106 / 12%);
@@ -40,14 +40,15 @@
 	/* ui/ compatibility: muted and accent historically mean text. */
 	--canvas: var(--background);
 	--surface: var(--card);
-	--raised: color-mix(in oklab, var(--foreground) 6%, var(--background));
+	/* Tints, so they lift whatever surface they lie on. */
+	--raised: color-mix(in oklab, var(--foreground) 6%, transparent);
 	--text: var(--foreground);
 	--muted: var(--muted-foreground);
 	--accent: var(--attention);
 	--focus: var(--attention);
 	--control: var(--scrollbar-thumb);
 	--danger: color-mix(in oklab, var(--destructive) 80%, var(--foreground));
-	--danger-surface: color-mix(in oklab, var(--destructive) 10%, var(--background));
+	--danger-surface: color-mix(in oklab, var(--destructive) 10%, transparent);
 	--danger-border: color-mix(in oklab, var(--destructive) 45%, var(--background));
 }
 html.light {
@@ -61,12 +62,12 @@ html.light {
 	--primary-foreground: oklch(0.985 0.003 106);
 	--secondary: oklch(0.965 0.003 106);
 	--muted-surface: oklch(0.955 0.003 106);
-	--muted-foreground: oklch(0.556 0.007 106);
-	--accent-surface: oklch(0.955 0.003 106);
+	--muted-foreground: oklch(0.5 0.007 106);
+	--accent-surface: oklch(0.935 0.003 106);
 	--destructive: lab(48.4493% 77.4328 61.5452);
 	--border: oklch(0.895 0.005 106);
 	--input: oklch(0.86 0.005 106);
 	--ring: transparent;
 	--scrollbar-thumb: #85857f;
-	--attention: #2563eb;
+	--attention: #1d4ed8;
 }
