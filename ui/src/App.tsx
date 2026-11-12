@@ -43,8 +43,6 @@ export function App() {
   const pauses = usePauses(setFailure);
   // Each chat's workspace: the files opened from its questions, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, { files: FileTab[]; selected: string }>>({});
-  // Each chat's team column, open until the person hides it (the owner's split chat design).
-  const [splits, setSplits] = useState<Record<string, boolean>>({});
   // An agent's task opened in a chat's Tasks tab, from Summary or a hand-off line (room task 70).
   const [opened, setOpened] = useState<Record<string, number | undefined>>({});
   // Each chat's plan bar, folded until the person opens it.
@@ -283,8 +281,6 @@ export function App() {
             person.setOpen(chat.id, true);
             setTab(chat.id, () => ({ selected: 'tasks' }));
           }}
-          split={splits[chat.id] ?? true}
-          onSplit={(open) => setSplits((all) => ({ ...all, [chat.id]: open }))}
           plan={!!plans[chat.id]}
           onPlan={(open) => setPlans((all) => ({ ...all, [chat.id]: open }))}
           found={found?.chat === chat.id ? found : undefined}

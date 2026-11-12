@@ -17,7 +17,7 @@ export interface Message {
   role: 'user' | 'assistant' | 'gathr';
   kind: string;
   body: string | ToolBody;
-  /** A message an agent sent one member: that member's id, shown in the team column. */
+  /** A message an agent sent one member: that member's id. It shows as its own block (0037). */
   to?: string | null;
   /** What Gathr told the member in its turn: the message it carries, already shown as the sender's. */
   copy_of?: string | null;

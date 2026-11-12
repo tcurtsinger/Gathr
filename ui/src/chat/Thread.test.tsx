@@ -35,7 +35,7 @@ function View({
 }) {
   return (
     <div style={{ height: 600, display: 'flex' }}>
-      <Thread messages={useColumns(state, agents, unsent).main} running={false} actions={none} empty={false}>
+      <Thread messages={useColumns(state, agents, unsent).items} running={false} actions={none} empty={false}>
         <p>Composer</p>
       </Thread>
     </div>
@@ -58,7 +58,7 @@ test('a reply shows while it streams, and once when it is saved', async () => {
   await screen.rerender(<View state={replay(events)} />);
   await expect.element(screen.getByText(reply, { exact: true })).toBeVisible();
   expect(screen.getByText(reply, { exact: true }).elements()).toHaveLength(1);
-  await expect.element(screen.getByText('1 tool call')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: /1 step$/ })).toBeVisible();
 });
 
 test('a reply is formatted, and the HTML or script links in it do nothing', async () => {

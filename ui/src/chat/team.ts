@@ -2,9 +2,9 @@ import type { Member, Role } from '../api';
 import type { ChatState } from './state';
 
 /**
- * Where a team's work sits (DESIGN.md "Team messages", 0015): a turn on a task belongs to the hand-off
- * of the main-line turn that gave it, followed up through tasks its own turns gave, and shows in the
- * team column. Only the service's links decide it (each turn's `task`, each task's `given_in`), never
+ * Which round a team's work belongs to (DESIGN.md "Agent plan and Summary"): a turn on a task belongs to
+ * the hand-off of the main-line turn that gave it, followed up through tasks its own turns gave. Only
+ * the service's links decide it (each turn's `task`, each task's `given_in`), never
  * prose or timing.
  */
 export interface Team {

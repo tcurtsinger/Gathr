@@ -8,12 +8,13 @@ After `npm ci` in `ui/`, run `node designs/check-help.cjs` for Help placement,
 Escape and focus return in both themes at 1440 and 1024px (Edge on Windows,
 WebKit on macOS).
 
-Settings retains the centred Gathr layout. The accepted split chat (0015,
-2026-11-10) replaces inline team threads: a header toggle opens one chronological
-team conversation beside the Supervisor, with independent scrolling. Direct
-@member exchanges stay in the main column. Summary remains a popover. The
-recipient defaults to the Supervisor by name and has no Everyone option.
+Settings retains the centred Gathr layout. The split chat (0015, 2026-11-10) is
+retired: the chat is one timeline (0037, 2026-11-11), where a turn is one block with
+its work folded into a row, agents' messages to each other are their own block, and
+Gathr's notes are one-line events. Summary remains a popover. The recipient defaults
+to the Supervisor by name and has no Everyone option.
 
+The split previews stay as history; the app no longer draws them.
 `system.html#team-message` demonstrates the split, 52rem maximum, 34px reply
 indent, docked Agent plan, working initials and Summary progress with invented
 records. Finish and Late reply simulate outcomes; Reset returns to running.
@@ -22,8 +23,8 @@ These are fixture controls, not product actions. The portable page has no servic
 uses assistant-ui registry components and Gathr state; never port the handoff
 HTML or its support.js runtime. The owner's reference stays in Shared/designs/split_chat.
 
-Run `node designs/check-team.cjs` after installing UI dependencies. It checks split
-state, independent scrolling, late/unread work, plan and Summary counts, keyboard
+Run `node designs/check-team.cjs` after installing UI dependencies. It checks the
+retired split preview: split state, independent scrolling, late/unread work, plan and Summary counts, keyboard
 controls and draft retention at 1440 and 1024px in both themes. An optional
 absolute folder outside the repo saves PNGs and JSON evidence.
 
@@ -117,7 +118,7 @@ Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exe
 Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
 `designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
 The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
-Team messages use 0015's split conversation with Summary. `node designs/check-team.cjs` checks running, finished and late replies,
+Team messages use 0037's one timeline with Summary; the split preview is history. `node designs/check-team.cjs` checks its running, finished and late replies,
 split retention, independent scrolling, plan/Summary progress, keyboard controls and draft retention in both sizes and themes (uses the UI dependencies).
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
 

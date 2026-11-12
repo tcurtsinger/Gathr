@@ -38,7 +38,7 @@
 .head-button .lucide-ellipsis circle {
   r: 1.4px;
 }
-/* Pressed: the team chat while split, Close while the workspace is open. */
+/* Pressed: Close while the workspace is open. */
 .head-button:is([aria-pressed="true"], .workspace-toggle[aria-expanded="true"]) {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
