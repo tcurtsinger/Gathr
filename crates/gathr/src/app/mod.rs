@@ -204,11 +204,20 @@ impl Copies {
         self.write(&next)
     }
 
-    /// Copies `program` and the UI beside it to `<VERSION>`, through a staging folder.
+    /// Copies `program`, its diagnostics CLI and UI to `<VERSION>`, through a staging folder.
     fn take_files(&self, program: &Path) -> io::Result<Current> {
         let staging = self.root.join(format!(".adopt-{}", ids::span_id()));
         std::fs::create_dir_all(&staging)?;
         let copied = std::fs::copy(program, staging.join(Self::program_name()))
+            .and_then(|_| {
+                let name = format!("gathr{}", std::env::consts::EXE_SUFFIX);
+                let cli = program.with_file_name(&name);
+                // Older installs and standalone dev services have no CLI beside them.
+                if cli.try_exists()? {
+                    std::fs::copy(cli, staging.join(name))?;
+                }
+                Ok(())
+            })
             .and_then(|_| match installed_ui(program) {
                 Some(ui) => copy_dir(&ui, &staging.join("ui")),
                 None => Ok(()),

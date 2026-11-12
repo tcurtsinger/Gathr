@@ -1,9 +1,9 @@
 // Gathr's release files, the same in CI (.github/workflows/release.yml) and in a local check.
 //
 //   node scripts/release.mjs stamp <version>       the workspace's version, in Cargo.toml and Cargo.lock
-//   node scripts/release.mjs sidecar               target/release/gathrd beside the window, for `tauri build`
+//   node scripts/release.mjs sidecar               target/release/{gathrd,gathr} beside the window, for `tauri build`
 //   node scripts/release.mjs collect <version> <out>
-//       after `tauri build`: this system's installer, its update and signature, and gathrd with the built
+//       after `tauri build`: this system's installer, its update and signature, and gathrd/gathr with the built
 //       UI as gathrd-<version>-<target>.tar.gz (0031), into <out>, with <out>/<target>.json naming them
 //   node scripts/release.mjs feeds <version> <dir> <base url>
 //       every <target>.json in <dir> into gathrd.json (the service's feed) and latest.json (the window's)
@@ -39,7 +39,9 @@ function stamp(version) {
 function sidecar() {
   const folder = join(root, "crates/gathr-app/binaries");
   mkdirSync(folder, { recursive: true });
-  copyFileSync(join(target, `release/gathrd${exe}`), join(folder, `gathrd-${system.triple}${exe}`));
+  for (const program of ["gathrd", "gathr"]) {
+    copyFileSync(join(target, `release/${program}${exe}`), join(folder, `${program}-${system.triple}${exe}`));
+  }
 }
 
 function collect(version, out) {
@@ -53,17 +55,19 @@ function collect(version, out) {
   copyFileSync(join(bundle, update), join(out, updateName));
   const signature = readFileSync(join(bundle, `${update}.sig`), "utf8").trim();
 
-  // gathrd and the built UI, as the service unpacks them: both at the archive's top. The same bytes the
+  // gathrd, gathr and the built UI, as the service unpacks them: all at the archive's top. The same bytes the
   // installer puts in: on macOS the bundler signs gathrd again, and a copy that differs from the installed one
   // reads to the service as a rebuild, which it copies in again and so ends a trial with no rollback.
   const staging = join(out, `.gathrd-${system.target}`);
   rmSync(staging, { recursive: true, force: true });
   mkdirSync(staging);
-  const gathrd = windows ? join(target, "release/gathrd.exe") : join(bundle, "macos/Gathr.app/Contents/MacOS/gathrd");
-  copyFileSync(gathrd, join(staging, `gathrd${exe}`));
+  for (const program of ["gathrd", "gathr"]) {
+    const source = windows ? join(target, `release/${program}.exe`) : join(bundle, `macos/Gathr.app/Contents/MacOS/${program}`);
+    copyFileSync(source, join(staging, `${program}${exe}`));
+  }
   cpSync(join(root, "ui/dist"), join(staging, "ui"), { recursive: true });
   const archive = `gathrd-${version}-${system.target}.tar.gz`;
-  execFileSync(tar(), ["-czf", join(out, archive), "-C", staging, `gathrd${exe}`, "ui"], { stdio: "inherit" });
+  execFileSync(tar(), ["-czf", join(out, archive), "-C", staging, `gathrd${exe}`, `gathr${exe}`, "ui"], { stdio: "inherit" });
   rmSync(staging, { recursive: true });
 
   const part = {

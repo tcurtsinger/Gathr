@@ -34,141 +34,74 @@
   white-space: nowrap;
 }
 
-/* What a turn did before its message: one quiet row, all one size, weight and colour. */
+/* A turn's work row (0037) is assistant-ui's Run activity, each tool step its Tool call (the owner's call,
+   2026-11-12): published colours and spacing, with the owner's sizes: the row 14px, a step 12.5px, the
+   latest step and mid-work words 13px, steps 4px apart. Set from here, so the registry files stay as published. */
 .work {
-  /* The registry's group is as wide as its parent, which a named block indents. */
-  width: auto;
+  gap: 0;
   min-width: 0;
   font-size: 14px;
 }
-.work-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  margin-left: -4px;
-  padding: 3px 8px 3px 4px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--muted-foreground);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.work-row:hover {
-  background: var(--hover-tint);
-}
-.work-row:hover,
-.work-row[data-state="open"] {
-  color: var(--foreground);
-}
-.work-chevron {
-  flex: none;
-  width: 14px;
-  height: 14px;
-  color: var(--muted-foreground);
-  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-.work-row[data-state="open"] .work-chevron {
-  transform: rotate(90deg);
-}
-.work-notes {
-  white-space: pre;
-}
-/* While it runs, what the agent is doing now stands out from how far it has got. */
-.work-row[data-running] {
-  color: var(--foreground);
-}
-.work-row[data-running] .work-notes {
-  color: var(--muted-foreground);
-  font-variant-numeric: tabular-nums;
-}
-.work-steps {
-  display: grid;
+.work [data-slot="collapsible-content"] > ol {
+  gap: 4px;
   /* A step's chip is cut to the column, never the column widened to the chip. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 5px;
-  margin: 2px 0 4px;
-  padding: 0 0 0 5px;
-  border-left: 1px solid var(--border);
-  list-style: none;
+  min-width: 0;
 }
-.work-steps li {
+.work > [data-slot="collapsible"] > p {
+  font-size: 13px;
+}
+.work [data-slot="tool-call"] {
+  max-width: none;
+}
+.work [data-slot="tool-call"] > [data-slot="collapsible-trigger"] {
+  font-size: 12.5px;
+}
+/* A step that kept no chip (from before 0041) has no empty pill. */
+.work [data-slot="tool-call"] > [data-slot="collapsible-trigger"] > span:empty {
+  display: none;
+}
+/* What it ran and what came back keep their lines and indents. */
+.work [data-slot="tool-call"] [data-slot="collapsible-content"] p {
+  white-space: pre-wrap;
+}
+.work-say {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+/* Gathr's own lines in the row: a thought, a task it gave (its chip opens the task). */
+.work-line {
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  padding-left: 10px;
+  padding: 4px 0 4px 22px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
 }
-.work-mark {
+.work-line svg {
   flex: none;
   width: 14px;
   height: 14px;
-  color: var(--muted-foreground);
 }
-.work-steps li[data-state="error"] .work-mark,
-.work-failed {
-  color: var(--danger);
-}
-.work-failed {
-  flex: none;
-  font-size: 13px;
-}
-.work-steps .work-say {
-  display: block;
-  color: var(--muted-foreground);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.work-detail {
+.work-task {
   min-width: 0;
-  padding: 1px 6px;
+  padding: 2px 6px;
   border: 0;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--foreground) 7.5%, transparent);
-  color: inherit;
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  color: color-mix(in oklab, var(--foreground) 70%, transparent);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-/* What a step ran (0041): the same chip in monospace. The chip is cut first; a label only past 60%. */
-.work-label:has(~ .work-detail) {
-  flex: none;
-  max-width: 60%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.work-detail[data-ran] {
-  font-family: ui-monospace, monospace;
-}
-.work-ran-whole {
-  max-width: min(560px, calc(100vw - 32px));
-  font-family: ui-monospace, monospace;
-  text-wrap: wrap;
-  overflow-wrap: anywhere;
-}
-button.work-detail {
   cursor: pointer;
 }
-button.work-detail:hover {
+.work-task:hover {
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
-}
-.work-time {
-  flex: none;
-  margin-left: auto;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-@media (prefers-reduced-motion: reduce) {
-  .work-chevron {
-    transition: none;
-  }
 }
 
 /* Messages between agents: one surface, so talk reads as talk. */

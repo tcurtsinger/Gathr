@@ -12,7 +12,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
-      - scripts/release.mjs
+      - scripts/release*.mjs
       - crates/gathr-app/**
 
 permissions:
@@ -70,7 +70,8 @@ jobs:
           echo "GATHR_APP_FEED=http://127.0.0.1:47199" >> "$GITHUB_ENV"
           echo '{"plugins": {"updater": {"endpoints": ["http://127.0.0.1:47199/latest.json"],
             "dangerousInsecureTransportProtocol": true}}}' > "$RUNNER_TEMP/local-feed.json"
-      - run: cargo build --release -p gathr --bin gathrd
+      - run: node scripts/release.check.mjs
+      - run: cargo build --release -p gathr --bin gathrd --bin gathr
       - run: node scripts/release.mjs sidecar
       - name: installers
         shell: bash
@@ -83,6 +84,8 @@ jobs:
           ui/node_modules/.bin/tauri build --config crates/gathr-app/tauri.release.conf.json "${extra[@]}" \
             --bundles ${{ matrix.bundles }}
       - run: node scripts/release.mjs collect ${{ env.VERSION }} release
+      - name: packaged diagnostics CLI
+        run: node scripts/release-smoke.mjs ${{ env.VERSION }} release
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.name }}
