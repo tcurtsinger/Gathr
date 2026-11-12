@@ -8,6 +8,9 @@
 kbd.nav-count {
   font-family: inherit;
 }
+.nav-waiting {
+  color: var(--attention);
+}
 /* Just right of navigation, 40px down; the sidebar is its containing block. */
 .flyout-anchor {
   position: absolute;

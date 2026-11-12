@@ -50,7 +50,7 @@ export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
         <>
           <ListTodo aria-hidden="true" />
           Tasks
-          {tasks.length > 0 && <span className="nav-count">{tasks.length}</span>}
+          {tasks.length > 0 && <span className="nav-count nav-waiting">{tasks.length}</span>}
         </>
       }
     >
