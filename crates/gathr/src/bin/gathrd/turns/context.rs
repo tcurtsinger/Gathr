@@ -24,9 +24,12 @@ impl Task {
                 .find(|(model, _)| model.is_some() && *model == self.context_model)
                 .map(|(_, window)| *window),
         };
-        if let Some(window) = own {
-            self.save_context(move |c, chat, agent| gathr::context::window(c, chat, agent, window))
-                .await;
+        let of = self.assigned.as_ref().map(super::Assignment::model_key);
+        if let (Some(window), Some(of)) = (own, of) {
+            let save = move |c: &_, chat: &str, agent: &str| {
+                gathr::context::window(c, chat, agent, window, &of)
+            };
+            self.save_context(save).await;
         }
     }
 
@@ -93,14 +96,15 @@ impl Task {
     /// Whether the turn starting now is told its conversation nears where it compacts (K3): once,
     /// at 75% of the point, again only after a compaction or a failed turn. Recorded when it is.
     pub(super) async fn near_compaction(&self, ids: &super::Ids) -> bool {
-        let Some(agent) = ids.agent.clone() else {
+        let of = self.assigned.as_ref().map(super::Assignment::model_key);
+        let (Some(agent), Some(of)) = (ids.agent.clone(), of) else {
             return false;
         };
         let chat = ids.chat.clone();
         let told = self
             .chats
             .writer
-            .call(move |c| gathr::context::tell_soon(c, &chat, &agent));
+            .call(move |c| gathr::context::tell_soon(c, &chat, &agent, &of));
         let told = told.await.and_then(Result::ok).unwrap_or(false);
         if told {
             let event = Event::point("gathr.context.soon")

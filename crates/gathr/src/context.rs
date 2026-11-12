@@ -17,12 +17,18 @@ pub fn filled(conn: &Connection, chat: &str, agent: &str, used: i64) -> Result<V
     Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
 }
 
-/// The agent's model holds this much: its context as now shown.
-pub fn window(conn: &Connection, chat: &str, agent: &str, window: i64) -> Result<Value, Error> {
+/// The agent's model holds this much, seen on `of` (`model_key`): its context as now shown.
+pub fn window(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    window: i64,
+    seen_on: &str,
+) -> Result<Value, Error> {
     conn.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, window, updated_ts) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT (chat_id, agent_id) DO UPDATE SET window = ?3, updated_ts = ?4",
-        params![chat, agent, window, now_us()],
+        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, ?5, ?4)
+         ON CONFLICT (chat_id, agent_id) DO UPDATE SET window = ?3, window_of = ?5, updated_ts = ?4",
+        params![chat, agent, window, now_us(), seen_on],
     )?;
     Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
 }
@@ -36,7 +42,12 @@ pub fn of(conn: &Connection, chat: &str, agent: &str) -> Result<Option<Value>, E
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
-    let at = point(auto_compact(conn)?, found.and_then(|(_, window)| window));
+    // Unknown until the model's window is: as the engine is started (`point_for`).
+    let window = found.and_then(|(_, window)| window);
+    let at = match window {
+        Some(window) => point(auto_compact(conn)?, Some(window)),
+        None => None,
+    };
     Ok(found.map(|(used, window)| json!({ "used": used, "window": window, "compact_at": at })))
 }
 
@@ -83,18 +94,33 @@ pub fn point(setting: Option<i64>, window: Option<i64>) -> Option<i64> {
     setting.map(|at| window.map_or(at, |w| at.min(w * 8 / 10)))
 }
 
-/// The point for an engine of the agent about to start in `chat`: its window there, else the one it
-/// had last anywhere (the same model, most likely), else none known yet.
-pub fn point_for(conn: &Connection, chat: &str, agent: &str) -> Result<Option<i64>, Error> {
+/// Which engine and model a window was seen on: the agent's model as set (`None` the engine's own),
+/// so a changed model or account never takes another model's window.
+pub fn model_key(engine: &str, model: Option<&str>) -> String {
+    format!("{engine}:{}", model.unwrap_or_default())
+}
+
+/// The point for the agent's engine about to start in `chat` on `of` (`model_key`): with the window
+/// seen on that model, in this chat or else its latest anywhere. None while that window isn't known,
+/// so the engine compacts at its own point rather than one past its window (#168's review).
+pub fn point_for(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    of: &str,
+) -> Result<Option<i64>, Error> {
     let window: Option<i64> = conn
         .query_row(
-            "SELECT window FROM agent_context WHERE agent_id = ?2 AND window IS NOT NULL
+            "SELECT window FROM agent_context WHERE agent_id = ?2 AND window IS NOT NULL AND window_of = ?3
              ORDER BY chat_id = ?1 DESC, updated_ts DESC LIMIT 1",
-            params![chat, agent],
+            params![chat, agent, of],
             |r| r.get(0),
         )
         .optional()?;
-    Ok(point(auto_compact(conn)?, window))
+    let Some(window) = window else {
+        return Ok(None);
+    };
+    Ok(point(auto_compact(conn)?, Some(window)))
 }
 
 /// The line a turn is given once its agent's conversation nears where it compacts (K3).
@@ -103,7 +129,7 @@ pub const SOON: &str = "Your conversation is close to its compaction point: when
 
 /// Whether the agent's next turn in `chat` gets `SOON`: its last call filled 75% of where it compacts,
 /// and it hasn't been told since its last compaction. Marked told when it does.
-pub fn tell_soon(conn: &Connection, chat: &str, agent: &str) -> Result<bool, Error> {
+pub fn tell_soon(conn: &Connection, chat: &str, agent: &str, of: &str) -> Result<bool, Error> {
     let found: Option<(Option<i64>, bool)> = conn
         .query_row(
             "SELECT used, told FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
@@ -114,7 +140,7 @@ pub fn tell_soon(conn: &Connection, chat: &str, agent: &str) -> Result<bool, Err
     let Some((Some(used), false)) = found else {
         return Ok(false);
     };
-    let Some(at) = point_for(conn, chat, agent)? else {
+    let Some(at) = point_for(conn, chat, agent, of)? else {
         return Ok(false);
     };
     if used * 4 < at * 3 {
@@ -220,34 +246,67 @@ mod tests {
         assert!(set_auto_compact(&conn, Some(250_000)).is_err());
     }
 
-    /// The window an engine starts with: its chat's, else the agent's latest anywhere.
+    /// What members show is what an engine starts with: no point until the window is known.
     #[test]
-    fn a_new_chat_takes_the_agents_last_window() {
+    fn the_point_shown_is_unknown_until_the_window_is() {
         let (_dir, conn) = db();
-        window(&conn, "d", "ann", 200_000).unwrap();
-        assert_eq!(point_for(&conn, "c", "ann").unwrap(), Some(160_000));
-        window(&conn, "c", "ann", 1_000_000).unwrap();
-        assert_eq!(point_for(&conn, "c", "ann").unwrap(), Some(500_000));
+        let shown = filled(&conn, "c", "ann", 1_000).unwrap();
+        assert!(shown["compact_at"].is_null(), "{shown}");
+        let shown = window(&conn, "c", "ann", 200_000, "claude:").unwrap();
+        assert_eq!(shown["compact_at"], 160_000, "{shown}");
+    }
+
+    /// The window an engine starts with: its chat's, else the agent's latest anywhere, on its model.
+    #[test]
+    fn a_new_chat_takes_the_agents_last_window_on_the_same_model() {
+        let (_dir, conn) = db();
+        assert_eq!(
+            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            None,
+            "none seen yet"
+        );
+        window(&conn, "d", "ann", 200_000, "claude:").unwrap();
+        assert_eq!(
+            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            Some(160_000)
+        );
+        let other = model_key("claude", Some("opus"));
+        assert_eq!(
+            point_for(&conn, "c", "ann", &other).unwrap(),
+            None,
+            "another model"
+        );
+        window(&conn, "c", "ann", 1_000_000, "claude:").unwrap();
+        assert_eq!(
+            point_for(&conn, "c", "ann", "claude:").unwrap(),
+            Some(500_000)
+        );
     }
 
     #[test]
     fn the_save_notes_line_comes_once_at_75_percent_and_again_after_a_compaction() {
         let (_dir, conn) = db();
-        window(&conn, "c", "ann", 1_000_000).unwrap();
+        window(&conn, "c", "ann", 1_000_000, "claude:").unwrap();
         filled(&conn, "c", "ann", 370_000).unwrap();
-        assert!(!tell_soon(&conn, "c", "ann").unwrap(), "under 75% of 500K");
+        assert!(
+            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            "under 75% of 500K"
+        );
         filled(&conn, "c", "ann", 380_000).unwrap();
-        assert!(tell_soon(&conn, "c", "ann").unwrap());
-        assert!(!tell_soon(&conn, "c", "ann").unwrap(), "told once");
+        assert!(tell_soon(&conn, "c", "ann", "claude:").unwrap());
+        assert!(
+            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
+            "told once"
+        );
         untold(&conn, "c", "ann").unwrap();
         assert!(
-            tell_soon(&conn, "c", "ann").unwrap(),
+            tell_soon(&conn, "c", "ann", "claude:").unwrap(),
             "told again after a compaction"
         );
         set_auto_compact(&conn, None).unwrap();
         untold(&conn, "c", "ann").unwrap();
         assert!(
-            !tell_soon(&conn, "c", "ann").unwrap(),
+            !tell_soon(&conn, "c", "ann", "claude:").unwrap(),
             "no point of its own to tell of"
         );
     }

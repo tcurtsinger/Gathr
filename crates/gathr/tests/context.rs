@@ -209,7 +209,7 @@ fn seen_window(data: &std::path::Path, service: &TestService, agent: &str, windo
         .to_string();
     let db = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, window, updated_ts) VALUES (?1, ?2, ?3, 1)",
+        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, 'claude:', 1)",
         rusqlite::params![other, agent, window],
     )
     .unwrap();
@@ -225,11 +225,12 @@ fn agent(service: &TestService, account: &str) -> String {
 }
 
 /// K3: Claude Code is started with Auto-compact, never past 80% of the window its model showed; with
-/// the engine's own, with none.
+/// the engine's own, or no window seen on its model yet, with none (#168's review).
 #[test]
 fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
     for (at, window, expected) in [
-        (json!(300_000), None, json!("300000")),
+        (json!(300_000), None, Value::Null),
+        (json!(300_000), Some(1_000_000), json!("300000")),
         (json!(500_000), Some(200_000), json!("160000")),
         (Value::Null, Some(200_000), Value::Null),
     ] {
@@ -263,24 +264,35 @@ fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
     }
 }
 
-/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`.
+/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`, once its model's
+/// window is known: capped at 80% of it. Before, the engine's own.
 #[test]
 fn codex_opens_its_thread_with_auto_compact() {
     let data = TempDir::new();
     let (service, account) = codex(&data.0, &common::recording("codex_signed_in"));
     auto_compact(&service, json!(400_000));
-    let (chat, _) = one_turn(&service, &account);
+    let (chat, agent) = one_turn(&service, &account);
     service.wait_for(&chat, 10, "the turn's end", |h| {
         h["turns"][0]["status"] == "done"
     });
-    let sql =
-        "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%'";
+    // Another chat: the engine starts again, now knowing the window (475K).
+    let other = service.new_chat();
+    let path = format!("/api/chats/{other}/messages");
+    service.send("POST", &path, json!({ "text": "Hi", "agent": agent }));
+    service.wait_for(&other, 10, "the second turn's end", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%' ORDER BY id";
     let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
     assert!(ok, "{rows}");
-    let opened: Value = serde_json::from_str(rows["rows"][0]["body"].as_str().unwrap()).unwrap();
+    let opened = |n: usize| -> Value {
+        serde_json::from_str(rows["rows"][n]["body"].as_str().unwrap()).unwrap()
+    };
+    let limit = |n: usize| opened(n)["params"]["config"]["model_auto_compact_token_limit"].clone();
     assert_eq!(
-        opened["params"]["config"]["model_auto_compact_token_limit"], 400_000,
-        "{opened}"
+        [limit(0), limit(1)],
+        [Value::Null, json!(380_000)],
+        "{rows}"
     );
 }
 
@@ -297,7 +309,7 @@ fn a_turn_near_the_compaction_point_is_told_to_save_its_notes() {
     let chat = service.new_chat();
     let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, used, window, updated_ts) VALUES (?1, ?2, 380000, 1000000, 1)",
+        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, updated_ts) VALUES (?1, ?2, 380000, 1000000, 'claude:', 1)",
         rusqlite::params![chat, ann],
     )
     .unwrap();
@@ -541,4 +553,34 @@ fn compact_waits_for_the_engines_background_commands_and_the_turn_they_end_in() 
     });
     assert_eq!(gathr_lines(&history).len(), 1, "{history}");
     assert_eq!([0, 1].map(|n| slash(&data.0, n)), [false, true]);
+}
+
+/// #168's review: a compaction whose engine refuses the login waits for a sign-in like any turn,
+/// and stays a compaction: after it, slash commands on again, one compaction and one quiet line.
+#[test]
+fn a_compaction_refused_a_login_compacts_once_after_a_sign_in() {
+    let data = TempDir::new();
+    let (turn, compaction) = claude_parts();
+    let refused = std::fs::read_to_string(common::recording("signed_out")).unwrap();
+    let refused: Vec<String> = refused.lines().map(String::from).collect();
+    let service = claude(&data.0, &turn, &refused);
+    let account = service.signed_in(&data.0);
+    let (chat, agent) = one_turn(&service, &account);
+    service.wait_for(&chat, 10, "the first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+
+    assert_eq!(compact(&service, &chat, &agent).status, 200);
+    service.wait_for(&chat, 10, "the compaction to wait for a sign-in", |h| {
+        h["turns"][1]["status"] == "waiting_sign_in"
+    });
+    std::fs::write(data.0.join("compaction.jsonl"), compaction.join("\n")).unwrap();
+    common::sign_in_account(&data.0, &account);
+
+    let history = service.wait_for(&chat, 20, "the compaction", |h| {
+        h["turns"][1]["status"] == "done"
+    });
+    let line = "Compacted Made-up's conversation: 23K to 3.6K";
+    assert_eq!(gathr_lines(&history), [line], "{history}");
+    assert_eq!([0, 1, 2].map(|n| slash(&data.0, n)), [false, true, true]);
 }

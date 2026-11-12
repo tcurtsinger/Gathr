@@ -163,7 +163,7 @@ impl Task {
         let pass = self.pass_for(&assigned, worktree, given, trace).await?;
         drop(making);
         let url = format!("http://127.0.0.1:{}/mcp", self.chats.port);
-        let compact_at = self.compact_at(&assigned.chat).await;
+        let compact_at = self.compact_at(&assigned).await;
         let first = if codex {
             args = gathr::codex::command::args(
                 Some(&url),
@@ -334,12 +334,13 @@ impl Task {
 
     /// Where the agent's conversation in `chat` compacts (Auto-compact, K3): read at each start, so a
     /// changed setting applies from the engine's next start.
-    async fn compact_at(&self, chat: &str) -> Option<i64> {
-        let (chat, agent) = (chat.to_string(), self.agent.clone()?);
+    async fn compact_at(&self, assigned: &Assignment) -> Option<i64> {
+        let (chat, agent) = (assigned.chat.clone(), self.agent.clone()?);
+        let of = assigned.model_key();
         let found = self
             .chats
             .writer
-            .call(move |c| gathr::context::point_for(c, &chat, &agent));
+            .call(move |c| gathr::context::point_for(c, &chat, &agent, &of));
         found.await.and_then(Result::ok).flatten()
     }
 

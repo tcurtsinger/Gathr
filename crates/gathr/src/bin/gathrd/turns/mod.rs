@@ -84,6 +84,13 @@ struct Assignment {
     slash: bool,
 }
 
+impl Assignment {
+    /// The engine and model a window seen now belongs to (Auto-compact, K3).
+    fn model_key(&self) -> String {
+        gathr::context::model_key(&self.engine, self.model.as_deref())
+    }
+}
+
 /// A tool call under way: its message, its name, when it began, and what it ran (0041), kept so
 /// its end writes it back with the status.
 struct OpenTool {

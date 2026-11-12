@@ -63,6 +63,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
     let before =
         "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
                   ALTER TABLE agent_context DROP COLUMN told;
+                  ALTER TABLE agent_context DROP COLUMN window_of;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);
