@@ -1,4 +1,4 @@
-//! Settings tools for agents (0036 C5a, owner's room task 90): an agent reads Gathr's settings and
+//! Settings tools for agents (0043 C5a, owner's room task 90): an agent reads Gathr's settings and
 //! changes them when the person asks, each change recorded with who made it. Never an agent's:
 //! answering its own approval, answering its own question to the person, or changing which pushes
 //! ask (an agent's Full approvals is what skips a push's ask).

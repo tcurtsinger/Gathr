@@ -187,7 +187,7 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
 /// Applies `change` to the agent as saved now, and saves it: in one call on the writer, so nothing
 /// saved since a read is lost. `checked` is the agent the model and effort were checked as: one
 /// whose account, model or effort came out otherwise is refused, never saved unchecked. An agent
-/// (`by_agent`) never moves one into or out of Full, which decides which pushes ask (0036 C5a).
+/// (`by_agent`) never moves one into or out of Full, which decides which pushes ask (0043 C5a).
 pub fn change(
     conn: &Connection,
     checked: &Agent,

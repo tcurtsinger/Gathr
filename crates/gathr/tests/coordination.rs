@@ -625,7 +625,7 @@ fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
     std::fs::write(&go, "").unwrap();
 }
 
-/// 0036 C12 (owner, task 1450): a wait for a PR to be up to date with its base is its own kind,
+/// 0043 C12 (owner, task 1450): a wait for a PR to be up to date with its base is its own kind,
 /// and a look that can't read the PR fails with a reference, as other PR looks do.
 #[test]
 fn an_up_to_date_wait_whose_looks_fail_is_found_from_its_reference() {

@@ -19,9 +19,11 @@ use super::Caller;
 use crate::api::State;
 use crate::chats::Chats;
 
-/// A message longer than this is cut, with its id to read the whole of it (0020: a tool returns
-/// what the question needs, with an id for the rest).
-const CUT_AT: usize = 2_000;
+/// A message longer than `KEEP_START` and `KEEP_END` together is cut in the middle, with its id to
+/// read the whole of it (0020: a tool returns what the question needs, with an id for the rest).
+/// Its end stays: agents end a message with what matters to a scan, such as "Friction: …" (G176).
+const KEEP_START: usize = 1_500;
+const KEEP_END: usize = 400;
 const DEFAULT_LIMIT: u32 = 20;
 const MOST: u32 = 100;
 
@@ -52,7 +54,7 @@ pub fn names() -> Vec<String> {
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
     pub(super) stopping: tokio::sync::watch::Receiver<bool>,
-    /// The service's own state, so a settings tool changes them as the API does (0036 C5a).
+    /// The service's own state, so a settings tool changes them as the API does (0043 C5a).
     pub(super) state: Arc<State>,
     tool_router: ToolRouter<Self>,
 }
@@ -196,17 +198,25 @@ fn read(conn: &Connection, chat: &str, ask: &ReadChat) -> Result<String, String>
         (Some(_), false) => "From the start of the chat.".to_string(),
     }];
     for row in found {
-        let length = row.body.chars().count();
-        let body = match length > CUT_AT {
-            true => {
-                let cut: String = row.body.chars().take(CUT_AT).collect();
-                format!("{cut} [cut at {CUT_AT} of {length} characters]")
-            }
-            false => row.body,
-        };
+        let body = kept(&row.body, &row.id);
         lines.push(format!("{} {}: {}", row.id, row.author, body));
     }
     Ok(lines.join("\n"))
+}
+
+/// The message as `read_chat` lists it: whole, or its start and end with what was cut between.
+fn kept(body: &str, id: &str) -> String {
+    let chars: Vec<char> = body.chars().collect();
+    if chars.len() <= KEEP_START + KEEP_END {
+        return body.to_string();
+    }
+    let start: String = chars[..KEEP_START].iter().collect();
+    let end: String = chars[chars.len() - KEEP_END..].iter().collect();
+    let cut = chars.len() - KEEP_START - KEEP_END;
+    format!(
+        "{start} [… {cut} of {} characters cut: read message {id} for all of it …] {end}",
+        chars.len()
+    )
 }
 
 /// The chat's text messages that pass `filter`, newest first, with who wrote each.

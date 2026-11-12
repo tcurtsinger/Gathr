@@ -146,7 +146,7 @@ pub struct Task {
     pub stale_us: Option<i64>,
     /// The turn its giver heard it was settled in: the chat shows the person's answer there.
     pub heard_in: Option<String>,
-    /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0036 C6).
+    /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0043 C6).
     pub pr_head: Option<String>,
 }
 

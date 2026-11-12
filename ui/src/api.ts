@@ -173,7 +173,7 @@ export interface Project {
   name: string;
   folder: string;
   members: Member[];
-  /** Run in order on a PR's head; only the Supervisor sets them (0036, owner's call 1455). */
+  /** Run in order on a PR's head; only the Supervisor sets them (0043, owner's call 1455). */
   checks: ProjectCheck[];
   /** Whose result gates a merge. */
   ci: 'ci' | 'gathr' | 'both';
@@ -187,7 +187,7 @@ export interface ProjectCheck {
   set: string;
 }
 
-/** A run of a project's checks at one commit (0036 C3): its commands in order, stopping at the first failure. */
+/** A run of a project's checks at one commit (0043 C3): its commands in order, stopping at the first failure. */
 export interface CheckRun {
   run: string;
   head: string;

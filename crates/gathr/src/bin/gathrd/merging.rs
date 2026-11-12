@@ -1,4 +1,4 @@
-//! Agents don't merge; Gathr does (0036 points 3-4, C4). A PR's reviewer asks with `merge`, and
+//! Agents don't merge; Gathr does (0043 points 3-4, C4). A PR's reviewer asks with `merge`, and
 //! Gathr refuses, saying why, unless a done review covers the PR's head H, the checks the project
 //! asks for passed on H, and the default branch's commit B is in H. A PR that changes tests or check
 //! settings, or that brings a project its first passing checks, also needs the reviewer's sign-off.

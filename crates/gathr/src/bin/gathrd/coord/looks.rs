@@ -114,7 +114,7 @@ pub async fn once(chats: &Arc<Chats>) {
         };
         let state = json_text(&answer, "state");
         let head = json_text(&answer, "headRefOid");
-        // A review's PR: Gathr runs the project's checks at each head it sees (0036 C3).
+        // A review's PR: Gathr runs the project's checks at each head it sees (0043 C3).
         if state == "OPEN" && !head.is_empty() {
             crate::check_runs::for_review(chats, &chat, task, &head).await;
         }
@@ -251,7 +251,7 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
     }
 }
 
-/// An up-to-date wait (0036 C12): met once the PR has every commit its base has, or when it's
+/// An up-to-date wait (0043 C12): met once the PR has every commit its base has, or when it's
 /// merged or closed (nothing left to keep up to date); else not yet.
 fn up_to_date(pr: &str, state: &str, base: &str, behind: Option<u64>) -> Look {
     match (state, behind) {
@@ -457,7 +457,7 @@ async fn project_of(chats: &Arc<Chats>, chat: &str) -> PathBuf {
 mod tests {
     use super::*;
 
-    /// 0036 C12: met when the base's commits are all in the PR, not before; a merged or closed PR
+    /// 0043 C12: met when the base's commits are all in the PR, not before; a merged or closed PR
     /// has nothing left to keep up to date.
     #[test]
     fn an_up_to_date_wait_is_met_once_the_base_is_in_the_pr() {

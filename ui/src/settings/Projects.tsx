@@ -14,7 +14,7 @@ type Open = (ref: string) => void;
 export type Seat = { agent: string; role: Role };
 
 /**
- * Settings > Projects (0036, the owner's pick B): the projects listed as Agents lists agents, the picked
+ * Settings > Projects (0043, the owner's pick B): the projects listed as Agents lists agents, the picked
  * one's General (name, folder, team) and Checks & merge (its checks read only, the CI choice and merge
  * method), in one draft with one Save.
  */

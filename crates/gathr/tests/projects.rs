@@ -287,7 +287,7 @@ fn a_project_that_fails_to_save_is_found_from_its_reference() {
     assert!(ok && trace.to_string().contains("forced"), "{trace}");
 }
 
-/// 0036: a project's name, folder, team, CI choice and merge method are each changed on their own,
+/// 0043: a project's name, folder, team, CI choice and merge method are each changed on their own,
 /// each window hears of it, and it's recorded.
 #[test]
 fn each_project_setting_is_changed_on_its_own_and_heard_live() {

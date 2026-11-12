@@ -214,7 +214,7 @@ pub fn answer(conn: &mut Connection, answers: &[Answer], trace: &str) -> Result<
     answer_as(conn, answers, None, trace)
 }
 
-/// `answer`, by the person (`by` none) or by an agent for the person (0036 C5a): never one the
+/// `answer`, by the person (`by` none) or by an agent for the person (0043 C5a): never one the
 /// agent asked itself, or asked the Supervisor to file.
 pub fn answer_as(
     conn: &mut Connection,
