@@ -115,8 +115,9 @@ test("an agent in Summary opens as a workspace tab, and its task opens from ther
   const opened = page.getByRole('region', { name: 'Task #82' });
   await expect.element(opened.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
   await expect.element(opened.getByText('PR #42', { exact: false })).toBeVisible();
-  // While Tasks is the tab shown, the agent's panel isn't drawn at all.
-  expect(document.querySelector('.agent-slot')?.childElementCount).toBe(0);
+  // While Tasks is the tab shown, the agent's panel stays as it was, out of sight.
+  const kept = document.querySelector('.agent-slot .agent-panel') as HTMLElement;
+  expect(kept.closest('[role="tabpanel"]')?.hasAttribute('hidden')).toBe(true);
   await opened.getByRole('button', { name: 'Back' }).click();
   await expect.element(opened).not.toBeInTheDocument();
 

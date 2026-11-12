@@ -26,8 +26,8 @@ Replaces 0015's plan bar above the composer and its Summary of expandable rows.
   and the blocks are the timeline's own components.
 - **The Working line opens Summary** too, so "who is working" leads to what they are doing.
 - **The workspace is not drawn again for a streamed token.** The chat hands the workspace one fixed place
-  for the agent's panel and draws the panel into it only while its tab is shown; the panel is drawn again
-  only when something of that agent's changed.
+  for the agent's panel and draws the panel into it. The panel is drawn again only when something of that
+  agent's changed, and not at all while another tab shows: it stays as it was, scroll and opened rows kept.
 - **Pause or resume for one agent** is a menu at Summary's foot. An agent's context bar is in its panel.
 
 ## Why

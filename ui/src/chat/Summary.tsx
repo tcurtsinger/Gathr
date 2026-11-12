@@ -142,7 +142,7 @@ export function Summary(props: Props) {
                         {g.done}/{g.total}
                       </span>
                       <span className="visually-hidden">
-                        {g.done} of {g.total} tasks done
+                        {g.done} of {g.total} {g.total === 1 ? 'task' : 'tasks'} done
                       </span>
                     </>
                   )}

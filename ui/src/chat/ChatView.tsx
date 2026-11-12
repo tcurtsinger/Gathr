@@ -167,7 +167,8 @@ export function ChatView(props: Props) {
     [onCloseWorkspace],
   );
   // The panel's place in the workspace: the same element whatever streams, so the workspace isn't asked
-  // for again; the panel itself is drawn into it from here, and only while its tab is the one shown.
+  // for again. The panel is drawn into it from here and stays there while another tab shows, keeping its
+  // scroll and its opened rows; hidden, it is handed what it was last drawn from, so nothing redraws it.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   const name = opened?.member.name;
   const tab = useMemo(
@@ -176,23 +177,29 @@ export function ChatView(props: Props) {
   );
   const beside = useMemo(() => workspace?.(tab), [workspace, tab]);
   const kept = useRef(new Map<string, Kept>());
+  const drawn = useRef<{ agent: string; panel: ReactNode }>(undefined);
   const panel = () => {
-    if (!slot || !opened || !agentOpen?.shown) return null;
+    if (!slot || !opened) return null;
     const { agent } = opened.member;
-    const mine = kept.current.get(agent) ?? noneKept();
-    kept.current.set(agent, mine);
-    return createPortal(
-      <AgentPanel
-        key={agent}
-        glance={opened}
-        tasks={state.tasks}
-        members={state.members}
-        {...blocksOf(timeline.items, agent, mine)}
-        actions={stable}
-        onMessage={!archived && recipients.some((a) => a.id === agent) ? message : undefined}
-      />,
-      slot,
-    );
+    if (agentOpen?.shown || drawn.current?.agent !== agent) {
+      const mine = kept.current.get(agent) ?? noneKept();
+      kept.current.set(agent, mine);
+      drawn.current = {
+        agent,
+        panel: (
+          <AgentPanel
+            key={agent}
+            glance={opened}
+            tasks={state.tasks}
+            members={state.members}
+            {...blocksOf(timeline.items, agent, mine)}
+            actions={stable}
+            onMessage={!archived && recipients.some((a) => a.id === agent) ? message : undefined}
+          />
+        ),
+      };
+    }
+    return createPortal(drawn.current.panel, slot);
   };
 
   return (

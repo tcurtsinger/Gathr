@@ -247,7 +247,7 @@ outside closes it. Top to bottom:
   circle-exclamation for failed, a square for stopped. A done row is muted.
 - **Team**, with "2 working · 1 needs you" at the heading's right, a part omitted when it is zero.
   One line for each agent: its 24px initial (ringed while it works), its name, what it is doing in one
-  13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done"), cancelled ones left out and
+  13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done", "1 of 1 task done"), cancelled ones left out and
   nothing when it has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
   command); "Needs your approval" or "Asked you a question" in the attention colour; "Waiting for
   Juno", a wait on CI or a PR by name, Held, Paused, Stopped or a usage limit with its end; else Ready.
@@ -270,7 +270,8 @@ inferred state. Reduced motion stops spinners and rings.
 ### Agent panel
 
 An agent opens beside the chat as a workspace tab, after Tasks: its 18px initial and name, with a
-close button. One agent at a time: opening another replaces it. It opens from a step or a row in
+close button. One agent at a time: opening another replaces it. While another tab shows, the panel
+keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
 Summary, and from an agent's initial in the timeline. Where the workspace lies over the chat (1200px
 and below), so does the panel. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in

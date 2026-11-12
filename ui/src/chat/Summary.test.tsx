@@ -213,7 +213,7 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     ['MM', 'Made-up Member', 'Running a command', '1/21 of 2 tasks done'],
     ['ML', 'Made-up Lead', 'Waiting for Made-up Member'],
     ['K', 'Kit', 'Ready'],
-    ['L', 'Lane', 'Ready', '1/11 of 1 tasks done'],
+    ['L', 'Lane', 'Ready', '1/11 of 1 task done'],
   ]);
   // "1/2" is for the eye; a screen reader is told "1 of 2 tasks done", not a half.
   const count = document.querySelectorAll('.agent-count')[1];

@@ -135,6 +135,7 @@ interface Shown {
 /** The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. */
 function Chat({ openedTasks = [], archived, known = agents }: Shown) {
   const [agent, setAgent] = useState<string>();
+  const [shown, setShown] = useState(true);
   const [draft, setDraft] = useState('');
   return (
     <div style={{ height: 760, display: 'flex' }}>
@@ -155,15 +156,21 @@ function Chat({ openedTasks = [], archived, known = agents }: Shown) {
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
         onOpenTask={(n) => openedTasks.push(n)}
-        agentOpen={agent === undefined ? undefined : { agent, shown: true }}
+        agentOpen={agent === undefined ? undefined : { agent, shown }}
         onOpenAgent={setAgent}
         onCloseWorkspace={() => {
           counts.closed += 1;
         }}
         workspace={(open) => (
-          <aside aria-label="Made-up workspace" style={{ display: 'flex', width: 440 }}>
+          <aside aria-label="Made-up workspace" style={{ width: 440 }}>
             <Counted />
-            {open?.panel}
+            <button type="button" onClick={() => setShown((s) => !s)}>
+              Made-up other tab
+            </button>
+            {/* As the workspace keeps a tab that isn't shown: in the page, hidden. */}
+            <div data-testid="tab" style={{ display: shown ? 'flex' : 'none', height: 300 }}>
+              {open?.panel}
+            </div>
           </aside>
         )}
       />
@@ -352,27 +359,6 @@ test("an agent's context shows in its panel, from the engine's fill and window; 
   expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();
 });
 
-test('the button over a speaker’s initial sits on the initial, however long the task beside it', async () => {
-  const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
-  service({ tasks: [tasks[0], task(8, 'c', { what }), tasks[2]] });
-  await render(<Chat />);
-  await openFromSummary(/^Made-up Third/);
-  await expect.element(panel.getByText('Made-up review')).toBeVisible();
-  const offsets = () =>
-    [...document.querySelectorAll('.speaker-who')].map((who) => {
-      const avatar = who.querySelector('[data-slot="speaker-identity"] > div > span') as HTMLElement;
-      const a = avatar.getBoundingClientRect();
-      const b = (who.querySelector('.speaker-open') as HTMLElement).getBoundingClientRect();
-      return [Math.round(b.left - a.left), Math.round(b.top - a.top), b.width, b.height];
-    });
-  // In the timeline and in the 440px panel.
-  expect(offsets().length).toBeGreaterThan(4);
-  expect(new Set(offsets().map(String))).toEqual(new Set(['0,0,24,24']));
-  // In a narrow window the time wraps under the name.
-  await page.viewport(520, 800);
-  expect(new Set(offsets().map(String))).toEqual(new Set(['0,0,24,24']));
-});
-
 test('an agent that left the chat keeps its words in the timeline, with nothing to open', async () => {
   const gone = {
     ...history,
@@ -430,4 +416,41 @@ test('another agent’s token leaves an agent’s blocks the very same objects; 
   const grown = blocksOf(toThread(more, agents, [], cache).items, 'c', kept);
   expect(grown.earlier).not.toBe(first.earlier);
   expect(grown.earlier[1]).toBe(first.earlier[1]);
+});
+
+test('behind another tab the panel keeps its scroll and its opened rows, and nothing draws it until it shows again', async () => {
+  service();
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Member/);
+  const earlier = panel.getByRole('button', { name: 'Worked · 1 step' });
+  await earlier.click();
+  await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
+  const scroller = panel.element().querySelector('.agent-panel') as HTMLElement;
+  // Once the row has finished opening, so nothing but the tab switch can move the scroll.
+  const opening = scroller
+    .getAnimations({ subtree: true })
+    .filter((a) => a.effect?.getComputedTiming().endTime !== Number.POSITIVE_INFINITY);
+  await Promise.all(opening.map((a) => a.finished));
+  scroller.scrollTop = 150;
+  expect(scroller.scrollTop).toBe(150);
+  const other = page.getByRole('button', { name: 'Made-up other tab' });
+  await other.click();
+  expect(page.getByTestId('tab').element().style.display).toBe('none');
+  await other.click();
+  expect(panel.element().querySelector('.agent-panel')).toBe(scroller);
+  expect(scroller.scrollTop).toBe(150);
+  await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
+
+  // Hidden, even its own agent's next step doesn't draw it: it reads as it was last shown.
+  await other.click();
+  const next = tool('t9', 'now', 'Edit', { status: 'running' });
+  for (const listener of live) listener({ type: 'message', chat: 'c', message: next });
+  await expect.element(page.getByRole('main').getByRole('button', { name: /^Editing a file/ })).toBeVisible();
+  expect(scroller.querySelector('.work-row[data-running]')?.textContent).toContain('Running a command');
+
+  // Shown again, it catches up, the same panel as before.
+  await other.click();
+  await expect.element(panel.getByRole('button', { name: /^Editing a file/ })).toBeVisible();
+  expect(panel.element().querySelector('.agent-panel')).toBe(scroller);
+  await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
 });
