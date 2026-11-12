@@ -112,3 +112,18 @@ test('a reply reads tight: bullets hang, items 6px apart, paragraphs 16px, headi
   const code = getComputedStyle(root.querySelector('[data-streamdown="inline-code"]') as HTMLElement);
   expect([code.fontSize, code.fontWeight]).toEqual(['14px', '500']);
 });
+
+// Vale's review of #154: an item written with two paragraphs keeps them as two lines, 6px apart (the plan's
+// choice 2); Streamdown draws an item's paragraphs inline.
+test("a loose list item's paragraphs stay on their own lines, 6px apart", async () => {
+  const text = '- First paragraph of the item.\n\n  Second paragraph of the same item.\n- Two';
+  const screen = await render(
+    <div style={{ width: 600 }}>
+      <View state={saved(text)} />
+    </div>,
+  );
+  const root = screen.container.querySelector('.markdown') as HTMLElement;
+  await expect.poll(() => root.querySelectorAll('li > p').length).toBe(2);
+  const [one, two] = [...root.querySelectorAll('li > p')].map((p) => p.getBoundingClientRect());
+  expect(Math.round(two.top - one.bottom)).toBe(6);
+});

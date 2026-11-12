@@ -35,6 +35,10 @@
 .markdown li {
   padding-block: 0;
 }
+/* An item written with two paragraphs keeps them as two (Streamdown draws them inline); one alone is unwrapped. */
+.markdown li > p {
+  display: block;
+}
 .markdown p + p {
   margin-top: 16px;
 }
