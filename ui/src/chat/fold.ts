@@ -61,7 +61,8 @@ export function duration(ms: number): string {
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
-interface Given {
+/** The task a give_task call made. */
+export interface Given {
   task: Task;
   /** Its owner's name. */
   owner?: string;

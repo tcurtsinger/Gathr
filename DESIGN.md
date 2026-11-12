@@ -189,14 +189,19 @@ hairline, 16px radius, 14px 16px padding, 14px between messages, text at 15px. E
 sits beside the message it answers. Gathr's copy of a message in the receiver's turn is never
 shown. The reviewer's agreement stays a named reaction; a question stays a reply.
 
-Gathr's notes are one-line events, only for what belongs to no turn's row: "Vale completed:
-Review PR #138", "You answered Orin: Hold the button", "Orin asked you: Ship it?", and a
-wake-up in Gathr's own words. 13px, muted, the lead-in in the foreground colour at 500, an
-icon first, no Gathr speaker. Closed, a line stays on one line, with an ellipsis (…) for
-overflow. Click or Enter opens it in place: the whole line, the reason or the question, and
-Open task. Click or Enter again closes it. Keyboard focus uses the hover highlight, without
-an outline or ring. The message that gives a member its task is not drawn: the member's
-header says the task and the giver's row lists it.
+Everything Gathr tells an agent is a one-line event, with two exceptions that are never
+drawn: the brief of a member's own task (Gathr's message that opens with "Task #<number>
+from", in a turn on that task), because the member's header says the task and the giver's row
+lists it; and Gathr's copy of an agent's message. A hear-back draws one line for each task it
+reports, in the state that hear-back gave, not the task's state now: "Vale completed: Review
+PR #138", "Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix
+up to date", also failed, stopped and cancelled. The person's answer reads "You answered
+Orin: Hold the button", a question "Orin asked you: Ship it?". Anything else (a wait's
+result, a wake-up, a stale-task nudge, a usage interruption) is drawn in Gathr's own words.
+13px, muted, the lead-in in the foreground colour at 500, an icon first, no Gathr speaker.
+Closed, a line stays on one line, with an ellipsis (…) for overflow. Click or Enter opens it
+in place: the whole line, the reason or the question, and Open task. Click or Enter again
+closes it. Keyboard focus uses the hover highlight, without an outline or ring.
 
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
 composer: an attention border at 50%, 16px radius, the popover surface; the agent's initial,
@@ -206,7 +211,7 @@ focuses it. An answer being sent leaves the dock; a refused answer brings it bac
 
 Working appears after the latest message while any turn runs: an attention spinner, Working,
 overlapping 18px initials for agents with running turns, and the time since the longest-running
-of those turns began. Never show a queued or pending task as a working agent.
+of those turns began, in the format a running row uses (4m 02s). Never show a queued or pending task as a working agent.
 
 ### Agent plan and Summary
 

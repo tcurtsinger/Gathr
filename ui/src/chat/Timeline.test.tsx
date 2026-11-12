@@ -157,12 +157,17 @@ test('an event line opens in place to what more there is, and its task opens fro
     ...empty,
     members,
     turns: { lead: turn('lead', 'a', 0), back: turn('back', 'a', 1, { answers: 'lead' }) },
-    tasks: [task(7, { reason: 'Made-up outcome' })],
+    tasks: [task(7, {})],
     messages: [
       said('m1', 'lead', 'Made-up hand-off'),
-      said('g', 'back', 'The task you gave is settled:\n- #7 Made-up Member, Made-up task 7: done', {
-        role: 'gathr',
-      }),
+      said(
+        'g',
+        'back',
+        'The task you gave is settled:\n- #7 Made-up Member, Made-up task 7: done: Made-up outcome',
+        {
+          role: 'gathr',
+        },
+      ),
       said('m2', 'back', 'Made-up wrap-up'),
     ],
   };
@@ -180,8 +185,65 @@ test('an event line opens in place to what more there is, and its task opens fro
   expect(opened).toEqual([7]);
 });
 
+test('two event lines that read the same open one at a time, each to its own question', async () => {
+  const errors = vi.spyOn(console, 'error');
+  const asked = {
+    owner: null,
+    kind: 'person' as const,
+    state: 'done' as const,
+    reason: 'Done',
+    heard_in: 'h',
+  };
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { lead: turn('lead', 'a', 0), h: turn('h', 'a', 1, { answers: 'lead' }) },
+    tasks: [
+      task(5, { ...asked, what: 'Made-up first question' }),
+      task(6, { ...asked, what: 'Made-up second one' }),
+    ],
+    messages: [
+      said('g', 'h', 'The person answered: made-up', { role: 'gathr' }),
+      said('m', 'h', 'Made-up thanks'),
+    ],
+  };
+  const screen = await render(<View state={state} />);
+  const lines = screen.getByRole('button', { name: 'You answered Made-up Lead: Done' });
+  await expect.element(lines.nth(1)).toBeVisible();
+  await lines.nth(1).click();
+  await expect.element(screen.getByText('Question #6: Made-up second one')).toBeVisible();
+  expect(screen.getByText('Question #5: Made-up first question').query()).toBeNull();
+  // React names lines it can't tell apart.
+  expect(errors.mock.calls.filter(([said]) => String(said).includes('same key'))).toEqual([]);
+  errors.mockRestore();
+});
+
+test('a member’s header stays one line however long its task is, with the time in view', async () => {
+  const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { work: turn('work', 'b', 0, { task: 7 }) },
+    tasks: [task(7, { what })],
+    messages: [said('m', 'work', 'Made-up finding')],
+  };
+  const screen = await render(<View state={state} />);
+  await expect.element(screen.getByText('Made-up finding')).toBeVisible();
+  const header = document.querySelector('.speaker') as HTMLElement;
+  expect(header.textContent).toContain(`on ${what}`);
+  // One line: the 24px avatar is its tallest part.
+  expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(28);
+  const name = screen.getByText('Made-up Member', { exact: true }).element();
+  expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth);
+  const column = (header.closest('.reply') as HTMLElement).getBoundingClientRect();
+  expect((header.querySelector('time') as HTMLElement).getBoundingClientRect().right).toBeLessThanOrEqual(
+    column.right,
+  );
+});
+
 test('waiting approvals dock above the composer: the oldest and how many, with Show, Deny and Allow', async () => {
   const posted: { path: string; allow: boolean }[] = [];
+  const settle: ((answer: Response) => void)[] = [];
   const history = {
     chat: 'c',
     members,
@@ -200,8 +262,8 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
   vi.stubGlobal('fetch', (path: string, init?: RequestInit) => {
     if (init?.method === 'POST' && path.includes('/approvals/')) {
       posted.push({ path, allow: JSON.parse(String(init.body)).allow });
-      // Never answered: the answer stays in flight.
-      return new Promise<Response>(() => {});
+      // Answered when the test says: until then the answer is in flight.
+      return new Promise<Response>((answer) => settle.push(answer));
     }
     const body = path.endsWith('/tasks') ? { tasks: [], waits: [] } : path === '/api/pauses' ? {} : history;
     return Promise.resolve(new Response(JSON.stringify(body)));
@@ -244,10 +306,22 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
   // The one being sent has left the dock; the next is the lead's, which names its tool.
   await expect.poll(() => dock.element().textContent).toContain('Needs you · 1 of 1');
   expect(dock.element().textContent).toContain('Made-up Lead wants to run Write');
+
+  // The service refuses the first answer: it is back in the dock, the oldest again, to answer once more.
+  settle[0](
+    new Response(JSON.stringify({ error: 'Answer failed', why: 'made-up reason', ref: 'r1' }), {
+      status: 500,
+    }),
+  );
+  await expect.poll(() => dock.element().textContent).toContain('Needs you · 1 of 2');
+  expect(dock.element().textContent).toContain('made-up --first');
+  await dock.getByRole('button', { name: 'Allow' }).click();
+  await expect.poll(() => dock.element().textContent).toContain('Made-up Lead wants to run Write');
   await dock.getByRole('button', { name: 'Allow' }).click();
   await expect.element(dock).not.toBeInTheDocument();
   expect(posted).toEqual([
     { path: '/api/chats/c/approvals/q1', allow: false },
+    { path: '/api/chats/c/approvals/q1', allow: true },
     { path: '/api/chats/c/approvals/q2', allow: true },
   ]);
 });

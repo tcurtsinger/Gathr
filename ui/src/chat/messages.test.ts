@@ -320,7 +320,6 @@ test('messages between agents are their own block, shared while they follow each
 test('Gathr’s notes are one-line events: a task heard back, the person’s answer, a question, a wake-up', () => {
   const state = round();
   const asked = { owner: null, giver: 'mira', kind: 'person' as const };
-  state.tasks[0].reason = 'Approved at head 9a41c07';
   state.tasks.push(
     task(5, 'mira', 'ask', { ...asked, what: 'Which notice?', reason: 'B: two sections', heard_in: 'heard' }),
     task(6, 'mira', 'ask', { ...asked, state: 'cancelled', heard_in: 'heard' }),
@@ -330,7 +329,11 @@ test('Gathr’s notes are one-line events: a task heard back, the person’s ans
   state.turns.heard = { ...turn('heard', 'mira', { answers: 'ask' }), position: 6 };
   state.turns.woke = { ...turn('woke', 'mira'), position: 7 };
   state.messages.push(
-    said('back', 'gathr', 'The task you gave is settled:\n- #1 Rowan, Task 1: done\nRead replies.'),
+    said(
+      'back',
+      'gathr',
+      'The task you gave is settled:\n- #1 Rowan, Task 1: done: Approved at head 9a41c07\nRead.',
+    ),
     said('back', 'assistant', 'Rowan is done'),
     said('heard', 'gathr', 'The person answered:\n- #5 Which notice?: B: two sections\nContinue.'),
     said('heard', 'assistant', 'B it is'),
@@ -405,4 +408,121 @@ test('a search hit opens at its message: the text in its block, or the block for
   const gave = state.messages.find((m) => m.role === 'gathr' && m.turn === 'rowan') as Message;
   expect(find(gave.id)).toEqual({ id: 'a-rowan' });
   expect(find('gone')).toBeUndefined();
+});
+
+const lines = (state: ChatState) =>
+  events(view(state).items).map((e) => [e.who, e.text, e.more].filter(Boolean));
+/** Mira hears back in a turn that answers `ask`, with these words from Gathr. */
+function heardBack(state: ChatState, id: string, body: string, position: number) {
+  state.turns[id] = { ...turn(id, 'mira', { answers: 'ask' }), position };
+  state.messages.push(said(id, 'gathr', body), said(id, 'assistant', 'Noted'));
+}
+
+test('a hear-back reads as its own lines say, not as the task stands now', () => {
+  const state = round();
+  // Task 1 came back blocked, then done; task 2 is held on its merge. All are done by now.
+  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(12, 'lane', 'ask')];
+  heardBack(
+    state,
+    'b1',
+    'Where the task you gave stands:\n- #1 Rowan, Task 1: blocked: needs the key\nRead replies.',
+    5,
+  );
+  heardBack(
+    state,
+    'b2',
+    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #2 Kit, Task 2: held: see #12 for the merge\nRead.',
+    6,
+  );
+  heardBack(state, 'b3', 'The task you gave is settled:\n- #12 Lane, Task 12: failed\nRead replies.', 7);
+  expect(lines(state)).toEqual([
+    ['Rowan is blocked:', 'Task 1', 'Task #1. needs the key'],
+    ['Rowan completed:', 'Task 1', 'Task #1'],
+    // A number in a reason is not a task the hear-back reports.
+    ['Kit finished, waiting to merge:', 'Task 2', 'Task #2. see #12 for the merge'],
+    // #12, not #1.
+    ['Lane failed:', 'Task 12', 'Task #12'],
+  ]);
+});
+
+test('what Gathr says that is not a hear-back is drawn in its own words, never replaced or dropped', () => {
+  const state = round();
+  state.tasks.push(task(54, 'kit', 'ask', { what: 'Open the PR' }));
+  // A wait's result names a number that is also a task the answered turn gave.
+  const woke = 'Your wait ended: CI on #54 at abc1234 finished: passed. You planned to do this: merge.';
+  heardBack(state, 'woke', woke, 5);
+  // A member on its task is told its turn was interrupted; only the task's own brief stays hidden.
+  const usage = "The account's usage limit interrupted your turn. Check what is done first.";
+  state.turns.again = { ...turn('again', 'kit', { task: 2, answers: 'ask' }), position: 6 };
+  state.messages.push(said('again', 'gathr', usage), said('again', 'assistant', 'Carrying on'));
+  state.turns.redo = { ...turn('redo', 'kit', { task: 2, answers: 'ask' }), position: 7 };
+  state.messages.push(said('redo', 'gathr', 'Task #2 from Mira: Task 2\nContinue from here: half done.'));
+  state.messages.push(said('redo', 'assistant', 'Done now'));
+  expect(lines(state)).toEqual([[woke], [usage]]);
+  expect(ids(view(state).items).slice(-5)).toEqual([
+    'woke-gathr',
+    'a-woke',
+    'again-gathr',
+    'a-again',
+    'a-redo',
+  ]);
+});
+
+test('a hit on a task brief whose member has not started opens at the turn that gave the task', () => {
+  const state = round();
+  state.turns.wait = turn('wait', 'lane', { task: 3, status: 'queued', held: 'pause' });
+  state.tasks.push(task(3, 'lane', 'ask', { state: 'ready' }));
+  const brief = said('wait', 'gathr', 'Task #3 from Mira: Task 3');
+  state.messages.push(brief);
+  expect(view(state).find(brief.id)).toEqual({ id: 'a-ask' });
+});
+
+test('only an answer to a message addressed to it moves a block below what it sent', () => {
+  const state = round();
+  // Kit writes to Rowan; Lane, who was not written to, works and then writes to Sol.
+  const first: Message = { ...said('kit', 'assistant', 'Kit to Rowan'), id: 'first-1', to: 'rowan' };
+  state.turns.other = { ...turn('other', 'lane'), position: 5 };
+  const second: Message = { ...said('other', 'assistant', 'Lane to Sol'), id: 'second-1', to: 'sol' };
+  state.messages.push(first, tool('other', 'o1', 'mcp__gathr__message'), second);
+  expect(ids(view(state).items).slice(-3)).toEqual(['first-1', 'a-other', 'second-1']);
+});
+
+test('a block that did not change is the same object on the next draw; a changed one is new', () => {
+  const state = round();
+  state.messages.push(tool('kit', 'k1', 'Bash', { status: 'running' }));
+  const cache = new Map();
+  const before = toThread(state, agents, [], cache).items;
+  const after = toThread({ ...state, partial: { rowan: 'More' } }, agents, [], cache).items;
+  const same = before.map((m, i) => m === after[i]);
+  // Only Rowan's block, now streaming, was made again: the person's messages are kept too.
+  expect(same).toEqual(ids(before).map((id) => id !== 'a-rowan'));
+
+  const ended = { ...state, messages: [...state.messages.slice(0, -1), tool('kit', 'k1', 'Bash')] };
+  const next = toThread(ended, agents, [], cache).items;
+  expect(next.at(-1)).not.toBe(before.at(-1));
+  expect(custom(next.at(-1)).work?.steps.at(-1)).toMatchObject({ state: 'ok' });
+});
+
+test('a turn with only a notice has its block after the message that began it; one still waiting has none', () => {
+  const state = round();
+  state.turns.bad = { ...turn('bad', 'mira', { status: 'failed' }), position: 5 };
+  state.turns.queued = turn('queued', 'mira', { status: 'queued', held: 'pause' });
+  state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped' }), position: 6 };
+  state.messages.push(
+    said('bad', 'user', 'Try this'),
+    said('queued', 'user', 'And this'),
+    said('cut', 'user', '@Lane'),
+  );
+  const { items } = view(state);
+  expect(ids(items).slice(-5)).toEqual(['bad-user', 'a-bad', 'queued-user', 'cut-user', 'a-cut']);
+  expect(custom(byId(items, 'a-bad')).notice).toMatchObject({ replied: false });
+  expect(text(byId(items, 'a-cut'))).toBe('');
+});
+
+test('the questions a split turn asked show once, after its first block', () => {
+  const state = round();
+  state.turns.kit.status = 'running';
+  state.tasks.push(task(9, 'kit', 'kit', { owner: null, giver: 'kit', kind: 'person', what: 'Ship it?' }));
+  state.messages.push(said('kit', 'user', '@Kit one thing'), said('kit', 'assistant', 'Kept'));
+  expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'asked-kit', 'kit-user', 'a-kit-1']);
 });

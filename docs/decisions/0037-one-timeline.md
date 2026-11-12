@@ -24,11 +24,13 @@ recipient rules of 0015 and 0028 stand until their own slices of the redesign.
 - **Agents' messages to each other are their own block,** tinted, each headed "Juno to Orin" with its
   time. Messages that follow each other share one block, and an answer sits beside the message it
   answers. Gathr's copy of a message in the receiver's turn stays hidden.
-- **Gathr's notes are one-line events,** only for what belongs to no turn's row: a task heard back
-  ("Vale completed: Review PR #138"), the person's answer ("You answered Orin: Hold it"), a question to
-  the person, a wake-up. No "Gathr" speaker. A line opens in place to the reason or the question, and to
-  its task. The message that gives a member its task isn't drawn: the member's block is headed by it, and
-  the giver's row lists it.
+- **What Gathr tells an agent is a one-line event,** with no "Gathr" speaker. A hear-back draws a line
+  for each task it reports, in the state that hear-back gave ("Vale completed: Review PR #138", "Cass is
+  blocked: Fix the build"); the person's answer reads "You answered Orin: Hold it"; a question to the
+  person "Orin asked you: Ship it?"; anything else (a wait's result, a wake-up, a nudge) is drawn in
+  Gathr's own words. A line opens in place to the reason or the question, and to its task. Two things
+  are never drawn: the brief of a member's own task, because the member's block is headed by the task
+  and the giver's row lists it, and Gathr's copy of an agent's message.
 - **Approvals** keep their card where the agent asked, and also dock above the composer: the oldest one
   waiting, how many wait, and Show, Deny and Allow.
 - **"Working"** stays after the latest message while any turn runs: who is at work, and for how long.

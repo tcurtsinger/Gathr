@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Agent, Failure, Message, Role, Task, ToolBody, Turn } from '../api';
-import { fold, type Work } from './fold';
+import type { Agent, Failure, Message, Role, ToolBody, Turn } from '../api';
+import { fold, type Given, type Work } from './fold';
+import { hearBack, outcome } from './hearback';
 import { place } from './order';
 import type { Approval, ChatState } from './state';
 import { type Team, team } from './team';
@@ -91,11 +92,12 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  * so turns streaming at once never interleave. Only a person's message sent into a running turn splits it,
  * one block before and one after; the last holds the streaming text, the notice and the approvals.
  * Messages between agents are their own block where they were sent, shared while they follow each other;
- * Gathr's copy of one in the receiver's turn isn't shown. Of what Gathr told an agent, only what belongs
- * to no turn's row is drawn, as one-line events.
+ * Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an agent is drawn as one-line
+ * events, all but the brief of a member's own task.
  *
  * A block keeps one id from its first streamed text to its saved messages, so nothing remounts when a
- * stream ends, and a block that didn't change keeps the same object, so assistant-ui doesn't convert it again.
+ * stream ends. One that didn't change is the same object as on the draw before (`cache`), so the thread
+ * can tell which blocks to convert and draw again.
  */
 export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[], cache: Cache): Timeline {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
@@ -131,7 +133,10 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
     }
     endTalk();
     if (g.kind === 'person') {
-      add(toUser(g.msgs[0]), [g]);
+      add(
+        kept(cache, g.key, '', () => toUser(g.msgs[0])),
+        [g],
+      );
       speaker = undefined;
       continue;
     }
@@ -149,7 +154,10 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   endTalk();
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
-  for (const f of unsent) if (!f.failure.ref || !told.has(f.failure.ref)) items.push(failed(f));
+  for (const f of unsent) {
+    if (f.failure.ref && told.has(f.failure.ref)) continue;
+    items.push(kept(cache, `f-${f.id}`, `${f.text}|${f.failure.ref}|${f.failure.why}`, () => failed(f)));
+  }
 
   const find = (message: string): Spot | undefined => {
     const hit = state.messages.find((x) => x.id === message);
@@ -164,9 +172,12 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
       return { id: at.id, text: m.body as string, nth };
     }
     if (at) return { id: at.id };
-    // What Gathr told an agent and isn't drawn (the task it gave): its turn's block stands for it.
-    const stand = m.turn && groups.find((g) => g.turn === m.turn && shown.has(g));
-    return stand ? { id: shown.get(stand)?.id as string } : undefined;
+    // A task's brief isn't drawn: its turn's block stands for it, or the giver's until that turn starts.
+    const task = state.turns[m.turn ?? '']?.task;
+    const gave = task == null ? undefined : state.tasks.find((t) => t.number === task)?.given_in;
+    const blocks = groups.filter((g) => g.kind === 'reply' && shown.has(g));
+    const stand = [m.turn, gave].flatMap((turn) => blocks.find((g) => !!turn && g.turn === turn) ?? []);
+    return stand.length ? { id: shown.get(stand[0])?.id as string } : undefined;
   };
   return { items, find };
 }
@@ -197,7 +208,11 @@ function grouped(state: ChatState): Group[] {
       // An answer follows the message it answers: a turn that has only worked since that message
       // shows after what it sent, so the talk reads as one block.
       const sender = open.get(m.turn ?? '');
-      const answering = groups.at(-1) === sender && groups.at(-2)?.kind === 'to';
+      const asked = groups.at(-2);
+      const answering =
+        groups.at(-1) === sender &&
+        asked?.kind === 'to' &&
+        asked.msgs[0].to === state.turns[m.turn ?? '']?.agent;
       if (answering && sender?.msgs.every((x) => x.kind === 'tool')) sender.at = at + 0.5;
       groups.push({ ...one, key: m.id, kind: 'to', bound: false });
     } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
@@ -231,7 +246,7 @@ function givenBy(state: ChatState, crew: Team) {
     if (!m.turn || body?.tool !== 'mcp__gathr__give_task' || body.status !== 'ok') continue;
     calls.set(m.turn, [...(calls.get(m.turn) ?? []), m]);
   }
-  const gave = new Map<string, { task: Task; owner?: string }>();
+  const gave = new Map<string, Given>();
   for (const [turn, made] of calls) {
     const tasks = state.tasks
       .filter((t) => t.given_in === turn && t.kind !== 'person')
@@ -248,7 +263,7 @@ function block(
   group: Group,
   state: ChatState,
   crew: Team,
-  gave: ReturnType<typeof givenBy>,
+  gave: Map<string, Given>,
   { on, head }: { on?: string; head: boolean },
 ) {
   const id = group.turn;
@@ -281,7 +296,7 @@ function toReply(
   partial: string,
   turn: Turn | undefined,
   custom: Custom,
-  gave: ReturnType<typeof givenBy>,
+  gave: Map<string, Given>,
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
@@ -327,26 +342,17 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
   return value;
 }
 
-const SETTLED: Partial<Record<Task['state'], string>> = {
-  done: 'completed',
-  failed: 'failed',
-  stopped: 'stopped',
-  cancelled: 'cancelled',
-  blocked: 'is blocked on',
-};
-
 /**
- * What Gathr told an agent, as the lines worth drawing: the person's answers it heard, the tasks a
- * hear-back reports, else its own words. None for what opens a member's turn on a task: the member's
+ * What Gathr told an agent, as lines: the person's answers it heard, the tasks a hear-back reports as
+ * that hear-back said them, else its own words. None for the brief of the turn's own task: the member's
  * block is headed by the task.
  */
 function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
   const m = group.msgs[0];
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
-  if (!turn) return [{ kind: 'note', text }];
   const answers = state.tasks
-    .filter((t) => t.kind === 'person' && t.state === 'done' && t.heard_in === turn.id)
+    .filter((t) => t.kind === 'person' && t.state === 'done' && !!turn && t.heard_in === turn.id)
     .map(
       (t): EventLine => ({
         kind: 'answer',
@@ -357,25 +363,19 @@ function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
       }),
     );
   if (answers.length) return answers;
-  // A hear-back names each task it reports, of the ones the turn it answers gave; its own task's
-  // number is in the message that gave it.
-  const reported = (t: Task) =>
-    t.kind !== 'person' &&
-    t.given_in === turn.answers &&
-    t.number !== turn.task &&
-    text.includes(`#${t.number} `);
-  const back = state.tasks.filter(reported).map(
-    (t): EventLine => ({
+  const back = hearBack(text, state.tasks)?.map(
+    ({ task, state: how, reason }): EventLine => ({
       kind: 'task',
-      who: `${crew.name(t.owner) ?? 'An agent'} ${SETTLED[t.state] ?? 'is working on'}:`,
-      text: t.what,
-      more: [`Task #${t.number}`, t.reason].filter(Boolean).join('. '),
-      task: t.number,
+      who: `${crew.name(task.owner) ?? 'An agent'} ${outcome(how)}:`,
+      text: task.what,
+      more: [`Task #${task.number}`, reason].filter(Boolean).join('. '),
+      task: task.number,
     }),
   );
-  if (back.length) return back;
-  // What opens a turn on a task is the task itself, or a wake-up to carry on with it.
-  return turn.task != null && group.bound ? [] : [{ kind: 'note', text }];
+  if (back) return back;
+  // The service's brief (tasks/words.rs `brief`) opens with the task's number and its giver.
+  const brief = turn?.task != null && text.startsWith(`Task #${turn.task} from `);
+  return brief ? [] : [{ kind: 'note', text }];
 }
 
 /** The questions to the person a turn asked. */
@@ -391,6 +391,15 @@ function questions(state: ChatState, turn: string, crew: Team): EventLine[] {
         task: t.number,
       }),
     );
+}
+
+/** The block made on an earlier draw, while what it's made from (`sig`) is the same. */
+function kept(cache: Cache, key: string, sig: string, make: () => ThreadMessageLike): ThreadMessageLike {
+  const hit = cache.get(key);
+  if (hit?.sig === sig) return hit.value;
+  const value = make();
+  cache.set(key, { sig, value });
+  return value;
 }
 
 function eventsOf(cache: Cache, key: string, events: EventLine[]): ThreadMessageLike {

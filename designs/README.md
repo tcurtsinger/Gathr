@@ -116,7 +116,8 @@ The current reference and retired pages are listed in `designs/README.md`. Run `
 (uses the UI dependencies).
 Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
 Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
-`designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
+`designs/components.css` and `designs/system.html` define shared patterns, all but `system.html`'s Team messages
+section, which is the retired split (0037). Keep them aligned when a pattern changes.
 The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
 Team messages use 0037's one timeline with Summary; the split preview is history. `node designs/check-team.cjs` checks its running, finished and late replies,
 split retention, independent scrolling, plan/Summary progress, keyboard controls and draft retention in both sizes and themes (uses the UI dependencies).

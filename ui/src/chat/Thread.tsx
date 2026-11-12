@@ -73,6 +73,10 @@ export interface Target {
   at: number;
 }
 
+// One function for the life of the page: the runtime keeps what it converted only while its converter is
+// the same one, and would convert every message again on each streamed token otherwise.
+const asIs = (m: ThreadMessageLike) => m;
+
 /** The chat's timeline, drawn by assistant-ui's thread over Gathr's own chat state (0030, 0037). */
 export function Thread(props: Props) {
   const { running, actions, header, after, empty, children, target } = props;
@@ -82,7 +86,7 @@ export function Thread(props: Props) {
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
-    convertMessage: (m) => m,
+    convertMessage: asIs,
     isRunning: running,
     // The composer is Gathr's own and sends through useChat, never through the runtime.
     onNew: async () => {},

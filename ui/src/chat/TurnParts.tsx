@@ -10,7 +10,7 @@ import {
   PenLine,
   X,
 } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -18,9 +18,10 @@ import {
 } from '@/components/assistant-ui/elements/collapsible-root';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolGroupContent, ToolGroupRoot } from '@/components/assistant-ui/elements/tool-group.aui';
-import { duration, type Step, type Work } from './fold';
+import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { clock } from './team';
+import { Elapsed } from './Working';
 import './team.css';
 
 /** The text a search hit opened at. */
@@ -63,7 +64,7 @@ export function WorkRow({ work, onOpenTask }: { work: Work; onOpenTask: (task: n
           </span>
           <span className="work-notes">
             {work.notes.map((note) => ` · ${note}`)}
-            {work.running && work.since !== undefined && <Elapsed since={work.since} />}
+            {work.running && work.since !== undefined && <Elapsed since={work.since} lead=" " />}
           </span>
         </span>
       </CollapsibleTrigger>
@@ -117,17 +118,6 @@ function StepLine({
   );
 }
 
-/** How long a running row has worked, redrawn each second: " · 4m 02s". */
-function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, []);
-  const took = duration(now - since);
-  return took ? ` · ${took}` : null;
-}
-
 /** Messages between agents, on one surface, so talk reads as talk; `text` draws the nth one's words. */
 export function Exchange({
   said,
@@ -154,8 +144,9 @@ const ICON = { task: CircleCheck, answer: PenLine, question: CircleHelp, note: B
 export function Events({ events, onOpenTask }: { events: EventLine[]; onOpenTask: (task: number) => void }) {
   return (
     <MessagePrimitive.Root className="events">
-      {events.map((e) => (
-        <Event key={`${e.who} ${e.text}`} event={e} onOpenTask={onOpenTask} />
+      {events.map((e, index) => (
+        // Two lines can read the same ("You answered Orin: Done"): its task tells them apart, else its place.
+        <Event key={e.task ?? `at-${index}`} event={e} onOpenTask={onOpenTask} />
       ))}
     </MessagePrimitive.Root>
   );

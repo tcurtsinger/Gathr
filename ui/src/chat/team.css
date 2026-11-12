@@ -294,18 +294,22 @@ button.work-detail:hover {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-/* One line: the name whole, what it's on cut with … (the registry's identity wraps by default). */
+/*
+ * One line: the name whole, what it's on cut with …. The registry's identity wraps by default and takes
+ * no class for its parts, so these reach its name and detail by their place (the avatar is left alone);
+ * Timeline.test.tsx fails if a long header grows past one line.
+ */
 .speaker [data-slot="speaker-identity"] {
   flex: 1;
 }
-.speaker [data-slot="speaker-identity"] span {
+.speaker [data-slot="speaker-identity"] > div > span:last-child {
   flex-wrap: nowrap;
   white-space: nowrap;
 }
-.speaker [data-slot="speaker-identity"] span > span:first-child {
+.speaker [data-slot="speaker-identity"] > div > span:last-child > span:first-child {
   flex: none;
 }
-.speaker [data-slot="speaker-identity"] span > span:last-child:not(:first-child) {
+.speaker [data-slot="speaker-identity"] > div > span:last-child > span + span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -39,11 +39,11 @@
   r: 1.4px;
 }
 /* Pressed: Close while the workspace is open. */
-.head-button:is([aria-pressed="true"], .workspace-toggle[aria-expanded="true"]) {
+.head-button.workspace-toggle[aria-expanded="true"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
-.head-button:is([aria-pressed="true"], .workspace-toggle[aria-expanded="true"]):hover {
+.head-button.workspace-toggle[aria-expanded="true"]:hover {
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 .head-button > .attention {

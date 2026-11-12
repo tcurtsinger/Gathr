@@ -1,6 +1,7 @@
 import { LoaderIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Member } from '../api';
+import { duration } from './fold';
 import type { ChatState } from './state';
 import { list } from './team';
 import './team.css';
@@ -30,7 +31,11 @@ export function Working({ state }: { state: ChatState }) {
       </span>
       Working
       <Initials members={busy.members} />
-      {busy.since !== undefined && <Elapsed since={busy.since} />}
+      {busy.since !== undefined && (
+        <span className="working-time">
+          <Elapsed since={busy.since} />
+        </span>
+      )}
     </p>
   );
 }
@@ -57,14 +62,13 @@ export const initials = (name: string) =>
     .map((w) => [...w][0]?.toUpperCase())
     .join('');
 
-/** Time since it began, redrawn each minute: "· 38m", "· 2h 5m". */
-function Elapsed({ since }: { since: number }) {
+/** How long something has run, redrawn each second: "· 4m 02s"; nothing in its first second. */
+export function Elapsed({ since, lead = '' }: { since: number; lead?: string }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 60_000);
+    const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
-  const minutes = Math.max(1, Math.floor((now - since) / 60_000));
-  const text = minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
-  return <span className="working-time">· {text}</span>;
+  const took = duration(now - since);
+  return took ? `${lead}· ${took}` : null;
 }
