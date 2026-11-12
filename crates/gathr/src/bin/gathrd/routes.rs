@@ -24,6 +24,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}", get(history).patch(crate::team::change))
         .route("/api/chats/{chat}/messages", post(send))
         .route("/api/chats/{chat}/stop", post(stop))
+        .route("/api/chats/{chat}/agents/{agent}/compact", post(compact))
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
         .route("/api/chats/{chat}/turns", get(turns))
         .route("/api/trace/{reference}", get(trace))
@@ -170,6 +171,40 @@ async fn send(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",
             "the chat's task ended",
+            &t.0,
+        )),
+    }
+}
+
+/// Compact (compaction plan, K4): the agent's conversation in the chat, after what it's doing.
+async fn compact(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path((chat, agent)): Path<(String, String)>,
+) -> Answer {
+    known(&s, &t, &chat).await?;
+    crate::agents::find(&s, &t, &agent, "Compact failed").await?;
+    let id = chat.clone();
+    let _ = db(&s, &t, "Compact failed", move |conn| {
+        gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
+    })
+    .await?;
+    let (reply, answer) = oneshot::channel();
+    let task = s.chats.task(&chat, Some(&agent));
+    let trace = t.0.clone();
+    let _ = task.send(Cmd::Compact { chat, trace, reply });
+    match answer.await {
+        Ok(Ok(compacting)) => Ok(Json(compacting)),
+        Ok(Err(failed)) => Err(fail(
+            StatusCode::CONFLICT,
+            "Compact failed",
+            &failed.why,
+            &failed.trace,
+        )),
+        Err(_) => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Compact failed",
+            "the agent's task ended",
             &t.0,
         )),
     }

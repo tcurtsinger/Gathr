@@ -154,7 +154,7 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
         // Agents get only what Gathr gives them (0024), as SerenityOS starts Claude Code: no
         // skills or commands, no MCP servers but Gathr's, and no user settings, which is where
         // plugins (synced from claude.ai too), their hooks and the person's sub-agents come from.
-        "--disable-slash-commands",
+        NO_SLASH,
         "--strict-mcp-config",
         "--setting-sources",
         "project,local",
@@ -178,6 +178,9 @@ pub fn args(session: Session<'_>, assigned: Assigned<'_>, hook: Option<&str>) ->
     }
     args
 }
+
+/// Keeps slash commands off: Gathr leaves it out only to run `/compact` (compaction plan, K4).
+pub const NO_SLASH: &str = "--disable-slash-commands";
 
 /// The engine's own token for Gathr's tools, in its environment: never in its arguments, which any
 /// process on the computer can read (0005).

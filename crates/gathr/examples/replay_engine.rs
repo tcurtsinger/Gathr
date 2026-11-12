@@ -134,7 +134,12 @@ fn main() {
             .is_file();
         std::process::exit(if signed_in { 0 } else { 1 });
     }
-    let recording = std::env::var("GATHR_REPLAY")
+    // An engine started with its slash commands on (Compact, K4) plays its own recording.
+    let slash = !args.iter().any(|a| a == "--disable-slash-commands");
+    let recording = std::env::var("GATHR_REPLAY_SLASH")
+        .ok()
+        .filter(|_| slash)
+        .map_or_else(|| std::env::var("GATHR_REPLAY"), Ok)
         .or_else(|_| recording_beside_me())
         .unwrap_or_default();
     record_start(&args);

@@ -20,7 +20,8 @@ impl Task {
         let running = self
             .turn
             .as_ref()
-            .filter(|t| !t.stopping && t.ids.chat == chat);
+            .filter(|t| !t.stopping && t.ids.chat == chat)
+            .filter(|t| !self.compactions.contains(&t.ids.turn));
         if let Some(ids) = running.map(|t| t.ids.clone()) {
             let Ok(mut message) = self.db_message(&ids, "gathr", "text", &ask).await else {
                 return "failed";
@@ -34,7 +35,11 @@ impl Task {
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             return "in_turn";
         }
-        let waiting = self.queue.iter_mut().find(|q| q.ids.chat == chat);
+        let compactions = &self.compactions;
+        let waiting = self
+            .queue
+            .iter_mut()
+            .find(|q| q.ids.chat == chat && !compactions.contains(&q.ids.turn));
         if let Some(queued) = waiting {
             queued.text = format!("{}\n\n{ask}", queued.text);
             let ids = queued.ids.clone();

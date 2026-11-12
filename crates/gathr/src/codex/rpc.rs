@@ -49,6 +49,8 @@ pub struct Session {
     stop_pending: bool,
     /// Messages sent before the thread opened, in order.
     held: Vec<String>,
+    /// A compaction asked before the thread opened.
+    compact_held: bool,
     /// Approvals Codex is waiting on, by the id Gathr shows: their JSON-RPC id.
     approvals: HashMap<String, Value>,
     replied: bool,
@@ -129,6 +131,17 @@ impl Session {
                 self.request(Asked::Turn, "turn/start", params)
             }
         })
+    }
+
+    /// Compacts the thread, which Codex runs as a turn of its own. Held until the thread is open.
+    pub fn compact(&mut self) -> Option<Value> {
+        let Some(thread) = self.thread.clone().filter(|_| !self.starting) else {
+            self.compact_held = true;
+            return None;
+        };
+        self.starting = true;
+        let params = json!({ "threadId": thread });
+        Some(self.request(Asked::Turn, "thread/compact/start", params))
     }
 
     /// Stop: Codex's own interrupt of the turn under way, never a kill.
@@ -217,6 +230,7 @@ impl Session {
                 if self.stop_pending {
                     self.stop_pending = false;
                     self.held.clear();
+                    self.compact_held = false;
                     read.frames.push(Frame::TurnEnd(ended("interrupted")));
                 } else {
                     self.flush_held(read);
@@ -263,6 +277,9 @@ impl Session {
     }
 
     fn flush_held(&mut self, read: &mut Read) {
+        if std::mem::take(&mut self.compact_held) {
+            read.send.extend(self.compact());
+        }
         for text in std::mem::take(&mut self.held) {
             read.send.extend(self.user(&text));
         }

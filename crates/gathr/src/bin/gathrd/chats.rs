@@ -52,6 +52,13 @@ pub enum Cmd {
         chat: String,
         reply: oneshot::Sender<(Vec<Value>, Option<Value>)>,
     },
+    /// Compacts the agent's conversation in the chat, after its running turn and background
+    /// commands (K4): the compaction's turn, or why it can't.
+    Compact {
+        chat: String,
+        trace: String,
+        reply: oneshot::Sender<Result<Value, Failed>>,
+    },
     /// The agent was deleted: its waiting turns fail and its engine closes once it's free.
     Retire,
     /// Takes over a turn left waiting by the last run.

@@ -520,16 +520,21 @@ impl Task {
         self.idle_since = std::time::Instant::now();
         // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
         let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
+        // A compaction that ends without one failed, whatever the engine said (K4).
+        let compaction = self.compactions.remove(&turn.ids.turn);
+        let not_compacted = compaction && !turn.compacted && !turn.stopping && !turn.signed_out;
         let status = match () {
             _ if turn.save_failed.is_some() => "failed",
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
+            _ if not_compacted => "failed",
             _ if empty => "failed",
             _ if end.ok => "done",
             _ => "failed",
         };
         let why = match status {
             "failed" if turn.save_failed.is_some() => turn.save_failed.clone(),
+            "failed" if not_compacted => Some(self.not_compacted(&turn.ids, &end).await),
             "failed" if empty => Some(EMPTY.to_string()),
             "failed" => Some(
                 end.message

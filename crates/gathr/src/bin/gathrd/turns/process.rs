@@ -187,6 +187,9 @@ impl Task {
         } else {
             self.driver = Default::default();
             args.extend(command::given(&url, &pass.briefing, &crate::tools::names()));
+            if assigned.slash {
+                args.retain(|a| a != command::NO_SLASH);
+            }
             args.extend(command::folders(&beside));
             None
         };

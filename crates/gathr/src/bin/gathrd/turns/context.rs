@@ -51,8 +51,15 @@ impl Task {
             self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, after))
                 .await;
         }
-        let Some(ids) = self.turn.as_ref().map(|t| t.ids.clone()) else {
+        let Some(turn) = self.turn.as_mut() else {
             return;
+        };
+        turn.compacted = true;
+        let ids = turn.ids.clone();
+        // Claude Code says how its compaction began; Codex doesn't, so Compact says so (K4).
+        let trigger = match self.compactions.contains(&ids.turn) {
+            true => "manual".to_string(),
+            false => trigger,
         };
         let mut event = Event::point("gathr.context.compact")
             .trace(&ids.trace)
