@@ -52,7 +52,7 @@ pub fn names() -> Vec<String> {
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
     pub(super) stopping: tokio::sync::watch::Receiver<bool>,
-    /// The service's own state, so a settings tool changes them as the API does (0036 C5a).
+    /// The service's own state, so a settings tool changes them as the API does (0043 C5a).
     pub(super) state: Arc<State>,
     tool_router: ToolRouter<Self>,
 }

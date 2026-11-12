@@ -18,7 +18,7 @@ export function size(bytes: number): string {
 }
 
 /**
- * A project's checks cache (0036 C3, the mock-up's row): its size and Clear, which acts at once, apart
+ * A project's checks cache (0043 C3, the mock-up's row): its size and Clear, which acts at once, apart
  * from Save. Clearing waits for a run that's using the cache, so it says so meanwhile.
  */
 export function ChecksCache({

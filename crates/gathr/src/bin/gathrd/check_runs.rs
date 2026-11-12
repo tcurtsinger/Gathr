@@ -1,4 +1,4 @@
-//! Gathr runs a project's checks at a commit (0036 C3). Each project has one checkout in its
+//! Gathr runs a project's checks at a commit (0043 C3). Each project has one checkout in its
 //! agent folder, `<Project>/checks`, reset to the commit before each run (a forced checkout, then
 //! `git clean -ffdx`), so nothing an agent left uncommitted, and nothing a run left, reaches the
 //! next. Caches live beside it in `<Project>/caches`, so a run after the first starts warm. One

@@ -374,7 +374,7 @@ fn shutdown_refuses_a_wait_check_whose_approval_is_still_open() {
     );
 }
 
-/// 0036 C11 (owner, task 1450): a Codex wait whose check is one known read-only command saves
+/// 0043 C11 (owner, task 1450): a Codex wait whose check is one known read-only command saves
 /// without asking, and says which rule let it through; the same command redirected still asks.
 #[test]
 fn a_known_read_only_wait_check_saves_without_asking() {

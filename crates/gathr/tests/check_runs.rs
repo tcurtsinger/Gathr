@@ -1,4 +1,4 @@
-//! 0036 C3: Gathr runs a project's checks at a commit's exact contents, in its own checkout reset
+//! 0043 C3: Gathr runs a project's checks at a commit's exact contents, in its own checkout reset
 //! for each run, with caches kept outside it; a failure carries a reference.
 
 mod common;

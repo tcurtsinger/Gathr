@@ -33,7 +33,7 @@ impl Task {
             .chat(chat)
             .attr("gen_ai.agent.id", self.agent.clone())
             .attr("remote", input["remote"].as_str().map(String::from));
-        // One known read-only command alone runs without asking, for every engine (0036 C11).
+        // One known read-only command alone runs without asking, for every engine (0043 C11).
         let read_only = input["command"]
             .as_str()
             .and_then(gathr::approvals::read_only_check);
@@ -86,7 +86,7 @@ impl Task {
                 "Gathr runs this check in sh (Git Bash on Windows), outside the engine sandbox"
                     .to_string(),
             ),
-            // 0036: once per project and command; the project's own files didn't name these.
+            // 0043: once per project and command; the project's own files didn't name these.
             "checks" => (
                 "project checks".to_string(),
                 "Gathr runs these on every PR's head in this project, and the project's files don't name them"

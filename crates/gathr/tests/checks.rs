@@ -1,4 +1,4 @@
-//! A project's checks set by its Supervisor through Gathr's tools (0036, owner's call on task
+//! A project's checks set by its Supervisor through Gathr's tools (0043, owner's call on task
 //! 1455): only the Supervisor, starting from what Gathr finds; a command the project's own files
 //! don't name asks the person once per project.
 

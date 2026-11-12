@@ -475,7 +475,7 @@ behind Help beside the label. The shared ? opens an in-window popover; Escape
 closes Help before Settings and preserves focus. Switch remains the existing
 accessible immediate setting, with pending save and referenced failure states.
 
-Projects (0036, option B) lists projects as Agents lists agents. A project's page has
+Projects (0043, option B) lists projects as Agents lists agents. A project's page has
 two sections in one draft with one Save: General (name, folder, default team) and
 Checks & merge. Checks are read only, in run order, each with who set it (the
 agent's name, or Found in the project) and when: the Supervisor sets them, the

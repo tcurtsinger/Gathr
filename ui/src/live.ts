@@ -44,7 +44,7 @@ export type LiveEvent =
   // A chat started or stopped working, or needing the person (0040): only when either changed.
   | { type: 'chat_state'; chat: string; working: boolean; needs: boolean }
   | { type: 'project'; project: string; change: 'created' | 'changed' }
-  // A checks run of the project started or ended (0036 C3).
+  // A checks run of the project started or ended (0043 C3).
   | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }

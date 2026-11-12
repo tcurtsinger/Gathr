@@ -72,7 +72,7 @@ same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0
   removal reads again, right before it starts, whether its chat is still archived: a chat restored
   while a sweep looks at it keeps what's there.
 
-### Finished PRs (0036 C10)
+### Finished PRs (0043 C10)
 
 A task's merged or closed PR queues cleanup of its local branch and the worktrees Gathr recorded
 for it in the agent folder. The PR looks and a successful `merge` tool both queue it before settling
