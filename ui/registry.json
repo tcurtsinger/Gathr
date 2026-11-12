@@ -138,6 +138,16 @@
       "path": "components/assistant-ui/elements/conversation-map.tsx",
       "url": "https://r.assistant-ui.com/elements-conversation-map.json",
       "sha256": "805ea554059827847e6a6de4b09087037f11777235fc543208139e5e126b58cd"
+    },
+    {
+      "path": "components/assistant-ui/elements/run-activity.tsx",
+      "url": "https://r.assistant-ui.com/elements-run-activity.json",
+      "sha256": "1b838ae6054c2c45535701af231291436e77da1d6215a2c2a80a313de5aaeace"
+    },
+    {
+      "path": "components/assistant-ui/elements/tool-call.tsx",
+      "url": "https://r.assistant-ui.com/elements-tool-call.json",
+      "sha256": "ee96c2ba9247910657deace6a3d7e5949c3ef9985d47ad8dd7ea8ec535d51855"
     }
   ]
 }
