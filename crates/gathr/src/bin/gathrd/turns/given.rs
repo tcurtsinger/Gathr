@@ -56,25 +56,53 @@ impl Task {
         let asked = self
             .chats
             .writer
+            .call(move |conn| why_not(conn, &chat, task, &turn))
+            .await;
+        unread(asked)
+    }
+
+    /// Saves the turn as waiting (`queued`, `waiting_sign_in`) in the same call that asks the gate,
+    /// so archiving can't fall between them (F1): `None` once saved, else why it may not wait,
+    /// and the turn isn't touched. A turn that ended meanwhile keeps its end.
+    pub(super) async fn hold(&self, ids: &Ids, status: &'static str) -> Option<String> {
+        let (chat, task, turn) = (ids.chat.clone(), ids.task, ids.turn.clone());
+        let asked = self
+            .chats
+            .writer
             .call(move |conn| {
-                match gathr::archive::archived(conn, &chat) {
-                    Ok(Some(_)) => return Ok(Some("its chat is archived".to_string())),
-                    Err(gathr::Error::Refused(_)) => {
-                        return Ok(Some("its chat was deleted".into()));
-                    }
-                    Err(e) => return Err(e),
-                    Ok(None) => {}
-                }
-                if let Some(why) = gathr::tasks::stop_why(conn, &turn)? {
+                if let Some(why) = why_not(conn, &chat, task, &turn)? {
                     return Ok(Some(why));
                 }
-                task.map_or(Ok(None), |task| gathr::tasks::may_start(conn, task))
+                let saved = gathr::store::set_turn(conn, &turn, status, None)?;
+                Ok((!saved).then(|| "it ended meanwhile".to_string()))
             })
             .await;
-        match asked {
-            Some(Ok(why)) => why,
-            Some(Err(e)) => Some(format!("its chat or task wasn't read: {e}")),
-            None => Some("its chat or task wasn't read: the database didn't answer".into()),
-        }
+        unread(asked)
+    }
+}
+
+fn why_not(
+    conn: &mut rusqlite::Connection,
+    chat: &str,
+    task: Option<i64>,
+    turn: &str,
+) -> Result<Option<String>, gathr::Error> {
+    match gathr::archive::archived(conn, chat) {
+        Ok(Some(_)) => return Ok(Some("its chat is archived".to_string())),
+        Err(gathr::Error::Refused(_)) => return Ok(Some("its chat was deleted".into())),
+        Err(e) => return Err(e),
+        Ok(None) => {}
+    }
+    if let Some(why) = gathr::tasks::stop_why(conn, turn)? {
+        return Ok(Some(why));
+    }
+    task.map_or(Ok(None), |task| gathr::tasks::may_start(conn, task))
+}
+
+fn unread(asked: Option<Result<Option<String>, gathr::Error>>) -> Option<String> {
+    match asked {
+        Some(Ok(why)) => why,
+        Some(Err(e)) => Some(format!("its chat or task wasn't read: {e}")),
+        None => Some("its chat or task wasn't read: the database didn't answer".into()),
     }
 }
