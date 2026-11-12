@@ -220,6 +220,24 @@ In a chat with more than one agent the line is a button that opens Summary, and 
 it says it opens a dialog and whether it is open, and who is working is announced from beside it, not by a live
 region around the button.
 
+### Conversation map
+
+The registry's ConversationMap as published ([0039](docs/decisions/0039-conversation-map.md)): a 24px rail
+14px inside the chat pane's left edge, its ticks centred between the header and the composer, 8px clear of
+each. It shows from three ticks up and only with 44px left of the column, so it never lies over the text.
+
+- Ticks: 12px long and 2px thick for a message from the person (foreground 22%), 6px for the lead's reply to
+  them (15%), 4px thick for a folded day. On screen 50%; current 3px thick at 90%. Pointing at the rail
+  lengthens the ticks on screen by 6px and the one under the pointer by 12px. No other agent's turn, work
+  row, exchange or event has a tick.
+- At least 6px a tick, 14px at most. Short of room, the oldest days fold first into one tick each, the
+  latest day's replies go next, then its oldest messages fold into one tick.
+- Card, to the right: "You · 16:04" or the lead's name and time, 13px medium, two lines; then the message's
+  first lines as plain text, muted, three lines. A day: "Monday · 14 messages from you" (the date once a
+  week old), "Jumps to the start of that day". The tick's accessible name is the card's title.
+- A tick opens its message at the top of the view, 32px under the edge, and focus stays on the tick.
+  Up, Down, Home and End move along the rail.
+
 ### Summary
 
 Summary holds what the plan bar and a status bar would say, so neither exists

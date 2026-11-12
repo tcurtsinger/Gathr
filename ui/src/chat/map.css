@@ -1,0 +1,33 @@
+/*
+ * The conversation map (0039): the registry's rail in the gutter left of the column, between the header
+ * and the composer. Its ticks are drawn alike; ChatMap marks each with its kind, styled here.
+ */
+.chat-map {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  padding: 8px 0;
+}
+.chat-map [data-slot="conversation-map-tick"] {
+  min-height: 6px;
+}
+.chat-map [data-slot="conversation-map-tick"] > span {
+  transition-property: width, max-width, height, background-color;
+}
+.chat-map [data-kind="day"] > span {
+  height: 4px;
+}
+/* A reply's tick is half as long, at rest and as the rail's ticks grow under the pointer. */
+.chat-map [data-kind="lead"] > span {
+  max-width: 6px;
+}
+/* A message from the person reads a step firmer than a reply, before either is on screen. */
+.chat-map [data-kind="you"]:not([data-in-view], :hover, :focus-visible) > span {
+  background: color-mix(in oklab, var(--foreground) 22%, transparent);
+}
+.chat-map:is(:hover, :focus-within) [data-kind="lead"][data-in-view] > span {
+  max-width: 12px;
+}
+.chat-map:is(:hover, :focus-within) [data-kind="lead"]:is(:hover, :focus-visible) > span {
+  max-width: 18px;
+}

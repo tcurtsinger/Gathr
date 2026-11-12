@@ -12,7 +12,8 @@ const TOP = 32;
 /**
  * A search hit opened in the chat (plans/search.md), or an approval shown from the dock: draws the pages
  * up to it, centres it and tints it, then holds the view there, so neither a stream nor a new turn pulls
- * it to the bottom, until the person scrolls back to the bottom or sends a message.
+ * it to the bottom, until the person scrolls back to the bottom or sends a message. A tick of the
+ * conversation map opens its message the same way, at the top of the view and untinted (0039).
  */
 export function useFound(
   all: ThreadMessageLike[],
@@ -60,7 +61,7 @@ export function useFound(
       reach(Math.max(0, index - ABOVE));
       if (frames > 60) {
         report({
-          name: 'gathr.ui.search.error',
+          name: found.top ? 'gathr.ui.map.error' : 'gathr.ui.search.error',
           error: 'not_drawn',
           attrs: { from_end: all.length - index },
         });
@@ -72,18 +73,19 @@ export function useFound(
     const card = found.card && message.querySelector(`[data-approval="${CSS.escape(found.card)}"]`);
     const block = card || (found.text && message.querySelectorAll('.found-part')[found.nth ?? 0]) || message;
     spot.current?.removeAttribute('data-search-hit');
-    centre(el, block);
+    place(el, block, found.top);
     // Its text may still wrap again once the scroll bar shows.
     const settle = (left: number) =>
       requestAnimationFrame(() => {
         if (spot.current !== block) return;
-        centre(el, block);
+        place(el, block, found.top);
         if (left > 1) settle(left - 1);
       });
     settle(2);
-    block.setAttribute('data-search-hit', '');
+    // A tick's message is the one at the top, and focus stays on the map to move along it.
+    if (!found.top) block.setAttribute('data-search-hit', '');
     // Keys scroll the chat from here, and a screen reader reads the message.
-    if (block instanceof HTMLElement) {
+    if (!found.top && block instanceof HTMLElement) {
       block.tabIndex = -1;
       block.focus({ preventScroll: true });
     }
@@ -93,7 +95,7 @@ export function useFound(
     nextFrame(0);
     const fromEnd = all.length - Math.max(0, index - ABOVE);
     if (!found.card)
-      timeToPaint('gathr.ui.search.open', found.at, {
+      timeToPaint(found.top ? 'gathr.ui.map.open' : 'gathr.ui.search.open', found.at, {
         from_end: fromEnd,
         older_pages: Math.ceil(Math.max(0, fromEnd - PAGE) / PAGE),
       });
@@ -118,13 +120,16 @@ export function useFound(
   return { held: !!found, text: found?.text, onScroll };
 }
 
-/** Scrolls a block to the middle of what shows above the composer; one taller than that starts at the top. */
-function centre(viewport: HTMLElement, block: Element) {
+/**
+ * Scrolls a block to the middle of what shows above the composer; one taller than that, or one opened
+ * from the map, starts at the top.
+ */
+function place(viewport: HTMLElement, block: Element, top?: boolean) {
   const view = viewport.getBoundingClientRect();
   const footer = viewport.querySelector('.thread-footer')?.getBoundingClientRect().height ?? 0;
   const room = view.height - footer;
   const box = block.getBoundingClientRect();
-  const offset = box.height > room - TOP ? TOP : (room - box.height) / 2;
+  const offset = top || box.height > room - TOP ? TOP : (room - box.height) / 2;
   viewport.scrollTop += box.top - view.top - offset;
 }
 

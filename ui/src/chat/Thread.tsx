@@ -7,13 +7,23 @@ import {
   useExternalStoreRuntime,
 } from '@assistant-ui/react';
 import { ArrowDown } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { asked } from './ApprovalDock';
+import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
 import { useFound } from './found';
 import type { Custom, SendFailure, TurnNotice } from './messages';
@@ -72,6 +82,8 @@ export interface Target {
   text?: string;
   nth?: number;
   card?: string;
+  /** Opened from the conversation map: it starts at the top of the view, and focus stays on its tick. */
+  top?: boolean;
   at: number;
 }
 
@@ -81,10 +93,15 @@ const asIs = (m: ThreadMessageLike) => m;
 
 /** The chat's timeline, drawn by assistant-ui's thread over Gathr's own chat state (0030, 0037). */
 export function Thread(props: Props) {
-  const { running, actions, header, after, empty, children, target } = props;
+  const { running, actions, header, after, empty, children } = props;
   const viewport = useRef<HTMLDivElement>(null);
   const { messages, onScroll, reach } = useOlder(props.messages, viewport);
-  const found = useFound(props.messages, viewport, reach, target, props.onTarget);
+  // A tick of the map opens its message as a search hit opens: whichever was picked last.
+  const [jump, setJump] = useState<Target>();
+  const onJump = useCallback((id: string) => setJump({ id, top: true, at: performance.now() }), []);
+  const jumped = jump && jump.at > (props.target?.at ?? 0);
+  const target = jumped ? jump : props.target;
+  const found = useFound(props.messages, viewport, reach, target, jumped ? undefined : props.onTarget);
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
     messages,
@@ -94,6 +111,7 @@ export function Thread(props: Props) {
     onNew: async () => {},
   });
   const stable = useStable(actions);
+  const ticks = useTicks(props.messages);
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
@@ -129,6 +147,7 @@ export function Thread(props: Props) {
                 </ThreadPrimitive.ViewportFooter>
               </div>
             </ThreadPrimitive.Viewport>
+            <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
           </ThreadPrimitive.Root>
         </FoundContext>
       </ActionsContext>
