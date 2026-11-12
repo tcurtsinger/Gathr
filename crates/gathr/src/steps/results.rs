@@ -79,8 +79,14 @@ fn kept(out: &str, from_end: bool, exit: Option<i64>) -> Option<StepResult> {
     // Hidden whole before it's split: a secret spread over lines is still seen as one.
     let hidden = redact(out);
     let all: Vec<&str> = hidden.lines().map(str::trim_end).collect();
-    let start = all.iter().position(|l| !l.trim().is_empty()).unwrap_or(all.len());
-    let end = all.iter().rposition(|l| !l.trim().is_empty()).map_or(start, |e| e + 1);
+    let start = all
+        .iter()
+        .position(|l| !l.trim().is_empty())
+        .unwrap_or(all.len());
+    let end = all
+        .iter()
+        .rposition(|l| !l.trim().is_empty())
+        .map_or(start, |e| e + 1);
     let all = &all[start..end];
     let mut shown: Vec<String> = match from_end {
         true => &all[all.len().saturating_sub(LINES)..],
@@ -118,7 +124,10 @@ mod tests {
         let last = last_lines(&numbered(8), Some(0)).unwrap();
         assert_eq!(last.text, "line 4\nline 5\nline 6\nline 7\nline 8");
         let short = first_lines("\n  ok\n\n").unwrap();
-        assert_eq!((short.text.as_str(), short.lines, short.more), ("  ok", 1, false));
+        assert_eq!(
+            (short.text.as_str(), short.lines, short.more),
+            ("  ok", 1, false)
+        );
         assert_eq!(first_lines(" \n"), None);
     }
 

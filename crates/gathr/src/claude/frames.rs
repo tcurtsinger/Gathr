@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 
-use crate::steps::{self, StepInput};
+use crate::steps::{self, StepInput, StepResult};
 
 /// What one line of Claude Code's output means to the driver.
 #[derive(Debug, Clone, PartialEq)]
@@ -27,11 +27,13 @@ pub enum Frame {
         name: String,
         input: Option<StepInput>,
     },
-    /// A tool call ended; `input` when the engine says what it ran only now (Codex's web search).
+    /// A tool call ended; `input` when the engine says what it ran only now (Codex's web search),
+    /// and what came back (0044).
     ToolEnd {
         id: String,
         ok: bool,
         input: Option<StepInput>,
+        result: Option<StepResult>,
     },
     /// A tool call arrived without the field its step is read from: the engine's protocol changed.
     ToolShape {
@@ -216,14 +218,22 @@ fn read_own(value: &Value, own: bool) -> Vec<Frame> {
                     .map_or_else(|| joined_text(content), String::from),
             )]
         }
-        "user" => blocks(&value["message"]["content"])
-            .filter(|b| b["type"] == "tool_result")
-            .map(|b| Frame::ToolEnd {
-                id: text(b, "tool_use_id"),
-                ok: b.get("is_error") != Some(&Value::Bool(true)),
-                input: None,
-            })
-            .collect(),
+        "user" => {
+            let ended: Vec<&Value> = blocks(&value["message"]["content"])
+                .filter(|b| b["type"] == "tool_result")
+                .collect();
+            // A sub-agent's steps aren't kept (0041), nor what they returned.
+            let done = (ended.len() == 1).then(|| &value["tool_use_result"]);
+            ended
+                .into_iter()
+                .map(|b| Frame::ToolEnd {
+                    id: text(b, "tool_use_id"),
+                    ok: b.get("is_error") != Some(&Value::Bool(true)),
+                    input: None,
+                    result: own.then(|| super::results::of(b, done)).flatten(),
+                })
+                .collect()
+        }
         "control_request" if value["request"]["subtype"] == "can_use_tool" => {
             vec![Frame::ApprovalAsked {
                 request_id: text(value, "request_id"),
@@ -324,7 +334,11 @@ fn step(tool: &str, input: &Value, own: bool) -> Result<Option<StepInput>, &'sta
         _ => return Ok(None),
     };
     let text = input[field].as_str().ok_or(field)?;
-    Ok(own.then(|| steps::input(text, title)).flatten())
+    let step = match field {
+        "command" => steps::command(text, title),
+        _ => steps::input(text, title),
+    };
+    Ok(own.then_some(step).flatten())
 }
 
 fn turn_end(value: &Value) -> TurnEnd {
@@ -556,11 +570,7 @@ mod tests {
             );
         }
         assert!(
-            own.contains(&&Frame::ToolEnd {
-                id: agent_call.clone(),
-                ok: true,
-                input: None
-            }),
+            own.iter().any(|f| matches!(f, Frame::ToolEnd { id, ok: true, input: None, .. } if *id == agent_call)),
             "the Agent call's own end is missing"
         );
         assert!(
@@ -570,6 +580,55 @@ mod tests {
     }
 
     /// Each of the agent's own tool calls in a recording: its name, and its step's text and title.
+    /// Each step's Request and Result, on a live turn (Claude Code 2.1.322, a test account, 0044).
+    #[test]
+    fn each_kind_of_step_keeps_what_it_returned() {
+        let frames = replayed("results_claude");
+        let mut names = std::collections::HashMap::new();
+        let mut kept = Vec::new();
+        for frame in &frames {
+            match frame {
+                Frame::ToolStart { id, name, input } => {
+                    names.insert(id.clone(), (name.clone(), input.clone()));
+                }
+                Frame::ToolEnd { id, result, .. } => {
+                    let (name, input) = names[id].clone();
+                    let request = input.and_then(|i| i.request);
+                    kept.push((name, request, result.clone().map(|r| r.text)));
+                }
+                _ => {}
+            }
+        }
+        let shown = |name: &str| kept.iter().find(|(n, ..)| n == name).cloned().unwrap();
+        let (_, request, result) = shown("PowerShell");
+        assert_eq!(request, None, "a one-line command's Request is its line");
+        assert_eq!(result.as_deref(), Some("git version 2.55.0.windows.5"));
+        for (tool, said) in [
+            ("Write", "+3 −0"),
+            ("Read", "4 lines"),
+            ("Edit", "+1 −1"),
+            (
+                "Grep",
+                "2 matching lines
+1:alpha line
+3:gamma line",
+            ),
+            (
+                "Glob",
+                "1 file
+notes.txt",
+            ),
+            ("mcp__gathr__list_tasks", "No open tasks."),
+        ] {
+            assert_eq!(shown(tool).2.as_deref(), Some(said), "{tool}");
+            assert_eq!(
+                shown(tool).1,
+                None,
+                "{tool}: only a command keeps a Request"
+            );
+        }
+    }
+
     fn steps_of(name: &str) -> Vec<(String, Option<String>, Option<String>)> {
         let own = replayed(name).into_iter().filter_map(|f| match f {
             Frame::ToolStart { name, input, .. } => {

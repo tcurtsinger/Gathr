@@ -388,6 +388,7 @@ impl Session {
                     id: text(&item["id"]),
                     ok,
                     input: super::steps::step(item).unwrap_or(None),
+                    result: super::steps::result(item),
                 });
             }
             "thread/tokenUsage/updated" => {

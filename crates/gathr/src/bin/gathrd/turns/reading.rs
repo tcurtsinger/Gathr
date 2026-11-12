@@ -5,7 +5,7 @@ use gathr::claude::engine::Line;
 use gathr::claude::frames::{Frame, TurnEnd};
 use gathr::event::Event;
 use gathr::ids::{now_us, span_id};
-use gathr::steps::StepInput;
+use gathr::steps::{StepInput, StepResult};
 use gathr::store;
 use serde_json::{Value, json};
 
@@ -204,9 +204,14 @@ impl Task {
                 self.save_reply(&ids, text, false).await;
             }
             Frame::ToolStart { id, name, input } => self.tool_started(id, name, input).await,
-            Frame::ToolEnd { id, ok, input } => {
-                self.tool_ended(&id, if ok { "ok" } else { "error" }, input)
-                    .await
+            Frame::ToolEnd {
+                id,
+                ok,
+                input,
+                result,
+            } => {
+                let status = if ok { "ok" } else { "error" };
+                self.tool_ended(&id, status, input, result).await
             }
             Frame::ToolShape { tool, field } => self.tool_shape(tool, field),
             Frame::Read(text) => {
@@ -414,7 +419,13 @@ impl Task {
     }
 
     /// `said`: what it ran, when the engine says so only as it ends.
-    pub(super) async fn tool_ended(&mut self, id: &str, status: &str, said: Option<StepInput>) {
+    pub(super) async fn tool_ended(
+        &mut self,
+        id: &str,
+        status: &str,
+        said: Option<StepInput>,
+        result: Option<StepResult>,
+    ) {
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
@@ -426,7 +437,10 @@ impl Task {
         turn.push_allowed = false;
         let (ids, span) = (turn.ids.clone(), turn.span.clone());
         let duration_us = now_us() - open.started_us;
-        let body = tool_body(&name, status, Some(duration_us / 1000), input.as_ref());
+        let mut body = tool_body(&name, status, Some(duration_us / 1000), input.as_ref());
+        if let Some(result) = result {
+            body["result"] = json!(result);
+        }
         let (body_text, mid) = (body.to_string(), message_id.clone());
         self.chats
             .writer
@@ -460,7 +474,7 @@ impl Task {
         let open: Vec<String> = turn.tools.keys().cloned().collect();
         self.save_reply(&ids, text, true).await;
         for id in open {
-            self.tool_ended(&id, "stopped", None).await;
+            self.tool_ended(&id, "stopped", None, None).await;
         }
         if self.turn.as_ref().is_some_and(|t| t.thought.is_some()) {
             self.thought("stopped").await;

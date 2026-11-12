@@ -121,7 +121,12 @@ fn a_claude_turns_steps_carry_what_they_ran_in_history_and_live_with_secrets_hid
             "Bash",
             json!({ "text": "git status --short", "title": "Show what changed" }),
         ),
-        ("PowerShell", text("cargo fmt --all --check…")),
+        (
+            "PowerShell",
+            json!({ "text": "cargo fmt --all --check…",
+                "request": "cargo fmt --all --check
+cargo clippy --workspace" }),
+        ),
         ("Read", text("src/lib.rs")),
         ("Edit", text("src/lib.rs")),
         ("Write", text("notes/plan.md")),
@@ -210,7 +215,8 @@ fn a_codex_turns_steps_carry_the_command_out_of_its_shell_the_files_and_the_sear
         ("Shell", text("git status --short")),
         (
             "Shell",
-            text("Get-Content 'src\\lib.rs' | Select-Object -First 5…"),
+            json!({ "text": "Get-Content 'src\\lib.rs' | Select-Object -First 5…",
+                "request": "Get-Content 'src\\lib.rs' | Select-Object -First 5\ncargo clippy --workspace" }),
         ),
         (
             "Shell",
@@ -251,4 +257,41 @@ fn a_tool_without_its_field_is_found_from_the_turns_reference() {
     let edit = json!({ "gen_ai.tool.name": "Edit", "field": "file_path" });
     let grep = json!({ "gen_ai.tool.name": "Grep", "field": "pattern" });
     assert_eq!(found, [&edit, &grep], "{trace}");
+}
+
+/// What each step returned (0044), through the service, from a live turn (`results_claude`): in
+/// history and live alike, a read only as its count, and nothing of it in the event record.
+#[test]
+fn each_step_keeps_what_it_returned_in_history_and_live_and_never_in_events() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0, "claude", "results_claude");
+    let (history, heard) = one_turn(&service, &account);
+    let messages = history["messages"].as_array().unwrap();
+    let body = |tool: &str| {
+        let found = messages.iter().find(|m| m["body"]["tool"] == tool);
+        found.map(|m| (m["id"].clone(), m["body"].clone())).unwrap()
+    };
+    for (tool, said) in [
+        ("PowerShell", "git version 2.55.0.windows.5"),
+        ("Read", "4 lines"),
+        ("Edit", "+1 −1"),
+        ("Glob", "1 file\nnotes.txt"),
+        ("mcp__gathr__list_tasks", "No open tasks."),
+    ] {
+        let (id, kept) = body(tool);
+        assert_eq!(kept["result"]["text"], said, "{tool}: {kept}");
+        let end = heard
+            .iter()
+            .rev()
+            .find(|e| e["type"] == "tool" && e["message"] == id);
+        let live = end.map(|e| e["body"]["result"].clone());
+        assert_eq!(live.as_ref(), Some(&kept["result"]), "{tool}'s end, live");
+    }
+    // The file's own lines were read, and never kept: only how many.
+    assert!(!history.to_string().contains("beta line\n"), "{history}");
+    let query =
+        "SELECT attrs FROM event_log WHERE attrs LIKE '%git version%' OR attrs LIKE '%4 lines%'";
+    let (ok, rows) = gathr(&data.0, &["diag", "query", query]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"], json!([]), "a result reached the event record");
 }

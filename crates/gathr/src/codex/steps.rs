@@ -2,7 +2,7 @@
 
 use serde_json::Value;
 
-use crate::steps::{self, StepInput};
+use crate::steps::{self, StepInput, StepResult, counted};
 
 /// What the item's step keeps, or the name of the field it's read from when the item lacks it.
 /// MCP calls, image views and anything not listed keep nothing.
@@ -10,7 +10,7 @@ pub(super) fn step(item: &Value) -> Result<Option<StepInput>, &'static str> {
     match item["type"].as_str() {
         Some("commandExecution") => {
             let command = item["command"].as_str().ok_or("command")?;
-            Ok(steps::input(&unwrapped(command), None))
+            Ok(steps::command(&unwrapped(command), None))
         }
         Some("fileChange") => {
             let changes = item["changes"].as_array().ok_or("changes")?;
@@ -25,6 +25,62 @@ pub(super) fn step(item: &Value) -> Result<Option<StepInput>, &'static str> {
         Some("webSearch") => Ok(steps::input(item["query"].as_str().ok_or("query")?, None)),
         _ => Ok(None),
     }
+}
+
+/// What came back from the item (0044), as recorded live (Codex 0.167.2,
+/// `tests/frames/results_codex.jsonl`; a file change's `diff` and a web search's `results` were seen
+/// live only by their names and counts).
+pub(super) fn result(item: &Value) -> Option<StepResult> {
+    match item["type"].as_str() {
+        Some("commandExecution") => {
+            let out = item["aggregatedOutput"].as_str().unwrap_or_default();
+            steps::last_lines(out, item["exitCode"].as_i64())
+        }
+        Some("fileChange") => {
+            let changes = item["changes"].as_array()?;
+            let lines: Vec<String> = changes
+                .iter()
+                .map(|change| {
+                    let (added, removed) = diff_counts(change["diff"].as_str().unwrap_or_default());
+                    let path = change["path"].as_str().unwrap_or_default();
+                    format!("+{added} −{removed} {path}")
+                })
+                .collect();
+            steps::first_lines(&lines.join(
+                "
+",
+            ))
+        }
+        Some("webSearch") => {
+            let n = item["results"].as_array().map_or(0, Vec::len) as i64;
+            Some(steps::said(counted(n, "result", "results")))
+        }
+        Some("mcpToolCall") => {
+            let failed = item["error"]["message"].as_str();
+            let said: Vec<&str> = item["result"]["content"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|b| b["text"].as_str())
+                .collect();
+            steps::first_lines(failed.unwrap_or(&said.join(
+                "
+",
+            )))
+        }
+        _ => None,
+    }
+}
+
+/// Lines added and removed in a unified diff, its file headers aside.
+fn diff_counts(diff: &str) -> (usize, usize) {
+    diff.lines()
+        .filter(|l| !l.starts_with("+++") && !l.starts_with("---"))
+        .fold((0, 0), |(added, removed), line| match line.chars().next() {
+            Some('+') => (added + 1, removed),
+            Some('-') => (added, removed + 1),
+            _ => (added, removed),
+        })
 }
 
 const SHELLS: [&str; 5] = ["pwsh", "powershell", "bash", "zsh", "sh"];
@@ -165,6 +221,41 @@ mod tests {
 
     /// `steps_codex`'s tool items, read: each step's name, what it kept at its start and at its
     /// end, and any field found missing.
+    /// What each item returned, on a live turn (Codex 0.167.2, a test account, 0044): a command's
+    /// last lines, a failing one with its exit code, and Gathr's answer.
+    #[test]
+    fn each_item_keeps_what_it_returned() {
+        let (_, frames) = played("results_codex");
+        let results: Vec<String> = frames
+            .iter()
+            .filter_map(|f| match f {
+                Frame::ToolEnd { result, .. } => Some(result.clone().map(|r| r.text)),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        assert_eq!(
+            results.first().map(String::as_str),
+            Some("git version 2.55.0.windows.5")
+        );
+        let failed = "fatal: not a git repository (or any of the parent directories): .git
+exit 1";
+        assert!(results.iter().any(|r| r == failed), "{results:?}");
+        assert!(results.iter().any(|r| r == "No open tasks."), "{results:?}");
+        // A command longer than its step's one line keeps the whole of it as its Request.
+        let long = frames.iter().find_map(|f| match f {
+            Frame::ToolStart { input: Some(i), .. } => {
+                i.request.clone().map(|r| (i.text.clone(), r))
+            }
+            _ => None,
+        });
+        let (line, request) = long.expect("a command longer than its line");
+        assert!(
+            line.ends_with('…') && request.chars().count() > 200,
+            "{line} / {request}"
+        );
+    }
+
     fn played(name: &str) -> (Vec<Kept>, Vec<Frame>) {
         let path = format!("{}/tests/frames/{name}.jsonl", env!("CARGO_MANIFEST_DIR"));
         let (mut session, _) = Session::open(Opening::default());
