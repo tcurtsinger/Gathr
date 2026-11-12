@@ -17,6 +17,7 @@ import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
 import { usePersonTasks } from './tasks/usePersonTasks';
 import { type FileTab, fileId, Workspace, WorkspaceOpener } from './tasks/Workspace';
+import { readyVersion, useAppUpdate } from './update';
 import './app.css';
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
   const [, redraw] = useState(0);
   const person = usePersonTasks(setFailure);
   const pauses = usePauses(setFailure);
+  const appUpdate = useAppUpdate(setFailure);
   // Each chat's workspace: the files opened from its questions, the agent opened from Summary, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, Tabs>>({});
   // An agent's task opened in a chat's Tasks tab, from Summary or a hand-off line (room task 70).
@@ -237,6 +239,12 @@ export function App() {
         onSelect={choose}
         onNew={newChat}
         onSettings={(opener) => openSettings('engines', undefined, opener)}
+        update={{
+          ready: readyVersion(appUpdate.app),
+          updating: appUpdate.app?.state === 'updating',
+          asking: appUpdate.asking,
+          onUpdate: appUpdate.update,
+        }}
         onProjectSettings={(project, opener) =>
           setSettings({
             page: 'projects',

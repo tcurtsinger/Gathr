@@ -1,5 +1,6 @@
-import { Folder, FolderOpen, Plus, Settings } from 'lucide-react';
+import { CircleArrowUp, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
+import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
 import { ResizeHandle } from './components/ResizeHandle';
@@ -15,6 +16,8 @@ interface Props {
   /** A new chat, in the project given. */
   onNew: (project?: string) => void;
   onSettings: (opener: HTMLElement) => void;
+  /** Gathr's own update (0032): the version ready to install, or that it's installing now. */
+  update?: { ready: string | null; updating: boolean; asking: boolean; onUpdate: () => void };
   /** Settings > Projects, at this project. */
   onProjectSettings: (project: string, opener: HTMLElement | null) => void;
   /** Under New: the Tasks flyout. */
@@ -25,7 +28,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { chats, archived, projects, selected, onSelect, onNew, onSettings, actions } = props;
+  const { chats, archived, projects, selected, onSelect, onNew, onSettings, actions, update } = props;
   // Projects start open, Archived folded; the person's fold of one holds while the window is open.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -154,6 +157,22 @@ export function Sidebar(props: Props) {
           <Settings aria-hidden="true" />
           Settings
         </button>
+        {update?.ready && (
+          <TooltipIconButton
+            tooltip={`Update to ${update.ready}`}
+            side="top"
+            className="sidebar-update"
+            disabled={update.asking}
+            onClick={update.onUpdate}
+          >
+            <CircleArrowUp aria-hidden="true" />
+          </TooltipIconButton>
+        )}
+        {update?.updating && (
+          <span className="sidebar-updating" role="status">
+            Updating Gathr
+          </span>
+        )}
       </div>
       <ResizeHandle label="Resize navigation" side="right" name="--sidebar-width" min={190} max={() => 400} />
     </nav>

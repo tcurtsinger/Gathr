@@ -5,10 +5,14 @@ import { render } from 'vitest-browser-react';
 import { followTheme } from '../theme';
 import { General } from './General';
 
+// Version and updates have their own test (AppVersion.test.tsx): here the service says nothing of them.
+vi.mock('../live', () => ({ listen: () => () => {} }));
+
 /** Answers GET /api/startup with `on`; each PUT takes the next answer in `puts`. */
 function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/app') return new Response('{}');
     if (init?.method !== 'PUT') return new Response(JSON.stringify({ on }));
     sent.push(JSON.parse(String(init.body)));
     const next = puts.shift();
@@ -134,6 +138,7 @@ test('a read on focus that answers after a newer read never shows the older stat
   ];
   vi.stubGlobal('fetch', async (path: string) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/app') return new Response('{}');
     const read = reads.shift() ?? { on: true, hold: false };
     const answer = new Response(JSON.stringify({ on: read.on }));
     if (read.hold) await new Promise<void>((done) => (release = done));
@@ -156,6 +161,7 @@ test('a read on focus that fails while a save is pending leaves no failure once 
   let holdPut = false;
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/settings') return new Response(JSON.stringify({ stale_days: 3, cancel_days: 7 }));
+    if (path === '/api/app') return new Response('{}');
     if (init?.method !== 'PUT') {
       if (!holdPut) return new Response(JSON.stringify({ on: false }));
       const body = { error: 'Open at login failed', why: 'made-up read failure', ref: 'made-up-read-ref' };
