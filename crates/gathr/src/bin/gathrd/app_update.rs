@@ -189,10 +189,28 @@ impl AppUpdates {
             }
             tokio::time::sleep(LOOK).await;
         };
-        // A turn that ended by itself meanwhile needs no carry-on: it would repeat the work.
-        let drop = move |c: &mut rusqlite::Connection| gathr::carry::drop_unneeded(c, &carry_ons);
-        let dropped = self.chats.writer.call(drop).await.and_then(Result::ok);
-        event = event.attr("carry_ons_dropped", dropped);
+        // A turn that ended by itself meanwhile needs no carry-on: it would repeat the work. The
+        // hand-over goes on even when that can't be written, as every agent is stopped by now: the
+        // failure is recorded with what it leaves, a carry-on that may repeat finished work.
+        let carry_ons = Arc::new(carry_ons);
+        let mut dropped = Err("the database didn't answer".to_string());
+        for _ in 0..3 {
+            let saved = carry_ons.clone();
+            let drop = move |c: &mut rusqlite::Connection| gathr::carry::drop_unneeded(c, &saved);
+            match self.chats.writer.call(drop).await {
+                Some(Ok(n)) => dropped = Ok(n),
+                Some(Err(e)) => dropped = Err(e.to_string()),
+                None => {}
+            }
+            if dropped.is_ok() {
+                break;
+            }
+            tokio::time::sleep(LOOK).await;
+        }
+        event = match dropped {
+            Ok(n) => event.attr("carry_ons_dropped", n),
+            Err(why) => event.error("carry_on_drop").attr("drop_failed", why),
+        };
         event.duration_us = Some(began.elapsed().as_micros() as i64);
         self.chats.writer.record(event);
         *self.handing_over.lock().expect("never poisoned") = Some(version);
