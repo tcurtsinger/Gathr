@@ -18,7 +18,8 @@ const report = [];
 const run = (program, args) => execFileSync(program, args, { encoding: 'utf8', timeout: 120_000, windowsHide: true });
 function check(folder, label) {
   for (const name of ['gathr', 'gathrd']) {
-    assert.equal(run(join(folder, name + exe), ['--version']).trim(), `${name} ${version}`, `${label}: ${name} version`);
+    // Both Clap commands report their crate name, `gathr`, including the service executable.
+    assert.equal(run(join(folder, name + exe), ['--version']).trim(), `gathr ${version}`, `${label}: ${name} version`);
   }
   const data = join(dir, label + '-data');
   run(join(folder, 'gathr' + exe), ['seed', '--data', data]);
