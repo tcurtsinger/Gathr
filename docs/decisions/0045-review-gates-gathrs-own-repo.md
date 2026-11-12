@@ -8,7 +8,10 @@ Owner, 2026-11-12 (room tasks 167-169).
   and its author ran the checks and tests the change touches (AGENTS.md, How we build). The reviewer reads and
   doesn't rerun suites, as before.
 - GitHub CI keeps running on every PR and every push to `main`, as information: a red job is read and, if it is a real
-  failure, fixed in a follow-up, but it doesn't hold a merge. Releases still build when CI passes on `main` (F7).
+  failure, fixed in a follow-up, but it doesn't hold a merge.
+- Releases still wait for green CI on `main` (F7; owner, room task 175): it's the one run on clean machines before an
+  install updates, so a red `main` is fixed before the next release.
+- When a PR's CI is already running, the merger waits for it to finish and reads any failure before merging.
 - Everything else in the merge rule stays: the landing order, up to date with `main` before merging, the reviewed
   head pinned (`--match-head-commit`), a merge commit, no auto-merge.
 - Until Gathr's `merge` tool has a review-only setting for Required checks, the reviewer merges Gathr's own PRs with
