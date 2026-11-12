@@ -203,14 +203,15 @@ impl Task {
     /// Stop now (the person's alone): the running turn in the scope is interrupted, the engine's
     /// background commands there are ended by its own stop, and a carry-on naming them waits for
     /// Restart. The scope is already paused, stopped, so nothing else starts. An update stops the
-    /// same way with every carry-on saved before (`carried`, `gathr::carry`): none is saved here,
-    /// and the turn's end leaves its task to that carry-on.
+    /// same way with its carry-ons saved before (`carried`: the turns they answer, `gathr::carry`):
+    /// none is saved here for those, and such a turn's end leaves its task to its carry-on. A turn
+    /// the update saved none for (it started as the update began) is carried on as Stop now does.
     pub(super) async fn stop_now(
         &mut self,
         scope: String,
         target: String,
         by: &str,
-        carried: bool,
+        carried: Option<std::sync::Arc<std::collections::HashSet<String>>>,
     ) {
         let pause = [Pause {
             scope,
@@ -241,6 +242,11 @@ impl Task {
             .as_ref()
             .filter(|t| !t.stopping)
             .map(|t| t.ids.clone());
+        let saved = |turn: &str| carried.as_ref().is_some_and(|c| c.contains(turn));
+        let carried = match &running {
+            Some(ids) => saved(&ids.turn),
+            None => commands.iter().any(|(_, turn, _)| saved(turn)),
+        };
         if let Some(turn) = self.turn.as_mut().filter(|t| carried && !t.stopping) {
             turn.carried = true;
         }

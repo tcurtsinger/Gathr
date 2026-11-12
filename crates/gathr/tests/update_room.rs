@@ -56,6 +56,15 @@ fn an_update_in_the_middle_of_a_task_carries_it_on_and_tells_its_lead_nothing_fa
     assert_eq!(done, 1, "the task ended once: {states:?}");
     assert_eq!(room.lead_heard(), (2, 1), "the lead heard back once");
     assert_eq!(room.carry_ons(&stopped).len(), 1, "still one carry-on");
+    let history = room.history(&next);
+    let ended = turn_by(&history, "answers", &stopped).unwrap()["ended"].clone();
+    let turns = history["turns"].as_array().unwrap();
+    let heard = turns.iter().rfind(|t| t["agent"] == room.lead.as_str());
+    let made = heard.unwrap()["created"].as_str().unwrap();
+    assert!(
+        made >= ended.as_str().unwrap(),
+        "the lead heard back at {made}, before the carry-on ended at {ended}"
+    );
 }
 
 /// The turn in `history` whose id or `answers` is `id`, by `field`.
@@ -211,6 +220,8 @@ fn a_chat_stopped_before_the_update_stays_stopped_and_restarts_once() {
     held_by_pause(&room, &next, &stopped);
     assert_eq!(room.history(&next)["run"]["state"], "stopped");
     assert_eq!(room.carry_ons(&stopped).len(), 1, "the update added one");
+    std::thread::sleep(Duration::from_millis(500));
+    held_by_pause(&room, &next, &stopped);
 
     room.pause(&next, "/api/pauses/resume");
     room.go_until(&next, "the carry-on after Restart", |h| {
@@ -251,6 +262,14 @@ fn a_carry_on_that_never_runs_leaves_no_task_working() {
                         AND status IN ('queued', 'running', 'waiting_sign_in')";
             (state == [json!("cancelled")] && room.column(open, "id").is_empty()).then_some(())
         });
+        let ran = format!(
+            "SELECT m.id FROM messages m JOIN turns u ON u.id = m.turn_id \
+             WHERE u.answers = '{stopped}' AND m.role = 'assistant'"
+        );
+        assert!(
+            room.column(&ran, "id").is_empty(),
+            "{end}: the carry-on ran"
+        );
     }
 }
 
@@ -309,6 +328,16 @@ fn what_is_sent_once_update_answered_waits_and_runs_once_on_the_new_copy() {
         assert_eq!(room.column(&said, "id").len(), 1, "{text}: {history}");
     }
     assert_eq!(room.carry_ons(&stopped).len(), 1, "one carry-on");
+    for turn in [&to_ann, &to_lead] {
+        let replies = format!(
+            "SELECT id FROM messages WHERE turn_id = '{turn}' AND role = 'assistant' AND kind = 'text'"
+        );
+        assert_eq!(
+            room.column(&replies, "id").len(),
+            1,
+            "answered once: {history}"
+        );
+    }
 }
 
 /// #172's review: a turn that ends by itself after its carry-on was saved, before the update
@@ -351,6 +380,12 @@ fn a_turn_that_ends_by_itself_before_the_stop_gets_no_carry_on() {
         .count();
     assert_eq!(done, 1, "the task ended once: {history}");
     assert_eq!(room.lead_heard(), (2, 1), "the lead heard back once");
+    let unplaced = format!("SELECT id FROM turns WHERE id = '{turn}' AND position IS NULL");
+    assert_eq!(
+        room.column(&unplaced, "id").len(),
+        1,
+        "the carry-on started"
+    );
 }
 
 /// A carry-on that can't be saved: nothing is stopped, the turn under way goes on, and Update
@@ -398,7 +433,7 @@ fn an_update_that_cant_save_its_carry_ons_stops_nothing_and_says_why() {
     assert!(room.carry_ons(&stopped).is_empty(), "a carry-on was saved");
     assert_eq!(get(&room.service.info, "/api/app")["state"], "ready");
 
-    // The gate was lifted with it: the turn ends as any turn, and its task with it.
+    // The gate was lifted with it: the turn goes on to its end as any turn does.
     db.execute_batch("DROP TRIGGER made_to_fail").unwrap();
     room.go_until(&room.service.info, "the turn to end by itself", |h| {
         turn_by(h, "id", &stopped).is_some_and(|t| t["status"] == "done")
@@ -443,4 +478,9 @@ fn a_turn_that_never_ends_doesnt_hold_the_update() {
     });
     // Nothing is left holding, so no engine outlives the test.
     room.go_until(&next, "everything to end", all_ended);
+    assert!(
+        !room.states().contains(&json!("stopped")),
+        "{:?}",
+        room.states()
+    );
 }

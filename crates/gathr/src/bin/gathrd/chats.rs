@@ -92,8 +92,9 @@ pub enum Cmd {
         target: String,
         /// Who stopped it, as the carry-on says: Stop now, or an update.
         by: String,
-        /// An update saved every carry-on before it stopped anything: none is saved here.
-        carried: bool,
+        /// The turns an update saved a carry-on for, before it stopped anything: none is saved
+        /// here for those.
+        carried: Option<Arc<HashSet<String>>>,
         done: oneshot::Sender<()>,
     },
     /// The chat was archived, or with close deleted (F11): its turns and background commands end,
@@ -500,12 +501,18 @@ impl Chats {
     }
 
     /// Stop now in a scope: every agent's queue stops what it runs there; `by` is who did.
-    pub async fn stop_now(&self, scope: &str, target: &str, by: &str, carried: bool) {
+    pub async fn stop_now(
+        &self,
+        scope: &str,
+        target: &str,
+        by: &str,
+        carried: Option<Arc<HashSet<String>>>,
+    ) {
         self.ask_all(|done| Cmd::StopNow {
             scope: scope.to_string(),
             target: target.to_string(),
             by: by.to_string(),
-            carried,
+            carried: carried.clone(),
             done,
         })
         .await;

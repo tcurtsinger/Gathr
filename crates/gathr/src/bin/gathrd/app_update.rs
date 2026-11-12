@@ -4,6 +4,7 @@
 //! stopped, and hands over (`gathr::launch::hand_over`), which goes back to the copy before if the
 //! new one doesn't start. The window updates itself, apart (`gathr-app`'s `update.rs`).
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -134,11 +135,11 @@ impl AppUpdates {
         };
         let event = Event::point("gathr.app.install").trace(trace);
         let event = event.attr("version", version.clone());
-        let for_turns = match saved {
-            Ok((carry_ons, for_turns)) => {
-                let event = event.ok().attr("carry_ons", carry_ons);
+        let carry_ons = match saved {
+            Ok(carry_ons) => {
+                let event = event.ok().attr("carry_ons", carry_ons.len());
                 self.chats.writer.record(event);
-                for_turns
+                carry_ons
             }
             Err(why) => {
                 self.chats.set_updating(None).await;
@@ -153,7 +154,7 @@ impl AppUpdates {
         };
         self.publish();
         let (app, to, trace) = (self.clone(), version.clone(), trace.to_string());
-        tokio::spawn(async move { app.switch(to, by, trace, began, for_turns).await });
+        tokio::spawn(async move { app.switch(to, by, trace, began, carry_ons).await });
         Ok(json!({ "installing": version }))
     }
 
@@ -170,13 +171,16 @@ impl AppUpdates {
     ) {
         held_by_a_test().await;
         let deadline = tokio::time::Instant::from_std(began + ENDING);
-        let stopping = self.chats.stop_now("app", "", &by, true);
+        let carried: HashSet<String> = carry_ons.iter().map(|c| c.answers.clone()).collect();
+        let stopping = self.chats.stop_now("app", "", &by, Some(Arc::new(carried)));
         let _ = tokio::time::timeout_at(deadline, stopping).await;
         let event = Event::point("gathr.app.hold")
             .trace(&trace)
             .attr("version", version.as_str());
         let mut event = loop {
-            let running = self.running_now().await;
+            // Asked under the deadline too: a database that doesn't answer reads as still running.
+            let asked = tokio::time::timeout_at(deadline, self.running_now()).await;
+            let running = asked.unwrap_or_else(|_| json!({ "turns": ["unknown"] }));
             if running["turns"].as_array().is_none_or(Vec::is_empty) {
                 break event.ok();
             }
@@ -197,10 +201,12 @@ impl AppUpdates {
         for _ in 0..3 {
             let saved = carry_ons.clone();
             let drop = move |c: &mut rusqlite::Connection| gathr::carry::drop_unneeded(c, &saved);
-            match self.chats.writer.call(drop).await {
-                Some(Ok(n)) => dropped = Ok(n),
-                Some(Err(e)) => dropped = Err(e.to_string()),
-                None => {}
+            // Two seconds a try: a database that doesn't answer never holds the hand-over.
+            let tried = tokio::time::timeout(Duration::from_secs(2), self.chats.writer.call(drop));
+            match tried.await {
+                Ok(Some(Ok(n))) => dropped = Ok(n),
+                Ok(Some(Err(e))) => dropped = Err(e.to_string()),
+                Ok(None) | Err(_) => {}
             }
             if dropped.is_ok() {
                 break;
