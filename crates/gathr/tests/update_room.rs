@@ -311,6 +311,48 @@ fn what_is_sent_once_update_answered_waits_and_runs_once_on_the_new_copy() {
     assert_eq!(room.carry_ons(&stopped).len(), 1, "one carry-on");
 }
 
+/// #172's review: a turn that ends by itself after its carry-on was saved, before the update
+/// stopped it, settles its task as any turn does. Its carry-on is ended unstarted, so the finished
+/// work isn't asked for again on the new copy.
+#[test]
+fn a_turn_that_ends_by_itself_before_the_stop_gets_no_carry_on() {
+    let hold = TempDir::new();
+    let switch = hold.0.join("switch");
+    let room = Room::start_with(&[("GATHR_APP_SWITCH_HOLD", &switch)]);
+    let _next = Successor(room.data.clone());
+    let finished = room.ann_works();
+    // Update answered and saved the carry-on; the worker that stops things is held back.
+    room.update();
+    assert_eq!(room.carry_ons(&finished).len(), 1, "the carry-on was saved");
+    // Ann's turn goes on to its end by itself: its task is done.
+    room.go();
+    until(20, "Ann's turn to end by itself", || {
+        let history = room.history(&room.service.info);
+        (turn_by(&history, "id", &finished)?["status"] == "done").then_some(())
+    });
+
+    std::fs::write(&switch, "").unwrap();
+    let next = successor(&room.data, room.service.info.pid);
+    let history = room.go_until(&next, "the lead to hear back", |h| {
+        h["turns"].as_array().unwrap().len() == 4 && all_ended(h)
+    });
+    let carry_on = turn_by(&history, "answers", &finished).unwrap();
+    assert_eq!(carry_on["status"], "stopped", "{history}");
+    let why = carry_on["why"].as_str().unwrap_or_default();
+    assert!(why.contains("ended by itself"), "{history}");
+    let unsaid = "SELECT id FROM messages WHERE role = 'assistant' AND turn_id = '{}'";
+    let turn = carry_on["id"].as_str().unwrap();
+    let said = room.column(&unsaid.replace("{}", turn), "id");
+    assert!(said.is_empty(), "the carry-on ran: {history}");
+    let done = room
+        .states()
+        .iter()
+        .filter(|s| **s == json!("done"))
+        .count();
+    assert_eq!(done, 1, "the task ended once: {history}");
+    assert_eq!(room.lead_heard(), (2, 1), "the lead heard back once");
+}
+
 /// A carry-on that can't be saved: nothing is stopped, the turn under way goes on, and Update
 /// fails with a reference that traces to why.
 #[test]

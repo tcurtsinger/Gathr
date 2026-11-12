@@ -134,10 +134,11 @@ impl AppUpdates {
         };
         let event = Event::point("gathr.app.install").trace(trace);
         let event = event.attr("version", version.clone());
-        match saved {
-            Ok(carry_ons) => {
+        let for_turns = match saved {
+            Ok((carry_ons, for_turns)) => {
                 let event = event.ok().attr("carry_ons", carry_ons);
                 self.chats.writer.record(event);
+                for_turns
             }
             Err(why) => {
                 self.chats.set_updating(None).await;
@@ -149,17 +150,24 @@ impl AppUpdates {
                     format!("the agents' carry-ons weren't saved, so nothing was stopped: {why}");
                 return Err(Refused::Failed(why));
             }
-        }
+        };
         self.publish();
         let (app, to, trace) = (self.clone(), version.clone(), trace.to_string());
-        tokio::spawn(async move { app.switch(to, by, trace, began).await });
+        tokio::spawn(async move { app.switch(to, by, trace, began, for_turns).await });
         Ok(json!({ "installing": version }))
     }
 
     /// Stops what runs and hands over once the turns stopped have ended, or `ENDING` after Update
     /// was accepted with what still ran recorded: the carry-ons are saved, so nothing that runs,
     /// and no engine that won't take the stop, holds the update.
-    async fn switch(&self, version: String, by: String, trace: String, began: Instant) {
+    async fn switch(
+        &self,
+        version: String,
+        by: String,
+        trace: String,
+        began: Instant,
+        carry_ons: Vec<gathr::carry::Saved>,
+    ) {
         held_by_a_test().await;
         let deadline = tokio::time::Instant::from_std(began + ENDING);
         let stopping = self.chats.stop_now("app", "", &by, true);
@@ -181,6 +189,10 @@ impl AppUpdates {
             }
             tokio::time::sleep(LOOK).await;
         };
+        // A turn that ended by itself meanwhile needs no carry-on: it would repeat the work.
+        let drop = move |c: &mut rusqlite::Connection| gathr::carry::drop_unneeded(c, &carry_ons);
+        let dropped = self.chats.writer.call(drop).await.and_then(Result::ok);
+        event = event.attr("carry_ons_dropped", dropped);
         event.duration_us = Some(began.elapsed().as_micros() as i64);
         self.chats.writer.record(event);
         *self.handing_over.lock().expect("never poisoned") = Some(version);

@@ -293,11 +293,12 @@ function block(
     const made = gave.get(m.id);
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
-  // The turn that answers a stopped one is its carry-on: once it has started, the work goes on there.
-  const waiting = ['queued', 'waiting_sign_in'];
+  // The turn that answers a stopped one is its carry-on: once it runs or has ended, the work went on
+  // there. One still waiting, or stopped (it may never have started), leaves Continue with the person.
+  const went = ['running', 'done', 'failed'];
   const carried =
     turn?.status === 'stopped' &&
-    Object.values(state.turns).some((t) => t.answers === id && !waiting.includes(t.status));
+    Object.values(state.turns).some((t) => t.answers === id && went.includes(t.status));
   const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}|${carried}` : '';
   // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;
