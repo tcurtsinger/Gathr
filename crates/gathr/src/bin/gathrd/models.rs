@@ -245,27 +245,52 @@ async fn answered(lines: &mut tokio::sync::mpsc::UnboundedReceiver<Line>) -> Res
 }
 
 /// What a picker needs from each model: its id, name, line and effort levels, in the engine's order.
+/// Claude Code lists its newest models by family only (`opus`, which it names "Opus 5.5" signed in):
+/// each is followed by a row for the exact model it means today, so that model can be chosen and
+/// kept, by the id the engine resolves the family to.
 fn listed(init: &Value) -> Value {
-    let models: Vec<Value> = init["models"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .map(|m| {
-            // A family's Latest: an alias the engine resolves to its newest model today (0025).
-            let latest = m["value"] != "default"
-                && m["resolvedModel"].is_string()
-                && m["value"] != m["resolvedModel"];
+    let rows: Vec<&Value> = init["models"].as_array().into_iter().flatten().collect();
+    let mut models = Vec::new();
+    for m in &rows {
+        // A family's Latest: an alias the engine resolves to its newest model today (0025).
+        let latest = m["value"] != "default"
+            && m["resolvedModel"].is_string()
+            && m["value"] != m["resolvedModel"];
+        let row = |id: &Value, latest: bool, name: Value| {
             json!({
-                "id": m["value"],
+                "id": id,
                 "resolved": m["resolvedModel"],
                 "latest": latest,
-                "name": m["displayName"],
+                "name": name,
                 "description": m["description"],
                 "efforts": m["supportedEffortLevels"].as_array().cloned().unwrap_or_default(),
             })
-        })
-        .collect();
+        };
+        models.push(row(&m["value"], latest, m["displayName"].clone()));
+        // Once: the engine may list the exact model itself, or two families may mean one model.
+        let exact = &m["resolvedModel"];
+        let listed = rows.iter().any(|other| other["value"] == *exact)
+            || models.iter().any(|made| made["id"] == *exact);
+        if latest && !listed {
+            models.push(row(exact, false, exact_name(m).into()));
+        }
+    }
     json!({ "version": init["claude_code_version"], "models": models })
+}
+
+/// The exact model a family row means, as the engine names it: its display name signed in ("Opus
+/// 5.5"); signed out, where that's the family alone, the start of its description ("Opus 5.5 · …");
+/// else its id.
+fn exact_name(m: &Value) -> &str {
+    let versioned = |name: &&str| name.bytes().any(|b| b.is_ascii_digit());
+    let shown = m["displayName"].as_str().filter(versioned);
+    let described = m["description"]
+        .as_str()
+        .and_then(|d| d.split(" · ").next());
+    shown
+        .or(described.filter(versioned))
+        .or(m["resolvedModel"].as_str())
+        .unwrap_or_default()
 }
 
 async fn ask_codex(
@@ -309,4 +334,43 @@ async fn codex_list(client: &mut gathr::codex::client::Client) -> Result<Value, 
     }
     let models = gathr::codex::models::listed(&all)?;
     Ok(json!({"version":client.version, "models":models}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #171's review: an exact model is listed once, whether two families mean it or the engine
+    /// lists it itself; a family with no model named adds none.
+    #[test]
+    fn an_exact_model_is_listed_once() {
+        let family = |value: &str, exact: Value| json!({ "value": value, "displayName": "Made-up 9", "resolvedModel": exact });
+        let init = json!({ "models": [
+            family("default", "made-up-9".into()),
+            family("one", "made-up-9".into()),
+            family("two", "made-up-9".into()),
+            family("three", "made-up-8".into()),
+            family("made-up-8", "made-up-8".into()),
+            family("four", Value::Null),
+        ] });
+        let listed = listed(&init);
+        let ids: Vec<&str> = listed["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|m| m["id"].as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "default",
+                "one",
+                "made-up-9",
+                "two",
+                "three",
+                "made-up-8",
+                "four"
+            ]
+        );
+    }
 }

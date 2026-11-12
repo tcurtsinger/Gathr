@@ -86,6 +86,8 @@ record) reads the same `Frame`s and doesn't know which engine runs.
 - **Models (C4):** `model/list` on the account's app-server, all pages, hidden ones left out. Each
   model's `supportedReasoningEfforts` are its efforts and `defaultReasoningEffort` its default;
   efforts stay open strings. Codex reports no native family aliases. The owner chose Gathr-owned
+  Settings no longer offers Latest rows (the owner, 2026-11-12: exact models only, [0025](0025-engine-copies.md));
+  an agent saved on one keeps running as below.
   Family Latest rows (task 1291): parse `gpt-<numeric version>-<lowercase family>`, compare numeric
   components, and leave unfamiliar shapes exact. IDs are `latest:<family>`; names are Sol Latest,
   Terra Latest, Luna Latest, Astra Latest for today's account. Each inherits the chosen model's
