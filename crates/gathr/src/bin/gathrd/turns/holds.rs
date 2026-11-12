@@ -17,7 +17,7 @@ use serde_json::json;
 use super::{Ids, Task};
 
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
-const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
+use gathr::carry::CHECK_FIRST;
 
 impl Task {
     /// What holds the queued turn from starting: the update the person asked for, installing now
@@ -202,8 +202,16 @@ impl Task {
 
     /// Stop now (the person's alone): the running turn in the scope is interrupted, the engine's
     /// background commands there are ended by its own stop, and a carry-on naming them waits for
-    /// Restart. The scope is already paused, stopped, so nothing else starts.
-    pub(super) async fn stop_now(&mut self, scope: String, target: String, by: &str) {
+    /// Restart. The scope is already paused, stopped, so nothing else starts. An update stops the
+    /// same way with every carry-on saved before (`carried`, `gathr::carry`): none is saved here,
+    /// and the turn's end leaves its task to that carry-on.
+    pub(super) async fn stop_now(
+        &mut self,
+        scope: String,
+        target: String,
+        by: &str,
+        carried: bool,
+    ) {
         let pause = [Pause {
             scope,
             target,
@@ -233,6 +241,9 @@ impl Task {
             .as_ref()
             .filter(|t| !t.stopping)
             .map(|t| t.ids.clone());
+        if let Some(turn) = self.turn.as_mut().filter(|t| carried && !t.stopping) {
+            turn.carried = true;
+        }
         if running.is_some() {
             self.interrupt(&chat).await;
         }
@@ -252,13 +263,10 @@ impl Task {
             })
         });
         let Some(ids) = ids else { return };
-        let ended = match (turn_ended, commands.len()) {
-            (true, 0) => "your turn".to_string(),
-            (true, n) => format!("your turn and {n} background command(s)"),
-            (false, n) => format!("{n} background command(s) of yours"),
-        };
-        let said = format!("{by} ended {ended}. {CHECK_FIRST}");
-        self.carry_on(&ids, said).await;
+        if !carried {
+            let ended = gathr::carry::ended(turn_ended, commands.len());
+            self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
+        }
         self.record(
             Event::point("gathr.pause.stop_now")
                 .trace(&ids.trace)

@@ -105,11 +105,21 @@ impl Task {
     /// what this task holds, not from the write: a failed write still names the turn's agent, so
     /// Retry goes to it.
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
+        self.move_turn(ids, ids.task, status, why).await;
+    }
+
+    /// A turn an update stopped, its carry-on saved: it ends `stopped` and its task isn't settled,
+    /// so nobody is told it stopped while the carry-on works on it (0032).
+    pub(super) async fn end_carried(&self, ids: &Ids, why: Option<&str>) {
+        self.move_turn(ids, None, "stopped", why).await;
+    }
+
+    async fn move_turn(&self, ids: &Ids, task: Option<i64>, status: &str, why: Option<&str>) {
         let moved = gathr::tasks::Moved {
             chat: &ids.chat,
             turn: &ids.turn,
             agent: ids.agent.as_deref(),
-            task: ids.task,
+            task,
             trace: &ids.trace,
         };
         crate::coord::turn_moved(&self.chats, moved, status, why).await;

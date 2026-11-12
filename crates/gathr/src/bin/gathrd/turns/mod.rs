@@ -121,6 +121,8 @@ struct Running {
     /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
     push_allowed: bool,
     stopping: bool,
+    /// An update stopped it with its carry-on saved: its end doesn't settle its task (0032).
+    carried: bool,
     /// Why Gathr stopped it, when Gathr did: the stopped turn says so.
     stop_why: Option<String>,
     /// A message of it the database refused: the turn fails with this (audit 2.2.6).
@@ -387,9 +389,10 @@ impl Task {
                 scope,
                 target,
                 by,
+                carried,
                 done,
             } => {
-                self.stop_now(scope, target, &by).await;
+                self.stop_now(scope, target, &by, carried).await;
                 let _ = done.send(());
             }
             Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,
@@ -412,7 +415,9 @@ impl Task {
             .turn
             .as_ref()
             .filter(|t| !t.stopping && t.ids.chat == chat && t.ids.agent == agent)
-            .filter(|t| !self.compactions.contains(&t.ids.turn));
+            .filter(|t| !self.compactions.contains(&t.ids.turn))
+            // An update is about to stop that turn: the message waits as a turn of its own (0032).
+            .filter(|_| self.chats.updating().is_none());
         if let Some(running) = steered {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.

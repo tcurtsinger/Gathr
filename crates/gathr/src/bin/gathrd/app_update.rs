@@ -1,9 +1,8 @@
-//! Gathr updates its own service when the person says (0032, the room's manual-update plan). It
-//! looks for a newer release at start, every 10 minutes and when asked; installs it beside the copy
-//! that runs and checks it, and shows it ready. Update stops what runs as Stop now does, queues a
-//! carry-on per agent stopped, and hands over (`gathr::launch::hand_over`), which goes back to the
-//! copy before if the new one doesn't start. The window's own update is asked for through the data
-//! folder: it writes `window-update.json` when one is ready, and Update leaves `window-install`.
+//! Gathr updates its own service when the person says (0032). It looks for a newer release at
+//! start, every 10 minutes and when asked; installs it beside the copy that runs and checks it, and
+//! shows it ready. Update stops what runs as Stop now does, with a carry-on saved for each agent
+//! stopped, and hands over (`gathr::launch::hand_over`), which goes back to the copy before if the
+//! new one doesn't start. The window updates itself, apart (`gathr-app`'s `update.rs`).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -13,7 +12,7 @@ use axum::extract::{Extension, State as Extract};
 use axum::http::StatusCode;
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use gathr::app::{Copies, STARTING, Started, TRIAL, WINDOW_INSTALL, WINDOW_READY, release};
+use gathr::app::{Copies, STARTING, Started, TRIAL, release};
 use gathr::event::Event;
 use gathr::fetch::{Failure, failed, parse_version};
 use gathr::pauses::{self, Pause};
@@ -90,11 +89,10 @@ impl AppUpdates {
     /// The version that runs, the one before it, and the last check, for Settings.
     pub fn view(&self) -> Value {
         let current = self.copies.current();
-        let window = self.window_ready();
         let shown = self.shown();
-        let state = match (&shown.installing, &shown.ready, &window, shown.checking) {
+        let state = match (&shown.installing, &shown.ready, shown.checking) {
             (Some(_), ..) => "updating",
-            (_, Some(_), _, _) | (_, _, Some(_), _) => "ready",
+            (_, Some(_), _) => "ready",
             _ if release::feed().is_none() => "off",
             (.., true) => "checking",
             _ => "idle",
@@ -106,53 +104,66 @@ impl AppUpdates {
             "checked": shown.checked_us.map(ids::utc),
             "failed": shown.failed.as_ref().map(|(why, r)| json!({ "why": why, "ref": r })),
             "update": shown.ready.as_ref().map(|(v, since)| json!({ "version": v, "since_us": since })),
-            "window": window.map(|v| json!({ "version": v })),
             "running": shown.installing.as_ref().map(|(_, running)| running),
         })
     }
 
-    /// The window's update it downloaded and checked, if it has one ready.
-    fn window_ready(&self) -> Option<String> {
-        let file = std::fs::read(self.chats.data.path().join(WINDOW_READY)).ok()?;
-        let ready: Value = serde_json::from_slice(&file).ok()?;
-        ready["version"].as_str().map(String::from)
-    }
-
-    /// Update: installs what's ready, the service's now and the window's when it next looks.
-    pub fn install(self: &Arc<Self>, trace: &str) -> Result<Value, String> {
-        let (ready, window) = (self.shown().ready.clone(), self.window_ready());
-        if self.shown().installing.is_some() {
-            return Err("Gathr is updating already".into());
-        }
-        if ready.is_none() && window.is_none() {
-            return Err("no update is ready".into());
-        }
-        if window.is_some() {
-            let asked = std::fs::write(self.chats.data.path().join(WINDOW_INSTALL), b"");
-            asked.map_err(|e| format!("the window wasn't asked: {e}"))?;
-        }
-        let version = ready.map(|(version, _)| version);
-        let event = Event::point("gathr.app.install").trace(trace).ok();
-        let event = event
-            .attr("version", version.clone())
-            .attr("window", window.clone());
-        self.chats.writer.record(event);
-        if let Some(version) = &version {
-            self.shown().installing = Some((version.clone(), Value::Null));
-            self.publish();
-            let (app, version, trace) = (self.clone(), version.clone(), trace.to_string());
-            tokio::spawn(async move { app.switch(version, trace).await });
-        }
-        Ok(json!({ "installing": version, "window": window }))
-    }
-
-    /// Stops what runs, its agents to carry on after, and hands over once the turns stopped have
-    /// ended, or after `ENDING` with what still ran recorded.
-    async fn switch(&self, version: String, trace: String) {
+    /// Update: installs the release that's ready. Before it answers, no new turn starts any more
+    /// and a carry-on is saved for everything it will stop; then the switch begins. When a carry-on
+    /// can't be saved, nothing is stopped and Update fails (`Refused::Failed`).
+    pub async fn install(self: &Arc<Self>, trace: &str) -> Result<Value, Refused> {
+        let version = {
+            let mut shown = self.shown();
+            if shown.installing.is_some() {
+                return Err(Refused::Not("Gathr is updating already".into()));
+            }
+            let Some((version, _)) = shown.ready.clone() else {
+                return Err(Refused::Not("no update is ready".into()));
+            };
+            shown.installing = Some((version.clone(), Value::Null));
+            version
+        };
+        let began = Instant::now();
         self.chats.set_updating(Some(version.clone())).await;
         let by = format!("Gathr's update to {version}");
-        self.chats.stop_now("app", "", &by).await;
-        let began = Instant::now();
+        let stopper = by.clone();
+        let save = move |c: &mut rusqlite::Connection| gathr::carry::save_all(c, &stopper);
+        let saved = match self.chats.writer.call(save).await {
+            Some(saved) => saved.map_err(|e| e.to_string()),
+            None => Err("the database didn't answer".to_string()),
+        };
+        let event = Event::point("gathr.app.install").trace(trace);
+        let event = event.attr("version", version.clone());
+        match saved {
+            Ok(carry_ons) => {
+                let event = event.ok().attr("carry_ons", carry_ons);
+                self.chats.writer.record(event);
+            }
+            Err(why) => {
+                self.chats.set_updating(None).await;
+                self.shown().installing = None;
+                let event = event.error("carry_on").attr("why", why.clone());
+                self.chats.writer.record(event);
+                self.publish();
+                let why =
+                    format!("the agents' carry-ons weren't saved, so nothing was stopped: {why}");
+                return Err(Refused::Failed(why));
+            }
+        }
+        self.publish();
+        let (app, to, trace) = (self.clone(), version.clone(), trace.to_string());
+        tokio::spawn(async move { app.switch(to, by, trace, began).await });
+        Ok(json!({ "installing": version }))
+    }
+
+    /// Stops what runs and hands over once the turns stopped have ended, or `ENDING` after Update
+    /// was accepted with what still ran recorded: the carry-ons are saved, so nothing that runs,
+    /// and no engine that won't take the stop, holds the update.
+    async fn switch(&self, version: String, by: String, trace: String, began: Instant) {
+        held_by_a_test().await;
+        let deadline = tokio::time::Instant::from_std(began + ENDING);
+        let stopping = self.chats.stop_now("app", "", &by, true);
+        let _ = tokio::time::timeout_at(deadline, stopping).await;
         let event = Event::point("gathr.app.hold")
             .trace(&trace)
             .attr("version", version.as_str());
@@ -373,6 +384,24 @@ async fn trial(app: Arc<AppUpdates>) {
     app.chats.writer.record(event);
 }
 
+/// Why an Update didn't begin: nothing to do (409), or it failed (500).
+pub enum Refused {
+    Not(String),
+    Failed(String),
+}
+
+/// In tests, `GATHR_APP_SWITCH_HOLD` names a file the switch waits for (a minute at most) before
+/// it stops anything, so a test reads what was sent meanwhile while the old turns still run.
+async fn held_by_a_test() {
+    let Some(file) = std::env::var_os("GATHR_APP_SWITCH_HOLD") else {
+        return;
+    };
+    let until = Instant::now() + Duration::from_secs(60);
+    while !std::path::Path::new(&file).exists() && Instant::now() < until {
+        tokio::time::sleep(LOOK).await;
+    }
+}
+
 /// Checks at start, then every 10 minutes or when asked, until the service stops: the newest
 /// release checked is shown ready until the person updates.
 pub async fn run(app: Arc<AppUpdates>) {
@@ -412,9 +441,13 @@ async fn update(
 ) -> Answer {
     let asked: Value = serde_json::from_slice(&body).unwrap_or_default();
     if asked["install"] == true {
-        let installing = s.app.install(&t.0);
-        let why = |why: String| fail(StatusCode::CONFLICT, "Update failed", &why, &t.0);
-        return installing.map(Json).map_err(why);
+        return s.app.install(&t.0).await.map(Json).map_err(|refused| {
+            let (status, why) = match refused {
+                Refused::Not(why) => (StatusCode::CONFLICT, why),
+                Refused::Failed(why) => (StatusCode::INTERNAL_SERVER_ERROR, why),
+            };
+            fail(status, "Update failed", &why, &t.0)
+        });
     }
     if !s.app.check_now() {
         let why = "this dev build has no release feed: set GATHR_APP_RELEASES";

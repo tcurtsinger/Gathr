@@ -62,6 +62,7 @@ impl Task {
             service_approvals: HashMap::new(),
             push_allowed: false,
             stopping: false,
+            carried: false,
             stop_why: None,
             save_failed: None,
             signed_out: false,

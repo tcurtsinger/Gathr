@@ -6,7 +6,9 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use common::feed::Feed;
-use common::{TempDir, TestService, gathr, held_recording, recording, replay_engine, until};
+use common::{
+    TempDir, TestService, call_tool, gathr, held_recording, recording, replay_engine, text, until,
+};
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::{VERSION, http};
 use serde_json::{Value, json};
@@ -297,35 +299,211 @@ fn a_background_command_never_holds_an_update() {
     std::fs::write(dir.0.join("go"), "").unwrap();
 }
 
-/// The window downloads and checks its own update; the service shows it ready, and Update asks
-/// the window to install it, through the data folder they share.
-#[test]
-fn update_asks_the_window_to_install_its_ready_update() {
-    let dir = TempDir::new();
-    let data = dir.0.join("data");
-    let old = seed_copy(&data, "0.0.1");
-    let feed = Feed::start();
-    let service = TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
-    let _next = Successor(data.clone());
-    let none = service.send("POST", "/api/app/update", json!({ "install": true }));
-    assert_eq!(none.status, 409, "nothing is ready: {}", none.body);
-    assert!(none.json()["ref"].is_string(), "{}", none.body);
+/// A team's update: the old copy's service, its folder, and a chat with a Supervisor (Lead) and a
+/// member (Ann) whose engines each hold once, after their message arrives, until `go` is made.
+struct Room {
+    dir: TempDir,
+    data: PathBuf,
+    feed: Feed,
+    service: TestService,
+    chat: String,
+    lead: String,
+    ann: String,
+}
 
-    let version = json!({ "version": "9.9.9" }).to_string();
-    std::fs::write(data.join("window-update.json"), version).unwrap();
-    let app = ready(&service);
-    assert_eq!(app["window"]["version"], "9.9.9", "{app}");
-    assert_eq!(install(&service)["window"], "9.9.9");
+impl Room {
+    fn start() -> Room {
+        let dir = TempDir::new();
+        let data = dir.0.join("data");
+        let old = seed_copy(&data, "0.0.1");
+        let feed = Feed::start();
+        // Each engine holds once and uses `go` up, so the test lets one held turn go on at a time.
+        let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
+        let (first, rest) = frames.split_once('\n').unwrap();
+        let held = dir.0.join("held.jsonl");
+        let take = r#"{"dir":"hold","line":"take"}"#;
+        std::fs::write(&held, format!("{first}\n{take}\n{rest}")).unwrap();
+        // GitHub's `gh` stands in with no answers, so a task's look at its PRs fails at once.
+        let answers = dir.0.join("gh.json");
+        std::fs::write(&answers, "[]").unwrap();
+        let service = TestService::start_program(
+            &old,
+            &data,
+            &[
+                ("GATHR_APP_RELEASES", &feed.url()),
+                ("GATHR_CLAUDE_PATH", &replay_engine()),
+                ("GATHR_REPLAY", &held),
+                ("GATHR_REPLAY_HOLD", &dir.0.join("go")),
+                ("GATHR_REPLAY_ENV", &dir.0.join("env.jsonl")),
+                ("GATHR_GH_PATH", &common::fake_gh()),
+                ("GATHR_FAKE_GH", &answers),
+            ],
+        );
+        let account = service.signed_in(&data);
+        let agent = |name: &str| {
+            let made = json!({ "name": name, "account": account });
+            let made = service.send("POST", "/api/agents", made);
+            assert_eq!(made.status, 200, "{}", made.body);
+            made.json()["id"].as_str().unwrap().to_string()
+        };
+        let (lead, ann) = (agent("Lead"), agent("Ann"));
+        let members =
+            json!([{ "agent": lead, "role": "supervisor" }, { "agent": ann, "role": "member" }]);
+        let made = service.send("POST", "/api/chats", json!({ "members": members }));
+        assert_eq!(made.status, 200, "{}", made.body);
+        let chat = made.json()["id"].as_str().unwrap().to_string();
+        Room {
+            dir,
+            data,
+            feed,
+            service,
+            chat,
+            lead,
+            ann,
+        }
+    }
+
+    /// Lets the one engine that holds now go on.
+    fn go(&self) {
+        std::fs::write(self.dir.0.join("go"), "").unwrap();
+    }
+
+    /// The token of the `n`th engine started.
+    fn token(&self, n: usize) -> String {
+        let line = common::nth(&self.dir.0.join("env.jsonl"), n);
+        line["GATHR_AGENT_TOKEN"].as_str().unwrap().to_string()
+    }
+
+    /// The lead gives Ann task #1 and ends its turn; Ann's turn on the task runs and holds: its id.
+    fn ann_works(&self) -> String {
+        say(&self.service, &self.chat, "Plan it");
+        let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
+        let given = text(&call_tool(
+            self.service.info.port,
+            &self.token(0),
+            "give_task",
+            ask,
+        ));
+        assert!(given.starts_with("Task #1 for ann: ready."), "{given}");
+        self.go();
+        let history = self
+            .service
+            .wait_for(&self.chat, 20, "Ann's turn on the task", |h| {
+                let turns = h["turns"].as_array().unwrap();
+                turns.len() == 2 && turns[0]["status"] == "done" && turns[1]["status"] == "running"
+            });
+        assert_eq!(history["turns"][1]["agent"], self.ann.as_str(), "{history}");
+        assert_eq!(history["turns"][1]["task"], 1, "{history}");
+        history["turns"][1]["id"].as_str().unwrap().to_string()
+    }
+
+    /// A release is published and Update pressed.
+    fn update(&self) {
+        publish(
+            &self.feed,
+            &self.dir.0,
+            VERSION,
+            env!("CARGO_BIN_EXE_gathrd"),
+            "new ui",
+        );
+        update_now(&self.service);
+    }
+
+    /// One column of a read-only query on the folder's database.
+    fn column(&self, sql: &str, column: &str) -> Vec<Value> {
+        let (ok, rows) = gathr(&self.data, &["diag", "query", sql]);
+        assert!(ok, "{rows}");
+        let rows = rows["rows"].as_array().cloned().unwrap_or_default();
+        rows.iter().map(|row| row[column].clone()).collect()
+    }
+
+    /// Every state task #1 has had, in order.
+    fn states(&self) -> Vec<Value> {
+        let sql = "SELECT attrs FROM event_log WHERE name = 'gathr.task.state' ORDER BY id";
+        let attrs = self.column(sql, "attrs");
+        attrs
+            .iter()
+            .map(|a| a["gathr.task.state"].clone())
+            .collect()
+    }
+
+    /// How many turns the lead has had, and how many hear-backs were ever queued.
+    fn lead_heard(&self) -> (usize, usize) {
+        let turns = format!("SELECT id FROM turns WHERE agent_id = '{}'", self.lead);
+        let heard = "SELECT name FROM event_log WHERE name = 'gathr.task.hear_back'";
+        (
+            self.column(&turns, "id").len(),
+            self.column(heard, "name").len(),
+        )
+    }
+
+    /// The turns saved on task #1 that answer `turn`: their ids.
+    fn carry_ons(&self, turn: &str) -> Vec<Value> {
+        let sql = format!("SELECT id FROM turns WHERE task = 1 AND answers = '{turn}'");
+        self.column(&sql, "id")
+    }
+}
+
+/// The carry-on of `stopped` on the service at `next`, running and held: the chat's history.
+fn carry_on_held(next: &ServiceInfo, chat: &str, stopped: &str) -> Value {
+    until(
+        30,
+        "the carry-on to run and hold on the new service",
+        || {
+            let history = get(next, &format!("/api/chats/{chat}"));
+            let turns = history["turns"].as_array()?;
+            let carried = turns.iter().find(|t| t["answers"] == stopped)?;
+            (carried["status"] == "running").then_some(history.clone())
+        },
+    )
+}
+
+/// Nobody is told a task stopped when it is carrying on (the small Update button's plan, change
+/// 2): an update that stops a member in the middle of a task never sets the task `stopped`, its
+/// lead hears nothing until the task ends, and the one carry-on runs once on the new copy.
+#[test]
+fn an_update_in_the_middle_of_a_task_carries_it_on_and_tells_its_lead_nothing_false() {
+    let room = Room::start();
+    let _next = Successor(room.data.clone());
+    let stopped = room.ann_works();
+
+    room.update();
+    // Ann's old engine goes on to its end, as a stopped engine does.
+    room.go();
+    let next = successor(&room.data, room.service.info.pid);
+
+    // The checkpoint: the carry-on runs and holds. Nothing has ended yet.
+    let history = carry_on_held(&next, &room.chat, &stopped);
+    assert_eq!(history["turns"][1]["status"], "stopped", "{history}");
+    let states = room.states();
     assert!(
-        data.join("window-install").is_file(),
-        "the window wasn't asked"
+        !states.contains(&json!("stopped")),
+        "the task was told stopped: {states:?}"
     );
-    std::thread::sleep(Duration::from_millis(500));
-    let still = ServiceInfo::read(&DataDir::new(&data)).unwrap();
     assert_eq!(
-        still.pid, service.info.pid,
-        "the service has no update of its own"
+        room.lead_heard(),
+        (1, 0),
+        "the lead heard back before the task ended"
     );
+    assert_eq!(room.carry_ons(&stopped).len(), 1, "one carry-on");
+
+    room.go();
+    // The task ends once, and only then its lead hears back: its turn holds, then is let go.
+    until(30, "the lead's hear-back to be queued", || {
+        (room.lead_heard() == (2, 1)).then_some(())
+    });
+    room.go();
+    until(30, "every turn to end", || {
+        let history = get(&next, &format!("/api/chats/{}", room.chat));
+        let turns = history["turns"].as_array()?;
+        (turns.len() == 4 && turns[2]["status"] == "done" && turns[3]["status"] == "done")
+            .then_some(())
+    });
+    let states = room.states();
+    let done = states.iter().filter(|s| **s == json!("done")).count();
+    assert_eq!(done, 1, "the task ended once: {states:?}");
+    assert_eq!(room.lead_heard(), (2, 1), "the lead heard back once");
+    assert_eq!(room.carry_ons(&stopped).len(), 1, "still one carry-on");
 }
 
 fn current(data: &Path) -> Value {

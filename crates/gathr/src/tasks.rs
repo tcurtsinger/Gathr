@@ -623,7 +623,11 @@ pub fn restart(
 pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     let tx = conn.transaction()?;
     let working: Vec<i64> = {
-        let mut stmt = tx.prepare("SELECT number FROM tasks WHERE state = 'working'")?;
+        // A task with a turn waiting on it carries on in that turn: it isn't stopped (0032).
+        let mut stmt = tx.prepare(
+            "SELECT number FROM tasks WHERE state = 'working' AND NOT EXISTS
+             (SELECT 1 FROM turns u WHERE u.task = tasks.number AND u.status = 'queued')",
+        )?;
         let rows = stmt.query_map([], |r| r.get(0))?;
         rows.collect::<Result<_, _>>()?
     };

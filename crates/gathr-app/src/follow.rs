@@ -40,7 +40,6 @@ pub fn run(app: &AppHandle) {
             if updates.is_some_and(|u| u.installing.load(Ordering::SeqCst)) {
                 continue;
             }
-            update::asked(&app);
             match ServiceInfo::read(&service.data) {
                 Ok(now) if now.pid != known.pid && answers(&now) => {
                     silent = 0;
