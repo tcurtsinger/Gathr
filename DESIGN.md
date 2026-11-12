@@ -183,7 +183,8 @@ status icon, a short label, the chip, the duration ("Ran" then "git merge origin
 Read, Edited, Searched, Fetched, Searched the web, Ran a sub-agent). When the engine gave the
 call its own words, they are the label ("Show what changed" then "git status --short"). The
 chip is one line, cut with an ellipsis to the column it is in, never widening it, before the
-label is cut; pointing at a cut chip shows it whole in the shared tooltip. A step that kept
+label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
+the shared tooltip. A step that kept
 nothing reads as before ("Ran a command"), and the row's own label while it runs does not
 change. The turn's last text is the message. A turn that only wrote once has no row.
 

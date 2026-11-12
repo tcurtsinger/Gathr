@@ -2,6 +2,7 @@
 // and the approvals docked above the composer.
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
+import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
@@ -155,11 +156,42 @@ test('a step’s chip says what it ran; a long one is cut to the column and show
   const time = row.querySelector('.work-time') as HTMLElement;
   expect(time.getBoundingClientRect().right).toBeLessThanOrEqual(list.getBoundingClientRect().right);
 
-  // Only a chip that's cut has more to show.
+  // Only a chip that's cut has more to show: pointing at a whole one opens nothing.
   await screen.getByText('git status --short').hover();
+  await new Promise((done) => setTimeout(done, 300));
+  expect(screen.getByRole('tooltip').elements()).toHaveLength(0);
   await screen.getByText(long).hover();
   await expect.element(screen.getByRole('tooltip')).toHaveTextContent(long);
   expect(screen.getByRole('tooltip').elements()).toHaveLength(1);
+});
+
+test('the keyboard reaches a cut chip’s whole text: it takes focus, and a whole chip is no stop', async () => {
+  const long = `cargo nextest run --workspace --locked ${'--made-up-flag '.repeat(12)}`.trim();
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { lead: turn('lead', 'a', 0) },
+    messages: [
+      tool('t1', 'lead', 'Bash', { input: { text: 'git status --short' } }),
+      tool('t2', 'lead', 'Shell', { input: { text: long } }),
+      said('m1', 'lead', 'Made-up final answer'),
+    ],
+  };
+  const screen = await render(
+    <div style={{ width: 520 }}>
+      <View state={state} />
+    </div>,
+  );
+  const row = screen.getByRole('button', { name: 'Worked · 2 steps' });
+  await row.click();
+  await expect.element(screen.getByRole('listitem').nth(1)).toBeVisible();
+  const [short, cut] = [...document.querySelectorAll<HTMLElement>('.work-detail')];
+  await expect.poll(() => cut.tabIndex).toBe(0);
+  expect(short.tabIndex).toBe(-1);
+  (row.element() as HTMLElement).focus();
+  await userEvent.keyboard('{Tab}');
+  expect(document.activeElement).toBe(cut);
+  await expect.element(screen.getByRole('tooltip')).toHaveTextContent(long);
 });
 
 test('a running turn’s row says what the agent is doing now, with no message under it yet', async () => {

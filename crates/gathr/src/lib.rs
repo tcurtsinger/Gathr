@@ -36,6 +36,7 @@ pub mod steps;
 pub mod store;
 pub mod tasks;
 pub mod team;
+pub mod text;
 pub mod timeline;
 pub mod waits;
 pub mod worktree;

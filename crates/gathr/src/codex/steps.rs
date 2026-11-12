@@ -31,8 +31,8 @@ const SHELLS: [&str; 5] = ["pwsh", "powershell", "bash", "zsh", "sh"];
 
 /// The command as the agent wrote it. Codex hands over the command line of the shell it runs it
 /// in, its words quoted as a POSIX shell quotes them, on Windows too:
-/// `"C:\\…\\pwsh.exe" -Command 'git status'`. A line that isn't a shell, its flags and one
-/// script stays as it is.
+/// `"C:\\…\\pwsh.exe" -Command 'git status'`. A line that isn't a shell, flags ending in a command
+/// flag, and one script stays as it is.
 fn unwrapped(command: &str) -> String {
     let script = || {
         let mut words = words(command)?;
@@ -40,8 +40,14 @@ fn unwrapped(command: &str) -> String {
         let (shell, flags) = words.split_first()?;
         let name = shell.rsplit(['\\', '/']).next()?.to_ascii_lowercase();
         let name = name.strip_suffix(".exe").unwrap_or(&name);
-        let wraps =
-            SHELLS.contains(&name) && !flags.is_empty() && flags.iter().all(|f| f.starts_with('-'));
+        // Only what follows a command flag is a script: `-Command`, `-c`, or short flags run
+        // together that end in `c` (`-lc`). After anything else it's a file the shell runs.
+        let (last, before) = flags.split_last()?;
+        let short = last.strip_prefix('-').unwrap_or_default();
+        let run_together = short.len() <= 3 && short.bytes().all(|b| b.is_ascii_lowercase());
+        let command =
+            last.eq_ignore_ascii_case("-command") || (short.ends_with('c') && run_together);
+        let wraps = SHELLS.contains(&name) && command && before.iter().all(|f| f.starts_with('-'));
         wraps.then_some(script)
     };
     script().unwrap_or_else(|| command.to_string())
@@ -111,6 +117,9 @@ mod tests {
             ),
             ("/bin/zsh -lc 'cargo test'".to_string(), "cargo test"),
             ("bash -l -c \"npm test\"".to_string(), "npm test"),
+            ("sh -ec 'make all'".to_string(), "make all"),
+            ("pwsh -NoProfile -c 'git log'".to_string(), "git log"),
+            ("powershell.exe -NoLogo -COMMAND 'dir'".to_string(), "dir"),
         ];
         for (command, script) in cases {
             assert_eq!(unwrapped(&command), script, "command: {command}");
@@ -123,6 +132,12 @@ mod tests {
             "git status --short",
             "bash build.sh",
             "pwsh -File build.ps1 -Fast",
+            // A script file run by a shell: without the shell it would read as a bare name.
+            "bash -l build.sh",
+            "sh -e deploy.sh",
+            "pwsh -File build.ps1",
+            "pwsh -NoProfile -ExecutionPolicy Bypass",
+            "bash --login build.sh",
             "pwsh -Command 'left open",
             "cargo run -- 'one script'",
         ] {

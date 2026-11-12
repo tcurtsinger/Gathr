@@ -3,8 +3,37 @@
 
 pub mod stream;
 
-/// Flags whose value is a secret.
-const SECRET_FLAGS: &[&str] = &["token", "key", "secret", "password"];
+/// Names whose value is a secret, matched word by word in a flag (`--api-key`, `-AccessToken`), a
+/// header (`X-Auth-Token`) or a PowerShell variable (`$env:GH_TOKEN`); never inside a longer word
+/// (`--keyboard`, `--max-tokens`). `--pwd` is left out: it's as often a folder.
+const SECRET_WORDS: &[&str] = &[
+    "token",
+    "key",
+    "secret",
+    "password",
+    "passwd",
+    "auth",
+    "credential",
+    "credentials",
+    "apikey",
+];
+
+/// Flags named like a secret that take no value: the word after them is not one.
+const NO_VALUE: &[&str] = &["password-stdin", "with-token"];
+
+/// How a provider's key starts, when the word is at least 20 characters.
+const KEY_PREFIXES: &[&str] = &[
+    "sk-",
+    "sk_live_",
+    "sk_test_",
+    "ghp_",
+    "gho_",
+    "ghu_",
+    "ghs_",
+    "github_pat_",
+    "xoxb-",
+    "xoxp-",
+];
 
 /// Keys whose string value is a secret whatever it looks like (`refresh_token`, `Authorization`).
 const SECRET_KEYS: &[&str] = &[
@@ -18,6 +47,9 @@ const SECRET_KEYS: &[&str] = &[
     "cookie",
 ];
 
+/// How every mark left for a secret starts.
+pub(crate) const MARK: &str = "[redacted:";
+
 /// Where a word ends: whitespace, or the punctuation JSON and shell quoting put around a value,
 /// so a key inside `{"key":"sk-…"}` or a fragment of streamed tool input is still one word.
 fn ends_word(c: char) -> bool {
@@ -28,56 +60,259 @@ fn ends_word(c: char) -> bool {
         )
 }
 
-/// What's already hidden stays as it is, so text redacted twice (a step's text, then the event
-/// that carries it) reads the same: a mark is passed over whole, and stands for the secret a
-/// `--token` or `Bearer` before it was waiting for.
+/// Ends a command: a secret waited for after a flag isn't looked for past it.
+fn ends_command(c: char) -> bool {
+    matches!(c, ';' | '|' | '&' | '<' | '>' | ')')
+}
+
+/// One pass, left to right. What's already hidden stays as it is, so text redacted twice (a
+/// step's text, then a frame that carries it) reads the same: a mark is passed over whole, and
+/// stands for the secret a `--token` or `Bearer` before it was waiting for.
 pub fn redact(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
-    let mut hide_next: Option<&'static str> = None;
+    let mut waiting: Option<&'static str> = None;
     let mut rest = text;
-    while let Some((at, end)) = mark(rest) {
-        redact_part(&rest[..at], &mut hide_next, &mut out);
-        hide_next = None;
-        out.push_str(&rest[at..end]);
-        rest = &rest[end..];
+    while let Some(first) = rest.chars().next() {
+        if let Some(len) = mark_len(rest) {
+            waiting = None;
+            out.push_str(&rest[..len]);
+            rest = &rest[len..];
+            continue;
+        }
+        if let Some(kind) = waiting {
+            // A quote opens a value only after a gap: straight after the flag it closes the
+            // flag's own quotes (`"--token","abc"`), and what follows is still waited for.
+            let opens = out.ends_with(|c: char| c.is_whitespace() || c == '=' || c == ':');
+            let len = match first {
+                '"' | '\'' if !opens => 0,
+                '[' | '{' | '(' | ',' | ':' | '=' => 0,
+                _ => value_len(rest),
+            };
+            if len == 0 {
+                if ends_command(first) {
+                    waiting = None;
+                }
+                out.push(first);
+                rest = &rest[first.len_utf8()..];
+            } else {
+                waiting = None;
+                push_hidden(&mut out, &rest[..len], kind);
+                rest = &rest[len..];
+            }
+            continue;
+        }
+        let end = rest.find(ends_word).unwrap_or(rest.len());
+        if end == 0 {
+            out.push(first);
+            rest = &rest[first.len_utf8()..];
+            continue;
+        }
+        let taken = word(rest, end, &mut out, &mut waiting);
+        rest = &rest[taken..];
     }
-    redact_part(rest, &mut hide_next, &mut out);
     out
 }
 
-/// Where the next `[redacted:<kind>]` starts and ends.
-fn mark(text: &str) -> Option<(usize, usize)> {
-    const OPENS: &str = "[redacted:";
-    let at = text.find(OPENS)?;
-    let kind = &text[at + OPENS.len()..];
-    let len = kind.find(']')?;
+/// The length of the `[redacted:<kind>]` that `text` starts with.
+fn mark_len(text: &str) -> Option<usize> {
+    let kind = text.strip_prefix(MARK)?;
+    let len = kind.bytes().take(17).position(|b| b == b']')?;
     let named = len > 0 && kind[..len].bytes().all(|b| b.is_ascii_lowercase());
-    named.then_some((at, at + OPENS.len() + len + 1))
+    named.then_some(MARK.len() + len + 1)
 }
 
-fn redact_part(text: &str, hide_next: &mut Option<&'static str>, out: &mut String) {
-    for piece in text.split_inclusive(ends_word) {
-        let word = piece.trim_end_matches(ends_word);
-        let gap = &piece[word.len()..];
-        if word.is_empty() {
-            out.push_str(piece);
-            continue;
+/// How much of `text`, from its start, is one value as a shell reads it: a quoted run, or up to
+/// whitespace, a quote or what ends a command. 0 when it starts with none, or with a mark.
+fn value_len(text: &str) -> usize {
+    if text.starts_with(MARK) {
+        return 0;
+    }
+    match text.bytes().next() {
+        // A failed search means no such quote is left, so none is searched for again: one pass.
+        Some(quote @ (b'"' | b'\'')) => {
+            let close = text.bytes().skip(1).position(|b| b == quote);
+            close.map_or(0, |at| at + 2)
         }
-        if let Some(kind) = hide_next.take() {
-            out.push_str(&format!("[redacted:{kind}]{gap}"));
-            continue;
+        _ => {
+            let ends = |c: char| {
+                c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '\\') || ends_command(c)
+            };
+            text.find(ends).unwrap_or(text.len())
         }
-        match classify(word) {
-            Some(Shape::Whole(kind)) => out.push_str(&format!("[redacted:{kind}]")),
-            Some(Shape::Value(name)) => out.push_str(&format!("{name}=[redacted:env]")),
-            Some(Shape::Flag(flag)) => out.push_str(&format!("{flag}[redacted:flag]")),
-            Some(Shape::Next(kind)) => {
-                *hide_next = Some(kind);
+    }
+}
+
+/// The mark in place of `value`, inside the value's own quotes when it has them, so JSON text
+/// and a quoted command keep their shape.
+fn push_hidden(out: &mut String, value: &str, kind: &str) {
+    let quote = value.chars().next().filter(|c| matches!(c, '"' | '\''));
+    out.extend(quote);
+    out.push_str(&format!("{MARK}{kind}]"));
+    out.extend(quote);
+}
+
+/// Writes `rest[..upto]`, then hides the value that starts there; with none there yet (a space,
+/// an open quote), the secret is waited for. Answers how much of `rest` that took.
+fn hide(
+    rest: &str,
+    upto: usize,
+    kind: &'static str,
+    out: &mut String,
+    waiting: &mut Option<&'static str>,
+) -> usize {
+    out.push_str(&rest[..upto]);
+    let len = value_len(&rest[upto..]);
+    match len {
+        0 => *waiting = Some(kind),
+        _ => push_hidden(out, &rest[upto..upto + len], kind),
+    }
+    upto + len
+}
+
+/// Whether a name says its value is a secret: one of its words, split at `-`, `_`, `.` and where
+/// a capital follows a small letter (`ApiKey`), is a secret word; or it is `pass` whole.
+fn secret_name(name: &str) -> bool {
+    let mut words = String::with_capacity(name.len() + 4);
+    let mut small = false;
+    for c in name.chars() {
+        if c.is_ascii_uppercase() && small {
+            words.push('-');
+        }
+        small = c.is_ascii_lowercase() || c.is_ascii_digit();
+        words.push(c.to_ascii_lowercase());
+    }
+    let mut words = words.split(['-', '_', '.']);
+    words.any(|w| SECRET_WORDS.contains(&w)) || name.eq_ignore_ascii_case("pass")
+}
+
+/// Reads the word `rest[..end]` with what follows it, writes it with its secret hidden, and
+/// answers how much of `rest` that took.
+fn word(rest: &str, end: usize, out: &mut String, waiting: &mut Option<&'static str>) -> usize {
+    let (word, after) = rest.split_at(end);
+    if let Some((at, len)) = url_login(rest, end) {
+        out.push_str(&rest[..at]);
+        push_hidden(out, "", "url");
+        return at + len;
+    }
+    if word.eq_ignore_ascii_case("$env")
+        && let Some(value) = powershell_env(after)
+    {
+        return hide(rest, end + value, "env", out, waiting);
+    }
+    if let Some(value) = header(word, after) {
+        return hide(rest, end + value, "header", out, waiting);
+    }
+    let named = word.trim_start_matches('-');
+    let dashes = word.len() - named.len();
+    let name = named.split('=').next().unwrap_or(named);
+    let flag = (1..=2).contains(&dashes) && name.starts_with(|c: char| c.is_ascii_alphabetic());
+    let alone = !word.contains('=') && NO_VALUE.contains(&name.to_ascii_lowercase().as_str());
+    if flag && secret_name(name) && !alone {
+        // PowerShell also takes `-Token:value`.
+        let colon = after.starts_with(':') && !after[1..].starts_with(char::is_whitespace);
+        return match word.find('=') {
+            Some(eq) => hide(rest, eq + 1, "flag", out, waiting),
+            None if colon => hide(rest, end + 1, "flag", out, waiting),
+            None => {
                 out.push_str(word);
+                *waiting = Some("flag");
+                end
             }
-            None => out.push_str(word),
+        };
+    }
+    if word.eq_ignore_ascii_case("bearer") {
+        out.push_str(word);
+        *waiting = Some("bearer");
+        return end;
+    }
+    if let Some(kind) = key_kind(word) {
+        push_hidden(out, "", kind);
+        return end;
+    }
+    if let Some((name, value)) = word.split_once('=') {
+        let env_name = name.len() >= 2
+            && name.starts_with(|c: char| c.is_ascii_uppercase())
+            && name
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+        if env_name && value_len(&rest[name.len() + 1..]) > 0 {
+            return hide(rest, name.len() + 1, "env", out, waiting);
         }
-        out.push_str(gap);
+        if let Some(kind) = key_kind(value) {
+            out.push_str(&rest[..=name.len()]);
+            push_hidden(out, "", kind);
+            return end;
+        }
+    }
+    out.push_str(word);
+    end
+}
+
+/// `scheme://user:password@host`: where the password starts in `rest` and how long it is, the
+/// name kept; or a key standing alone as the login (`https://ghp_…@host`).
+fn url_login(rest: &str, scheme_end: usize) -> Option<(usize, usize)> {
+    let (scheme, after) = rest.split_at(scheme_end);
+    let host = after.strip_prefix("://")?;
+    let plain = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.');
+    if !scheme.starts_with(|c: char| c.is_ascii_alphabetic()) || !scheme.chars().all(plain) {
+        return None;
+    }
+    let ends =
+        |c: char| c.is_whitespace() || matches!(c, '/' | '?' | '#' | '"' | '\'' | '`' | '\\');
+    let host = &host[..host.find(ends).unwrap_or(host.len())];
+    let login = &host[..host.rfind('@')?];
+    let start = scheme_end + "://".len();
+    let secret = match login.find(':') {
+        Some(colon) => colon + 1,
+        None => key_kind(login).map(|_| 0)?,
+    };
+    let hidden = login[secret..].is_empty() || login[secret..].starts_with(MARK);
+    (!hidden).then_some((start + secret, login.len() - secret))
+}
+
+/// `$env:NAME = value` with a secret's name: how far after `$env` the value starts.
+fn powershell_env(after: &str) -> Option<usize> {
+    let name = after.strip_prefix(':')?;
+    let named = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let name_len = name.find(|c: char| !named(c)).unwrap_or(name.len());
+    let assigned = name[name_len..].trim_start_matches([' ', '\t']);
+    let value = assigned.strip_prefix('=')?.trim_start_matches([' ', '\t']);
+    secret_name(&name[..name_len]).then_some(after.len() - value.len())
+}
+
+/// A header in plain text, `Name: value`: how far after the name the secret starts. A hyphened
+/// name with a secret word (`X-Api-Key`), `apikey`, or `Authorization` with any scheme but
+/// Bearer, which `Bearer` itself hides. A lone word before a colon is prose (`key: value`).
+fn header(name: &str, after: &str) -> Option<usize> {
+    let value = after.strip_prefix(':')?.strip_prefix([' ', '\t'])?;
+    let value = value.trim_start_matches([' ', '\t']);
+    let at = after.len() - value.len();
+    let lower = name.to_ascii_lowercase();
+    if lower == "authorization" || lower.ends_with("-authorization") {
+        let scheme = value_len(value);
+        let named = scheme > 0 && value[..scheme].chars().all(|c| c.is_ascii_alphabetic());
+        let then = value[scheme..].strip_prefix(' ');
+        let given = then.is_some_and(|t| t.starts_with(MARK) || value_len(t) > 0);
+        let bearer = value[..scheme].eq_ignore_ascii_case("bearer");
+        return match (named && given, bearer) {
+            (_, true) => None,
+            (true, false) => Some(at + scheme + 1),
+            (false, false) => Some(at),
+        };
+    }
+    let listed = lower == "apikey" || (name.contains('-') && secret_name(name));
+    (listed && !name.starts_with('-')).then_some(at)
+}
+
+/// The kind of secret a whole word is, by its shape: a provider's key or a JWT.
+fn key_kind(word: &str) -> Option<&'static str> {
+    let prefixed = word.len() >= 20 && KEY_PREFIXES.iter().any(|p| word.starts_with(p));
+    let capital = |b: u8| b.is_ascii_uppercase() || b.is_ascii_digit();
+    let aws = word.len() == 20 && word.starts_with("AKIA") && word.bytes().all(capital);
+    match () {
+        _ if prefixed || aws => Some("key"),
+        _ if is_jwt(word) => Some("jwt"),
+        _ => None,
     }
 }
 
@@ -107,48 +342,6 @@ pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
     }
 }
 
-enum Shape<'a> {
-    /// The word itself is a secret.
-    Whole(&'static str),
-    /// `NAME=value`: keep the name, hide the value.
-    Value(&'a str),
-    /// `--flag=value`: keep the flag and its `=`, hide the value.
-    Flag(&'a str),
-    /// The next word is a secret.
-    Next(&'static str),
-}
-
-fn classify(word: &str) -> Option<Shape<'_>> {
-    if word.starts_with("sk-") && word.len() >= 20 {
-        return Some(Shape::Whole("key"));
-    }
-    if is_jwt(word) {
-        return Some(Shape::Whole("jwt"));
-    }
-    if word.eq_ignore_ascii_case("bearer") {
-        return Some(Shape::Next("bearer"));
-    }
-    // The flag's name decides, with its value after a space or an `=`: `--port=47101` stays.
-    if let Some(flag) = word.strip_prefix("--") {
-        let (name, value) = flag.split_once('=').unwrap_or((flag, ""));
-        let lower = name.to_ascii_lowercase();
-        if SECRET_FLAGS.iter().any(|s| lower.contains(s)) {
-            return Some(match value {
-                // `--token abc`, and `--token="abc"`, whose quote ends the word.
-                "" => Shape::Next("flag"),
-                _ => Shape::Flag(&word[..word.len() - value.len()]),
-            });
-        }
-    }
-    let (name, value) = word.split_once('=')?;
-    let env_name = name.len() >= 2
-        && name.starts_with(|c: char| c.is_ascii_uppercase())
-        && name
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
-    (env_name && !value.is_empty()).then_some(Shape::Value(name))
-}
-
 fn is_jwt(word: &str) -> bool {
     let parts: Vec<&str> = word.split('.').collect();
     parts.len() == 3
@@ -161,120 +354,4 @@ fn is_jwt(word: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{redact, redact_json};
-    use serde_json::{Value, json};
-
-    /// Real frame shapes (Claude Code and Codex) with a secret where an agent's work can put one.
-    #[test]
-    fn secrets_inside_frame_values_are_redacted() {
-        let frames = [
-            json!({ "type": "user", "message": { "role": "user", "content": "sk-ant-api03-abcdefghijklmnopqrst" } }),
-            json!({ "type": "assistant", "message": { "content": [{ "type": "tool_use", "name": "Bash",
-                "input": { "command": "curl -H \"Authorization: Bearer abc123secret\" x" } }] } }),
-            json!({ "type": "stream_event", "event": { "type": "content_block_delta",
-                "delta": { "type": "input_json_delta", "partial_json": "{\"key\":\"sk-proj-0123456789abcdefgh\"}" } } }),
-            json!({ "method": "item/started", "params": { "item": { "type": "mcpToolCall",
-                "arguments": { "headers": { "Authorization": "Basic dXNlcjpwYXNz" }, "refresh_token": "rt-1" } } } }),
-        ];
-        for frame in frames {
-            let line = frame.to_string();
-            let body = redact_json(&frame).to_string();
-            for secret in [
-                "sk-ant-api03",
-                "abc123secret",
-                "sk-proj-0123",
-                "dXNlcjpwYXNz",
-                "rt-1",
-            ] {
-                assert!(
-                    !body.contains(secret),
-                    "{secret} survived in {body} (from {line})"
-                );
-            }
-            assert!(body.contains("[redacted:"), "nothing was marked in {body}");
-            serde_json::from_str::<Value>(&body).expect("the redacted frame is still JSON");
-        }
-    }
-
-    #[test]
-    fn frame_values_without_secrets_are_untouched() {
-        let frame = json!({ "type": "result", "usage": { "input_tokens": 12, "output_tokens": 3 },
-            "result": "Done: wrote note.txt", "session_id": "8947397a-6c50-409f-9253-43c09abad99c" });
-        assert_eq!(redact_json(&frame), frame);
-    }
-
-    #[test]
-    fn each_secret_shape_is_redacted() {
-        let cases = [
-            (
-                "key sk-ant-api03-abcdefghijklmnop end",
-                "key [redacted:key] end",
-            ),
-            (
-                "Authorization: Bearer abc.def.ghi",
-                "Authorization: Bearer [redacted:bearer]",
-            ),
-            (
-                "got eyJhbGciOi.eyJzdWIiOiIx.c2lnbmF0dXJl\n",
-                "got [redacted:jwt]\n",
-            ),
-            (
-                "run ANTHROPIC_API_KEY=xyz claude",
-                "run ANTHROPIC_API_KEY=[redacted:env] claude",
-            ),
-            (
-                "claude --api-key 12345 -p",
-                "claude --api-key [redacted:flag] -p",
-            ),
-            (
-                "value \"sk-proj-0123456789abcdef\",",
-                "value \"[redacted:key]\",",
-            ),
-        ];
-        for (input, expected) in cases {
-            assert_eq!(redact(input), expected, "input: {input:?}");
-        }
-    }
-
-    /// A secret flag given its value with `=`: the name decides, as it does for `--flag value`.
-    #[test]
-    fn a_secret_flags_value_after_an_equals_sign_is_redacted() {
-        let cases = [
-            (
-                "gh --token=abc123 pr list",
-                "gh --token=[redacted:flag] pr list",
-            ),
-            ("x --api-key=12345", "x --api-key=[redacted:flag]"),
-            ("x --PASSWORD=hunter2 y", "x --PASSWORD=[redacted:flag] y"),
-            ("x --token=\"abc123\" y", "x --token=\"[redacted:flag]\" y"),
-        ];
-        for (input, expected) in cases {
-            assert_eq!(redact(input), expected, "input: {input:?}");
-        }
-        let plain = "cargo run --port=47101 --data=test-data --color=always --jobs=4 -k=v";
-        assert_eq!(redact(plain), plain);
-    }
-
-    /// A step's text is redacted when it's kept, then again on the event that carries it: the
-    /// second pass took "bearer" inside `[redacted:bearer]` for the word before a secret.
-    #[test]
-    fn text_already_redacted_stays_as_it_is() {
-        let text = "curl --token=abc123 -H \"Authorization: Bearer abc.def\" https://example.test \
-                    KEY_ID=x --password hunter2 sk-proj-0123456789abcdefgh done";
-        let once = redact(text);
-        assert_eq!(redact(&once), once);
-        // A mark that came in someone's text ends a wait for a secret too.
-        assert_eq!(
-            redact("--token [redacted:flag] next"),
-            "--token [redacted:flag] next"
-        );
-    }
-
-    #[test]
-    fn ordinary_text_is_untouched() {
-        let text =
-            "start failed: file is not a database (path X:\\data\\gathr.db) a=b --port 47101\n";
-        assert_eq!(redact(text), text);
-    }
-}
+mod tests;

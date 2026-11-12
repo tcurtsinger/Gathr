@@ -143,10 +143,11 @@ pub fn kind(value: &Value) -> String {
 
 /// Reads one parsed output line.
 pub fn read(value: &Value) -> Vec<Frame> {
-    let frames = read_own(value);
     // Null for the main conversation; a sub-agent's frames carry the id of the call that
     // started it. Stream events are documented as main-session only, but are checked the same way.
-    match value.get("parent_tool_use_id").and_then(Value::as_str) {
+    let parent = value.get("parent_tool_use_id").and_then(Value::as_str);
+    let frames = read_own(value, parent.is_none());
+    match parent {
         Some(parent) => frames
             .into_iter()
             .map(|frame| Frame::Sub {
@@ -158,7 +159,7 @@ pub fn read(value: &Value) -> Vec<Frame> {
     }
 }
 
-fn read_own(value: &Value) -> Vec<Frame> {
+fn read_own(value: &Value, own: bool) -> Vec<Frame> {
     let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).unwrap_or("").to_string();
     match value.get("type").and_then(Value::as_str).unwrap_or("") {
         "system" if text(value, "subtype") == "init" => vec![Frame::Init {
@@ -194,7 +195,7 @@ fn read_own(value: &Value) -> Vec<Frame> {
             }]
         }
         "stream_event" => delta(value).into_iter().collect(),
-        "assistant" => assistant(value),
+        "assistant" => assistant(value, own),
         "user" if value.get("isReplay") == Some(&Value::Bool(true)) => {
             let content = &value["message"]["content"];
             vec![Frame::Read(
@@ -250,7 +251,7 @@ fn delta(value: &Value) -> Option<Frame> {
         .then(|| Frame::TextDelta(delta["text"].as_str().unwrap_or("").to_string()))
 }
 
-fn assistant(value: &Value) -> Vec<Frame> {
+fn assistant(value: &Value, own: bool) -> Vec<Frame> {
     let content = &value["message"]["content"];
     if let Some(kind) = value.get("error").and_then(Value::as_str) {
         return vec![Frame::EngineError {
@@ -268,7 +269,7 @@ fn assistant(value: &Value) -> Vec<Frame> {
         Some("text") => vec![Frame::Text(b["text"].as_str().unwrap_or("").to_string())],
         Some("tool_use") => {
             let name = b["name"].as_str().unwrap_or("").to_string();
-            let input = step(&name, &b["input"]);
+            let input = step(&name, &b["input"], own);
             let missing = input.as_ref().err().map(|field| Frame::ToolShape {
                 tool: name.clone(),
                 field,
@@ -287,8 +288,9 @@ fn assistant(value: &Value) -> Vec<Frame> {
 
 /// What a tool call's step keeps of its input (0041), or the name of the field it's read from
 /// when the call lacks it. Only the tools whose input was seen in real frames; Gathr's own tools,
-/// other MCP tools and anything not listed keep nothing.
-fn step(tool: &str, input: &Value) -> Result<Option<StepInput>, &'static str> {
+/// other MCP tools and anything not listed keep nothing. A sub-agent's steps aren't kept or shown
+/// (`own` is false): its call is only checked for the field.
+fn step(tool: &str, input: &Value, own: bool) -> Result<Option<StepInput>, &'static str> {
     let (field, title) = match tool {
         "Bash" | "PowerShell" => ("command", input["description"].as_str()),
         "Read" | "Write" | "Edit" => ("file_path", None),
@@ -297,7 +299,8 @@ fn step(tool: &str, input: &Value) -> Result<Option<StepInput>, &'static str> {
         "Agent" => ("description", None),
         _ => return Ok(None),
     };
-    Ok(steps::input(input[field].as_str().ok_or(field)?, title))
+    let text = input[field].as_str().ok_or(field)?;
+    Ok(own.then(|| steps::input(text, title)).flatten())
 }
 
 fn turn_end(value: &Value) -> TurnEnd {
@@ -580,22 +583,29 @@ mod tests {
         );
     }
 
-    /// A sub-agent's Read keeps its path under its Agent call, never as a step of the agent's own.
+    /// A sub-agent's steps aren't kept or shown yet (G24 keeps them out of the agent's own): its
+    /// Read carries no input, and a field it lacks is still found, under its Agent call.
     #[test]
-    fn a_sub_agents_step_stays_under_its_agent_call() {
-        let subs: Vec<Frame> = replayed("subagent")
-            .into_iter()
-            .filter_map(|f| match f {
+    fn a_sub_agents_tool_keeps_nothing_and_still_says_when_its_field_is_gone() {
+        let subs = |frames: Vec<Frame>| -> Vec<Frame> {
+            let subs = frames.into_iter().filter_map(|f| match f {
                 Frame::Sub { frame, .. } => Some(*frame),
                 _ => None,
-            })
-            .collect();
-        let read = subs.iter().find_map(|f| match f {
-            Frame::ToolStart { name, input, .. } if name == "Read" => input.clone(),
+            });
+            subs.collect()
+        };
+        let recorded = subs(replayed("subagent"));
+        let read = recorded.iter().find_map(|f| match f {
+            Frame::ToolStart { name, input, .. } if name == "Read" => Some(input.clone()),
             _ => None,
         });
-        let path = "gathr-test-data\\probe\\subagent\\a.txt";
-        assert_eq!(read.map(|i| i.text).as_deref(), Some(path), "{subs:?}");
+        assert_eq!(read, Some(None), "{recorded:?}");
+        let shape = Frame::ToolShape {
+            tool: "Grep".into(),
+            field: "pattern",
+        };
+        let changed = subs(replayed("steps_shape_changed"));
+        assert!(changed.contains(&shape), "{changed:?}");
     }
 
     /// `steps_claude` is hand-written in the shape of the owner's live frames (its first row says
@@ -632,7 +642,11 @@ mod tests {
     #[test]
     fn a_listed_tool_without_its_field_reads_as_a_changed_shape() {
         let frames = replayed("steps_shape_changed");
-        assert_eq!(steps_of("steps_shape_changed"), [kept("Edit", None, None)]);
+        let agent = kept("Agent", Some("Find the tests"), None);
+        assert_eq!(
+            steps_of("steps_shape_changed"),
+            [kept("Edit", None, None), agent]
+        );
         let shape = Frame::ToolShape {
             tool: "Edit".into(),
             field: "file_path",

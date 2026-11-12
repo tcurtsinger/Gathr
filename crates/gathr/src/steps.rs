@@ -5,6 +5,7 @@
 use serde::Serialize;
 
 use crate::redact::redact;
+use crate::text;
 
 const TEXT: usize = 200;
 const TITLE: usize = 80;
@@ -28,15 +29,9 @@ pub fn input(text: &str, title: Option<&str>) -> Option<StepInput> {
 /// The first line, secrets hidden, at most `limit` characters; "…" where more followed. Hidden
 /// before the cut, so a key the cut would split is still seen whole.
 fn kept(text: &str, limit: usize) -> Option<String> {
-    let text = text.trim();
-    let line = text.lines().next()?.trim_end();
-    let clean = redact(line);
-    let more = line.len() < text.len();
-    if !more && clean.chars().count() <= limit {
-        return Some(clean);
-    }
-    let cut: String = clean.chars().take(limit - 1).collect();
-    Some(format!("{}…", cut.trim_end()))
+    let line = text::first_line(text)?;
+    let more = text.trim().len() > line.len();
+    Some(text::cut(&redact(line), limit, more))
 }
 
 #[cfg(test)]
@@ -114,9 +109,14 @@ mod tests {
     #[test]
     fn a_key_the_cut_would_split_is_hidden_whole() {
         let command = format!("{} sk-test-0123456789abcdefgh", "x".repeat(190));
-        let shown = text(&command);
-        assert!(!shown.contains("sk-test"), "{shown}");
-        assert_eq!(shown.chars().count(), 200, "{shown}");
+        assert_eq!(text(&command), format!("{}…", "x".repeat(190)));
+    }
+
+    /// A mark the cut lands in goes whole: half of one would read as text.
+    #[test]
+    fn a_secret_at_the_cut_leaves_no_half_mark() {
+        let shown = text(&format!("{} --token=abc", "x".repeat(185)));
+        assert_eq!(shown, format!("{} --token=…", "x".repeat(185)));
     }
 
     #[test]

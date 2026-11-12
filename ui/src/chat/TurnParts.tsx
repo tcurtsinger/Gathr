@@ -10,7 +10,7 @@ import {
   PenLine,
   X,
 } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useLayoutEffect, useRef, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -150,15 +150,27 @@ function StepLine({
   );
 }
 
-/** The chip for what a step ran (0041), in the step's one line; cut short, pointing at it shows it whole. */
+/**
+ * The chip for what a step ran (0041), in the step's one line. Cut short, it shows whole when pointed at
+ * or focused: a cut chip is a tab stop, so the keyboard reaches its text; a whole one is not.
+ */
 function Ran({ text }: { text: string }) {
   const chip = useRef<HTMLSpanElement>(null);
+  const [cut, setCut] = useState(false);
   const [whole, setWhole] = useState(false);
-  const cut = () => !!chip.current && chip.current.scrollWidth > chip.current.clientWidth;
+  useLayoutEffect(() => {
+    const el = chip.current;
+    if (!el) return;
+    const measure = () => setCut(el.scrollWidth > el.clientWidth);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   return (
-    <Tooltip open={whole} onOpenChange={(open) => setWhole(open && cut())}>
+    <Tooltip open={whole} onOpenChange={(open) => setWhole(open && cut)}>
       <TooltipTrigger asChild>
-        <span ref={chip} className="work-detail" data-ran="">
+        <span ref={chip} className="work-detail" data-ran="" tabIndex={cut ? 0 : undefined}>
           {text}
         </span>
       </TooltipTrigger>

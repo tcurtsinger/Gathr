@@ -35,36 +35,67 @@ It ends 0037's line "Steps show no argument … until the service keeps them". T
 - **Codex's command comes out of the shell it is wrapped in.** Codex hands over the shell's command line
   with its words quoted as a POSIX shell quotes them, on Windows too
   (`"C:\\…\\pwsh.exe" -Command 'git status'`). The driver splits it as a POSIX shell would and keeps the
-  script when the line is a shell (`pwsh`, `powershell`, `bash`, `zsh`, `sh`), then only flags, then one
-  script. Any other line stays as it is.
+  script when the line is a shell (`pwsh`, `powershell`, `bash`, `zsh`, `sh`), flags that end in a command
+  flag (`-Command`, `-c`, or short flags run together ending in `c`, as `-lc`), then one script. Any other
+  line stays as it is: `bash -l build.sh` and `pwsh -File build.ps1` run a file, and keep their shell.
 - **Codex's web search says its words only as it ends:** `query` is empty at `item/started`. So a tool's
   end may carry what it ran, and the end's body wins over the start's.
-- **A sub-agent's own tools stay under its Agent call** (G24), with their input, never as the agent's steps.
+- **A sub-agent's steps are not kept or shown yet.** Its tools stay under its Agent call, never as the
+  agent's own (G24), and the service drops them: the chat shows the Agent step alone. Their input is not
+  worked out. A field one of them lacks is still recorded as below, on the agent's turn. The live Grep and
+  WebFetch calls were all a sub-agent's: they verify the shape the agent's own calls keep.
 - **A Codex item that ends with no `status` did not fail.** A web search and an image view end with
   neither `status` nor `success` (34 live items); the driver read that as a failure, and the step would
   have shown "Failed". Fixed here, with its test.
 - **The window** shows the text as a chip after the step's label, in monospace, cut to the column with an
-  ellipsis and whole in the shared tooltip when pointed at. The label is the engine's title when there is
-  one, else a short one beside the chip ("Ran", "Read", "Edited", "Searched", "Fetched", "Searched the
-  web", "Ran a sub-agent"). A step with no input reads as before ("Ran a command"), and so does the row's
-  own label while a turn runs.
+  ellipsis and whole in the shared tooltip when pointed at or focused: a cut chip is a tab stop, a whole
+  one is not. The label is the engine's title when there is one, else a short one beside the chip ("Ran",
+  "Read", "Edited"). A step with no input reads as before ("Ran a command"), and so does the row's own
+  label while a turn runs. Grep, WebFetch, WebSearch and Agent read "Searched", "Fetched", "Searched the
+  web" and "Ran a sub-agent" with or without a chip (and "Searching the web" while a search runs, before
+  Codex names it), where they showed the tool's name.
 - **Old messages have no input** and show their label alone. No backfill.
-- **Found from Diagnostics** (0019). Each `execute_tool <name>` event carries the text as
-  `gathr.tool.input`, so `gathr diag trace <ref>` lists what ran. A listed tool whose frame lacks its
-  field keeps nothing and records `gathr.engine.tool_input` with error `shape_changed`, the tool's name
-  and the field, on the turn's reference: a protocol change is found there, not by a person noticing a
-  chip gone.
+- **The text lives in the message only, never in the event record** (0011: events never copy content,
+  and a support bundle exports them). `execute_tool <name>` says the tool's name, as before, so nothing a
+  step ran reaches a bundle. `gathr diag trace` is as it was: what ran is read in the chat.
+- **Found from Diagnostics** (0019). A listed tool whose frame lacks its field keeps nothing and records
+  `gathr.engine.tool_input` with error `shape_changed`, the tool's name and the field, on the turn's
+  reference: a protocol change is found there, not by a person noticing a chip gone.
+- **A cut never lands inside a `[redacted:…]` mark:** it backs up to before it. One helper,
+  `gathr::text`, takes the first line and cuts it, for a step and for a chat's title.
 
-## Two gaps in `redact`, fixed here
+## What `redact` hides, widened here
 
-- **`--token=abc` was not hidden** (`--token abc` was). A flag whose name holds `token`, `key`, `secret`
-  or `password` now hides its value after `=` too: `--token=[redacted:flag]`. The flag's name decides, as
-  it does for the form with a space, so `--port=47101` and any other `--flag=value` stay as written.
-- **Redacting twice changed the text.** A step's text is redacted when kept and again on the event that
-  carries it; the second pass took the word "bearer" inside `[redacted:bearer]` for the word before a
-  secret and hid the next word. A `[redacted:<kind>]` mark is now passed over whole, and stands for the
-  secret a `--token` or `Bearer` before it was waiting for. This affected `engine_raw` text copied into
-  events too.
+`redact` is one pass, shared with Diagnostics and the raw frames, so each of these helps there too. Each
+has its test, with look-alikes proven untouched (`crates/gathr/src/redact/tests.rs`).
+
+- **A secret flag's whole value,** after a space or an `=`: to the next space outside quotes, whatever
+  punctuation it holds (`--auth-token=user:s3cret`, `--token 'a b'`). `--token=abc` was not hidden at all
+  before. The value's own quotes stay, so JSON text stays JSON.
+- **The flag's name is read word by word,** split at `-`, `_`, `.` and capitals: `token`, `key`, `secret`,
+  `password`, `passwd`, `auth`, `credential(s)`, `apikey`, and `pass` whole. So `--keyboard`, `--monkey`,
+  `--tokenizer` and `--max-tokens` stay. `--key-file=path`, `--sort-key=name` and `sort --key=2,2` are
+  hidden though they hold no secret: hiding too much is the safe side. `--pwd` is left: it is as often a
+  folder. `--password-stdin` and `--with-token` take no value, so the word after them stays.
+- **PowerShell parameters,** one dash: `-Token`, `-ApiKey`, `-AccessToken`, `-Password`, `-Secret`,
+  `-Credential`, and `-Token:value`. Not `-Path`, `-Name`, `-KeyboardLayout`.
+- **`$env:NAME = "value"`** when the name holds a secret word. An upper-case `NAME=value` was hidden
+  already, whatever its name; now also when its value is quoted.
+- **A password in a URL or connection string:** `scheme://user:[redacted:url]@host`. The name and host
+  stay. A provider's key standing as the whole login goes too.
+- **Headers in plain text:** `Authorization` with any scheme (`token`, `Basic`; `Bearer` already), a
+  hyphened name with a secret word (`X-Api-Key`, `X-Auth-Token`) and `apikey`. A lone word before a colon
+  (`key: value`, `error: token expired`) is prose, and stays.
+- **Keys by how they start,** at 20 characters or more: `sk-` (already), `sk_live_`, `sk_test_`, `ghp_`,
+  `gho_`, `ghu_`, `ghs_`, `github_pat_`, `xoxb-`, `xoxp-`; and `AKIA` with 16 capitals or digits. Also
+  after an `=` (`?access=ghp_…`).
+- **Redacting twice changes nothing.** The second pass took "bearer" inside `[redacted:bearer]` for the
+  word before a secret. A mark is passed over whole, wherever it stands, and stands for the secret a
+  `--token` or `Bearer` before it was waiting for.
+
+Known limits, left as they are: `-p hunter2`, `mysql -pSECRET`, `curl -u user:pass`, a bare AWS secret
+access key, a private key's body (only the first line is kept anyway), `--pwd`, and `name=value` with a
+lower-case secret name (`?token=abc`, `password=abc`) unless the value is a known key.
 
 ## Why
 
@@ -83,6 +114,8 @@ It ends 0037's line "Steps show no argument … until the service keeps them". T
 - **Only the program's name.** "git merge origin/main" becomes "git".
 - **A new column or table.** It buys nothing over the body.
 - **Showing it unredacted,** as the approval card shows a raw command.
+- **What ran on the tool's event, for `diag trace`.** Built first, then removed at review: it put command
+  text into the event record and so into bundles, against 0011.
 - **Cutting before hiding,** as the plan first had it: a key that straddles the 200th character would
   have lost the length that marks it as a key, and kept its start.
 - **Trusting Codex's own `commandActions[].command`** for the script: it held the script for 403 of the
@@ -94,7 +127,7 @@ It ends 0037's line "Steps show no argument … until the service keeps them". T
 `steps_claude.jsonl`, `steps_codex.jsonl` and `steps_shape_changed.jsonl` in `crates/gathr/tests/frames`
 are **hand-written, not recordings**: made-up commands, paths, URLs and queries in the shape verified
 above, each saying so in its first row. Nothing in them comes from a real conversation. The real
-recordings (`background`, `approval`, `subagent`) cover the tools they hold.
+recordings (`background`, `approval`, `subagent`, `exits_mid_reply`) cover the tools they hold.
 
 ## Cost
 
@@ -109,6 +142,7 @@ Measured on the fixtures through the service. A body without input is 45 to 66 b
 - **Tools seen live that the plan did not list keep nothing** until the owner decides: Claude's `Monitor`
   (7), `ToolSearch` (24), `TaskStop` (10), `SubagentHandback` (5); Codex's `imageView` (33).
 - **Codex's shell on macOS** (`zsh -lc`, as SerenityOS's code has it) was not seen: every live command was
-  `pwsh.exe -Command` on Windows. The same split handles it, by the rule above, but no real frame proves it.
+  `pwsh.exe -Command` on Windows (all 541 still come out of their shell under the command-flag rule). The
+  same split handles `zsh -lc`, by the rule above, but no real frame proves it.
 - **Codex's web search** rests on one real call.
 - **How many steps a real turn has,** so the cost per turn.

@@ -143,17 +143,62 @@ fn a_claude_turns_steps_carry_what_they_ran_in_history_and_live_with_secrets_hid
     assert_eq!(started[0]["status"], "running", "{started:?}");
     assert_eq!(started[0]["input"], expected[0].1, "{started:?}");
 
-    // Diagnostics has what ran on the tool's own event (0019).
-    let query = "SELECT attrs FROM event_log WHERE name = 'execute_tool Bash' ORDER BY ts, id";
+    // 0011: the event record never copies content. A tool's event says its name, never what it
+    // ran, so nothing of a step reaches a bundle, which is made to be shared.
+    let query = "SELECT attrs FROM event_log WHERE name LIKE 'execute_tool %' ORDER BY ts, id";
     let (ok, rows) = gathr(&data.0, &["diag", "query", query]);
     assert!(ok, "{rows}");
-    let ran: Vec<&Value> = rows["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|r| &r["attrs"]["gathr.tool.input"])
-        .collect();
-    assert_eq!(ran, [&json!("git status --short"), &json!(curl)], "{rows}");
+    let events = rows["rows"].as_array().unwrap();
+    assert_eq!(events.len(), expected.len(), "{rows}");
+    for event in events {
+        let attrs = event["attrs"].as_object().unwrap();
+        let keys: Vec<&String> = attrs.keys().collect();
+        assert_eq!(keys, ["gen_ai.tool.name"], "{event}");
+    }
+    let (ok, made) = gathr(&data.0, &["diag", "bundle"]);
+    assert!(ok, "{made}");
+    let bundle = std::fs::read_to_string(made["written"].as_str().unwrap()).unwrap();
+    assert!(
+        bundle.contains("execute_tool Bash"),
+        "no tool in the bundle"
+    );
+    for ran in [
+        "git status",
+        "Show what changed",
+        "cargo fmt",
+        "src/lib.rs",
+        "notes/plan.md",
+        "fn main",
+        "example.test",
+        "Find the tests",
+    ] {
+        assert!(!bundle.contains(ran), "the bundle holds a step's {ran:?}");
+    }
+}
+
+/// What a step showed while it ran stays when its turn is cut off: the engine exits with a Read
+/// still open, and the stopped step keeps its path.
+#[test]
+fn a_tool_stopped_mid_run_keeps_what_it_was_running() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0, "claude", "exits_mid_reply");
+    let body = json!({ "name": "Made-up", "account": account });
+    let agent = service.send("POST", "/api/agents", body).json()["id"].clone();
+    let members = json!([{ "agent": agent, "role": "supervisor" }]);
+    let made = service.send("POST", "/api/chats", json!({ "members": members }));
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi", "agent": agent }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let history = service.wait_for(&chat, 10, "the turn to fail", |h| {
+        h["turns"][0]["status"] == "failed"
+    });
+    let kept = steps(&history);
+    assert_eq!(kept.len(), 1, "{history}");
+    let stopped = history["messages"].as_array().unwrap().iter();
+    let stopped = stopped.filter(|m| m["kind"] == "tool").collect::<Vec<_>>();
+    assert_eq!(stopped[0]["body"]["status"], "stopped", "{history}");
+    assert_eq!(kept[0].2, text("note.txt"), "{history}");
 }
 
 #[test]
@@ -180,14 +225,16 @@ fn a_codex_turns_steps_carry_the_command_out_of_its_shell_the_files_and_the_sear
     carries(&history, &heard, &expected);
 }
 
-/// 0019's forced failure: an Edit whose `file_path` an engine renamed. The step shows its label
-/// alone, the turn still ends well, and its reference finds what changed.
+/// 0019's forced failure: an Edit whose `file_path` an engine renamed, and a sub-agent's Grep
+/// whose `pattern` it renamed. The Edit shows its label alone, the sub-agent's step isn't shown
+/// at all, the turn still ends well, and its reference finds both changes.
 #[test]
 fn a_tool_without_its_field_is_found_from_the_turns_reference() {
     let data = TempDir::new();
     let (service, account) = service(&data.0, "claude", "steps_shape_changed");
     let (history, heard) = one_turn(&service, &account);
-    carries(&history, &heard, &[("Edit", Value::Null)]);
+    let expected = [("Edit", Value::Null), ("Agent", text("Find the tests"))];
+    carries(&history, &heard, &expected);
 
     let reference = history["turns"][0]["ref"].as_str().unwrap();
     let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
@@ -196,9 +243,12 @@ fn a_tool_without_its_field_is_found_from_the_turns_reference() {
     let changed: Vec<&Value> = events
         .filter(|e| e["name"] == "gathr.engine.tool_input")
         .collect();
-    assert_eq!(changed.len(), 1, "{trace}");
-    assert_eq!(changed[0]["status"], "error", "{trace}");
-    assert_eq!(changed[0]["error_type"], "shape_changed", "{trace}");
-    let attrs = json!({ "gen_ai.tool.name": "Edit", "field": "file_path" });
-    assert_eq!(changed[0]["attrs"], attrs, "{trace}");
+    for event in &changed {
+        assert_eq!(event["status"], "error", "{trace}");
+        assert_eq!(event["error_type"], "shape_changed", "{trace}");
+    }
+    let found: Vec<&Value> = changed.iter().map(|e| &e["attrs"]).collect();
+    let edit = json!({ "gen_ai.tool.name": "Edit", "field": "file_path" });
+    let grep = json!({ "gen_ai.tool.name": "Grep", "field": "pattern" });
+    assert_eq!(found, [&edit, &grep], "{trace}");
 }

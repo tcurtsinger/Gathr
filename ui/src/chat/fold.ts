@@ -35,6 +35,10 @@ const TOOLS: Record<string, [string, string]> = {
   Read: ['Read a file', 'Reading a file'],
   Edit: ['Edited a file', 'Editing a file'],
   Write: ['Edited a file', 'Editing a file'],
+  Grep: ['Searched', 'Searching'],
+  WebFetch: ['Fetched', 'Fetching'],
+  WebSearch: ['Searched the web', 'Searching the web'],
+  Agent: ['Ran a sub-agent', 'Running a sub-agent'],
   mcp__gathr__give_task: ['Gave a task', 'Giving a task'],
   mcp__gathr__ask_person: ['Asked you a question', 'Asking you a question'],
   mcp__gathr__message: ['Sent a message', 'Sending a message'],
@@ -58,10 +62,6 @@ const BESIDE: Record<string, [string, string]> = {
   Read: ['Read', 'Reading'],
   Edit: ['Edited', 'Editing'],
   Write: ['Edited', 'Editing'],
-  Grep: ['Searched', 'Searching'],
-  WebFetch: ['Fetched', 'Fetching'],
-  WebSearch: ['Searched the web', 'Searching the web'],
-  Agent: ['Ran a sub-agent', 'Running a sub-agent'],
 };
 
 /**

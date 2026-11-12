@@ -196,18 +196,7 @@ impl Task {
                 self.tool_ended(&id, if ok { "ok" } else { "error" }, input)
                     .await
             }
-            Frame::ToolShape { tool, field } => {
-                let Some(turn) = self.turn.as_ref() else {
-                    return;
-                };
-                let event = Event::point("gathr.engine.tool_input")
-                    .trace(&turn.ids.trace)
-                    .chat(&chat)
-                    .error("shape_changed")
-                    .attr("gen_ai.tool.name", tool)
-                    .attr("field", field);
-                self.record(event);
-            }
+            Frame::ToolShape { tool, field } => self.tool_shape(tool, field),
             Frame::Read(text) => {
                 let unread = self.unread.iter().position(|(_, t)| *t == text);
                 let read = unread.map(|i| self.unread.remove(i));
@@ -296,8 +285,29 @@ impl Task {
                 before,
                 after,
             } => self.compacted(trigger, before, after).await,
-            Frame::Sub { .. } | Frame::ControlAnswer { .. } | Frame::Other(_) => {}
+            // A sub-agent's steps aren't kept, but a field its tool lacks is still recorded (0041).
+            Frame::Sub { frame, .. } => {
+                if let Frame::ToolShape { tool, field } = *frame {
+                    self.tool_shape(tool, field);
+                }
+            }
+            Frame::ControlAnswer { .. } | Frame::Other(_) => {}
         }
+    }
+
+    /// Records a tool call that came without the field its step is read from: the engine's
+    /// protocol changed, found from the turn's reference (0019).
+    fn tool_shape(&self, tool: String, field: &'static str) {
+        let Some(turn) = self.turn.as_ref() else {
+            return;
+        };
+        let event = Event::point("gathr.engine.tool_input")
+            .trace(&turn.ids.trace)
+            .chat(&turn.ids.chat)
+            .error("shape_changed")
+            .attr("gen_ai.tool.name", tool)
+            .attr("field", field);
+        self.record(event);
     }
 
     /// Records an engine that runs in another permission mode than its agent's approvals: Claude
@@ -408,9 +418,6 @@ impl Task {
             .chat(&ids.chat)
             .span("end", &span_id())
             .attr("gen_ai.tool.name", name);
-        if let Some(input) = input {
-            event = event.attr("gathr.tool.input", input.text);
-        }
         event.parent_span_id = Some(span);
         event.duration_us = Some(duration_us);
         self.record(if status == "ok" {

@@ -264,6 +264,11 @@ test('a step shows what it ran as its chip, under the engine’s own words for i
     // From before steps kept what they ran, and a tool that keeps nothing: the label alone, as it was.
     tool('lead', 's10', 'Bash'),
     tool('lead', 's11', 'mcp__gathr__list_tasks'),
+    // With no input (an old message, a sub-agent's kind of tool, a search before Codex names it): words, not the tool's name.
+    tool('lead', 's12', 'Grep'),
+    tool('lead', 's13', 'WebFetch'),
+    tool('lead', 's14', 'Agent'),
+    tool('lead', 's15', 'WebSearch', { status: 'running' }),
   );
   state.turns.lead.status = 'running';
   const work = custom(byId(view(state).items, 'a-lead')).work;
@@ -280,9 +285,13 @@ test('a step shows what it ran as its chip, under the engine’s own words for i
     ['Running', 'cargo nextest run'],
     ['Ran a command', undefined],
     ['Listed tasks', undefined],
+    ['Searched', undefined],
+    ['Fetched', undefined],
+    ['Ran a sub-agent', undefined],
+    ['Searching the web', undefined],
   ]);
-  // The row's own label while it runs is what it was: the chip is the step's, not the row's.
-  expect(work?.label).toBe('Running a command');
+  // The row's own label while it runs is the last running step's, in the words it had: no chip in it.
+  expect(work?.label).toBe('Searching the web');
 });
 
 test('a running turn’s row says what the agent is doing now; text streaming last is its message', () => {
