@@ -88,9 +88,11 @@ fn kept(out: &str, from_end: bool, exit: Option<i64>) -> Option<StepResult> {
         .rposition(|l| !l.trim().is_empty())
         .map_or(start, |e| e + 1);
     let all = &all[start..end];
+    // A failing command's exit line is one of the five (#161's review).
+    let room = LINES - usize::from(exit.is_some());
     let mut shown: Vec<String> = match from_end {
-        true => &all[all.len().saturating_sub(LINES)..],
-        false => &all[..all.len().min(LINES)],
+        true => &all[all.len().saturating_sub(room)..],
+        false => &all[..all.len().min(room)],
     }
     .iter()
     .map(|line| text::cut(line, LINE, false))
@@ -104,7 +106,7 @@ fn kept(out: &str, from_end: bool, exit: Option<i64>) -> Option<StepResult> {
     Some(StepResult {
         text: shown.join("\n"),
         lines: all.len(),
-        more: all.len() > LINES,
+        more: all.len() > room,
     })
 }
 
@@ -129,6 +131,24 @@ mod tests {
             ("  ok", 1, false)
         );
         assert_eq!(first_lines(" \n"), None);
+    }
+
+    /// #161's review: the exit line is one of the five, never a sixth.
+    #[test]
+    fn a_failing_commands_exit_line_is_within_the_five() {
+        let failed = last_lines(&numbered(8), Some(2)).unwrap();
+        assert_eq!(
+            failed.text,
+            "line 5
+line 6
+line 7
+line 8
+exit 2"
+        );
+        assert_eq!((failed.lines, failed.more), (8, true));
+        let short = last_lines(&numbered(4), Some(2)).unwrap();
+        assert_eq!(short.text.lines().count(), 5);
+        assert!(!short.more);
     }
 
     #[test]

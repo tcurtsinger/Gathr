@@ -295,3 +295,57 @@ fn each_step_keeps_what_it_returned_in_history_and_live_and_never_in_events() {
     assert!(ok, "{rows}");
     assert_eq!(rows["rows"], json!([]), "a result reached the event record");
 }
+
+/// #161's review: a frame that ends two calls has no `tool_use_result` to say which is which, so
+/// a read is never told apart by its text. Its file's lines, here holding a secret `redact` can't
+/// know, are kept nowhere; an MCP answer in the same frame still is.
+#[test]
+fn a_read_whose_kind_isnt_said_keeps_nothing_of_its_file() {
+    let data = TempDir::new();
+    let secret = "hand-made-secret-QX7ZPV";
+    let real = std::fs::read_to_string(recording("results_claude")).unwrap();
+    let rows: Vec<&str> = real.lines().collect();
+    let first_in = rows.iter().find(|r| r.contains(r#""dir":"in""#)).unwrap();
+    let init = rows
+        .iter()
+        .find(|r| r.contains(r#"\"subtype\":\"init\""#))
+        .unwrap();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() }).to_string();
+    let session = "6c0d7e1b-0000-4000-8000-000000000000";
+    let calls = json!({ "type": "assistant", "session_id": session, "parent_tool_use_id": null,
+        "message": { "role": "assistant", "content": [
+            { "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } },
+            { "type": "tool_use", "id": "toolu_tasks", "name": "mcp__gathr__list_tasks", "input": {} } ] } });
+    let ended = json!({ "type": "user", "session_id": session, "parent_tool_use_id": null,
+        "message": { "role": "user", "content": [
+            { "type": "tool_result", "tool_use_id": "toolu_read", "content": format!("1\t{secret}\n2\tmore") },
+            { "type": "tool_result", "tool_use_id": "toolu_tasks",
+              "content": [{ "type": "text", "text": "No open tasks." }] } ] } });
+    let done = json!({ "type": "result", "subtype": "success", "is_error": false, "num_turns": 1,
+        "result": "Done.", "session_id": session, "usage": { "input_tokens": 3, "output_tokens": 2 } });
+    let played = [
+        first_in.to_string(),
+        init.to_string(),
+        out(calls),
+        out(ended),
+        out(done),
+    ];
+    // `recording` joins a whole path as it is: this one is played from the test's folder.
+    let path = data.0.join("two_calls");
+    std::fs::write(path.with_extension("jsonl"), played.join("\n") + "\n").unwrap();
+    let (service, account) = service(&data.0, "claude", path.to_str().unwrap());
+    let (history, heard) = one_turn(&service, &account);
+
+    for said in [history.to_string(), json!(heard).to_string()] {
+        assert!(!said.contains(secret), "the file's text was kept: {said}");
+    }
+    let messages = history["messages"].as_array().unwrap();
+    let body =
+        |tool: &str| messages.iter().find(|m| m["body"]["tool"] == tool).unwrap()["body"].clone();
+    assert_eq!(body("Read")["result"], Value::Null, "{history}");
+    assert_eq!(
+        body("mcp__gathr__list_tasks")["result"]["text"],
+        "No open tasks.",
+        "{history}"
+    );
+}

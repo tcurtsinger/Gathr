@@ -209,8 +209,10 @@ impl Task {
                 ok,
                 input,
                 result,
+                told,
             } => {
                 let status = if ok { "ok" } else { "error" };
+                let result = self.kept_result(&id, result, told);
                 self.tool_ended(&id, status, input, result).await
             }
             Frame::ToolShape { tool, field } => self.tool_shape(tool, field),
@@ -415,6 +417,22 @@ impl Task {
             };
             turn.tools.insert(id, open);
             turn.tools_started += 1;
+        }
+    }
+
+    /// What a step keeps of what came back. A file tool whose kind the engine didn't say (Claude
+    /// Code, a frame ending several calls) keeps nothing: its text could be the file's own lines,
+    /// which a step never keeps (0044, #161's review).
+    fn kept_result(&self, id: &str, result: Option<StepResult>, told: bool) -> Option<StepResult> {
+        let name = self
+            .turn
+            .as_ref()?
+            .tools
+            .get(id)
+            .map(|open| open.name.as_str());
+        match (told, name) {
+            (false, Some("Read" | "Write" | "Edit" | "MultiEdit" | "NotebookEdit")) => None,
+            _ => result,
         }
     }
 

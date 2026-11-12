@@ -13,9 +13,13 @@ row's second slice: assistant-ui's Tool call shows a Request and a Result.
 - **What each kind of step keeps** (the owner's picks, from the plan's R3 to R8):
   - **A command** (Claude Code's `Bash`/`PowerShell`, Codex's commands): its output's last lines, where
     a build or a test run ends with its summary or its error. When it failed, Codex's exit code follows
-    as `exit N`. Claude Code gives no exit code: none was seen live, so none is shown.
+    as `exit N`, which is one of the five lines. Claude Code gives no exit code: none was seen live,
+    so none is shown.
   - **A read:** how many lines were read ("4 lines"), never what they hold. A file's body is where
-    secrets sit that `redact` doesn't know.
+    secrets sit that `redact` doesn't know. When Claude Code doesn't say what kind of step it was (a
+    frame that ends several calls has no `tool_use_result` to say whose it is), a step that reads or
+    writes a file (`Read`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit`) keeps no result at all: its
+    text could be the file's own lines (#161's review). Other tools keep their first lines.
   - **An edit or a new file:** lines added and removed ("+1 −1"; for Codex, one line per file with its
     path).
   - **A search** (`Grep`, `Glob`; Codex's web search): how many it found, then its first hits ("1 file",

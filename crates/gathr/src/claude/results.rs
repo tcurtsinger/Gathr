@@ -6,6 +6,13 @@ use serde_json::Value;
 
 use crate::steps::{self, StepResult, counted};
 
+/// Whether Claude Code said what kind of step the call was: it failed (its text is the error), or
+/// its `tool_use_result` was read. Without it, the text could be a file's own lines (#161's review),
+/// and the service keeps none of it for a step that reads or writes a file.
+pub(super) fn told(block: &Value, done: Option<&Value>) -> bool {
+    block.get("is_error") == Some(&Value::Bool(true)) || done.is_some_and(Value::is_object)
+}
+
 /// The step's result. `done` is Claude Code's `tool_use_result`, read only when the frame ends one
 /// call: with several, it can't say whose it is, and the text answers alone.
 pub(super) fn of(block: &Value, done: Option<&Value>) -> Option<StepResult> {

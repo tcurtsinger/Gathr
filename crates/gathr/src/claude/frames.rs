@@ -28,12 +28,14 @@ pub enum Frame {
         input: Option<StepInput>,
     },
     /// A tool call ended; `input` when the engine says what it ran only now (Codex's web search),
-    /// and what came back (0044).
+    /// and what came back (0044); `told` when the engine said what kind of step it was, so its
+    /// result is the step's own answer, never a file's text read as one.
     ToolEnd {
         id: String,
         ok: bool,
         input: Option<StepInput>,
         result: Option<StepResult>,
+        told: bool,
     },
     /// A tool call arrived without the field its step is read from: the engine's protocol changed.
     ToolShape {
@@ -231,6 +233,7 @@ fn read_own(value: &Value, own: bool) -> Vec<Frame> {
                     ok: b.get("is_error") != Some(&Value::Bool(true)),
                     input: None,
                     result: own.then(|| super::results::of(b, done)).flatten(),
+                    told: super::results::told(b, done),
                 })
                 .collect()
         }

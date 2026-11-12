@@ -389,6 +389,7 @@ impl Session {
                     ok,
                     input: super::steps::step(item).unwrap_or(None),
                     result: super::steps::result(item),
+                    told: true,
                 });
             }
             "thread/tokenUsage/updated" => {
