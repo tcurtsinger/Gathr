@@ -43,7 +43,8 @@
   margin-top: 16px;
 }
 .markdown li + li,
-.markdown li > * + * {
+.markdown li > * + *,
+.markdown li > p + p {
   margin-top: 6px;
 }
 /* Headings no bigger than a panel's title; inline code a step quieter than the text. */
