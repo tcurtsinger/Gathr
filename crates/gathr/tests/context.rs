@@ -497,35 +497,11 @@ fn a_compaction_the_engine_doesnt_make_fails_with_why() {
     assert!(gathr_lines(&history).is_empty(), "{history}");
 }
 
-/// `compact_codex` with its second turn made a compaction asked for: `thread/compact/start`, which
-/// Codex runs as a turn with the compaction and nothing said.
-fn codex_compaction(data: &std::path::Path) -> std::path::PathBuf {
-    let text = std::fs::read_to_string(common::recording("compact_codex")).unwrap();
-    let rows: Vec<&str> = text.lines().collect();
-    let asks = |r: &&str| r.starts_with(r#"{"dir":"in""#) && r.contains("turn/start");
-    let second = rows.iter().rposition(asks).unwrap();
-    let thread = r#"{\"threadId\":\"01a1cbe2-5626-7240-b1f6-d45c8b2592cf\"}"#;
-    let ask = r#"{\"id\":4,\"method\":\"thread/compact/start\",\"params\":THREAD}"#;
-    let ask = format!(
-        r#"{{"dir":"in","line":"{}"}}"#,
-        ask.replace("THREAD", thread)
-    );
-    let answer = r#"{"dir":"out","line":"{\"id\":4,\"result\":{}}"}"#;
-    let said = [r#"\"id\":4,\"result\""#, "userMessage", "agentMessage"];
-    let said = |r: &&&str| !r.contains("turn/completed") && said.iter().any(|s| r.contains(s));
-    let turn = rows[second + 1..].iter().filter(|r| !said(r));
-    let mut made: Vec<String> = rows[..second].iter().map(|r| r.to_string()).collect();
-    made.extend([ask, answer.to_string()]);
-    made.extend(turn.map(|r| r.to_string()));
-    let path = data.join("compact_codex_asked.jsonl");
-    std::fs::write(&path, made.join("\n")).unwrap();
-    path
-}
-
 #[test]
 fn compact_asks_codex_to_compact_its_thread_and_says_so() {
     let data = TempDir::new();
-    let (service, account) = codex(&data.0, &codex_compaction(&data.0));
+    // A real compaction asked for: `thread/compact/start`, which Codex runs as a turn of its own.
+    let (service, account) = codex(&data.0, &common::recording("compact_codex_asked"));
     let (chat, agent) = one_turn(&service, &account);
     service.wait_for(&chat, 10, "the first turn", |h| {
         h["turns"][0]["status"] == "done"
