@@ -7,6 +7,10 @@ use serde::Serialize;
 use crate::redact::redact;
 use crate::text;
 
+mod results;
+
+pub use results::{StepResult, counted, first_lines, found, last_lines, request, said};
+
 const TEXT: usize = 200;
 const TITLE: usize = 80;
 
@@ -16,6 +20,9 @@ pub struct StepInput {
     pub text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// A command, whole, as the step's Request (0044), when it's more than `text`, its one line.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request: Option<String>,
 }
 
 /// `text` and `title` as a step keeps them; nothing when the text is empty.
@@ -23,7 +30,16 @@ pub fn input(text: &str, title: Option<&str>) -> Option<StepInput> {
     Some(StepInput {
         text: kept(text, TEXT)?,
         title: title.and_then(|title| kept(title, TITLE)),
+        request: None,
     })
+}
+
+/// A command's step: `input`, with the whole command as its Request when that says more than the
+/// one line does (a script, a cut line); else the line is the Request.
+pub fn command(command: &str, title: Option<&str>) -> Option<StepInput> {
+    let mut step = input(command, title)?;
+    step.request = request(command).filter(|whole| *whole != step.text);
+    Some(step)
 }
 
 /// The first line, secrets hidden, at most `limit` characters; "…" where more followed. Hidden

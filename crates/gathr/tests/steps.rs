@@ -121,7 +121,12 @@ fn a_claude_turns_steps_carry_what_they_ran_in_history_and_live_with_secrets_hid
             "Bash",
             json!({ "text": "git status --short", "title": "Show what changed" }),
         ),
-        ("PowerShell", text("cargo fmt --all --check…")),
+        (
+            "PowerShell",
+            json!({ "text": "cargo fmt --all --check…",
+                "request": "cargo fmt --all --check
+cargo clippy --workspace" }),
+        ),
         ("Read", text("src/lib.rs")),
         ("Edit", text("src/lib.rs")),
         ("Write", text("notes/plan.md")),
@@ -210,7 +215,8 @@ fn a_codex_turns_steps_carry_the_command_out_of_its_shell_the_files_and_the_sear
         ("Shell", text("git status --short")),
         (
             "Shell",
-            text("Get-Content 'src\\lib.rs' | Select-Object -First 5…"),
+            json!({ "text": "Get-Content 'src\\lib.rs' | Select-Object -First 5…",
+                "request": "Get-Content 'src\\lib.rs' | Select-Object -First 5\ncargo clippy --workspace" }),
         ),
         (
             "Shell",
@@ -251,4 +257,143 @@ fn a_tool_without_its_field_is_found_from_the_turns_reference() {
     let edit = json!({ "gen_ai.tool.name": "Edit", "field": "file_path" });
     let grep = json!({ "gen_ai.tool.name": "Grep", "field": "pattern" });
     assert_eq!(found, [&edit, &grep], "{trace}");
+}
+
+/// What each step returned (0044), through the service, from a live turn (`results_claude`): in
+/// history and live alike, a read only as its count, and nothing of it in the event record.
+#[test]
+fn each_step_keeps_what_it_returned_in_history_and_live_and_never_in_events() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0, "claude", "results_claude");
+    let (history, heard) = one_turn(&service, &account);
+    let messages = history["messages"].as_array().unwrap();
+    let body = |tool: &str| {
+        let found = messages.iter().find(|m| m["body"]["tool"] == tool);
+        found.map(|m| (m["id"].clone(), m["body"].clone())).unwrap()
+    };
+    for (tool, said) in [
+        ("PowerShell", "git version 2.55.0.windows.5"),
+        ("Read", "4 lines"),
+        ("Edit", "+1 −1"),
+        ("Glob", "1 file\nnotes.txt"),
+        ("mcp__gathr__list_tasks", "No open tasks."),
+    ] {
+        let (id, kept) = body(tool);
+        assert_eq!(kept["result"]["text"], said, "{tool}: {kept}");
+        let end = heard
+            .iter()
+            .rev()
+            .find(|e| e["type"] == "tool" && e["message"] == id);
+        let live = end.map(|e| e["body"]["result"].clone());
+        assert_eq!(live.as_ref(), Some(&kept["result"]), "{tool}'s end, live");
+    }
+    // The file's own lines were read, and never kept: only how many.
+    assert!(!history.to_string().contains("beta line\n"), "{history}");
+    let query =
+        "SELECT attrs FROM event_log WHERE attrs LIKE '%git version%' OR attrs LIKE '%4 lines%'";
+    let (ok, rows) = gathr(&data.0, &["diag", "query", query]);
+    assert!(ok, "{rows}");
+    assert_eq!(rows["rows"], json!([]), "a result reached the event record");
+}
+
+/// #161's review: a frame that ends two calls has no `tool_use_result` to say which is which, so
+/// a read is never told apart by its text. Its file's lines, here holding a secret `redact` can't
+/// know, are kept nowhere; an MCP answer in the same frame still is.
+#[test]
+fn a_read_whose_kind_isnt_said_keeps_nothing_of_its_file() {
+    let data = TempDir::new();
+    let secret = "hand-made-secret-QX7ZPV";
+    let real = std::fs::read_to_string(recording("results_claude")).unwrap();
+    let rows: Vec<&str> = real.lines().collect();
+    let first_in = rows.iter().find(|r| r.contains(r#""dir":"in""#)).unwrap();
+    let init = rows
+        .iter()
+        .find(|r| r.contains(r#"\"subtype\":\"init\""#))
+        .unwrap();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() }).to_string();
+    let session = "6c0d7e1b-0000-4000-8000-000000000000";
+    let calls = json!({ "type": "assistant", "session_id": session, "parent_tool_use_id": null,
+        "message": { "role": "assistant", "content": [
+            { "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } },
+            { "type": "tool_use", "id": "toolu_tasks", "name": "mcp__gathr__list_tasks", "input": {} } ] } });
+    let ended = json!({ "type": "user", "session_id": session, "parent_tool_use_id": null,
+        "message": { "role": "user", "content": [
+            { "type": "tool_result", "tool_use_id": "toolu_read", "content": format!("1\t{secret}\n2\tmore") },
+            { "type": "tool_result", "tool_use_id": "toolu_tasks",
+              "content": [{ "type": "text", "text": "No open tasks." }] } ] } });
+    let done = json!({ "type": "result", "subtype": "success", "is_error": false, "num_turns": 1,
+        "result": "Done.", "session_id": session, "usage": { "input_tokens": 3, "output_tokens": 2 } });
+    let played = [
+        first_in.to_string(),
+        init.to_string(),
+        out(calls),
+        out(ended),
+        out(done),
+    ];
+    // `recording` joins a whole path as it is: this one is played from the test's folder.
+    let path = data.0.join("two_calls");
+    std::fs::write(path.with_extension("jsonl"), played.join("\n") + "\n").unwrap();
+    let (service, account) = service(&data.0, "claude", path.to_str().unwrap());
+    let (history, heard) = one_turn(&service, &account);
+
+    for said in [history.to_string(), json!(heard).to_string()] {
+        assert!(!said.contains(secret), "the file's text was kept: {said}");
+    }
+    let messages = history["messages"].as_array().unwrap();
+    let body =
+        |tool: &str| messages.iter().find(|m| m["body"]["tool"] == tool).unwrap()["body"].clone();
+    assert_eq!(body("Read")["result"], Value::Null, "{history}");
+    assert_eq!(
+        body("mcp__gathr__list_tasks")["result"]["text"],
+        "No open tasks.",
+        "{history}"
+    );
+}
+
+/// #161's second look: a single read whose `tool_use_result` is empty, or holds no count Gathr
+/// knows, is no more told than one with none at all. Its file's text is kept nowhere.
+#[test]
+fn a_read_with_metadata_gathr_doesnt_know_keeps_nothing_of_its_file() {
+    let secret = "hand-made-secret-LM4WQT";
+    let real = std::fs::read_to_string(recording("results_claude")).unwrap();
+    let rows: Vec<&str> = real.lines().collect();
+    let first_in = rows.iter().find(|r| r.contains(r#""dir":"in""#)).unwrap();
+    let init = rows
+        .iter()
+        .find(|r| r.contains(r#"\"subtype\":\"init\""#))
+        .unwrap();
+    let out = |frame: Value| json!({ "dir": "out", "line": frame.to_string() }).to_string();
+    let session = "6c0d7e1b-0000-4000-8000-000000000001";
+    for metadata in [
+        json!({}),
+        json!({ "type": "text", "file": { "filePath": "notes.txt" } }),
+    ] {
+        let data = TempDir::new();
+        let call = json!({ "type": "assistant", "session_id": session, "parent_tool_use_id": null,
+            "message": { "role": "assistant", "content": [
+                { "type": "tool_use", "id": "toolu_read", "name": "Read", "input": { "file_path": "notes.txt" } } ] } });
+        let ended = json!({ "type": "user", "session_id": session, "parent_tool_use_id": null,
+            "tool_use_result": metadata,
+            "message": { "role": "user", "content": [
+                { "type": "tool_result", "tool_use_id": "toolu_read", "content": format!("1\t{secret}") } ] } });
+        let done = json!({ "type": "result", "subtype": "success", "is_error": false, "num_turns": 1,
+            "result": "Done.", "session_id": session, "usage": { "input_tokens": 3, "output_tokens": 2 } });
+        let played = [
+            first_in.to_string(),
+            init.to_string(),
+            out(call),
+            out(ended),
+            out(done),
+        ];
+        let path = data.0.join("one_read");
+        std::fs::write(path.with_extension("jsonl"), played.join("\n") + "\n").unwrap();
+        let (service, account) = service(&data.0, "claude", path.to_str().unwrap());
+        let (history, heard) = one_turn(&service, &account);
+        for said in [history.to_string(), json!(heard).to_string()] {
+            assert!(
+                !said.contains(secret),
+                "{metadata}: the file's text was kept: {said}"
+            );
+        }
+    }
 }
