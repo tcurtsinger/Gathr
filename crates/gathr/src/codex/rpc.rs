@@ -23,6 +23,8 @@ pub struct Opening {
     pub writable: Vec<String>,
     /// Where its conversation compacts, in tokens (Auto-compact, K3); the engine's own when `None`.
     pub compact_at: Option<i64>,
+    /// The model `compact_at` is for: a Latest that resolves to another opens without it.
+    pub compact_for: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -310,6 +312,9 @@ impl Session {
             .find(|r| r["id"].as_str() == opening.model.as_deref())
             .and_then(|r| r["resolved"].as_str())
             .ok_or("the account no longer offers this model family")?;
+        if opening.compact_for.as_deref() != Some(model) {
+            opening.compact_at = None;
+        }
         opening.model = Some(model.to_string());
         Ok(self.open_thread())
     }
@@ -945,10 +950,22 @@ mod latest_tests {
     use super::*;
     #[test]
     fn a_family_latest_resolves_from_all_pages_before_opening_the_thread() {
-        let (mut session, _) = Session::open(Opening {
+        let latest = |compact_for: &str| Opening {
             model: Some("latest:sol".into()),
+            compact_at: Some(380_000),
+            compact_for: Some(compact_for.into()),
             ..Opening::default()
-        });
+        };
+        // A point for the model Latest still means opens the thread; one for another never does.
+        for (was, limit) in [("gpt-6.1-sol", json!(380_000)), ("gpt-6-sol", Value::Null)] {
+            let (mut session, _) = Session::open(latest(was));
+            session.read(&json!({"id":1,"result":{"userAgent":"gathr/0.167.0 (test)"}}));
+            let rows = json!([{"model":"gpt-6-sol","isDefault":true},{"model":"gpt-6.1-sol"}]);
+            let read = session.read(&json!({"id":2,"result":{"data":rows,"nextCursor":null}}));
+            let config = &read.send[0]["params"]["config"];
+            assert_eq!(config["model_auto_compact_token_limit"], limit, "{was}");
+        }
+        let (mut session, _) = Session::open(latest("gpt-6.1-sol"));
         session.user("hello");
         let read = session.read(&json!({"id":1,"result":{"userAgent":"gathr/0.167.0 (test)"}}));
         assert_eq!(

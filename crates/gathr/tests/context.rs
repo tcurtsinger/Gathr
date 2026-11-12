@@ -57,7 +57,9 @@ fn a_claude_turn_shows_its_last_calls_fill_and_its_models_window() {
 
     let update = live_context(&mut live, &agent);
     assert_eq!(update["chat"], chat.as_str());
-    let expected = json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000, "compact_at": null });
+    // On its engine's default: the point shows once the engine has named its model and its window.
+    let expected =
+        json!({ "used": 2 + 23_627 + 1_711, "window": 1_000_000, "compact_at": 500_000 });
     assert_eq!(update["context"], expected, "{update}");
     let history = service.wait_for(&chat, 10, "the turn's end", |h| {
         h["turns"][0]["status"] == "done"
@@ -108,7 +110,7 @@ fn a_codex_turn_shows_its_last_calls_fill_and_its_window() {
     });
     assert_eq!(
         history["members"][0]["context"],
-        json!({ "used": 16_291, "window": 475_000, "compact_at": null }),
+        json!({ "used": 16_291, "window": 475_000, "compact_at": 380_000 }),
         "{history}"
     );
 }
@@ -200,16 +202,21 @@ fn auto_compact(service: &TestService, at: Value) {
     assert_eq!(saved.json()["auto_compact"], at, "{}", saved.body);
 }
 
-/// A window the agent's model showed in another chat, as a turn there would have saved it.
-fn seen_window(data: &std::path::Path, service: &TestService, agent: &str, window: i64, on: &str) {
-    let other = service.send("POST", "/api/chats", json!({})).json()["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
+/// A window the agent showed in another chat while set to `set` (`context::model_key`), as a turn
+/// there would have saved it: on the model `ran`, or none named, as a window from before 0031 has.
+fn seen_window(
+    data: &std::path::Path,
+    service: &TestService,
+    agent: &str,
+    window: i64,
+    (set, ran): (&str, Option<&str>),
+) {
+    let other = service.new_chat();
     let db = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, updated_ts) VALUES (?1, ?2, ?3, ?4, 1)",
-        rusqlite::params![other, agent, window, on],
+        "INSERT INTO agent_context (chat_id, agent_id, window, window_of, ran, updated_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+        rusqlite::params![other, agent, window, set, ran],
     )
     .unwrap();
 }
@@ -222,66 +229,120 @@ fn agent(service: &TestService, account: &str, model: Option<&str>) -> String {
     made.json()["id"].as_str().unwrap().to_string()
 }
 
-const OPUS: &str = "claude-opus-5";
+/// The agent's turn in a chat of its own, once it's done: the chat.
+fn turn_in_a_new_chat(service: &TestService, agent: &str) -> String {
+    let chat = service.new_chat();
+    turn(service, &chat, agent);
+    chat
+}
 
-/// K3: Claude Code is started with Auto-compact, never past 80% of the window its model showed on
-/// the same account. With the engine's own, an engine default, an alias, another account's window or
-/// none seen yet, with none (#168's review and second look).
+fn turn(service: &TestService, chat: &str, agent: &str) {
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": agent }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    service.wait_for(chat, 10, "the turn's end", |h| {
+        let turns = h["turns"].as_array().unwrap();
+        turns.iter().all(|t| t["status"] == "done")
+    });
+}
+
+const OPUS: &str = "claude-opus-5";
+/// The model `signed_in`'s turn runs on, whatever the agent is set to.
+const RUNS: &str = "claude-opus-5-5";
+
+/// A service whose Claude Code plays `recording`, each start's environment in `env.jsonl`, and a
+/// signed-in account.
+fn claude_env(data: &std::path::Path, recording: &std::path::Path) -> (TestService, String) {
+    let env = [
+        ("GATHR_REPLAY", recording),
+        ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
+    ];
+    let service = TestService::with_engine(data, &env);
+    let account = service.signed_in(data);
+    (service, account)
+}
+
+/// The Auto-compact point the `n`th engine started with.
+fn started_with(data: &std::path::Path, n: usize) -> Value {
+    common::nth(&data.join("env.jsonl"), n)["CLAUDE_CODE_AUTO_COMPACT_WINDOW"].clone()
+}
+
+/// K3: Claude Code is started with Auto-compact, never past 80% of the window the agent's model
+/// showed while set as it is now, on the same account: pinned, a Latest or the engine's default
+/// alike. With the engine's own, another account's window, one seen while set to another model, one
+/// with no model named or none seen yet, with none (#168's review and second look).
 #[test]
 fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
-    let pinned = |account: &str| format!("{account}:claude:{OPUS}");
-    let cases = [
+    // (the setting, the agent's model, the window seen: its size, what the agent was set to then
+    // (`same` for as now), whether its model was named, on the same account; the point).
+    type Seen = (i64, &'static str, bool, bool);
+    let seen = |window, set, named, account| Some((window, set, named, account));
+    let cases: [(Value, Option<&str>, Option<Seen>, Value); 10] = [
         (
             json!(500_000),
             Some(OPUS),
-            Some(200_000),
-            true,
+            seen(200_000, "same", true, true),
             json!("160000"),
         ),
         (
             json!(300_000),
             Some(OPUS),
-            Some(1_000_000),
-            true,
+            seen(1_000_000, "same", true, true),
             json!("300000"),
         ),
-        (json!(300_000), Some(OPUS), None, true, Value::Null),
+        (
+            json!(300_000),
+            None,
+            seen(1_000_000, "same", true, true),
+            json!("300000"),
+        ),
+        (
+            json!(500_000),
+            Some("opus"),
+            seen(200_000, "same", true, true),
+            json!("160000"),
+        ),
+        (json!(300_000), Some(OPUS), None, Value::Null),
+        (json!(300_000), Some("opus"), None, Value::Null),
         (
             json!(300_000),
             Some(OPUS),
-            Some(1_000_000),
-            false,
+            seen(1_000_000, "same", true, false),
             Value::Null,
         ),
-        (json!(300_000), None, Some(1_000_000), true, Value::Null),
         (
             json!(300_000),
             Some("opus"),
-            Some(1_000_000),
-            true,
+            seen(1_000_000, OPUS, true, true),
             Value::Null,
         ),
-        (Value::Null, Some(OPUS), Some(200_000), true, Value::Null),
+        (
+            json!(300_000),
+            Some(OPUS),
+            seen(1_000_000, "same", false, true),
+            Value::Null,
+        ),
+        (
+            Value::Null,
+            Some("opus"),
+            seen(200_000, "same", true, true),
+            Value::Null,
+        ),
     ];
-    for (at, model, window, same_account, expected) in cases {
+    for (at, model, window, expected) in cases {
         let data = TempDir::new();
-        let env = data.0.join("env.jsonl");
-        let service = TestService::with_engine(
-            &data.0,
-            &[
-                ("GATHR_REPLAY", &common::recording("signed_in")),
-                ("GATHR_REPLAY_ENV", &env),
-            ],
-        );
-        let account = service.signed_in(&data.0);
+        let (service, account) = claude_env(&data.0, &common::recording("signed_in"));
         auto_compact(&service, at.clone());
         let ann = agent(&service, &account, model);
-        if let Some(window) = window {
-            let on = match same_account {
-                true => pinned(&account),
-                false => pinned("another-account"),
+        if let Some((window, set, named, same_account)) = window {
+            let set = match set {
+                "same" => model.unwrap_or("default"),
+                other => other,
             };
-            seen_window(&data.0, &service, &ann, window, &on);
+            let account = if same_account { &account } else { "another" };
+            let set = format!("{account}:claude:{set}");
+            let on = (set.as_str(), named.then_some(RUNS));
+            seen_window(&data.0, &service, &ann, window, on);
         }
         let chat = service.new_chat();
         let sent = service.send(
@@ -291,43 +352,140 @@ fn claude_code_starts_with_auto_compact_capped_at_80_percent_of_its_window() {
         );
         assert_eq!(sent.status, 200, "{}", sent.body);
         // An agent given a model has the account's models listed first, by an engine of its own.
-        let started = common::nth(&env, usize::from(model.is_some()));
-        let case = format!("{at} on {model:?} with {window:?}, same account {same_account}");
+        let started = started_with(&data.0, usize::from(model.is_some()));
+        assert_eq!(started, expected, "{at} on {model:?} with {window:?}");
+    }
+}
+
+/// Auto-compact reaches every agent: one on a Latest or its engine's default starts with the point
+/// from its second start on, once the engine has named its model and shown its window.
+#[test]
+fn an_agent_on_a_latest_or_the_engines_default_starts_with_its_point_once_its_window_is_seen() {
+    for model in [Some("opus"), None] {
+        let data = TempDir::new();
+        let (service, account) = claude_env(&data.0, &common::recording("signed_in"));
+        auto_compact(&service, json!(300_000));
+        let ann = agent(&service, &account, model);
+        turn_in_a_new_chat(&service, &ann);
+        turn_in_a_new_chat(&service, &ann);
+
+        let listed = usize::from(model.is_some());
+        let points = [0, 1].map(|n| started_with(&data.0, listed + n));
+        assert_eq!(points, [Value::Null, json!("300000")], "{model:?}");
+    }
+}
+
+/// A Latest that moved to a model with a smaller window never keeps the old model's point: the
+/// engine names its model in its first call, its window from the old one is dropped, and it starts
+/// again before its next turn, with the point its own window allows.
+#[test]
+fn a_latest_that_moved_to_a_smaller_model_starts_again_with_that_models_point() {
+    let data = TempDir::new();
+    let small = std::fs::read_to_string(common::recording("signed_in")).unwrap();
+    assert!(small.contains(r#"\"contextWindow\":1000000"#), "{small}");
+    let small = small.replace(
+        r#"\"contextWindow\":1000000"#,
+        r#"\"contextWindow\":200000"#,
+    );
+    let recording = data.0.join("small.jsonl");
+    std::fs::write(&recording, small).unwrap();
+    let (service, account) = claude_env(&data.0, &recording);
+    let ann = agent(&service, &account, Some("opus"));
+    let set = format!("{account}:claude:opus");
+    seen_window(
+        &data.0,
+        &service,
+        &ann,
+        1_000_000,
+        (&set, Some("claude-opus-4")),
+    );
+
+    let chat = turn_in_a_new_chat(&service, &ann);
+    // The same chat, agent and model: nothing else would start the engine again.
+    turn(&service, &chat, &ann);
+
+    // The models' list, the start on the old model's point, then the start on its own.
+    let points = [1, 2].map(|n| started_with(&data.0, n));
+    assert_eq!(points, [json!("500000"), json!("160000")]);
+    let sql = "SELECT attrs FROM event_log WHERE name = 'gathr.context.moved'";
+    let (ok, moved) = common::gathr(&data.0, &["diag", "query", sql]);
+    assert!(ok, "{moved}");
+    let rows = moved["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{moved}");
+    let attrs = rows[0]["attrs"].to_string();
+    assert!(
+        attrs.contains("claude-opus-4") && attrs.contains(RUNS),
+        "{moved}"
+    );
+}
+
+/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`, once its
+/// model's window is known, pinned or its engine's default alike: capped at 80% of it. Before, the
+/// engine's own.
+#[test]
+fn codex_opens_its_thread_with_auto_compact() {
+    for model in [Some("gpt-6.1-sol"), None] {
+        let data = TempDir::new();
+        let (service, account) = codex(&data.0, &common::recording("codex_signed_in"));
+        auto_compact(&service, json!(400_000));
+        let ann = agent(&service, &account, model);
+        // Each in a chat of its own: the engine starts again, the second time knowing the window.
+        turn_in_a_new_chat(&service, &ann);
+        turn_in_a_new_chat(&service, &ann);
+        let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%' ORDER BY id";
+        let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
+        assert!(ok, "{rows}");
+        let opened = |n: usize| -> Value {
+            serde_json::from_str(rows["rows"][n]["body"].as_str().unwrap()).unwrap()
+        };
+        let limit =
+            |n: usize| opened(n)["params"]["config"]["model_auto_compact_token_limit"].clone();
         assert_eq!(
-            started["CLAUDE_CODE_AUTO_COMPACT_WINDOW"], expected,
-            "{case}"
+            [limit(0), limit(1)],
+            [Value::Null, json!(380_000)],
+            "{model:?}: {rows}"
         );
     }
 }
 
-/// K3: Codex's thread opens with Auto-compact as `model_auto_compact_token_limit`, once its pinned
-/// model's window is known: capped at 80% of it. Before, the engine's own.
+/// A window from an engine that named no model never sets a point, even after one that did: the
+/// model an earlier engine named isn't carried over to it.
 #[test]
-fn codex_opens_its_thread_with_auto_compact() {
+fn a_window_seen_with_no_model_named_never_sets_the_point() {
     let data = TempDir::new();
-    let (service, account) = codex(&data.0, &common::recording("codex_signed_in"));
+    let named = std::fs::read_to_string(common::recording("codex_signed_in")).unwrap();
+    let recording = data.0.join("codex.jsonl");
+    std::fs::write(&recording, &named).unwrap();
+    let (service, account) = codex(&data.0, &recording);
     auto_compact(&service, json!(400_000));
-    let ann = agent(&service, &account, Some("gpt-6.1-sol"));
-    for _ in 0..2 {
-        // Each in a chat of its own: the engine starts again, the second time knowing the window.
-        let chat = service.new_chat();
-        let path = format!("/api/chats/{chat}/messages");
-        let sent = service.send("POST", &path, json!({ "text": "Hi", "agent": ann }));
-        assert_eq!(sent.status, 200, "{}", sent.body);
-        service.wait_for(&chat, 10, "the turn's end", |h| {
-            h["turns"][0]["status"] == "done"
-        });
-    }
+    let ann = agent(&service, &account, None);
+    turn_in_a_new_chat(&service, &ann);
+
+    let (model, window) = (
+        r#"\"model\":\"gpt-6.1-sol\","#,
+        r#"\"modelContextWindow\":475000"#,
+    );
+    assert!(named.contains(model) && named.contains(window), "{named}");
+    let unnamed = named.replace(model, "");
+    let unnamed = unnamed.replace(window, r#"\"modelContextWindow\":1000000"#);
+    std::fs::write(&recording, unnamed).unwrap();
+    turn_in_a_new_chat(&service, &ann);
+    turn_in_a_new_chat(&service, &ann);
+
     let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND body LIKE '%\"thread/start\"%' ORDER BY id";
     let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
     assert!(ok, "{rows}");
-    let opened = |n: usize| -> Value {
-        serde_json::from_str(rows["rows"][n]["body"].as_str().unwrap()).unwrap()
-    };
-    let limit = |n: usize| opened(n)["params"]["config"]["model_auto_compact_token_limit"].clone();
+    let limits: Vec<Value> = rows["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| serde_json::from_str::<Value>(row["body"].as_str().unwrap()).unwrap())
+        .map(|opened| opened["params"]["config"]["model_auto_compact_token_limit"].clone())
+        .collect();
+    // 80% of the named model's 475,000 each time, never the unnamed 1,000,000's 400,000.
     assert_eq!(
-        [limit(0), limit(1)],
-        [Value::Null, json!(380_000)],
+        limits,
+        [Value::Null, json!(380_000), json!(380_000)],
         "{rows}"
     );
 }
@@ -345,8 +503,9 @@ fn a_turn_near_the_compaction_point_is_told_to_save_its_notes() {
     let chat = service.new_chat();
     let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
     db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, updated_ts) VALUES (?1, ?2, 380000, 1000000, ?3, 1)",
-        rusqlite::params![chat, ann, format!("{account}:claude:{OPUS}")],
+        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, ran, updated_ts)
+         VALUES (?1, ?2, 380000, 1000000, ?3, ?4, 1)",
+        rusqlite::params![chat, ann, format!("{account}:claude:{OPUS}"), RUNS],
     )
     .unwrap();
     let sent = service.send(
