@@ -380,6 +380,15 @@ Parts: 6.3
 - **When** Gathr flags it
 - **Then** the chat shows that turn as silent, with for how long, and its lead is told
 
+### 6g. CI says what happened to each job
+
+Parts: 6.2
+
+- **Given** a wait on a PR's CI, where one job has passed and no runner has taken another
+- **When** Gathr looks, and later GitHub cancels the job nobody took
+- **Then** the wait says what it saw: one passed, and which job is queued. Its wake names the
+  cancelled job as cancelled, never as failed, and a queued job is never called running
+
 ### 6e. Agents talk to each other in the open, as a thread
 
 Parts: 6.4, 6.5

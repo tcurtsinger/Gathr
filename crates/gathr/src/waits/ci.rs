@@ -3,7 +3,8 @@
 //! Agents wrote their own checks, and some came true before GitHub had any checks for a new commit.
 //! Here CI on a PR's newest commit, or on one commit, is finished once it has checks and none is
 //! still running; none 15 minutes on says so. A PR is followed to its newest commit, and the line
-//! says which (G49); a commit a PR has moved past ends the wait (G69).
+//! says which (G49); a commit a PR has moved past ends the wait (G69). Each check is named as it
+//! stands: a cancelled job isn't a failed test, and a queued one isn't running (G144, G181).
 
 use serde_json::Value;
 
@@ -43,26 +44,47 @@ impl Target {
     }
 }
 
+/// How one check stands. `Unknown` is a conclusion Gathr has no word for: finished, and never
+/// counted as passed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Outcome {
+pub enum Stand {
+    Queued,
+    Running,
     Passed,
     Failed,
+    Cancelled,
     Skipped,
+    Unknown,
 }
 
-/// One check, as either of GitHub's shapes says it: `None` while it runs.
+impl Stand {
+    fn finished(self) -> bool {
+        !matches!(self, Stand::Queued | Stand::Running)
+    }
+}
+
+/// One check, as either of GitHub's shapes says it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Check {
     pub name: String,
-    pub outcome: Option<Outcome>,
+    pub stand: Stand,
 }
 
-fn outcome_of(conclusion: &str) -> Outcome {
-    match conclusion.to_ascii_lowercase().as_str() {
-        "failure" | "timed_out" | "cancelled" | "action_required" | "startup_failure" | "error"
-        | "stale" => Outcome::Failed,
-        "skipped" | "neutral" => Outcome::Skipped,
-        _ => Outcome::Passed,
+/// A check run: in progress is running, completed is as it concluded, and anything else (queued,
+/// waiting, requested, pending) hasn't started.
+fn stand_of(status: &str, conclusion: &str) -> Stand {
+    match status {
+        "completed" => match conclusion.to_ascii_lowercase().as_str() {
+            "success" => Stand::Passed,
+            "failure" | "timed_out" | "action_required" | "startup_failure" | "stale" | "error" => {
+                Stand::Failed
+            }
+            "cancelled" => Stand::Cancelled,
+            "skipped" | "neutral" => Stand::Skipped,
+            _ => Stand::Unknown,
+        },
+        "in_progress" => Stand::Running,
+        _ => Stand::Queued,
     }
 }
 
@@ -80,22 +102,22 @@ pub fn checks_of(runs: &str, statuses: &str) -> Result<Vec<Check>, String> {
     let text = |v: &Value, key: &str| v[key].as_str().unwrap_or_default().to_string();
     let mut checks = Vec::new();
     for run in each(runs)? {
-        let done = text(&run, "status") == "completed";
         checks.push(Check {
             name: text(&run, "name"),
-            outcome: done.then(|| outcome_of(&text(&run, "conclusion"))),
+            stand: stand_of(&text(&run, "status"), &text(&run, "conclusion")),
         });
     }
     for status in each(statuses)? {
         let state = text(&status, "state");
-        let outcome = match state.as_str() {
-            "pending" => None,
-            "success" => Some(Outcome::Passed),
-            _ => Some(Outcome::Failed),
+        // A commit status has no word for queued: pending is all it says.
+        let stand = match state.as_str() {
+            "pending" => Stand::Running,
+            "success" => Stand::Passed,
+            _ => Stand::Failed,
         };
         checks.push(Check {
             name: text(&status, "context"),
-            outcome,
+            stand,
         });
     }
     Ok(checks)
@@ -114,7 +136,8 @@ pub struct Seen<'a> {
     pub now_us: i64,
 }
 
-/// Whether CI has finished, and the line its agent is woken with.
+/// Whether CI has finished, and the line: what its agent is woken with once it has, and what the
+/// wait is seen to wait on until then.
 pub fn verdict(s: &Seen) -> (bool, String) {
     let at = format!(" at {}", s.head.get(..7).unwrap_or(s.head));
     let state = s.state.unwrap_or_default().to_ascii_uppercase();
@@ -122,7 +145,7 @@ pub fn verdict(s: &Seen) -> (bool, String) {
         let finished: Vec<Check> = s
             .checks
             .iter()
-            .filter(|c| c.outcome.is_some())
+            .filter(|c| c.stand.finished())
             .cloned()
             .collect();
         let mut line = format!("{} was {}", s.what, state.to_lowercase());
@@ -145,13 +168,28 @@ pub fn verdict(s: &Seen) -> (bool, String) {
         }
         return (false, format!("no checks on {}{at} yet", s.what));
     }
-    let running = s.checks.iter().filter(|c| c.outcome.is_none()).count();
-    if running > 0 {
-        let line = format!(
-            "{running} of {} checks on {}{at} still running",
+    let finished: Vec<Check> = s
+        .checks
+        .iter()
+        .filter(|c| c.stand.finished())
+        .cloned()
+        .collect();
+    if finished.len() < s.checks.len() {
+        let mut line = format!(
+            "{} of {} checks on {}{at} finished",
+            finished.len(),
             s.checks.len(),
             s.what
         );
+        if !finished.is_empty() {
+            line.push_str(&format!(": {}", counted(&finished)));
+        }
+        for (word, stand) in [("running", Stand::Running), ("queued", Stand::Queued)] {
+            let names = names(s.checks, stand);
+            if !names.is_empty() {
+                line.push_str(&format!("; {word}: {}", listed(&names)));
+            }
+        }
         return (false, line);
     }
     (
@@ -160,24 +198,33 @@ pub fn verdict(s: &Seen) -> (bool, String) {
     )
 }
 
+fn names(checks: &[Check], stand: Stand) -> Vec<&str> {
+    let of = checks.iter().filter(|c| c.stand == stand);
+    of.map(|c| c.name.as_str()).collect()
+}
+
+/// Up to five names, then that there are more.
+fn listed(names: &[&str]) -> String {
+    let more = if names.len() > 5 { ", …" } else { "" };
+    format!("{}{more}", names[..names.len().min(5)].join(", "))
+}
+
+/// The finished checks by how they ended, those that didn't pass or skip by name.
 fn counted(checks: &[Check]) -> String {
-    let n = |o| checks.iter().filter(|c| c.outcome == Some(o)).count();
-    let failed: Vec<&str> = checks
-        .iter()
-        .filter(|c| c.outcome == Some(Outcome::Failed))
-        .map(|c| c.name.as_str())
-        .collect();
     let mut parts = Vec::new();
-    if n(Outcome::Passed) > 0 {
-        parts.push(format!("{} passed", n(Outcome::Passed)));
-    }
-    if !failed.is_empty() {
-        let more = if failed.len() > 5 { ", …" } else { "" };
-        let names = failed[..failed.len().min(5)].join(", ");
-        parts.push(format!("{} failed ({names}{more})", failed.len()));
-    }
-    if n(Outcome::Skipped) > 0 {
-        parts.push(format!("{} skipped", n(Outcome::Skipped)));
+    for (word, stand, named) in [
+        ("passed", Stand::Passed, false),
+        ("failed", Stand::Failed, true),
+        ("cancelled", Stand::Cancelled, true),
+        ("skipped", Stand::Skipped, false),
+        ("unknown", Stand::Unknown, true),
+    ] {
+        let names = names(checks, stand);
+        match (names.len(), named) {
+            (0, _) => {}
+            (n, true) => parts.push(format!("{n} {word} ({})", listed(&names))),
+            (n, false) => parts.push(format!("{n} {word}")),
+        }
     }
     parts.join(", ")
 }

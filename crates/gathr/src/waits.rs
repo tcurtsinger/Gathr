@@ -57,8 +57,35 @@ pub struct Wait {
     pub head_ts: Option<i64>,
     pub failures: i64,
     pub last_error: Option<String>,
+    /// What its last look saw while it wasn't met, and when it last looked.
+    pub seen: Option<String>,
+    pub looked_ts: Option<i64>,
     pub created_ts: i64,
     pub parts: Vec<Wait>,
+}
+
+impl Wait {
+    /// What the last look saw, each part's for a wait of several.
+    pub fn saw(&self) -> Option<String> {
+        if self.parts.is_empty() {
+            return self.seen.clone();
+        }
+        let parts: Vec<&str> = self
+            .parts
+            .iter()
+            .filter_map(|p| p.seen.as_deref())
+            .collect();
+        (!parts.is_empty()).then(|| parts.join("; "))
+    }
+
+    /// The looks that failed in a row and the last one's error: its own, or for a wait of several
+    /// the part's whose looks have failed most. Looks are made part by part.
+    pub fn failing(&self) -> Option<(i64, String)> {
+        let own = std::iter::once(self).filter(|_| self.parts.is_empty());
+        let worst = own.chain(&self.parts).max_by_key(|w| w.failures)?;
+        let error = worst.last_error.clone()?;
+        (worst.failures > 0).then_some((worst.failures, error))
+    }
 }
 
 fn refused(why: impl Into<String>) -> Error {
@@ -258,20 +285,29 @@ pub fn to_look_at(conn: &Connection) -> Result<Vec<Wait>, Error> {
     .and_then(|ids| ids.iter().map(|id| read(conn, id)).collect())
 }
 
-/// How a look went that didn't meet the wait: the head it saw, or why it failed. The failures in a
-/// row since the last look that worked.
+/// How a look went that didn't meet the wait: the head and what it saw, or why it failed (what an
+/// earlier look saw then stands). The failures in a row since the last look that worked.
 pub fn looked(
     conn: &Connection,
     id: &str,
     head: Option<(&str, i64)>,
+    seen: Option<&str>,
     error: Option<&str>,
 ) -> Result<i64, Error> {
     Ok(conn.query_row(
         "UPDATE waits SET looked_ts = ?2,
              head = COALESCE(?3, head), head_ts = COALESCE(?4, head_ts),
-             failures = CASE WHEN ?5 IS NULL THEN 0 ELSE failures + 1 END, last_error = ?5
+             failures = CASE WHEN ?5 IS NULL THEN 0 ELSE failures + 1 END, last_error = ?5,
+             seen = CASE WHEN ?5 IS NULL THEN ?6 ELSE seen END
          WHERE id = ?1 RETURNING failures",
-        params![id, now_us(), head.map(|h| h.0), head.map(|h| h.1), error],
+        params![
+            id,
+            now_us(),
+            head.map(|h| h.0),
+            head.map(|h| h.1),
+            error,
+            seen
+        ],
         |r| r.get(0),
     )?)
 }
@@ -489,7 +525,7 @@ fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<Str
 pub fn read(conn: &Connection, id: &str) -> Result<Wait, Error> {
     let mut wait = conn.query_row(
         "SELECT id, chat_id, agent_id, task, kind, target, repo, cwd, then_do, state, line, head,
-                head_ts, failures, last_error, created_ts, left_in
+                head_ts, failures, last_error, created_ts, left_in, seen, looked_ts
          FROM waits WHERE id = ?1",
         [id],
         |r| {
@@ -511,6 +547,8 @@ pub fn read(conn: &Connection, id: &str) -> Result<Wait, Error> {
                 last_error: r.get(14)?,
                 created_ts: r.get(15)?,
                 left_in: r.get(16)?,
+                seen: r.get(17)?,
+                looked_ts: r.get(18)?,
                 parts: Vec::new(),
             })
         },

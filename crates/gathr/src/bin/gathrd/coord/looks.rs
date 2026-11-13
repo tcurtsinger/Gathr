@@ -25,10 +25,18 @@ const LIMIT: Duration = Duration::from_secs(60);
 /// The most of what a met check printed that its agent is told.
 const PRINTED_MOST: usize = 300;
 
-/// What one look found: met, with the line its agent is woken with; not yet; or why it failed.
+/// What one look found: met, with the line its agent is woken with; not yet, with what it saw
+/// instead; or why it failed.
 enum Look {
     Met(String),
-    NotYet { head: Option<(String, i64)> },
+    NotYet {
+        head: Option<(String, i64)>,
+        seen: String,
+    },
+}
+
+fn not_yet(seen: String) -> Look {
+    Look::NotYet { head: None, seen }
 }
 
 /// A day for the stale rules (F11): `GATHR_STALE_DAY_MS` shortens it, in dev and tests only.
@@ -193,18 +201,18 @@ async fn settle(chats: &Arc<Chats>, wait: Wait, looked: Result<Look, String>) {
             })
             .await;
         }
-        Ok(Look::NotYet { head }) => {
-            let seen = move |c: &mut rusqlite::Connection| {
+        Ok(Look::NotYet { head, seen }) => {
+            let save = move |c: &mut rusqlite::Connection| {
                 let head = head.as_ref().map(|(h, ts)| (h.as_str(), *ts));
-                waits::looked(c, &id, head, None)
+                waits::looked(c, &id, head, Some(&seen), None)
             };
-            let _ = chats.writer.call(seen).await;
+            let _ = chats.writer.call(save).await;
         }
         Err(why) => {
             let error = why.clone();
             let failures = chats
                 .writer
-                .call(move |c| waits::looked(c, &id, None, Some(&error)))
+                .call(move |c| waits::looked(c, &id, None, None, Some(&error)))
                 .await;
             if let Some(Ok(failures)) = failures
                 && failures == waits::SHOWN_AFTER
@@ -243,7 +251,7 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
             Ok(match json_text(&answer, "state").as_str() {
                 "MERGED" => Look::Met(format!("#{target} was merged")),
                 "CLOSED" => Look::Met(format!("#{target} was closed without merging")),
-                _ => Look::NotYet { head: None },
+                _ => not_yet(format!("#{target} is open")),
             })
         }
         "up_to_date" => {
@@ -287,7 +295,9 @@ fn up_to_date(pr: &str, state: &str, base: &str, behind: Option<u64>) -> Look {
         ("MERGED", _) => Look::Met(format!("#{pr} was merged")),
         ("CLOSED", _) => Look::Met(format!("#{pr} was closed without merging")),
         (_, Some(0)) => Look::Met(format!("#{pr} is up to date with {base}")),
-        _ => Look::NotYet { head: None },
+        (_, Some(1)) => not_yet(format!("#{pr} is 1 commit behind {base}")),
+        (_, Some(n)) => not_yet(format!("#{pr} is {n} commits behind {base}")),
+        (_, None) => not_yet(format!("#{pr} is {}", state.to_lowercase())),
     }
 }
 
@@ -351,8 +361,9 @@ async fn look_ci(wait: &Wait, target: &Target, dir: &Path, vars: &Vars) -> Resul
     };
     Ok(match ci::verdict(&seen) {
         (true, line) => Look::Met(line),
-        (false, _) => Look::NotYet {
+        (false, seen) => Look::NotYet {
             head: Some((head, since)),
+            seen,
         },
     })
 }
@@ -403,10 +414,19 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
             gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
         }
     };
+    // Kept on the wait and said in its wake: never with a secret the command printed. Hidden
+    // before the cut: a key the cut shortens is no longer known for one.
+    let printed = gathr::redact::redact(&ran.out);
+    let printed: String = printed.chars().take(PRINTED_MOST).collect();
     if ran.code != Some(0) {
-        return Ok(Look::NotYet { head: None });
+        let exit = ran
+            .code
+            .map_or("with no exit code".to_string(), |c| c.to_string());
+        return Ok(not_yet(match printed.trim().is_empty() {
+            true => format!("the check exited {exit}"),
+            false => format!("the check exited {exit}: \"{}\"", printed.trim()),
+        }));
     }
-    let printed: String = ran.out.chars().take(PRINTED_MOST).collect();
     Ok(Look::Met(match printed.is_empty() {
         true => "Check passed".to_string(),
         false => format!("Check passed: \"{printed}\""),
@@ -569,5 +589,48 @@ mod tests {
             [false, false],
             "a read-only check ran a program the repository names"
         );
+    }
+
+    /// What a check that isn't met printed is kept on its wait and shown: its exit code and its
+    /// output, never with a secret in it (#183's review).
+    #[tokio::test]
+    async fn a_check_not_met_says_how_it_exited_and_hides_a_secret_it_printed() {
+        let root = std::env::temp_dir().join(format!("gathr-seen-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let secret = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
+        let command = format!("echo \"2 left, --token {secret}\"; exit 3");
+        let looked = check(&command, &root, &vars).await;
+        let quiet = check("exit 1", &root, &vars).await;
+        let _ = std::fs::remove_dir_all(&root);
+        let Ok(Look::NotYet { seen, .. }) = looked else {
+            panic!("a check that exits 3 isn't met: {:?}", looked.err());
+        };
+        assert!(
+            seen.starts_with("the check exited 3: \"2 left, --token ") && !seen.contains(secret),
+            "{seen}"
+        );
+        let Ok(Look::NotYet { seen, .. }) = quiet else {
+            panic!("a check that exits 1 isn't met: {:?}", quiet.err());
+        };
+        assert_eq!(seen, "the check exited 1");
+    }
+
+    /// The output is cut to its first characters only once its secrets are hidden: cut first, a
+    /// key that straddles the cut is too short to be known for one, and its start is kept (#183's
+    /// second look).
+    #[tokio::test]
+    async fn a_secret_that_straddles_the_cut_is_hidden_whole() {
+        let root = std::env::temp_dir().join(format!("gathr-cut-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let pad = "x".repeat(PRINTED_MOST - 10);
+        let command = format!("echo {pad} ghp_0123456789abcdefghijABCDEFGHIJ012345; exit 1");
+        let looked = check(&command, &root, &vars).await;
+        let _ = std::fs::remove_dir_all(&root);
+        let Ok(Look::NotYet { seen, .. }) = looked else {
+            panic!("a check that exits 1 isn't met: {:?}", looked.err());
+        };
+        assert!(seen.contains(&pad) && !seen.contains("ghp_"), "{seen}");
     }
 }
