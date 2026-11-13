@@ -2,7 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
-use super::records::OptionalTask;
+use super::records::{OptionalTask, heard_as};
 use super::{Finish, Start, State, Task, cascade, read, ready, set, words};
 use crate::Error;
 use crate::event::Event;
@@ -55,7 +55,7 @@ pub(super) fn after_review(
 }
 
 /// What the task still has open, each in a few words: its waits, the tasks given in its turns that
-/// aren't settled, and its PR.
+/// aren't settled (but for those given in passing, G164), and its PR.
 pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error> {
     let mut open = Vec::new();
     let mut waits = conn.prepare_cached(
@@ -77,7 +77,8 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
     // Settled isn't enough: the giver isn't done before it has heard back on them.
     let mut given = conn.prepare_cached(&format!(
         "SELECT c.number, c.owner FROM tasks c JOIN turns t ON t.id = c.given_in
-         WHERE t.task = ?1 AND (c.state NOT IN {} OR c.heard = 0) ORDER BY c.number",
+         WHERE t.task = ?1 AND c.in_passing = 0 AND (c.state NOT IN {} OR c.heard = 0)
+         ORDER BY c.number",
         super::SETTLED
     ))?;
     let rows = given.query_map([task], |r| Ok((r.get::<_, i64>(0)?, r.get(1)?)))?;
@@ -186,10 +187,12 @@ fn ask(tx: &Transaction, t: &Task, trace: &str) -> Result<Start, Error> {
     Start::queue(tx, (&t.chat, owner), on, words::ask(t))
 }
 
-/// The hear-backs on the tasks given in `turn`, one per giver: once, when that turn has ended (so
-/// the giver is done handing out work) and every task it gave there is settled. Each says what
-/// became of every task, on the giver's own task from that turn while it's still open. A task
-/// restarted after its hear-back makes its group heard again when it settles.
+/// The hear-backs on the tasks given in `turn`, one per giver: when that turn has ended (so the
+/// giver is done handing out work) and every task it gave there is settled. Each says what became
+/// of the tasks its giver hasn't heard about, and only those (G188), on the giver's own task from
+/// that turn while it's still open. A task restarted after its hear-back is heard again when it
+/// settles, whatever the outcome (its giver asked for that run), and one that settles as something
+/// else than was heard is heard once more: each by itself (0047).
 pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
     let found: Option<(String, String, Option<i64>)> = tx
         .query_row(
@@ -218,30 +221,43 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     };
     let mut starts = Vec::new();
     for giver in givers {
-        let group: Vec<i64> = {
+        let group: Vec<(i64, bool)> = {
             let mut stmt = tx.prepare_cached(
                 // The person's answers come back as they're sent (person::heard), not with these.
-                "SELECT number FROM tasks WHERE given_in = ?1 AND giver = ?2 AND owner IS NOT NULL
-                 ORDER BY number",
+                "SELECT number, heard FROM tasks WHERE given_in = ?1 AND giver = ?2
+                 AND owner IS NOT NULL ORDER BY number",
             )?;
-            let rows = stmt.query_map(params![turn, giver], |r| r.get(0))?;
+            let rows = stmt.query_map(params![turn, giver], |r| Ok((r.get(0)?, r.get(1)?)))?;
             rows.collect::<Result<_, _>>()?
         };
-        let settled = group
-            .into_iter()
-            .map(|n| super::read(tx, n))
-            .collect::<Result<Vec<_>, _>>()?;
-        let mut pending = false;
-        for t in &settled {
-            pending |= !t.state.settled() && !only_its_merge_left(tx, t.number)?;
+        // What the giver hasn't heard: of the work its own task needs, once all of it stands; of
+        // what it gave in passing, each as it stands, whatever the rest does (G164).
+        let (mut due, mut aside, mut pending) = (Vec::new(), Vec::new(), false);
+        for (number, heard) in group {
+            let t = super::read(tx, number)?;
+            let stands = t.state.settled() || only_its_merge_left(tx, number)?;
+            match (t.in_passing, heard) {
+                (false, _) if !stands => pending = true,
+                (false, false) => due.push(t),
+                (true, false) if stands => aside.push(t),
+                _ => {}
+            }
         }
         if pending {
+            due.clear();
+        }
+        due.extend(aside);
+        if due.is_empty() {
             continue;
         }
-        tx.execute(
-            "UPDATE tasks SET heard = 1 WHERE given_in = ?1 AND giver = ?2 AND owner IS NOT NULL",
-            params![turn, giver],
-        )?;
+        due.sort_by_key(|t| t.number);
+        let settled = due;
+        for t in &settled {
+            tx.execute(
+                "UPDATE tasks SET heard = 1, heard_as = ?2 WHERE number = ?1",
+                params![t.number, heard_as(t.state, t.reason.as_deref())],
+            )?;
+        }
         Event::point("gathr.task.hear_back")
             .trace(trace)
             .chat(&chat)

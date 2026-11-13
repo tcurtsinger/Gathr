@@ -30,6 +30,9 @@ pub struct GiveTask {
     kind: Option<String>,
     /// The PR it's about: merged settles the task, closed cancels it.
     pr: Option<i64>,
+    /// True for a task that isn't part of your own: your task doesn't wait on it, and you hear back
+    /// on it by itself. Leave it out for work your own task needs.
+    in_passing: Option<bool>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -93,7 +96,8 @@ pub struct Nothing {}
 impl Tools {
     #[tool(
         description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back when every task you gave \
-            this turn is settled. Check the returned tasks and PRs for duplicates."
+            this turn is settled, and your own task waits on them. Set `in_passing` for a task that isn't part of your own work. \
+            Check the returned tasks and PRs for duplicates."
     )]
     async fn give_task(
         &self,
@@ -123,6 +127,7 @@ impl Tools {
                     why: ask.why.as_deref(),
                     after: ask.after.as_deref().unwrap_or_default(),
                     pr: ask.pr,
+                    in_passing: ask.in_passing.unwrap_or(false),
                 };
                 let trace = on
                     .as_ref()
@@ -214,7 +219,15 @@ impl Tools {
             .db(move |c| {
                 let why = ask.why.as_deref().unwrap_or("cancelled by its giver");
                 let starts = tasks::cancel(c, by.as_deref(), ask.task, why, &trace)?;
-                Ok((format!("Task #{} was cancelled.", ask.task), starts))
+                let done = tasks::get(c, ask.task)?.is_some_and(|t| t.state == State::Done);
+                let said = match done {
+                    true => format!(
+                        "Task #{} had the person's answer already, so it's done, not cancelled. What waited on it carries on.",
+                        ask.task
+                    ),
+                    false => format!("Task #{} was cancelled.", ask.task),
+                };
+                Ok((said, starts))
             })
             .await;
         Ok(self.answer(&caller, "cancel_task", started, done).await)

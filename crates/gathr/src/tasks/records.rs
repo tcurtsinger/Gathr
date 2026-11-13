@@ -17,13 +17,22 @@ pub fn set(
     trace: &str,
 ) -> Result<(), Error> {
     // A task heard while held only on its merge (held.rs) is heard again when it settles, merged,
-    // closed or cancelled: its giver's own task is still held on it.
+    // closed or cancelled: its giver's own task is still held on it. So is one that settles as
+    // something other than what its giver last heard (0047): blocked, then reported done.
     let chat: String = tx.query_row(
         "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL,
              review_done = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE review_done END,
-             heard = CASE WHEN state = 'held' AND ?5 THEN 0 ELSE heard END
+             heard = CASE WHEN ?5 AND (state = 'held' OR (heard_as IS NOT NULL AND heard_as IS NOT ?6))
+                          THEN 0 ELSE heard END
          WHERE number = ?1 RETURNING chat_id",
-        params![task, state.as_str(), reason, now_us(), state.settled()],
+        params![
+            task,
+            state.as_str(),
+            reason,
+            now_us(),
+            state.settled(),
+            heard_as(state, reason)
+        ],
         |r| r.get(0),
     )?;
     let event = Event::point("gathr.task.state").trace(trace).chat(&chat);
@@ -44,6 +53,11 @@ pub fn set(
     Ok(())
 }
 
+/// How a task stood when its giver heard of it: kept to tell a changed outcome from the same one.
+pub fn heard_as(state: State, reason: Option<&str>) -> String {
+    format!("{}: {}", state.as_str(), reason.unwrap_or_default())
+}
+
 pub fn state_of(conn: &Connection, task: i64) -> Result<Option<State>, Error> {
     let found: Option<String> = conn
         .query_row("SELECT state FROM tasks WHERE number = ?1", [task], |r| {
@@ -57,7 +71,8 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     let mut t = conn.query_row(
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
-                stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks
+                stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
+                in_passing
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -105,6 +120,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                     .transpose()?,
                 asked: r.get::<_, i64>(28)? > 0,
                 waiting_on: Vec::new(),
+                in_passing: r.get(29)?,
             })
         },
     )?;

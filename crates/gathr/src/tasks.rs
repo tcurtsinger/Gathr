@@ -156,6 +156,8 @@ pub struct Task {
     pub asked: bool,
     /// What a held task still has open, each in a few words.
     pub waiting_on: Vec<String>,
+    /// Given in passing: it doesn't hold the task whose turn gave it (G164).
+    pub in_passing: bool,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -226,6 +228,8 @@ pub struct Give<'a> {
     pub why: Option<&'a str>,
     pub after: &'a [i64],
     pub pr: Option<i64>,
+    /// Given in passing: the giver's own task doesn't wait on it, and it's heard back on by itself.
+    pub in_passing: bool,
 }
 
 /// How a turn on a task ended.
@@ -271,8 +275,8 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
     let now = now_us();
     tx.execute(
         "INSERT INTO tasks (chat_id, giver, owner, given_in, parent, kind, what, why, state, pr,
-                            created_ts, updated_ts)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10)",
+                            created_ts, updated_ts, in_passing)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10, ?11)",
         params![
             g.chat,
             g.giver,
@@ -283,7 +287,8 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
             what,
             g.why.map(str::trim).filter(|w| !w.is_empty()),
             g.pr,
-            now
+            now,
+            g.in_passing
         ],
     )?;
     let number = tx.last_insert_rowid();
@@ -471,7 +476,7 @@ fn in_tx<R>(
 }
 
 /// Cancels a task not done or cancelled yet, by its giver or the person (`by` none); its open waits
-/// end.
+/// end. A member's request the person has answered settles as done instead.
 pub fn cancel(
     conn: &mut Connection,
     by: Option<&str>,
@@ -485,6 +490,17 @@ pub fn cancel(
     if matches!(t.state, State::Done | State::Cancelled) {
         let state = t.state.as_str();
         return Err(refused(format!("task #{task} is already {state}")));
+    }
+    // A request the person already answered is done with that answer, not cancelled: what waited
+    // on it carries on, and its giver hears the answer (G183).
+    if t.kind == Kind::PersonRequest
+        && let Some(answer) = person::answered(&tx, task)?
+    {
+        set(&tx, task, State::Done, Some(&answer), trace)?;
+        end_waits(&tx, task, "its request was answered")?;
+        let starts = cascade(&tx, task, trace)?;
+        tx.commit()?;
+        return Ok(starts);
     }
     let mut starts = cancel_in(&tx, task, why, trace)?;
     if t.kind == Kind::Person {

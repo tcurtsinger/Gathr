@@ -283,7 +283,8 @@ Parts: 5.5, 5.6
   handed on, a background command, or a question
 - **When** the report is taken
 - **Then** the task is held and says on what. It becomes done when Gathr sees that thing end: the
-  merge, the wait, the other task, the command, the answer
+  merge, the wait, the other task, the command, the answer. A task handed on in passing holds
+  nothing, and is heard back on by itself
 
 ### 5e. Whoever gave a task hears back once, with the real outcome
 
@@ -291,8 +292,9 @@ Parts: 5.7
 
 - **Given** a lead gave a task
 - **When** the task settles: done, left, blocked, cancelled, or stopped by the person
-- **Then** the lead hears back once, with that outcome and what to look at. If the work carries on
-  after a stop and then ends, the lead hears that outcome too
+- **Then** the lead hears back once, with that outcome and what to look at, and the hear-back names
+  only what the lead has not heard yet. If the work carries on after a stop and then ends, the lead
+  hears that outcome too. An outcome that changes after the lead heard it is heard once more
 
 ### 5f. A review is of an exact version
 
