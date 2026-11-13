@@ -249,6 +249,7 @@ fn a_stop_between_a_giving_turns_end_and_its_round_still_brings_its_hear_back() 
         agent: Some("lead"),
         task: Some(lead_task),
         trace: T,
+        carries_on: None,
     };
     assert!(tasks::turn_moved(&mut conn, &moved, "done", None).is_err());
     drop(conn);

@@ -31,6 +31,7 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
         m.trace.to_string(),
     );
     let (status, why) = (status.to_string(), why.map(String::from));
+    let carries_on = m.carries_on.map(String::from);
     let work = move |conn: &mut rusqlite::Connection| {
         let m = Moved {
             chat: &chat,
@@ -38,6 +39,7 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
             agent: agent.as_deref(),
             task,
             trace: &trace,
+            carries_on: carries_on.as_deref(),
         };
         tasks::turn_moved(conn, &m, &status, why.as_deref())
     };

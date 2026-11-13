@@ -105,22 +105,38 @@ impl Task {
     /// what this task holds, not from the write: a failed write still names the turn's agent, so
     /// Retry goes to it.
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
-        self.move_turn(ids, ids.task, status, why).await;
+        self.move_turn(ids, ids.task, status, why, None).await;
+    }
+
+    /// A turn stopped with its carry-on waiting (Stop now, a usage limit): it ends `stopped`, and
+    /// its task stays as it was, saying why nothing runs on it (`waits`). Nobody is told it
+    /// settled: its giver hears how the carry-on ends (0047).
+    pub(super) async fn end_waiting(&self, ids: &Ids, why: Option<&str>, waits: &str) {
+        self.move_turn(ids, ids.task, "stopped", why, Some(waits))
+            .await;
     }
 
     /// A turn an update stopped, its carry-on saved: it ends `stopped` and its task isn't settled,
     /// so nobody is told it stopped while the carry-on works on it (0032).
     pub(super) async fn end_carried(&self, ids: &Ids, why: Option<&str>) {
-        self.move_turn(ids, None, "stopped", why).await;
+        self.move_turn(ids, None, "stopped", why, None).await;
     }
 
-    async fn move_turn(&self, ids: &Ids, task: Option<i64>, status: &str, why: Option<&str>) {
+    async fn move_turn(
+        &self,
+        ids: &Ids,
+        task: Option<i64>,
+        status: &str,
+        why: Option<&str>,
+        carries_on: Option<&str>,
+    ) {
         let moved = gathr::tasks::Moved {
             chat: &ids.chat,
             turn: &ids.turn,
             agent: ids.agent.as_deref(),
             task,
             trace: &ids.trace,
+            carries_on,
         };
         crate::coord::turn_moved(&self.chats, moved, status, why).await;
         self.announce_turn(ids, status, why).await;

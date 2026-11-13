@@ -35,6 +35,7 @@ mod state;
 mod thinking;
 mod workspace;
 
+pub use holds::STOP_NOW;
 pub use process::CLOSE_GRACE;
 
 /// How often a turn waiting for sign-in looks at the login again.
@@ -123,6 +124,8 @@ struct Running {
     stopping: bool,
     /// An update stopped it with its carry-on saved: its end doesn't settle its task (0032).
     carried: bool,
+    /// Stop now stopped it with its carry-on saved: its task stays as it was and says this (0047).
+    waits: Option<&'static str>,
     /// Why Gathr stopped it, when Gathr did: the stopped turn says so.
     stop_why: Option<String>,
     /// A message of it the database refused: the turn fails with this (audit 2.2.6).

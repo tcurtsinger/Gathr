@@ -431,3 +431,111 @@ fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
     });
     assert_eq!(settled["state"], "done", "{settled}");
 }
+
+/// A usage limit that cuts a turn after a tool ran ends the turn with a carry-on waiting for the
+/// account. The turn's task stays as it was and says why: nobody is told it stopped (0047).
+#[test]
+fn a_usage_limit_after_a_tool_leaves_the_task_as_it_was() {
+    let data = TempDir::new();
+    // Made by hand from two hand-made recordings: the steps recording up to its first tool's
+    // result, then the usage limit's event and the turn's end, in that session.
+    let steps = std::fs::read_to_string(recording("steps_claude")).unwrap();
+    let limit = std::fs::read_to_string(recording("usage_limit")).unwrap();
+    let ran = steps.lines().position(|l| l.contains(r#"\"tool_result\""#));
+    let mut limited: Vec<String> = steps
+        .lines()
+        .take(ran.unwrap() + 1)
+        .map(String::from)
+        .collect();
+    let cut = limit
+        .lines()
+        .position(|l| l.contains(r#"\"type\":\"rate_limit_event\""#));
+    let session = "a404d9af-ce93-4b65-bb15-1b300040a9f1";
+    limited.extend(
+        limit
+            .lines()
+            .skip(cut.unwrap())
+            .map(|l| l.replace(session, "default")),
+    );
+    let first = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let replay = data.0.join("limited.jsonl");
+    std::fs::write(
+        &replay,
+        format!("{}\n{}\n", first.trim_end(), limited.join("\n")),
+    )
+    .unwrap();
+    let (service, chat, _) = team(&data.0, &replay, &[]);
+    send(&service, &chat, "Hi");
+    service.wait_for(&chat, 10, "the lead's first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let ask = json!({ "to": "Lead", "what": "Run the steps" });
+    let given = call_tool(service.info.port, &token(&data.0), "give_task", ask);
+    assert_ne!(given["isError"], true, "{given}");
+    let history = service.wait_for(&chat, 10, "the carry-on held for the account", |h| {
+        h["turns"][1]["status"] == "stopped" && h["turns"][2]["held"] == "usage"
+    });
+    assert_eq!(history["turns"][2]["task"], 1, "{history}");
+    let listed = service
+        .call("GET", &format!("/api/chats/{chat}/tasks"))
+        .json();
+    let task = &listed["tasks"][0];
+    assert_eq!(
+        (&task["state"], &task["reason"]),
+        (
+            &json!("working"),
+            &json!("The account is out of usage. Carries on when it is back")
+        ),
+        "{listed}"
+    );
+}
+
+/// The engine exits instead of answering Stop now's interrupt. The turn is over all the same: with
+/// its carry-on saved, its task stays as it was, and nobody is told it failed (0047).
+#[test]
+fn an_engine_that_exits_after_stop_now_leaves_the_task_to_its_carry_on() {
+    let data = TempDir::new();
+    // The lead's first turn; then a turn that holds and exits with no word, as a crash would.
+    let first = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let asked = first.lines().next().unwrap();
+    let rows = [
+        first.trim_end(),
+        asked,
+        r#"{"dir":"hold"}"#,
+        r#"{"dir":"exit","line":"1"}"#,
+    ];
+    let replay = data.0.join("exits.jsonl");
+    std::fs::write(&replay, rows.join("\n") + "\n").unwrap();
+    let (service, chat, _) = team(&data.0, &replay, &[]);
+    send(&service, &chat, "Hi");
+    service.wait_for(&chat, 10, "the lead's first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let ask = json!({ "to": "Lead", "what": "Run the steps" });
+    let given = call_tool(service.info.port, &token(&data.0), "give_task", ask);
+    assert_ne!(given["isError"], true, "{given}");
+    service.wait_for(&chat, 10, "the task's turn", |h| {
+        h["turns"][1]["status"] == "running"
+    });
+    pause(&service, "/api/pauses/stop", &chat);
+    service.wait_for(&chat, 10, "Stop now's carry-on", |h| {
+        h["turns"][2]["held"] == "pause"
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "the turn to end", |h| {
+        h["turns"][1]["status"] != "running"
+    });
+    assert_eq!(history["turns"][1]["status"], "stopped", "{history}");
+    let listed = service
+        .call("GET", &format!("/api/chats/{chat}/tasks"))
+        .json();
+    let task = &listed["tasks"][0];
+    assert_eq!(
+        (&task["state"], &task["reason"]),
+        (
+            &json!("working"),
+            &json!("Stopped by you. Carries on at Restart")
+        ),
+        "{listed}"
+    );
+}

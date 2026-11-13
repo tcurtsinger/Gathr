@@ -486,3 +486,42 @@ fn a_turn_that_never_ends_doesnt_hold_the_update() {
         room.states()
     );
 }
+
+/// Scenario 5h: Stop now leaves the task as it was. It says the person stopped it, it is never
+/// `stopped`, and its lead hears nothing until the carry-on, after Restart, ends: then the real
+/// outcome, once.
+#[test]
+fn stop_now_leaves_the_task_as_it_was_and_its_lead_hears_only_how_it_ends() {
+    let room = Room::start();
+    let stopped = room.ann_works();
+    room.pause(&room.service.info, "/api/pauses/stop");
+    room.go();
+    until(20, "Stop now's carry-on", || {
+        let history = room.history(&room.service.info);
+        let ended = turn_by(&history, "id", &stopped)?["status"] == "stopped";
+        let carried = turn_by(&history, "answers", &stopped)?;
+        (ended && carried["held"] == "pause").then_some(())
+    });
+    let sql = "SELECT state || ': ' || reason AS stands FROM tasks WHERE number = 1";
+    assert_eq!(
+        room.column(sql, "stands"),
+        [json!("working: Stopped by you. Carries on at Restart")]
+    );
+    let states = room.states();
+    assert!(
+        !states.contains(&json!("stopped")),
+        "the task was told stopped: {states:?}"
+    );
+    assert_eq!(room.lead_heard(), (1, 0), "the lead heard of the stop");
+
+    room.pause(&room.service.info, "/api/pauses/resume");
+    let done = "#1 Ann, Write the notes: done: the notes are written";
+    let history = room.go_until(&room.service.info, "the lead to hear how it ended", |h| {
+        h.to_string().contains(done)
+    });
+    assert_eq!(room.lead_heard().1, 1, "heard once: {history}");
+    let states = room.states();
+    assert!(!states.contains(&json!("stopped")), "{states:?}");
+    assert_eq!(states.last(), Some(&json!("done")), "{states:?}");
+    room.go_until(&room.service.info, "everything to end", all_ended);
+}
