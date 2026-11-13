@@ -11,6 +11,7 @@ use crate::ids::now_us;
 
 mod held;
 pub mod person;
+mod prs;
 mod records;
 mod report;
 pub mod stale;
@@ -20,6 +21,7 @@ mod words;
 use records::{OptionalTask, read, set, state_of};
 
 pub use held::background_changed;
+pub use prs::{Seen, pr_looked, with_prs};
 pub use report::{Finish, Report, Said, Took, finish};
 
 pub use words::{name_of, owner_name, wait_name};
@@ -158,6 +160,9 @@ pub struct Task {
     pub waiting_on: Vec<String>,
     /// Given in passing: it doesn't hold the task whose turn gave it (G164).
     pub in_passing: bool,
+    /// The pair a look last judged its review for, "<commit reviewed>:<head>": `outdated` is that verdict.
+    #[serde(skip)]
+    pub judged: Option<String>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -620,96 +625,6 @@ pub fn engine_gone(
     }
     tx.commit()?;
     Ok(starts)
-}
-
-/// A task's PR has been looked at: merged settles work reported done and any review, closed
-/// cancels it (G67, G44). `covered` says the commits after the one reviewed only bring in the base. A review
-/// whose PR moved past its commit is out of date (G73).
-pub fn pr_looked(
-    conn: &mut Connection,
-    task: i64,
-    pr_state: &str,
-    head: Option<&str>,
-    covered: bool,
-    trace: &str,
-) -> Result<Vec<Start>, Error> {
-    let tx = conn.transaction()?;
-    let t = read(&tx, task)?;
-    if let (Some(reviewed), Some(head)) = (&t.reviewed, head) {
-        let past = !head.starts_with(reviewed.as_str()) && !reviewed.starts_with(head);
-        // Past the commit reviewed, but by nothing except clean merges of the base: the review
-        // still covers it (G165), as the merge tool finds.
-        let past = past && !covered;
-        tx.execute(
-            "UPDATE tasks SET outdated = ?2 WHERE number = ?1",
-            params![task, past],
-        )?;
-    }
-    if let Some(head) = head {
-        tx.execute(
-            "UPDATE tasks SET pr_head = ?2 WHERE number = ?1",
-            params![task, head],
-        )?;
-    }
-    let pr = t.pr.unwrap_or_default();
-    let pr_state = pr_state.to_ascii_uppercase();
-    if matches!(pr_state.as_str(), "MERGED" | "CLOSED") {
-        tx.execute("UPDATE tasks SET pr_closed = 1 WHERE number = ?1", [task])?;
-    }
-    let mut starts = Vec::new();
-    if !t.state.settled() || t.state == State::Blocked {
-        match pr_state.as_str() {
-            "MERGED" => {
-                end_waits(&tx, task, "its PR merged")?;
-                let said = t.report.as_ref().map(|r| r.how);
-                if t.kind == Kind::Work && said != Some(Finish::Done) {
-                    // Work is done by its merge only if its owner reported it done (0047, live
-                    // #148). Else the owner is woken with what it last said, and this is the one
-                    // ask; with a turn of its own running or queued, that turn's end settles it.
-                    if !turn_due(&tx, task)? {
-                        tx.execute("UPDATE tasks SET asks = 1 WHERE number = ?1", [task])?;
-                        let note = t.report.as_ref().and_then(|r| r.note.as_deref());
-                        let stands = match (said, note) {
-                            (Some(Finish::Left), Some(note)) => {
-                                format!("you left this work: {note}")
-                            }
-                            (Some(Finish::Blocked), Some(note)) => {
-                                format!("you reported this task blocked: {note}")
-                            }
-                            _ => "this task has no report that it's done".to_string(),
-                        };
-                        let carry = format!("#{pr} merged, and {stands}");
-                        starts.push(ready(&tx, task, Some(&carry))?);
-                    }
-                } else {
-                    let why = format!("#{pr} merged");
-                    set(&tx, task, State::Done, Some(&why), trace)?;
-                    starts = cascade(&tx, task, trace)?;
-                }
-            }
-            "CLOSED" => {
-                let why = format!("#{pr} was closed without merging");
-                set(&tx, task, State::Cancelled, Some(&why), trace)?;
-                end_waits(&tx, task, "its PR was closed")?;
-                starts = cascade(&tx, task, trace)?;
-            }
-            _ => {}
-        }
-    }
-    tx.commit()?;
-    Ok(starts)
-}
-
-/// Tasks whose open PR the service looks at: open tasks, and done reviews while their PR may move
-/// past the commit reviewed (G73). Number, chat, owner and PR.
-pub fn with_prs(conn: &Connection) -> Result<Vec<(i64, String, String, i64)>, Error> {
-    let mut stmt = conn.prepare(
-        "SELECT number, chat_id, owner, pr FROM tasks
-         WHERE pr IS NOT NULL AND pr_closed = 0 AND owner IS NOT NULL
-         AND (state NOT IN ('done', 'cancelled') OR (state = 'done' AND kind = 'review'))",
-    )?;
-    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
-    Ok(rows.collect::<Result<_, _>>()?)
 }
 
 /// The chat's tasks, newest first.

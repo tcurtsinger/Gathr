@@ -16,7 +16,7 @@ fn move_pr(room: &mut Room, head: &str) {
     room.heads[0] = head.to_string();
     room.checks_passed(head);
     // A real PR look's transition makes the old review outdated; merge must prove it safe.
-    gathr::tasks::pr_looked(&mut room.db(), 1, "OPEN", Some(head), false, "pr-look").unwrap();
+    gathr::tasks::pr_looked(&mut room.db(), 1, "OPEN", Some(head), None, "pr-look").unwrap();
 }
 
 fn advance_main(room: &Room) -> String {

@@ -509,15 +509,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         prs.iter().any(|p| p.0 == task.number)
     };
     assert!(followed(&conn), "its PR is still followed for G73");
-    tasks::pr_looked(
-        &mut conn,
-        task.number,
-        "OPEN",
-        Some("def5678aaaa"),
-        false,
-        T,
-    )
-    .unwrap();
+    tasks::pr_looked(&mut conn, task.number, "OPEN", Some("def5678aaaa"), None, T).unwrap();
     let looked = tasks::get(&conn, task.number).unwrap().unwrap();
     assert!(looked.outdated, "G73");
     // The head the look saw, so the window shows the checks run at that commit (0043 C6).
@@ -527,7 +519,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         task.number,
         "MERGED",
         Some("def5678aaaa"),
-        false,
+        None,
         T,
     )
     .unwrap();
@@ -544,7 +536,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     work(&mut conn, work_pr.number, Some(Finish::Done));
     let held = Some("done, waiting on #61 to merge".to_string());
     assert_eq!(state(&conn, work_pr.number), (State::Held, held), "G75");
-    tasks::pr_looked(&mut conn, work_pr.number, "MERGED", None, false, T).unwrap();
+    tasks::pr_looked(&mut conn, work_pr.number, "MERGED", None, None, T).unwrap();
     assert_eq!(
         state(&conn, work_pr.number),
         (State::Done, Some("#61 merged".into()))
@@ -552,7 +544,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     let (other, _) = give(&mut conn, "ann", &[], None);
     conn.execute("UPDATE tasks SET pr = 60 WHERE number = ?1", [other])
         .unwrap();
-    tasks::pr_looked(&mut conn, other, "CLOSED", None, false, T).unwrap();
+    tasks::pr_looked(&mut conn, other, "CLOSED", None, None, T).unwrap();
     let why = Some("#60 was closed without merging".to_string());
     assert_eq!(state(&conn, other), (State::Cancelled, why));
     // S72: a review under way on a PR that closes is cancelled too, not only the work task.
@@ -563,7 +555,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     };
     let (under_way, _) = tasks::give(&mut conn, &under_way, T).unwrap();
     tasks::started(&mut conn, under_way.number, T).unwrap();
-    tasks::pr_looked(&mut conn, under_way.number, "CLOSED", None, false, T).unwrap();
+    tasks::pr_looked(&mut conn, under_way.number, "CLOSED", None, None, T).unwrap();
     let why = Some("#62 was closed without merging".to_string());
     assert_eq!(state(&conn, under_way.number), (State::Cancelled, why));
 }
@@ -607,7 +599,7 @@ fn a_task_done_and_held_only_on_its_pr_lets_the_tasks_after_it_start() {
     );
     let bo: Vec<_> = starts.iter().filter(|s| s.agent == "bo").collect();
     assert_eq!(bo.len(), 1, "{starts:?}");
-    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, false, T).unwrap();
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, None, T).unwrap();
     assert_eq!(state(&conn, fix).0, State::Done);
     let again: Vec<_> = merged.iter().filter(|s| s.agent == "bo").collect();
     assert!(again.is_empty(), "the review starts once: {again:?}");
@@ -798,7 +790,7 @@ fn a_task_held_only_on_its_merge_wakes_its_giver_once_its_review_is_done() {
         "Lead hears it waits on the merge: {starts:?}"
     );
     assert!(lead[0].contains("waiting on #85 to merge"), "{}", lead[0]);
-    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, false, T).unwrap();
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, None, T).unwrap();
     let lead = to(&merged, "lead");
     assert_eq!(lead.len(), 1, "Lead hears the merge too: {merged:?}");
     assert!(lead[0].contains("#85 merged"), "{}", lead[0]);
@@ -835,7 +827,7 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let fix = heard_while_held(&mut conn, 87);
-    let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, false, T).unwrap();
+    let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, None, T).unwrap();
     let lead = to(&closed, "lead");
     assert_eq!(lead.len(), 1, "{closed:?}");
     assert!(
@@ -843,7 +835,7 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
         "{}",
         lead[0]
     );
-    let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, false, T).unwrap();
+    let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, None, T).unwrap();
     assert!(to(&again, "lead").is_empty(), "heard once: {again:?}");
     let fix = heard_while_held(&mut conn, 88);
     let cancelled = tasks::cancel(&mut conn, None, fix, "not needed", T).unwrap();

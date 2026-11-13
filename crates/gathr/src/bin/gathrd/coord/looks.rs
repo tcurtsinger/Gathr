@@ -119,7 +119,11 @@ pub async fn once(chats: &Arc<Chats>) {
             crate::check_runs::for_review(chats, &chat, task, &head).await;
         }
         let view: Value = serde_json::from_str(&answer).unwrap_or_default();
-        let covered = covered(chats, task, &head, &json_text(&answer, "baseRefName"), &dir).await;
+        let base = json_text(&answer, "baseRefName");
+        let seen = match state.as_str() {
+            "OPEN" => judged(chats, task, &head, &base, &dir).await,
+            _ => None,
+        };
         let t = trace.clone();
         apply(chats, "gathr.task.pr", &trace, move |c| {
             if matches!(state.as_str(), "MERGED" | "CLOSED") {
@@ -130,7 +134,7 @@ pub async fn once(chats: &Arc<Chats>) {
                 task,
                 &state,
                 Some(head.as_str()).filter(|h| !h.is_empty()),
-                covered,
+                seen.as_ref().map(|(of, covers)| (of.as_str(), *covers)),
                 &t,
             )
         })
@@ -139,24 +143,25 @@ pub async fn once(chats: &Arc<Chats>) {
     crate::cleanup::sweep(chats, None).await;
 }
 
-/// Whether the task's review still covers its PR at `head`: asked of git once for each head the
-/// PR moves to, and kept as the look last found it while the head stays (0047).
-async fn covered(chats: &Arc<Chats>, task: i64, head: &str, base: &str, dir: &Path) -> bool {
+/// The look's verdict on the task's review, for the commit reviewed now and the PR at `head`:
+/// that commit, and whether a review of it still covers the head. Asked of git once for each such
+/// pair and kept (`judged`), so a review recorded again or a head that moves is judged again (0047).
+async fn judged(
+    chats: &Arc<Chats>,
+    task: i64,
+    head: &str,
+    base: &str,
+    dir: &Path,
+) -> Option<(String, bool)> {
     let read = chats.writer.call(move |c| tasks::get(c, task)).await;
-    let Some(Ok(Some(t))) = read else {
-        return false;
-    };
-    let Some(reviewed) = t.reviewed.filter(|_| !head.is_empty()) else {
-        return false;
-    };
-    if t.pr_head.as_deref() == Some(head) {
-        return !t.outdated;
-    }
-    if head.starts_with(&reviewed) || reviewed.starts_with(head) {
-        return true;
+    let t = read?.ok()??;
+    let reviewed = t.reviewed.filter(|_| !head.is_empty())?;
+    if t.judged.as_deref() == Some(format!("{reviewed}:{head}").as_str()) {
+        return Some((reviewed, !t.outdated));
     }
     let vars = super::fresh().await;
-    crate::merging::still_covers(dir, &reviewed, head, base, &vars).await
+    let covers = crate::merging::still_covers(dir, &reviewed, head, base, &vars).await;
+    Some((reviewed, covers))
 }
 
 /// Whether the wait is still open: a wait that can't be read isn't.

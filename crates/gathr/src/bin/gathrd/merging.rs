@@ -527,7 +527,7 @@ async fn settle(
             crate::cleanup::queue(c, &chat, &view, &trace)?;
             let mut starts = Vec::new();
             for number in numbers {
-                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), false, &trace)?);
+                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), None, &trace)?);
             }
             // Only the merger's hear-backs go, as marked where they're made: work of its own the
             // merge moved on (a task blocked on the merged one) still starts.

@@ -145,7 +145,9 @@ pub fn finish(
     if let Some(missing) = missing {
         return Err(refused(missing));
     }
-    // A review's commit is the commit reviewed. Work's commit or file is what to look at.
+    // A review's commit is the commit reviewed. Work's commit or file is what to look at. A review
+    // recorded at a commit that isn't the PR's head as last seen reads out of date until the look
+    // judges it, and any earlier verdict is dropped: it was for another commit.
     let (reviewed, see) = match t.kind {
         Kind::Review => (commit, None),
         _ => (None, file.or(commit)),
@@ -155,7 +157,10 @@ pub fn finish(
                           blocked_on = CASE WHEN ?2 = 'blocked' THEN ?6 ELSE NULL END,
                           pr = COALESCE(?7, pr), reviewed = COALESCE(?8, reviewed),
                           review_done = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?8 IS NOT NULL) ELSE review_done END,
-                          outdated = CASE WHEN ?8 IS NULL THEN outdated ELSE 0 END
+                          outdated = CASE WHEN ?8 IS NULL THEN outdated WHEN pr_head IS NULL THEN 0
+                              WHEN substr(pr_head, 1, length(?8)) = ?8 OR substr(?8, 1, length(pr_head)) = pr_head
+                              THEN 0 ELSE 1 END,
+                          judged = CASE WHEN ?8 IS NULL THEN judged ELSE NULL END
          WHERE number = ?1",
         params![task, how.as_str(), note, see, now_us(), said.on_task, said.pr, reviewed],
     )?;
