@@ -636,8 +636,8 @@ pub fn pr_looked(
                 if t.kind == Kind::Work && said != Some(Finish::Done) {
                     // Work is done by its merge only if its owner reported it done (0047, live
                     // #148). Else the owner is woken with what it last said, and this is the one
-                    // ask; while its turn still runs, that turn's end settles the task instead.
-                    if !turn_running(&tx, task)? {
+                    // ask; with a turn of its own running or queued, that turn's end settles it.
+                    if !turn_due(&tx, task)? {
                         tx.execute("UPDATE tasks SET asks = 1 WHERE number = ?1", [task])?;
                         let note = t.report.as_ref().and_then(|r| r.note.as_deref());
                         let stands = match (said, note) {
@@ -702,6 +702,16 @@ pub fn get(conn: &Connection, task: i64) -> Result<Option<Task>, Error> {
 fn turn_running(conn: &Connection, task: i64) -> Result<bool, Error> {
     Ok(conn.query_row(
         "SELECT EXISTS (SELECT 1 FROM turns WHERE task = ?1 AND status = 'running')",
+        [task],
+        |r| r.get(0),
+    )?)
+}
+
+/// Whether a turn on the task is running or waiting to.
+fn turn_due(conn: &Connection, task: i64) -> Result<bool, Error> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM turns WHERE task = ?1
+         AND status IN ('queued', 'waiting_sign_in', 'running'))",
         [task],
         |r| r.get(0),
     )?)

@@ -46,6 +46,23 @@ test('a held task shows its report and what it waits on, each once', async () =>
   ]);
 });
 
+test('a done task shows its note once, and a merge as its reason', async () => {
+  const report = { how: 'done' as const, note: 'Updated the guide', see: null, at_us: 1 };
+  const noted = task({ state: 'done', reason: 'Updated the guide', report });
+  expect(await fields(noted)).toEqual(['Assigned to: sol', 'State: done', 'Report: Done: Updated the guide']);
+});
+
+test('a task done by its merge shows the merge beside the report', async () => {
+  const report = { how: 'done' as const, note: 'Updated the guide', see: null, at_us: 1 };
+  const merged = task({ state: 'done', reason: '#18 merged', report });
+  expect(await fields(merged)).toEqual([
+    'Assigned to: sol',
+    'State: done',
+    'Reason: #18 merged',
+    'Report: Done: Updated the guide',
+  ]);
+});
+
 test('a task stopped as left says what is left', async () => {
   const left = task({
     state: 'blocked',

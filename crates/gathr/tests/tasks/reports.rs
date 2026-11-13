@@ -173,13 +173,12 @@ fn left_with_nothing_open_stops_and_tells_the_giver() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let task = given_by_the_lead(&mut conn);
-    tasks::started(&mut conn, task, T).unwrap();
-    turn(&conn, "t1", "ann", Some(task), "running");
+    let t1 = begin(&mut conn, task);
     let said = note("the drivers and the PR remain");
     let (_, took, _) = tasks::finish(&mut conn, "ann", task, Finish::Left, &said, T).unwrap();
     assert_eq!(took, tasks::Took::Kept, "its turn is running");
     assert_eq!(state(&conn, task).0, State::Working);
-    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    gathr::store::set_turn(&conn, &t1, "done", None).unwrap();
     let starts = tasks::ended(&mut conn, task, Outcome::Ok, T).unwrap();
     let left = Some("left: the drivers and the PR remain".to_string());
     assert_eq!(state(&conn, task), (State::Blocked, left));
@@ -230,8 +229,7 @@ fn a_pr_that_merges_does_not_make_a_left_task_done() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let fix = fix_with_pr(&mut conn);
-    tasks::started(&mut conn, fix, T).unwrap();
-    turn(&conn, "t1", "ann", Some(fix), "running");
+    let t1 = begin(&mut conn, fix);
     finish(
         &mut conn,
         "ann",
@@ -240,7 +238,7 @@ fn a_pr_that_merges_does_not_make_a_left_task_done() {
         &note("the second driver"),
     )
     .unwrap();
-    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    gathr::store::set_turn(&conn, &t1, "done", None).unwrap();
     tasks::ended(&mut conn, fix, Outcome::Ok, T).unwrap();
     let starts = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
     assert_eq!(state(&conn, fix).0, State::Ready, "not done");
@@ -271,9 +269,21 @@ fn a_pr_that_merges_finishes_work_only_if_its_owner_reported_it_done() {
     let carry = "#69 merged, and this task has no report that it's done";
     assert!(starts[0].text.contains(carry), "{}", starts[0].text);
 
+    // Not started yet, its first turn still queued: the merge queues no second one.
+    let queued = fix_with_pr(&mut conn);
+    let starts = tasks::pr_looked(&mut conn, queued, "MERGED", None, T).unwrap();
+    assert!(starts.is_empty(), "{starts:?}");
+    assert_eq!(state(&conn, queued).0, State::Ready);
+
+    // Reported done: the merge finishes it.
+    let reported = fix_with_pr(&mut conn);
+    work(&mut conn, reported, Some(Finish::Done));
+    tasks::pr_looked(&mut conn, reported, "MERGED", None, T).unwrap();
+    let merged = Some("#69 merged".to_string());
+    assert_eq!(state(&conn, reported), (State::Done, merged));
+
     let at_work = fix_with_pr(&mut conn);
-    turn(&conn, "t1", "ann", Some(at_work), "running");
-    tasks::started(&mut conn, at_work, T).unwrap();
+    let t1 = begin(&mut conn, at_work);
     let starts = tasks::pr_looked(&mut conn, at_work, "MERGED", None, T).unwrap();
     assert!(starts.is_empty(), "no second turn is queued: {starts:?}");
     assert_eq!(
@@ -289,7 +299,7 @@ fn a_pr_that_merges_finishes_work_only_if_its_owner_reported_it_done() {
         &note("the second half"),
     )
     .unwrap();
-    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    gathr::store::set_turn(&conn, &t1, "done", None).unwrap();
     tasks::ended(&mut conn, at_work, Outcome::Ok, T).unwrap();
     let left = Some("left: the second half".to_string());
     assert_eq!(state(&conn, at_work), (State::Blocked, left));
@@ -302,11 +312,10 @@ fn a_hold_that_ends_with_no_report_wakes_its_owner() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let (task, _) = give(&mut conn, "ann", &[], None);
-    turn(&conn, "t1", "ann", Some(task), "running");
-    tasks::started(&mut conn, task, T).unwrap();
+    let t1 = begin(&mut conn, task);
     let running = [("b1".to_string(), "cargo test".to_string())];
-    gathr::background::set(&conn, ("c", Some("ann")), &running, Some("t1")).unwrap();
-    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    gathr::background::set(&conn, ("c", Some("ann")), &running, Some(&t1)).unwrap();
+    gathr::store::set_turn(&conn, &t1, "done", None).unwrap();
     tasks::ended(&mut conn, task, Outcome::Ok, T).unwrap();
     let held = Some("waiting on a background command (cargo test)".to_string());
     assert_eq!(state(&conn, task), (State::Held, held));

@@ -44,10 +44,12 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
     task.stale_us ? idle(task.stale_us) : undefined,
   ].filter(Boolean);
   const report = reported(task);
-  // Report and Waiting on already say why a task is held, or stopped by its owner's word or silence. A
-  // reason they don't carry stays: "blocked on #3", from a report with a task and no note.
-  const said = task.report ? task.report.how === 'left' || !!task.report.note : !!task.asked;
-  const told = task.state === 'held' || (task.state === 'blocked' && said);
+  // Report and Waiting on already say why a task is held, a report's note is often the reason word
+  // for word, and a task stopped as left or with no report says so in Report. A reason they don't
+  // carry stays: "blocked on #3" from a report with no note, "#18 merged".
+  const stopped = task.report ? task.report.how === 'left' : !!task.asked;
+  const told =
+    task.state === 'held' || (task.state === 'blocked' && stopped) || task.reason === task.report?.note;
   return (
     <section className="tasks" aria-label={`Task #${task.number}`}>
       <div className="tasks-scroll">

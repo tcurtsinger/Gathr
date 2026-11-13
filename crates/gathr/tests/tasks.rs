@@ -82,16 +82,29 @@ fn finish(
     tasks::finish(conn, agent, task, how, said, T).map(|(t, _, _)| t)
 }
 
+/// Starts a turn of its owner's on the task: the one Gathr queued on it, else a new one. Its id.
+fn begin(conn: &mut Connection, task: i64) -> String {
+    let owner = tasks::get(conn, task).unwrap().unwrap().owner.unwrap();
+    let sql = "SELECT id FROM turns WHERE task = ?1 AND status = 'queued' ORDER BY rowid LIMIT 1";
+    let queued: Option<String> = conn.query_row(sql, [task], |r| r.get(0)).ok();
+    let id = queued.unwrap_or_else(|| {
+        let turns: i64 = conn
+            .query_row("SELECT count(*) FROM turns", [], |r| r.get(0))
+            .unwrap();
+        let id = format!("work-{turns}");
+        gathr::store::add_turn(conn, "c", &id, T, (Some(&owner), Some(task), None)).unwrap();
+        id
+    });
+    gathr::store::set_turn(conn, &id, "running", None).unwrap();
+    tasks::started(conn, task, T).unwrap();
+    id
+}
+
 /// Runs one turn of its owner's on the task: started, its report if any (with a note, as a report
 /// needs one), then ended well.
 fn work(conn: &mut Connection, task: i64, how: Option<Finish>) -> Vec<Start> {
     let owner = tasks::get(conn, task).unwrap().unwrap().owner.unwrap();
-    let turns: i64 = conn
-        .query_row("SELECT count(*) FROM turns", [], |r| r.get(0))
-        .unwrap();
-    let id = format!("work-{turns}");
-    turn(conn, &id, &owner, Some(task), "running");
-    tasks::started(conn, task, T).unwrap();
+    let id = begin(conn, task);
     if let Some(how) = how {
         let said = Said {
             note: Some("see the change"),
