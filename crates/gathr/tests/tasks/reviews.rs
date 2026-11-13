@@ -143,6 +143,25 @@ fn a_looks_verdict_counts_only_for_the_commit_reviewed_now() {
         (false, Some("abc1234:def5678aaaa"))
     );
 
+    // A commit named in fewer than seven characters could be another one: it isn't taken.
+    for short in ["d", "def567", "not-a-commit"] {
+        let said = Said {
+            commit: Some(short),
+            ..Said::default()
+        };
+        assert_eq!(
+            refusal(tasks::finish(
+                &mut conn,
+                "bo",
+                review,
+                Finish::Done,
+                &said,
+                T
+            )),
+            "Give 7 to 40 characters of the commit you reviewed, as git names it"
+        );
+    }
+
     // Recorded again at a commit that isn't the head: out of date until the look judges it.
     let older = Said {
         commit: Some("0000aaa"),

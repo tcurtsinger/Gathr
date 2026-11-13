@@ -133,6 +133,11 @@ pub fn finish(
         (Finish::Done, Kind::Review) if commit.is_none() => {
             Some("Include the reviewed commit when you finish a review")
         }
+        // As the merge tool asks (0043): fewer characters could name another commit, and one that
+        // happened to begin like the PR's head would read as a review of it.
+        (_, Kind::Review) if commit.as_deref().is_some_and(|c| !names_a_commit(c)) => {
+            Some("Give 7 to 40 characters of the commit you reviewed, as git names it")
+        }
         (Finish::Done, Kind::Work) if !shown => {
             Some("Say what to look at when work is done: a PR, a commit, a file or a note")
         }
@@ -181,4 +186,9 @@ pub fn finish(
     let task = read(&tx, task)?;
     tx.commit()?;
     Ok((task, took, starts))
+}
+
+/// Whether the text is how git names a commit, in full or cut short: 7 to 40 hex digits.
+fn names_a_commit(text: &str) -> bool {
+    (7..=40).contains(&text.len()) && text.chars().all(|c| c.is_ascii_hexdigit())
 }
