@@ -76,6 +76,7 @@ impl Tools {
             + Tools::person_router()
             + Tools::checks_router()
             + Tools::message_router()
+            + Tools::friction_router()
             + Tools::merge_router()
             + Tools::github_router()
             + Tools::settings_router()

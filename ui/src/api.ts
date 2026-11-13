@@ -158,6 +158,19 @@ export interface TaskReport {
   at_us: number | null;
 }
 
+/** Friction an agent reported: who, on which task, in which chat and where. A deleted chat or agent leaves null. */
+export interface FrictionReport {
+  id: number;
+  time: string;
+  chat: string;
+  chat_title: string | null;
+  agent: string | null;
+  agent_name: string | null;
+  task: number | null;
+  what: string;
+  where: string | null;
+}
+
 /** An agent's stale task, on the person's list across chats. */
 export interface StaleTask extends Task {
   chat_title: string;
@@ -448,6 +461,8 @@ export const api = {
   approve: (chat: string, request: string, allow: boolean) =>
     call<unknown>('POST', `/api/chats/${chat}/approvals/${request}`, { allow }),
   turns: (chat: string) => call<TurnTimeline[]>('GET', `/api/chats/${chat}/turns`),
+  /** What agents reported got in their way (0048), newest first. */
+  friction: () => call<{ friction: FrictionReport[] }>('GET', '/api/friction').then((f) => f.friction),
   engine: (engine: string) => call<Engine>('GET', `/api/engines/${engine}`),
   checkEngine: (engine: string) => call<unknown>('POST', `/api/engines/${engine}/update`),
   accounts: () => call<{ accounts: Account[] }>('GET', '/api/accounts').then((a) => a.accounts),

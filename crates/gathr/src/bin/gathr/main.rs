@@ -60,6 +60,12 @@ enum Diag {
         #[arg(long, default_value = "24h")]
         since: String,
     },
+    /// What agents reported got in their way, newest first.
+    Friction {
+        /// How far back: 24h, 7d, 30d.
+        #[arg(long, default_value = "30d")]
+        since: String,
+    },
     /// Read-only SQL over the database, up to 1,000 rows. The `event_log` view shows events readably.
     Query { sql: String },
     /// The turns behind a reference: how each ended and its events.
@@ -133,6 +139,7 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
         Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw),
         Diag::Trace { reference } => diag::trace(&conn, &reference),
         Diag::Failures { since } => diag::failures(&conn, ids::now_us() - parse_since(&since)?),
+        Diag::Friction { since } => diag::friction(&conn, ids::now_us() - parse_since(&since)?),
         Diag::Query { sql } => diag::query(&conn, &sql),
     }
 }

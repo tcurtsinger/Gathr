@@ -2,6 +2,7 @@ import { Dialog } from '../components/Dialog';
 import { Agents } from './Agents';
 import { Diagnostics } from './Diagnostics';
 import { Engines } from './Engines';
+import { Friction } from './Friction';
 import { General } from './General';
 import { Projects } from './Projects';
 import './settings.css';
@@ -75,12 +76,15 @@ export function SettingsPanel({ target, onPage, onReference, onClose }: Props) {
             ) : target.page === 'projects' ? (
               <Projects start={target.project} onReference={onReference} />
             ) : (
-              <Diagnostics
-                chat={target.chat}
-                title={target.title}
-                turn={target.turn}
-                reference={target.reference}
-              />
+              <div className="diagnostics-page">
+                <Diagnostics
+                  chat={target.chat}
+                  title={target.title}
+                  turn={target.turn}
+                  reference={target.reference}
+                />
+                <Friction />
+              </div>
             )}
           </div>
         </div>

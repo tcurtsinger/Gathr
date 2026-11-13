@@ -222,6 +222,12 @@ pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
     Ok(json!({ "since": crate::ids::utc(since_us), "groups": groups }))
 }
 
+/// The friction agents reported since `since_us` (0048), newest first.
+pub fn friction(conn: &Connection, since_us: i64) -> Result<Value, Error> {
+    let friction = crate::friction::list(conn, since_us, 1_000)?;
+    Ok(json!({ "since": crate::ids::utc(since_us), "friction": friction }))
+}
+
 /// The turns behind a reference, with how each ended and its events; with `raw`, every engine
 /// frame in and out of each turn, as recorded (redacted).
 pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Error> {

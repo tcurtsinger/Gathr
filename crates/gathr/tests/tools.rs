@@ -126,6 +126,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "message",
         "pr",
         "read_chat",
+        "report_friction",
         "restart_task",
         "set_agent",
         "set_checks",
