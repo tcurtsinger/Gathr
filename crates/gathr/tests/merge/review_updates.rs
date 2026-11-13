@@ -1,4 +1,5 @@
 //! G165: a review covers canonical base merges, and remains done across a CI wake.
+use super::lands::{passed, running};
 use super::*;
 
 fn move_pr(room: &mut Room, head: &str) {
@@ -37,7 +38,7 @@ fn a_done_review_covers_a_clean_update_from_main() {
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
     let reviewed = room.heads[0].clone();
-    room.reviewed(&vale, 1, &reviewed);
+    room.review_done(1, &reviewed);
     advance_main(&room);
     git(&room.other, &["checkout", "-q", "room/five"]);
     git(
@@ -62,7 +63,7 @@ fn an_author_commit_after_review_still_needs_review() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let base = room.main();
     git(&room.other, &["checkout", "-q", "room/five"]);
     std::fs::write(room.other.join("author.txt"), "not reviewed\n").unwrap();
@@ -83,7 +84,7 @@ fn a_conflicted_main_merge_with_a_resolution_needs_review() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     git(&room.other, &["checkout", "-q", "main"]);
     std::fs::write(
         room.other.join("feature.txt"),
@@ -147,7 +148,7 @@ fn an_amended_clean_merge_tree_cannot_hide_author_changes() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let base = advance_main(&room);
     git(&room.other, &["checkout", "-q", "room/five"]);
     git(
@@ -186,11 +187,13 @@ fn task_state(room: &Room) -> Value {
 
 fn held_review(data: &Path, repos: &Path) -> (Room, String, PathBuf, Value) {
     let mut room = room_replay(data, repos, false, true);
+    // GitHub's own sum of the PR's checks says the same: Gathr doesn't land it yet (0049).
+    room.ci(0, json!([running("CI")]));
     let file = data.join("gh.json");
     let mut answers: Value =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     answers.as_array_mut().unwrap().push(json!({"args":["api"],"out":json!({"name":"CI","status":"in_progress","context":"CI","state":"pending"}).to_string()}));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(data, &answers);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
     let lead_cwd = PathBuf::from(nth(&data.join("env.jsonl"), 0)["cwd"].as_str().unwrap());
@@ -213,20 +216,16 @@ fn held_review(data: &Path, repos: &Path) -> (Room, String, PathBuf, Value) {
 #[test]
 fn a_ci_wait_waking_the_review_task_keeps_its_completed_review() {
     let (data, repos) = (TempDir::new(), TempDir::new());
-    let (room, vale, file, mut answers) = held_review(&data.0, &repos.0);
+    let (room, _, _, mut answers) = held_review(&data.0, &repos.0);
     answers[2]["out"] = json!(json!({"name":"CI","status":"completed","conclusion":"SUCCESS","context":"CI","state":"success"}).to_string());
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     common::until(20, "CI wakes the same review task into working", || {
         (task_state(&room) == "working").then_some(())
     });
-    let merged = room.call(&vale, "merge", json!({"pr":5}));
-    assert_eq!(
-        merged["isError"],
-        false,
-        "CI wake must not erase the completed review: {}",
-        text(&merged)
-    );
-    assert_eq!(room.main(), room.heads[0]);
+    // The wake didn't erase the completed review: once GitHub's own sum of the checks says they
+    // passed, the PR lands on it (0049).
+    room.ci(0, json!([passed("CI")]));
+    room.landed(&room.heads[0]);
 }
 
 #[test]
@@ -280,6 +279,8 @@ fn an_explicit_unfinished_review_revokes_its_prior_approval() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
+    // A CI run still going keeps Gathr from landing it on the first report (0049).
+    room.ci(0, json!([running("CI")]));
     room.reviewed(&vale, 1, &room.heads[0]);
     let left = room.call(
         &vale,
@@ -320,7 +321,7 @@ fn publish(room: &mut Room, head: &str) {
         view["headRefOid"] = json!(head);
         answers[0][key] = json!(view.to_string());
     }
-    std::fs::write(file, answers.to_string()).unwrap();
+    put_answers(&room.data, &answers);
     room.heads[0] = head.to_string();
 }
 
@@ -334,6 +335,8 @@ fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
     let reviewed = room.heads[0].clone();
+    // A CI run still going keeps Gathr from landing it meanwhile (0049).
+    room.ci(0, json!([running("CI")]));
     room.reviewed(&vale, 1, &reviewed);
 
     advance_main(&room);
@@ -369,7 +372,7 @@ fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
 #[test]
 fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
     let (data, repos) = (TempDir::new(), TempDir::new());
-    let (room, vale, file, mut answers) = held_review(&data.0, &repos.0);
+    let (room, vale, _, mut answers) = held_review(&data.0, &repos.0);
     let head = room.heads[0].clone();
     let path = |what: &str| format!("repos/{{owner}}/{{repo}}/commits/{head}/{what}?per_page=100");
     let jobs = |macos: (&str, &str)| {
@@ -386,7 +389,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
         .as_array_mut()
         .unwrap()
         .push(json!({"args":["api","--paginate",path("status")],"out":""}));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     let waits = || {
         let tasks = room
             .service
@@ -417,7 +420,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
     );
 
     answers[2]["out"] = json!(jobs(("completed", "cancelled")));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     let woke = common::until(20, "the wake that names the cancelled job", || {
         let chat = room
             .service

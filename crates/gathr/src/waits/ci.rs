@@ -123,6 +123,41 @@ pub fn checks_of(runs: &str, statuses: &str) -> Result<Vec<Check>, String> {
     Ok(checks)
 }
 
+/// A PR's checks as `gh pr view --json statusCheckRollup` sums them up: its check runs (`name`,
+/// `status`, `conclusion`) and its commit statuses (`context`, `state`), in GitHub's capitals.
+pub fn rollup(rollup: &Value) -> Vec<Check> {
+    let text = |v: &Value, key: &str| v[key].as_str().unwrap_or_default().to_ascii_lowercase();
+    let checks = rollup.as_array().into_iter().flatten();
+    checks
+        .map(|check| match check["state"].as_str() {
+            Some(state) => Check {
+                name: check["context"].as_str().unwrap_or_default().to_string(),
+                stand: match state.to_ascii_lowercase().as_str() {
+                    "pending" | "expected" => Stand::Running,
+                    "success" => Stand::Passed,
+                    _ => Stand::Failed,
+                },
+            },
+            None => Check {
+                name: check["name"].as_str().unwrap_or_default().to_string(),
+                stand: stand_of(&text(check, "status"), &text(check, "conclusion")),
+            },
+        })
+        .collect()
+}
+
+/// The checks that haven't finished, by name: "running: a; queued: b". None once all have.
+pub fn going(checks: &[Check]) -> Option<String> {
+    let mut parts = Vec::new();
+    for (word, stand) in [("running", Stand::Running), ("queued", Stand::Queued)] {
+        let names = names(checks, stand);
+        if !names.is_empty() {
+            parts.push(format!("{word}: {}", listed(&names)));
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("; "))
+}
+
 /// What one look saw.
 pub struct Seen<'a> {
     /// `#242` or a short commit id.
@@ -184,11 +219,8 @@ pub fn verdict(s: &Seen) -> (bool, String) {
         if !finished.is_empty() {
             line.push_str(&format!(": {}", counted(&finished)));
         }
-        for (word, stand) in [("running", Stand::Running), ("queued", Stand::Queued)] {
-            let names = names(s.checks, stand);
-            if !names.is_empty() {
-                line.push_str(&format!("; {word}: {}", listed(&names)));
-            }
+        if let Some(going) = going(s.checks) {
+            line.push_str(&format!("; {going}"));
         }
         return (false, line);
     }
@@ -210,7 +242,7 @@ fn listed(names: &[&str]) -> String {
 }
 
 /// The finished checks by how they ended, those that didn't pass or skip by name.
-fn counted(checks: &[Check]) -> String {
+pub fn counted(checks: &[Check]) -> String {
     let mut parts = Vec::new();
     for (word, stand, named) in [
         ("passed", Stand::Passed, false),

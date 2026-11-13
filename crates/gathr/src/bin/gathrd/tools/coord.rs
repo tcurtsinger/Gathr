@@ -52,6 +52,10 @@ pub struct FinishTask {
     commit: Option<String>,
     /// For work: a file to look at.
     file: Option<String>,
+    /// For a review that is done, when Gathr asks for your sign-off (the PR changes tests or check
+    /// settings, or brings the project its first checks): yes once you checked they still test
+    /// the code.
+    signed_off: Option<bool>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -164,7 +168,9 @@ impl Tools {
     #[tool(
         description = "Report your task: done (say what to look at: a PR, a commit, a file or a note), left (say what is \
                        left) or blocked (say on what). Any task of yours, from any turn. While a turn runs on the task the \
-                       report applies when that turn ends; otherwise at once. A task with open waits or PRs stays held until they end."
+                       report applies when that turn ends; otherwise at once. A task with open waits or PRs stays held until \
+                       they end. A review reported done is the word to land its PR: Gathr merges it once its checks pass, and \
+                       the answer says where it stands. Don't wait on its CI or call merge."
     )]
     async fn finish_task(
         &self,
@@ -198,12 +204,38 @@ impl Tools {
                     pr: ask.pr,
                     commit: ask.commit.as_deref(),
                     file: ask.file.as_deref(),
+                    signed_off: ask.signed_off == Some(true),
                 };
                 let (t, took, starts) = tasks::finish(c, &agent, task, how, &said, &trace)?;
-                Ok((taken(&t, took, &ask.how), starts))
+                // Not a cancelled review's: nothing changed, and an older one may still stand.
+                let review = t.kind == Kind::Review
+                    && how == Finish::Done
+                    && t.pr.is_some()
+                    && took != Took::Cancelled;
+                Ok((
+                    taken(&t, took, &ask.how),
+                    starts,
+                    review.then_some(t.number),
+                ))
             })
             .await;
-        Ok(self.answer(&caller, "finish_task", started, finished).await)
+        let finished = match finished {
+            Ok((mut said, starts, review)) => {
+                self.chats.start(starts);
+                // A done review is the word to land its PR: Gathr looks at once (0049).
+                if let Some(task) = review
+                    && let Some(landing) =
+                        crate::landing::recorded(&self.chats, &caller, task).await
+                {
+                    said = format!("{said}\n{landing}");
+                }
+                Ok(said)
+            }
+            Err(why) => Err(why),
+        };
+        Ok(self
+            .respond(&caller, "finish_task", started, finished)
+            .await)
     }
 
     #[tool(description = "Cancel a task you gave and end its waits.")]

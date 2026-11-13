@@ -18,6 +18,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         pr: None,
         reviewed: None,
         outdated: false,
+        signed_off: false,
         form: Some(form),
         choices: labels
             .iter()

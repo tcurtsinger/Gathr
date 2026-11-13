@@ -46,6 +46,9 @@ pub struct Said<'a> {
     pub commit: Option<&'a str>,
     /// For work: a file to look at.
     pub file: Option<&'a str>,
+    /// For a review that is done: its reviewer checked that the PR's tests and check settings
+    /// still test the code (0049).
+    pub signed_off: bool,
 }
 
 /// How Gathr took a report.
@@ -93,13 +96,17 @@ pub fn finish(
         text.map(String::from)
     };
     let (note, commit, file) = (given(said.note), given(said.commit), given(said.file));
+    if said.signed_off && (t.kind != Kind::Review || how != Finish::Done) {
+        return Err(refused("`signed_off` goes with a review that is done"));
+    }
     // A review that is done is recorded again at another commit while its PR is open (G170): the
-    // task stays done, and no fresh review task is made only to re-record an approval.
+    // task stays done, and no fresh review task is made only to re-record an approval. The same
+    // review recorded again with its sign-off is taken too (0049).
     let again = t.state == State::Done
         && t.kind == Kind::Review
         && how == Finish::Done
         && commit.is_some()
-        && commit != t.reviewed
+        && (commit != t.reviewed || (said.signed_off && !t.signed_off))
         && tx.query_row(
             "SELECT pr IS NOT NULL AND pr_closed = 0 FROM tasks WHERE number = ?1",
             [task],
@@ -162,12 +169,24 @@ pub fn finish(
                           blocked_on = CASE WHEN ?2 = 'blocked' THEN ?6 ELSE NULL END,
                           pr = COALESCE(?7, pr), reviewed = COALESCE(?8, reviewed),
                           review_done = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?8 IS NOT NULL) ELSE review_done END,
+                          signed_off = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?8 IS NOT NULL
+                              AND (?9 OR (signed_off AND review_done AND reviewed = ?8))) ELSE signed_off END,
                           outdated = CASE WHEN ?8 IS NULL THEN outdated WHEN pr_head IS NULL THEN 0
                               WHEN substr(pr_head, 1, length(?8)) = ?8 OR substr(?8, 1, length(pr_head)) = pr_head
                               THEN 0 ELSE 1 END,
                           judged = CASE WHEN ?8 IS NULL THEN judged ELSE NULL END
          WHERE number = ?1",
-        params![task, how.as_str(), note, see, now_us(), said.on_task, said.pr, reviewed],
+        params![
+            task,
+            how.as_str(),
+            note,
+            see,
+            now_us(),
+            said.on_task,
+            said.pr,
+            reviewed,
+            said.signed_off
+        ],
     )?;
     let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.

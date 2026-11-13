@@ -14,8 +14,10 @@ Built: yes. Proof: `.github/workflows/ci.yml`, `AGENTS.md`. No test can prove a 
 - Releases still wait for green CI on `main` (F7; owner, room task 175): it's the one run on clean machines before an
   install updates, so a red `main` is fixed before the next release.
 - When a PR's CI is already running, the merger waits for it to finish and reads any failure before merging.
+  Since [0049](0049-gathr-lands-pull-requests.md) Gathr is the merger: it does the waiting, and a PR whose CI
+  failed is left to its reviewer, who reads the failure.
 - Everything else in the merge rule stays: the landing order, up to date with `main` before merging, the reviewed
-  head pinned (`--match-head-commit`), a merge commit, no auto-merge.
+  head pinned (`--match-head-commit`), a merge commit, and no auto-merge by GitHub.
 - Gathr's `merge` tool has a Review only setting for Required checks ([0043](0043-checks-and-merge.md)), and
   agents working in Gathr merge only with that tool ([0046](0046-github-tools.md)). By hand, outside Gathr, the
   same merge is `gh pr merge --merge --delete-branch --match-head-commit <reviewed head>`.
@@ -39,3 +41,5 @@ review was more gate than this app needs; review and local tests find the issues
 - 0043: "Gathr's own project uses CI" is replaced by this decision.
 - AGENTS.md: How we build (Tests, The reviewer merges) and Build and check (CI).
 - `main`'s branch protection: required status checks removed (done 2026-11-12).
+- Amended by [0049](0049-gathr-lands-pull-requests.md), 2026-11-13: Gathr lands a PR on its reviewer's done
+  review. "No auto-merge" is GitHub's own.

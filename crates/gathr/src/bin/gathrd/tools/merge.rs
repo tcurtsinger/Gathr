@@ -22,8 +22,10 @@ pub struct Merge {
 #[tool_router(router = merge_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Reviewer only: merge a PR you reviewed. Gathr merges it once your review is done on its head, \
-                       its checks passed there and it's up to date with its base, else says why. Never merge another way."
+        description = "Reviewer only: merge a PR you reviewed, by hand. Gathr lands a PR by itself once your review is \
+                       done on its head, so use this only for one Gathr left to you. It merges once your review is done \
+                       on its head, its checks passed there and it's up to date with its base, else says why. Never \
+                       merge another way."
     )]
     async fn merge(
         &self,

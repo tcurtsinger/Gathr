@@ -58,3 +58,4 @@ fails in CI when the two differ.
 | 0046 | [Gathr reaches GitHub for agents, with its own sign-in](0046-github-tools.md) | accepted | yes |
 | 0047 | [A task's report is a record, and Gathr works out where the task stands](0047-a-report-is-a-record.md) | accepted | yes |
 | 0048 | [Gathr records friction, starting with what agents report](0048-gathr-records-friction.md) | accepted | partly |
+| 0049 | [Gathr lands a pull request](0049-gathr-lands-pull-requests.md) | accepted | yes |

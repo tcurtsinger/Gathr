@@ -608,19 +608,21 @@ Parts: 9.7
 Parts: 10.2
 
 - **Given** a project with checks, and a PR reviewed clean
-- **When** the reviewer merges it through Gathr
+- **When** Gathr lands it
 - **Then** Gathr has run the checks at the exact commit and kept the result, where the reviewer and
-  the person can read it. Where the project requires its checks to pass, the merge is refused while
-  one has failed or hasn't run at that commit
+  the person can read it. Whatever the project requires (Gathr's checks, GitHub's CI, or both) holds
+  the PR until it passed at that commit. Where it requires none, the review lands the PR once no CI
+  run is still going, and a CI failure leaves the PR to its reviewer
 
 ### 10b. A PR behind its base is brought up to date before it merges
 
 Parts: 10.5
 
 - **Given** a PR reviewed clean, and its base has moved since
-- **When** it is merged through Gathr
-- **Then** Gathr brings it up to date first, its review still holds
-  ([5f](#5f-a-review-is-of-an-exact-version)), and it is never merged while it is behind
+- **When** Gathr looks at it
+- **Then** Gathr brings it up to date, its review still holds
+  ([5f](#5f-a-review-is-of-an-exact-version)), and it lands when its checks pass again at the new
+  commit. It is never merged while it is behind
 
 ### 10c. The size of the process fits the size of the ask
 
@@ -639,6 +641,27 @@ Parts: 10.1
 - **When** its builder reports it done, naming the file
 - **Then** someone who didn't write it checks that version before it counts as landed. Landing is
   the file saved in the place the brief named, and the person is shown where
+
+### 10e. A PR reviewed clean lands by itself
+
+Parts: 10.4
+
+- **Given** a PR whose newest review in the chat is done on a commit that covers its head
+- **When** what the project requires has passed there and no CI run is still going
+- **Then** Gathr merges it, with no agent's turn. It doesn't land on an older approval while a newer
+  review is open, after an author's commit past the review, into a branch that isn't the default, or
+  without its reviewer's sign-off where it changes tests or check settings. Sign-off given with the
+  review lands it
+
+### 10f. A PR that can't land says why, once
+
+Parts: 10.4
+
+- **Given** a PR reviewed clean that Gathr can't land: its update conflicts, a check the project
+  requires failed, or CI failed where it isn't required
+- **When** Gathr looks at it, again and again, and after a restart
+- **Then** its reviewer is woken once for that commit, on no task, with what Gathr saw, and its
+  review stands. A merge that GitHub doesn't confirm settles nothing and isn't made again
 
 ## 11. No rulebook needed, and Gathr measures it
 

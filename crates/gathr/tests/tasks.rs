@@ -6,6 +6,8 @@ mod common;
 mod hear_backs;
 #[path = "tasks/commands.rs"]
 mod held_commands;
+#[path = "tasks/landings.rs"]
+mod landing_records;
 #[path = "tasks/reports.rs"]
 mod reports;
 #[path = "tasks/reviews.rs"]

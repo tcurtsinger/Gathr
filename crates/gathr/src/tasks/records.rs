@@ -22,6 +22,7 @@ pub fn set(
     let chat: String = tx.query_row(
         "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL,
              review_done = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE review_done END,
+             signed_off = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE signed_off END,
              heard = CASE WHEN ?5 AND (state = 'held' OR (heard_as IS NOT NULL AND heard_as IS NOT ?6))
                           THEN 0 ELSE heard END
          WHERE number = ?1 RETURNING chat_id",
@@ -72,7 +73,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
                 stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
-                in_passing, judged
+                in_passing, judged, signed_off
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -122,6 +123,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 waiting_on: Vec::new(),
                 in_passing: r.get(29)?,
                 judged: r.get(30)?,
+                signed_off: r.get(31)?,
             })
         },
     )?;

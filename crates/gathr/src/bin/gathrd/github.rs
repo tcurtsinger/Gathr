@@ -4,7 +4,7 @@
 //! `origin` is the repository), never one an agent names, and nothing passes a command through.
 //! Merging stays `merge` (0043 C4).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -13,6 +13,7 @@ use rusqlite::OptionalExtension;
 use serde_json::Value;
 
 use crate::chats::Chats;
+use crate::merging::By;
 use crate::tools::Caller;
 
 /// What a run's failed jobs show at most: their logs' last lines, and their first annotations.
@@ -136,7 +137,39 @@ pub async fn update(
 ) -> Result<String, String> {
     let repo = project_folder(chats, caller).await?;
     reviewer(chats, caller, pr).await?;
-    let was = view(pr, &repo).await?;
+    let by = By {
+        chat: caller.chat.clone(),
+        agent: caller.agent.clone(),
+        trace: caller.trace().unwrap_or_else(gathr::ids::trace_id),
+        landed: false,
+    };
+    let (head, now, base) =
+        bring_up_to_date(chats, &repo, &by, pr, expected, update_wait()).await?;
+    Ok(match now == head {
+        true => format!(
+            "Asked GitHub to update #{pr} from {} with {base}: its new head isn't shown yet. Read it again with `pr`.",
+            short(&head)
+        ),
+        false => format!(
+            "Updated #{pr} with {base}: head {} is now {}.",
+            short(&head),
+            short(&now)
+        ),
+    })
+}
+
+/// The update itself, in whoever's place it's made: the reviewer's with `update_pr`, or Gathr's
+/// own, landing the PR (0049). Waits up to `wait` for GitHub to show the new head. The head
+/// before, the head after (the same one when it isn't shown yet) and the base.
+pub async fn bring_up_to_date(
+    chats: &Arc<Chats>,
+    repo: &Path,
+    by: &By,
+    pr: i64,
+    expected: &str,
+    wait: Duration,
+) -> Result<(String, String, String), String> {
+    let was = view(pr, repo).await?;
     let text = |key: &str| was[key].as_str().unwrap_or_default().to_string();
     let (state, head, base) = (text("state"), text("headRefOid"), text("baseRefName"));
     if state != "OPEN" {
@@ -149,7 +182,7 @@ pub async fn update(
             short(&head)
         ));
     }
-    let default = gh(&["repo", "view", "--json", "defaultBranchRef"], &repo).await?;
+    let default = gh(&["repo", "view", "--json", "defaultBranchRef"], repo).await?;
     let default: Value = serde_json::from_str(&default).unwrap_or_default();
     let default = default["defaultBranchRef"]["name"]
         .as_str()
@@ -162,7 +195,7 @@ pub async fn update(
     // GitHub pins the update to the head (`expected_head_sha`), not to the PR's state or base: read
     // again just before the write, and check what came back after (#162's review). A retarget in the
     // instant between this read and the write can't be refused; it's caught in what came back.
-    let again = view(pr, &repo).await?;
+    let again = view(pr, repo).await?;
     let now_text = |key: &str| again[key].as_str().unwrap_or_default().to_string();
     if now_text("state") != "OPEN"
         || now_text("headRefOid") != head
@@ -172,13 +205,13 @@ pub async fn update(
     }
     let path = format!("repos/{{owner}}/{{repo}}/pulls/{pr}/update-branch");
     let pinned = format!("expected_head_sha={head}");
-    gh(&["api", "-X", "PUT", &path, "-f", &pinned], &repo).await?;
-    let until = std::time::Instant::now() + update_wait();
+    gh(&["api", "-X", "PUT", &path, "-f", &pinned], repo).await?;
+    let until = std::time::Instant::now() + wait;
     let mut now = head.clone();
     let mut last = again;
     while now == head && std::time::Instant::now() < until {
         tokio::time::sleep(Duration::from_millis(500)).await;
-        if let Ok(seen) = view(pr, &repo).await {
+        if let Ok(seen) = view(pr, repo).await {
             now = seen["headRefOid"].as_str().unwrap_or_default().to_string();
             last = seen;
         }
@@ -188,25 +221,16 @@ pub async fn update(
         return Err(changed(pr, &last, default));
     }
     let event = Event::point("gathr.github.update")
-        .trace(&caller.trace().unwrap_or_else(gathr::ids::trace_id))
-        .chat(&caller.chat)
+        .trace(&by.trace)
+        .chat(&by.chat)
         .ok()
         .attr("pr", pr)
         .attr("requested_head", head.clone())
         .attr("returned_head", now.clone())
-        .attr("gen_ai.agent.id", caller.agent.clone());
+        .attr("landed", by.landed)
+        .attr("gen_ai.agent.id", by.agent.clone());
     chats.writer.record(event);
-    Ok(match now == head {
-        true => format!(
-            "Asked GitHub to update #{pr} from {} with {base}: its new head isn't shown yet. Read it again with `pr`.",
-            short(&head)
-        ),
-        false => format!(
-            "Updated #{pr} with {base}: head {} is now {}.",
-            short(&head),
-            short(&now)
-        ),
-    })
+    Ok((head, now, base))
 }
 
 /// The PR isn't as the update needs it: open, at the head given, into the default branch.

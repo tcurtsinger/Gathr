@@ -149,6 +149,8 @@ pub async fn once(chats: &Arc<Chats>) {
         })
         .await;
     }
+    // Every PR whose newest review is done is among the tasks' PRs above (0049).
+    crate::landing::sweep(chats.clone(), None).await;
     crate::cleanup::sweep(chats, None).await;
 }
 

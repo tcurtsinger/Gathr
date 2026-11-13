@@ -128,7 +128,8 @@ pub fn text(facts: &Facts) -> String {
         // Gathr reaches GitHub with its own sign-in, which an engine's sandbox may not have (0046).
         lines.push(
             "For this project's PRs use Gathr's pr, ci_failures and update_pr, not your own gh: Gathr asks \
-             GitHub for you. Merge only with merge."
+             GitHub for you. Gathr merges a PR once its review is done and its checks passed; by hand, \
+             merge only with merge."
                 .to_string(),
         );
     }
