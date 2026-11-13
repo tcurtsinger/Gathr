@@ -15,6 +15,7 @@ fn a_work_tasks_commit_is_what_to_look_at_never_a_review() {
         why: None,
         after: &[],
         pr: Some(5),
+        in_passing: false,
     };
     let task = tasks::give(&mut conn, &work, T).unwrap().0.number;
     tasks::started(&mut conn, task, T).unwrap();
@@ -63,6 +64,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
         "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
                   ALTER TABLE tasks DROP COLUMN finish_see; ALTER TABLE tasks DROP COLUMN finish_ts;
                   ALTER TABLE tasks RENAME COLUMN asks TO idle_lefts;
+                  ALTER TABLE tasks DROP COLUMN in_passing; ALTER TABLE tasks DROP COLUMN heard_as;
                   ALTER TABLE agent_context DROP COLUMN told;
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;

@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/tasks/TaskReport.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/tasks/hear_backs.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/tasks/TaskReport.test.tsx`.
 
 Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [the charter](../charter.md#the-promises): work tells the truth.
 
@@ -30,6 +30,11 @@ Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [
 - **A turn that is stopped with its carry-on waiting doesn't settle its task.** After Stop now, or a usage limit
   that cuts a turn once a tool has run, the task stays as it was and says why nothing runs on it. Its giver hears
   how the carry-on ends, not that it stopped. An update already worked this way ([0032](0032-service-updates.md)).
+- **A hear-back says what is new.** It names only the tasks its giver hasn't heard about. A task that settles as
+  something other than what its giver last heard is heard once more, by itself; the same outcome reached again
+  is not. A task given `in_passing` doesn't hold the task whose turn gave it, and is heard back on by itself.
+- **A member's request the person has answered can't be cancelled out from under the work that waits on it:**
+  it settles as done, with the answer.
 - **A task blocked for the one it comes after** records which one (`blocked_on`), and goes back in line when that
   one is restarted and finishes.
 

@@ -522,6 +522,19 @@ fn lead_of(conn: &Connection, chat: &str, giver: &str) -> Result<String, Error> 
     Ok(lead.map_or_else(|| giver.to_string(), |m| m.agent.clone()))
 }
 
+/// The person's answer to a member's request, when a task filed for it has one: its words.
+pub(super) fn answered(conn: &Connection, request: i64) -> Result<Option<String>, Error> {
+    let answer: Option<Option<String>> = conn
+        .query_row(
+            "SELECT reason FROM tasks WHERE request = ?1 AND kind = 'person' AND state = 'done'
+             AND answer IS NOT NULL ORDER BY number DESC LIMIT 1",
+            [request],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(answer.map(|words| words.unwrap_or_else(|| "answered".to_string())))
+}
+
 /// The member's request a person task is filed for: in this chat, the giver's, and open.
 fn request_for(conn: &Connection, chat: &str, giver: &str, r: i64) -> Result<Task, Error> {
     let t = read(conn, r).map_err(|_| refused(format!("there's no task #{r}")))?;

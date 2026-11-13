@@ -86,6 +86,7 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
         why: None,
         after: &[],
         pr: None,
+        in_passing: false,
     };
     let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
     running(&conn, "c", "ann-1", "ann", Some(work.number));
@@ -304,4 +305,70 @@ fn the_chats_only_agent_asks_the_person_itself_and_hears_when_its_ask_is_cancell
     let sent = person::answer(&mut conn, &[wrong], T).unwrap();
     let why = format!("#{} is already cancelled", asked.number);
     assert_eq!(sent.refused, [(asked.number, why)]);
+}
+
+/// G183, live: a member's request was cancelled after the person had answered it, and the member's
+/// work, blocked on the request, was cancelled with it. An answered request settles as done with
+/// the answer, so what waited on it carries on.
+#[test]
+fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let g = tasks::Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "ann",
+        given_in: None,
+        parent: None,
+        kind: Kind::Work,
+        what: "Word the notice",
+        why: None,
+        after: &[],
+        pr: None,
+        in_passing: false,
+    };
+    let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
+    running(&conn, "c", "ann-1", "ann", Some(work.number));
+    let what = Some("What should the reconnect notice say?");
+    let (request, _) = person::ask(&mut conn, ask("c", "ann", "ann-1", what), T).unwrap();
+    // Ann says her work waits on the request, and her turn ends.
+    let on = Said {
+        on_task: Some(request.number),
+        ..Default::default()
+    };
+    tasks::finish(&mut conn, "ann", work.number, Finish::Blocked, &on, T).unwrap();
+    ended(&mut conn, "ann-1", "ann", Some(work.number));
+    assert_eq!(
+        tasks::get(&conn, work.number).unwrap().unwrap().state,
+        State::Blocked
+    );
+    // The lead files it, and the person answers.
+    running(&conn, "c", "lead-1", "lead", Some(request.number));
+    let mut filing = ask("c", "lead", "lead-1", None);
+    filing.request = Some(request.number);
+    filing.choices.clear();
+    let (asked, _) = person::ask(&mut conn, filing, T).unwrap();
+    ended(&mut conn, "lead-1", "lead", Some(request.number));
+    let answer = Answer {
+        task: asked.number,
+        pick: vec!["Connection lost".into()],
+        ..Default::default()
+    };
+    person::answer(&mut conn, &[answer], T).unwrap();
+
+    let starts = tasks::cancel(&mut conn, None, request.number, "not needed", T).unwrap();
+    let settled = tasks::get(&conn, request.number).unwrap().unwrap();
+    assert_eq!(
+        (settled.state, settled.reason.as_deref()),
+        (State::Done, Some("Connection lost")),
+        "done, with the answer"
+    );
+    let carried = tasks::get(&conn, work.number).unwrap().unwrap();
+    assert_eq!(carried.state, State::Ready, "Ann's work carries on");
+    let to_ann = starts
+        .iter()
+        .find(|s| s.agent == "ann" && s.task == Some(work.number));
+    let to_ann = to_ann.expect("Ann's work starts again");
+    let carry = format!("the task blocking this one, #{}, is done", request.number);
+    assert!(to_ann.text.contains(&carry), "{}", to_ann.text);
 }
