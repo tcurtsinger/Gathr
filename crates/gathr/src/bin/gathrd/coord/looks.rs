@@ -25,10 +25,18 @@ const LIMIT: Duration = Duration::from_secs(60);
 /// The most of what a met check printed that its agent is told.
 const PRINTED_MOST: usize = 300;
 
-/// What one look found: met, with the line its agent is woken with; not yet; or why it failed.
+/// What one look found: met, with the line its agent is woken with; not yet, with what it saw
+/// instead; or why it failed.
 enum Look {
     Met(String),
-    NotYet { head: Option<(String, i64)> },
+    NotYet {
+        head: Option<(String, i64)>,
+        seen: String,
+    },
+}
+
+fn not_yet(seen: String) -> Look {
+    Look::NotYet { head: None, seen }
 }
 
 /// A day for the stale rules (F11): `GATHR_STALE_DAY_MS` shortens it, in dev and tests only.
@@ -193,18 +201,18 @@ async fn settle(chats: &Arc<Chats>, wait: Wait, looked: Result<Look, String>) {
             })
             .await;
         }
-        Ok(Look::NotYet { head }) => {
-            let seen = move |c: &mut rusqlite::Connection| {
+        Ok(Look::NotYet { head, seen }) => {
+            let save = move |c: &mut rusqlite::Connection| {
                 let head = head.as_ref().map(|(h, ts)| (h.as_str(), *ts));
-                waits::looked(c, &id, head, None)
+                waits::looked(c, &id, head, Some(&seen), None)
             };
-            let _ = chats.writer.call(seen).await;
+            let _ = chats.writer.call(save).await;
         }
         Err(why) => {
             let error = why.clone();
             let failures = chats
                 .writer
-                .call(move |c| waits::looked(c, &id, None, Some(&error)))
+                .call(move |c| waits::looked(c, &id, None, None, Some(&error)))
                 .await;
             if let Some(Ok(failures)) = failures
                 && failures == waits::SHOWN_AFTER
@@ -243,7 +251,7 @@ async fn look(wait: &Wait, data: &Path, vars: &Vars) -> Result<Look, String> {
             Ok(match json_text(&answer, "state").as_str() {
                 "MERGED" => Look::Met(format!("#{target} was merged")),
                 "CLOSED" => Look::Met(format!("#{target} was closed without merging")),
-                _ => Look::NotYet { head: None },
+                _ => not_yet(format!("#{target} is open")),
             })
         }
         "up_to_date" => {
@@ -287,7 +295,9 @@ fn up_to_date(pr: &str, state: &str, base: &str, behind: Option<u64>) -> Look {
         ("MERGED", _) => Look::Met(format!("#{pr} was merged")),
         ("CLOSED", _) => Look::Met(format!("#{pr} was closed without merging")),
         (_, Some(0)) => Look::Met(format!("#{pr} is up to date with {base}")),
-        _ => Look::NotYet { head: None },
+        (_, Some(1)) => not_yet(format!("#{pr} is 1 commit behind {base}")),
+        (_, Some(n)) => not_yet(format!("#{pr} is {n} commits behind {base}")),
+        (_, None) => not_yet(format!("#{pr} is {}", state.to_lowercase())),
     }
 }
 
@@ -351,8 +361,9 @@ async fn look_ci(wait: &Wait, target: &Target, dir: &Path, vars: &Vars) -> Resul
     };
     Ok(match ci::verdict(&seen) {
         (true, line) => Look::Met(line),
-        (false, _) => Look::NotYet {
+        (false, seen) => Look::NotYet {
             head: Some((head, since)),
+            seen,
         },
     })
 }
@@ -403,10 +414,16 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
             gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
         }
     };
-    if ran.code != Some(0) {
-        return Ok(Look::NotYet { head: None });
-    }
     let printed: String = ran.out.chars().take(PRINTED_MOST).collect();
+    if ran.code != Some(0) {
+        let exit = ran
+            .code
+            .map_or("with no exit code".to_string(), |c| c.to_string());
+        return Ok(not_yet(match printed.trim().is_empty() {
+            true => format!("the check exited {exit}"),
+            false => format!("the check exited {exit}: \"{}\"", printed.trim()),
+        }));
+    }
     Ok(Look::Met(match printed.is_empty() {
         true => "Check passed".to_string(),
         false => format!("Check passed: \"{printed}\""),

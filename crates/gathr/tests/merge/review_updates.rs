@@ -363,3 +363,73 @@ fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
     );
     assert!(listed.contains(&says), "{listed}");
 }
+
+/// Scenario 6g through the service (G144, G181, G101): a CI wait keeps what its last look saw, for
+/// the window and for its agent, and its wake tells a cancelled job from a failed one.
+#[test]
+fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let (room, vale, file, mut answers) = held_review(&data.0, &repos.0);
+    let head = room.heads[0].clone();
+    let path = |what: &str| format!("repos/{{owner}}/{{repo}}/commits/{head}/{what}?per_page=100");
+    let jobs = |macos: (&str, &str)| {
+        [
+            json!({"name":"UI (Windows)","status":"completed","conclusion":"success"}),
+            json!({"name":"UI (macOS)","status":macos.0,"conclusion":macos.1}),
+        ]
+        .map(|job| job.to_string())
+        .join("\n")
+    };
+    // GitHub's check runs for the head, and no commit statuses: ahead of the answer for any `api`.
+    answers[2] = json!({"args":["api","--paginate",path("check-runs")],"out":jobs(("queued", ""))});
+    answers
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"args":["api","--paginate",path("status")],"out":""}));
+    std::fs::write(&file, answers.to_string()).unwrap();
+    let waits = || {
+        let tasks = room
+            .service
+            .call("GET", &format!("/api/chats/{}/tasks", room.chat))
+            .json();
+        tasks["waits"].clone()
+    };
+    let saw = common::until(20, "the wait to say a job is queued", || {
+        let wait = waits()[0].clone();
+        wait["seen"]
+            .as_str()
+            .is_some_and(|seen| seen.contains("queued"))
+            .then_some(wait)
+    });
+    assert_eq!(
+        saw["seen"],
+        format!(
+            "1 of 2 checks on #5 at {} finished: 1 passed; queued: UI (macOS)",
+            &head[..7]
+        ),
+        "{saw}"
+    );
+    assert!(saw["looked_ts"].as_i64().is_some(), "when it looked: {saw}");
+    let listed = text(&room.call(&vale, "list_tasks", json!({})));
+    assert!(
+        listed.contains("Last look: 1 of 2 checks on #5") && listed.contains("queued: UI (macOS)"),
+        "its agent reads the same: {listed}"
+    );
+
+    answers[2]["out"] = json!(jobs(("completed", "cancelled")));
+    std::fs::write(&file, answers.to_string()).unwrap();
+    let woke = common::until(20, "the wake that names the cancelled job", || {
+        let chat = room
+            .service
+            .call("GET", &format!("/api/chats/{}", room.chat))
+            .json();
+        chat["messages"].as_array()?.iter().find_map(|m| {
+            let body = m["body"].as_str()?;
+            (m["role"] == "gathr" && body.contains("Your wait ended")).then(|| body.to_string())
+        })
+    });
+    assert!(
+        woke.contains("finished: 1 passed, 1 cancelled (UI (macOS))") && !woke.contains("failed"),
+        "cancelled, not failed: {woke}"
+    );
+}

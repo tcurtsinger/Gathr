@@ -284,7 +284,20 @@ impl Tools {
                     if w.state == "open" {
                         let parts = w.parts.len() as i64;
                         let name = tasks::wait_name(c, &w.kind, w.target.as_deref(), parts)?;
-                        lines.push(format!("Wait {}: {name}. Next: {}", w.id, w.then_do));
+                        let mut line = format!("Wait {}: {name}. Next: {}", w.id, w.then_do);
+                        // What it is seen to wait on, and a look that can't be made: neither
+                        // waits unseen (G101).
+                        if let Some(saw) = w.saw() {
+                            line.push_str(&format!(". Last look: {saw}"));
+                        }
+                        if let (true, Some(error)) = (w.failures > 0, &w.last_error) {
+                            let looks = if w.failures == 1 { "look" } else { "looks" };
+                            line.push_str(&format!(
+                                ". The last {} {looks} failed: {error}",
+                                w.failures
+                            ));
+                        }
+                        lines.push(line);
                     }
                 }
                 Ok((lines.join("\n"), Vec::new()))

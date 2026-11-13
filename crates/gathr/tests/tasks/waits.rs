@@ -63,7 +63,7 @@ fn a_wait_a_day_old_wakes_its_agent_anyway() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();
-    waits::looked(&conn, &wait.id, None, Some("bash didn't start")).unwrap();
+    waits::looked(&conn, &wait.id, None, None, Some("bash didn't start")).unwrap();
     let now = gathr::ids::now_us();
     assert!(waits::expire(&mut conn, now, T).unwrap().is_empty());
     let woken = waits::expire(&mut conn, now + waits::WAIT_FOR_US, T).unwrap();
