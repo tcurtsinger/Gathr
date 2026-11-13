@@ -283,19 +283,20 @@ test('a chat archived while it worked has no dot in Archived', async () => {
   expect(document.querySelector('.chat-dot')).toBeNull();
 });
 
-// Reduced motion is the browser's setting: only Chromium lets a test turn it on (WebKit runs the rest).
+// Reduced motion is the browser's setting, and the tests run with it on: only Chromium lets a test
+// switch it (WebKit runs the rest).
 test.runIf(server.browser === 'chromium')('reduced motion keeps the dot and stops its ring', async () => {
   made.chats = [openChat, { ...other, working: true }];
   service();
   await render(<App />);
   await expect.element(dot('Agents working')).toBeVisible();
   const ring = () => getComputedStyle(dot('Agents working').element(), '::after');
-  expect(ring().animationName).toBe('chat-dot-pulse');
-
   const motion = (value: string) =>
     cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value }] });
-  await motion('reduce');
+  await motion('no-preference');
   try {
+    expect(ring().animationName).toBe('chat-dot-pulse');
+    await motion('reduce');
     expect(ring().animationName).toBe('none');
     expect(ring().opacity).toBe('0');
     await expect.element(dot('Agents working')).toBeVisible();

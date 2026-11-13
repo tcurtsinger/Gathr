@@ -46,7 +46,12 @@ export default defineConfig({
             enabled: true,
             headless: true,
             // WebView2 is Edge's engine and WKWebView is WebKit's (0022).
-            provider: playwright({ launchOptions: mac ? {} : { channel: 'msedge' } }),
+            // Reduced motion: a test that reads a size reads where it ends, not a transition part-way. WebKit
+            // on a busy macOS runner left a tick's 4px height at 2px past the wait (ChatMap, #180's CI).
+            provider: playwright({
+              launchOptions: mac ? {} : { channel: 'msedge' },
+              contextOptions: { reducedMotion: 'reduce' },
+            }),
             instances: [{ browser: mac ? 'webkit' : 'chromium' }],
           },
         },
