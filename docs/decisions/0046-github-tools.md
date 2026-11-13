@@ -6,7 +6,7 @@ so this is 0046.
 
 Built: yes. Proof: `crates/gathr/tests/github.rs`.
 
-Out of date below: `GH_DEBUG` is dropped from the `gh` calls of these tools, not from every `gh` Gathr runs: its own looks at a PR keep the environment they have.
+Out of date below: `GH_DEBUG` is dropped from the `gh` calls of these tools and of `merge`, not from every `gh` Gathr runs: the looks it takes at a PR for tasks and waits keep the environment they have.
 
 ## Choice
 

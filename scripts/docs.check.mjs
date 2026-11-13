@@ -13,6 +13,7 @@ const tracked = execFileSync('git', ['ls-files', '*.md'], { cwd: root, encoding:
   .split('\n')
   .filter((path) => path && !path.startsWith('ui/src/registry/'));
 const failures = [];
+const isFile = (path) => existsSync(join(root, path)) && statSync(join(root, path)).isFile();
 
 // Decisions: a status, a built line with its proof, and the list of them all.
 const LIST = 'docs/decisions/README.md';
@@ -32,7 +33,7 @@ for (const path of decisions) {
   const built = head.find((line) => line.startsWith('Built: '))?.slice(7) ?? '';
   const how = built.match(/^(yes|partly|no)\b/)?.[1];
   if (!how) failures.push(`${path}: no "Built: yes", "Built: partly" or "Built: no" in its first 12 lines`);
-  const proof = [...built.matchAll(/`([^`]+)`/g)].map((m) => m[1]).filter((p) => existsSync(join(root, p)));
+  const proof = [...built.matchAll(/`([^`]+)`/g)].map((m) => m[1]).filter(isFile);
   if (how && how !== 'no' && !proof.length) {
     failures.push(`${path}: "Built: ${how}" names no file in this repo (a test, in backticks) that proves it`);
   }
@@ -76,7 +77,15 @@ const headings = new Map();
 const headingsOf = (path) => {
   if (!headings.has(path)) {
     const found = read(path).replace(/^(```|~~~).*?^\1.*?$/gms, '').matchAll(/^#{1,6} (.+)$/gm);
-    headings.set(path, new Set([...found].map((m) => slug(m[1].trim()))));
+    // A repeated heading's later anchors end -1, -2, as GitHub makes them.
+    const seen = new Map();
+    const anchors = [...found].map((m) => {
+      const base = slug(m[1].trim());
+      const nth = seen.get(base) ?? 0;
+      seen.set(base, nth + 1);
+      return nth ? `${base}-${nth}` : base;
+    });
+    headings.set(path, new Set(anchors));
   }
   return headings.get(path);
 };
@@ -84,7 +93,11 @@ const links = new Map();
 let count = 0;
 for (const path of tracked) {
   links.set(path, []);
-  for (const [, target] of prose(read(path)).matchAll(/\[[^\]]*\]\(([^)\s]+)(?: "[^"]*")?\)/g)) {
+  // Inline links, with a title in any of its three forms, and reference links by their definitions.
+  const text = prose(read(path));
+  const inline = text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\)/g);
+  const defined = text.matchAll(/^ {0,3}\[[^\]]+\]:\s*(\S+)/gm);
+  for (const [, target] of [...inline, ...defined]) {
     if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
     count += 1;
     const [file, anchor] = target.split('#');
@@ -115,11 +128,12 @@ for (const path of tracked.filter((p) => p.startsWith('docs/'))) {
 }
 
 // AGENTS.md's stopgap rules: each tag names promises the charter has.
-const promises = [...read('docs/charter.md').split('## The promises')[1].split('\n## ')[0].matchAll(/^(\d+)\. /gm)];
+const numbered = read('docs/charter.md').split('## The promises')[1].split('\n## ')[0].matchAll(/^(\d+)\. /gm);
+const promises = new Set([...numbered].map((m) => `P${m[1]}`));
 const tags = [...read('AGENTS.md').matchAll(/ \((P\d+(?:, P\d+)*)\)$/gm)];
 for (const [, tag] of tags) {
   for (const p of tag.split(', ')) {
-    if (Number(p.slice(1)) < 1 || Number(p.slice(1)) > promises.length) {
+    if (!promises.has(p)) {
       failures.push(`AGENTS.md: the tag (${tag}) names a promise the charter doesn't have`);
     }
   }
