@@ -39,7 +39,7 @@ designs/system.html in the F6 PR, using shared production code rather than this 
 - node designs/check.cjs passed. Serenity design check found no issues on either option.
 - Installed Edge: Space enables, Enter disables, Escape closes Settings, both versions.
 - Inspected at 1440 and 1024 px in dark and light; 390 px reflow also captured.
-- Screenshots are outside the public repo at gathr-work/reviews/startup-design.
+- Screenshots are outside the public repo, in the room's `Shared/reviews/startup-design`.
 - No installed-app or OS login behaviour was tested; that belongs to F6.
 
 ## Merge Danger

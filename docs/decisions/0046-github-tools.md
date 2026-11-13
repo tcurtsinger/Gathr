@@ -1,6 +1,6 @@
 # 0046. Gathr reaches GitHub for agents, with its own sign-in
 
-Status: accepted (owner, 2026-11-12: option A of `Shared\plans\codex-github.md`, "Fix now"). Date:
+Status: accepted (owner, 2026-11-12: option A of `Shared\archive\2026-11\plans\codex-github.md`, "Fix now"). Date:
 2026-11-12. G185, G147, G179. 0044 is the step-results decision and 0045 is Gathr's own review gate,
 so this is 0046.
 
