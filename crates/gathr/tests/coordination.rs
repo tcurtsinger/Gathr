@@ -837,10 +837,19 @@ fn friction_an_agent_reports_is_kept_by_gathr_and_listed() {
         "{refused}"
     );
 
+    let later = json!({ "what": "list_tasks left out my blocked task" });
+    let said = text(&call_tool(port, &ann, "report_friction", later));
+    assert_eq!(said, "Recorded as friction #2.");
+
     let listed = team.service.call("GET", "/api/friction").json();
     let rows = listed["friction"].as_array().unwrap();
-    assert_eq!(rows.len(), 1, "the refused ones aren't kept: {listed}");
-    let kept = &rows[0];
+    assert_eq!(rows.len(), 2, "the refused ones aren't kept: {listed}");
+    assert_eq!(
+        (&rows[0]["what"], &rows[0]["where"]),
+        (&json!("list_tasks left out my blocked task"), &Value::Null),
+        "newest first: {listed}"
+    );
+    let kept = &rows[1];
     assert_eq!(
         (
             &kept["what"],
@@ -854,5 +863,5 @@ fn friction_an_agent_reports_is_kept_by_gathr_and_listed() {
     assert_eq!(kept["chat"], team.chat.as_str(), "{listed}");
     let (ok, shown) = gathr(&data.0, &["diag", "friction"]);
     assert!(ok, "{shown}");
-    assert_eq!(shown["friction"][0]["what"], what, "{shown}");
+    assert_eq!(shown["friction"][1]["what"], what, "{shown}");
 }
