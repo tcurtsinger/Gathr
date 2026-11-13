@@ -107,10 +107,12 @@ impl Room {
                 |r| r.get(0),
             )
             .unwrap();
-        // A look asks once for each task with a PR, then lands what it can; the next look's first
-        // ask shows it ended. A look under way now may have read what the test has since changed,
-        // so it isn't the one counted: one look's worth of asks and one more has seen a look that
-        // began after this call through to its end.
+        // A look asks once for each task with a PR, then lands what it can (reading the tasks and
+        // GitHub afresh), and the next look's first ask shows that landing ended. What is proved
+        // is that one landing began after this call and ended. With `prs` asks and one more: a look
+        // with asks still to make now lands after them, and the next look's first ask comes within
+        // the count; a look already landing now may have begun before the test's change, and the
+        // count runs through the whole next look to the ask after it.
         let enough = before + prs as usize + 1;
         common::until(120, "the service to look at its PRs again", || {
             (self.calls(PR_LOOK) >= enough).then_some(())
