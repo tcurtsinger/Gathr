@@ -78,6 +78,9 @@ test('an agent that is not working says what the service says it waits for: held
     `Waiting for CI on #12 since ${began(since)} and Made-up Third since ${began(since)}`,
   );
 
+  // Nor does it hide a turn just queued for an agent it still calls free.
+  const justQueued = { ...state, turns: { t: turn('t', 'c', 'queued') } };
+  expect(doing(justQueued, held).c).toBe('Waiting');
   // The chat as it streams says who works: an answer a moment old never calls a working agent free.
   const working = { ...state, turns: { t: turn('t', 'c', 'running') } };
   expect(doing(working, held).c).toBe('Working');

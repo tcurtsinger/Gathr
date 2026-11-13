@@ -23,10 +23,11 @@ Serves promise 6 of [the charter](../charter.md#the-promises): the room explains
   agent's queue, which is one for the agent across all its chats: the turn it is behind, an engine that is
   closing, a message its engine hasn't read yet, a compaction waiting for background commands. Each queue tells
   the service why each of its queued turns waits whenever that changes. A queued turn nothing has spoken for is
-  said as unknown.
+  said as unknown. A turn behind one that waits for a sign-in waits on you too, whichever chat that turn is in.
 - **Served three ways, one answer:** `GET /api/chats/<chat>/waiting`; a tool for every agent, `waiting`, for its
   own chat; and `gathr diag waiting --chat <id>`, from the service when it runs and from the database when it
-  doesn't, where what only the service knew is said as it was when it stopped.
+  doesn't, where what only the service knew is said as it was when it stopped and nothing is said to move by
+  itself.
 - **In the window, a line at the foot of the chat,** where "Working" shows, while no turn runs and the answer
   has a line. Its words are the first of: "Waiting on you: 2 questions"; "Waiting: …" with what has waited
   longest among the things that move by themselves; "Not moving: …" with what nobody is on. Then "and N more".

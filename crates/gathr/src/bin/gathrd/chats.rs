@@ -109,6 +109,15 @@ pub enum Cmd {
     },
 }
 
+/// Why a queued turn hasn't started, as its agent's queue says it (0050): its chat, the words, and
+/// the turn it is behind, when it is behind one.
+#[derive(Clone, PartialEq)]
+pub struct QueuedWhy {
+    pub chat: String,
+    pub words: String,
+    pub behind: Option<String>,
+}
+
 /// A send that failed: why, and the trace its reference points to.
 pub struct Failed {
     pub why: String,
@@ -132,9 +141,9 @@ pub struct Chats {
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
     /// Agents whose engine hasn't exited 30 s after its close: what each is held on (0010).
     holds: Mutex<HashMap<String, Value>>,
-    /// Why each queued turn hasn't started, as its agent's queue last said it: its chat and the
-    /// words (0050). Only what no table holds.
-    queued: Mutex<HashMap<String, (String, String)>>,
+    /// Why each queued turn hasn't started, as its agent's queue last said it (0050). Only what
+    /// no table holds.
+    queued: Mutex<HashMap<String, QueuedWhy>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
     /// Accounts being removed, never picked even while their rows remain.
@@ -344,9 +353,8 @@ impl Chats {
         };
     }
 
-    /// An agent's queue says why a turn of its waits (its chat and the words), or that it no
-    /// longer does.
-    pub fn say_queued(&self, turn: &str, said: Option<(String, String)>) {
+    /// An agent's queue says why a turn of its waits, or that it no longer does.
+    pub fn say_queued(&self, turn: &str, said: Option<QueuedWhy>) {
         let mut queued = self.queued.lock().expect("never poisoned");
         match said {
             Some(said) => queued.insert(turn.to_string(), said),
@@ -355,11 +363,10 @@ impl Chats {
     }
 
     /// Why each queued turn of the chat waits, where its agent's queue has said.
-    pub fn queued_in(&self, chat: &str) -> HashMap<String, String> {
+    pub fn queued_in(&self, chat: &str) -> Vec<(String, QueuedWhy)> {
         let queued = self.queued.lock().expect("never poisoned");
-        let of = queued.iter().filter(|(_, (c, _))| c == chat);
-        of.map(|(turn, (_, why))| (turn.clone(), why.clone()))
-            .collect()
+        let of = queued.iter().filter(|(_, why)| why.chat == chat);
+        of.map(|(turn, why)| (turn.clone(), why.clone())).collect()
     }
 
     /// The account folder's renewal gate (0002).

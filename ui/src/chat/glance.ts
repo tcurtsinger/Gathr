@@ -81,7 +81,10 @@ function standing(
   }
   // Neither: what it waits for, or that it is free, is the service's answer.
   const stand = waiting?.agents.find((a) => a.agent === m.agent);
-  if (stand?.state === 'free') return { standing: 'ready', doing: 'Ready' };
+  const mine = state.tasks.some((t) => t.owner === m.agent && open(t));
+  const queued = turns.some((t) => t.status === 'queued');
+  // Free, unless the chat already shows a task or a turn of its own the answer is yet to count.
+  if (stand?.state === 'free' && !mine && !queued) return { standing: 'ready', doing: 'Ready' };
   if (stand?.state === 'waiting') {
     const until = stand.until_us ? ` until ${clock(new Date(stand.until_us / 1000).toISOString())}` : '';
     const since = stand.on.map((on) => `${on.what} since ${began(on.since_us)}`);
@@ -92,8 +95,6 @@ function standing(
     };
   }
   // The answer hasn't come, or is a moment behind the chat: whether anything is its to do says which.
-  const mine = state.tasks.some((t) => t.owner === m.agent && open(t));
-  const queued = turns.some((t) => t.status === 'queued');
   return mine || queued ? { standing: 'waiting', doing: 'Waiting' } : { standing: 'ready', doing: 'Ready' };
 }
 

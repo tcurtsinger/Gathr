@@ -38,6 +38,8 @@ pub struct Live {
     pub running: bool,
     /// Why each queued turn hasn't started, as its agent's queue says it, by turn.
     pub queued: HashMap<String, String>,
+    /// The turn each of those is behind, when it is behind one: in this chat or another.
+    pub behind: HashMap<String, String>,
     /// The turns with an approval waiting.
     pub approvals: Vec<String>,
     /// The version Gathr is updating to.
@@ -48,7 +50,7 @@ pub struct Live {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Line {
     /// `turn`, `queued`, `sign_in`, `approval`, `question`, `wait`, `command`, `pr`, `given`,
-    /// `merge`, `after`, `idle`, `trouble` or `update`.
+    /// `merge`, `after`, `idle`, `trouble`, `update`, or `stopped` when the service isn't running.
     pub kind: &'static str,
     /// The line in words.
     pub what: String,
@@ -210,13 +212,27 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
         line.from = "service";
         lines.push(line);
     }
+    if !live.running {
+        // Nothing moves by itself while the service is stopped, whatever was under way.
+        for line in lines.iter_mut().filter(|l| l.moves == Moves::Itself) {
+            line.moves = Moves::Nobody;
+        }
+        let stopped = "Gathr's service isn't running: nothing here moves until it starts";
+        lines.push(Line::new("stopped", stopped.to_string(), Moves::Nobody));
+    }
     // What waits on the person first, then what nobody is on; the longest wait first in each.
     let rank = |m: Moves| {
         [Moves::You, Moves::Nobody, Moves::Itself, Moves::Others]
             .iter()
             .position(|x| *x == m)
     };
-    lines.sort_by_key(|l| (rank(l.moves), l.since_us.unwrap_or(i64::MAX)));
+    lines.sort_by_key(|l| {
+        (
+            l.kind != "stopped",
+            rank(l.moves),
+            l.since_us.unwrap_or(i64::MAX),
+        )
+    });
     let agents = standings(conn, chat, live, (&pauses, &turns, &open, &waiting), now_us)?;
     Ok(Answer { lines, agents })
 }
@@ -319,7 +335,7 @@ fn turn_lines(
                 Moves::You,
             ),
             _ => {
-                let (why, moves, from) = queued_why(live, pauses, chat, t);
+                let (why, moves, from) = queued_why(conn, live, pauses, chat, t)?;
                 let what = format!("{who}'s turn{on_task} is queued: {why}");
                 let mut line = Line::new("queued", what, moves);
                 line.from = from;
@@ -333,13 +349,23 @@ fn turn_lines(
 
 /// Why a queued turn hasn't started: what is saved on it, else what its agent's queue says.
 fn queued_why(
+    conn: &Connection,
     live: &Live,
     pauses: &[Pause],
     chat: &str,
     t: &Turn,
-) -> (String, Moves, &'static str) {
+) -> Result<(String, Moves, &'static str), Error> {
     let saved = |fallback: &str| t.why.clone().unwrap_or_else(|| fallback.to_string());
-    match t.held.as_deref() {
+    // Behind a turn that waits for a sign-in, in this chat or another, it waits on the person too.
+    let behind_sign_in = match live.behind.get(&t.id) {
+        Some(ahead) => conn.query_row(
+            "SELECT EXISTS (SELECT 1 FROM turns WHERE id = ?1 AND status = 'waiting_sign_in')",
+            [ahead],
+            |r| r.get(0),
+        )?,
+        None => false,
+    };
+    Ok(match t.held.as_deref() {
         Some("pause") => {
             let stopped =
                 pauses::holding(pauses, chat, t.agent.as_deref()).is_some_and(|p| p.stopped);
@@ -357,6 +383,11 @@ fn queued_why(
         ),
         Some(_) => (saved("its engine is downloading"), Moves::Itself, "saved"),
         None => match (live.queued.get(&t.id), live.running) {
+            (Some(why), _) if behind_sign_in => (
+                format!("{why}, which waits for you to sign in"),
+                Moves::You,
+                "service",
+            ),
             (Some(why), _) => (why.clone(), Moves::Itself, "service"),
             (None, true) => (
                 "unknown: its agent's queue hasn't said why".to_string(),
@@ -369,7 +400,7 @@ fn queued_why(
                 "saved",
             ),
         },
-    }
+    })
 }
 
 fn wait_lines(
@@ -605,7 +636,9 @@ fn standings(
         let mine = open
             .iter()
             .any(|o| o.owner.as_deref() == Some(id) && o.under_way());
-        let queued = own.iter().any(|t| t.status == "queued");
+        // A turn to come, queued or waiting for a sign-in.
+        let queued = own.iter().any(|t| t.status != "running");
+        let sign_in = own.iter().any(|t| t.status == "waiting_sign_in");
         let usage = usage_until(conn, id, now_us)?;
         let on = waits_for(conn, id, open, waiting)?;
         let held = |words: &str| ("waiting", words.to_string());
@@ -616,6 +649,8 @@ fn standings(
         } else if !running.is_empty() {
             stand.since_us = running.iter().map(|t| t.created).min();
             ("working", "Working".to_string())
+        } else if sign_in {
+            held("Waiting for you to sign in")
         } else if usage.is_some() {
             stand.until_us = usage;
             held("Usage limit")

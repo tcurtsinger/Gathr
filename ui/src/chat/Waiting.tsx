@@ -45,10 +45,12 @@ export function headline(lines: Line[]) {
       more: lines.length - you.length,
     };
   const moving = lines.find((l) => l.moves === 'itself');
-  const first = moving ?? lines.find((l) => l.moves === 'nobody') ?? lines[0];
+  const idle = lines.find((l) => l.moves === 'nobody');
+  // Lines that only follow others aren't stuck: what they follow is about to be said or done.
+  const first = moving ?? idle ?? lines[0];
   return {
-    moves: (moving ? 'itself' : 'nobody') as Moves,
-    lead: moving ? 'Waiting' : 'Not moving',
+    moves: first.moves,
+    lead: first === idle ? 'Not moving' : 'Waiting',
     words: first.what,
     since: first.since_us ?? undefined,
     more: lines.length - 1,

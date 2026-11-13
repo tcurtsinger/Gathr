@@ -8,9 +8,10 @@ use std::collections::HashMap;
 use serde_json::json;
 
 use super::{Ids, Task};
+use crate::chats::QueuedWhy;
 
-/// Each queued turn's chat and why it waits.
-pub(super) type Said = HashMap<String, (String, String)>;
+/// Why each queued turn waits, by turn.
+pub(super) type Said = HashMap<String, QueuedWhy>;
 
 impl Task {
     /// Tells the chats why each queued turn waits, when that has changed since it last did, and
@@ -22,16 +23,16 @@ impl Task {
         }
         let was = std::mem::replace(&mut self.said_waits, now);
         let mut chats: Vec<&String> = Vec::new();
-        for (turn, (chat, why)) in &was {
-            if self.said_waits.get(turn).map(|(_, now)| now) != Some(why) {
+        for (turn, said) in &was {
+            if self.said_waits.get(turn) != Some(said) {
                 self.chats.say_queued(turn, None);
-                chats.push(chat);
+                chats.push(&said.chat);
             }
         }
         for (turn, said) in &self.said_waits {
             if was.get(turn) != Some(said) {
                 self.chats.say_queued(turn, Some(said.clone()));
-                chats.push(&said.0);
+                chats.push(&said.chat);
             }
         }
         chats.sort();
@@ -42,8 +43,9 @@ impl Task {
         }
     }
 
-    /// Why each queued turn that nothing saved holds hasn't started. The one next to start has no
-    /// reason to give.
+    /// Why each queued turn that nothing saved holds hasn't started, in the order `try_next` takes
+    /// them: one turn at a time, the first no pause holds. The one next to start has no reason to
+    /// give, unless the engine itself isn't ready for it.
     fn queued_whys(&self) -> Said {
         let behind = |ids: &Ids, of: &Ids, what: &str| {
             let on = of.task.map_or(String::new(), |n| format!(" on #{n}"));
@@ -51,7 +53,8 @@ impl Task {
                 true => "",
                 false => " in another chat",
             };
-            format!("behind this agent's {what}{on}{place}")
+            let words = format!("behind this agent's {what}{on}{place}");
+            (words, Some(of.turn.clone()))
         };
         let mut whys = Said::new();
         let mut first: Option<&Ids> = None;
@@ -66,22 +69,31 @@ impl Task {
                 continue;
             }
             let compaction = self.background > 0 && self.compactions.contains(&q.ids.turn);
-            let why = if let Some(running) = &self.turn {
+            let (words, ahead) = if let Some(running) = &self.turn {
                 behind(&q.ids, &running.ids, "turn")
-            } else if self.closing.is_some() {
-                "its engine is closing".to_string()
-            } else if self.awaiting_read() {
-                "its engine hasn't yet read a message sent into its last turn".to_string()
             } else if let Some(ahead) = first {
+                // Whatever keeps the first from starting, this one waits for the first.
                 behind(&q.ids, ahead, "queued turn")
+            } else if self.closing.is_some() {
+                ("its engine is closing".to_string(), None)
+            } else if self.awaiting_read() {
+                let unread = "its engine hasn't yet read a message sent into its last turn";
+                (unread.to_string(), None)
             } else if compaction {
-                "it compacts the conversation once this agent's background commands end".to_string()
+                let waits =
+                    "it compacts the conversation once this agent's background commands end";
+                (waits.to_string(), None)
             } else {
                 first = Some(&q.ids);
                 continue;
             };
             first = first.or(Some(&q.ids));
-            whys.insert(q.ids.turn.clone(), (q.ids.chat.clone(), why));
+            let why = QueuedWhy {
+                chat: q.ids.chat.clone(),
+                words,
+                behind: ahead,
+            };
+            whys.insert(q.ids.turn.clone(), why);
         }
         whys
     }

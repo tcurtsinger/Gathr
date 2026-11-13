@@ -32,17 +32,21 @@ const line = (kind: string, what: string, moves: Line['moves'], more: Partial<Li
   error: null,
   ...more,
 });
-const ci = line('wait', 'Made-up Member waits for CI on #157', 'itself', {
-  seen: '1 of 2 checks on #157 at 0123456 finished: 1 passed; queued: UI (macOS)',
-  looked_us: minutesAgo(1),
-});
-const blocked = line(
-  'trouble',
-  '#4 (Made-up Third) is blocked: left: one file. Made-up Lead was told',
-  'nobody',
-);
-const question = line('question', 'A question for you: Pick a colour', 'you');
-const failing = line('wait', 'Made-up Lead waits for a check', 'nobody', { error: 'gh: not signed in' });
+/** The lines a test shows, made when it runs: their ages are counted from then. */
+function made() {
+  const ci = line('wait', 'Made-up Member waits for CI on #157', 'itself', {
+    seen: '1 of 2 checks on #157 at 0123456 finished: 1 passed; queued: UI (macOS)',
+    looked_us: minutesAgo(1),
+  });
+  const blocked = line(
+    'trouble',
+    '#4 (Made-up Third) is blocked: left: one file. Made-up Lead was told',
+    'nobody',
+  );
+  const question = line('question', 'A question for you: Pick a colour', 'you');
+  const failing = line('wait', 'Made-up Lead waits for a check', 'nobody', { error: 'gh: not signed in' });
+  return { ci, blocked, question, failing };
+}
 
 const members = [
   { agent: 'a', name: 'Made-up Lead', role: 'supervisor' },
@@ -91,12 +95,16 @@ const foot = () => page.getByRole('button', { name: /^(Waiting|Not moving)/ });
 const list = page.getByRole('dialog', { name: 'What this chat waits on' });
 
 test('the line says what waits on the person first, then what has waited longest, then what nobody is on', () => {
+  const { ci, blocked, question } = made();
   expect(headline([ci, blocked])).toMatchObject({
     lead: 'Waiting',
     words: 'Made-up Member waits for CI on #157',
     more: 1,
   });
   expect(headline([blocked])).toMatchObject({ lead: 'Not moving', words: blocked.what, more: 0 });
+  // Lines that only follow others aren't stuck.
+  const follows = line('trouble', '#4 is blocked. Made-up Lead hears of it next', 'others');
+  expect(headline([follows])).toMatchObject({ lead: 'Waiting', moves: 'others', more: 0 });
   const approval = line('approval', 'Made-up Member needs your approval', 'you');
   const paused = line('queued', "Made-up Lead's turn is queued: paused", 'you');
   expect(headline([question, { ...question, what: 'Another' }, approval, paused, ci])).toMatchObject({
@@ -107,6 +115,7 @@ test('the line says what waits on the person first, then what has waited longest
 });
 
 test('with no turn running, the foot of the chat says what it waits on and for how long, and opens the whole list', async () => {
+  const { ci, blocked, failing } = made();
   service({ lines: [blocked, failing, ci], agents: [] });
   const screen = await render(<Chat />);
   // Scenario 6b: the queued macOS job nobody saw. The line names the wait, and the list what its look saw.
@@ -135,6 +144,7 @@ test('with no turn running, the foot of the chat says what it waits on and for h
 });
 
 test('the line follows the service without a reload, and goes when the last hold ends', async () => {
+  const { ci, question } = made();
   service({ lines: [ci], agents: [] });
   await render(<Chat />);
   await expect.element(foot()).toHaveTextContent('Waiting: Made-up Member waits for CI on #157· 9m');
@@ -169,6 +179,7 @@ test('a turn that is queued and has not started is said, not hidden as if it ran
 });
 
 test('while a turn runs the foot says Working, not what waits', async () => {
+  const { ci } = made();
   service({ lines: [ci], agents: [] }, [{ id: 't', status: 'running', why: null, ref: 'r', agent: 'b' }]);
   const screen = await render(<Chat />);
   await expect.element(screen.getByRole('button', { name: /Working/ })).toBeVisible();

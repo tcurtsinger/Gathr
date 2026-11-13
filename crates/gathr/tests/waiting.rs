@@ -109,6 +109,7 @@ fn one_answer_names_each_agent_with_its_task_and_whether_it_works_waits_or_is_fr
         ]
     );
     let lead = &said.agents[0];
+    assert_eq!(lead.on.len(), 2, "whom it waits for: {lead:?}");
     assert!(
         lead.on.iter().all(|on| on.since_us > 0),
         "since when: {lead:?}"
@@ -416,6 +417,46 @@ fn a_request_filed_for_the_person_waits_for_their_answer() {
     );
     let stale = line(&said, "idle", "#68 (Bo) is held (waiting on a check)");
     assert_eq!(stale.moves, Moves::Nobody);
+}
+
+/// Found in #185's review. A turn queued behind one that waits for a sign-in waits on the person,
+/// whichever chat that turn is in, and its agent isn't free. With the service stopped nothing
+/// moves by itself, and the answer says so first.
+#[test]
+fn a_turn_behind_a_sign_in_waits_on_the_person_and_nothing_moves_while_the_service_is_stopped() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "signing", "ann", None, "waiting_sign_in");
+    turn(&conn, "next", "ann", None, "queued");
+    ci_wait(&mut conn, "bo");
+    let words = "behind this agent's queued turn";
+    let live = Live {
+        queued: HashMap::from([("next".to_string(), words.to_string())]),
+        behind: HashMap::from([("next".to_string(), "signing".to_string())]),
+        ..service()
+    };
+    let said = answer(&conn, &live);
+    let behind = line(&said, "queued", words);
+    assert_eq!(behind.moves, Moves::You, "{behind:?}");
+    assert!(
+        behind.what.contains("waits for you to sign in"),
+        "{behind:?}"
+    );
+    let ann = said.agents.iter().find(|a| a.name == "Ann").unwrap();
+    assert_eq!(
+        (ann.state, ann.words.as_str()),
+        ("waiting", "Waiting for you to sign in")
+    );
+    assert_eq!(line(&said, "wait", "Bo waits for CI").moves, Moves::Itself);
+
+    let stopped = answer(&conn, &Live::default());
+    assert_eq!(stopped.lines[0].kind, "stopped", "{:#?}", stopped.lines);
+    let moving: Vec<&Line> = stopped
+        .lines
+        .iter()
+        .filter(|l| l.moves == Moves::Itself)
+        .collect();
+    assert!(moving.is_empty(), "moving with no service: {moving:#?}");
 }
 
 /// The answer in words, as the `waiting` tool and `gathr diag waiting --text` give it.
