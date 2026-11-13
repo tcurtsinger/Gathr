@@ -72,7 +72,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
                 stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
-                in_passing, judged
+                in_passing, judged, signed_off
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -122,6 +122,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 waiting_on: Vec::new(),
                 in_passing: r.get(29)?,
                 judged: r.get(30)?,
+                signed_off: r.get(31)?,
             })
         },
     )?;

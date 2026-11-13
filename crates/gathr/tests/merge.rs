@@ -3,6 +3,8 @@
 //! the default branch is in it. One merge per repository at a time; the PR's tasks settle at once.
 
 mod common;
+#[path = "merge/lands.rs"]
+mod lands;
 #[path = "merge/review_updates.rs"]
 mod review_updates;
 
@@ -108,27 +110,7 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
             .replace("{\"dir\":\"hold\"}", "{\"dir\":\"hold\",\"line\":\"take\"}");
         std::fs::write(&recording, format!("{}\n{}", held.trim_end(), held)).unwrap();
     }
-    let gate = if waking {
-        PathBuf::from("go")
-    } else {
-        data.join("go")
-    };
-    let service = TestService::with_engine(
-        data,
-        &[
-            ("GATHR_REPLAY", &recording),
-            ("GATHR_REPLAY_HOLD", &gate),
-            ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
-            ("GATHR_GH_PATH", &fake_gh()),
-            ("GATHR_FAKE_GH", &answers),
-            // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
-            ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
-            (
-                "GATHR_WAIT_EVERY_MS",
-                Path::new(if waking { "100" } else { "120000" }),
-            ),
-        ],
-    );
+    let service = service(data, waking);
     let account = service.add_account("Team");
     common::sign_in_account(data, &account);
     let agent = |name: &str| {
@@ -177,9 +159,38 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
     room
 }
 
+/// The service on `data`, with the held recording and GitHub's stand-in the room wrote there: at a
+/// room's start, and again after a stop.
+fn service(data: &Path, waking: bool) -> TestService {
+    let gate = if waking {
+        PathBuf::from("go")
+    } else {
+        data.join("go")
+    };
+    TestService::with_engine(
+        data,
+        &[
+            ("GATHR_REPLAY", &data.join("held.jsonl")),
+            ("GATHR_REPLAY_HOLD", &gate),
+            ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
+            ("GATHR_GH_PATH", &fake_gh()),
+            ("GATHR_FAKE_GH", &data.join("gh.json")),
+            // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
+            ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
+            (
+                "GATHR_WAIT_EVERY_MS",
+                Path::new(if waking { "100" } else { "120000" }),
+            ),
+        ],
+    )
+}
+
 impl Room {
     fn db(&self) -> rusqlite::Connection {
-        rusqlite::Connection::open(self.data.join("gathr.db")).unwrap()
+        let db = rusqlite::Connection::open(self.data.join("gathr.db")).unwrap();
+        // The service writes at each of its looks: a test's own write waits its turn.
+        db.busy_timeout(std::time::Duration::from_secs(10)).unwrap();
+        db
     }
 
     /// The project's checks, passed at `head`, as a run of Gathr's (C3) leaves them.
@@ -234,6 +245,8 @@ impl Room {
     }
 
     /// A review finished done on `commit` in a turn not running here, as its turn would record it.
+    /// Nothing looks at its PR then, so the test merges it by hand: a review reported with
+    /// `finish_task` lands it (0049, `lands.rs`).
     fn review_done(&self, task: i64, commit: &str) {
         let done =
             "UPDATE tasks SET finish = 'done', reviewed = ?2, review_done = 1 WHERE number = ?1";
@@ -325,7 +338,7 @@ fn of_two_prs_on_one_base_the_second_is_refused_once_the_first_merges() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5, 6]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     room.review_done(2, &room.heads[1]);
     let first = room.call(&vale, "merge", json!({ "pr": 5 }));
     assert_eq!(first["isError"], false, "{}", text(&first));
@@ -505,7 +518,7 @@ fn a_project_merges_by_its_own_method() {
         );
         let lead = room.lead_turn();
         let vale = room.reviews(&lead, &[5]);
-        room.reviewed(&vale, 1, &room.heads[0].clone());
+        room.review_done(1, &room.heads[0]);
         if method == "squash" {
             let answers = room.data.join("gh.json");
             let mut all: Vec<Value> =
@@ -551,7 +564,7 @@ fn an_older_pass_never_outweighs_a_newer_run_or_changed_checks() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let five = json!({ "pr": 5 });
     for (state, why) in [("failed", "failed"), ("running", "still running")] {
         let newer = "INSERT INTO check_runs (id, project_id, head, state, trace_id, started_ts) VALUES (?1, ?2, ?3, ?4, 't', 5)";
@@ -585,7 +598,7 @@ fn a_head_that_moves_during_a_merge_is_refused_or_left_unsettled() {
         let mut room = room(&data.0, &repos.0, false);
         let lead = room.lead_turn();
         let vale = room.reviews(&lead, &[5]);
-        room.reviewed(&vale, 1, &room.heads[0].clone());
+        room.review_done(1, &room.heads[0]);
         let view = |head: &str| {
             json!({ "state": "OPEN", "headRefOid": head, "baseRefName": "main", "statusCheckRollup": [], "headRefName": "room/five", "isCrossRepository": false }).to_string()
         };
@@ -627,7 +640,7 @@ fn tasks_that_fail_to_settle_after_a_merge_are_reported_with_a_reference() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let refuse = "CREATE TRIGGER no_settling BEFORE UPDATE OF pr_closed ON tasks BEGIN SELECT RAISE(ABORT, 'forced'); END";
     room.db().execute(refuse, []).unwrap();
     let answer = room.call(&vale, "merge", json!({ "pr": 5 }));
@@ -655,7 +668,7 @@ fn a_pr_retargeted_during_a_merge_is_refused_or_left_unsettled() {
         let mut room = room(&data.0, &repos.0, false);
         let lead = room.lead_turn();
         let vale = room.reviews(&lead, &[5]);
-        room.reviewed(&vale, 1, &room.heads[0].clone());
+        room.review_done(1, &room.heads[0]);
         let view = |base: &str| {
             let h = &room.heads[0];
             json!({ "state": "OPEN", "headRefOid": h, "baseRefName": base, "statusCheckRollup": [] })
@@ -697,7 +710,7 @@ fn merge_queues_cleanup_at_once_without_waiting_for_a_pr_look() {
     let vale = room.reviews(&lead, &[5]);
     let cwd = PathBuf::from(nth(&data.0.join("env.jsonl"), 1)["cwd"].as_str().unwrap());
     git(&cwd, &["checkout", "-q", "-b", "room/five", &room.heads[0]]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let merged = room.call(&vale, "merge", json!({"pr":5}));
     assert_eq!(merged["isError"], false, "{}", text(&merged));
     // The replay engine still holds this worktree. No periodic PR look runs in this fixture.
@@ -741,7 +754,7 @@ fn review_only_merges_on_a_clean_review_while_ci_is_pending() {
     };
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    room.reviewed(&vale, 1, &room.heads[0].clone());
+    room.review_done(1, &room.heads[0]);
     let five = json!({ "pr": 5 });
 
     set(&room, "ci");

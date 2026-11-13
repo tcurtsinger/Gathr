@@ -169,6 +169,8 @@ pub async fn start(
             &id,
             if why.is_some() { "failed" } else { "passed" },
         );
+        // A PR reviewed clean may land on this run, or its reviewer hears that it can't (0049).
+        crate::landing::soon(&chats, Some(project));
     });
     Ok(run)
 }

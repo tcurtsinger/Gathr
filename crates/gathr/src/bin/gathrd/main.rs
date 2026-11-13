@@ -12,6 +12,7 @@ mod check_runs;
 mod cleanup;
 mod coord;
 mod github;
+mod landing;
 mod logs;
 mod merging;
 mod models;

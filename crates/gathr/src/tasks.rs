@@ -137,6 +137,8 @@ pub struct Task {
     pub pr: Option<i64>,
     pub reviewed: Option<String>,
     pub outdated: bool,
+    /// Its reviewer signed off the PR's tests and check settings with the review (0049).
+    pub signed_off: bool,
     /// How the person answers it (a person task or a request for one).
     pub form: Option<person::Form>,
     pub choices: Vec<person::Choice>,
