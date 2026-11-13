@@ -301,6 +301,7 @@ test.runIf(server.browser === 'chromium')('reduced motion keeps the dot and stop
     expect(ring().opacity).toBe('0');
     await expect.element(dot('Agents working')).toBeVisible();
   } finally {
-    await motion('');
+    // Back to what the tests run with: clearing the override would leave the system's own setting.
+    await motion('reduce');
   }
 });
