@@ -25,6 +25,9 @@ fn ago(us: i64) -> String {
 /// The lines grouped by who can end each, what waits on the person first, then each agent.
 pub fn text(answer: &Answer, now_us: i64) -> String {
     let mut said = Vec::new();
+    // That the service isn't running comes before everything it would otherwise be moving.
+    let stopped = answer.lines.iter().find(|l| l.kind == "stopped");
+    said.extend(stopped.map(|l| format!("{}.", l.what)));
     let groups = [
         (Moves::You, "Waiting on you:"),
         (Moves::Nobody, "Not moving:"),
@@ -32,7 +35,8 @@ pub fn text(answer: &Answer, now_us: i64) -> String {
         (Moves::Others, "Following the lines above:"),
     ];
     for (moves, heading) in groups {
-        let of: Vec<&Line> = answer.lines.iter().filter(|l| l.moves == moves).collect();
+        let grouped = answer.lines.iter().filter(|l| l.kind != "stopped");
+        let of: Vec<&Line> = grouped.filter(|l| l.moves == moves).collect();
         if of.is_empty() {
             continue;
         }

@@ -457,6 +457,10 @@ fn a_turn_behind_a_sign_in_waits_on_the_person_and_nothing_moves_while_the_servi
         .filter(|l| l.moves == Moves::Itself)
         .collect();
     assert!(moving.is_empty(), "moving with no service: {moving:#?}");
+    // In words too it comes first, before what waits on the person.
+    let text = waiting::text(&stopped, gathr::ids::now_us());
+    assert!(text.starts_with("Gathr's service isn't running"), "{text}");
+    assert!(text.contains("Waiting on you:"), "{text}");
 }
 
 /// The answer in words, as the `waiting` tool and `gathr diag waiting --text` give it.
