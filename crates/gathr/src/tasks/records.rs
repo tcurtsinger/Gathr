@@ -22,6 +22,7 @@ pub fn set(
     let chat: String = tx.query_row(
         "UPDATE tasks SET state = ?2, reason = ?3, updated_ts = ?4, stale_ts = NULL,
              review_done = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE review_done END,
+             signed_off = CASE WHEN ?2 = 'cancelled' THEN 0 ELSE signed_off END,
              heard = CASE WHEN ?5 AND (state = 'held' OR (heard_as IS NOT NULL AND heard_as IS NOT ?6))
                           THEN 0 ELSE heard END
          WHERE number = ?1 RETURNING chat_id",

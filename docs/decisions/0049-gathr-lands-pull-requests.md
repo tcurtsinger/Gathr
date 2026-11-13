@@ -41,12 +41,18 @@ Serves promise 10 of [the charter](../charter.md#the-promises), nobody waits on 
 
 Settled while building, each the smaller choice:
 
-- A PR whose review doesn't reach its head (its author committed since) wakes nobody. It needs a review again, as
-  it did before, and each commit of a fix under way would otherwise wake the reviewer.
+- A PR whose review doesn't reach its head (its author committed since) wakes nobody, whatever else is wrong
+  with it. It needs a review again, as it did before, and each commit of a fix under way would otherwise wake
+  the reviewer.
+- A fork's PR is never landed, by what GitHub says of it (`isCrossRepository`), though its head may be in the
+  project because someone fetched it. Its reviewer is told once.
 - A CI job GitHub cancelled isn't a failure where CI isn't required ([0045](0045-review-gates-gathrs-own-repo.md)
   came from such jobs). Where CI is required, anything but passed or skipped holds the PR.
 - After Gathr's own update, CI gets 2 minutes to start on the new head before "no checks" reads as none.
 - A pause of the app or the chat holds landing, as it holds everything Gathr starts by itself.
+- A reviewer's report waits up to 15 seconds for another look at the project's PRs to end, then reads the
+  review and the pause again before it looks. Past that it answers that the PR is next.
+- A cancel or a restart of a review withdraws its sign-off with its approval.
 - The default branch is asked of `origin` itself (`git ls-remote --symref`), not of GitHub.
 
 ## Why

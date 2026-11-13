@@ -159,6 +159,16 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
     room
 }
 
+/// GitHub's answers, replaced whole: the service asks every 100 ms in some rooms, and the stand-in
+/// must never read half a file (it would answer nothing, and Gathr would say GitHub failed).
+fn put_answers(data: &Path, answers: &Value) {
+    let next = data.join("gh.json.next");
+    std::fs::write(&next, answers.to_string()).unwrap();
+    common::until(10, "GitHub's answers to be replaced", || {
+        std::fs::rename(&next, data.join("gh.json")).ok()
+    });
+}
+
 /// The service on `data`, with the held recording and GitHub's stand-in the room wrote there: at a
 /// room's start, and again after a stop.
 fn service(data: &Path, waking: bool) -> TestService {

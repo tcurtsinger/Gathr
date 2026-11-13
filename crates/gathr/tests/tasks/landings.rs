@@ -105,6 +105,29 @@ fn sign_off_is_kept_with_the_review_it_was_given_with() {
     .unwrap();
     assert!(!signed(&conn), "sign-off outlived its review");
 
+    // A cancel withdraws the approval and its sign-off with it, and a restart starts clean.
+    let second = review_by_bo(&mut conn, 6, "giving");
+    begin(&mut conn, second);
+    finish(
+        &mut conn,
+        "bo",
+        second,
+        Finish::Done,
+        &done_at("abc1234", true),
+    )
+    .unwrap();
+    let kept = |conn: &Connection| tasks::get(conn, second).unwrap().unwrap().signed_off;
+    assert!(kept(&conn));
+    tasks::cancel(&mut conn, Some("ann"), second, "not needed", T).unwrap();
+    assert!(!kept(&conn), "sign-off outlived a cancel");
+    conn.execute(
+        "UPDATE tasks SET signed_off = 1 WHERE number = ?1",
+        [second],
+    )
+    .unwrap();
+    tasks::restart(&mut conn, Some("ann"), second, T).unwrap();
+    assert!(!kept(&conn), "sign-off outlived a restart");
+
     // It goes with a review that is done, and nothing else.
     let work = give(&mut conn, "ann", &[], None).0;
     let said = done_at("abc1234", true);

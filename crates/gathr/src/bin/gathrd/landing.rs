@@ -105,16 +105,29 @@ pub async fn sweep(chats: Arc<Chats>, project: Option<String>) {
 /// in the answer to that report. None when the report lands nothing: the task isn't the done review
 /// of an open PR in a project's chat.
 pub async fn recorded(chats: &Arc<Chats>, caller: &Caller, task: i64) -> Option<String> {
-    let chat = caller.chat.clone();
-    let found = chats.writer.call(move |c| {
-        let pr = gathr::tasks::get(c, task)?.and_then(|t| t.pr);
-        match pr {
-            Some(pr) => landings::review_of(c, &chat, pr),
-            None => Ok(None),
-        }
-    });
-    let review = found.await?.ok()??;
+    let newest = || {
+        let chat = caller.chat.clone();
+        chats.writer.call(move |c| {
+            let pr = gathr::tasks::get(c, task)?.and_then(|t| t.pr);
+            match pr {
+                Some(pr) => landings::review_of(c, &chat, pr),
+                None => Ok(None),
+            }
+        })
+    };
+    let review = newest().await?.ok()??;
     let pr = review.pr;
+    let project = merging::project(chats, &review.project).await?;
+    let lock = merging::lock_of(&project.folder);
+    let Ok(one) = tokio::time::timeout(TURN, lock.lock()).await else {
+        soon(chats, Some(review.project));
+        return Some(format!(
+            "Gathr is landing another PR of this project: #{pr} is next."
+        ));
+    };
+    // Read once it's this look's turn: while it waited, the PR may have landed, a newer review
+    // been given, or the chat been paused.
+    let review = newest().await?.ok()??;
     if review.task != task {
         return Some(format!(
             "#{pr} has a newer review, task #{}: Gathr lands it on that one.",
@@ -125,14 +138,6 @@ pub async fn recorded(chats: &Arc<Chats>, caller: &Caller, task: i64) -> Option<
     if gathr::pauses::holding(&chats.pauses(), &review.chat, None).is_some() {
         return Some(format!("Gathr lands #{pr} once this chat isn't paused."));
     }
-    let project = merging::project(chats, &review.project).await?;
-    let lock = merging::lock_of(&project.folder);
-    let Ok(one) = tokio::time::timeout(TURN, lock.lock()).await else {
-        soon(chats, Some(review.project));
-        return Some(format!(
-            "Gathr is landing another PR of this project: #{pr} is next."
-        ));
-    };
     // Alone it's never first in line: the project's look, with the others, brings it up to date.
     let looked = look(chats, &project, &review, false, Some(caller)).await;
     drop(one);
@@ -313,20 +318,29 @@ async fn stand(
     vars: &Vars,
 ) -> Result<Stand, String> {
     let (repo, pr, at) = (&project.folder, review.pr, short(head));
+    let reviewed = review.reviewed.as_deref().unwrap_or_default();
+    // A fork's PR is never landed, though someone may have fetched its head into the project. Its
+    // reviewer is told only for the commit reviewed: a review that doesn't reach the head wakes
+    // nobody, whatever else is wrong with the PR.
+    if view["isCrossRepository"] == true || !merging::known(repo, head, vars).await {
+        let exact = reviewed.len() >= 7 && head.starts_with(&reviewed.to_ascii_lowercase());
+        return Ok(match exact {
+            true => Stand::Stops(format!(
+                "its head {at} isn't on origin: a PR from a fork isn't landed here"
+            )),
+            false => Stand::Rests(format!(
+                "your review of {reviewed} doesn't reach its head {at}, which isn't on origin"
+            )),
+        });
+    }
+    if let Err(why) = merging::reviewed_is_head(repo, reviewed, head, b, pr, vars).await {
+        return Ok(Stand::Rests(why));
+    }
     let default = default_branch(repo, vars).await?;
     if base != default {
         return Ok(Stand::Stops(format!(
             "it's into {base}, and Gathr lands only into the default branch, {default}"
         )));
-    }
-    if !merging::known(repo, head, vars).await {
-        return Ok(Stand::Stops(format!(
-            "its head {at} isn't on origin: a PR from a fork isn't landed here"
-        )));
-    }
-    let reviewed = review.reviewed.as_deref().unwrap_or_default();
-    if let Err(why) = merging::reviewed_is_head(repo, reviewed, head, b, pr, vars).await {
-        return Ok(Stand::Rests(why));
     }
     // A merge pushed that GitHub doesn't show yet: nothing is left to merge.
     if merging::ancestor(repo, head, b, vars).await {

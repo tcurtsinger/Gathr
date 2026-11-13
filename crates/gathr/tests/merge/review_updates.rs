@@ -193,7 +193,7 @@ fn held_review(data: &Path, repos: &Path) -> (Room, String, PathBuf, Value) {
     let mut answers: Value =
         serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
     answers.as_array_mut().unwrap().push(json!({"args":["api"],"out":json!({"name":"CI","status":"in_progress","context":"CI","state":"pending"}).to_string()}));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(data, &answers);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
     let lead_cwd = PathBuf::from(nth(&data.join("env.jsonl"), 0)["cwd"].as_str().unwrap());
@@ -216,9 +216,9 @@ fn held_review(data: &Path, repos: &Path) -> (Room, String, PathBuf, Value) {
 #[test]
 fn a_ci_wait_waking_the_review_task_keeps_its_completed_review() {
     let (data, repos) = (TempDir::new(), TempDir::new());
-    let (room, _, file, mut answers) = held_review(&data.0, &repos.0);
+    let (room, _, _, mut answers) = held_review(&data.0, &repos.0);
     answers[2]["out"] = json!(json!({"name":"CI","status":"completed","conclusion":"SUCCESS","context":"CI","state":"success"}).to_string());
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     common::until(20, "CI wakes the same review task into working", || {
         (task_state(&room) == "working").then_some(())
     });
@@ -321,7 +321,7 @@ fn publish(room: &mut Room, head: &str) {
         view["headRefOid"] = json!(head);
         answers[0][key] = json!(view.to_string());
     }
-    std::fs::write(file, answers.to_string()).unwrap();
+    put_answers(&room.data, &answers);
     room.heads[0] = head.to_string();
 }
 
@@ -372,7 +372,7 @@ fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
 #[test]
 fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
     let (data, repos) = (TempDir::new(), TempDir::new());
-    let (room, vale, file, mut answers) = held_review(&data.0, &repos.0);
+    let (room, vale, _, mut answers) = held_review(&data.0, &repos.0);
     let head = room.heads[0].clone();
     let path = |what: &str| format!("repos/{{owner}}/{{repo}}/commits/{head}/{what}?per_page=100");
     let jobs = |macos: (&str, &str)| {
@@ -389,7 +389,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
         .as_array_mut()
         .unwrap()
         .push(json!({"args":["api","--paginate",path("status")],"out":""}));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     let waits = || {
         let tasks = room
             .service
@@ -420,7 +420,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
     );
 
     answers[2]["out"] = json!(jobs(("completed", "cancelled")));
-    std::fs::write(&file, answers.to_string()).unwrap();
+    put_answers(&data.0, &answers);
     let woke = common::until(20, "the wake that names the cancelled job", || {
         let chat = room
             .service

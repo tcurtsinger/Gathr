@@ -34,7 +34,7 @@ impl Room {
     fn answer(&self, answer: Value) {
         let mut all = self.answers();
         all.as_array_mut().unwrap().push(answer);
-        std::fs::write(self.data.join("gh.json"), all.to_string()).unwrap();
+        put_answers(&self.data, &all);
     }
 
     /// GitHub's view of PR `n` (0 is #5, 1 is #6), changed in place.
@@ -45,7 +45,7 @@ impl Room {
             change(&mut view);
             all[n][key] = json!(view.to_string());
         }
-        std::fs::write(self.data.join("gh.json"), all.to_string()).unwrap();
+        put_answers(&self.data, &all);
     }
 
     /// GitHub's CI on PR `n`'s head, as its view sums it up.
@@ -107,15 +107,20 @@ impl Room {
                 |r| r.get(0),
             )
             .unwrap();
-        // A look asks once for each task with a PR: one more than two looks' worth has ended one.
-        let enough = before + 2 * prs as usize + 1;
-        common::until(60, "the service to look at its PRs again", || {
+        // A look asks once for each task with a PR, then lands what it can; the next look's first
+        // ask shows it ended. A look under way now may have read what the test has since changed,
+        // so it isn't the one counted: one look's worth of asks and one more has seen a look that
+        // began after this call through to its end.
+        let enough = before + prs as usize + 1;
+        common::until(120, "the service to look at its PRs again", || {
             (self.calls(PR_LOOK) >= enough).then_some(())
         });
     }
 
     pub(super) fn landed(&self, head: &str) {
-        common::until(60, "the PR to land", || (self.main() == head).then_some(()));
+        common::until(120, "the PR to land", || {
+            (self.main() == head).then_some(())
+        });
     }
 
     fn chat(&self) -> Value {
@@ -136,7 +141,7 @@ impl Room {
     }
 
     fn told_once(&self) -> String {
-        common::until(60, "Gathr to tell the reviewer", || {
+        common::until(120, "Gathr to tell the reviewer", || {
             self.told().into_iter().next()
         })
     }
@@ -197,7 +202,14 @@ fn a_reviewed_pr_lands_by_itself_once_what_the_project_asks_for_passed() {
         room.review(1, 5, Some(&head));
         room.looked();
         assert_eq!(room.main(), room.base, "{ci}: landed before it passed");
-        if ci == "gathr" {
+        if ci == "both" {
+            // GitHub's CI passes while Gathr's own run is still going: both, not either.
+            room.run(&head, "running");
+            room.ci(0, json!([passed("Rust (Windows)"), passed("Rust (macOS)")]));
+            room.looked();
+            assert_eq!(room.main(), room.base, "landed on CI alone");
+        }
+        if ci == "gathr" || ci == "both" {
             room.run(&head, "passed");
         } else {
             room.ci(0, json!([passed("Rust (Windows)"), passed("Rust (macOS)")]));
@@ -256,7 +268,7 @@ fn a_pr_behind_its_base_is_brought_up_to_date_and_lands_when_its_checks_pass_aga
     let base = room.main_moves();
     room.checks_passed(&base);
     room.review(1, 5, Some(&room.heads[0]));
-    common::until(60, "Gathr to ask GitHub for the update", || {
+    common::until(120, "Gathr to ask GitHub for the update", || {
         (room.calls("update-branch") > 0).then_some(())
     });
     let pinned = format!("expected_head_sha={}", room.heads[0]);
@@ -269,7 +281,7 @@ fn a_pr_behind_its_base_is_brought_up_to_date_and_lands_when_its_checks_pass_aga
     git(&room.other, &["push", "-q", "origin", "room/five"]);
     let mut all = room.answers();
     all[0]["merged_if"]["head"] = json!(head);
-    std::fs::write(room.data.join("gh.json"), all.to_string()).unwrap();
+    put_answers(&room.data, &all);
     room.view(0, |view| {
         view["headRefOid"] = json!(head);
         view["statusCheckRollup"] = json!([passed("Rust (Windows)")]);
@@ -352,6 +364,33 @@ fn a_pr_into_a_branch_that_isnt_the_default_is_left_to_its_reviewer() {
     assert_eq!(room.main(), room.base);
 }
 
+/// Found in #184's review. A fork's PR is never landed, though its head is in the project (someone
+/// fetched it): its reviewer is told. And a review that doesn't reach the head wakes nobody,
+/// whatever else is wrong with the PR.
+#[test]
+fn a_forks_pr_is_left_to_its_reviewer_and_a_stale_review_wakes_nobody() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let room = looking(&data.0, &repos.0, false);
+    // #6 is into another branch, and reviewed at a commit its head has moved past.
+    git(&room.other, &["push", "-q", "origin", "main:release"]);
+    room.view(1, |view| view["baseRefName"] = json!("release"));
+    room.review(1, 6, Some(&room.base));
+    room.looked();
+    assert_eq!(
+        room.told(),
+        Vec::<String>::new(),
+        "woken for a stale review"
+    );
+    // #5 is a fork's, reviewed at its head, with everything else in order.
+    room.view(0, |view| view["isCrossRepository"] = json!(true));
+    room.review(2, 5, Some(&room.heads[0]));
+    let told = room.told_once();
+    assert!(told.contains("#5") && told.contains("fork"), "{told}");
+    room.looked();
+    assert_eq!(room.told().len(), 1, "told again, or for #6");
+    assert_eq!(room.main(), room.base, "a fork's PR landed");
+}
+
 /// Scenario 10e: a PR that changes tests needs its reviewer's sign-off, said with the review and
 /// kept with it. Without it the answer says so and nothing lands; the same review recorded again
 /// with it lands the PR.
@@ -391,7 +430,7 @@ fn a_push_github_doesnt_confirm_settles_nothing_and_isnt_tried_again() {
     // GitHub goes on showing the PR open.
     let mut all = room.answers();
     all[0].as_object_mut().unwrap().remove("merged_if");
-    std::fs::write(room.data.join("gh.json"), all.to_string()).unwrap();
+    put_answers(&room.data, &all);
     room.review(1, 5, Some(&room.heads[0]));
     let unconfirmed = || {
         let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.merge.done'
@@ -400,7 +439,7 @@ fn a_push_github_doesnt_confirm_settles_nothing_and_isnt_tried_again() {
         assert!(ok, "{rows}");
         rows["rows"][0]["n"].as_i64().unwrap()
     };
-    common::until(60, "the push GitHub doesn't confirm", || {
+    common::until(120, "the push GitHub doesn't confirm", || {
         (unconfirmed() > 0).then_some(())
     });
     let pushed = room.main();
