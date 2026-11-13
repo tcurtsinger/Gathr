@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
-import { began } from '../chat/waits';
+import { began } from '../chat/team';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { ChecksCache } from './ChecksCache';

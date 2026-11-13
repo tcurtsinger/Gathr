@@ -132,6 +132,9 @@ pub struct Chats {
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
     /// Agents whose engine hasn't exited 30 s after its close: what each is held on (0010).
     holds: Mutex<HashMap<String, Value>>,
+    /// Why each queued turn hasn't started, as its agent's queue last said it: its chat and the
+    /// words (0050). Only what no table holds.
+    queued: Mutex<HashMap<String, (String, String)>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
     /// Accounts being removed, never picked even while their rows remain.
@@ -162,6 +165,7 @@ impl Chats {
             gates: Mutex::default(),
             tasks: Mutex::default(),
             holds: Mutex::default(),
+            queued: Mutex::default(),
             account: Mutex::default(),
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
@@ -338,6 +342,24 @@ impl Chats {
             Some(hold) => holds.insert(agent.to_string(), hold),
             None => holds.remove(agent),
         };
+    }
+
+    /// An agent's queue says why a turn of its waits (its chat and the words), or that it no
+    /// longer does.
+    pub fn say_queued(&self, turn: &str, said: Option<(String, String)>) {
+        let mut queued = self.queued.lock().expect("never poisoned");
+        match said {
+            Some(said) => queued.insert(turn.to_string(), said),
+            None => queued.remove(turn),
+        };
+    }
+
+    /// Why each queued turn of the chat waits, where its agent's queue has said.
+    pub fn queued_in(&self, chat: &str) -> HashMap<String, String> {
+        let queued = self.queued.lock().expect("never poisoned");
+        let of = queued.iter().filter(|(_, (c, _))| c == chat);
+        of.map(|(turn, (_, why))| (turn.clone(), why.clone()))
+            .collect()
     }
 
     /// The account folder's renewal gate (0002).

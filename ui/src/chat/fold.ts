@@ -75,6 +75,8 @@ const BESIDE: Record<string, [string, string]> = {
 export function duration(ms: number, to: 'second' | 'minute' = 'second'): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
+  // A wait can last days (0050): "6d 19h" reads where "163h 53m" doesn't.
+  if (minutes >= 2880) return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`;
   if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   if (to === 'minute') return `${Math.max(1, minutes)}m`;
   if (!(seconds >= 1)) return '';

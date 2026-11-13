@@ -82,15 +82,20 @@ export function Working({
   );
 }
 
-/** How long something has run, redrawn as often as it changes: "· 4m 02s" each second, "· 12m" each minute. */
+/**
+ * How long something has run, redrawn as often as it changes: "· 4m 02s" each second, "· 12m" each
+ * minute; `bare` leaves the dot out, for a time inside a sentence.
+ */
 export function Elapsed({
   since,
   to = 'second',
   lead = '',
+  bare = false,
 }: {
   since: number;
   to?: 'second' | 'minute';
   lead?: string;
+  bare?: boolean;
 }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -98,5 +103,6 @@ export function Elapsed({
     return () => clearInterval(tick);
   }, [to]);
   const took = duration(now - since, to);
-  return took ? `${lead}· ${took}` : null;
+  if (!took) return null;
+  return bare ? took : `${lead}· ${took}`;
 }

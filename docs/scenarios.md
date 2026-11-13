@@ -350,7 +350,8 @@ Parts: 6.1
 - **Given** a team where one agent works on a task, one waits, and one has nothing to do
 - **When** the person, or an agent, asks Gathr who is doing what
 - **Then** one answer from the service names each agent with its task and whether it is working,
-  waiting or free. The window shows the same answer
+  waiting or free, a free agent included. An agent with an approval waiting and a turn running
+  reads as needing the person. The window shows the same answer
 
 ### 6b. Gathr can say what the room is waiting on
 
@@ -360,7 +361,7 @@ Parts: 6.2
   review, one on a background command, and one turn is queued behind an update of Gathr
 - **When** the person, or an agent, asks what the room is waiting on
 - **Then** one answer lists every hold by name: what it is, who can end it, and how long it has
-  waited. The window shows the same answer
+  waited. The window shows the same answer, and changes without a reload when the last hold ends
 
 ### 6c. Gathr notices a quiet room before the person does
 

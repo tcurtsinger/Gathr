@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import type { Member, Message, Task, Turn, Wait } from '../api';
+import type { Member, Message, Task, Turn, Wait, Waiting } from '../api';
 import { activity, glances } from './glance';
 import { toThread } from './messages';
 import { Summary } from './Summary';
@@ -59,7 +59,16 @@ const turns = (...list: Turn[]) => Object.fromEntries(list.map((t) => [t.id, t])
 const approval = (turnId: string) => ({ turn: turnId, request: `q-${turnId}`, tool: 'Bash' });
 
 /** Summary as the chat draws it, with what it reports back kept for the test to read. */
-function Shown({ state, opened = [] }: { state: ChatState; opened?: string[] }) {
+function Shown({
+  state,
+  opened = [],
+  waiting,
+}: {
+  state: ChatState;
+  opened?: string[];
+  /** The service's answer to what the chat waits on, where a test's rows read from it. */
+  waiting?: Waiting;
+}) {
   const [open, setOpen] = useState(false);
   const pauses = { pauses: [], usage: [] };
   const doing = activity(toThread(state, [], [], new Map()).items);
@@ -68,7 +77,7 @@ function Shown({ state, opened = [] }: { state: ChatState; opened?: string[] }) 
       <button type="button">Made-up neighbour</button>
       <Summary
         state={state}
-        team={glances(state, pauses, { state: 'running', by: null, scope: null }, doing)}
+        team={glances(state, doing, waiting)}
         open={open}
         onOpen={setOpen}
         pauses={pauses}
@@ -199,7 +208,23 @@ test('the team is one line each: what it is doing and its tasks done, in order o
       task(4, 'e', { state: 'done', given_in: null }),
     ],
   };
-  const screen = await render(<Shown state={state} />);
+  // What the lead waits for is the service's answer; the two with nothing to do are free.
+  const stands = (agent: string, state: 'waiting' | 'free', words: string) => ({
+    agent,
+    state,
+    words,
+    on: [],
+    until_us: null,
+  });
+  const waiting: Waiting = {
+    lines: [],
+    agents: [
+      stands('a', 'waiting', 'Waiting for Made-up Member'),
+      stands('d', 'free', 'Ready'),
+      stands('e', 'free', 'Ready'),
+    ],
+  };
+  const screen = await render(<Shown state={state} waiting={waiting} />);
   await screen.getByRole('button', { name: /^Summary/ }).click();
   const summary = page.getByRole('dialog', { name: 'Summary' });
   await expect.element(summary.getByRole('heading')).toHaveTextContent('Team1 working · 1 needs you');

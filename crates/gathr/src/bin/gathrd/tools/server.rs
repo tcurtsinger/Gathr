@@ -80,6 +80,7 @@ impl Tools {
             + Tools::merge_router()
             + Tools::github_router()
             + Tools::settings_router()
+            + Tools::waiting_router()
     }
 }
 

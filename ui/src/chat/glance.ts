@@ -1,15 +1,17 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Member, Pauses } from '../api';
+import type { Member, Waiting } from '../api';
 import type { Custom } from './messages';
-import { agentPause, type Run } from './pauses';
 import { type ChatState, unanswered } from './state';
-import { clock, list } from './team';
-import { began, open, waitingOn } from './waits';
+import { began, clock, list, open } from './team';
 
 /** Where an agent stands, most pressing first: it needs the person, works, waits or is held, or is ready. */
 export type Standing = 'needs' | 'working' | 'waiting' | 'ready';
 
-/** One agent of the chat at a glance (DESIGN.md "Summary"), from the service's records only. */
+/**
+ * One agent of the chat at a glance (DESIGN.md "Summary"), from the service's records only. Who needs
+ * the person and who works is read from the chat as it streams; what an agent that does neither waits
+ * for is the service's answer (0050), so the window works none of that out itself.
+ */
 export interface Glance {
   member: Member;
   standing: Standing;
@@ -31,21 +33,21 @@ const ORDER: Standing[] = ['needs', 'working', 'waiting', 'ready'];
 
 /**
  * Every agent of the chat: who needs the person first, then who works, who waits, who is ready; the
- * Supervisor first among equals. `activity` is what each running turn's row says its agent is doing now.
+ * Supervisor first among equals. `activity` is what each running turn's row says its agent is doing now,
+ * `waiting` the service's answer to what the chat waits on.
  * An agent whose glance reads as it did in `before` keeps that object, so what draws it needn't redraw.
  */
 export function glances(
   state: ChatState,
-  pauses: Pauses,
-  run: Run,
   activity: Map<string, string>,
+  waiting?: Waiting,
   before: Glance[] = [],
 ): Glance[] {
   const all = state.members.map((member): Glance => {
     const tasks = state.tasks.filter((t) => t.owner === member.agent && t.state !== 'cancelled');
     const now: Glance = {
       member,
-      ...standing(member, state, pauses, run, activity),
+      ...standing(member, state, activity, waiting),
       done: tasks.filter((t) => t.state === 'done').length,
       total: tasks.length,
     };
@@ -59,9 +61,8 @@ export function glances(
 function standing(
   m: Member,
   state: ChatState,
-  pauses: Pauses,
-  run: Run,
   activity: Map<string, string>,
+  waiting?: Waiting,
 ): Pick<Glance, 'standing' | 'doing' | 'began' | 'detail' | 'task'> {
   const turns = Object.values(state.turns).filter((t) => t.agent === m.agent);
   const running = turns.filter((t) => t.status === 'running');
@@ -78,25 +79,22 @@ function standing(
       .sort();
     return { standing: 'working', doing: activity.get(m.agent) ?? 'Working', began: clock(starts[0]), task };
   }
-  const own = agentPause(pauses, m.agent);
-  const held = (doing: string) => ({ standing: 'waiting' as const, doing });
-  if (own.usageUntil)
-    return held(`Usage limit until ${clock(new Date(own.usageUntil / 1000).toISOString())}`);
-  if (run.state === 'stopped') return held('Stopped');
+  // Neither: what it waits for, or that it is free, is the service's answer.
+  const stand = waiting?.agents.find((a) => a.agent === m.agent);
+  if (stand?.state === 'free') return { standing: 'ready', doing: 'Ready' };
+  if (stand?.state === 'waiting') {
+    const until = stand.until_us ? ` until ${clock(new Date(stand.until_us / 1000).toISOString())}` : '';
+    const since = stand.on.map((on) => `${on.what} since ${began(on.since_us)}`);
+    return {
+      standing: 'waiting',
+      doing: `${stand.words}${until}`,
+      detail: since.length ? `Waiting for ${list(since)}` : undefined,
+    };
+  }
+  // The answer hasn't come, or is a moment behind the chat: whether anything is its to do says which.
   const mine = state.tasks.some((t) => t.owner === m.agent && open(t));
   const queued = turns.some((t) => t.status === 'queued');
-  if (own.paused || run.state !== 'running') return held(mine || queued ? 'Held' : 'Paused');
-  // Each name the agent waits for, with when its earliest wait on it began.
-  const name = (agent: string | null) =>
-    agent === null ? 'you' : (state.members.find((x) => x.agent === agent)?.name ?? 'an agent');
-  const { agents, other } = waitingOn(m.agent, state);
-  const since = [...[...agents].map(([who, us]) => [name(who), us] as const), ...other];
-  if (since.length)
-    return {
-      ...held(`Waiting for ${list(since.map(([who]) => who))}`),
-      detail: `Waiting for ${list(since.map(([who, us]) => `${who} since ${began(us)}`))}`,
-    };
-  return mine || queued ? held('Waiting') : { standing: 'ready', doing: 'Ready' };
+  return mine || queued ? { standing: 'waiting', doing: 'Waiting' } : { standing: 'ready', doing: 'Ready' };
 }
 
 const names = (all: Glance[], standing: Standing) =>

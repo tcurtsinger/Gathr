@@ -283,6 +283,24 @@ fn a_usage_limit_holds_the_turn_until_the_reset_instead_of_failing_it() {
     );
     let listed = service.call("GET", "/api/pauses").json();
     assert_eq!(listed["usage"][0]["kind"], "five_hour", "{listed}");
+    // What the chat waits on says it (0050), and a turn queued behind the held one says that it
+    // waits for it: found on a dev service, where it read "unknown".
+    send(&service, &chat, "And again");
+    let waiting = until(10, "both queued turns to say why they wait", || {
+        let path = format!("/api/chats/{chat}/waiting");
+        let answer = service.call("GET", &path).json();
+        let lines = answer["lines"].as_array()?.clone();
+        let said = |has: &str| {
+            let whats = lines.iter().filter_map(|l| l["what"].as_str());
+            whats.into_iter().any(|what| what.contains(has))
+        };
+        let both = said("is queued: out of usage until 2100-01-01")
+            && said("is queued: behind this agent's queued turn");
+        both.then_some(answer)
+    });
+    let stands = &waiting["agents"][0];
+    assert_eq!(stands["words"], "Usage limit", "{waiting}");
+    assert_eq!(stands["until_us"], 4_102_444_800_000_000_i64, "{waiting}");
     let (ok, events) = gathr(
         &data.0,
         &[

@@ -11,8 +11,7 @@ import { Initial } from './Initial';
 import type { Custom } from './messages';
 import { type Actions, Blocks } from './Thread';
 import { WorkRow } from './TurnParts';
-import { roleName } from './team';
-import { open } from './waits';
+import { open, roleName } from './team';
 import './agent.css';
 
 /** The agent's earlier blocks shown; older ones stay in the chat. */

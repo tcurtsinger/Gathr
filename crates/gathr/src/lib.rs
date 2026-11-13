@@ -41,6 +41,7 @@ pub mod tasks;
 pub mod team;
 pub mod text;
 pub mod timeline;
+pub mod waiting;
 pub mod waits;
 pub mod worktree;
 pub mod writer;

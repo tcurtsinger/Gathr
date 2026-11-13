@@ -59,3 +59,4 @@ fails in CI when the two differ.
 | 0047 | [A task's report is a record, and Gathr works out where the task stands](0047-a-report-is-a-record.md) | accepted | yes |
 | 0048 | [Gathr records friction, starting with what agents report](0048-gathr-records-friction.md) | accepted | partly |
 | 0049 | [Gathr lands a pull request](0049-gathr-lands-pull-requests.md) | accepted | yes |
+| 0050 | [One answer to what a chat waits on](0050-what-a-chat-waits-on.md) | accepted | partly |

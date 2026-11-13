@@ -134,6 +134,31 @@ fn service_now(data: &DataDir) -> Value {
     }
 }
 
+/// What a chat waits on (0050): from the running service, which knows what no table holds; else
+/// from the database, where what only the service knew is said as it was when it stopped.
+pub fn waiting(data: &DataDir, chat: &str) -> Result<Value, Error> {
+    let path = format!("/api/chats/{chat}/waiting");
+    if let Ok(info) = ServiceInfo::read(data)
+        && let Ok(answered) = http::call(info.port, &info.token, "GET", &path)
+        && answered.status == 200
+    {
+        return Ok(answered.json());
+    }
+    let (conn, _) = db::open_read_only(&data.db())?;
+    let known: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM chats WHERE id = ?1)",
+        [chat],
+        |r| r.get(0),
+    )?;
+    if !known {
+        return Err(Error::Other(format!("there's no chat {chat}")));
+    }
+    let now = crate::ids::now_us();
+    let stopped = crate::waiting::Live::default();
+    let answer = crate::waiting::answer(&conn, chat, &stopped, now)?;
+    Ok(crate::waiting::shown(&answer, now, "database"))
+}
+
 /// Open tasks and waits (0010): each task's state and why, each wait's failing looks.
 fn coordination(conn: &Connection) -> Result<Value, Error> {
     let tasks = query(

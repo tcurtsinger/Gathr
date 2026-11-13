@@ -1,7 +1,6 @@
 import type { Task } from '../api';
 import type { ChatState } from './state';
-import { team } from './team';
-import { open } from './waits';
+import { open, team } from './team';
 
 /** A step's state: a task's own, with held counted as at work. Blocked, failed and stopped never count done. */
 export type StepState = 'done' | 'active' | 'pending' | 'blocked' | 'failed' | 'stopped';

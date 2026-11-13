@@ -134,6 +134,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "settings",
         "update_pr",
         "wait",
+        "waiting",
     ];
     assert_eq!(names, all, "{tools}");
 

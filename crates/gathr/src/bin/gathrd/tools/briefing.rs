@@ -150,7 +150,8 @@ pub fn text(facts: &Facts) -> String {
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
          cancel_task and restart_task for tasks; message for one member of a team chat; wait and \
-         end_wait instead of polling in a loop; ask_person for anything you need from the person."
+         end_wait instead of polling in a loop; waiting for what this chat waits on and where each agent \
+         stands; ask_person for anything you need from the person."
             .to_string(),
         "End a task turn with finish_task. Assign work with give_task and ask the person with ask_person. Writing it in chat does not create a task."
             .to_string(),

@@ -18,7 +18,29 @@ pub fn watch(conn: &Connection) -> Result<(), Error> {
              BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          -- Not on every look: a look only stamps when it looked.
          CREATE TEMP TRIGGER wait_changed AFTER UPDATE OF state, line, then_do ON waits
-             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;",
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         -- What a chat waits on may have changed (0050), beyond its tasks and waits above: a turn
+         -- queued, started, held or ended, a look that saw something new or began to fail, a
+         -- background command that began or ended, a look at a PR to land that saw something new.
+         CREATE TEMP TABLE touched_waiting (chat_id TEXT PRIMARY KEY);
+         CREATE TEMP TRIGGER turn_added AFTER INSERT ON turns
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER turn_moved AFTER UPDATE OF status, held ON turns
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER wait_looked AFTER UPDATE OF seen, failures ON waits
+             WHEN NEW.seen IS NOT OLD.seen OR NEW.failures IS NOT OLD.failures
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER command_began AFTER INSERT ON background
+             BEGIN INSERT OR IGNORE INTO touched_waiting
+                 SELECT chat_id FROM turns WHERE id = NEW.turn_id; END;
+         CREATE TEMP TRIGGER command_ended AFTER DELETE ON background
+             BEGIN INSERT OR IGNORE INTO touched_waiting
+                 SELECT chat_id FROM turns WHERE id = OLD.turn_id; END;
+         CREATE TEMP TRIGGER landing_added AFTER INSERT ON landings
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER landing_looked AFTER UPDATE OF saw, moving ON landings
+             WHEN NEW.saw IS NOT OLD.saw OR NEW.moving IS NOT OLD.moving
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;",
     )?;
     Ok(())
 }
@@ -31,6 +53,19 @@ pub fn take(conn: &Connection) -> Result<Vec<String>, Error> {
         .collect::<Result<_, _>>()?;
     if !chats.is_empty() {
         conn.execute("DELETE FROM temp.touched", [])?;
+    }
+    Ok(chats)
+}
+
+/// The chats whose turns, looks or background commands changed since the last call, committed;
+/// noted no more.
+pub fn take_waiting(conn: &Connection) -> Result<Vec<String>, Error> {
+    let mut stmt = conn.prepare_cached("SELECT chat_id FROM temp.touched_waiting")?;
+    let chats: Vec<String> = stmt
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    if !chats.is_empty() {
+        conn.execute("DELETE FROM temp.touched_waiting", [])?;
     }
     Ok(chats)
 }
