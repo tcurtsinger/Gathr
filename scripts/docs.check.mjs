@@ -191,6 +191,7 @@ for (const p of promises) if (!mapped.has(p)) failures.push(`${MAP}: no part for
 const SCENARIOS = 'docs/scenarios.md';
 const proved = new Set();
 const scenarios = read(SCENARIOS).split(/^### /m).slice(1);
+const ids = new Set();
 for (const scenario of scenarios) {
   const id = scenario.match(/^(\d+[a-z]|R\d)\. /)?.[1];
   const at = `${SCENARIOS}: scenario ${id ?? `"${scenario.split('\n')[0]}"`}`;
@@ -198,8 +199,10 @@ for (const scenario of scenarios) {
     failures.push(`${at} isn't headed by a promise's number and a letter ("5b. "), or "R1. " for a run`);
     continue;
   }
+  if (ids.has(id)) failures.push(`${at} is there twice`);
+  ids.add(id);
   for (const step of ['Given', 'When', 'Then']) {
-    if (!scenario.includes(`\n- **${step}`)) failures.push(`${at} has no "- **${step}**" line`);
+    if (!scenario.includes(`\n- **${step}**`)) failures.push(`${at} has no "- **${step}**" line`);
   }
   if (id.startsWith('R')) continue;
   const named = scenario.match(/^Parts: (.+)$/m)?.[1].split(', ') ?? [];

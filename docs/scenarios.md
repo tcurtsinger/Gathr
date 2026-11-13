@@ -55,8 +55,8 @@ Parts: 1.4, 1.5
 - **Given** an account signed in on an engine
 - **When** the person creates an agent with a name, that account, a model, an effort and a job
   description
-- **Then** the agent is saved and can be talked to, and every agent that is told about it (a teammate,
-  the assistant) is told its job description
+- **Then** the agent is saved with all five, its turns run on that account, model and effort, and
+  every agent that is told about it (a teammate, the assistant) is told its job description
 
 ### 1e. The assistant hands an ask to the specialist it belongs to
 
@@ -94,6 +94,15 @@ Parts: 1.10
   work in a different project
 - **Then** the other agent has the note about the person, the new member has the project's note, and
   the first agent has its craft note in the new project and not the old project's note
+
+### 1i. A chat sits under its agent, inside its project
+
+Parts: 1.9
+
+- **Given** a project with chats with two of its agents, and one chat that belongs to no project
+- **When** the person looks at navigation
+- **Then** the project shows each agent's name with that agent's chats under it, and the chat with
+  no project sits under its agent's name outside every project
 
 ## 2. New work is planned with you and checked first. Repairs don't wait for you
 
@@ -204,8 +213,8 @@ Parts: 4.1, 4.3
 - **Given** a team with a lead and a builder
 - **When** the builder needs an answer from the person
 - **Then** the builder's ask becomes a request the lead owns, and the builder never asks the person
-  directly. The lead answers it when it can. Otherwise the lead asks the person in its own words:
-  Gathr gives it no way to pass the builder's text on unread
+  directly. The lead answers it when it can. Otherwise the question that reaches the person is
+  text the lead wrote: Gathr has no way to forward the builder's text as it is
 
 ### 4b. A question is a record, with the lead's pick first
 
@@ -562,17 +571,18 @@ Parts: 10.2
 
 - **Given** a project with checks, and a PR reviewed clean
 - **When** the reviewer merges it through Gathr
-- **Then** Gathr has run the checks at the exact commit and kept the result. The merge is refused when
-  a check failed, or hasn't run at that commit
+- **Then** Gathr has run the checks at the exact commit and kept the result, where the reviewer and
+  the person can read it. Where the project requires its checks to pass, the merge is refused while
+  one has failed or hasn't run at that commit
 
 ### 10b. A PR behind its base is brought up to date before it merges
 
 Parts: 10.5
 
-- **Given** two PRs reviewed clean, and the base has moved since
-- **When** they are merged through Gathr
-- **Then** only the first in line is brought up to date, and it merges once its checks pass. Then the
-  second is brought up to date. Neither merges while it is behind
+- **Given** a PR reviewed clean, and its base has moved since
+- **When** it is merged through Gathr
+- **Then** Gathr brings it up to date first, its review still holds
+  ([5f](#5f-a-review-is-of-an-exact-version)), and it is never merged while it is behind
 
 ### 10c. The size of the process fits the size of the ask
 
@@ -582,6 +592,15 @@ Parts: 10.3
 - **When** each is carried out
 - **Then** the everyday ask made no plan, no task for the person and no review. The new ask went
   through every step of the loop in order, and none could be skipped
+
+### 10d. Work that isn't code is checked, and saved where it belongs
+
+Parts: 10.1
+
+- **Given** a task whose result is a document, with a brief that says where it is to be saved
+- **When** its builder reports it done, naming the file
+- **Then** someone who didn't write it checks that version before it counts as landed. Landing is
+  the file saved in the place the brief named, and the person is shown where
 
 ## 11. No rulebook needed, and Gathr measures it
 
@@ -609,8 +628,18 @@ Parts: 11.3
 
 - **Given** a project the room has worked in for several days
 - **When** the person opens the scorecard
-- **Then** it shows, for each day: corrections, stalls Gathr caught and stalls the person caught, tasks
-  closed with no report, reports refused, and dead time. Each number opens the events behind it
+- **Then** it shows the corrections counted for each day, beside the other numbers Gathr counts. Every
+  number comes from Gathr's own events: none was typed in
+
+### 11d. Friction is recorded by Gathr, not by hand
+
+Parts: 11.4
+
+- **Given** something in Gathr got in an agent's way during a task, and something else in the
+  person's
+- **When** the agent says so in its report, and the person marks theirs
+- **Then** Gathr keeps each one, with who reported it, when and on which task, where the person and
+  the lead can read them all. Nobody copied anything by hand
 
 ## 12. Open both ways
 
@@ -657,7 +686,7 @@ The whole product, end to end. They are the last scenarios to pass.
 - **Given** a person with an assistant and one specialist, and no project
 - **When** they start a new chat, name nobody, and ask for something small: "summarise this file", with
   the file attached
-- **Then:**
+- **Then** all of this holds:
   1. The assistant gets the ask ([1a](#1a-a-new-chat-with-nobody-named-is-with-the-assistant)), and it
      is sized as everyday ([2a](#2a-every-ask-is-sized-and-gathr-holds-the-size)).
   2. The assistant does it with its own tools and answers in the chat.
@@ -695,7 +724,10 @@ the same chat.
   9. **Land.** Gathr runs the checks and merges ([10a](#10a-proof-is-never-skipped)). The worktrees go
      ([7d](#7d-a-worktree-goes-when-its-work-is-over)).
   10. **Prove.** The lead shows the person the export working, with proof.
-  11. **And throughout:** only the lead asked the person anything
+  11. **Learn.** The friction the agents reported in the run is on record
+      ([11d](#11d-friction-is-recorded-by-gathr-not-by-hand)), and the run's numbers are on the scorecard
+      ([11c](#11c-a-scorecard-in-the-app-from-gathrs-own-events)).
+  12. **And throughout:** only the lead asked the person anything
       ([4a](#4a-a-members-question-goes-through-the-lead-in-the-leads-words)), no task closed without a
       report ([5b](#5b-a-turn-that-ends-is-not-a-task-that-is-done)), and the person never had to ask
       what the room was waiting on ([6c](#6c-gathr-notices-a-quiet-room-before-the-person-does)).
