@@ -265,11 +265,13 @@ impl Tools {
         let (chat, agent) = (caller.chat.clone(), caller.agent.clone());
         let listed = self
             .db(move |c| {
-                // Its own stopped tasks too: it can still report on them (0047).
+                // Its own stopped tasks too: it can still report on them (0047). And its own
+                // reviews that went out of date: it records them again on the same task.
                 let mine = |t: &tasks::Task| {
-                    t.owner.is_some()
-                        && t.owner == agent
-                        && matches!(t.state, State::Blocked | State::Failed | State::Stopped)
+                    let stopped =
+                        matches!(t.state, State::Blocked | State::Failed | State::Stopped);
+                    let stale = t.kind == Kind::Review && t.state == State::Done && t.outdated;
+                    t.owner.is_some() && t.owner == agent && (stopped || stale)
                 };
                 let open = tasks::list(c, &chat)?
                     .into_iter()
@@ -449,7 +451,28 @@ fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
         .as_ref()
         .map_or(String::new(), |r| format!(" ({r})"));
     let state = t.state.as_str();
-    Ok(format!("#{} {owner} {state}{reason}: {}", t.number, t.what))
+    // A review says which commit it is of, and where its PR is now once that has moved past it (G42).
+    let short = |commit: &str| commit.get(..7).unwrap_or(commit).to_string();
+    let review = match (&t.reviewed, t.kind) {
+        (Some(reviewed), Kind::Review) => {
+            let at = short(reviewed);
+            match (t.outdated, t.pr, &t.pr_head) {
+                (true, Some(pr), Some(head)) => {
+                    format!(
+                        " [reviewed at {at}, out of date: #{pr} is at {}]",
+                        short(head)
+                    )
+                }
+                (true, ..) => format!(" [reviewed at {at}, out of date]"),
+                _ => format!(" [reviewed at {at}]"),
+            }
+        }
+        _ => String::new(),
+    };
+    Ok(format!(
+        "#{} {owner} {state}{reason}{review}: {}",
+        t.number, t.what
+    ))
 }
 
 /// The caller's one open task in the chat, for a report from a turn on no task that names none.

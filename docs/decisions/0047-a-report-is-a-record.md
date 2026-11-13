@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/tasks/hear_backs.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/tasks/TaskReport.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/tasks/hear_backs.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/update_room.rs`, `crates/gathr/tests/merge/review_updates.rs`, `ui/src/tasks/TaskReport.test.tsx`.
 
 Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [the charter](../charter.md#the-promises): work tells the truth.
 
@@ -35,6 +35,12 @@ Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [
   is not, unless its giver restarted the task: the giver asked for that run and hears how it ended. A task given `in_passing` doesn't hold the task whose turn gave it, and is heard back on by itself.
 - **A member's request the person has answered can't be cancelled out from under the work that waits on it:**
   it settles as done, with the answer.
+- **A review follows the code.** Gathr's own look at a PR puts a review out of date only when the commits after
+  it are more than clean merges of the base, which is the merge tool's rule ([0043](0043-checks-and-merge.md),
+  G165): one function answers both. The look's verdict is kept for the exact pair it was worked out for, the
+  commit reviewed and the PR's head, so a review recorded again or a head that moves is judged again; when git can't say, no verdict is kept and
+  the next look asks again. A review
+  that is done is recorded again at a newer commit on its own task.
 - **A task blocked for the one it comes after** records which one (`blocked_on`), and goes back in line when that
   one is restarted and finishes.
 

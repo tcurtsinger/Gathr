@@ -65,6 +65,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   ALTER TABLE tasks DROP COLUMN finish_see; ALTER TABLE tasks DROP COLUMN finish_ts;
                   ALTER TABLE tasks RENAME COLUMN asks TO idle_lefts;
                   ALTER TABLE tasks DROP COLUMN in_passing; ALTER TABLE tasks DROP COLUMN heard_as;
+                  ALTER TABLE tasks DROP COLUMN judged;
                   ALTER TABLE agent_context DROP COLUMN told;
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;
@@ -82,4 +83,106 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
             .unwrap();
         assert_eq!(approved, expected, "completed evidence for task {task}");
     }
+}
+
+/// G170: a review that is done is recorded again at a newer commit on the same task. No fresh
+/// review task is needed only to re-record an approval.
+#[test]
+fn a_done_review_is_recorded_again_at_a_newer_commit() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "ann", None, "done");
+    let review = review_by_bo(&mut conn, 5, "giving");
+    reviewed(&mut conn, review);
+    assert_eq!(state(&conn, review).0, State::Done);
+    tasks::pr_looked(&mut conn, review, "OPEN", Some("def5678aaaa"), None, T).unwrap();
+    assert!(tasks::get(&conn, review).unwrap().unwrap().outdated);
+
+    let newer = Said {
+        commit: Some("def5678"),
+        ..Said::default()
+    };
+    let (again, took, starts) =
+        tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
+    assert_eq!(took, tasks::Took::Applied);
+    assert!(starts.is_empty(), "nobody is told twice: {starts:?}");
+    assert_eq!(
+        (again.state, again.reviewed.as_deref(), again.outdated),
+        (State::Done, Some("def5678"), false)
+    );
+    // The same commit again changes nothing.
+    let (_, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
+    assert_eq!(took, tasks::Took::Already);
+    // Once the PR has merged or closed there is nothing left to review.
+    tasks::pr_looked(&mut conn, review, "MERGED", Some("def5678aaaa"), None, T).unwrap();
+    let late = Said {
+        commit: Some("0123abc"),
+        ..Said::default()
+    };
+    let (kept, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &late, T).unwrap();
+    assert_eq!(took, tasks::Took::Already);
+    assert_eq!(kept.reviewed.as_deref(), Some("def5678"));
+}
+
+/// The look's verdict is for one commit reviewed and one head. A review recorded again at another
+/// commit reads out of date until it is judged, and a verdict that arrives for the commit reviewed
+/// before is not taken.
+#[test]
+fn a_looks_verdict_counts_only_for_the_commit_reviewed_now() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "ann", None, "done");
+    let review = review_by_bo(&mut conn, 5, "giving");
+    reviewed(&mut conn, review);
+    let head = Some("def5678aaaa");
+    // Only the base came in after abc1234: the look says so, and that is kept for this pair.
+    tasks::pr_looked(&mut conn, review, "OPEN", head, Some(("abc1234", true)), T).unwrap();
+    let t = tasks::get(&conn, review).unwrap().unwrap();
+    assert_eq!(
+        (t.outdated, t.judged.as_deref()),
+        (false, Some("abc1234:def5678aaaa"))
+    );
+
+    // A commit named in fewer than seven characters could be another one: it isn't taken.
+    for short in ["d", "def567", "not-a-commit"] {
+        let said = Said {
+            commit: Some(short),
+            ..Said::default()
+        };
+        assert_eq!(
+            refusal(tasks::finish(
+                &mut conn,
+                "bo",
+                review,
+                Finish::Done,
+                &said,
+                T
+            )),
+            "Give 7 to 40 characters of the commit you reviewed, as git names it"
+        );
+    }
+
+    // Recorded again at a commit that isn't the head: out of date until the look judges it.
+    let older = Said {
+        commit: Some("0000aaa"),
+        ..Said::default()
+    };
+    let (t, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &older, T).unwrap();
+    assert_eq!((t.outdated, t.judged), (true, None));
+
+    // A verdict worked out for abc1234 while that happened is for another review: not taken.
+    tasks::pr_looked(&mut conn, review, "OPEN", head, Some(("abc1234", true)), T).unwrap();
+    let t = tasks::get(&conn, review).unwrap().unwrap();
+    assert_eq!(
+        (t.outdated, t.judged),
+        (true, None),
+        "judged at the next look"
+    );
+
+    tasks::pr_looked(&mut conn, review, "OPEN", head, Some(("0000aaa", false)), T).unwrap();
+    let t = tasks::get(&conn, review).unwrap().unwrap();
+    assert_eq!(
+        (t.outdated, t.judged.as_deref()),
+        (true, Some("0000aaa:def5678aaaa"))
+    );
 }

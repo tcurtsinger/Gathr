@@ -229,6 +229,51 @@ async fn confirmed(pr: i64, repo: &Path, head: &str, base: &str) -> Result<(), S
     }
 }
 
+/// Whether a review of `reviewed` still covers `head`: nothing came after it but clean merges of
+/// the base branch. Gathr's look at a PR asks, by the merge tool's own rule (G165), so a review
+/// reads out of date only when the merge would be refused for it. None when git couldn't say (a
+/// fetch that fails, a command that errors while another git is at work in the repository): the
+/// look asks again next time, and keeps no verdict. Found on macOS CI, where the fetch met the
+/// checks run starting at the same head and its failure was kept as "out of date" for good.
+pub async fn still_covers(
+    repo: &Path,
+    reviewed: &str,
+    head: &str,
+    base: &str,
+    vars: &Vars,
+) -> Option<bool> {
+    git(repo, &["fetch", "--quiet", "origin"], vars)
+        .await
+        .ok()?;
+    let origin = format!("refs/remotes/origin/{base}");
+    let base = git(repo, &["rev-parse", &origin], vars).await.ok()?;
+    // A head that origin doesn't have (a fork's) is covered by no review here.
+    if !known(repo, head, vars).await {
+        return Some(false);
+    }
+    let Some(resolved) = commit_of(repo, reviewed, vars).await else {
+        return Some(false);
+    };
+    if resolved == head {
+        return Some(true);
+    }
+    review::base_updates_only(repo, &resolved, head, &base, vars)
+        .await
+        .ok()
+}
+
+/// The commit a recorded review names, when the project has exactly that one: at least 7
+/// characters of it.
+async fn commit_of(repo: &Path, reviewed: &str, vars: &Vars) -> Option<String> {
+    // Git resolves an id with more than 40 characters to its first 40: only a true prefix counts.
+    let hex = (7..=40).contains(&reviewed.len()) && reviewed.chars().all(|c| c.is_ascii_hexdigit());
+    let commit = format!("{reviewed}^{{commit}}");
+    git(repo, &["rev-parse", "--verify", "--quiet", &commit], vars)
+        .await
+        .ok()
+        .filter(|r| hex && r.starts_with(&reviewed.to_ascii_lowercase()))
+}
+
 /// Resolve the recorded review, then prove any later changes came only from the base.
 async fn reviewed_is_head(
     repo: &Path,
@@ -243,16 +288,11 @@ async fn reviewed_is_head(
             "the reviewed commit {reviewed} is too short: finish the review with at least 7 characters of it"
         ));
     }
-    // Git resolves an id with more than 40 characters to its first 40: only a true prefix counts.
-    let hex = reviewed.len() <= 40 && reviewed.chars().all(|c| c.is_ascii_hexdigit());
-    let commit = format!("{reviewed}^{{commit}}");
-    let resolved = git(repo, &["rev-parse", "--verify", "--quiet", &commit], vars)
-        .await
-        .ok()
-        .filter(|r| hex && r.starts_with(&reviewed.to_ascii_lowercase()))
-        .ok_or_else(|| {
-            format!("the reviewed commit {reviewed} isn't a commit the project has (or names more than one)")
-        })?;
+    let resolved = commit_of(repo, reviewed, vars).await.ok_or_else(|| {
+        format!(
+            "the reviewed commit {reviewed} isn't a commit the project has (or names more than one)"
+        )
+    })?;
     if resolved != head
         && !review::base_updates_only(repo, &resolved, head, base, vars)
             .await
@@ -500,7 +540,7 @@ async fn settle(
             crate::cleanup::queue(c, &chat, &view, &trace)?;
             let mut starts = Vec::new();
             for number in numbers {
-                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), &trace)?);
+                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), None, &trace)?);
             }
             // Only the merger's hear-backs go, as marked where they're made: work of its own the
             // merge moved on (a task blocked on the merged one) still starts.

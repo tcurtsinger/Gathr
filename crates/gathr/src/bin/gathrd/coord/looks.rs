@@ -114,6 +114,12 @@ pub async fn once(chats: &Arc<Chats>) {
         };
         let state = json_text(&answer, "state");
         let head = json_text(&answer, "headRefOid");
+        // Judged before the checks start: both use git in the same repository.
+        let base = json_text(&answer, "baseRefName");
+        let seen = match state.as_str() {
+            "OPEN" => judged(chats, task, &head, &base, &dir).await,
+            _ => None,
+        };
         // A review's PR: Gathr runs the project's checks at each head it sees (0043 C3).
         if state == "OPEN" && !head.is_empty() {
             crate::check_runs::for_review(chats, &chat, task, &head).await;
@@ -129,12 +135,35 @@ pub async fn once(chats: &Arc<Chats>) {
                 task,
                 &state,
                 Some(head.as_str()).filter(|h| !h.is_empty()),
+                seen.as_ref().map(|(of, covers)| (of.as_str(), *covers)),
                 &t,
             )
         })
         .await;
     }
     crate::cleanup::sweep(chats, None).await;
+}
+
+/// The look's verdict on the task's review, for the commit reviewed now and the PR at `head`:
+/// that commit, and whether a review of it still covers the head. Asked of git once for each such
+/// pair and kept (`judged`), so a review recorded again or a head that moves is judged again (0047).
+async fn judged(
+    chats: &Arc<Chats>,
+    task: i64,
+    head: &str,
+    base: &str,
+    dir: &Path,
+) -> Option<(String, bool)> {
+    let read = chats.writer.call(move |c| tasks::get(c, task)).await;
+    let t = read?.ok()??;
+    let reviewed = t.reviewed.filter(|_| !head.is_empty())?;
+    if t.judged.as_deref() == Some(format!("{reviewed}:{head}").as_str()) {
+        return Some((reviewed, !t.outdated));
+    }
+    let vars = super::fresh().await;
+    // No verdict when git couldn't say: nothing is kept, and the next look asks again.
+    let covers = crate::merging::still_covers(dir, &reviewed, head, base, &vars).await?;
+    Some((reviewed, covers))
 }
 
 /// Whether the wait is still open: a wait that can't be read isn't.

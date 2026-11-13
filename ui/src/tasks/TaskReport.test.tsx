@@ -106,3 +106,27 @@ test('a task reported blocked on another, with no note, still names that task', 
     'Report: Blocked',
   ]);
 });
+
+test("a review shows the commit it is of, and the PR's head once it is out of date", async () => {
+  const review = task({
+    kind: 'review',
+    state: 'done',
+    pr: 18,
+    reviewed: 'abc1234def',
+    pr_head: 'abc1234def5678',
+    report: { how: 'done', note: null, see: null, at_us: 1 },
+  });
+  expect(await fields(review)).toEqual([
+    'Assigned to: sol',
+    'State: done',
+    'Report: Done',
+    'Reviewed at: abc1234',
+  ]);
+  const stale = { ...review, number: 13, what: 'Review the export', pr_head: 'def5678aaaa', outdated: true };
+  expect(await fields(stale)).toEqual([
+    'Assigned to: sol',
+    'State: done',
+    'Report: Done',
+    'Reviewed at: abc1234. Out of date: #18 is at def5678',
+  ]);
+});

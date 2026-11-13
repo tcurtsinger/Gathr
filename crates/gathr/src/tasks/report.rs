@@ -88,16 +88,28 @@ pub fn finish(
     if t.owner.as_deref() != Some(agent) {
         return Err(refused(format!("task #{task} isn't yours")));
     }
-    match t.state {
-        State::Done => return Ok((t, Took::Already, Vec::new())),
-        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
-        _ => {}
-    }
     let given = |text: Option<&str>| {
         let text = text.map(str::trim).filter(|s| !s.is_empty());
         text.map(String::from)
     };
     let (note, commit, file) = (given(said.note), given(said.commit), given(said.file));
+    // A review that is done is recorded again at another commit while its PR is open (G170): the
+    // task stays done, and no fresh review task is made only to re-record an approval.
+    let again = t.state == State::Done
+        && t.kind == Kind::Review
+        && how == Finish::Done
+        && commit.is_some()
+        && commit != t.reviewed
+        && tx.query_row(
+            "SELECT pr IS NOT NULL AND pr_closed = 0 FROM tasks WHERE number = ?1",
+            [task],
+            |r| r.get::<_, bool>(0),
+        )?;
+    match t.state {
+        State::Done if !again => return Ok((t, Took::Already, Vec::new())),
+        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
+        _ => {}
+    }
     if let Some(on) = said.on_task
         && (state_of(&tx, on)?.is_none() || on == task)
     {
@@ -121,6 +133,11 @@ pub fn finish(
         (Finish::Done, Kind::Review) if commit.is_none() => {
             Some("Include the reviewed commit when you finish a review")
         }
+        // As the merge tool asks (0043): fewer characters could name another commit, and one that
+        // happened to begin like the PR's head would read as a review of it.
+        (_, Kind::Review) if commit.as_deref().is_some_and(|c| !names_a_commit(c)) => {
+            Some("Give 7 to 40 characters of the commit you reviewed, as git names it")
+        }
         (Finish::Done, Kind::Work) if !shown => {
             Some("Say what to look at when work is done: a PR, a commit, a file or a note")
         }
@@ -133,7 +150,9 @@ pub fn finish(
     if let Some(missing) = missing {
         return Err(refused(missing));
     }
-    // A review's commit is the commit reviewed. Work's commit or file is what to look at.
+    // A review's commit is the commit reviewed. Work's commit or file is what to look at. A review
+    // recorded at a commit that isn't the PR's head as last seen reads out of date until the look
+    // judges it, and any earlier verdict is dropped: it was for another commit.
     let (reviewed, see) = match t.kind {
         Kind::Review => (commit, None),
         _ => (None, file.or(commit)),
@@ -143,14 +162,19 @@ pub fn finish(
                           blocked_on = CASE WHEN ?2 = 'blocked' THEN ?6 ELSE NULL END,
                           pr = COALESCE(?7, pr), reviewed = COALESCE(?8, reviewed),
                           review_done = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?8 IS NOT NULL) ELSE review_done END,
-                          outdated = CASE WHEN ?8 IS NULL THEN outdated ELSE 0 END
+                          outdated = CASE WHEN ?8 IS NULL THEN outdated WHEN pr_head IS NULL THEN 0
+                              WHEN substr(pr_head, 1, length(?8)) = ?8 OR substr(?8, 1, length(pr_head)) = pr_head
+                              THEN 0 ELSE 1 END,
+                          judged = CASE WHEN ?8 IS NULL THEN judged ELSE NULL END
          WHERE number = ?1",
         params![task, how.as_str(), note, see, now_us(), said.on_task, said.pr, reviewed],
     )?;
     let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
-    let (took, starts) = if running {
+    let (took, starts) = if again {
+        (Took::Applied, Vec::new())
+    } else if running {
         (Took::Kept, Vec::new())
     } else if in_line {
         (Took::Applied, Vec::new())
@@ -162,4 +186,9 @@ pub fn finish(
     let task = read(&tx, task)?;
     tx.commit()?;
     Ok((task, took, starts))
+}
+
+/// Whether the text is how git names a commit, in full or cut short: 7 to 40 hex digits.
+fn names_a_commit(text: &str) -> bool {
+    (7..=40).contains(&text.len()) && text.chars().all(|c| c.is_ascii_hexdigit())
 }
