@@ -408,6 +408,9 @@ pub struct Moved<'a> {
     pub agent: Option<&'a str>,
     pub task: Option<i64>,
     pub trace: &'a str,
+    /// A stopped turn whose carry-on waits (Stop now, a usage limit): its task stays as it was,
+    /// with this as why nothing runs on it. Nobody is told it settled (0047).
+    pub carries_on: Option<&'a str>,
 }
 
 /// Saves a turn's status with what it does, in one transaction: its task moves, its giver hears
@@ -439,8 +442,14 @@ pub fn turn_moved(
             "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
             _ => return Ok(starts),
         };
-        if let Some(task) = m.task {
-            starts.extend(ended_in(tx, task, outcome, m.trace)?);
+        match (m.task, m.carries_on) {
+            (Some(task), Some(waits)) if status == "stopped" => {
+                if state_of(tx, task)? == Some(State::Working) {
+                    set(tx, task, State::Working, Some(waits), m.trace)?;
+                }
+            }
+            (Some(task), _) => starts.extend(ended_in(tx, task, outcome, m.trace)?),
+            (None, _) => {}
         }
         starts.extend(held::hear_backs(tx, m.turn, m.trace)?);
         if let Some(agent) = m.agent {

@@ -19,6 +19,13 @@ use super::{Ids, Task};
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
 use gathr::carry::CHECK_FIRST;
 
+/// Who stops a scope's turns when the person presses Stop now.
+pub const STOP_NOW: &str = "Stop now";
+/// Why nothing runs on a task whose turn the person stopped.
+const STOPPED: &str = "Stopped by you. Carries on at Restart";
+/// Why nothing runs on a task whose turn a usage limit cut off.
+const LIMITED: &str = "The account is out of usage. Carries on when it is back";
+
 impl Task {
     /// What holds the queued turn from starting: the update the person asked for, installing now
     /// (0032), whose hand-over would cut it off; else a pause (0010), never the person's message.
@@ -163,15 +170,19 @@ impl Task {
             self.set_turn(ids, "queued", Some(why)).await;
             return true;
         }
-        self.set_turn(ids, "stopped", Some(why)).await;
         let said = format!("The account's usage limit interrupted your turn. {CHECK_FIRST}");
-        self.carry_on(ids, said).await;
+        // The carry-on first: with it saved the turn's task stays as it was, and nobody is told
+        // it stopped while the carry-on waits for the account (0047).
+        match self.carry_on(ids, said).await {
+            true => self.end_waiting(ids, Some(why), LIMITED).await,
+            false => self.set_turn(ids, "stopped", Some(why)).await,
+        }
         true
     }
 
     /// Queues a turn that carries on from `ids` in the same session, on the same task: for its
-    /// agent, or for none in a chat sent to no agent.
-    async fn carry_on(&mut self, ids: &Ids, text: String) {
+    /// agent, or for none in a chat sent to no agent. Whether it was saved.
+    async fn carry_on(&mut self, ids: &Ids, text: String) -> bool {
         let (chat, agent) = (ids.chat.clone(), ids.agent.clone());
         let (task, answers, said) = (ids.task, ids.turn.clone(), text.clone());
         let saved = self.chats.writer.call(move |c| {
@@ -189,14 +200,16 @@ impl Task {
                     person: false,
                 };
                 self.queue_given(carry, text, message).await;
+                true
             }
             Some(Err(e)) => {
                 let event = Event::point("gathr.turn.carry_on")
                     .trace(&ids.trace)
                     .error("sqlite");
                 self.record(event.attr("why", e.to_string()));
+                false
             }
-            None => {}
+            None => false,
         }
     }
 
@@ -271,7 +284,13 @@ impl Task {
         let Some(ids) = ids else { return };
         if !carried {
             let ended = gathr::carry::ended(turn_ended, commands.len());
-            self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
+            let saved = self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
+            // With its carry-on saved, the stopped turn's task stays as it was (0047). The person
+            // is told why nothing runs on it; an update's own stop takes seconds and says nothing.
+            if let Some(turn) = self.turn.as_mut().filter(|_| saved && turn_ended) {
+                turn.carried = true;
+                turn.waits = (by == STOP_NOW).then_some(STOPPED);
+            }
         }
         self.record(
             Event::point("gathr.pause.stop_now")

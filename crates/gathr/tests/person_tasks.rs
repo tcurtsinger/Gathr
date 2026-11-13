@@ -45,6 +45,7 @@ fn ended(conn: &mut Connection, turn: &str, agent: &str, task: Option<i64>) -> V
         agent: Some(agent),
         task,
         trace: T,
+        carries_on: None,
     };
     tasks::turn_moved(conn, &m, "done", None).unwrap()
 }

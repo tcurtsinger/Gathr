@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/coordination.rs`, `ui/src/tasks/TaskReport.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/tasks/reports.rs`, `crates/gathr/tests/tasks/commands.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/tasks/TaskReport.test.tsx`.
 
 Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [the charter](../charter.md#the-promises): work tells the truth.
 
@@ -27,6 +27,9 @@ Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [
   still runs when its PR merges is left to that turn's end. A review is done when its PR merges: nothing is left
   to review.
 - **"Left" and "no report" are not states.** Gathr holds such a task as `blocked`, and the report says which.
+- **A turn that is stopped with its carry-on waiting doesn't settle its task.** After Stop now, or a usage limit
+  that cuts a turn once a tool has run, the task stays as it was and says why nothing runs on it. Its giver hears
+  how the carry-on ends, not that it stopped. An update already worked this way ([0032](0032-service-updates.md)).
 - **A task blocked for the one it comes after** records which one (`blocked_on`), and goes back in line when that
   one is restarted and finishes.
 

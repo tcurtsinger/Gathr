@@ -63,6 +63,7 @@ impl Task {
             push_allowed: false,
             stopping: false,
             carried: false,
+            waits: None,
             stop_why: None,
             save_failed: None,
             signed_out: false,

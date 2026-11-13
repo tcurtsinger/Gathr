@@ -64,7 +64,9 @@ async fn stop_now(
 ) -> Answer {
     let (scope, target) = (body.scope.clone(), body.target.clone());
     let _paused = changed(&s, &t, "Stop failed", body, true).await?;
-    s.chats.stop_now(&scope, &target, "Stop now", None).await;
+    s.chats
+        .stop_now(&scope, &target, crate::turns::STOP_NOW, None)
+        .await;
     let checks = s.chats.checking();
     db(&s, &t, "Stop failed", move |c| pauses::listed(c, &checks)).await
 }
