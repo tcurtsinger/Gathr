@@ -10,6 +10,8 @@ mod held_commands;
 mod reports;
 #[path = "tasks/reviews.rs"]
 mod review_evidence;
+#[path = "tasks/waits.rs"]
+mod waits_fire;
 
 use common::TempDir;
 use gathr::Error;
@@ -507,12 +509,28 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         prs.iter().any(|p| p.0 == task.number)
     };
     assert!(followed(&conn), "its PR is still followed for G73");
-    tasks::pr_looked(&mut conn, task.number, "OPEN", Some("def5678aaaa"), T).unwrap();
+    tasks::pr_looked(
+        &mut conn,
+        task.number,
+        "OPEN",
+        Some("def5678aaaa"),
+        false,
+        T,
+    )
+    .unwrap();
     let looked = tasks::get(&conn, task.number).unwrap().unwrap();
     assert!(looked.outdated, "G73");
     // The head the look saw, so the window shows the checks run at that commit (0043 C6).
     assert_eq!(looked.pr_head.as_deref(), Some("def5678aaaa"));
-    tasks::pr_looked(&mut conn, task.number, "MERGED", Some("def5678aaaa"), T).unwrap();
+    tasks::pr_looked(
+        &mut conn,
+        task.number,
+        "MERGED",
+        Some("def5678aaaa"),
+        false,
+        T,
+    )
+    .unwrap();
     assert_eq!(state(&conn, task.number).0, State::Done);
     assert!(!followed(&conn), "a merged PR is looked at no more");
     let work_pr = Give {
@@ -526,7 +544,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     work(&mut conn, work_pr.number, Some(Finish::Done));
     let held = Some("done, waiting on #61 to merge".to_string());
     assert_eq!(state(&conn, work_pr.number), (State::Held, held), "G75");
-    tasks::pr_looked(&mut conn, work_pr.number, "MERGED", None, T).unwrap();
+    tasks::pr_looked(&mut conn, work_pr.number, "MERGED", None, false, T).unwrap();
     assert_eq!(
         state(&conn, work_pr.number),
         (State::Done, Some("#61 merged".into()))
@@ -534,7 +552,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     let (other, _) = give(&mut conn, "ann", &[], None);
     conn.execute("UPDATE tasks SET pr = 60 WHERE number = ?1", [other])
         .unwrap();
-    tasks::pr_looked(&mut conn, other, "CLOSED", None, T).unwrap();
+    tasks::pr_looked(&mut conn, other, "CLOSED", None, false, T).unwrap();
     let why = Some("#60 was closed without merging".to_string());
     assert_eq!(state(&conn, other), (State::Cancelled, why));
     // S72: a review under way on a PR that closes is cancelled too, not only the work task.
@@ -545,7 +563,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     };
     let (under_way, _) = tasks::give(&mut conn, &under_way, T).unwrap();
     tasks::started(&mut conn, under_way.number, T).unwrap();
-    tasks::pr_looked(&mut conn, under_way.number, "CLOSED", None, T).unwrap();
+    tasks::pr_looked(&mut conn, under_way.number, "CLOSED", None, false, T).unwrap();
     let why = Some("#62 was closed without merging".to_string());
     assert_eq!(state(&conn, under_way.number), (State::Cancelled, why));
 }
@@ -589,7 +607,7 @@ fn a_task_done_and_held_only_on_its_pr_lets_the_tasks_after_it_start() {
     );
     let bo: Vec<_> = starts.iter().filter(|s| s.agent == "bo").collect();
     assert_eq!(bo.len(), 1, "{starts:?}");
-    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, false, T).unwrap();
     assert_eq!(state(&conn, fix).0, State::Done);
     let again: Vec<_> = merged.iter().filter(|s| s.agent == "bo").collect();
     assert!(again.is_empty(), "the review starts once: {again:?}");
@@ -694,127 +712,6 @@ fn part(kind: &str, target: &str) -> Part {
     }
 }
 
-#[test]
-fn an_all_wait_fires_once_when_every_part_is_met() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let all = wait_on(&mut conn, vec![part("ci", "#54"), part("pr", "55")]).unwrap();
-    assert_eq!((all.kind.as_str(), all.parts.len()), ("all", 2));
-    let first = waits::met(
-        &mut conn,
-        &all.parts[0].id,
-        "CI on #54 finished: 4 passed",
-        T,
-    )
-    .unwrap();
-    assert!(first.is_empty(), "{first:?}");
-    let fired = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
-    assert_eq!(fired.len(), 1, "{fired:?}");
-    assert!(
-        fired[0]
-            .text
-            .contains("CI on #54 finished: 4 passed; #55 was merged")
-    );
-    assert!(fired[0].text.contains("You planned to do this: merge"));
-    let again = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
-    assert!(again.is_empty(), "fires once");
-    assert_eq!(waits::read(&conn, &all.id).unwrap().state, "fired");
-}
-
-#[test]
-fn an_agent_wait_fires_when_that_agent_has_nothing_left_in_the_chat() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let idle = wait_on(&mut conn, vec![part("agent", "ann")]);
-    assert_eq!(
-        refusal(idle),
-        "Ann has nothing running or queued in this chat"
-    );
-    turn(&conn, "t1", "ann", None, "running");
-    turn(&conn, "t2", "ann", None, "queued");
-    wait_on(&mut conn, vec![part("agent", "ann")]).unwrap();
-    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
-    let early = waits::agent_free(&mut conn, "c", "ann", T).unwrap();
-    assert!(
-        early.is_empty(),
-        "a queued turn is still Ann's work: {early:?}"
-    );
-    gathr::store::set_turn(&conn, "t2", "failed", Some("boom")).unwrap();
-    let woken = waits::agent_free(&mut conn, "c", "ann", T).unwrap();
-    assert_eq!(woken.len(), 1);
-    assert!(
-        woken[0]
-            .text
-            .contains("Ann is done here: its last turn failed")
-    );
-}
-
-#[test]
-fn a_wait_a_day_old_wakes_its_agent_anyway() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();
-    waits::looked(&conn, &wait.id, None, Some("bash didn't start")).unwrap();
-    let now = gathr::ids::now_us();
-    assert!(waits::expire(&mut conn, now, T).unwrap().is_empty());
-    let woken = waits::expire(&mut conn, now + waits::WAIT_FOR_US, T).unwrap();
-    assert_eq!(woken.len(), 1);
-    assert!(woken[0].text.contains(
-        "You have waited 24 hours for a check (the last check failed: \
-         bash didn't start)"
-    ));
-    assert_eq!(waits::read(&conn, &wait.id).unwrap().state, "expired");
-}
-
-#[test]
-fn an_agent_ends_only_its_own_waits() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let wait = wait_on(&mut conn, vec![part("pr", "54")]).unwrap();
-    let again = wait_on(&mut conn, vec![part("pr", "54")]).unwrap();
-    assert_eq!(again.id, wait.id, "the same wait, said again");
-    let theirs = waits::end(&mut conn, "c", "ann", &wait.id, T);
-    assert_eq!(
-        refusal(theirs),
-        format!("wait {} isn't yours in this chat", wait.id)
-    );
-    assert_eq!(waits::in_chat(&conn, "c", Some("lead")).unwrap().len(), 1);
-    waits::end(&mut conn, "c", "lead", &wait.id, T).unwrap();
-    assert_eq!(waits::read(&conn, &wait.id).unwrap().state, "cancelled");
-    assert_eq!(
-        refusal(wait_on(&mut conn, vec![part("ci", "main")])),
-        "a CI wait takes a PR's number or a commit's id, not \"main\""
-    );
-    let nowhere = Leave {
-        chat: "c",
-        agent: "lead",
-        task: None,
-        left_in: None,
-        cwd: None,
-        then_do: "merge",
-        parts: vec![part("check", "true")],
-    };
-    assert_eq!(
-        refusal(waits::leave(&mut conn, &nowhere, T)),
-        "a check runs in its agent's folder, and this wait has none"
-    );
-}
-
-#[test]
-fn a_wait_on_an_agent_doing_your_task_is_refused_since_the_hear_back_covers_it() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let (task, _) = give(&mut conn, "ann", &[], None);
-    turn(&conn, "t1", "ann", Some(task), "queued");
-    let doubled = wait_on(&mut conn, vec![part("agent", "ann")]);
-    assert_eq!(
-        refusal(doubled),
-        format!(
-            "Ann is on your task #{task}: you hear back when it's settled, so don't wait on Ann"
-        )
-    );
-}
-
 /// Ann's work on `pr`, given in Lead's turn, which has ended: Lead is the one to hear back.
 fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
     let giving = format!("lead-{pr}");
@@ -901,7 +798,7 @@ fn a_task_held_only_on_its_merge_wakes_its_giver_once_its_review_is_done() {
         "Lead hears it waits on the merge: {starts:?}"
     );
     assert!(lead[0].contains("waiting on #85 to merge"), "{}", lead[0]);
-    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, false, T).unwrap();
     let lead = to(&merged, "lead");
     assert_eq!(lead.len(), 1, "Lead hears the merge too: {merged:?}");
     assert!(lead[0].contains("#85 merged"), "{}", lead[0]);
@@ -938,7 +835,7 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let fix = heard_while_held(&mut conn, 87);
-    let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, T).unwrap();
+    let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, false, T).unwrap();
     let lead = to(&closed, "lead");
     assert_eq!(lead.len(), 1, "{closed:?}");
     assert!(
@@ -946,7 +843,7 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
         "{}",
         lead[0]
     );
-    let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, T).unwrap();
+    let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, false, T).unwrap();
     assert!(to(&again, "lead").is_empty(), "heard once: {again:?}");
     let fix = heard_while_held(&mut conn, 88);
     let cancelled = tasks::cancel(&mut conn, None, fix, "not needed", T).unwrap();

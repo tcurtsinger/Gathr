@@ -88,16 +88,28 @@ pub fn finish(
     if t.owner.as_deref() != Some(agent) {
         return Err(refused(format!("task #{task} isn't yours")));
     }
-    match t.state {
-        State::Done => return Ok((t, Took::Already, Vec::new())),
-        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
-        _ => {}
-    }
     let given = |text: Option<&str>| {
         let text = text.map(str::trim).filter(|s| !s.is_empty());
         text.map(String::from)
     };
     let (note, commit, file) = (given(said.note), given(said.commit), given(said.file));
+    // A review that is done is recorded again at another commit while its PR is open (G170): the
+    // task stays done, and no fresh review task is made only to re-record an approval.
+    let again = t.state == State::Done
+        && t.kind == Kind::Review
+        && how == Finish::Done
+        && commit.is_some()
+        && commit != t.reviewed
+        && tx.query_row(
+            "SELECT pr IS NOT NULL AND pr_closed = 0 FROM tasks WHERE number = ?1",
+            [task],
+            |r| r.get::<_, bool>(0),
+        )?;
+    match t.state {
+        State::Done if !again => return Ok((t, Took::Already, Vec::new())),
+        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
+        _ => {}
+    }
     if let Some(on) = said.on_task
         && (state_of(&tx, on)?.is_none() || on == task)
     {
@@ -150,7 +162,9 @@ pub fn finish(
     let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
-    let (took, starts) = if running {
+    let (took, starts) = if again {
+        (Took::Applied, Vec::new())
+    } else if running {
         (Took::Kept, Vec::new())
     } else if in_line {
         (Took::Applied, Vec::new())

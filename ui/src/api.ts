@@ -139,6 +139,9 @@ export interface Task {
   /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
   pr?: number | null;
   pr_head?: string | null;
+  /** A review's commit, and whether its PR has moved past it by more than merges of its base. */
+  reviewed?: string | null;
+  outdated?: boolean;
   /** Its owner's last report, kept until it reports again or the task is restarted (0047). */
   report?: TaskReport | null;
   /** Gathr asked its owner for a report, and none has come since. */

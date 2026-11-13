@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure, type Task } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { idle, reported } from './model';
+import { idle, reported, reviewedAt } from './model';
 import { TaskChecks } from './TaskChecks';
 
 /** Only a settled task starts again (0010); an open one the person can only cancel. */
@@ -44,6 +44,7 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
     task.stale_us ? idle(task.stale_us) : undefined,
   ].filter(Boolean);
   const report = reported(task);
+  const review = reviewedAt(task);
   // Report and Waiting on already say why a task is held, a report's note is often the reason word
   // for word, and a task stopped as left or with no report says so in Report. A reason they don't
   // carry stays: "blocked on #3" from a report with no note, "#18 merged".
@@ -73,6 +74,12 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
               <>
                 <dt>Report</dt>
                 <dd>{report}</dd>
+              </>
+            )}
+            {review && (
+              <>
+                <dt>Reviewed at</dt>
+                <dd>{review}</dd>
               </>
             )}
             {!!task.waiting_on?.length && (

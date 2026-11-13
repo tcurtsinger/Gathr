@@ -53,6 +53,18 @@ export function reported(task: Task): string | null {
   return task.state === 'working' || task.state === 'held' ? 'No report yet' : null;
 }
 
+const short = (commit: string) => commit.slice(0, 7);
+
+/** The commit a review is of, and where its PR is now once that has moved past it (G42). */
+export function reviewedAt(task: Task): string | null {
+  if (task.kind !== 'review' || !task.reviewed) return null;
+  const at = short(task.reviewed);
+  if (!task.outdated) return at;
+  return task.pr && task.pr_head
+    ? `${at}. Out of date: #${task.pr} is at ${short(task.pr_head)}`
+    : `${at}. Out of date`;
+}
+
 /** How long nothing has moved a stale task (F11): "Idle 4 days". */
 export function idle(sinceUs: number, now = Date.now()): string {
   const days = Math.max(1, Math.floor((now - sinceUs / 1000) / 86_400_000));

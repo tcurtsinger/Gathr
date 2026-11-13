@@ -16,7 +16,7 @@ fn move_pr(room: &mut Room, head: &str) {
     room.heads[0] = head.to_string();
     room.checks_passed(head);
     // A real PR look's transition makes the old review outdated; merge must prove it safe.
-    gathr::tasks::pr_looked(&mut room.db(), 1, "OPEN", Some(head), "pr-look").unwrap();
+    gathr::tasks::pr_looked(&mut room.db(), 1, "OPEN", Some(head), false, "pr-look").unwrap();
 }
 
 fn advance_main(room: &Room) -> String {
@@ -290,4 +290,73 @@ fn an_explicit_unfinished_review_revokes_its_prior_approval() {
     let base = room.main();
     room.refused(&room.call(&vale, "merge", json!({"pr":5})), "isn't done");
     assert_eq!(room.main(), base);
+}
+
+/// The PR as Gathr's own look last saw it at `head`: the review task, once its `pr_head` is there.
+fn looked_at(room: &Room, head: &str) -> Value {
+    common::until(20, "Gathr's look at the PR", || {
+        let tasks = room
+            .service
+            .call("GET", &format!("/api/chats/{}/tasks", room.chat))
+            .json();
+        let task = tasks["tasks"]
+            .as_array()?
+            .iter()
+            .find(|t| t["number"] == 1)?;
+        (task["pr_head"] == head).then(|| task.clone())
+    })
+}
+
+/// The PR moves to `head` on GitHub, and nothing tells the service: its own look finds out.
+fn publish(room: &mut Room, head: &str) {
+    git(&room.other, &["push", "-q", "origin", "room/five"]);
+    let file = room.data.join("gh.json");
+    let mut answers: Value =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
+    for key in ["out", "out_merged"] {
+        let mut view: Value = serde_json::from_str(answers[0][key].as_str().unwrap()).unwrap();
+        view["headRefOid"] = json!(head);
+        answers[0][key] = json!(view.to_string());
+    }
+    std::fs::write(file, answers.to_string()).unwrap();
+    room.heads[0] = head.to_string();
+}
+
+/// Scenario 5f: Gathr's own look at a PR agrees with the merge tool. A commit that only brings in
+/// the base leaves the review standing; a commit that changes code puts it out of date, and
+/// `list_tasks` says so with both commits.
+#[test]
+fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room_replay(&data.0, &repos.0, false, true);
+    let lead = room.lead_turn();
+    let vale = room.reviews(&lead, &[5]);
+    let reviewed = room.heads[0].clone();
+    room.reviewed(&vale, 1, &reviewed);
+
+    advance_main(&room);
+    git(&room.other, &["checkout", "-q", "room/five"]);
+    git(
+        &room.other,
+        &["merge", "--no-ff", "-m", "update main", "main"],
+    );
+    let head = git(&room.other, &["rev-parse", "HEAD"]);
+    publish(&mut room, &head);
+    let seen = looked_at(&room, &head);
+    assert_eq!(seen["outdated"], false, "only main came in: {seen}");
+
+    std::fs::write(room.other.join("author.txt"), "not reviewed\n").unwrap();
+    git(&room.other, &["add", "."]);
+    git(&room.other, &["commit", "-q", "-m", "author change"]);
+    let head = git(&room.other, &["rev-parse", "HEAD"]);
+    publish(&mut room, &head);
+    let seen = looked_at(&room, &head);
+    assert_eq!(seen["outdated"], true, "the author changed code: {seen}");
+    let listed = text(&room.call(&vale, "list_tasks", json!({})));
+    let says = format!(
+        "reviewed at {}, out of date: #5 is at {}",
+        &reviewed[..7],
+        &head[..7]
+    );
+    assert!(listed.contains(&says), "{listed}");
 }

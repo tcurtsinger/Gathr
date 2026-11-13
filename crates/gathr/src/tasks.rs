@@ -623,19 +623,23 @@ pub fn engine_gone(
 }
 
 /// A task's PR has been looked at: merged settles work reported done and any review, closed
-/// cancels it (G67, G44); a review
+/// cancels it (G67, G44). `covered` says the commits after the one reviewed only bring in the base. A review
 /// whose PR moved past its commit is out of date (G73).
 pub fn pr_looked(
     conn: &mut Connection,
     task: i64,
     pr_state: &str,
     head: Option<&str>,
+    covered: bool,
     trace: &str,
 ) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task)?;
     if let (Some(reviewed), Some(head)) = (&t.reviewed, head) {
         let past = !head.starts_with(reviewed.as_str()) && !reviewed.starts_with(head);
+        // Past the commit reviewed, but by nothing except clean merges of the base: the review
+        // still covers it (G165), as the merge tool finds.
+        let past = past && !covered;
         tx.execute(
             "UPDATE tasks SET outdated = ?2 WHERE number = ?1",
             params![task, past],

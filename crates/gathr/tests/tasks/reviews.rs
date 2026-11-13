@@ -83,3 +83,42 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
         assert_eq!(approved, expected, "completed evidence for task {task}");
     }
 }
+
+/// G170: a review that is done is recorded again at a newer commit on the same task. No fresh
+/// review task is needed only to re-record an approval.
+#[test]
+fn a_done_review_is_recorded_again_at_a_newer_commit() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "ann", None, "done");
+    let review = review_by_bo(&mut conn, 5, "giving");
+    reviewed(&mut conn, review);
+    assert_eq!(state(&conn, review).0, State::Done);
+    tasks::pr_looked(&mut conn, review, "OPEN", Some("def5678aaaa"), false, T).unwrap();
+    assert!(tasks::get(&conn, review).unwrap().unwrap().outdated);
+
+    let newer = Said {
+        commit: Some("def5678"),
+        ..Said::default()
+    };
+    let (again, took, starts) =
+        tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
+    assert_eq!(took, tasks::Took::Applied);
+    assert!(starts.is_empty(), "nobody is told twice: {starts:?}");
+    assert_eq!(
+        (again.state, again.reviewed.as_deref(), again.outdated),
+        (State::Done, Some("def5678"), false)
+    );
+    // The same commit again changes nothing.
+    let (_, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
+    assert_eq!(took, tasks::Took::Already);
+    // Once the PR has merged or closed there is nothing left to review.
+    tasks::pr_looked(&mut conn, review, "MERGED", Some("def5678aaaa"), false, T).unwrap();
+    let late = Said {
+        commit: Some("0123abc"),
+        ..Said::default()
+    };
+    let (kept, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &late, T).unwrap();
+    assert_eq!(took, tasks::Took::Already);
+    assert_eq!(kept.reviewed.as_deref(), Some("def5678"));
+}

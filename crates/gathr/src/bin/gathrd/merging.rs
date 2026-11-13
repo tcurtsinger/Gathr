@@ -229,6 +229,33 @@ async fn confirmed(pr: i64, repo: &Path, head: &str, base: &str) -> Result<(), S
     }
 }
 
+/// Whether a review of `reviewed` still covers `head`: nothing came after it but clean merges of
+/// the base branch. Gathr's look at a PR asks, by the merge tool's own rule (G165), so a review
+/// reads out of date only when the merge would be refused for it. False when git can't say (a
+/// fetch that fails, a commit it doesn't have): out of date is the safe side.
+pub async fn still_covers(
+    repo: &Path,
+    reviewed: &str,
+    head: &str,
+    base: &str,
+    vars: &Vars,
+) -> bool {
+    if git(repo, &["fetch", "--quiet", "origin"], vars)
+        .await
+        .is_err()
+    {
+        return false;
+    }
+    let origin = format!("refs/remotes/origin/{base}");
+    let Ok(base) = git(repo, &["rev-parse", &origin], vars).await else {
+        return false;
+    };
+    known(repo, head, vars).await
+        && reviewed_is_head(repo, reviewed, head, &base, 0, vars)
+            .await
+            .is_ok()
+}
+
 /// Resolve the recorded review, then prove any later changes came only from the base.
 async fn reviewed_is_head(
     repo: &Path,
@@ -500,7 +527,7 @@ async fn settle(
             crate::cleanup::queue(c, &chat, &view, &trace)?;
             let mut starts = Vec::new();
             for number in numbers {
-                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), &trace)?);
+                starts.extend(tasks::pr_looked(c, number, "MERGED", Some(&h), false, &trace)?);
             }
             // Only the merger's hear-backs go, as marked where they're made: work of its own the
             // merge moved on (a task blocked on the merged one) still starts.

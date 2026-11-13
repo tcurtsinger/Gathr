@@ -240,7 +240,7 @@ fn a_pr_that_merges_does_not_make_a_left_task_done() {
     .unwrap();
     gathr::store::set_turn(&conn, &t1, "done", None).unwrap();
     tasks::ended(&mut conn, fix, Outcome::Ok, T).unwrap();
-    let starts = tasks::pr_looked(&mut conn, fix, "MERGED", None, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, fix, "MERGED", None, false, T).unwrap();
     assert_eq!(state(&conn, fix).0, State::Ready, "not done");
     let ann: Vec<_> = starts.iter().filter(|s| s.agent == "ann").collect();
     assert_eq!(ann.len(), 1, "{starts:?}");
@@ -264,27 +264,27 @@ fn a_pr_that_merges_finishes_work_only_if_its_owner_reported_it_done() {
     work(&mut conn, silent, None);
     let held = Some("waiting on #69 to merge".to_string());
     assert_eq!(state(&conn, silent), (State::Held, held));
-    let starts = tasks::pr_looked(&mut conn, silent, "MERGED", None, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, silent, "MERGED", None, false, T).unwrap();
     assert_eq!(state(&conn, silent).0, State::Ready, "asked, not done");
     let carry = "#69 merged, and this task has no report that it's done";
     assert!(starts[0].text.contains(carry), "{}", starts[0].text);
 
     // Not started yet, its first turn still queued: the merge queues no second one.
     let queued = fix_with_pr(&mut conn);
-    let starts = tasks::pr_looked(&mut conn, queued, "MERGED", None, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, queued, "MERGED", None, false, T).unwrap();
     assert!(starts.is_empty(), "{starts:?}");
     assert_eq!(state(&conn, queued).0, State::Ready);
 
     // Reported done: the merge finishes it.
     let reported = fix_with_pr(&mut conn);
     work(&mut conn, reported, Some(Finish::Done));
-    tasks::pr_looked(&mut conn, reported, "MERGED", None, T).unwrap();
+    tasks::pr_looked(&mut conn, reported, "MERGED", None, false, T).unwrap();
     let merged = Some("#69 merged".to_string());
     assert_eq!(state(&conn, reported), (State::Done, merged));
 
     let at_work = fix_with_pr(&mut conn);
     let t1 = begin(&mut conn, at_work);
-    let starts = tasks::pr_looked(&mut conn, at_work, "MERGED", None, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, at_work, "MERGED", None, false, T).unwrap();
     assert!(starts.is_empty(), "no second turn is queued: {starts:?}");
     assert_eq!(
         state(&conn, at_work).0,
