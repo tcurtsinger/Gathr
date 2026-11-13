@@ -139,6 +139,20 @@ export interface Task {
   /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
   pr?: number | null;
   pr_head?: string | null;
+  /** Its owner's last report, kept until it reports again or the task is restarted (0047). */
+  report?: TaskReport | null;
+  /** Gathr asked its owner for a report, and none has come since. */
+  asked?: boolean;
+  /** What a held task still has open, each in a few words. */
+  waiting_on?: string[];
+}
+
+/** What an owner said of its task: for work, `see` is a commit or file to look at. */
+export interface TaskReport {
+  how: 'done' | 'left' | 'blocked';
+  note: string | null;
+  see: string | null;
+  at_us: number | null;
 }
 
 /** An agent's stale task, on the person's list across chats. */

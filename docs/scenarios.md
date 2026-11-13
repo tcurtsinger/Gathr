@@ -204,6 +204,14 @@ Parts: 3.7, 8.8
 - **Then** the first thing the agent is given holds the whole brief: what, why, done, proof and where.
   It works in the folder and on the branch the brief names, and nothing it needs is only in the chat
 
+### 3e. A task set after one that stopped starts when that one finishes
+
+Parts: 3.6
+
+- **Given** a task set after another, which was left, failed or stopped
+- **When** that other task is restarted and finishes
+- **Then** the task set after it starts, and so does the next one down the chain
+
 ## 4. One voice to you
 
 ### 4a. A member's question goes through the lead, in the lead's words
@@ -254,17 +262,18 @@ Parts: 5.2
 - **Given** a builder working on a task
 - **When** its turn ends and it has reported nothing
 - **Then** the task is not marked done, and whoever gave it is not told it is done. The task shows that
-  its last turn ended with no report, and its owner is asked for one
+  its last turn ended with no report, and its owner is woken once and asked for one. If that turn says
+  nothing either, whoever gave the task is told there is no report
 
 ### 5c. A truthful report is never refused
 
 Parts: 5.4
 
-- **Given** an agent's tasks in every state Gathr can put one in: ready, working, held, blocked,
-  stopped
+- **Given** an agent's tasks in every state Gathr can put one in: waiting, ready, working, held,
+  blocked, failed, stopped, done, cancelled
 - **When** the agent reports the truth about each, from whichever turn it is in
-- **Then** Gathr takes every report. A report on a task that is already done is answered with what was
-  recorded, not with an error
+- **Then** Gathr takes every report. A report on a task that is already done, or cancelled, is answered
+  with what was recorded, not with an error
 
 ### 5d. What Gathr can see holds a task open, by name
 
@@ -311,6 +320,24 @@ Parts: 5.10
 - **When** the person presses Stop now
 - **Then** the task keeps its state and shows that the person stopped it. Its lead is not told it
   settled. When the person presses Restart, the builder carries on
+
+### 5i. "Left" stops the task and is told
+
+Parts: 5.1, 5.5
+
+- **Given** a builder working on a task, with nothing else open on it
+- **When** it reports the task left, with what is left
+- **Then** the task stops there and shows what is left. Whoever gave it hears that, and the builder is
+  not started again by itself. If the task's PR merges later, the task is still not done: the builder
+  is woken with what it left
+
+### 5j. A hold that ends doesn't finish a task nobody reported
+
+Parts: 5.2, 5.6
+
+- **Given** a task held on something Gathr can see, with no "done" reported
+- **When** that thing ends
+- **Then** the task is not marked done. Its owner is woken on it and told what ended
 
 ## 6. The room explains itself
 
@@ -757,8 +784,6 @@ changes with it:
   should still protect the person's own checkout isn't decided.
 - **Where a hand-over shows** (1e). In the chat the person started, as written here, or in a chat of
   the specialist's.
-- **What happens to a turn that ends with no report** (5b). Whether its owner is woken to report, or is
-  asked on its next turn.
 - **How long a quiet room is left** (6c) before Gathr acts.
 - **Tools that answer for the person** (12c). Agents hold tools that can answer an approval or a
   question when the person asks them to. A guest gets none of them; what an agent may do with them

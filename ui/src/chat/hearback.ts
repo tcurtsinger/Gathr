@@ -8,7 +8,8 @@ export interface Reported {
 }
 
 // The service's own words (tasks/words.rs `hear_back`): a first line, then "- #<number> <owner>, <what>: <how>"
-// for each task, where <how> is "done", "<state>" or "<state>: <reason>".
+// for each task, where <how> is "done", "<state>" or "<state>: <reason>". A task that stopped as its
+// owner left it, or with no report, says "left: <what is left>" or "no report: <why>" (0047).
 const FIRST =
   /^(?:The (?:task|(\d+) tasks) you gave (?:is|are) settled|Where the (?:task|(\d+) tasks) you gave stands?):$/;
 const TASK = /^- #(\d+) /;
@@ -55,6 +56,8 @@ const OUTCOME: Record<string, string> = {
   stopped: 'stopped',
   cancelled: 'cancelled',
   blocked: 'is blocked',
+  left: 'left it unfinished',
+  'no report': 'gave no report',
   // Done, and held only until its merge lands.
   held: 'finished, waiting to merge',
 };

@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use axum::http::request::Parts;
 use gathr::Error;
-use gathr::tasks::{self, Finish, Give, Kind, Said, Start};
+use gathr::tasks::{self, Finish, Give, Kind, Said, Start, State, Took};
 use gathr::waits::{self, Leave, Part};
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
@@ -34,9 +34,10 @@ pub struct GiveTask {
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct FinishTask {
-    /// `done`, `left` (part is left: say what) or `blocked` (say on whom).
+    /// `done`, `left` (part is left: say what in `note`) or `blocked` (say on what in `note`, or
+    /// name the task in `on_task`).
     how: String,
-    /// Your task's number: the one this turn works on unless set.
+    /// Your task's number. Without it: the task this turn works on, or your one open task here.
     task: Option<i64>,
     /// The result, what's left, or why you're blocked.
     note: Option<String>,
@@ -44,8 +45,10 @@ pub struct FinishTask {
     on_task: Option<i64>,
     /// The PR your work is in: the task settles when it merges.
     pr: Option<i64>,
-    /// For a review: the commit you reviewed.
+    /// For a review: the commit you reviewed. For work: a commit to look at.
     commit: Option<String>,
+    /// For work: a file to look at.
+    file: Option<String>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -154,9 +157,9 @@ impl Tools {
     }
 
     #[tool(
-        description = "Mark your task done, left or blocked when this turn ends. Say what is left or what blocks it. \
-                       A task with open waits or PRs stays held until they end. A held task of yours can be finished \
-                       from any turn: it is marked so once its hold ends."
+        description = "Report your task: done (say what to look at: a PR, a commit, a file or a note), left (say what is \
+                       left) or blocked (say on what). Any task of yours, from any turn. While a turn runs on the task the \
+                       report applies when that turn ends; otherwise at once. A task with open waits or PRs stays held until they end."
     )]
     async fn finish_task(
         &self,
@@ -166,6 +169,7 @@ impl Tools {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
         let agent = caller.agent.clone().unwrap_or_default();
+        let chat = caller.chat.clone();
         let current = caller.on().and_then(|o| o.task);
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
         let finished = self
@@ -173,41 +177,25 @@ impl Tools {
                 let how = Finish::named(&ask.how).ok_or_else(|| {
                     Error::Refused(format!("{} isn't one of done, left or blocked", ask.how))
                 })?;
-                let task = ask.task.or(current).ok_or_else(|| {
-                    Error::Refused(
-                        "this turn works on no task, so there's nothing to finish".into(),
-                    )
-                })?;
+                let task = match ask.task.or(current) {
+                    Some(task) => task,
+                    None => only_open(c, &chat, &agent)?,
+                };
+                // A tool acts in its caller's chat: an agent's task in another chat isn't reported here.
+                if !tasks::get(c, task)?.is_some_and(|t| t.chat == chat) {
+                    return Err(Error::Refused(format!(
+                        "there's no task #{task} in this chat"
+                    )));
+                }
                 let said = Said {
                     note: ask.note.as_deref(),
                     on_task: ask.on_task,
                     pr: ask.pr,
                     commit: ask.commit.as_deref(),
+                    file: ask.file.as_deref(),
                 };
-                let t = tasks::finish(c, &agent, task, how, &said)?;
-                if t.state == tasks::State::Held && t.kind != Kind::Review {
-                    // From any turn (G174): kept, and applied once the hold ends, at once if it has.
-                    let starts = tasks::release(c, task, &trace)?;
-                    let now = tasks::get(c, task)?.map(|t| t.state);
-                    let line = match now {
-                        Some(tasks::State::Held) => format!(
-                            "Task #{task} is held: marked {} once what it waits on ends.",
-                            ask.how
-                        ),
-                        Some(state) => format!("Task #{task} is {}.", state.as_str()),
-                        None => format!("Task #{task} is gone."),
-                    };
-                    return Ok((line, starts));
-                }
-                let line = if t.state == tasks::State::Held && t.kind == Kind::Review {
-                    format!("Review on task #{} recorded.", t.number)
-                } else {
-                    format!(
-                        "Task #{} will be marked {} when this turn ends.",
-                        t.number, ask.how
-                    )
-                };
-                Ok((line, Vec::new()))
+                let (t, took, starts) = tasks::finish(c, &agent, task, how, &said, &trace)?;
+                Ok((taken(&t, took, &ask.how), starts))
             })
             .await;
         Ok(self.answer(&caller, "finish_task", started, finished).await)
@@ -251,8 +239,8 @@ impl Tools {
     }
 
     #[tool(
-        description = "This chat's open tasks (number, owner, state, what) and your own waits \
-                          with their ids."
+        description = "This chat's open tasks (number, owner, state, what), your own tasks that stopped as left, \
+                          blocked, failed or stopped, and your own waits with their ids."
     )]
     async fn list_tasks(
         &self,
@@ -264,9 +252,15 @@ impl Tools {
         let (chat, agent) = (caller.chat.clone(), caller.agent.clone());
         let listed = self
             .db(move |c| {
+                // Its own stopped tasks too: it can still report on them (0047).
+                let mine = |t: &tasks::Task| {
+                    t.owner.is_some()
+                        && t.owner == agent
+                        && matches!(t.state, State::Blocked | State::Failed | State::Stopped)
+                };
                 let open = tasks::list(c, &chat)?
                     .into_iter()
-                    .filter(|t| !t.state.settled());
+                    .filter(|t| !t.state.settled() || mine(t));
                 let mut lines: Vec<String> = open.map(|t| line(c, &t)).collect::<Result<_, _>>()?;
                 if lines.is_empty() {
                     lines.push("No open tasks.".into());
@@ -443,6 +437,55 @@ fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
         .map_or(String::new(), |r| format!(" ({r})"));
     let state = t.state.as_str();
     Ok(format!("#{} {owner} {state}{reason}: {}", t.number, t.what))
+}
+
+/// The caller's one open task in the chat, for a report from a turn on no task that names none.
+fn only_open(conn: &Connection, chat: &str, agent: &str) -> Result<i64, Error> {
+    let open: Vec<tasks::Task> = tasks::list(conn, chat)?
+        .into_iter()
+        .filter(|t| t.owner.as_deref() == Some(agent) && !t.state.settled())
+        .collect();
+    match open.as_slice() {
+        [one] => Ok(one.number),
+        [] => Err(Error::Refused(
+            "This turn works on no task, and you have no open task here. Give the task's number in `task`.".into(),
+        )),
+        several => {
+            let listed: Vec<String> = several
+                .iter()
+                .map(|t| format!("#{} {}", t.number, t.what))
+                .collect();
+            Err(Error::Refused(format!(
+                "This turn works on no task, and you have {} open here. Say which in `task`: {}",
+                several.len(),
+                listed.join("; ")
+            )))
+        }
+    }
+}
+
+/// What Gathr says back to a report.
+fn taken(t: &tasks::Task, took: Took, how: &str) -> String {
+    let n = t.number;
+    let reason = |lead: &str| {
+        let reason = t.reason.as_ref();
+        reason.map_or(String::new(), |r| format!("{lead}{r}"))
+    };
+    match took {
+        Took::Kept => {
+            format!("Recorded: {how}. It applies when the turn running on task #{n} ends.")
+        }
+        Took::Applied => format!(
+            "Recorded: {how}. Task #{n} is {}{}.",
+            t.state.as_str(),
+            reason(": ")
+        ),
+        Took::Already => format!(
+            "Already recorded: task #{n} is done{}. Its giver or the person can restart it.",
+            reason(": ")
+        ),
+        Took::Cancelled => format!("Task #{n} was cancelled{}. Nothing changed.", reason(": ")),
+    }
 }
 
 fn numbers(after: &[i64]) -> String {

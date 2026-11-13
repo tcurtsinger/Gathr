@@ -90,6 +90,10 @@ fn room() -> Room {
     );
     assert_eq!(given["isError"], false, "{}", text(&given));
     let started = nth(&data.0.join("env.jsonl"), 1);
+    // Ann reports the work done from its turn: a merge finishes only work reported done (0047).
+    let ann = started["GATHR_AGENT_TOKEN"].as_str().unwrap();
+    let said = call_tool(service.info.port, ann, "finish_task", json!({"how":"done"}));
+    assert_eq!(said["isError"], false, "{}", text(&said));
     let worktree = PathBuf::from(started["cwd"].as_str().unwrap());
     let branch = git(&worktree, &["branch", "--show-current"]);
     let head = git(&worktree, &["rev-parse", "HEAD"]);

@@ -7,8 +7,8 @@ use super::{Finish, Start, State, Task, cascade, read, ready, set, words};
 use crate::Error;
 use crate::event::Event;
 
-/// `left` twice in a row by turns that ran no tool and left nothing open is `blocked` (0010).
-const IDLE_LEFTS: i64 = 2;
+/// Why a task is blocked once its owner was asked for a report and gave none.
+const NO_REPORT: &str = "no report: two turns ended without one";
 
 /// Tasks `t` its owner called done that are held only until their PR merges, read from the reason
 /// `settle` writes. They count as done for the tasks `after` them: a review of that PR may be what
@@ -98,7 +98,7 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
     // A review's PR is what it reviewed, not work its owner still owes.
     let pr: Option<Option<i64>> = conn
         .query_row(
-            "SELECT pr FROM tasks WHERE number = ?1 AND kind = 'work'",
+            "SELECT pr FROM tasks WHERE number = ?1 AND kind = 'work' AND pr_closed = 0",
             [task],
             |r| r.get(0),
         )
@@ -109,63 +109,81 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
     Ok(open)
 }
 
-/// A turn on the task ended well: `blocked` as its owner said; `held` while something it started
-/// is open, saying on what and whether its owner called it done (G75); else `done`, or for `left`
-/// another turn.
-pub fn settle(
-    tx: &Transaction,
-    t: &Task,
-    finish: Option<Finish>,
-    note: Option<String>,
-    tools: i64,
-    trace: &str,
-) -> Result<Vec<Start>, Error> {
+/// Where a task stands by its owner's report and what it still has open (0047), worked out when
+/// a turn on it ends well and when a report arrives outside one: `blocked` as reported; `held`
+/// while something is open, saying on what and what was reported (G75); with nothing open, `done`
+/// if reported so, and stopped there if reported left, for its giver to hear. With nothing open and
+/// no report its owner is asked once; silent again, the task is blocked and its giver hears. A turn
+/// that ended is never read as work that ended.
+pub fn settle(tx: &Transaction, t: &Task, trace: &str) -> Result<Vec<Start>, Error> {
     let task = t.number;
-    let open = open_on(tx, task)?;
-    let idle = |n: i64| {
+    let (finish, note, on, asks): (Option<String>, Option<String>, Option<i64>, i64) = tx
+        .query_row(
+            "SELECT finish, finish_note, blocked_on, asks FROM tasks WHERE number = ?1",
+            [task],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    let finish = finish.as_deref().and_then(Finish::named);
+    let asked = |n: i64| {
         tx.execute(
-            "UPDATE tasks SET idle_lefts = ?2 WHERE number = ?1",
+            "UPDATE tasks SET asks = ?2 WHERE number = ?1",
             params![task, n],
         )
     };
     if finish == Some(Finish::Blocked) {
-        idle(0)?;
-        let why = note.unwrap_or_else(|| "its owner can't go on".into());
+        asked(0)?;
+        let why = match (note, on) {
+            (Some(note), _) => note,
+            (None, Some(on)) => format!("blocked on #{on}"),
+            (None, None) => "its owner can't go on".to_string(),
+        };
         set(tx, task, State::Blocked, Some(&why), trace)?;
         return Ok(Vec::new());
     }
+    let open = open_on(tx, task)?;
     if !open.is_empty() {
-        idle(0)?;
+        asked(0)?;
+        // `ONLY_ITS_MERGE` reads these words for a done task.
         let said = match finish {
-            Some(Finish::Left) => "left",
-            _ => "done",
+            Some(Finish::Left) => "left, ",
+            Some(_) => "done, ",
+            None => "",
         };
-        let why = format!("{said}, waiting on {}", open.join(", "));
+        let why = format!("{said}waiting on {}", open.join(", "));
         set(tx, task, State::Held, Some(&why), trace)?;
         return Ok(Vec::new());
     }
-    if finish != Some(Finish::Left) {
-        idle(0)?;
-        set(tx, task, State::Done, note.as_deref(), trace)?;
-        return Ok(Vec::new());
+    match finish {
+        Some(Finish::Left) => {
+            asked(0)?;
+            let left = note.as_deref().unwrap_or("it isn't said what");
+            let why = format!("left: {left}");
+            set(tx, task, State::Blocked, Some(&why), trace)?;
+        }
+        Some(_) => {
+            asked(0)?;
+            set(tx, task, State::Done, note.as_deref(), trace)?;
+        }
+        None if asks == 0 => {
+            asked(1)?;
+            return Ok(vec![ask(tx, t, trace)?]);
+        }
+        None => set(tx, task, State::Blocked, Some(NO_REPORT), trace)?,
     }
-    let lefts: i64 = tx.query_row(
-        "SELECT idle_lefts FROM tasks WHERE number = ?1",
-        [task],
-        |r| r.get(0),
-    )?;
-    let lefts = if tools == 0 { lefts + 1 } else { 0 };
-    idle(lefts)?;
-    if lefts >= IDLE_LEFTS {
-        let why = "2 turns left this task unfinished without progress or open work";
-        set(tx, task, State::Blocked, Some(why), trace)?;
-        return Ok(Vec::new());
-    }
-    let carry = match &note {
-        Some(left) => format!("you left this work: {left}"),
-        None => "work remains".to_string(),
-    };
-    Ok(vec![ready(tx, task, Some(&carry))?])
+    Ok(Vec::new())
+}
+
+/// The one ask for a report: a short turn for the task's owner, on the task.
+fn ask(tx: &Transaction, t: &Task, trace: &str) -> Result<Start, Error> {
+    let owner = t.owner.as_deref().ok_or_else(|| {
+        Error::Refused(format!(
+            "task #{} is the person's: it has no turn to start",
+            t.number
+        ))
+    })?;
+    set(tx, t.number, State::Ready, None, trace)?;
+    let on = (Some(t.number), t.given_in.as_deref());
+    Start::queue(tx, (&t.chat, owner), on, words::ask(t))
 }
 
 /// The hear-backs on the tasks given in `turn`, one per giver: once, when that turn has ended (so
@@ -232,7 +250,7 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
             .attr("gen_ai.agent.id", giver.as_str())
             .attr("gathr.task.count", settled.len())
             .insert(tx)?;
-        let text = words::hear_back(tx, &settled)?;
+        let text = words::hear_back(tx, &settled, own)?;
         let mut start = Start::queue(tx, (&chat, &giver), (own, Some(turn)), text)?;
         start.hear_back = true;
         starts.push(start);
@@ -269,18 +287,12 @@ pub fn background_changed(
     Ok((ended, starts))
 }
 
-/// A held task's hold may be over, or narrower: settled as its owner last finished it, else as the
-/// turn that held it said ("done, waiting on …", "left, waiting on …"). Still held on something
-/// else, its reason names only what's left, and what follows it moves on that (#156's review: work
-/// held on its merge alone counts as done for a review of it). The owner's finish is kept until
-/// the hold ends.
-pub fn release(conn: &mut Connection, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
-    let tx = conn.transaction()?;
-    let starts = released(&tx, task, trace)?;
-    tx.commit()?;
-    Ok(starts)
-}
-
+/// A held task's hold may be over, or narrower, with no turn of its own to say so (a command that
+/// ended during another turn). Still held on something else, its reason names only what's left,
+/// and what follows it moves on that (#156's review: work held on its merge alone counts as done
+/// for a review of it). With nothing left open it's done if its owner reported so. Else its owner
+/// is woken on it and told what ended: a missing report is never read as done (0047), and the wake
+/// is the one ask for it.
 fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
     let Some(t) = read(tx, task).optional_task()? else {
         return Ok(Vec::new());
@@ -288,31 +300,18 @@ fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Erro
     if t.state != State::Held {
         return Ok(Vec::new());
     }
-    let (finish, note): (Option<String>, Option<String>) = tx.query_row(
-        "SELECT finish, finish_note FROM tasks WHERE number = ?1",
-        [task],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    )?;
-    let ends = open_on(tx, task)?.is_empty();
-    if ends {
-        tx.execute(
-            "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
-            [task],
-        )?;
+    let said = t.report.as_ref().map(|r| r.how);
+    if !open_on(tx, task)?.is_empty() || matches!(said, Some(Finish::Done | Finish::Blocked)) {
+        let mut starts = settle(tx, &t, trace)?;
+        starts.extend(cascade(tx, task, trace)?);
+        return Ok(starts);
     }
-    let said = match t.reason.as_deref() {
-        Some(r) if r.starts_with("left,") => Finish::Left,
-        _ => Finish::Done,
+    tx.execute("UPDATE tasks SET asks = 1 WHERE number = ?1", [task])?;
+    let carry = match t.report.and_then(|r| r.note) {
+        Some(left) => {
+            format!("what this task waited on has ended, and you left this work: {left}")
+        }
+        None => "what this task waited on has ended".to_string(),
     };
-    // While something is still open, the hold is only renamed: the owner's finish waits for its end.
-    let (finish, note) = match ends {
-        true => (
-            finish.as_deref().and_then(Finish::named).unwrap_or(said),
-            note,
-        ),
-        false => (said, None),
-    };
-    let mut starts = settle(tx, &t, Some(finish), note, 1, trace)?;
-    starts.extend(cascade(tx, task, trace)?);
-    Ok(starts)
+    Ok(vec![ready(tx, task, Some(&carry))?])
 }

@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn a_held_work_task_cannot_use_the_review_refresh_exception() {
+fn a_work_tasks_commit_is_what_to_look_at_never_a_review() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let work = Give {
@@ -22,20 +22,18 @@ fn a_held_work_task_cannot_use_the_review_refresh_exception() {
         commit: Some("abc1234"),
         ..Said::default()
     };
-    tasks::finish(&mut conn, "bo", task, Finish::Done, &said).unwrap();
-    tasks::ended(&mut conn, task, Outcome::Ok { tools: 1 }, T).unwrap();
+    finish(&mut conn, "bo", task, Finish::Done, &said).unwrap();
+    tasks::ended(&mut conn, task, Outcome::Ok, T).unwrap();
     assert_eq!(state(&conn, task).0, State::Held);
-    // Its owner may finish it from any turn (G174), but a commit with that is no review.
+    // Its owner may report it from any turn (G174). A commit with that is what to look at, no review.
     let again = Said {
         commit: Some("def5678"),
         ..Said::default()
     };
-    let finished = tasks::finish(&mut conn, "bo", task, Finish::Done, &again).unwrap();
-    assert_eq!(
-        finished.reviewed.as_deref(),
-        Some("abc1234"),
-        "{finished:?}"
-    );
+    let finished = finish(&mut conn, "bo", task, Finish::Done, &again).unwrap();
+    assert_eq!(finished.reviewed, None, "{finished:?}");
+    let see = finished.report.as_ref().and_then(|r| r.see.as_deref());
+    assert_eq!(see, Some("def5678"), "{finished:?}");
     assert_eq!(finished.state, State::Held);
 }
 
@@ -48,13 +46,14 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
     reviewed(&mut conn, done);
     let unfinished = review_by_bo(&mut conn, 6, "giving");
     tasks::started(&mut conn, unfinished, T).unwrap();
-    tasks::finish(
+    finish(
         &mut conn,
         "bo",
         unfinished,
         Finish::Left,
         &Said {
             commit: Some("def1234"),
+            note: Some("the second file"),
             ..Said::default()
         },
     )
@@ -62,6 +61,8 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
     // Recreate the prior schema to exercise the real database upgrade boundary.
     let before =
         "ALTER TABLE tasks DROP COLUMN review_done; DROP INDEX turns_live; DROP INDEX tasks_asked;
+                  ALTER TABLE tasks DROP COLUMN finish_see; ALTER TABLE tasks DROP COLUMN finish_ts;
+                  ALTER TABLE tasks RENAME COLUMN asks TO idle_lefts;
                   ALTER TABLE agent_context DROP COLUMN told;
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;

@@ -1,4 +1,4 @@
-import type { PersonAnswer, PersonTask } from '../api';
+import type { PersonAnswer, PersonTask, Task } from '../api';
 
 /** What the person has staged for a question: kept through Back, Next, tabs and chats until Send. */
 export interface Draft {
@@ -38,6 +38,19 @@ export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   if (task.form === 'yesno') return { task: task.number, yes: draft.values[0] === 'Yes', ...notes };
   if (task.form === 'done') return { task: task.number, done: true, ...notes };
   return { task: task.number, pick: draft.values, ...notes };
+}
+
+const said = { done: 'Done', left: 'Left', blocked: 'Blocked' };
+
+/** What a task's owner last reported, in a line, or that it has reported nothing (0047). */
+export function reported(task: Task): string | null {
+  const report = task.report;
+  if (report) {
+    const words = [said[report.how], report.note].filter(Boolean).join(': ');
+    return report.see ? `${words} · ${report.see}` : words;
+  }
+  if (task.asked) return task.state === 'blocked' ? 'No report. Asked once' : 'No report yet. Asked once';
+  return task.state === 'working' || task.state === 'held' ? 'No report yet' : null;
 }
 
 /** How long nothing has moved a stale task (F11): "Idle 4 days". */

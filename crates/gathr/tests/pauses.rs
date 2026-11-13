@@ -353,7 +353,7 @@ fn a_turn_with_no_progress_is_flagged_never_stopped() {
 
 /// G174, live on #139: a task's command ended while its owner's engine ran a turn on something
 /// else, so Claude Code said so inside that turn and began none for the task. The task, held on the
-/// command, settles there and then (its owner had said done), not never.
+/// command, settles there and then, as its owner had reported it done, not never.
 #[test]
 fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
     let data = TempDir::new();
@@ -408,6 +408,17 @@ fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
             .unwrap()
             .contains("background command"),
         "{task}"
+    );
+    let report = json!({ "task": 1, "how": "done", "note": "the pings ran" });
+    let said = text(&call_tool(
+        service.info.port,
+        &token(&data.0),
+        "finish_task",
+        report,
+    ));
+    assert!(
+        said.starts_with("Recorded: done. Task #1 is held"),
+        "{said}"
     );
 
     let path = format!("/api/chats/{chat}/messages");

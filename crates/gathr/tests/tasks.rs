@@ -4,6 +4,8 @@
 mod common;
 #[path = "tasks/commands.rs"]
 mod held_commands;
+#[path = "tasks/reports.rs"]
+mod reports;
 #[path = "tasks/reviews.rs"]
 mod review_evidence;
 
@@ -69,14 +71,49 @@ fn state(conn: &Connection, task: i64) -> (State, Option<String>) {
     (t.state, t.reason)
 }
 
-/// Runs one turn on the task: started, the owner's finish if any, then ended well.
-fn work(conn: &mut Connection, task: i64, finish: Option<Finish>, tools: i64) -> Vec<Start> {
-    tasks::started(conn, task, T).unwrap();
+/// The owner's report, as `tasks::finish` takes it: the task as it stands after.
+fn finish(
+    conn: &mut Connection,
+    agent: &str,
+    task: i64,
+    how: Finish,
+    said: &Said,
+) -> Result<tasks::Task, Error> {
+    tasks::finish(conn, agent, task, how, said, T).map(|(t, _, _)| t)
+}
+
+/// Starts a turn of its owner's on the task: the one Gathr queued on it, else a new one. Its id.
+fn begin(conn: &mut Connection, task: i64) -> String {
     let owner = tasks::get(conn, task).unwrap().unwrap().owner.unwrap();
-    if let Some(how) = finish {
-        tasks::finish(conn, &owner, task, how, &Said::default()).unwrap();
+    let sql = "SELECT id FROM turns WHERE task = ?1 AND status = 'queued' ORDER BY rowid LIMIT 1";
+    let queued: Option<String> = conn.query_row(sql, [task], |r| r.get(0)).ok();
+    let id = queued.unwrap_or_else(|| {
+        let turns: i64 = conn
+            .query_row("SELECT count(*) FROM turns", [], |r| r.get(0))
+            .unwrap();
+        let id = format!("work-{turns}");
+        gathr::store::add_turn(conn, "c", &id, T, (Some(&owner), Some(task), None)).unwrap();
+        id
+    });
+    gathr::store::set_turn(conn, &id, "running", None).unwrap();
+    tasks::started(conn, task, T).unwrap();
+    id
+}
+
+/// Runs one turn of its owner's on the task: started, its report if any (with a note, as a report
+/// needs one), then ended well.
+fn work(conn: &mut Connection, task: i64, how: Option<Finish>) -> Vec<Start> {
+    let owner = tasks::get(conn, task).unwrap().unwrap().owner.unwrap();
+    let id = begin(conn, task);
+    if let Some(how) = how {
+        let said = Said {
+            note: Some("see the change"),
+            ..Said::default()
+        };
+        finish(conn, &owner, task, how, &said).unwrap();
     }
-    tasks::ended(conn, task, Outcome::Ok { tools }, T).unwrap()
+    gathr::store::set_turn(conn, &id, "done", None).unwrap();
+    tasks::ended(conn, task, Outcome::Ok, T).unwrap()
 }
 
 fn refusal(result: Result<impl std::fmt::Debug, Error>) -> String {
@@ -112,7 +149,7 @@ fn a_task_waits_for_its_after_tasks_then_starts_its_owners_turn() {
         tasks::may_start(&conn, second).unwrap().as_deref(),
         Some(format!("task #{second} still waits on its `after` tasks").as_str())
     );
-    let starts = work(&mut conn, first, Some(Finish::Done), 3);
+    let starts = work(&mut conn, first, Some(Finish::Done));
     assert_eq!(state(&conn, first).0, State::Done);
     assert_eq!(state(&conn, second).0, State::Ready);
     let bo: Vec<_> = starts.iter().filter(|s| s.agent == "bo").collect();
@@ -184,7 +221,7 @@ fn a_giving_turn_cut_off_by_a_stop_still_brings_its_hear_back() {
     let mut conn = team(&dir);
     turn(&conn, "lead-turn", "lead", None, "running");
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
-    work(&mut conn, a, Some(Finish::Done), 1);
+    work(&mut conn, a, Some(Finish::Done));
     tasks::recover(&mut conn).unwrap();
     let waiting = gathr::store::take_over(&conn).unwrap();
     let back = waiting.iter().find(|w| w.agent.as_deref() == Some("lead"));
@@ -200,7 +237,7 @@ fn a_stop_between_a_giving_turns_end_and_its_round_still_brings_its_hear_back() 
     tasks::started(&mut conn, lead_task, T).unwrap();
     turn(&conn, "lead-turn", "lead", Some(lead_task), "running");
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
-    work(&mut conn, a, Some(Finish::Done), 1);
+    work(&mut conn, a, Some(Finish::Done));
     // The service stops after the turn's end is written, before its round runs.
     conn.execute_batch(
         "CREATE TEMP TRIGGER stop BEFORE UPDATE ON tasks BEGIN SELECT RAISE(ABORT, 'stopped'); END;",
@@ -235,25 +272,22 @@ fn a_finish_applies_when_the_turn_ends_and_only_the_owner_gives_one() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let (task, _) = give(&mut conn, "ann", &[], None);
-    let early = tasks::finish(&mut conn, "ann", task, Finish::Done, &Said::default());
-    assert_eq!(
-        refusal(early),
-        format!("task #{task} is ready, not being worked on")
-    );
+    turn(&conn, "t1", "ann", Some(task), "running");
     tasks::started(&mut conn, task, T).unwrap();
-    let theirs = tasks::finish(&mut conn, "bo", task, Finish::Done, &Said::default());
+    let theirs = finish(&mut conn, "bo", task, Finish::Done, &Said::default());
     assert_eq!(refusal(theirs), format!("task #{task} isn't yours"));
     let said = Said {
         note: Some("needs the lead's call on naming"),
         ..Said::default()
     };
-    tasks::finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
+    finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
     assert_eq!(
         state(&conn, task).0,
         State::Working,
         "not before the turn ends"
     );
-    tasks::ended(&mut conn, task, Outcome::Ok { tools: 2 }, T).unwrap();
+    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    tasks::ended(&mut conn, task, Outcome::Ok, T).unwrap();
     let reason = Some("needs the lead's call on naming".to_string());
     assert_eq!(state(&conn, task), (State::Blocked, reason));
 }
@@ -280,13 +314,10 @@ fn a_turn_that_ends_with_work_open_holds_its_task_and_says_on_what() {
         }],
     };
     waits::leave(&mut conn, &wait, T).unwrap();
-    tasks::ended(&mut conn, lead_task, Outcome::Ok { tools: 4 }, T).unwrap();
-    let why = format!("done, waiting on CI on #54, #{handed} (Ann)");
+    tasks::ended(&mut conn, lead_task, Outcome::Ok, T).unwrap();
+    // Nobody said it's done, so the hold doesn't say so either (0047).
+    let why = format!("waiting on CI on #54, #{handed} (Ann)");
     assert_eq!(state(&conn, lead_task), (State::Held, Some(why)));
-    // With nothing open, the same end is done.
-    let (plain, _) = give(&mut conn, "bo", &[], None);
-    work(&mut conn, plain, None, 1);
-    assert_eq!(state(&conn, plain).0, State::Done);
 }
 
 fn to_lead(starts: &[Start]) -> Vec<&Start> {
@@ -301,14 +332,14 @@ fn the_giver_hears_back_once_its_turn_has_ended_and_every_task_from_it_is_settle
     tasks::started(&mut conn, lead_task, T).unwrap();
     turn(&conn, "lead-turn", "lead", Some(lead_task), "running");
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
-    let starts = work(&mut conn, a, Some(Finish::Done), 1);
+    let starts = work(&mut conn, a, Some(Finish::Done));
     assert!(
         to_lead(&starts).is_empty(),
         "the lead is still giving: {starts:?}"
     );
     let (b, _) = give(&mut conn, "bo", &[], Some("lead-turn"));
     gathr::store::set_turn(&conn, "lead-turn", "done", None).unwrap();
-    tasks::ended(&mut conn, lead_task, Outcome::Ok { tools: 1 }, T).unwrap();
+    tasks::ended(&mut conn, lead_task, Outcome::Ok, T).unwrap();
     assert_eq!(state(&conn, lead_task).0, State::Held);
     let ended = tasks::turn_ended(&mut conn, "lead-turn", T).unwrap();
     assert!(to_lead(&ended).is_empty(), "#{b} is open: {ended:?}");
@@ -338,36 +369,17 @@ fn a_giver_whose_tasks_settle_while_it_gives_hears_back_when_its_turn_ends() {
     tasks::started(&mut conn, lead_task, T).unwrap();
     turn(&conn, "lead-turn", "lead", Some(lead_task), "running");
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
-    work(&mut conn, a, Some(Finish::Done), 1);
+    work(&mut conn, a, Some(Finish::Done));
     gathr::store::set_turn(&conn, "lead-turn", "done", None).unwrap();
-    tasks::ended(&mut conn, lead_task, Outcome::Ok { tools: 1 }, T).unwrap();
+    tasks::ended(&mut conn, lead_task, Outcome::Ok, T).unwrap();
     assert_eq!(
         state(&conn, lead_task),
-        (State::Held, Some(format!("done, waiting on #{a} (Ann)"))),
+        (State::Held, Some(format!("waiting on #{a} (Ann)"))),
         "not done before it has heard back"
     );
     let back = tasks::turn_ended(&mut conn, "lead-turn", T).unwrap();
     assert_eq!(back.len(), 1, "{back:?}");
     assert_eq!(back[0].task, Some(lead_task));
-}
-
-#[test]
-fn left_twice_by_turns_that_did_nothing_is_blocked() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let (task, _) = give(&mut conn, "ann", &[], None);
-    let starts = work(&mut conn, task, Some(Finish::Left), 5);
-    assert_eq!(
-        state(&conn, task).0,
-        State::Ready,
-        "work done: another turn"
-    );
-    assert!(starts[0].text.contains("Continue from here: work remains"));
-    work(&mut conn, task, Some(Finish::Left), 0);
-    assert_eq!(state(&conn, task).0, State::Ready);
-    let starts = work(&mut conn, task, Some(Finish::Left), 0);
-    assert!(starts.is_empty(), "{starts:?}");
-    assert_eq!(state(&conn, task).0, State::Blocked);
 }
 
 #[test]
@@ -381,10 +393,10 @@ fn a_task_blocked_on_an_existing_task_carries_on_when_it_is_done() {
         on_task: Some(fix),
         ..Said::default()
     };
-    tasks::finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
-    tasks::ended(&mut conn, task, Outcome::Ok { tools: 1 }, T).unwrap();
+    finish(&mut conn, "ann", task, Finish::Blocked, &said).unwrap();
+    tasks::ended(&mut conn, task, Outcome::Ok, T).unwrap();
     assert_eq!(state(&conn, task).0, State::Blocked);
-    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let starts = work(&mut conn, fix, Some(Finish::Done));
     assert_eq!(state(&conn, task).0, State::Ready);
     let ann: Vec<_> = starts.iter().filter(|s| s.agent == "ann").collect();
     assert!(
@@ -469,7 +481,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     };
     let (task, _) = tasks::give(&mut conn, &review, T).unwrap();
     tasks::started(&mut conn, task.number, T).unwrap();
-    let done = tasks::finish(&mut conn, "bo", task.number, Finish::Done, &Said::default());
+    let done = finish(&mut conn, "bo", task.number, Finish::Done, &Said::default());
     assert_eq!(
         refusal(done),
         "Include the reviewed commit when you finish a review"
@@ -478,8 +490,8 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         commit: Some("abc1234"),
         ..Said::default()
     };
-    tasks::finish(&mut conn, "bo", task.number, Finish::Done, &said).unwrap();
-    tasks::ended(&mut conn, task.number, Outcome::Ok { tools: 3 }, T).unwrap();
+    finish(&mut conn, "bo", task.number, Finish::Done, &said).unwrap();
+    tasks::ended(&mut conn, task.number, Outcome::Ok, T).unwrap();
     assert_eq!(
         state(&conn, task.number).0,
         State::Done,
@@ -506,7 +518,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         ..review
     };
     let (work_pr, _) = tasks::give(&mut conn, &work_pr, T).unwrap();
-    work(&mut conn, work_pr.number, Some(Finish::Done), 2);
+    work(&mut conn, work_pr.number, Some(Finish::Done));
     let held = Some("done, waiting on #61 to merge".to_string());
     assert_eq!(state(&conn, work_pr.number), (State::Held, held), "G75");
     tasks::pr_looked(&mut conn, work_pr.number, "MERGED", None, T).unwrap();
@@ -557,7 +569,7 @@ fn a_task_done_and_held_only_on_its_pr_lets_the_tasks_after_it_start() {
     let mut conn = team(&dir);
     let fix = fix_with_pr(&mut conn);
     let (review, _) = give(&mut conn, "bo", &[fix], None);
-    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let starts = work(&mut conn, fix, Some(Finish::Done));
     let held = Some("done, waiting on #69 to merge".to_string());
     assert_eq!(
         state(&conn, fix),
@@ -594,13 +606,13 @@ fn a_task_held_on_more_than_its_pr_or_left_still_holds_the_tasks_after_it() {
         parts: vec![part("ci", "#69")],
     };
     waits::leave(&mut conn, &wait, T).unwrap();
-    tasks::ended(&mut conn, fix, Outcome::Ok { tools: 2 }, T).unwrap();
-    let held = Some("done, waiting on CI on #69, #69 to merge".to_string());
+    tasks::ended(&mut conn, fix, Outcome::Ok, T).unwrap();
+    let held = Some("waiting on CI on #69, #69 to merge".to_string());
     assert_eq!(state(&conn, fix), (State::Held, held));
     assert_eq!(state(&conn, review).0, State::Waiting, "held on a wait");
     let left = fix_with_pr(&mut conn);
     let (after_left, _) = give(&mut conn, "bo", &[left], None);
-    work(&mut conn, left, Some(Finish::Left), 2);
+    work(&mut conn, left, Some(Finish::Left));
     assert_eq!(
         state(&conn, after_left).0,
         State::Waiting,
@@ -837,13 +849,16 @@ fn review_by_bo(conn: &mut Connection, pr: i64, given_in: &str) -> i64 {
 }
 
 fn reviewed(conn: &mut Connection, review: i64) -> Vec<Start> {
+    let id = format!("review-{review}");
+    turn(conn, &id, "bo", Some(review), "running");
     tasks::started(conn, review, T).unwrap();
     let said = Said {
         commit: Some("abc1234"),
         ..Said::default()
     };
-    tasks::finish(conn, "bo", review, Finish::Done, &said).unwrap();
-    tasks::ended(conn, review, Outcome::Ok { tools: 3 }, T).unwrap()
+    finish(conn, "bo", review, Finish::Done, &said).unwrap();
+    gathr::store::set_turn(conn, &id, "done", None).unwrap();
+    tasks::ended(conn, review, Outcome::Ok, T).unwrap()
 }
 
 fn to(starts: &[Start], agent: &str) -> Vec<String> {
@@ -861,13 +876,13 @@ fn a_task_held_only_on_its_merge_wakes_its_giver_once_its_review_is_done() {
     tasks::started(&mut conn, fix, T).unwrap();
     turn(&conn, "ann-turn", "ann", Some(fix), "running");
     let review = review_by_bo(&mut conn, 85, "ann-turn");
-    tasks::finish(&mut conn, "ann", fix, Finish::Done, &Said::default()).unwrap();
-    tasks::ended(&mut conn, fix, Outcome::Ok { tools: 2 }, T).unwrap();
+    finish(&mut conn, "ann", fix, Finish::Done, &Said::default()).unwrap();
+    tasks::ended(&mut conn, fix, Outcome::Ok, T).unwrap();
     conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-turn'", [])
         .unwrap();
     let starts = reviewed(&mut conn, review);
     assert_eq!(to(&starts, "ann").len(), 1, "Ann hears back on the review");
-    let starts = work(&mut conn, fix, Some(Finish::Done), 1);
+    let starts = work(&mut conn, fix, Some(Finish::Done));
     let held = Some("done, waiting on #85 to merge".to_string());
     assert_eq!(state(&conn, fix), (State::Held, held));
     let lead = to(&starts, "lead");
@@ -890,7 +905,7 @@ fn a_review_still_open_holds_the_hear_back_until_it_settles() {
     let fix = work_on_pr(&mut conn, 86);
     turn(&conn, "ann-other", "ann", None, "running");
     let review = review_by_bo(&mut conn, 86, "ann-other");
-    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let starts = work(&mut conn, fix, Some(Finish::Done));
     assert!(
         to(&starts, "lead").is_empty(),
         "the review leads to the merge"
@@ -904,7 +919,7 @@ fn a_review_still_open_holds_the_hear_back_until_it_settles() {
 /// Ann's work on `pr` held only on its merge, already heard by Lead (Vale's #100 review).
 fn heard_while_held(conn: &mut Connection, pr: i64) -> i64 {
     let fix = work_on_pr(conn, pr);
-    let starts = work(conn, fix, Some(Finish::Done), 2);
+    let starts = work(conn, fix, Some(Finish::Done));
     assert_eq!(to(&starts, "lead").len(), 1, "{starts:?}");
     fix
 }
@@ -963,10 +978,10 @@ fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
         pr: Some(90),
     };
     let fix = tasks::give(&mut conn, &fix, T).unwrap().0.number;
-    tasks::ended(&mut conn, review, Outcome::Ok { tools: 2 }, T).unwrap();
+    tasks::ended(&mut conn, review, Outcome::Ok, T).unwrap();
     conn.execute("UPDATE turns SET status = 'done' WHERE id = 'bo-turn'", [])
         .unwrap();
-    let starts = work(&mut conn, fix, Some(Finish::Done), 2);
+    let starts = work(&mut conn, fix, Some(Finish::Done));
     let held = Some("done, waiting on #90 to merge".to_string());
     assert_eq!(state(&conn, fix), (State::Held, held));
     assert_eq!(to(&starts, "bo").len(), 1, "Bo hears back: {starts:?}");
