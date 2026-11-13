@@ -190,8 +190,9 @@ fn ask(tx: &Transaction, t: &Task, trace: &str) -> Result<Start, Error> {
 /// The hear-backs on the tasks given in `turn`, one per giver: when that turn has ended (so the
 /// giver is done handing out work) and every task it gave there is settled. Each says what became
 /// of the tasks its giver hasn't heard about, and only those (G188), on the giver's own task from
-/// that turn while it's still open. A task restarted after its hear-back, or one that settles as
-/// something else than was heard, is heard once more, by itself (0047).
+/// that turn while it's still open. A task restarted after its hear-back is heard again when it
+/// settles, whatever the outcome (its giver asked for that run), and one that settles as something
+/// else than was heard is heard once more: each by itself (0047).
 pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
     let found: Option<(String, String, Option<i64>)> = tx
         .query_row(

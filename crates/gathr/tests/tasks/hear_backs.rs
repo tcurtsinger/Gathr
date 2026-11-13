@@ -42,7 +42,8 @@ fn a_hear_back_names_only_what_its_giver_has_not_heard() {
 }
 
 /// 5e: an outcome that changes after its giver heard it is heard once more. The same outcome,
-/// reached again, is not.
+/// reached again by a turn nobody asked for, is not. After a restart it is: the giver asked for
+/// that run, and hears how it ended.
 #[test]
 fn an_outcome_that_changes_after_it_was_heard_is_heard_once_more() {
     let dir = TempDir::new();
@@ -59,6 +60,11 @@ fn an_outcome_that_changes_after_it_was_heard_is_heard_once_more() {
         to_lead(&starts).is_empty(),
         "the same outcome twice: {starts:?}"
     );
+
+    // Restarted by its giver, it ends the same way: the giver hears how the run it asked for ended.
+    tasks::restart(&mut conn, Some("lead"), task, T).unwrap();
+    let starts = work(&mut conn, task, Some(Finish::Blocked));
+    assert_eq!(to_lead(&starts).len(), 1, "{starts:?}");
 
     // Its owner reports it done from another turn: its giver hears that.
     let (_, _, starts) = tasks::finish(
