@@ -62,11 +62,11 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 ### Friction
 
-At the end of your answer, as "Friction: <what, where>": anything in Gathr or SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead. (P11)
+At the end of your answer, as "Friction: <what, where>": anything in Gathr or SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead, and which [promise](docs/charter.md#the-promises) it breaks. (P11)
 
 Friction is how Gathr learns what not to repeat, so it's read all the time, not only logged:
 - Two sources: ours, and SerenityOS's own (`X:\code\serenityos\planning\FRICTION.md`), which the agents maintaining SerenityOS keep adding to.
-- `X:\Gathr\Gathr\Shared\plans\friction-ledger.md` holds every "Gathr must" from both, each with where it's covered (a decision, AGENTS.md, a feature on the backlog) or "open". The lead brings it up to date from both files at least daily.
+- `X:\Gathr\Gathr\Shared\plans\friction-ledger.md` holds every "Gathr must" from both. A row that belongs to a promise sits under it and under its part of [the truth map](docs/truth-map.md), with its state (Open, Written, Partly, Built or Kept) and where that state comes from; rows about how Gathr is built, and rows with nothing to build, have a section each. The lead brings it up to date from both files at least daily, and runs the check beside it (`friction-ledger-check.cjs`).
 - Every feature plan starts by reading the ledger for entries that touch it; the plan names the ones it covers, and its PR proves them. (P11)
 
 ## Build and check
