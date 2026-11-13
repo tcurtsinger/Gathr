@@ -75,3 +75,17 @@ test('a task blocked for the one it comes after keeps its reason', async () => {
   const waiting = task({ state: 'blocked', reason: '#3 is blocked' });
   expect(await fields(waiting)).toEqual(['Assigned to: sol', 'State: blocked', 'Reason: #3 is blocked']);
 });
+
+test('a task reported blocked on another, with no note, still names that task', async () => {
+  const on = task({
+    state: 'blocked',
+    reason: 'blocked on #3',
+    report: { how: 'blocked', note: null, see: null, at_us: 1 },
+  });
+  expect(await fields(on)).toEqual([
+    'Assigned to: sol',
+    'State: blocked',
+    'Reason: blocked on #3',
+    'Report: Blocked',
+  ]);
+});

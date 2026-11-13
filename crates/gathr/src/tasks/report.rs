@@ -5,7 +5,7 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 
 use super::records::{read, state_of};
-use super::{Kind, Start, State, Task, cascade, held, refused};
+use super::{Kind, Start, State, Task, cascade, held, refused, turn_running};
 use crate::Error;
 use crate::ids::now_us;
 
@@ -147,11 +147,7 @@ pub fn finish(
          WHERE number = ?1",
         params![task, how.as_str(), note, see, now_us(), said.on_task, said.pr, reviewed],
     )?;
-    let running: bool = tx.query_row(
-        "SELECT EXISTS (SELECT 1 FROM turns WHERE task = ?1 AND status = 'running')",
-        [task],
-        |r| r.get(0),
-    )?;
+    let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
     let (took, starts) = if running {

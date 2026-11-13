@@ -256,6 +256,45 @@ fn a_pr_that_merges_does_not_make_a_left_task_done() {
     );
 }
 
+/// Work nobody reported done isn't done because its PR merged: its owner is woken and asked, or,
+/// while its turn still runs, that turn's end settles the task by what it says.
+#[test]
+fn a_pr_that_merges_finishes_work_only_if_its_owner_reported_it_done() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let silent = fix_with_pr(&mut conn);
+    work(&mut conn, silent, None);
+    let held = Some("waiting on #69 to merge".to_string());
+    assert_eq!(state(&conn, silent), (State::Held, held));
+    let starts = tasks::pr_looked(&mut conn, silent, "MERGED", None, T).unwrap();
+    assert_eq!(state(&conn, silent).0, State::Ready, "asked, not done");
+    let carry = "#69 merged, and this task has no report that it's done";
+    assert!(starts[0].text.contains(carry), "{}", starts[0].text);
+
+    let at_work = fix_with_pr(&mut conn);
+    turn(&conn, "t1", "ann", Some(at_work), "running");
+    tasks::started(&mut conn, at_work, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, at_work, "MERGED", None, T).unwrap();
+    assert!(starts.is_empty(), "no second turn is queued: {starts:?}");
+    assert_eq!(
+        state(&conn, at_work).0,
+        State::Working,
+        "its turn still runs"
+    );
+    finish(
+        &mut conn,
+        "ann",
+        at_work,
+        Finish::Left,
+        &note("the second half"),
+    )
+    .unwrap();
+    gathr::store::set_turn(&conn, "t1", "done", None).unwrap();
+    tasks::ended(&mut conn, at_work, Outcome::Ok, T).unwrap();
+    let left = Some("left: the second half".to_string());
+    assert_eq!(state(&conn, at_work), (State::Blocked, left));
+}
+
 /// A hold that ends with no "done" reported never marks the task done: its owner is woken, and that
 /// is the one ask.
 #[test]

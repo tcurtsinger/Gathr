@@ -597,7 +597,8 @@ pub fn engine_gone(
     Ok(starts)
 }
 
-/// A task's PR has been looked at: merged settles it, closed cancels it (G67, G44); a review
+/// A task's PR has been looked at: merged settles work reported done and any review, closed
+/// cancels it (G67, G44); a review
 /// whose PR moved past its commit is out of date (G73).
 pub fn pr_looked(
     conn: &mut Connection,
@@ -631,27 +632,30 @@ pub fn pr_looked(
         match pr_state.as_str() {
             "MERGED" => {
                 end_waits(&tx, task, "its PR merged")?;
-                // Work its owner left isn't done because its PR merged (0047, live #148): the
-                // owner is woken with what it left, and this is its one ask.
-                let left: Option<Option<String>> = tx
-                    .query_row(
-                        "SELECT finish_note FROM tasks WHERE number = ?1 AND kind = 'work' AND finish = 'left'",
-                        [task],
-                        |r| r.get(0),
-                    )
-                    .optional()?;
-                match left {
-                    Some(note) => {
+                let said = t.report.as_ref().map(|r| r.how);
+                if t.kind == Kind::Work && said != Some(Finish::Done) {
+                    // Work is done by its merge only if its owner reported it done (0047, live
+                    // #148). Else the owner is woken with what it last said, and this is the one
+                    // ask; while its turn still runs, that turn's end settles the task instead.
+                    if !turn_running(&tx, task)? {
                         tx.execute("UPDATE tasks SET asks = 1 WHERE number = ?1", [task])?;
-                        let note = note.unwrap_or_else(|| "it isn't said what".to_string());
-                        let carry = format!("#{pr} merged, and you left this work: {note}");
+                        let note = t.report.as_ref().and_then(|r| r.note.as_deref());
+                        let stands = match (said, note) {
+                            (Some(Finish::Left), Some(note)) => {
+                                format!("you left this work: {note}")
+                            }
+                            (Some(Finish::Blocked), Some(note)) => {
+                                format!("you reported this task blocked: {note}")
+                            }
+                            _ => "this task has no report that it's done".to_string(),
+                        };
+                        let carry = format!("#{pr} merged, and {stands}");
                         starts.push(ready(&tx, task, Some(&carry))?);
                     }
-                    None => {
-                        let why = format!("#{pr} merged");
-                        set(&tx, task, State::Done, Some(&why), trace)?;
-                        starts = cascade(&tx, task, trace)?;
-                    }
+                } else {
+                    let why = format!("#{pr} merged");
+                    set(&tx, task, State::Done, Some(&why), trace)?;
+                    starts = cascade(&tx, task, trace)?;
                 }
             }
             "CLOSED" => {
@@ -692,6 +696,15 @@ pub fn list(conn: &Connection, chat: &str) -> Result<Vec<Task>, Error> {
 
 pub fn get(conn: &Connection, task: i64) -> Result<Option<Task>, Error> {
     read(conn, task).optional_task()
+}
+
+/// Whether a turn is running on the task now.
+fn turn_running(conn: &Connection, task: i64) -> Result<bool, Error> {
+    Ok(conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM turns WHERE task = ?1 AND status = 'running')",
+        [task],
+        |r| r.get(0),
+    )?)
 }
 
 /// Who may cancel or restart: the giver, or the person (`by` none).

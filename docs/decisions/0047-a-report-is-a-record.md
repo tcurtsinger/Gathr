@@ -23,7 +23,9 @@ Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [
   asking for it. If that ends silent too, the task is blocked with "no report" and its giver hears.
 - **A hold that ends** with no turn of its own (a PR merging, a background command ending during another turn)
   makes the task done only if its owner reported it done. Otherwise its owner is woken on it and told what ended,
-  and that wake is the one ask. A PR that merges never makes "left" work done.
+  and that wake is the one ask. A PR that merges never makes "left" work done, and unreported work whose turn
+  still runs when its PR merges is left to that turn's end. A review is done when its PR merges: nothing is left
+  to review.
 - **"Left" and "no report" are not states.** Gathr holds such a task as `blocked`, and the report says which.
 - **A task blocked for the one it comes after** records which one (`blocked_on`), and goes back in line when that
   one is restarted and finishes.

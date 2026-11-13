@@ -223,7 +223,7 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
     let said = text(&call_tool(port, &ann, "finish_task", report));
     assert_eq!(
         said,
-        "Recorded: done. It applies to task #1 when this turn ends."
+        "Recorded: done. It applies when the turn running on task #1 ends."
     );
     let listed = tasks(&team);
     assert_ne!(listed["tasks"][0]["state"], "done", "not before: {listed}");
@@ -245,6 +245,32 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
     assert!(
         said.starts_with("Already recorded: task #1 is done"),
         "{said}"
+    );
+
+    // A task of Ann's in another chat isn't hers to report from this one: a tool acts in its chat.
+    let members = json!([
+        { "agent": team.lead, "role": "supervisor" },
+        { "agent": history["turns"][1]["agent"], "role": "member" }
+    ]);
+    let made = team
+        .service
+        .send("POST", "/api/chats", json!({ "members": members }));
+    assert_eq!(made.status, 200, "{}", made.body);
+    let other = made.json()["id"].as_str().unwrap().to_string();
+    let path = format!("/api/chats/{other}/messages");
+    let sent = team
+        .service
+        .send("POST", &path, json!({ "text": "Plan it" }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let lead_there = token(&data.0, 2);
+    let ask = json!({ "to": "ann", "what": "Read the notes" });
+    let given = text(&call_tool(port, &lead_there, "give_task", ask));
+    assert!(given.starts_with("Task #2 for ann"), "{given}");
+    let elsewhere = json!({ "task": 2, "how": "done", "note": "read" });
+    let refused = text(&call_tool(port, &ann, "finish_task", elsewhere));
+    assert!(
+        refused.starts_with("finish_task failed: there's no task #2 in this chat"),
+        "{refused}"
     );
 }
 

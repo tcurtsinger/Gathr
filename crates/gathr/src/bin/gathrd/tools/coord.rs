@@ -158,8 +158,8 @@ impl Tools {
 
     #[tool(
         description = "Report your task: done (say what to look at: a PR, a commit, a file or a note), left (say what is \
-                       left) or blocked (say on what). Any task of yours, from any turn. In the task's own turn the report \
-                       applies when the turn ends; otherwise at once. A task with open waits or PRs stays held until they end."
+                       left) or blocked (say on what). Any task of yours, from any turn. While a turn runs on the task the \
+                       report applies when that turn ends; otherwise at once. A task with open waits or PRs stays held until they end."
     )]
     async fn finish_task(
         &self,
@@ -181,6 +181,12 @@ impl Tools {
                     Some(task) => task,
                     None => only_open(c, &chat, &agent)?,
                 };
+                // A tool acts in its caller's chat: an agent's task in another chat isn't reported here.
+                if !tasks::get(c, task)?.is_some_and(|t| t.chat == chat) {
+                    return Err(Error::Refused(format!(
+                        "there's no task #{task} in this chat"
+                    )));
+                }
                 let said = Said {
                     note: ask.note.as_deref(),
                     on_task: ask.on_task,
@@ -466,7 +472,9 @@ fn taken(t: &tasks::Task, took: Took, how: &str) -> String {
         reason.map_or(String::new(), |r| format!("{lead}{r}"))
     };
     match took {
-        Took::Kept => format!("Recorded: {how}. It applies to task #{n} when this turn ends."),
+        Took::Kept => {
+            format!("Recorded: {how}. It applies when the turn running on task #{n} ends.")
+        }
         Took::Applied => format!(
             "Recorded: {how}. Task #{n} is {}{}.",
             t.state.as_str(),
