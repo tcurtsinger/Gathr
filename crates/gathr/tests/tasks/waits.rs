@@ -30,6 +30,37 @@ fn an_all_wait_fires_once_when_every_part_is_met() {
     assert_eq!(waits::read(&conn, &all.id).unwrap().state, "fired");
 }
 
+/// A wait of several parts is looked at part by part: what each part saw, and a part's look that
+/// keeps failing, show on the wait its agent set (found in #183's review).
+#[test]
+fn a_wait_of_several_parts_says_what_each_part_saw_and_which_look_fails() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let all = wait_on(&mut conn, vec![part("ci", "#54"), part("pr", "55")]).unwrap();
+    let (ci, pr) = (&all.parts[0].id, &all.parts[1].id);
+    let queued = "1 of 2 checks on #54 at 0123456 finished: 1 passed; queued: UI (macOS)";
+    waits::looked(&conn, ci, None, Some(queued), None).unwrap();
+    for _ in 0..2 {
+        waits::looked(&conn, pr, None, None, Some("gh: not signed in")).unwrap();
+    }
+    let wait = waits::read(&conn, &all.id).unwrap();
+    assert_eq!(wait.saw().as_deref(), Some(queued));
+    assert_eq!(wait.failing(), Some((2, "gh: not signed in".to_string())));
+    // What an earlier look saw stands through a look that fails, and a look that works clears the
+    // failure.
+    waits::looked(&conn, ci, None, None, Some("gh timed out")).unwrap();
+    waits::looked(&conn, pr, None, Some("#55 is open"), None).unwrap();
+    let wait = waits::read(&conn, &all.id).unwrap();
+    assert_eq!(
+        wait.saw(),
+        Some(format!("{queued}; #55 is open")),
+        "each part's last good look"
+    );
+    assert_eq!(wait.failing(), Some((1, "gh timed out".to_string())));
+    let alone = wait_on(&mut conn, vec![part("pr", "56")]).unwrap();
+    assert_eq!(waits::read(&conn, &alone.id).unwrap().failing(), None);
+}
+
 #[test]
 fn an_agent_wait_fires_when_that_agent_has_nothing_left_in_the_chat() {
     let dir = TempDir::new();

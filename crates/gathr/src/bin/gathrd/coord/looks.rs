@@ -414,7 +414,9 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
             gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
         }
     };
+    // Kept on the wait and said in its wake: never with a secret the command printed.
     let printed: String = ran.out.chars().take(PRINTED_MOST).collect();
+    let printed = gathr::redact::redact(&printed);
     if ran.code != Some(0) {
         let exit = ran
             .code
@@ -586,5 +588,30 @@ mod tests {
             [false, false],
             "a read-only check ran a program the repository names"
         );
+    }
+
+    /// What a check that isn't met printed is kept on its wait and shown: its exit code and its
+    /// output, never with a secret in it (#183's review).
+    #[tokio::test]
+    async fn a_check_not_met_says_how_it_exited_and_hides_a_secret_it_printed() {
+        let root = std::env::temp_dir().join(format!("gathr-seen-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let secret = "ghp_0123456789abcdefghijABCDEFGHIJ012345";
+        let command = format!("echo \"2 left, --token {secret}\"; exit 3");
+        let looked = check(&command, &root, &vars).await;
+        let quiet = check("exit 1", &root, &vars).await;
+        let _ = std::fs::remove_dir_all(&root);
+        let Ok(Look::NotYet { seen, .. }) = looked else {
+            panic!("a check that exits 3 isn't met: {:?}", looked.err());
+        };
+        assert!(
+            seen.starts_with("the check exited 3: \"2 left, --token ") && !seen.contains(secret),
+            "{seen}"
+        );
+        let Ok(Look::NotYet { seen, .. }) = quiet else {
+            panic!("a check that exits 1 isn't met: {:?}", quiet.err());
+        };
+        assert_eq!(seen, "the check exited 1");
     }
 }

@@ -290,12 +290,9 @@ impl Tools {
                         if let Some(saw) = w.saw() {
                             line.push_str(&format!(". Last look: {saw}"));
                         }
-                        if let (true, Some(error)) = (w.failures > 0, &w.last_error) {
-                            let looks = if w.failures == 1 { "look" } else { "looks" };
-                            line.push_str(&format!(
-                                ". The last {} {looks} failed: {error}",
-                                w.failures
-                            ));
+                        if let Some((failed, error)) = w.failing() {
+                            let looks = if failed == 1 { "look" } else { "looks" };
+                            line.push_str(&format!(". The last {failed} {looks} failed: {error}"));
                         }
                         lines.push(line);
                     }

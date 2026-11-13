@@ -77,6 +77,15 @@ impl Wait {
             .collect();
         (!parts.is_empty()).then(|| parts.join("; "))
     }
+
+    /// The looks that failed in a row and the last one's error: its own, or for a wait of several
+    /// the part's whose looks have failed most. Looks are made part by part.
+    pub fn failing(&self) -> Option<(i64, String)> {
+        let own = std::iter::once(self).filter(|_| self.parts.is_empty());
+        let worst = own.chain(&self.parts).max_by_key(|w| w.failures)?;
+        let error = worst.last_error.clone()?;
+        (worst.failures > 0).then_some((worst.failures, error))
+    }
 }
 
 fn refused(why: impl Into<String>) -> Error {
