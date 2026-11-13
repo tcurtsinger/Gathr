@@ -146,25 +146,37 @@ const MAP = 'docs/truth-map.md';
 const states = { Written: 0, Partly: 0, Built: 0, Kept: 0 };
 const mapped = new Set();
 for (const row of read(MAP).matchAll(/^\| (\d+)\.\d+ \|.*$/gm)) {
-  const cells = row[0].slice(1, -1).split('|').map((cell) => cell.trim());
+  // Cells are split on the pipes Markdown splits on: an escaped one stays in its cell.
+  const cells = row[0].trim().slice(1, -1).split(/(?<!\\)\|/).map((cell) => cell.trim());
   const [part, , state, code = '', test = ''] = cells;
   const at = `${MAP}: part ${part}`;
   mapped.add(`P${row[1]}`);
   if (cells.length !== 6) failures.push(`${at} has ${cells.length} cells, not 6`);
   if (!promises.has(`P${row[1]}`)) failures.push(`${at} is under a promise the charter doesn't have`);
-  if (!(state in states)) {
+  if (!Object.hasOwn(states, state)) {
     failures.push(`${at}: its state is "${state}", not Written, Partly, Built or Kept`);
     continue;
   }
   states[state] += 1;
   const named = (cell) => [...cell.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-  const files = named(code).filter((name) => /\/.+\.\w+$/.test(name));
+  // In the Code cell a name with a slash or an extension is a file; the rest are what's in it.
+  const files = named(code).filter((name) => /[\\/]|\.\w+$/.test(name));
   for (const file of files) if (!isFile(file)) failures.push(`${at}: its code names ${file}, which isn't a file`);
   const proofs = named(test).map((name) => name.split('::'));
   for (const [file, name] of proofs) {
     if (!name) failures.push(`${at}: its test \`${file}\` isn't written as file::test name`);
     else if (!isFile(file)) failures.push(`${at}: its test names ${file}, which isn't a file`);
-    else if (!read(file).includes(name)) failures.push(`${at}: ${file} has no test "${name}"`);
+    else {
+      // The whole name: a Rust test's function, or a UI test's title between its quotes.
+      const text = read(file);
+      const whole = file.endsWith('.rs')
+        ? text.includes(`fn ${name}(`)
+        : ["'", '"', '`'].some((quote) => text.includes(`${quote}${name}${quote}`));
+      if (!whole) failures.push(`${at}: ${file} has no test named "${name}"`);
+    }
+  }
+  if ([...files, ...proofs.map(([file]) => file)].some((file) => file.includes('\\'))) {
+    failures.push(`${at}: write its paths with /, as the repo does`);
   }
   if (state === 'Written') continue;
   if (!files.length) failures.push(`${at} is ${state} but names no file that does it`);
