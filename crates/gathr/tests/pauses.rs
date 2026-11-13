@@ -489,3 +489,53 @@ fn a_usage_limit_after_a_tool_leaves_the_task_as_it_was() {
         "{listed}"
     );
 }
+
+/// The engine exits instead of answering Stop now's interrupt. The turn is over all the same: with
+/// its carry-on saved, its task stays as it was, and nobody is told it failed (0047).
+#[test]
+fn an_engine_that_exits_after_stop_now_leaves_the_task_to_its_carry_on() {
+    let data = TempDir::new();
+    // The lead's first turn; then a turn that holds and exits with no word, as a crash would.
+    let first = std::fs::read_to_string(recording("signed_in")).unwrap();
+    let asked = first.lines().next().unwrap();
+    let rows = [
+        first.trim_end(),
+        asked,
+        r#"{"dir":"hold"}"#,
+        r#"{"dir":"exit","line":"1"}"#,
+    ];
+    let replay = data.0.join("exits.jsonl");
+    std::fs::write(&replay, rows.join("\n") + "\n").unwrap();
+    let (service, chat, _) = team(&data.0, &replay, &[]);
+    send(&service, &chat, "Hi");
+    service.wait_for(&chat, 10, "the lead's first turn", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+    let ask = json!({ "to": "Lead", "what": "Run the steps" });
+    let given = call_tool(service.info.port, &token(&data.0), "give_task", ask);
+    assert_ne!(given["isError"], true, "{given}");
+    service.wait_for(&chat, 10, "the task's turn", |h| {
+        h["turns"][1]["status"] == "running"
+    });
+    pause(&service, "/api/pauses/stop", &chat);
+    service.wait_for(&chat, 10, "Stop now's carry-on", |h| {
+        h["turns"][2]["held"] == "pause"
+    });
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = service.wait_for(&chat, 10, "the turn to end", |h| {
+        h["turns"][1]["status"] != "running"
+    });
+    assert_eq!(history["turns"][1]["status"], "stopped", "{history}");
+    let listed = service
+        .call("GET", &format!("/api/chats/{chat}/tasks"))
+        .json();
+    let task = &listed["tasks"][0];
+    assert_eq!(
+        (&task["state"], &task["reason"]),
+        (
+            &json!("working"),
+            &json!("Stopped by you. Carries on at Restart")
+        ),
+        "{listed}"
+    );
+}

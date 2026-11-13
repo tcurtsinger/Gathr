@@ -540,7 +540,13 @@ impl Task {
                 .error("exited")
                 .attr("why", why.clone()),
         );
-        self.set_turn(&turn.ids, "failed", Some(&why)).await;
+        match (turn.waits, turn.carried) {
+            // Stopped with its carry-on saved, and the engine went instead of answering: the turn
+            // is over all the same, and its task stays for the carry-on (0032, 0047).
+            (Some(waits), _) => self.end_waiting(&turn.ids, Some(&why), waits).await,
+            (None, true) => self.end_carried(&turn.ids, Some(&why)).await,
+            _ => self.set_turn(&turn.ids, "failed", Some(&why)).await,
+        }
         self.try_next().await;
     }
 
