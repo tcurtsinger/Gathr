@@ -4,6 +4,10 @@ Status: accepted. Approved 2026-11-10; recorded 2026-11-12 against the built imp
 Amends [0029](0029-approvals.md). The earlier draft called this work 0036; that number now belongs to
 [Colours: surfaces in three steps](0036-surfaces-in-three-steps.md). Checks-and-merge references use 0043.
 
+Built: partly. Proof: `crates/gathr/tests/merge.rs`, `crates/gathr/tests/check_runs.rs`, `crates/gathr/tests/checks.rs`. Not built: the review task that starts by itself (C9); the hook in every repository and the guard on a typed merge (C5); the service key moved out of `service.json` (C5b).
+
+Out of date below: Required checks has a fourth value, Review only ([0045](0045-review-gates-gathrs-own-repo.md)). Comments in five migrations and three stylesheets still call this decision 0036; released migrations aren't edited.
+
 ## Why
 
 Projects need a merge gate even when they have no hosted CI. Instructions asking agents to merge only

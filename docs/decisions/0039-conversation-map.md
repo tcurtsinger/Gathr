@@ -4,6 +4,8 @@ Status: accepted (owner, 2026-11-11: asked for assistant-ui's conversation map o
 redesign's approved design; `@base-ui/react` approved with it; the rail's length and centring the same day).
 Date: 2026-11-11.
 
+Built: yes. Proof: `ui/src/chat/map.test.ts`, `ui/src/chat/ChatMap.test.tsx`.
+
 ## Choice
 
 - **assistant-ui's ConversationMap, as published** (`elements-conversation-map`, recorded in

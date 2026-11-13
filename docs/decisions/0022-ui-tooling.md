@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-07. Follows [0012](0012-ui-shell.md), which leaves build tooling to the first slice.
 
+Built: yes. Proof: `ui/proxy.test.ts`, `ui/package.json`, `.github/workflows/ci.yml`.
+
+Out of date below: "no component or state library, plain CSS" was replaced by [0030](0030-ui-foundation.md); the CI job exists and runs.
+
 ## Implementation status
 
 Vite, Biome, TypeScript checks and Vitest browser tests are built and run in Windows/macOS CI.

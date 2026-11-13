@@ -1,6 +1,8 @@
 # 0015: Desktop chat with split team conversation and Summary
 
-Status: accepted
+Status: accepted. The split team conversation is replaced by [0037](0037-one-timeline.md), and the plan bar and Summary's rows by [0038](0038-summary-holds-the-plan.md). The shell and the archive stand.
+
+Built: partly. Proof: `ui/src/archive.test.tsx`, `crates/gathr/tests/archive.rs`, `ui/src/chat/Summary.test.tsx`. Built: the shell, the archive in the sidebar, Summary as a popover. The split team conversation and the plan bar were built and then replaced, so they are no longer in the code.
 
 ## Choice
 

@@ -2,6 +2,8 @@
 
 Status: accepted (the owner's pick, Theme A, 2026-11-11). Date: 2026-11-11.
 
+Built: yes. Proof: `designs/tokens.css`, `designs/check.cjs`. No test: the tokens file is the decision, and the design check holds the three dark values.
+
 ## Choice
 
 - **Three surfaces, back to front:** `--frame` (navigation, the top bar, the workspace), `--background` (the

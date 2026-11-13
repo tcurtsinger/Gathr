@@ -4,7 +4,7 @@ Gathr is an open-source desktop app for working with your own AI agents, from di
 
 ## Status
 
-Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, team chats, tasks, diagnostics and updates are built. What Gathr is for, and what it promises, is in [`docs/charter.md`](docs/charter.md); the decisions behind it are in `docs/decisions/`.
+Early, with a working Windows/macOS desktop window and local browser UI. Claude Code and Codex accounts, team chats, tasks, diagnostics and updates are built. What Gathr is for, and what it promises, is in [`docs/charter.md`](docs/charter.md); what is built is in [`docs/architecture.md`](docs/architecture.md), and the decisions behind it, each with whether it is built, are listed in [`docs/decisions/`](docs/decisions/README.md).
 
 ## Build and check
 
@@ -17,6 +17,7 @@ cargo nextest run --workspace --locked
 bash scripts/check-file-size.sh
 node scripts/scrub-frames.check.mjs
 node scripts/registry.check.mjs
+node scripts/docs.check.mjs
 ```
 
 In `ui/`:

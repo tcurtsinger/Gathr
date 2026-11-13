@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-07.
 
+Built: no. Nothing of it is in the code.
+
+Out of date below: "from day one" in the title and "from the first version" below.
+
 ## Implementation status
 
 Not built yet. The accepted provider, interface, stand-in, Settings page and uses below remain planned; the first slice did not include them.

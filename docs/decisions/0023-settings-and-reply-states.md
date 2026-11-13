@@ -2,6 +2,10 @@
 
 Status: accepted.
 
+Built: yes. Proof: `ui/src/settings/SettingsPanel.test.tsx`, `ui/src/chat/Thread.test.tsx`.
+
+Out of date below: Engines shows the accounts, then each engine ([0026](0026-agent-settings.md)).
+
 Settings opens centered over the current screen, with categories at the left and
 an X at the top right, named Close Settings in its tooltip and to assistive tech. Engines uses one form for the first engine. Diagnostics
 is a category, with a turn list beside the selected timeline (option 1).

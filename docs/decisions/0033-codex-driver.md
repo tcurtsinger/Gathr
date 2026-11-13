@@ -2,6 +2,10 @@
 
 Status: accepted (owner, 2026-11-09: Codex before the move-in). Slice 2's C1 to C4.
 
+Built: yes. Proof: `crates/gathr/tests/codex.rs`, `crates/gathr/tests/codex_recovery.rs`, `crates/gathr/tests/codex_copies.rs`.
+
+Out of date below: only risky pushes ask ([0029](0029-approvals.md)); the model list offers exact models only, with no default row; in Auto a wait check doesn't ask.
+
 ## The choice
 
 Codex runs behind the same turn machinery as Claude Code. What differs is one driver per engine,
@@ -52,7 +56,7 @@ record) reads the same `Frame`s and doesn't know which engine runs.
   the network off, Vale's `gh pr view 85` failed ("error connecting to api.github.com") and no escalation was asked
   for, so #85 and #86 waited. Claude agents already have the network (no sandbox on Windows, 0029). Turned down:
   keeping it off and telling agents to escalate (Auto's reviewer decides each time, and in Edits each one asks the
-  person); a Gathr merge tool (more code); Full approvals for the reviewer (no sandbox at all). `ask` stays
+  person); a Gathr merge tool (more code; built later all the same, [0043](0043-checks-and-merge.md)); Full approvals for the reviewer (no sandbox at all). `ask` stays
   `read-only` with no network.
 - **Gathr's tools (0005):** `-c mcp_servers.gathr.url=…`, `bearer_token_env_var =
   "GATHR_AGENT_TOKEN"`, `default_tools_approval_mode = "approve"` (one of `auto`, `prompt`,

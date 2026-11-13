@@ -2,6 +2,10 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
+Built: partly. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/window.rs`, `crates/gathr/tests/context.rs`. Not built: standing rules; catch-up; the state block sent with each turn (agents ask with `list_tasks`); a fresh session per task, and for reviews; the analytics page; the quality comparison.
+
+Out of date below: "Summarise now" and "Summarise at" are built as Compact and Auto-compact; the briefing gives teammates' names and roles, not what each knows.
+
 ## Implementation status
 
 The stable role/team/tool briefing, provider usage and briefing/ask/read size measurements are built. Durable binding decisions, project notes, fresh-session digests and quality comparisons for context changes are not built yet.

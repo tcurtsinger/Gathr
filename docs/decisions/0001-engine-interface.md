@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06.
 
+Built: partly. Proof: `crates/gathr/tests/engines.rs`, `crates/gathr/tests/codex.rs`. Not built: the plan read from an engine's own task tools; a driver saying what its engine supports; the switch for keeping raw engine frames; the ACP driver. The code has a `Driver` enum, not a shared trait ([0033](0033-codex-driver.md)).
+
+Out of date below: Codex is built ([0033](0033-codex-driver.md)), so "follows in the next slice" and its unverified interrupt and approvals no longer hold. Gathr runs only its own engine copies ([0025](0025-engine-copies.md)), never the person's installed Codex. What an agent gets from its account was settled by [0024](0024-only-what-gathr-gives.md), and more tools are denied than the four listed. "Plan" in this file is the engine's own to-do list; [0010](0010-coordination-as-state.md) uses the word for a record with versions and [0038](0038-summary-holds-the-plan.md) for the Supervisor's newest round. One meaning is still to be chosen.
+
 ## Implementation status
 
 Claude Code and Codex drivers are built. The shared Rust `Engine` trait originally proposed here is not built yet: the turn boundary uses a `Driver` enum and shared `Frame` values (0033). The table below describes those operations, not an implemented trait.

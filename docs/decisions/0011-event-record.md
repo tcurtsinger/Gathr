@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06.
 
+Built: partly. Proof: `crates/gathr/tests/diag.rs`, `crates/gathr/tests/window.rs`. Not built: retention, pruning and rollups; OTLP export and content capture; the switch for raw frames; model-call spans and MCP span names; the attributes `gen_ai.provider.name`, `gathr.tool.kind` and `gathr.tool.result_bytes`; the name mapping in one module; Diagnostics answers beyond a turn's timeline.
+
+Out of date below: `room_id` is never written ([0013](0013-one-chat-model.md) has no rooms); the list of names emitted is incomplete, and `gathr.handoff.limit` is emitted. Where [0019](0019-troubleshooting.md)'s event names differ from this file's, the code uses this file's.
+
 ## Implementation status
 
 The event table, raw engine records, turn timeline and core diagnostics are built. Retention controls, pruning, daily rollups, content-capture controls and OTLP export are not built yet. Planned names are separated from emitted names below.
@@ -12,7 +16,7 @@ Every turn, model call, tool call, task change, hand-off, wait, pause, side job 
 
 Names and attributes follow OpenTelemetry's GenAI semantic conventions where they cover the thing, and a `gathr.` namespace where they don't. Export over OTLP is possible, off by default.
 
-A Diagnostics page in the app reads the record.
+Diagnostics, a category in Settings ([0023](0023-settings-and-reply-states.md)), reads the record.
 
 ## Why
 

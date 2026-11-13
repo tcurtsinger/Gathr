@@ -2,6 +2,10 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
+Built: partly. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/person_tasks.rs`, `crates/gathr/tests/team.rs`. Not built: `AGENTS.md` written from questions for a new project; plan mode; the Supervisor's briefing on parts, owners and checks; "how it works" per role; project notes; one question for a vague ask; nudges from state; analytics.
+
+Out of date below: the Claude Code setting is passed on the command line, and nothing is written into an account's folder ([0024](0024-only-what-gathr-gives.md)). [The charter](../charter.md) names the jobs assistant and lead, and has the lead ask its questions for new work where this file has one question for a vague ask; this file changes with the plan that builds them.
+
 ## Implementation status
 
 Supervisor routing, team roles, tool rules and the stable engine briefing are built. Plan mode, stored role job descriptions and the other planned context/state mechanisms below are not built yet.

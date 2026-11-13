@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06.
 
+Built: partly. Proof: `crates/gathr/tests/service.rs`, `crates/gathr/tests/installed.rs`. Not built: finding engines left over after a crash from the event record; the Tailscale name and the device token ([0017](0017-remote-use.md)).
+
+Out of date below: the service starts with no window, not in a new process group; the token file is readable only by the user on macOS, and on Windows relies on its folder.
+
 ## Implementation status
 
 The local service, authentication, window launch and graceful shutdown are built. Remote device authentication (0017) and finding leftover engines from a previous service crash are not built yet.

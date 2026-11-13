@@ -4,6 +4,8 @@ Status: accepted (owner, 2026-11-12, room tasks 140-146, on `Shared\plans\step-r
 0043 is the checks-and-merge decision, so this one is 0044. It extends 0041 (what a step ran) for the work
 row's second slice: assistant-ui's Tool call shows a Request and a Result.
 
+Built: yes. Proof: `crates/gathr/tests/steps.rs`, `ui/src/chat/WorkRow.test.tsx`.
+
 ## Choice
 
 - **A step's body gains `result`**, set as the step ends: `{"text", "lines", "more"}`. `text` is at most

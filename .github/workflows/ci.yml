@@ -17,9 +17,9 @@ env:
   CARGO_INCREMENTAL: 0
 
 jobs:
-  # A pull request that changes only Markdown files runs the four jobs `main` requires with the
-  # file size check alone. The jobs still run, so each required name reports: a skipped matrix
-  # job reports under no name `main` knows. A push to `main` always runs everything.
+  # A pull request that changes only Markdown files runs the same four jobs with the file size
+  # and docs checks alone. The jobs still run, so each reports under its own name: a skipped
+  # matrix job reports under none. A push to `main` always runs everything.
   changes:
     name: Changes
     runs-on: ubuntu-latest
@@ -62,6 +62,8 @@ jobs:
       - name: file size
         shell: bash
         run: bash scripts/check-file-size.sh
+      - name: docs
+        run: node scripts/docs.check.mjs
       - if: needs.changes.outputs.code != 'false'
         name: recording scrub
         run: node scripts/scrub-frames.check.mjs

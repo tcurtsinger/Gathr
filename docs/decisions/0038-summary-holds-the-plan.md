@@ -3,6 +3,10 @@
 Status: accepted (owner, 2026-11-11, on the chat redesign's approved design). Date: 2026-11-11.
 Replaces 0015's plan bar above the composer and its Summary of expandable rows.
 
+Built: yes. Proof: `ui/src/chat/Summary.test.tsx`, `ui/src/chat/plan.test.ts`, `ui/src/chat/AgentPanel.test.tsx`.
+
+Out of date below: the "later slices" are built. "The plan" here is the Supervisor's newest round of tasks; [0010](0010-coordination-as-state.md) uses the word for a record with versions and [0001](0001-engine-interface.md) for an engine's own to-do list. One meaning is still to be chosen.
+
 ## Choice
 
 - **No plan bar and no status bar.** Summary says what both would. A chat with more than one agent has it.

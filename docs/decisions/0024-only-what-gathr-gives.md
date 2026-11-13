@@ -2,6 +2,10 @@
 
 Status: accepted (the owner, 2026-11-07). Date: 2026-11-07.
 
+Built: yes. Proof: `crates/gathr/src/claude/frames.rs`, `crates/gathr/tests/tools.rs`. Left for later by the decision itself: bringing in the person's own items, per agent.
+
+Out of date below: Codex is built and its switches are set ([0033](0033-codex-driver.md)), and a Gathr folder has been signed in to Codex and run; five account tools are denied, the ones named.
+
 ## Choice
 
 - An agent's engine loads nothing from the person's own setup or accounts: no plugins (synced from claude.ai or installed), no hooks, no skills or commands, no MCP servers or claude.ai connectors, no sub-agents of their own, no auto-memory. What an agent has comes from Gathr.

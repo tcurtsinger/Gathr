@@ -4,6 +4,10 @@ Status: accepted (owner, 2026-11-12: option A of `Shared\plans\codex-github.md`,
 2026-11-12. G185, G147, G179. 0044 is the step-results decision and 0045 is Gathr's own review gate,
 so this is 0046.
 
+Built: yes. Proof: `crates/gathr/tests/github.rs`.
+
+Out of date below: `GH_DEBUG` is dropped from the `gh` calls of these tools, not from every `gh` Gathr runs: its own looks at a PR keep the environment they have.
+
 ## Choice
 
 - **Three tools on Gathr's tool server, made host-side** with the `gh` the service already runs for

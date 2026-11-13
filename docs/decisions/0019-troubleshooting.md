@@ -2,6 +2,10 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
+Built: partly. Proof: `crates/gathr/tests/diag.rs`, `crates/gathr/tests/window.rs`, `ui/src/chat/Thread.test.tsx`. Not built: `diag stalls` and `diag usage`; the diagnostics tools for agents; the detailed-logs file; `bundle --hours`; `diag`'s own errors as events; engines, logins and Tailscale in the health event.
+
+Out of date below: event names are [0011](0011-event-record.md)'s (`gathr.settings.change`; `gathr.ui.chat_open`, `chat_switch` and `first_token`, not `gathr.ui.timing`); warnings and errors become events, not every span; a reference opens Diagnostics, which is a Settings category ([0023](0023-settings-and-reply-states.md)); `diag turn` takes a reference.
+
 ## Implementation status
 
 Health, trace, failures, read-only query, turn/raw frames, support bundles and the UI timeline are built. `diag stalls`, `diag usage`, diagnostics MCP tools and the remaining settings described below are not built yet.

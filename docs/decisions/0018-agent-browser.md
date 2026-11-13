@@ -2,6 +2,8 @@
 
 Status: accepted. Date: 2026-11-07. The live stream is the owner's pick, over a browser view inside the window.
 
+Built: no. Nothing of it is in the code.
+
 ## Implementation status
 
 Not built yet. Browser profiles, control tools, live streaming and handover below are accepted plans.

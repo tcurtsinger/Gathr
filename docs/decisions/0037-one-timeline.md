@@ -4,6 +4,10 @@ Status: accepted (owner, 2026-11-11: "Build it", on the chat redesign's approved
 Replaces 0015's split chat and the two columns 0028's order was drawn in. Summary, the plan bar and the
 recipient rules of 0015 and 0028 stand until their own slices of the redesign.
 
+Built: yes. Proof: `ui/src/chat/messages.test.ts`, `ui/src/chat/Timeline.test.tsx`, `ui/src/chat/WorkRow.test.tsx`.
+
+Out of date below: a step shows no time ([0044](0044-what-a-step-returned.md)); a running row says "Working" with its latest step under it; the "later slices" are built ([0038](0038-summary-holds-the-plan.md) to [0042](0042-thinking.md)).
+
 ## Choice
 
 - **One chat in order,** for one agent or five. No Supervisor column and Team column, no header toggle,

@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06.
 
+Built: partly. Proof: `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/pauses.rs`. Not built: plans and plan checks (no plan record, no `plan_check` task); side jobs; a fresh session per task (an agent keeps one session per chat); the Supervisor pausing a chat, and who paused; notifications; the gate's hold while a plan is checked.
+
+Out of date below: hand-off chains and their limit are built. `may_start` isn't one function: a task's state, archive, pauses and usage are each checked where they apply. Waits also have the kind `up_to_date` and the state `picked` ([0043](0043-checks-and-merge.md)). "Plan" here is a record with versions; [0001](0001-engine-interface.md) and [0038](0038-summary-holds-the-plan.md) use the word for other things, and one meaning is still to be chosen.
+
 ## Implementation status
 
 Tasks, turns, waits, person tasks, pause/Stop, usage holds, archive and stale handling are built. Plan mode/checks, hand-off chains, side jobs and a fresh session per task are not built yet. A task can still settle when its turn ends without an explicit `finish_task`; requiring an explicit finish remains unbuilt.

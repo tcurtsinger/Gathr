@@ -2,6 +2,10 @@
 
 Status: accepted (slice 2, the owner's pick of "Auto, with guards"). Date: 2026-11-08.
 
+Built: yes. Proof: `crates/gathr/tests/approvals.rs`, `crates/gathr/tests/codex_recovery.rs`.
+
+Out of date below: in Auto a Codex wait check doesn't ask; an agent may write in its three folders, temp among them ([0034](0034-agent-folder.md)).
+
 Amended 2026-11-11: the owner picked "Ask only for risky pushes" (task 1421). An agent's push to a branch of its own goes through; one to the remote's default branch, one that rewrites or deletes a branch, or one to anywhere but its worktree's origin asks. The two push points below say how.
 
 ## Choice

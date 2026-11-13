@@ -2,6 +2,10 @@
 
 Status: accepted, renderer replaced by [0030](0030-ui-foundation.md) (Streamdown); raw HTML as text and unsafe links dropped still hold. Date: 2026-11-07. Chosen by the lead from the frontend's options.
 
+Built: partly. Proof: `ui/src/chat/Thread.test.tsx`, `ui/src/components/Markdown.test.tsx`. Built: raw HTML shown as text, unsafe links dropped, only the end parsed again while streaming. Not built as written: the react-markdown renderer, which [0030](0030-ui-foundation.md) replaced with Streamdown.
+
+Out of date below: the timings are the old renderer's; code highlighting and Copy exist now ([0030](0030-ui-foundation.md)).
+
 ## Choice
 
 | Job | Pick | Version checked | Licence |
