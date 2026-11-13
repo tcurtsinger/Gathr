@@ -153,7 +153,7 @@ as a test will see it, is in [the scenarios](scenarios.md).
 | 11.1 | A new project works on defaults | Partly | `crates/gathr/src/bin/gathrd/tools/briefing.rs` `text` | `crates/gathr/tests/tools.rs::each_turn_records_the_briefing_its_engine_was_given_and_whats_off` | Every agent gets one default briefing. No `AGENTS.md` is written from questions, and no role is told how it works. This repo's own `AGENTS.md` still carries 22 rules that stand in for the product |
 | 11.2 | Gathr counts how often you had to correct the room, and shows it | Written | | | Nothing counts a correction |
 | 11.3 | A scorecard in the app shows numbers from Gathr's own events | Written | | | No scorecard or analytics page |
-| 11.4 | Friction an agent or the person reports is recorded by Gathr | Written | | | Nothing records it. An agent ends a reply with a "Friction:" line, and the lead copies it into a file by hand (the Friction rule in [`AGENTS.md`](../AGENTS.md)). `read_chat` keeps the end of a message it cuts, so the line reaches a reader |
+| 11.4 | Friction an agent or the person reports is recorded by Gathr | Partly | `crates/gathr/src/friction.rs` `report`, `crates/gathr/src/bin/gathrd/tools/friction.rs` | `crates/gathr/tests/coordination.rs::friction_an_agent_reports_is_kept_by_gathr_and_listed` | An agent reports it with `report_friction`, and Gathr keeps and lists it; the list in Settings is held by `ui/src/settings/Friction.test.tsx` ([0048](decisions/0048-gathr-records-friction.md)). The person can't mark their own yet, and the ledger that says what each entry needs is still kept by hand |
 
 ## 12. Open both ways
 

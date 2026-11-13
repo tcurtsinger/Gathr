@@ -122,3 +122,37 @@
     gap: 8px;
   }
 }
+
+/* Diagnostics with the friction list under it (0048): the turns keep the room, the list scrolls in its own. */
+.diagnostics-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.diagnostics-page .diagnostics {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+.friction {
+  flex: none;
+  max-height: 40%;
+  overflow: auto;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+.friction h3 {
+  margin-bottom: 12px;
+}
+.friction ul {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.friction li p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

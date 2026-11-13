@@ -28,6 +28,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/approvals/{request}", post(approve))
         .route("/api/chats/{chat}/turns", get(turns))
         .route("/api/trace/{reference}", get(trace))
+        .route("/api/friction", get(friction))
         .route("/api/ui/events", post(ui_event))
         .route("/api/engines/claude", get(engine))
         .route("/api/engines/claude/update", post(update_engine))
@@ -250,6 +251,14 @@ async fn turns(
     known(&s, &t, &chat).await?;
     db(&s, &t, "Diagnostics failed", move |conn| {
         gathr::timeline::turns(conn, &chat)
+    })
+    .await
+}
+
+/// The friction agents reported (0048), newest first, for Settings > Diagnostics.
+async fn friction(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
+    db(&s, &t, "Friction failed", |conn| {
+        Ok(json!({ "friction": gathr::friction::list(conn, 0, 200)? }))
     })
     .await
 }

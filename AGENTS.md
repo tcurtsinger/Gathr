@@ -62,7 +62,7 @@ Gathr is built by a room of agents on the owner's PC: Orin (lead), Juno (product
 
 ### Friction
 
-At the end of your answer, as "Friction: <what, where>": anything in Gathr or SerenityOS that got in your way (a lost message, a wrong card, a missing command). The lead logs it in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead, and which [promise](docs/charter.md#the-promises) it breaks. (P11)
+With `report_friction`, when it happens: anything in Gathr that got in your way (a lost message, a wrong card, a missing command). Gathr keeps it ([0048](docs/decisions/0048-gathr-records-friction.md): Settings > Diagnostics, `gathr diag friction`). Friction in SerenityOS, or where you have no Gathr tool, goes at the end of your answer as "Friction: <what, where>". The lead logs both in `X:\Gathr\Gathr\Shared\FRICTION.md`. It's logged, not sent to SerenityOS to be fixed, unless the owner asks. Each one is also a requirement: write down what Gathr must do instead, and which [promise](docs/charter.md#the-promises) it breaks. (P11)
 
 Friction is how Gathr learns what not to repeat, so it's read all the time, not only logged:
 - Two sources: ours, and SerenityOS's own (`X:\code\serenityos\planning\FRICTION.md`), which the agents maintaining SerenityOS keep adding to.

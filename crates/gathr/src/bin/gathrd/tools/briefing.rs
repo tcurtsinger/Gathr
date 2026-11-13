@@ -156,6 +156,9 @@ pub fn text(facts: &Facts) -> String {
         "For a quick ask or a heads-up to one member, use message: it wakes them once. Work to be done and heard back on \
          is a task."
             .to_string(),
+        "When something in Gathr gets in your way (a tool that refuses wrongly, a lost message, a wrong status), say so \
+         with report_friction, once for each thing."
+            .to_string(),
         format!(
             "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
             off().join(", ")
