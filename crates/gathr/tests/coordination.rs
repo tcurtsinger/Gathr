@@ -803,3 +803,56 @@ fn give_task_outside_a_repository_never_asks_github_for_its_prs() {
     );
     std::fs::write(data.0.join("go"), "").unwrap();
 }
+
+/// Scenario 11d, the agent's half (0048): an agent says what got in its way with a tool, and Gathr
+/// keeps it with who said it, in which chat and on which task. It is in the API's list and in
+/// `gathr diag friction`, so nobody copies it out of an answer by hand.
+#[test]
+fn friction_an_agent_reports_is_kept_by_gathr_and_listed() {
+    let data = TempDir::new();
+    let team = team(&data.0, &twice(&data.0));
+    let lead = lead_turn(&team, &data.0, 0);
+    let port = team.service.info.port;
+    let ask = json!({ "to": "ann", "what": "Write the notes" });
+    text(&call_tool(port, &lead, "give_task", ask));
+    let ann = token(&data.0, 1);
+    let what = "read_chat cut the last message short";
+    let report = json!({ "what": what, "where": "read_chat" });
+    let said = text(&call_tool(port, &ann, "report_friction", report));
+    assert_eq!(said, "Recorded as friction #1.");
+    let empty = text(&call_tool(
+        port,
+        &ann,
+        "report_friction",
+        json!({ "what": "  " }),
+    ));
+    assert!(
+        empty.starts_with("report_friction failed: Say what got in your way, in `what`"),
+        "{empty}"
+    );
+    let long = json!({ "what": "x".repeat(501) });
+    let refused = text(&call_tool(port, &ann, "report_friction", long));
+    assert!(
+        refused.starts_with("report_friction failed: `what` is 501 characters: cut 1 to fit 500"),
+        "{refused}"
+    );
+
+    let listed = team.service.call("GET", "/api/friction").json();
+    let rows = listed["friction"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "the refused ones aren't kept: {listed}");
+    let kept = &rows[0];
+    assert_eq!(
+        (
+            &kept["what"],
+            &kept["where"],
+            &kept["agent_name"],
+            &kept["task"]
+        ),
+        (&json!(what), &json!("read_chat"), &json!("Ann"), &json!(1)),
+        "{listed}"
+    );
+    assert_eq!(kept["chat"], team.chat.as_str(), "{listed}");
+    let (ok, shown) = gathr(&data.0, &["diag", "friction"]);
+    assert!(ok, "{shown}");
+    assert_eq!(shown["friction"][0]["what"], what, "{shown}");
+}
