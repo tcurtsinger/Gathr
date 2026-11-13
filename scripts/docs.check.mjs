@@ -159,8 +159,8 @@ for (const row of read(MAP).matchAll(/^\| (\d+)\.\d+ \|.*$/gm)) {
   }
   states[state] += 1;
   const named = (cell) => [...cell.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
-  // In the Code cell a name with a slash or an extension is a file; the rest are what's in it.
-  const files = named(code).filter((name) => /[\\/]|\.\w+$/.test(name));
+  // In the Code cell a name with a slash or a source file's ending is a file; the rest are what's in it.
+  const files = named(code).filter((name) => /[\\/]|\.(rs|tsx?|[cm]?js|css|sql|md|json|toml|ya?ml)$/.test(name));
   for (const file of files) if (!isFile(file)) failures.push(`${at}: its code names ${file}, which isn't a file`);
   const proofs = named(test).map((name) => name.split('::'));
   for (const [file, name] of proofs) {
@@ -168,7 +168,7 @@ for (const row of read(MAP).matchAll(/^\| (\d+)\.\d+ \|.*$/gm)) {
     else if (!isFile(file)) failures.push(`${at}: its test names ${file}, which isn't a file`);
     else {
       // The whole name: a Rust test's function, or a UI test's title between its quotes.
-      const text = read(file);
+      const text = read(file).replaceAll("\\'", "'").replaceAll('\\"', '"');
       const whole = file.endsWith('.rs')
         ? text.includes(`fn ${name}(`)
         : ["'", '"', '`'].some((quote) => text.includes(`${quote}${name}${quote}`));
