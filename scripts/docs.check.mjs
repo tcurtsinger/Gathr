@@ -78,14 +78,14 @@ const headingsOf = (path) => {
   if (!headings.has(path)) {
     const found = read(path).replace(/^(```|~~~).*?^\1.*?$/gms, '').matchAll(/^#{1,6} (.+)$/gm);
     // A repeated heading's later anchors end -1, -2, as GitHub makes them.
-    const seen = new Map();
-    const anchors = [...found].map((m) => {
-      const base = slug(m[1].trim());
-      const nth = seen.get(base) ?? 0;
-      seen.set(base, nth + 1);
-      return nth ? `${base}-${nth}` : base;
-    });
-    headings.set(path, new Set(anchors));
+    const anchors = new Set();
+    for (const [, heading] of found) {
+      const base = slug(heading.trim());
+      let anchor = base;
+      for (let nth = 1; anchors.has(anchor); nth += 1) anchor = `${base}-${nth}`;
+      anchors.add(anchor);
+    }
+    headings.set(path, anchors);
   }
   return headings.get(path);
 };
@@ -96,7 +96,7 @@ for (const path of tracked) {
   // Inline links, with a title in any of its three forms, and reference links by their definitions.
   const text = prose(read(path));
   const inline = text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\)/g);
-  const defined = text.matchAll(/^ {0,3}\[[^\]]+\]:\s*(\S+)/gm);
+  const defined = text.matchAll(/^ {0,3}\[[^\]^][^\]]*\]:\s*<?([^\s>]+)/gm);
   for (const [, target] of [...inline, ...defined]) {
     if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
     count += 1;
