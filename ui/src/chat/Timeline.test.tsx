@@ -385,3 +385,24 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
     { path: '/api/chats/c/approvals/q2', allow: true },
   ]);
 });
+
+test('a hear-back says a task was left, or that nobody reported, in those words', async () => {
+  const back = [
+    'The 2 tasks you gave are settled:',
+    '- #7 Made-up Member, Made-up task 7: left: the made-up half remains',
+    '- #8 Made-up Member, Made-up task 8: no report: two turns ended without one',
+    'Read replies with read_chat, then continue. This turn is on your task #3: end it with finish_task.',
+  ];
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { lead: turn('lead', 'a', 0), back: turn('back', 'a', 1, { answers: 'lead' }) },
+    tasks: [task(7, {}), task(8, {})],
+    messages: [said('m1', 'lead', 'Made-up hand-off'), said('g', 'back', back.join('\n'), { role: 'gathr' })],
+  };
+  const screen = await render(<View state={state} actions={{ openTask: () => {} }} />);
+  const left = screen.getByRole('button', { name: 'Made-up Member left it unfinished: Made-up task 7' });
+  await expect.element(left).toBeVisible();
+  const silent = screen.getByRole('button', { name: 'Made-up Member gave no report: Made-up task 8' });
+  await expect.element(silent).toBeVisible();
+});

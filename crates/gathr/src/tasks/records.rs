@@ -3,7 +3,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::person::Form;
-use super::{Kind, State, Task};
+use super::{Finish, Kind, Report, State, Task};
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
@@ -57,7 +57,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     let mut t = conn.query_row(
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
-                stale_ts, heard_in, pr_head
+                stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -90,6 +90,21 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 stale_us: r.get(21)?,
                 heard_in: r.get(22)?,
                 pr_head: r.get(23)?,
+                report: r
+                    .get::<_, Option<String>>(24)?
+                    .as_deref()
+                    .and_then(Finish::named)
+                    .map(|how| -> rusqlite::Result<Report> {
+                        Ok(Report {
+                            how,
+                            note: r.get(25)?,
+                            see: r.get(26)?,
+                            at_us: r.get(27)?,
+                        })
+                    })
+                    .transpose()?,
+                asked: r.get::<_, i64>(28)? > 0,
+                waiting_on: Vec::new(),
             })
         },
     )?;
@@ -98,6 +113,9 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
     t.after = stmt
         .query_map([task], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
+    if t.state == State::Held {
+        t.waiting_on = super::held::open_on(conn, task)?;
+    }
     Ok(t)
 }
 

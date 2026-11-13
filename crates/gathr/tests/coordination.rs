@@ -107,6 +107,8 @@ fn tasks(team: &Team) -> Value {
     listed.json()
 }
 
+/// Scenario 5b on Claude Code: Ann's turn on the task ends with no report, so the task isn't done.
+/// Gathr asks her once; her next turn says nothing either, and the lead hears "no report".
 #[test]
 fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_back() {
     let data = TempDir::new();
@@ -134,14 +136,23 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     std::fs::write(data.0.join("go"), "").unwrap();
     let history = team.service.wait_for(&team.chat, 20, "the hear-back", |h| {
         let turns = h["turns"].as_array().cloned().unwrap_or_default();
-        turns.len() == 3 && turns.iter().all(|t| t["status"] == "done")
+        turns.len() == 4 && turns.iter().all(|t| t["status"] == "done")
     });
     let turns = history["turns"].as_array().unwrap();
-    let (giving, owned, heard) = (&turns[0], &turns[1], &turns[2]);
+    let (giving, owned, asked, heard) = (&turns[0], &turns[1], &turns[2], &turns[3]);
     assert_eq!(owned["task"], 1, "Ann's turn works on the task: {history}");
+    assert_eq!(
+        asked["task"], 1,
+        "so does the ask for her report: {history}"
+    );
     let listed = tasks(&team);
     let task = &listed["tasks"][0];
-    assert_eq!(task["state"], "done", "{listed}");
+    let silent = "no report: two turns ended without one";
+    assert_eq!(
+        (&task["state"], &task["reason"]),
+        (&json!("blocked"), &json!(silent)),
+        "{listed}"
+    );
     assert_eq!(task["given_in"], giving["id"], "the thread link: {listed}");
     assert_eq!(heard["agent"], team.lead.as_str());
     assert_eq!(
@@ -156,8 +167,9 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     let states: Vec<Value> = std::iter::from_fn(|| Some(common::next_live(&mut live)))
         .filter(|u| u["type"] == "tasks" && u["chat"] == team.chat.as_str())
         .map(|u| u["tasks"][0]["state"].clone())
-        .take_while(|state| state != "done")
+        .take_while(|state| state != "blocked")
         .collect();
+    assert!(!states.contains(&json!("done")), "never done: {states:?}");
     assert_eq!(states.first(), Some(&json!("ready")), "{states:?}");
     let said: Vec<&Value> = history["messages"]
         .as_array()
@@ -167,8 +179,8 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
         .collect();
     assert_eq!(
         said.len(),
-        2,
-        "the task and the hear-back are Gathr's: {history}"
+        3,
+        "the task, the ask and the hear-back are Gathr's: {history}"
     );
     assert!(
         said[0]["body"]
@@ -176,8 +188,64 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
             .unwrap()
             .starts_with("Task #1 from Lead: Write the notes")
     );
-    let back = said[1]["body"].as_str().unwrap();
-    assert!(back.contains("#1 Ann, Write the notes: done"), "{back}");
+    let ask = said[1]["body"].as_str().unwrap();
+    assert!(
+        ask.starts_with("Your last turn on task #1 (Write the notes) ended with no report."),
+        "{ask}"
+    );
+    let back = said[2]["body"].as_str().unwrap();
+    let line = format!("#1 Ann, Write the notes: {silent}");
+    assert!(back.contains(&line), "{back}");
+}
+
+/// Scenarios 5a and 5e on Claude Code: Ann reports the task done from its own turn, with what to
+/// look at. It's done when her turn ends, never before, and the lead hears that once.
+#[test]
+fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_so() {
+    let data = TempDir::new();
+    let team = team(&data.0, &twice(&data.0));
+    let lead_token = lead_turn(&team, &data.0, 0);
+    let port = team.service.info.port;
+    let ask = json!({ "to": "ann", "what": "Write the notes" });
+    text(&call_tool(port, &lead_token, "give_task", ask));
+    let ann = token(&data.0, 1);
+    let bare = text(&call_tool(
+        port,
+        &ann,
+        "finish_task",
+        json!({ "how": "done" }),
+    ));
+    assert!(
+        bare.starts_with("finish_task failed: Say what to look at when work is done"),
+        "{bare}"
+    );
+    let report = json!({ "how": "done", "note": "the notes are written", "file": "notes.md" });
+    let said = text(&call_tool(port, &ann, "finish_task", report));
+    assert_eq!(
+        said,
+        "Recorded: done. It applies to task #1 when this turn ends."
+    );
+    let listed = tasks(&team);
+    assert_ne!(listed["tasks"][0]["state"], "done", "not before: {listed}");
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let history = team.service.wait_for(&team.chat, 20, "the hear-back", |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        turns.len() == 3 && turns.iter().all(|t| t["status"] == "done")
+    });
+    let listed = tasks(&team);
+    let task = &listed["tasks"][0];
+    assert_eq!(task["state"], "done", "{listed}");
+    assert_eq!(task["report"]["see"], "notes.md", "{listed}");
+    let body = history.to_string();
+    let line = "#1 Ann, Write the notes: done: the notes are written";
+    assert!(body.contains(line), "{history}");
+    // Reported again from the lead's side of things: Ann is told it's recorded, not refused (G184).
+    let again = json!({ "task": 1, "how": "done", "note": "as before" });
+    let said = text(&call_tool(port, &ann, "finish_task", again));
+    assert!(
+        said.starts_with("Already recorded: task #1 is done"),
+        "{said}"
+    );
 }
 
 /// The engine's working folder for the `n`th start.
@@ -495,8 +563,10 @@ fn a_turn_whose_task_is_cancelled_then_restarted_still_stops() {
         ),
         "{history}"
     );
+    // The cancelled turn and the restarted one. A third may follow: when the restarted turn ends
+    // with no report, Gathr asks for it (0047).
     let on_it = history["turns"].as_array().unwrap().iter();
-    assert_eq!(on_it.filter(|t| t["task"] == 1).count(), 2, "{history}");
+    assert!(on_it.filter(|t| t["task"] == 1).count() >= 2, "{history}");
 }
 
 /// The signed-in turn held until the test lets it go, twice, for an agent's two turns. Each hold

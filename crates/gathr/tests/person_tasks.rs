@@ -129,7 +129,7 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
     assert_eq!(held.state, State::Held);
     assert_eq!(
         held.reason.as_deref(),
-        Some(format!("done, waiting on #{} (the person)", asked.number).as_str())
+        Some(format!("waiting on #{} (the person)", asked.number).as_str())
     );
 
     // The person answers: the lead hears back on the request, told to pass it on.
@@ -169,12 +169,17 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
     conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-1'", [])
         .unwrap();
     // The hear-back's turn was queued with it: it starts.
+    conn.execute(
+        "UPDATE turns SET status = 'running' WHERE id = ?1",
+        [&back.turn],
+    )
+    .unwrap();
     tasks::started(&mut conn, r, T).unwrap();
     let note = Said {
         note: Some("Connection lost, and say we retry"),
         ..Default::default()
     };
-    tasks::finish(&mut conn, "lead", r, Finish::Done, &note).unwrap();
+    tasks::finish(&mut conn, "lead", r, Finish::Done, &note, T).unwrap();
     let starts = ended(&mut conn, &back.turn, "lead", Some(r));
     let to_ann = starts
         .iter()

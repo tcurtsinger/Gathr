@@ -468,10 +468,13 @@ fn fire(
         .attr("gathr.wait.state", state)
         .attr("gen_ai.agent.id", wait.agent.clone())
         .insert(tx)?;
-    let text = format!(
+    let mut text = format!(
         "Your wait ended: {line}. You planned to do this: {}. Check the current status, then continue or explain what is blocking you.",
         wait.then_do.trim_end_matches('.')
     );
+    if let Some(task) = wait.task {
+        text.push_str(&format!(" End the turn with finish_task for task #{task}."));
+    }
     let at = (wait.chat.as_str(), wait.agent.as_str());
     let on = (wait.task, wait.left_in.as_deref());
     Ok(vec![Start::queue(tx, at, on, text)?])

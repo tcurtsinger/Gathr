@@ -33,6 +33,9 @@ fn task(form: Form, labels: &[&str]) -> Task {
         stale_us: None,
         heard_in: None,
         pr_head: None,
+        report: None,
+        asked: false,
+        waiting_on: Vec::new(),
     }
 }
 

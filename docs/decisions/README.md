@@ -56,3 +56,4 @@ fails in CI when the two differ.
 | 0044 | [A step keeps what it returned, and a command whole](0044-what-a-step-returned.md) | accepted | yes |
 | 0045 | [Gathr's own repo: review and local tests are the gate, not GitHub CI](0045-review-gates-gathrs-own-repo.md) | accepted | yes |
 | 0046 | [Gathr reaches GitHub for agents, with its own sign-in](0046-github-tools.md) | accepted | yes |
+| 0047 | [A task's report is a record, and Gathr works out where the task stands](0047-a-report-is-a-record.md) | accepted | yes |

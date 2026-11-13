@@ -34,7 +34,8 @@ fn held(data: &Path) -> PathBuf {
     )
 }
 
-fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
+/// A service whose Codex is the stand-in playing `file`, and a signed-in Codex account's id.
+fn codex(data: &Path, file: &Path) -> (TestService, String) {
     let replay = common::replay_engine();
     let service = TestService::with_engine(
         data,
@@ -61,13 +62,22 @@ fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
         r#"{"tokens":{"refresh_token":"made-up"}}"#,
     )
     .unwrap();
-    let agent = service
-        .send(
-            "POST",
-            "/api/agents",
-            json!({"name":"Test","account":id,"approvals":mode}),
-        )
-        .json();
+    (service, id.to_string())
+}
+
+fn agent(service: &TestService, name: &str, account: &str, mode: &str) -> Value {
+    let made = service.send(
+        "POST",
+        "/api/agents",
+        json!({"name":name,"account":account,"approvals":mode}),
+    );
+    assert_eq!(made.status, 200, "{}", made.body);
+    made.json()["id"].clone()
+}
+
+fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
+    let (service, account) = codex(data, file);
+    let agent = json!({ "id": agent(&service, "Test", &account, mode) });
     let made = service.send(
         "POST",
         "/api/chats",
@@ -409,4 +419,89 @@ fn a_known_read_only_wait_check_saves_without_asking() {
     );
     assert_eq!(asking.join().unwrap()["isError"], true);
     std::fs::write(data.0.join("go"), "").unwrap();
+}
+
+/// Made up, in the shape of Codex's frames: a turn that holds, then says something and ends well.
+/// The stand-in plays it for every turn an engine is given.
+fn replies(data: &Path) -> PathBuf {
+    let said =
+        json!({"type":"agentMessage","id":"m1","text":"Looked at it.","phase":"final_answer"});
+    recording(
+        data,
+        vec![
+            ("in", json!({"method":"turn/start"})),
+            ("out", json!({"id":3,"result":{"turn":{"id":"u1"}}})),
+            (
+                "out",
+                json!({"method":"turn/started","params":{"turn":{"id":"u1"}}}),
+            ),
+            ("hold", json!("")),
+            (
+                "out",
+                json!({"method":"item/completed","params":{"item":said,"threadId":"test-thread","turnId":"u1"}}),
+            ),
+            (
+                "out",
+                json!({"method":"turn/completed","params":{"turn":{"id":"u1","status":"completed"}}}),
+            ),
+        ],
+    )
+}
+
+/// The token of the `n`th engine started.
+fn token(data: &Path, n: usize) -> String {
+    until(20, "the engine's token", || {
+        let text = std::fs::read_to_string(data.join("env.jsonl")).ok()?;
+        let line: Value = serde_json::from_str(text.lines().nth(n)?).ok()?;
+        line["GATHR_AGENT_TOKEN"].as_str().map(String::from)
+    })
+}
+
+/// Scenarios 5b and 5c on Codex, with a lead and a member (0047). The member's turn on the task
+/// ends with no report: the task isn't done, she is asked once, and the lead hears "no report".
+/// Then she reports it done from outside any turn, on a task Gathr holds as blocked: it's taken.
+#[test]
+fn on_codex_a_turn_that_ends_is_not_a_task_done_and_a_late_report_is_taken() {
+    let data = TempDir::new();
+    let (service, account) = codex(&data.0, &replies(&data.0));
+    let lead = agent(&service, "Lead", &account, "auto");
+    let ann = agent(&service, "Ann", &account, "auto");
+    let members = json!([{"agent":lead,"role":"supervisor"},{"agent":ann,"role":"member"}]);
+    let made = service.send("POST", "/api/chats", json!({ "members": members }));
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+    let sent = service.send(
+        "POST",
+        &format!("/api/chats/{chat}/messages"),
+        json!({"text":"Plan it"}),
+    );
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let (port, lead) = (service.info.port, first_token(&data.0));
+    let ask = json!({"to":"Ann","what":"Write the notes"});
+    let given = call_tool(port, &lead, "give_task", ask);
+    assert_eq!(given["isError"], false, "{}", text(&given));
+
+    // The lead's turn ends, and every turn after it runs through: nobody reports anything.
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let silent = "#1 Ann, Write the notes: no report: two turns ended without one";
+    let history = service.wait_for(&chat, 30, "the lead to hear back", |h| {
+        h.to_string().contains(silent)
+    });
+    let asked = "Your last turn on task #1 (Write the notes) ended with no report.";
+    assert!(history.to_string().contains(asked), "{history}");
+    let tasks = format!("/api/chats/{chat}/tasks");
+    let listed = service.call("GET", &tasks).json();
+    assert_eq!(
+        listed["tasks"][0]["state"], "blocked",
+        "never done: {listed}"
+    );
+
+    let report = json!({"task":1,"how":"done","note":"the notes are written"});
+    let said = text(&call_tool(port, &token(&data.0, 1), "finish_task", report));
+    assert_eq!(
+        said,
+        "Recorded: done. Task #1 is done: the notes are written."
+    );
+    let listed = service.call("GET", &tasks).json();
+    assert_eq!(listed["tasks"][0]["state"], "done", "{listed}");
 }

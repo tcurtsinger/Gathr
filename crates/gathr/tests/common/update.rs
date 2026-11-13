@@ -232,7 +232,8 @@ impl Room {
         line["GATHR_AGENT_TOKEN"].as_str().unwrap().to_string()
     }
 
-    /// The lead gives Ann task #1 and ends its turn; Ann's turn on the task runs and holds: its id.
+    /// The lead gives Ann task #1 and ends its turn; Ann's turn on the task runs, reports the task
+    /// done and holds: its id. A task nobody reports is never done (0047).
     pub fn ann_works(&self) -> String {
         say(&self.service, &self.chat, "Plan it");
         let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
@@ -252,6 +253,10 @@ impl Room {
             });
         assert_eq!(history["turns"][1]["agent"], self.ann.as_str(), "{history}");
         assert_eq!(history["turns"][1]["task"], 1, "{history}");
+        let report = json!({ "how": "done", "note": "the notes are written" });
+        let port = self.service.info.port;
+        let said = text(&call_tool(port, &self.token(1), "finish_task", report));
+        assert!(said.starts_with("Recorded: done."), "{said}");
         history["turns"][1]["id"].as_str().unwrap().to_string()
     }
 

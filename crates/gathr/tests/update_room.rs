@@ -107,13 +107,15 @@ fn a_report_made_before_the_update_still_settles_the_task() {
     );
     assert_eq!(kept, [json!(note)], "the report went with the stopped turn");
 
-    // The carry-on ends with nothing more said, so the task settles by the report: left, and Ann
-    // gets the work she left as her next turn.
-    let history = room.go_until(&next, "the turn the report asks for", |h| {
-        h.to_string().contains("you left this work")
+    // The carry-on ends with nothing more said, so the task settles by the report: it stops there
+    // as left, and its lead hears what is left. Ann isn't started again (0047).
+    let left = format!("left: {note}");
+    let history = room.go_until(&next, "the lead to hear what is left", |h| {
+        h.to_string().contains(&left)
     });
-    let left = format!("you left this work: {note}");
-    assert!(history.to_string().contains(&left), "{history}");
+    let sql = "SELECT state || ': ' || reason AS stands FROM tasks WHERE number = 1";
+    let stands = room.column(sql, "stands");
+    assert_eq!(stands, [json!(format!("blocked: {left}"))], "{history}");
     assert!(
         !room.states().contains(&json!("stopped")),
         "{:?}",

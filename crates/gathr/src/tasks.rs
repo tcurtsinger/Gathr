@@ -12,13 +12,15 @@ use crate::ids::now_us;
 mod held;
 pub mod person;
 mod records;
+mod report;
 pub mod stale;
 pub mod touched;
 mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
-pub use held::{background_changed, release};
+pub use held::background_changed;
+pub use report::{Finish, Report, Said, Took, finish};
 
 pub use words::{name_of, owner_name, wait_name};
 
@@ -148,6 +150,12 @@ pub struct Task {
     pub heard_in: Option<String>,
     /// Its PR's head as the PR looks last saw it: the commit whose checks run shows on it (0043 C6).
     pub pr_head: Option<String>,
+    /// Its owner's last report, kept until the owner reports again or the task is restarted (0047).
+    pub report: Option<Report>,
+    /// Gathr asked its owner for a report, and none has come since.
+    pub asked: bool,
+    /// What a held task still has open, each in a few words.
+    pub waiting_on: Vec<String>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -222,48 +230,10 @@ pub struct Give<'a> {
 
 /// How a turn on a task ended.
 pub enum Outcome {
-    /// It ended well, having run this many tools.
-    Ok {
-        tools: i64,
-    },
+    /// It ended well.
+    Ok,
     Failed(String),
     Stopped(String),
-}
-
-/// What an owner says of its task as its turn ends.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Finish {
-    Done,
-    Left,
-    Blocked,
-}
-
-impl Finish {
-    pub fn named(text: &str) -> Option<Finish> {
-        match text {
-            "done" => Some(Finish::Done),
-            "left" => Some(Finish::Left),
-            "blocked" => Some(Finish::Blocked),
-            _ => None,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Finish::Done => "done",
-            Finish::Left => "left",
-            Finish::Blocked => "blocked",
-        }
-    }
-}
-
-/// The owner's finish, with what goes with it.
-#[derive(Default)]
-pub struct Said<'a> {
-    pub note: Option<&'a str>,
-    pub on_task: Option<i64>,
-    pub pr: Option<i64>,
-    pub commit: Option<&'a str>,
 }
 
 fn refused(why: impl Into<String>) -> Error {
@@ -368,84 +338,31 @@ pub fn stop_why(conn: &Connection, turn: &str) -> Result<Option<String>, Error> 
 
 /// A turn on the task has started: it's `working`.
 pub fn started(conn: &mut Connection, task: i64, trace: &str) -> Result<(), Error> {
-    in_tx(conn, |tx| started_in(tx, task, trace))
+    in_tx(conn, |tx| started_in(tx, task, false, trace))
 }
 
-fn started_in(tx: &Transaction, task: i64, trace: &str) -> Result<(), Error> {
+/// `carries_on`: the turn goes on from one that was stopped on the same task (an update, Stop now,
+/// a usage limit). It's the same piece of work, so what its owner reported in it still stands.
+fn started_in(tx: &Transaction, task: i64, carries_on: bool, trace: &str) -> Result<(), Error> {
     let Some(was) = state_of(tx, task)? else {
         return Ok(());
     };
     if !was.settled() || matches!(was, State::Blocked | State::Failed | State::Stopped) {
         set(tx, task, State::Working, None, trace)?;
+        // Its owner is at work on what it left: that word no longer stands. A done does (0047).
+        if !carries_on {
+            tx.execute(
+                "UPDATE tasks SET finish = NULL, finish_note = NULL, finish_see = NULL, finish_ts = NULL
+                 WHERE number = ?1 AND finish = 'left'",
+                [task],
+            )?;
+        }
     }
     Ok(())
 }
 
-/// The owner says how its task stands, applied when its turn has ended. A review's done names
-/// the commit reviewed (G73).
-pub fn finish(
-    conn: &mut Connection,
-    agent: &str,
-    task: i64,
-    how: Finish,
-    said: &Said,
-) -> Result<Task, Error> {
-    let tx = conn.transaction()?;
-    let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    if t.owner.as_deref() != Some(agent) {
-        return Err(refused(format!("task #{task} isn't yours")));
-    }
-    let commit = said.commit.map(str::trim).filter(|c| !c.is_empty());
-    let refresh = t.state == State::Held
-        && t.kind == Kind::Review
-        && how == Finish::Done
-        && commit.is_some()
-        && t.reviewed.is_some()
-        && t.pr.is_some()
-        && said.on_task.is_none()
-        && said.pr.is_none_or(|pr| Some(pr) == t.pr)
-        && tx.query_row(
-            "SELECT pr_closed = 0 FROM tasks WHERE number = ?1",
-            [task],
-            |r| r.get::<_, bool>(0),
-        )?;
-    // A held task's owner finishes it from any turn (G174): kept, and applied once its hold ends.
-    let held = t.state == State::Held && t.kind != Kind::Review;
-    if t.state != State::Working && !refresh && !held {
-        let state = t.state.as_str();
-        return Err(refused(format!(
-            "task #{task} is {state}, not being worked on"
-        )));
-    }
-    if let Some(on) = said.on_task {
-        let found = state_of(&tx, on)?;
-        if found.is_none() || on == task {
-            return Err(refused(format!(
-                "there's no other task #{on} to be blocked on"
-            )));
-        }
-    }
-    if how == Finish::Done && t.kind == Kind::Review && commit.is_none() {
-        return Err(refused(
-            "Include the reviewed commit when you finish a review",
-        ));
-    }
-    // A held work task's finish is no review: a commit with it isn't kept as one.
-    let commit = commit.filter(|_| t.state == State::Working || refresh);
-    tx.execute(
-        "UPDATE tasks SET finish = ?2, finish_note = ?3, blocked_on = COALESCE(?4, blocked_on),
-                          pr = COALESCE(?5, pr), reviewed = COALESCE(?6, reviewed),
-                          review_done = CASE WHEN kind = 'review' THEN (?2 = 'done' AND ?6 IS NOT NULL) ELSE review_done END,
-                          outdated = CASE WHEN ?6 IS NULL THEN outdated ELSE 0 END
-         WHERE number = ?1",
-        params![task, how.as_str(), said.note, said.on_task, said.pr, commit],
-    )?;
-    let task = read(&tx, task)?;
-    tx.commit()?;
-    Ok(task)
-}
-
-/// A turn on the task has ended: its owner's finish applies, else the service settles it (0010).
+/// A turn on the task has ended: a failure or a stop is what it is, and a turn that ended well
+/// settles by its owner's report, never by having ended (0047).
 pub fn ended(
     conn: &mut Connection,
     task: i64,
@@ -464,27 +381,15 @@ fn ended_in(
     let Some(t) = read(tx, task).optional_task()? else {
         return Ok(Vec::new());
     };
-    let (finish, note): (Option<String>, Option<String>) = tx.query_row(
-        "SELECT finish, finish_note FROM tasks WHERE number = ?1",
-        [task],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    )?;
-    tx.execute(
-        "UPDATE tasks SET finish = NULL, finish_note = NULL WHERE number = ?1",
-        [task],
-    )?;
     let mut starts = Vec::new();
     // Cancelled or settled while the turn ran: it stays so, and nothing follows twice. A turn that
     // failed or stopped before it ran (no engine, no worktree) leaves the task ready: it settles too.
-    let before_it_ran = t.state == State::Ready && !matches!(outcome, Outcome::Ok { .. });
+    let before_it_ran = t.state == State::Ready && !matches!(outcome, Outcome::Ok);
     if t.state == State::Working || before_it_ran {
-        let finish = finish.as_deref().and_then(Finish::named);
         match outcome {
             Outcome::Failed(why) => set(tx, task, State::Failed, Some(&why), trace)?,
             Outcome::Stopped(why) => set(tx, task, State::Stopped, Some(&why), trace)?,
-            Outcome::Ok { tools } => {
-                starts.extend(held::settle(tx, &t, finish, note, tools, trace)?);
-            }
+            Outcome::Ok => starts.extend(held::settle(tx, &t, trace)?),
         }
         starts.extend(cascade(tx, task, trace)?);
     }
@@ -519,18 +424,17 @@ pub fn turn_moved(
         let outcome = match status {
             "running" => {
                 if let Some(task) = m.task {
-                    started_in(tx, task, m.trace)?;
+                    let carries_on: bool = tx.query_row(
+                        "SELECT EXISTS (SELECT 1 FROM turns u JOIN turns was ON was.id = u.answers
+                         WHERE u.id = ?1 AND was.task = u.task AND was.status = 'stopped')",
+                        [m.turn],
+                        |r| r.get(0),
+                    )?;
+                    started_in(tx, task, carries_on, m.trace)?;
                 }
                 return Ok(starts);
             }
-            "done" => {
-                let tools: i64 = tx.query_row(
-                    "SELECT count(*) FROM messages WHERE turn_id = ?1 AND kind = 'tool'",
-                    [m.turn],
-                    |r| r.get(0),
-                )?;
-                Outcome::Ok { tools }
-            }
+            "done" => Outcome::Ok,
             "failed" => Outcome::Failed(why.unwrap_or(status).to_string()),
             "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
             _ => return Ok(starts),
@@ -610,7 +514,9 @@ pub fn restart(
         }
     };
     tx.execute(
-        "UPDATE tasks SET idle_lefts = 0, blocked_on = NULL, heard = 0, review_done = 0 WHERE number = ?1",
+        "UPDATE tasks SET asks = 0, blocked_on = NULL, heard = 0, review_done = 0, finish = NULL,
+                          finish_note = NULL, finish_see = NULL, finish_ts = NULL
+         WHERE number = ?1",
         [task],
     )?;
     tx.commit()?;
@@ -724,15 +630,29 @@ pub fn pr_looked(
     if !t.state.settled() || t.state == State::Blocked {
         match pr_state.as_str() {
             "MERGED" => {
-                set(
-                    &tx,
-                    task,
-                    State::Done,
-                    Some(&format!("#{pr} merged")),
-                    trace,
-                )?;
                 end_waits(&tx, task, "its PR merged")?;
-                starts = cascade(&tx, task, trace)?;
+                // Work its owner left isn't done because its PR merged (0047, live #148): the
+                // owner is woken with what it left, and this is its one ask.
+                let left: Option<Option<String>> = tx
+                    .query_row(
+                        "SELECT finish_note FROM tasks WHERE number = ?1 AND kind = 'work' AND finish = 'left'",
+                        [task],
+                        |r| r.get(0),
+                    )
+                    .optional()?;
+                match left {
+                    Some(note) => {
+                        tx.execute("UPDATE tasks SET asks = 1 WHERE number = ?1", [task])?;
+                        let note = note.unwrap_or_else(|| "it isn't said what".to_string());
+                        let carry = format!("#{pr} merged, and you left this work: {note}");
+                        starts.push(ready(&tx, task, Some(&carry))?);
+                    }
+                    None => {
+                        let why = format!("#{pr} merged");
+                        set(&tx, task, State::Done, Some(&why), trace)?;
+                        starts = cascade(&tx, task, trace)?;
+                    }
+                }
             }
             "CLOSED" => {
                 let why = format!("#{pr} was closed without merging");
@@ -865,8 +785,7 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                 starts.extend(cancel_in(tx, dependant, &why, trace)?);
             }
             _ => {
-                let why = format!("#{task} is {}", state.as_str());
-                set(tx, dependant, State::Blocked, Some(&why), trace)?;
+                block_after(tx, dependant, task, state, trace)?;
                 starts.extend(cascade(tx, dependant, trace)?);
             }
         }
@@ -879,7 +798,18 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         rows.collect::<Result<_, _>>()?
     };
     for blocked in on_it {
+        let after: bool = tx.query_row(
+            "SELECT EXISTS (SELECT 1 FROM task_after WHERE task = ?1 AND after_task = ?2)",
+            [blocked, task],
+            |r| r.get(0),
+        )?;
         match state {
+            // Blocked by Gathr for the task it comes after, which now counts as done for it.
+            State::Done | State::Held if after => {
+                if !waiting_on(tx, blocked)?.contains(&task) {
+                    starts.extend(back_in_line(tx, blocked, trace)?);
+                }
+            }
             State::Done => {
                 tx.execute(
                     "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
@@ -907,6 +837,45 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         starts.extend(held::after_review(tx, task, trace)?);
     }
     Ok(starts)
+}
+
+/// Blocks a task for the one it comes after, which failed, stopped or blocked, and records which:
+/// it carries on when that one is restarted and finishes (`cascade`).
+fn block_after(
+    tx: &Transaction,
+    task: i64,
+    after: i64,
+    state: State,
+    trace: &str,
+) -> Result<(), Error> {
+    let why = format!("#{after} is {}", state.as_str());
+    set(tx, task, State::Blocked, Some(&why), trace)?;
+    tx.execute(
+        "UPDATE tasks SET blocked_on = ?2 WHERE number = ?1",
+        [task, after],
+    )?;
+    Ok(())
+}
+
+/// A task Gathr blocked for one it comes after goes back in line: ready, or waiting on what it
+/// still comes after, or blocked for one of those that has stopped too.
+fn back_in_line(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
+    tx.execute(
+        "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
+        [task],
+    )?;
+    let waiting = waiting_on(tx, task)?;
+    if waiting.is_empty() {
+        return Ok(vec![ready(tx, task, None)?]);
+    }
+    for after in waiting {
+        if let Some(state) = state_of(tx, after)?.filter(|s| s.settled()) {
+            block_after(tx, task, after, state, trace)?;
+            return Ok(Vec::new());
+        }
+    }
+    set(tx, task, State::Waiting, None, trace)?;
+    Ok(Vec::new())
 }
 
 /// What follows the task's change, as `cascade`: for archiving, once its chat's tasks are all

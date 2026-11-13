@@ -3,7 +3,7 @@
 
 use rusqlite::{Connection, OptionalExtension};
 
-use super::{Kind, State, Task};
+use super::{Finish, Kind, State, Task};
 use crate::Error;
 
 pub fn name_of(conn: &Connection, agent: &str) -> Result<String, Error> {
@@ -49,8 +49,17 @@ pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
     lines.join("\n")
 }
 
-/// What became of each task the giver gave in one turn.
-pub fn hear_back(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
+/// The one ask for a report, after a turn on the task ended with none (0047).
+pub fn ask(t: &Task) -> String {
+    format!(
+        "Your last turn on task #{} ({}) ended with no report. Use finish_task to say done, left or blocked.",
+        t.number, t.what
+    )
+}
+
+/// What became of each task the giver gave in one turn, on the giver's `own` task when it has one
+/// open.
+pub fn hear_back(conn: &Connection, settled: &[Task], own: Option<i64>) -> Result<String, Error> {
     // A task held only on its merge comes back too (held.rs): not settled yet.
     let all = settled.iter().all(|t| t.state.settled());
     let mut lines = vec![match (settled.len(), all) {
@@ -60,15 +69,27 @@ pub fn hear_back(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
         (n, false) => format!("Where the {n} tasks you gave stand:"),
     }];
     for t in settled {
+        let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
         let how = match (t.state, &t.reason) {
             (State::Done, None) => "done".to_string(),
+            // Stopped as left, or with no report: the reason says which, in the owner's words.
+            (State::Blocked, Some(reason)) if left || (t.report.is_none() && t.asked) => {
+                reason.clone()
+            }
             (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
             (state, None) => state.as_str().to_string(),
         };
         let owner = owner_name(conn, t.owner.as_deref())?;
         lines.push(format!("- #{} {owner}, {}: {how}", t.number, t.what));
     }
-    lines.push("Read replies with read_chat, then continue.".to_string());
+    // One closing line: the window reads a hear-back's lines (`ui/src/chat/hearback.ts`).
+    let mut close = "Read replies with read_chat, then continue.".to_string();
+    if let Some(own) = own {
+        close.push_str(&format!(
+            " This turn is on your task #{own}: end it with finish_task."
+        ));
+    }
+    lines.push(close);
     Ok(lines.join("\n"))
 }
 

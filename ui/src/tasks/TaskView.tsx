@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure, type Task } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { idle } from './model';
+import { idle, reported } from './model';
 import { TaskChecks } from './TaskChecks';
 
 /** Only a settled task starts again (0010); an open one the person can only cancel. */
@@ -23,8 +23,9 @@ interface Props {
 }
 
 /**
- * An agent's task (archive-stale/v1, the task-pass and task-fail mock-ups): who has it, its state and
- * reason, how long it's been idle once stale, its PR's checks run, and Cancel and Restart.
+ * An agent's task (archive-stale/v1, the task-pass and task-fail mock-ups): who has it, its state, what
+ * its owner reported and what it waits on (0047), how long it's been idle once stale, its PR's checks
+ * run, and Cancel and Restart.
  */
 export function TaskView({ task, chatTitle, project, name, onSettle, onReference, onBack }: Props) {
   const [busy, setBusy] = useState(false);
@@ -42,6 +43,9 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
     task.pr ? `PR #${task.pr}` : undefined,
     task.stale_us ? idle(task.stale_us) : undefined,
   ].filter(Boolean);
+  const report = reported(task);
+  // Report and Waiting on already say why a task is held, or stopped by its owner's word or silence.
+  const told = task.state === 'held' || (task.state === 'blocked' && (!!task.report || !!task.asked));
   return (
     <section className="tasks" aria-label={`Task #${task.number}`}>
       <div className="tasks-scroll">
@@ -55,10 +59,22 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
             <dd>{name(task.owner)}</dd>
             <dt>State</dt>
             <dd>{task.state}</dd>
-            {task.reason && (
+            {task.reason && !told && (
               <>
                 <dt>Reason</dt>
                 <dd>{task.reason}</dd>
+              </>
+            )}
+            {report && (
+              <>
+                <dt>Report</dt>
+                <dd>{report}</dd>
+              </>
+            )}
+            {!!task.waiting_on?.length && (
+              <>
+                <dt>Waiting on</dt>
+                <dd>{task.waiting_on.join(', ')}</dd>
               </>
             )}
           </dl>
