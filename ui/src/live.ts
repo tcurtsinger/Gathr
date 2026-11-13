@@ -38,6 +38,8 @@ export type LiveEvent =
   | { type: 'read'; chat: string; turn: string | null; text: string }
   // The chat's tasks and waits, whole, after any change to them.
   | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[] }
+  // What the chat waits on may have changed (0050): ask the service again.
+  | { type: 'waiting'; chat: string }
   // The person's open questions across chats, whole, after any change to any task.
   | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
   // A chat was made, archived, restored (unarchived) or deleted.

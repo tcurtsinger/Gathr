@@ -66,6 +66,12 @@ enum Diag {
         #[arg(long, default_value = "30d")]
         since: String,
     },
+    /// What a chat waits on: from the service when it runs, else from the database, where what
+    /// only the service knew is said as it was when it stopped.
+    Waiting {
+        #[arg(long)]
+        chat: String,
+    },
     /// Read-only SQL over the database, up to 1,000 rows. The `event_log` view shows events readably.
     Query { sql: String },
     /// The turns behind a reference: how each ended and its events.
@@ -100,9 +106,11 @@ fn main() -> ExitCode {
     let data = DataDir::new(cli.data.unwrap_or_else(platform::default_data_dir));
     // A person reads `dev`; agents read the rest as JSON unless they ask for text.
     let text = cli.text || matches!(cli.command, Command::Dev { .. });
-    let show = |answer: &Value| match text {
-        true => text::render(answer),
-        false => answer.to_string(),
+    let show = |answer: &Value| match (text, answer["in_words"].as_str()) {
+        // An answer that is already written in words (`diag waiting`).
+        (true, Some(words)) => words.to_string(),
+        (true, None) => text::render(answer),
+        (false, _) => answer.to_string(),
     };
     let (name, result) = match cli.command {
         Command::Diag(diag) => ("diag", run_diag(&data, diag)),
@@ -131,11 +139,12 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
     match diag {
         Diag::Health => return Ok(diag::health(data)),
         Diag::Bundle => return diag::bundle(data),
+        Diag::Waiting { chat } => return diag::waiting(data, &chat),
         _ => {}
     }
     let (conn, _) = db::open_read_only(&data.db())?;
     match diag {
-        Diag::Health | Diag::Bundle => unreachable!("answered above"),
+        Diag::Health | Diag::Bundle | Diag::Waiting { .. } => unreachable!("answered above"),
         Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw),
         Diag::Trace { reference } => diag::trace(&conn, &reference),
         Diag::Failures { since } => diag::failures(&conn, ids::now_us() - parse_since(&since)?),

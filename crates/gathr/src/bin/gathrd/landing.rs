@@ -210,6 +210,9 @@ async fn acted(
                     if !merged.confirmed {
                         let (chat, head) = (review.chat.clone(), seen.head.clone());
                         db(chats, move |c| landings::pushed(c, &chat, pr, &head)).await?;
+                        let unshown =
+                            "Gathr pushed its merge, and GitHub doesn't show it merged yet";
+                        saw(chats, review, &seen.head, unshown, true).await;
                     }
                     Ok(Looked {
                         said: merged.said,
@@ -231,13 +234,17 @@ async fn acted(
             let asked =
                 crate::github::bring_up_to_date(chats, repo, &by, pr, &seen.head, Duration::ZERO);
             match asked.await {
-                Ok(_) => Ok(Looked::of(
-                    format!(
-                        "#{pr} was behind {base}: Gathr asked GitHub to bring it up to date, and lands it once its \
+                Ok(_) => {
+                    let asked = "Gathr asked GitHub to bring it up to date";
+                    saw(chats, review, &seen.head, asked, true).await;
+                    Ok(Looked::of(
+                        format!(
+                            "#{pr} was behind {base}: Gathr asked GitHub to bring it up to date, and lands it once its \
                          checks pass again."
-                    ),
-                    true,
-                )),
+                        ),
+                        true,
+                    ))
+                }
                 Err(why) => {
                     let why =
                         format!("it's behind {base}, and it wasn't brought up to date: {why}");
@@ -246,15 +253,35 @@ async fn acted(
             }
         }
         Act::Tell(why) => tell(chats, review, &seen.head, &why, asker, trace).await,
-        Act::Wait(why) => Ok(Looked::of(
-            format!("Gathr lands #{pr} by itself. Now: {why}."),
-            true,
-        )),
-        Act::Rest(why) => Ok(Looked::of(
-            format!("Gathr isn't landing #{pr} at {}: {why}.", short(&seen.head)),
-            false,
-        )),
+        Act::Wait(why) => {
+            saw(chats, review, &seen.head, &why, true).await;
+            Ok(Looked::of(
+                format!("Gathr lands #{pr} by itself. Now: {why}."),
+                true,
+            ))
+        }
+        Act::Rest(why) => {
+            saw(chats, review, &seen.head, &why, false).await;
+            Ok(Looked::of(
+                format!("Gathr isn't landing #{pr} at {}: {why}.", short(&seen.head)),
+                false,
+            ))
+        }
     }
+}
+
+/// Keeps what this look at the PR saw, and whether the PR moves by itself from here, for whoever
+/// asks what the chat waits on (0050). Not kept, the answer says the look before.
+async fn saw(chats: &Arc<Chats>, review: &Review, head: &str, words: &str, moving: bool) {
+    let (chat, pr, head, words) = (
+        review.chat.clone(),
+        review.pr,
+        head.to_string(),
+        words.to_string(),
+    );
+    let kept =
+        move |c: &mut rusqlite::Connection| landings::looked(c, (&chat, pr, &head), &words, moving);
+    let _ = db(chats, kept).await;
 }
 
 /// Tells the reviewer what stops the PR at this head, once: woken on no task, or, when its own
@@ -268,6 +295,14 @@ async fn tell(
     trace: &str,
 ) -> Result<Looked, String> {
     let said = format!("Gathr can't land #{} at {}: {why}.", review.pr, short(head));
+    saw(
+        chats,
+        review,
+        head,
+        &format!("left to its reviewer: {why}"),
+        false,
+    )
+    .await;
     let own = asker.is_some_and(|a| a.agent.as_deref() == Some(review.reviewer.as_str()));
     let wake = (!own).then(|| {
         format!(

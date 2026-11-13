@@ -53,6 +53,25 @@ pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::E
     Ok(json!({ "tasks": tasks, "waits": waits }))
 }
 
+/// What only the running service knows of what the chat waits on (0050): why its queued turns
+/// wait, as their agents' queues say, the turns with an approval waiting, and Gathr's own update.
+pub fn live_now(chats: &Chats, chat: &str) -> gathr::waiting::Live {
+    let said = chats.queued_in(chat);
+    let behind = said
+        .iter()
+        .filter_map(|(turn, why)| Some((turn.clone(), why.behind.clone()?)));
+    gathr::waiting::Live {
+        running: true,
+        behind: behind.collect(),
+        queued: said
+            .into_iter()
+            .map(|(turn, why)| (turn, why.words))
+            .collect(),
+        approvals: chats.states.asking_in(chat),
+        updating: chats.updating(),
+    }
+}
+
 /// The person's open tasks, as `GET /api/person-tasks` answers and the live socket sends.
 pub fn person_listed(
     conn: &rusqlite::Connection,
@@ -82,6 +101,13 @@ pub fn live_tasks(
                     let event = event.chat(chat).error("sqlite");
                     let _ = event.attr("why", e.to_string()).insert(conn);
                 }
+            }
+            // What these chats wait on may have changed, and that of chats whose turns, looks or
+            // background commands did: a window showing one asks again (0050).
+            let mut waiting = tasks::touched::take_waiting(conn)?;
+            waiting.retain(|chat| !chats.contains(chat));
+            for chat in chats.iter().chain(&waiting) {
+                let _ = live.send(json!({ "type": "waiting", "chat": chat }));
             }
             if chats.is_empty() || live.receiver_count() == 0 {
                 return Ok(());
@@ -184,8 +210,8 @@ mod tests {
 
         let sent: Vec<Value> = std::iter::from_fn(|| heard.try_recv().ok()).collect();
         let types: Vec<&str> = sent.iter().filter_map(|e| e["type"].as_str()).collect();
-        assert_eq!(types, ["tasks", "person_tasks"], "{sent:?}");
-        assert_eq!(sent[0]["chat"], "c1");
+        assert_eq!(types, ["waiting", "tasks", "person_tasks"], "{sent:?}");
+        assert_eq!(sent[1]["chat"], "c1");
         let failed = "SELECT conversation_id, error_type, ref, attrs FROM event_log \
                       WHERE name = 'gathr.chat.state'";
         let rows = gathr::diag::query(&conn, failed).unwrap();

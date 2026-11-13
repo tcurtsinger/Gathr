@@ -54,9 +54,44 @@ pub(super) fn after_review(
     Ok(starts)
 }
 
-/// What the task still has open, each in a few words: its waits, the tasks given in its turns that
-/// aren't settled (but for those given in passing, G164), and its PR.
+/// One thing a task still has open. Its reason is these in words, and what a chat waits on names
+/// them too (0050): one list, so the two never say different things.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Hold {
+    /// A wait of its own, by name.
+    Wait(String),
+    /// A task given in one of its turns that isn't settled, or that its giver hasn't heard of.
+    Given {
+        number: i64,
+        owner: String,
+        since_us: i64,
+    },
+    /// A command its engine runs in the background.
+    Command(String),
+    /// Its PR, until it merges.
+    Merge(i64),
+}
+
+impl Hold {
+    /// In a few words, as a task's reason says it. `ONLY_ITS_MERGE` reads the last of these.
+    pub fn words(&self) -> String {
+        match self {
+            Hold::Wait(name) => name.clone(),
+            Hold::Given { number, owner, .. } => format!("#{number} ({owner})"),
+            Hold::Command(described) => format!("a background command ({described})"),
+            Hold::Merge(pr) => format!("#{pr} to merge"),
+        }
+    }
+}
+
+/// What the task still has open, each in a few words.
 pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error> {
+    Ok(holds(conn, task)?.iter().map(Hold::words).collect())
+}
+
+/// What the task still has open: its waits, the tasks given in its turns that aren't settled (but
+/// for those given in passing, G164), its engine's background commands, and its PR.
+pub fn holds(conn: &Connection, task: i64) -> Result<Vec<Hold>, Error> {
     let mut open = Vec::new();
     let mut waits = conn.prepare_cached(
         "SELECT kind, target, (SELECT count(*) FROM waits p WHERE p.part_of = w.id)
@@ -72,29 +107,35 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
     })?;
     for row in rows {
         let (kind, target, parts) = row?;
-        open.push(words::wait_name(conn, &kind, target.as_deref(), parts)?);
+        open.push(Hold::Wait(words::wait_name(
+            conn,
+            &kind,
+            target.as_deref(),
+            parts,
+        )?));
     }
     // Settled isn't enough: the giver isn't done before it has heard back on them.
     let mut given = conn.prepare_cached(&format!(
-        "SELECT c.number, c.owner FROM tasks c JOIN turns t ON t.id = c.given_in
+        "SELECT c.number, c.owner, c.created_ts FROM tasks c JOIN turns t ON t.id = c.given_in
          WHERE t.task = ?1 AND c.in_passing = 0 AND (c.state NOT IN {} OR c.heard = 0)
          ORDER BY c.number",
         super::SETTLED
     ))?;
-    let rows = given.query_map([task], |r| Ok((r.get::<_, i64>(0)?, r.get(1)?)))?;
+    let rows = given.query_map([task], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?;
     for row in rows {
-        let (number, owner): (i64, Option<String>) = row?;
-        open.push(format!(
-            "#{number} ({})",
-            words::owner_name(conn, owner.as_deref())?
-        ));
+        let (number, owner, since_us): (i64, Option<String>, i64) = row?;
+        open.push(Hold::Given {
+            number,
+            owner: words::owner_name(conn, owner.as_deref())?,
+            since_us,
+        });
     }
     let mut commands = conn.prepare_cached(
         "SELECT b.description FROM background b JOIN turns t ON t.id = b.turn_id
          WHERE t.task = ?1 ORDER BY b.started_ts",
     )?;
     for described in commands.query_map([task], |r| r.get::<_, String>(0))? {
-        open.push(format!("a background command ({})", described?));
+        open.push(Hold::Command(described?));
     }
     // A review's PR is what it reviewed, not work its owner still owes.
     let pr: Option<Option<i64>> = conn
@@ -105,7 +146,7 @@ pub(super) fn open_on(conn: &Connection, task: i64) -> Result<Vec<String>, Error
         )
         .optional()?;
     if let Some(pr) = pr.flatten() {
-        open.push(format!("#{pr} to merge"));
+        open.push(Hold::Merge(pr));
     }
     Ok(open)
 }

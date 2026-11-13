@@ -33,6 +33,7 @@ mod reading;
 mod records;
 mod state;
 mod thinking;
+mod waits;
 mod workspace;
 
 pub use holds::STOP_NOW;
@@ -199,6 +200,8 @@ struct Task {
     compactions: HashSet<String>,
     /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
     held_raw: Vec<(Option<String>, u32, &'static str, String)>,
+    /// Why each queued turn waits, as the chats were last told (0050).
+    said_waits: waits::Said,
 }
 
 pub async fn run(
@@ -235,6 +238,7 @@ pub async fn run(
         unsaved: Vec::new(),
         compactions: HashSet::new(),
         held_raw: Vec::new(),
+        said_waits: HashMap::new(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
@@ -262,11 +266,15 @@ pub async fn run(
             command = commands.recv() => match command {
                 Some(Cmd::Close { done }) => {
                     task.shut_down("the service is stopping").await;
+                    task.queue.clear();
+                    task.say_waits();
                     let _ = done.send(());
                     return;
                 }
                 None => {
                     task.shut_down("the agent's task ended").await;
+                    task.queue.clear();
+                    task.say_waits();
                     return;
                 }
                 Some(command) => task.handle(command).await,
@@ -294,6 +302,8 @@ pub async fn run(
                 task.check_task().await;
             }
         }
+        // Whatever just happened may have changed why a queued turn waits.
+        task.say_waits();
     }
 }
 

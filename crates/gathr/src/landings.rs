@@ -168,6 +168,39 @@ pub fn did(conn: &Connection, chat: &str, pr: i64, head: &str) -> Result<Did, Er
     Ok(found.unwrap_or_default())
 }
 
+/// What Gathr's look at the PR at this head saw, kept for whoever asks what the chat waits on
+/// (0050): the words, and whether the PR moves by itself from here or is left to its reviewer.
+pub fn looked(
+    conn: &Connection,
+    (chat, pr, head): (&str, i64, &str),
+    saw: &str,
+    moving: bool,
+) -> Result<(), Error> {
+    conn.execute(
+        "INSERT INTO landings (chat_id, pr, head, saw, moving, looked_ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT DO UPDATE SET saw = excluded.saw, moving = excluded.moving,
+             looked_ts = excluded.looked_ts",
+        params![chat, pr, head, saw, moving, now_us()],
+    )?;
+    Ok(())
+}
+
+/// What the newest look at the PR saw, whether it moves by itself, and when it looked.
+pub fn last_look(
+    conn: &Connection,
+    chat: &str,
+    pr: i64,
+) -> Result<Option<(String, bool, i64)>, Error> {
+    Ok(conn
+        .query_row(
+            "SELECT saw, moving, looked_ts FROM landings
+             WHERE chat_id = ?1 AND pr = ?2 AND looked_ts IS NOT NULL ORDER BY looked_ts DESC LIMIT 1",
+            params![chat, pr],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .optional()?)
+}
+
 /// When Gathr last asked GitHub to bring this PR up to date, at any head.
 pub fn last_update(conn: &Connection, chat: &str, pr: i64) -> Result<Option<i64>, Error> {
     Ok(conn.query_row(

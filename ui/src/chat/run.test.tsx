@@ -40,6 +40,25 @@ const history = {
 // What the service's list reads now; a test changes it as the service would.
 let listed: Pauses = running;
 
+/** What the service answers the chat waits on (0050), as its pauses stand: the lead has a turn, the member nothing. */
+function waitingOf({ pauses }: Pauses) {
+  const held = (agent: string) => pauses.some((p) => p.scope !== 'agent' || p.target === agent);
+  const stands = (agent: string, state: string, words: string) => ({
+    agent,
+    state,
+    words,
+    on: [],
+    until_us: null,
+  });
+  return {
+    lines: [],
+    agents: [
+      stands('a', 'waiting', held('a') ? 'Held' : 'Waiting'),
+      held('b') ? stands('b', 'waiting', 'Paused') : stands('b', 'free', 'Ready'),
+    ],
+  };
+}
+
 /** The service as these tests need it; each POST is kept with its body. */
 function service(pauses: Pauses, answer: (path: string) => Promise<Response>) {
   listed = pauses;
@@ -50,6 +69,7 @@ function service(pauses: Pauses, answer: (path: string) => Promise<Response>) {
       return answer(path);
     }
     if (path === '/api/pauses') return Promise.resolve(json(listed));
+    if (path.endsWith('/waiting')) return Promise.resolve(json(waitingOf(listed)));
     return Promise.resolve(path.endsWith('/tasks') ? json({ tasks: [], waits: [] }) : json(history));
   });
   return posted;
@@ -126,7 +146,10 @@ test('a Pause answer that arrives after a newer live change never undoes it', as
 });
 
 test('an agent paused from Summary pauses that agent alone, and can be resumed there', async () => {
-  const posted = service(running, async () => json(paused('agent', 'b')));
+  const posted = service(running, async () => {
+    listed = paused('agent', 'b');
+    return json(listed);
+  });
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
   await expect.element(member).toHaveTextContent('MMMade-up MemberReady');
@@ -170,7 +193,8 @@ test('two agents paused at once, reaching the service in reverse order with no l
   await pause('Made-up Member');
   await expect.poll(() => answers.length).toBe(2);
   // The member's pause reached the service first, so its answer lists the member alone.
-  answers[1](json(paused('agent', 'b')));
+  listed = paused('agent', 'b');
+  answers[1](json(listed));
   await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
   const both: Pauses = {
     pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],

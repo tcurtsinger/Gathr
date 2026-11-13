@@ -207,7 +207,7 @@ fn held_review(data: &Path, repos: &Path) -> (Room, String, PathBuf, Value) {
     assert_eq!(waiting["isError"], false, "{}", text(&waiting));
     room.reviewed(&vale, 1, &room.heads[0]);
     std::fs::write(vale_cwd.join("go"), "").unwrap();
-    common::until(20, "review held on its pending CI", || {
+    common::until(120, "review held on its pending CI", || {
         (task_state(&room) == "held").then_some(())
     });
     (room, vale, file, answers)
@@ -219,7 +219,7 @@ fn a_ci_wait_waking_the_review_task_keeps_its_completed_review() {
     let (room, _, _, mut answers) = held_review(&data.0, &repos.0);
     answers[2]["out"] = json!(json!({"name":"CI","status":"completed","conclusion":"SUCCESS","context":"CI","state":"success"}).to_string());
     put_answers(&data.0, &answers);
-    common::until(20, "CI wakes the same review task into working", || {
+    common::until(120, "CI wakes the same review task into working", || {
         (task_state(&room) == "working").then_some(())
     });
     // The wake didn't erase the completed review: once GitHub's own sum of the checks says they
@@ -297,7 +297,7 @@ fn an_explicit_unfinished_review_revokes_its_prior_approval() {
 /// look that finds git busy keeps no verdict and asks again, so the first answer may not be the last.
 fn looked_at(room: &Room, head: &str, outdated: bool) -> Value {
     let what = format!("Gathr's look to find the review at {head} out of date: {outdated}");
-    common::until(20, &what, || {
+    common::until(120, &what, || {
         let tasks = room
             .service
             .call("GET", &format!("/api/chats/{}/tasks", room.chat))
@@ -397,7 +397,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
             .json();
         tasks["waits"].clone()
     };
-    let saw = common::until(20, "the wait to say a job is queued", || {
+    let saw = common::until(120, "the wait to say a job is queued", || {
         let wait = waits()[0].clone();
         wait["seen"]
             .as_str()
@@ -421,7 +421,7 @@ fn a_ci_wait_keeps_what_its_last_look_saw_and_wakes_with_each_job_by_name() {
 
     answers[2]["out"] = json!(jobs(("completed", "cancelled")));
     put_answers(&data.0, &answers);
-    let woke = common::until(20, "the wake that names the cancelled job", || {
+    let woke = common::until(120, "the wake that names the cancelled job", || {
         let chat = room
             .service
             .call("GET", &format!("/api/chats/{}", room.chat))

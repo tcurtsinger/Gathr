@@ -272,6 +272,17 @@ impl Room {
         assert_eq!(finished["isError"], false, "{finished}");
     }
 
+    /// Returns once Gathr's own look after a merge (0049) has dealt with `pr`: the look holds the
+    /// repository's lock, and a `merge` called meanwhile waits behind it, on a loaded machine for
+    /// longer than a test's request does.
+    fn looked_at(&self, pr: i64) {
+        let sql = "SELECT count(*) FROM landings WHERE pr = ?1 AND looked_ts IS NOT NULL";
+        common::until(120, "Gathr's look after the merge", || {
+            let seen: i64 = self.db().query_row(sql, [pr], |r| r.get(0)).ok()?;
+            (seen > 0).then_some(())
+        });
+    }
+
     fn main(&self) -> String {
         git(&self.origin, &["rev-parse", "refs/heads/main"])
             .trim()
@@ -352,6 +363,7 @@ fn of_two_prs_on_one_base_the_second_is_refused_once_the_first_merges() {
     room.review_done(2, &room.heads[1]);
     let first = room.call(&vale, "merge", json!({ "pr": 5 }));
     assert_eq!(first["isError"], false, "{}", text(&first));
+    room.looked_at(6);
     room.refused(&room.call(&vale, "merge", json!({ "pr": 6 })), "up to date");
     assert_eq!(room.main(), room.heads[0]);
 }
@@ -485,6 +497,7 @@ fn a_pr_that_changes_tests_or_brings_the_first_checks_needs_the_reviewers_sign_o
     );
     let signed = room.call(&vale, "merge", json!({ "pr": 6, "signed_off": true }));
     assert_eq!(signed["isError"], false, "{}", text(&signed));
+    room.looked_at(5);
 
     // A project with no passed checks on its main yet: its first PR is the baseline.
     room.db()

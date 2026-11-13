@@ -28,7 +28,9 @@ import { running } from './state';
 import { type Actions, Thread, useStable } from './Thread';
 import { roleName } from './team';
 import { type Unsent, useChat } from './useChat';
-import { Working } from './Working';
+import { useWaiting } from './useWaiting';
+import { WaitingLine } from './Waiting';
+import { Working, working } from './Working';
 import './chat.css';
 
 interface Props {
@@ -113,7 +115,9 @@ export function ChatView(props: Props) {
   const timeline = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
   const team = !fresh && state.members.length > 1;
   const before = useRef<Glance[]>([]);
-  const crew = glances(state, pauses, run, activity(timeline.items), before.current);
+  // What the chat waits on, as the service answers it; a pause changes it with no live message.
+  const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
+  const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
   // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
   const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
@@ -286,6 +290,9 @@ export function ChatView(props: Props) {
                       onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
                     />
                   )}
+                  {/* In Working's place while none runs: what the chat waits on. A queued turn
+                      that hasn't started is one of the things it says. */}
+                  {run.state === 'running' && !working(state) && <WaitingLine waiting={waiting} />}
                 </>
               )
             }

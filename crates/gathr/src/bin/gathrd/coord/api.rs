@@ -22,6 +22,7 @@ use crate::routes::{Answer, Fail, db, fail, known};
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/chats/{chat}/tasks", get(list))
+        .route("/api/chats/{chat}/waiting", get(waiting))
         .route("/api/tasks/{task}/cancel", post(cancel))
         .route("/api/tasks/{task}/restart", post(restart))
         .route("/api/person-tasks", get(person_open))
@@ -237,6 +238,23 @@ async fn list(
 ) -> Answer {
     known(&s, &t, &chat).await?;
     db(&s, &t, "Tasks failed", move |c| super::listed(c, &chat)).await
+}
+
+/// What the chat waits on now (0050): every line with who can end it and since when, where each
+/// agent stands, the same in words, and the service's clock for the ages.
+async fn waiting(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(chat): Path<String>,
+) -> Answer {
+    known(&s, &t, &chat).await?;
+    let live = super::live_now(&s.chats, &chat);
+    db(&s, &t, "Waiting failed", move |c| {
+        let now = gathr::ids::now_us();
+        let answer = gathr::waiting::answer(c, &chat, &live, now)?;
+        Ok(gathr::waiting::shown(&answer, now, "service"))
+    })
+    .await
 }
 
 #[derive(Deserialize)]

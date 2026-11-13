@@ -20,7 +20,7 @@ mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
-pub use held::background_changed;
+pub use held::{Hold, background_changed, holds};
 pub use prs::{Seen, pr_looked, with_prs};
 pub use report::{Finish, Report, Said, Took, finish};
 

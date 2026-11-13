@@ -207,6 +207,40 @@ export interface Wait {
   created_ts: number;
 }
 
+/** One thing a chat waits on (0050), in the service's words. */
+export interface WaitingLine {
+  kind: string;
+  what: string;
+  agent: string | null;
+  task: number | null;
+  /** Since when, in microseconds. */
+  since_us: number | null;
+  /** Who or what can end it: itself, the person, nobody, or the lines it follows. */
+  moves: 'itself' | 'you' | 'nobody' | 'others';
+  /** A wait's or a PR's last look: what it saw, when, and the error of looks that fail. */
+  seen: string | null;
+  looked_us: number | null;
+  error: string | null;
+}
+
+/** Where one agent of the chat stands, as the service works it out (0050). */
+export interface Standing {
+  agent: string;
+  state: 'needs_you' | 'working' | 'waiting' | 'free';
+  /** In a phrase: "Waiting for CI on #157", "Held", "Usage limit". */
+  words: string;
+  /** Waiting: for whom or what, each with since when (µs). */
+  on: { what: string; since_us: number }[];
+  /** Out of usage: when it resets (µs). */
+  until_us: number | null;
+}
+
+/** What a chat waits on: every line, the most pressing first, and each agent's standing. */
+export interface Waiting {
+  lines: WaitingLine[];
+  agents: Standing[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -430,6 +464,7 @@ export const api = {
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
+  waiting: (chat: string) => call<Waiting>('GET', `/api/chats/${chat}/waiting`),
   /** The person's open questions, and agents' stale tasks across chats. */
   personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
   cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),

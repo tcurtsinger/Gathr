@@ -71,3 +71,14 @@ export function clock(time: string | undefined): string {
   if (!at || Number.isNaN(at.getTime())) return '';
   return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 }
+
+/** Whether a task is still under way: not done, blocked, failed, stopped or cancelled. */
+export const open = (t: { state: string }) =>
+  !['done', 'blocked', 'failed', 'stopped', 'cancelled'].includes(t.state);
+
+/** When something began: its time today, else its date (Nov 8). */
+export function began(us: number): string {
+  const at = new Date(us / 1000);
+  if (at.toDateString() === new Date().toDateString()) return clock(at.toISOString());
+  return at.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}

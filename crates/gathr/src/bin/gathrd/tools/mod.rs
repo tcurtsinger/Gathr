@@ -17,6 +17,7 @@ mod message;
 mod person;
 mod server;
 mod settings;
+mod waiting;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
 pub use server::{names, service};

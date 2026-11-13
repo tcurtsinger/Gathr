@@ -459,3 +459,113 @@ fn a_message_goes_out_live_naming_its_chat_and_whom_its_for() {
     assert_eq!(heard["chat"], room.chat.as_str(), "{heard}");
     assert_eq!(heard["message"]["to"], room.ann.as_str(), "{heard}");
 }
+
+/// Scenario 6b through the service (0050): one answer says what the chat waits on, the same by the
+/// route, the `waiting` tool and the command line. A turn queued behind its agent's running turn
+/// says so, which only that agent's queue knows; when the turn ahead ends, a live message names the
+/// chat and the line is gone. With the service stopped, the command line answers from the database.
+#[test]
+fn what_a_chat_waits_on_is_one_answer_by_the_route_the_tool_and_the_command_line() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let lead = room.turn_of(&room.lead, 0);
+    room.turn_of(&room.ann, 1);
+    // Ann's task from Lead waits behind the turn Ann is running.
+    let task = json!({ "to": "Ann", "what": "Fix the build" });
+    let given = call_tool(room.service.info.port, &lead, "give_task", task);
+    assert_eq!(given["isError"], false, "{}", text(&given));
+    let path = format!("/api/chats/{}/waiting", room.chat);
+    let behind = "is queued: behind this agent's turn";
+    let says = |answer: &Value| {
+        let lines = answer["lines"].as_array().cloned().unwrap_or_default();
+        let said = |l: &Value| l["what"].as_str().is_some_and(|w| w.contains(behind));
+        lines.iter().any(said)
+    };
+    let asked = until(20, "the queue to say why Ann's task waits", || {
+        let answer = room.service.call("GET", &path).json();
+        says(&answer).then_some(answer)
+    });
+    let line = |kind: &str| {
+        let lines = asked["lines"].as_array().unwrap();
+        let of = lines.iter().filter(|l| l["kind"] == kind);
+        of.cloned().collect::<Vec<_>>()
+    };
+    let queued = &line("queued")[0];
+    assert_eq!(queued["moves"], "itself", "{queued}");
+    assert_eq!(queued["from"], "service", "{queued}");
+    assert_eq!(queued["task"], 1, "{queued}");
+    assert_eq!(line("turn").len(), 2, "both running turns: {asked}");
+    let states: Vec<&str> = asked["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|a| a["state"].as_str())
+        .collect();
+    assert_eq!(states, ["working", "working"], "{asked}");
+
+    let told = text(&call_tool(
+        room.service.info.port,
+        &lead,
+        "waiting",
+        json!({}),
+    ));
+    assert!(
+        told.contains(behind) && told.contains("Moving by itself:"),
+        "{told}"
+    );
+    let words = asked["in_words"].as_str().unwrap_or_default();
+    assert!(words.contains(behind), "{asked}");
+    let (ok, cli) = gathr(&room.data, &["diag", "waiting", "--chat", &room.chat]);
+    assert!(ok, "{cli}");
+    assert_eq!(cli["from"], "service", "{cli}");
+    assert!(says(&cli), "{cli}");
+
+    // The turn ahead ends: the window is told to ask again, and the line is gone.
+    let mut live = room.service.live();
+    std::fs::write(room.data.join("go"), "").unwrap();
+    loop {
+        let update = common::next_live(&mut live);
+        if update["type"] == "waiting" && update["chat"] == room.chat.as_str() {
+            break;
+        }
+    }
+    until(20, "the queued turn's line to go", || {
+        let answer = room.service.call("GET", &path).json();
+        (!says(&answer)).then_some(())
+    });
+
+    let (chat, folder) = (room.chat.clone(), room.data.clone());
+    let Room { service, .. } = room;
+    service.stop();
+    let (ok, cli) = gathr(&folder, &["diag", "waiting", "--chat", &chat]);
+    assert!(ok, "{cli}");
+    assert_eq!(cli["from"], "database", "{cli}");
+    let (ok, unknown) = gathr(&folder, &["diag", "waiting", "--chat", "nope"]);
+    let why = unknown["why"].as_str().unwrap_or_default();
+    assert!(!ok && why.contains("no chat"), "{unknown}");
+}
+
+/// G163: a message whose turn is held says what really holds it: the pause of the agent, of the
+/// chat or of the whole app, never "the chat" for all three.
+#[test]
+fn a_message_to_a_held_member_names_the_pause_that_holds_it() {
+    for (scope, says) in [
+        ("agent", "when Ann is resumed"),
+        ("chat", "when the chat is resumed"),
+        ("app", "when Gathr is resumed"),
+    ] {
+        let data = TempDir::new();
+        let room = room(&data.0);
+        let lead = room.turn_of(&room.lead, 0);
+        let target = match scope {
+            "agent" => room.ann.as_str(),
+            "chat" => room.chat.as_str(),
+            _ => "",
+        };
+        let body = json!({ "scope": scope, "target": target });
+        let paused = room.service.send("POST", "/api/pauses", body);
+        assert_eq!(paused.status, 200, "{}", paused.body);
+        let sent = text(&room.message(&lead, "Ann", "Held?"));
+        assert!(sent.contains(says), "{scope}: {sent}");
+    }
+}

@@ -166,6 +166,18 @@ impl Tools {
                 "Sent to {}: their turn starts when the chat is resumed.",
                 saved.to_name
             ),
+            "held_app" => format!(
+                "Sent to {}: their turn starts when Gathr is resumed.",
+                saved.to_name
+            ),
+            "held_agent" => format!(
+                "Sent to {0}: their turn starts when {0} is resumed.",
+                saved.to_name
+            ),
+            "held_update" => format!(
+                "Sent to {}: their turn starts once Gathr has updated.",
+                saved.to_name
+            ),
             _ => format!("Sent to {}: it wakes them once.", saved.to_name),
         })
     }

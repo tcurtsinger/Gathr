@@ -45,13 +45,23 @@ impl States {
         }
     }
 
-    /// Notes whether the turn has an approval waiting.
+    /// Notes whether the turn has an approval waiting. What the chat waits on may have changed.
     pub fn asking(&self, turn: &str, chat: &str, open: bool) {
         let mut known = self.known.lock().expect("never poisoned");
-        match open {
+        let was = match open {
             true => known.asking.insert(turn.to_string(), chat.to_string()),
             false => known.asking.remove(turn),
         };
+        if was.is_some() != open {
+            let _ = self.live.send(json!({ "type": "waiting", "chat": chat }));
+        }
+    }
+
+    /// The chat's turns with an approval waiting.
+    pub fn asking_in(&self, chat: &str) -> Vec<String> {
+        let known = self.known.lock().expect("never poisoned");
+        let turns = known.asking.iter().filter(|(_, c)| *c == chat);
+        turns.map(|(turn, _)| turn.clone()).collect()
     }
 
     /// Whether an approval waits in the chat.

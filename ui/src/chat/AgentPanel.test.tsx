@@ -103,7 +103,9 @@ const history = {
 };
 const tasks = [task(7, 'b', { state: 'working' }), task(8, 'c'), task(9, 'b')];
 
-function service(more: { history?: object; tasks?: Task[]; compact?: () => Response } = {}) {
+function service(
+  more: { history?: object; tasks?: Task[]; compact?: () => Response; waiting?: object } = {},
+) {
   const sent: unknown[] = [];
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (init?.method === 'POST' && path.endsWith('/compact')) {
@@ -114,6 +116,8 @@ function service(more: { history?: object; tasks?: Task[]; compact?: () => Respo
       sent.push(JSON.parse(String(init.body)));
       return new Response(JSON.stringify({ turn: 'u', status: 'running' }));
     }
+    // What the chat waits on (0050), where a test's words come from it.
+    if (path.endsWith('/waiting')) return new Response(JSON.stringify(more.waiting ?? {}));
     const work = { tasks: more.tasks ?? tasks, waits: [] };
     const body = path.endsWith('/tasks') ? work : path === '/api/pauses' ? {} : (more.history ?? history);
     return new Response(JSON.stringify(body));
@@ -246,7 +250,16 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
 test('a waiting agent says who it waits for and since when; with no task of its own it has no Task or Now', async () => {
   const earlier = new Date(2026, 10, 8, 16, 20);
-  service({ tasks: [...tasks, task(10, 'c', { state: 'working', created_us: earlier.getTime() * 1000 })] });
+  // The service says whom the lead waits for, each with since when.
+  const on = [
+    { what: 'Made-up Member', since_us: today(9, 42).getTime() * 1000 },
+    { what: 'Made-up Third', since_us: earlier.getTime() * 1000 },
+  ];
+  const lead = { agent: 'a', state: 'waiting', words: 'Waiting for Made-up Member and Made-up Third', on };
+  service({
+    tasks: [...tasks, task(10, 'c', { state: 'working', created_us: earlier.getTime() * 1000 })],
+    waiting: { lines: [], agents: [{ ...lead, until_us: null }] },
+  });
   await render(<Chat />);
   await openFromSummary(/^Made-up Lead/);
   // A wait that began today says its time; one from an earlier day, its date.
