@@ -591,6 +591,22 @@ test('a turn with only a notice has its block after the message that began it; o
   expect(text(byId(items, 'a-cut'))).toBe('');
 });
 
+test('a stopped turn says it carried on once its carry-on runs, never while that waits or was stopped', () => {
+  const state = round();
+  state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped' }), position: 5 };
+  state.turns.next = turn('next', 'lane', { status: 'queued', held: 'pause', answers: 'cut' });
+  state.messages.push(said('cut', 'user', '@Lane'), said('next', 'gathr', 'Stop now ended your turn.'));
+  const notice = () => custom(byId(view(state).items, 'a-cut')).notice;
+  expect(notice()).toMatchObject({ carried: false });
+
+  // Stopped before it ever started (its task cancelled while it waited): nothing carried on.
+  state.turns.next = { ...state.turns.next, status: 'stopped', held: null, position: 6 };
+  expect(notice()).toMatchObject({ carried: false });
+
+  state.turns.next = { ...state.turns.next, status: 'running' };
+  expect(notice()).toMatchObject({ carried: true });
+});
+
 test('the questions a split turn asked show once, after its first block', () => {
   const state = round();
   state.turns.kit.status = 'running';

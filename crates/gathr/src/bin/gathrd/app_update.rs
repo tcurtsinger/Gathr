@@ -1,8 +1,10 @@
-//! Gathr updates its own service between turns (0032). It looks for a newer release at start,
-//! every 10 minutes and when asked; installs it beside the copy that runs and checks it; holds
-//! the turns it queued (never the person's own message) until nothing runs; then stops and hands over to it
-//! (`gathr::launch::hand_over`), which goes back to the copy before if the new one doesn't start.
+//! Gathr updates its own service when the person says (0032). It looks for a newer release at
+//! start, every 10 minutes and when asked; installs it beside the copy that runs and checks it, and
+//! shows it ready. Update stops what runs as Stop now does, with a carry-on saved for each agent
+//! stopped, and hands over (`gathr::launch::hand_over`), which goes back to the copy before if the
+//! new one doesn't start. The window updates itself, apart (`gathr-app`'s `update.rs`).
 
+use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -25,9 +27,10 @@ use crate::chats::Chats;
 use crate::routes::{Answer, fail};
 
 const EVERY: Duration = Duration::from_secs(10 * 60);
-/// How long turns are held for an update before it waits for the next look instead.
-const HOLD: Duration = Duration::from_secs(30 * 60);
-/// How often a hold looks at what still runs.
+/// How long Update waits for the turns it stopped to end before it hands over anyway: nothing
+/// running holds the room's update for long (G194).
+const ENDING: Duration = Duration::from_secs(20);
+/// How often it looks at what still runs.
 const LOOK: Duration = Duration::from_millis(500);
 
 pub struct AppUpdates {
@@ -49,8 +52,10 @@ struct Shown {
     checked_us: Option<i64>,
     /// The last failure: why, and its reference.
     failed: Option<(String, String)>,
-    /// The update holding turns now, and since when.
-    holding: Option<(String, i64)>,
+    /// The update checked and ready, and since when.
+    ready: Option<(String, i64)>,
+    /// Installing now: the version, and what it still waits on to end.
+    installing: Option<(String, Value)>,
 }
 
 enum Found {
@@ -86,10 +91,11 @@ impl AppUpdates {
     pub fn view(&self) -> Value {
         let current = self.copies.current();
         let shown = self.shown();
-        let state = match (release::feed(), shown.checking, &shown.holding) {
-            (None, ..) => "off",
-            (_, _, Some(_)) => "updating",
-            (_, true, _) => "checking",
+        let state = match (&shown.installing, &shown.ready, shown.checking) {
+            (Some(_), ..) => "updating",
+            (_, Some(_), _) => "ready",
+            _ if release::feed().is_none() => "off",
+            (.., true) => "checking",
             _ => "idle",
         };
         json!({
@@ -98,8 +104,123 @@ impl AppUpdates {
             "state": state,
             "checked": shown.checked_us.map(ids::utc),
             "failed": shown.failed.as_ref().map(|(why, r)| json!({ "why": why, "ref": r })),
-            "update": shown.holding.as_ref().map(|(v, since)| json!({ "version": v, "since_us": since })),
+            "update": shown.ready.as_ref().map(|(v, since)| json!({ "version": v, "since_us": since })),
+            "running": shown.installing.as_ref().map(|(_, running)| running),
         })
+    }
+
+    /// Update: installs the release that's ready. Before it answers, no new turn starts any more
+    /// and a carry-on is saved for everything it will stop; then the switch begins. When a carry-on
+    /// can't be saved, nothing is stopped and Update fails (`Refused::Failed`).
+    pub async fn install(self: &Arc<Self>, trace: &str) -> Result<Value, Refused> {
+        let version = {
+            let mut shown = self.shown();
+            if shown.installing.is_some() {
+                return Err(Refused::Not("Gathr is updating already".into()));
+            }
+            let Some((version, _)) = shown.ready.clone() else {
+                return Err(Refused::Not("no update is ready".into()));
+            };
+            shown.installing = Some((version.clone(), Value::Null));
+            version
+        };
+        let began = Instant::now();
+        self.chats.set_updating(Some(version.clone())).await;
+        let by = format!("Gathr's update to {version}");
+        let stopper = by.clone();
+        let save = move |c: &mut rusqlite::Connection| gathr::carry::save_all(c, &stopper);
+        let saved = match self.chats.writer.call(save).await {
+            Some(saved) => saved.map_err(|e| e.to_string()),
+            None => Err("the database didn't answer".to_string()),
+        };
+        let event = Event::point("gathr.app.install").trace(trace);
+        let event = event.attr("version", version.clone());
+        let carry_ons = match saved {
+            Ok(carry_ons) => {
+                let event = event.ok().attr("carry_ons", carry_ons.len());
+                self.chats.writer.record(event);
+                carry_ons
+            }
+            Err(why) => {
+                self.chats.set_updating(None).await;
+                self.shown().installing = None;
+                let event = event.error("carry_on").attr("why", why.clone());
+                self.chats.writer.record(event);
+                self.publish();
+                let why =
+                    format!("the agents' carry-ons weren't saved, so nothing was stopped: {why}");
+                return Err(Refused::Failed(why));
+            }
+        };
+        self.publish();
+        let (app, to, trace) = (self.clone(), version.clone(), trace.to_string());
+        tokio::spawn(async move { app.switch(to, by, trace, began, carry_ons).await });
+        Ok(json!({ "installing": version }))
+    }
+
+    /// Stops what runs and hands over once the turns stopped have ended, or `ENDING` after Update
+    /// was accepted with what still ran recorded: the carry-ons are saved, so nothing that runs,
+    /// and no engine that won't take the stop, holds the update.
+    async fn switch(
+        &self,
+        version: String,
+        by: String,
+        trace: String,
+        began: Instant,
+        carry_ons: Vec<gathr::carry::Saved>,
+    ) {
+        held_by_a_test().await;
+        let deadline = tokio::time::Instant::from_std(began + ENDING);
+        let carried: HashSet<String> = carry_ons.iter().map(|c| c.answers.clone()).collect();
+        let stopping = self.chats.stop_now("app", "", &by, Some(Arc::new(carried)));
+        let _ = tokio::time::timeout_at(deadline, stopping).await;
+        let event = Event::point("gathr.app.hold")
+            .trace(&trace)
+            .attr("version", version.as_str());
+        let mut event = loop {
+            // Asked under the deadline too: a database that doesn't answer reads as still running.
+            let asked = tokio::time::timeout_at(deadline, self.running_now()).await;
+            let running = asked.unwrap_or_else(|_| json!({ "turns": ["unknown"] }));
+            if running["turns"].as_array().is_none_or(Vec::is_empty) {
+                break event.ok();
+            }
+            if began.elapsed() > ENDING {
+                break event.error("busy").attr("running", running);
+            }
+            let shown = Some((version.clone(), running));
+            if std::mem::replace(&mut self.shown().installing, shown.clone()) != shown {
+                self.publish();
+            }
+            tokio::time::sleep(LOOK).await;
+        };
+        // A turn that ended by itself meanwhile needs no carry-on: it would repeat the work. The
+        // hand-over goes on even when that can't be written, as every agent is stopped by now: the
+        // failure is recorded with what it leaves, a carry-on that may repeat finished work.
+        let carry_ons = Arc::new(carry_ons);
+        let mut dropped = Err("the database didn't answer".to_string());
+        for _ in 0..3 {
+            let saved = carry_ons.clone();
+            let drop = move |c: &mut rusqlite::Connection| gathr::carry::drop_unneeded(c, &saved);
+            // Two seconds a try: a database that doesn't answer never holds the hand-over.
+            let tried = tokio::time::timeout(Duration::from_secs(2), self.chats.writer.call(drop));
+            match tried.await {
+                Ok(Some(Ok(n))) => dropped = Ok(n),
+                Ok(Some(Err(e))) => dropped = Err(e.to_string()),
+                Ok(None) | Err(_) => {}
+            }
+            if dropped.is_ok() {
+                break;
+            }
+            tokio::time::sleep(LOOK).await;
+        }
+        event = match dropped {
+            Ok(n) => event.attr("carry_ons_dropped", n),
+            Err(why) => event.error("carry_on_drop").attr("drop_failed", why),
+        };
+        event.duration_us = Some(began.elapsed().as_micros() as i64);
+        self.chats.writer.record(event);
+        *self.handing_over.lock().expect("never poisoned") = Some(version);
+        self.ready.notify_one();
     }
 
     fn publish(&self) {
@@ -253,44 +374,6 @@ impl AppUpdates {
         })
     }
 
-    /// Holds the turns Gathr queued until nothing runs (turns, background commands, wait checks):
-    /// whether it got there. After `HOLD`, or at shutdown, it lets them go and says what still ran.
-    async fn hold(&self, version: &str) -> bool {
-        let (trace, began) = (ids::trace_id(), Instant::now());
-        self.shown().holding = Some((version.to_string(), ids::now_us()));
-        self.chats.set_updating(Some(version.to_string())).await;
-        self.publish();
-        let limit = hold_limit();
-        let event = Event::point("gathr.app.hold")
-            .trace(&trace)
-            .attr("version", version);
-        loop {
-            let running = self.running_now().await;
-            let idle = |key: &str| running[key].as_array().is_none_or(Vec::is_empty);
-            if idle("turns") && idle("background") && idle("checks") {
-                let mut event = event.ok();
-                event.duration_us = Some(began.elapsed().as_micros() as i64);
-                self.chats.writer.record(event);
-                return true;
-            }
-            if began.elapsed() > limit || self.stop.load(Ordering::Relaxed) {
-                let mut event = event.error("busy").attr("running", running);
-                event.duration_us = Some(began.elapsed().as_micros() as i64);
-                self.chats.writer.record(event);
-                let why = format!("{version} held {limit:?}: still running");
-                {
-                    let mut shown = self.shown();
-                    shown.holding = None;
-                    shown.failed = Some((why, ids::reference(&trace).to_string()));
-                }
-                self.chats.set_updating(None).await;
-                self.publish();
-                return false;
-            }
-            tokio::time::sleep(LOOK).await;
-        }
-    }
-
     /// What runs anywhere now, as the app's pause sees it.
     async fn running_now(&self) -> Value {
         let checks = self.chats.checking();
@@ -337,16 +420,26 @@ async fn trial(app: Arc<AppUpdates>) {
     app.chats.writer.record(event);
 }
 
-/// `GATHR_APP_HOLD_MS` shortens the hold, in dev and tests only.
-fn hold_limit() -> Duration {
-    let shorter = cfg!(debug_assertions)
-        .then(|| std::env::var("GATHR_APP_HOLD_MS").ok()?.parse().ok())
-        .flatten();
-    shorter.map_or(HOLD, Duration::from_millis)
+/// Why an Update didn't begin: nothing to do (409), or it failed (500).
+pub enum Refused {
+    Not(String),
+    Failed(String),
 }
 
-/// Checks at start, then every 10 minutes or when asked, until an update may go ahead or the
-/// service stops.
+/// In tests, `GATHR_APP_SWITCH_HOLD` names a file the switch waits for (a minute at most) before
+/// it stops anything, so a test reads what was sent meanwhile while the old turns still run.
+async fn held_by_a_test() {
+    let Some(file) = std::env::var_os("GATHR_APP_SWITCH_HOLD") else {
+        return;
+    };
+    let until = Instant::now() + Duration::from_secs(60);
+    while !std::path::Path::new(&file).exists() && Instant::now() < until {
+        tokio::time::sleep(LOOK).await;
+    }
+}
+
+/// Checks at start, then every 10 minutes or when asked, until the service stops: the newest
+/// release checked is shown ready until the person updates.
 pub async fn run(app: Arc<AppUpdates>) {
     let Some(feed) = release::feed() else {
         return;
@@ -354,15 +447,10 @@ pub async fn run(app: Arc<AppUpdates>) {
     while !app.stop.load(Ordering::Relaxed) {
         app.shown().checking = true;
         let (check, f) = (app.clone(), feed.clone());
-        let ready = tokio::task::spawn_blocking(move || check.check(&f)).await;
-        app.publish();
-        if let Ok(Some(version)) = ready
-            && app.hold(&version).await
-        {
-            *app.handing_over.lock().expect("never poisoned") = Some(version);
-            app.ready.notify_one();
-            return;
+        if let Ok(Some(version)) = tokio::task::spawn_blocking(move || check.check(&f)).await {
+            app.shown().ready = Some((version, ids::now_us()));
         }
+        app.publish();
         tokio::select! {
             _ = tokio::time::sleep(EVERY) => {}
             _ = app.wake.notified() => {}
@@ -380,8 +468,23 @@ async fn view(Extract(s): Extract<Arc<State>>) -> Json<Value> {
     Json(s.app.view())
 }
 
-/// Checks for a release now; `GET /api/app` shows how it went.
-async fn update(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
+/// Checks for a release now; with `{"install": true}`, Update: installs what's ready.
+/// `GET /api/app` shows how either went.
+async fn update(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    body: axum::body::Bytes,
+) -> Answer {
+    let asked: Value = serde_json::from_slice(&body).unwrap_or_default();
+    if asked["install"] == true {
+        return s.app.install(&t.0).await.map(Json).map_err(|refused| {
+            let (status, why) = match refused {
+                Refused::Not(why) => (StatusCode::CONFLICT, why),
+                Refused::Failed(why) => (StatusCode::INTERNAL_SERVER_ERROR, why),
+            };
+            fail(status, "Update failed", &why, &t.0)
+        });
+    }
     if !s.app.check_now() {
         let why = "this dev build has no release feed: set GATHR_APP_RELEASES";
         return Err(fail(StatusCode::CONFLICT, "Update failed", why, &t.0));

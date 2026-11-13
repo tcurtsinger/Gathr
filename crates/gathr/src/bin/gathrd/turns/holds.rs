@@ -17,17 +17,17 @@ use serde_json::json;
 use super::{Ids, Task};
 
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
-const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
+use gathr::carry::CHECK_FIRST;
 
 impl Task {
-    /// What holds the queued turn from starting: a pause (0010) or an update (0032), never the
-    /// person's own message, which starts at once; an update then waits for the next quiet moment.
+    /// What holds the queued turn from starting: the update the person asked for, installing now
+    /// (0032), whose hand-over would cut it off; else a pause (0010), never the person's message.
     pub(super) fn holder(&self, ids: &Ids) -> Option<&'static str> {
-        if ids.person {
-            return None;
-        }
         if self.chats.updating().is_some() {
             return Some("update");
+        }
+        if ids.person {
+            return None;
         }
         let pauses = self.chats.pauses();
         pauses::holding(&pauses, &ids.chat, ids.agent.as_deref()).map(|_| "pause")
@@ -202,8 +202,17 @@ impl Task {
 
     /// Stop now (the person's alone): the running turn in the scope is interrupted, the engine's
     /// background commands there are ended by its own stop, and a carry-on naming them waits for
-    /// Restart. The scope is already paused, stopped, so nothing else starts.
-    pub(super) async fn stop_now(&mut self, scope: String, target: String) {
+    /// Restart. The scope is already paused, stopped, so nothing else starts. An update stops the
+    /// same way with its carry-ons saved before (`carried`: the turns they answer, `gathr::carry`):
+    /// none is saved here for those, and such a turn's end leaves its task to its carry-on. A turn
+    /// the update saved none for (it started as the update began) is carried on as Stop now does.
+    pub(super) async fn stop_now(
+        &mut self,
+        scope: String,
+        target: String,
+        by: &str,
+        carried: Option<std::sync::Arc<std::collections::HashSet<String>>>,
+    ) {
         let pause = [Pause {
             scope,
             target,
@@ -233,6 +242,14 @@ impl Task {
             .as_ref()
             .filter(|t| !t.stopping)
             .map(|t| t.ids.clone());
+        let saved = |turn: &str| carried.as_ref().is_some_and(|c| c.contains(turn));
+        let carried = match &running {
+            Some(ids) => saved(&ids.turn),
+            None => commands.iter().any(|(_, turn, _)| saved(turn)),
+        };
+        if let Some(turn) = self.turn.as_mut().filter(|t| carried && !t.stopping) {
+            turn.carried = true;
+        }
         if running.is_some() {
             self.interrupt(&chat).await;
         }
@@ -252,13 +269,10 @@ impl Task {
             })
         });
         let Some(ids) = ids else { return };
-        let ended = match (turn_ended, commands.len()) {
-            (true, 0) => "your turn".to_string(),
-            (true, n) => format!("your turn and {n} background command(s)"),
-            (false, n) => format!("{n} background command(s) of yours"),
-        };
-        let said = format!("Stop now ended {ended}. {CHECK_FIRST}");
-        self.carry_on(&ids, said).await;
+        if !carried {
+            let ended = gathr::carry::ended(turn_ended, commands.len());
+            self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
+        }
         self.record(
             Event::point("gathr.pause.stop_now")
                 .trace(&ids.trace)

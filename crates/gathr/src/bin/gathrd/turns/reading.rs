@@ -595,7 +595,10 @@ impl Task {
             self.tell_again(&turn.ids).await;
         }
         self.compaction_ended(&turn.ids.turn);
-        self.set_turn(&turn.ids, status, why.as_deref()).await;
+        match status == "stopped" && turn.carried {
+            true => self.end_carried(&turn.ids, why.as_deref()).await,
+            false => self.set_turn(&turn.ids, status, why.as_deref()).await,
+        }
         self.try_next().await;
     }
 

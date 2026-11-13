@@ -338,6 +338,17 @@ export interface Account {
 }
 
 /** An answer that failed: "… failed", why, and the reference `gathr diag trace` takes. */
+/** Gathr's own version and update, as `GET /api/app` answers (0032). */
+export interface AppState {
+  version: string;
+  /** No release feed (a dev build), nothing to do, a check under way, a release ready, or installing it. */
+  state: 'off' | 'idle' | 'checking' | 'ready' | 'updating';
+  /** The release checked and ready to install. */
+  update: { version: string } | null;
+  /** The last check or update that failed. */
+  failed: { why: string; ref: string } | null;
+}
+
 export class Failure extends Error {
   constructor(
     readonly error: string,
@@ -437,6 +448,10 @@ export const api = {
   models: (account: string) =>
     call<{ models: Model[] }>('GET', `/api/accounts/${account}/models`).then((m) => m.models),
   /** Whether this computer opens Gathr at login, as the system says now. */
+  app: () => call<AppState>('GET', '/api/app'),
+  /** Update: installs the ready release now; what runs is stopped and carries on after. */
+  updateApp: () => call<unknown>('POST', '/api/app/update', { install: true }),
+  checkApp: () => call<unknown>('POST', '/api/app/update'),
   startup: () => call<{ on: boolean }>('GET', '/api/startup').then((s) => s.on),
   setStartup: (on: boolean) => call<{ on: boolean }>('PUT', '/api/startup', { on }).then((s) => s.on),
   agents: () => call<{ agents: Agent[] }>('GET', '/api/agents').then((a) => a.agents),

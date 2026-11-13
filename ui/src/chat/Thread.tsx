@@ -329,6 +329,8 @@ function AskApproval({
 function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions }) {
   const { turn } = notice;
   if (turn.status === 'stopped') {
+    // Its carry-on has started: Continue would only ask for the same work again.
+    if (notice.carried) return <Notice title="Stopped, then carried on" />;
     return (
       <Notice
         title="Stopped"

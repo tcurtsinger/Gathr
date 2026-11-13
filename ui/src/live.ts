@@ -1,4 +1,5 @@
 import type {
+  AppState,
   Context,
   Member,
   Message,
@@ -52,6 +53,8 @@ export type LiveEvent =
   | { type: 'context'; chat: string; agent: string; context: Context }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.
   | ({ type: 'pauses' } & Pauses)
+  // Gathr's own version and update, whole, after any change to it (0032).
+  | ({ type: 'app' } & AppState)
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
   // An agent was added or changed: reload agents.

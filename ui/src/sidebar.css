@@ -198,7 +198,24 @@
   padding-left: 34px;
 }
 .sidebar-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 9px;
   padding-top: 9px;
   border-top: 1px solid var(--border);
+}
+.sidebar-foot .navbutton {
+  flex: 1;
+  min-width: 0;
+}
+/* Gathr's own update (0032): the icon while one is ready, the quiet line while it installs. */
+.sidebar-update {
+  flex: none;
+  color: var(--accent);
+}
+.sidebar-updating {
+  flex: none;
+  color: var(--muted);
+  font-size: 13px;
 }

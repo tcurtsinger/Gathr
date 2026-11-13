@@ -2,18 +2,15 @@
 //! copies of the real `gathrd` in a test data folder and a stand-in release feed on 127.0.0.1.
 mod common;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use common::feed::Feed;
+use common::update::*;
 use common::{TempDir, TestService, gathr, held_recording, recording, replay_engine, until};
 use gathr::data::{DataDir, ServiceInfo};
 use gathr::{VERSION, http};
 use serde_json::{Value, json};
-
-fn program_name() -> String {
-    format!("gathrd{}", std::env::consts::EXE_SUFFIX)
-}
 
 #[test]
 fn adopting_an_install_keeps_its_diagnostics_cli_with_the_service() {
@@ -45,98 +42,11 @@ fn adopting_an_install_keeps_its_diagnostics_cli_with_the_service() {
     );
 }
 
-/// The built `gathrd` as the folder's copy of `version`, named current: what an older install left.
-fn seed_copy(data: &Path, version: &str) -> PathBuf {
-    let folder = data.join("app").join(version);
-    std::fs::create_dir_all(&folder).unwrap();
-    let program = folder.join(program_name());
-    std::fs::copy(env!("CARGO_BIN_EXE_gathrd"), &program).unwrap();
-    let current = json!({ "version": version }).to_string();
-    std::fs::write(data.join("app/current.json"), current).unwrap();
-    program
-}
-
-/// Publishes `version` as the newest release: `program` as its `gathrd`, with a UI saying `ui`.
-fn publish(feed: &Feed, dir: &Path, version: &str, program: &str, ui: &str) {
-    let stage = dir.join(format!("stage-{}", gathr::ids::span_id()));
-    std::fs::create_dir_all(stage.join("ui")).unwrap();
-    std::fs::copy(program, stage.join(program_name())).unwrap();
-    std::fs::write(stage.join("ui/index.html"), ui).unwrap();
-    let archive = stage.with_extension("tar.gz");
-    let made = std::process::Command::new(gathr::platform::tar())
-        .arg("-czf")
-        .arg(&archive)
-        .arg("-C")
-        .arg(&stage)
-        .args([program_name().as_str(), "ui"])
-        .status()
-        .unwrap();
-    assert!(made.success(), "tar: {made}");
-    let bytes = std::fs::read(&archive).unwrap();
-    let target = gathr::platform::release_target().expect("a platform Gathr ships for");
-    let file = format!("gathrd-{version}-{target}.tar.gz");
-    let manifest = json!({ "version": version, "platforms": { target: {
-        "file": file, "sha256": gathr::fetch::sha256(&bytes), "size": bytes.len() } } });
-    feed.put(&file, bytes);
-    feed.put("gathrd.json", manifest.to_string().into_bytes());
-}
-
-/// The service that took over from `pid` on the folder, once it answers.
-fn successor(data: &Path, pid: u32) -> ServiceInfo {
-    until(90, "a new service on the folder", || {
-        let info = ServiceInfo::read(&DataDir::new(data)).ok()?;
-        let health = http::call(info.port, &info.token, "GET", "/health").ok()?;
-        (info.pid != pid && health.status == 200).then_some(info)
-    })
-}
-
-fn get(info: &ServiceInfo, path: &str) -> Value {
-    http::call(info.port, &info.token, "GET", path)
-        .unwrap()
-        .json()
-}
-
-/// Stops whatever service is on the folder when the test ends, as `TestService` stops its own.
-struct Successor(PathBuf);
-
-impl Drop for Successor {
-    fn drop(&mut self) {
-        let Ok(info) = ServiceInfo::read(&DataDir::new(&self.0)) else {
-            return;
-        };
-        let _ = http::call(info.port, &info.token, "POST", "/api/shutdown");
-        let deadline = Instant::now() + Duration::from_secs(20);
-        while http::call(info.port, &info.token, "GET", "/health").is_ok()
-            && Instant::now() < deadline
-        {
-            std::thread::sleep(Duration::from_millis(50));
-        }
-    }
-}
-
-fn events(data: &Path, name: &str) -> Vec<Value> {
-    let sql = format!(
-        "SELECT status, error_type, attrs, ref FROM event_log WHERE name = '{name}' ORDER BY id"
-    );
-    let (ok, rows) = gathr(data, &["diag", "query", &sql]);
-    assert!(ok, "{rows}");
-    rows["rows"].as_array().cloned().unwrap_or_default()
-}
-
-fn update_now(service: &TestService) {
-    let asked = service.call("POST", "/api/app/update");
-    assert_eq!(asked.status, 200, "{}", asked.body);
-}
-
-fn say(service: &TestService, chat: &str, text: &str) -> Value {
-    let path = format!("/api/chats/{chat}/messages");
-    let sent = service.send("POST", &path, json!({ "text": text }));
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    sent.json()
-}
-
+/// A release is checked and kept ready, never switched to until the person says (the room's
+/// manual-update plan). Then the turn under way stops, and its agent carries on by itself on the
+/// new version.
 #[test]
-fn a_release_reaches_a_running_service_between_two_turns() {
+fn a_ready_release_waits_for_the_person_then_its_agents_carry_on() {
     let dir = TempDir::new();
     let data = dir.0.join("data");
     let old = seed_copy(&data, "0.0.1");
@@ -153,10 +63,8 @@ fn a_release_reaches_a_running_service_between_two_turns() {
         ],
     );
     let _next = Successor(data.clone());
-    service.signed_in(&data);
-    let first = service.new_chat();
-    say(&service, &first, "Say hi");
-    service.wait_for(&first, 20, "the turn to run", |h| {
+    let (_, chat) = agent_says(&service, &data, "Say hi");
+    service.wait_for(&chat, 20, "the turn to run", |h| {
         h["turns"][0]["status"] == "running"
     });
 
@@ -167,18 +75,14 @@ fn a_release_reaches_a_running_service_between_two_turns() {
         env!("CARGO_BIN_EXE_gathrd"),
         "new ui",
     );
-    update_now(&service);
-    until(30, "the update to hold", || {
-        (service.call("GET", "/api/app").json()["state"] == "updating").then_some(())
-    });
-    // The person's own message is never held: it starts, and the update waits for it too.
-    let second = service.new_chat();
-    let sent = say(&service, &second, "Say hi");
-    assert_eq!(sent["status"], "running", "{sent}");
-    std::thread::sleep(Duration::from_millis(500));
+    check_now(&service);
+    let app = ready(&service);
+    assert_eq!(app["update"]["version"], VERSION, "{app}");
+    std::thread::sleep(Duration::from_secs(1));
     let still = ServiceInfo::read(&DataDir::new(&data)).unwrap();
-    assert_eq!(still.pid, service.info.pid, "it switched during a turn");
+    assert_eq!(still.pid, service.info.pid, "it switched by itself");
 
+    assert_eq!(install(&service)["installing"], VERSION);
     std::fs::write(&go, "").unwrap();
     let next = successor(&data, service.info.pid);
     let app = get(&next, "/api/app");
@@ -193,23 +97,14 @@ fn a_release_reaches_a_running_service_between_two_turns() {
         "the new copy's UI: {}",
         page.body
     );
-    for chat in [&first, &second] {
-        let history = get(&next, &format!("/api/chats/{chat}"));
-        assert_eq!(history["turns"][0]["status"], "done", "{history}");
-    }
-    let path = format!("/api/chats/{first}/messages");
-    let sent = http::send(
-        next.port,
-        &next.token,
-        "POST",
-        &path,
-        &json!({ "text": "Again" }),
+    let history = carried_on(&next, &chat);
+    assert_eq!(history["turns"][0]["status"], "stopped", "{history}");
+    assert_eq!(
+        history["turns"][1]["answers"], history["turns"][0]["id"],
+        "{history}"
     );
-    assert_eq!(sent.unwrap().status, 200);
-    until(20, "a turn on the new service", || {
-        let history = get(&next, &format!("/api/chats/{first}"));
-        (history["turns"][1]["status"] == "done").then_some(())
-    });
+    let told = format!("Gathr's update to {VERSION} ended your turn");
+    assert!(history.to_string().contains(&told), "{history}");
     let switched = events(&data, "gathr.app.switch");
     assert_eq!(switched.len(), 1, "{switched:?}");
     assert_eq!(switched[0]["attrs"]["from"], "0.0.1", "{switched:?}");
@@ -219,6 +114,87 @@ fn a_release_reaches_a_running_service_between_two_turns() {
     });
     let kept = data.join("app").join(format!("gathr.db.before-{VERSION}"));
     assert!(!kept.exists(), "the database copy outlived the trial");
+}
+
+/// A background command never holds an update (G194: one held the room 30 minutes): Update ends
+/// it as Stop now does, and its agent carries on on the new version.
+#[test]
+fn a_background_command_never_holds_an_update() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let feed = Feed::start();
+    let service = TestService::start_program(
+        &old,
+        &data,
+        &[
+            ("GATHR_APP_RELEASES", &feed.url()),
+            ("GATHR_CLAUDE_PATH", &replay_engine()),
+            ("GATHR_REPLAY", &recording("background")),
+            ("GATHR_REPLAY_HOLD", &dir.0.join("go")),
+        ],
+    );
+    let _next = Successor(data.clone());
+    let (_, chat) = agent_says(&service, &data, "Run the pings in the background");
+    service.wait_for(&chat, 20, "the turn that starts them", |h| {
+        h["turns"][0]["status"] == "done"
+    });
+
+    publish(
+        &feed,
+        &dir.0,
+        VERSION,
+        env!("CARGO_BIN_EXE_gathrd"),
+        "new ui",
+    );
+    let began = Instant::now();
+    update_now(&service);
+    let next = successor(&data, service.info.pid);
+    let took = began.elapsed();
+    assert!(took < Duration::from_secs(40), "the update took {took:?}");
+    let history = carried_on(&next, &chat);
+    let told = "ended 1 background command(s) of yours";
+    assert!(history.to_string().contains(told), "{history}");
+    // The carry-on's engine plays the recording again: let its command end.
+    std::fs::write(dir.0.join("go"), "").unwrap();
+}
+
+/// An Update with nothing ready, and a release whose download isn't what its manifest names: each
+/// says why with a reference that traces, and neither is offered.
+#[test]
+fn nothing_ready_and_a_bad_download_each_say_why_with_a_reference() {
+    let dir = TempDir::new();
+    let data = dir.0.join("data");
+    let old = seed_copy(&data, "0.0.1");
+    let feed = Feed::start();
+    let service = TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
+    let _next = Successor(data.clone());
+    let none = service.send("POST", "/api/app/update", json!({ "install": true }));
+    assert_eq!(none.status, 409, "nothing is ready: {}", none.body);
+    assert!(none.json()["ref"].is_string(), "{}", none.body);
+
+    publish(
+        &feed,
+        &dir.0,
+        VERSION,
+        env!("CARGO_BIN_EXE_gathrd"),
+        "new ui",
+    );
+    let target = gathr::platform::release_target().unwrap();
+    let archive = format!("gathrd-{VERSION}-{target}.tar.gz");
+    feed.put(&archive, b"not the archive".to_vec());
+    check_now(&service);
+    let app = until(30, "the failed check", || {
+        let app = service.call("GET", "/api/app").json();
+        app["failed"]["ref"].is_string().then_some(app)
+    });
+    assert_ne!(app["state"], "ready", "{app}");
+    let reference = app["failed"]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data, &["diag", "trace", reference]);
+    assert!(
+        ok && trace.to_string().contains("gathr.app.update"),
+        "{trace}"
+    );
 }
 
 fn current(data: &Path) -> Value {
@@ -265,6 +241,7 @@ fn dies_on_trial(migrated: bool, resigned: bool) {
     let mut service =
         TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
     let _next = Successor(data.clone());
+    update_now(&service);
     let new = successor(&data, service.info.pid);
     assert!(service.child.wait().unwrap().success());
     let made = http::send(new.port, &new.token, "POST", "/api/chats", &json!({})).unwrap();
@@ -471,6 +448,7 @@ fn a_release_that_fails_to_start_rolls_back_to_the_copy_before() {
         TestService::start_program(&old, &data, &[("GATHR_APP_RELEASES", &feed.url())]);
     let _next = Successor(data.clone());
 
+    update_now(&service);
     let back = successor(&data, service.info.pid);
     assert!(service.child.wait().unwrap().success());
     let app = get(&back, "/api/app");
@@ -502,59 +480,6 @@ fn a_release_that_fails_to_start_rolls_back_to_the_copy_before() {
     assert_eq!(now.pid, back.pid, "a refused release was tried again");
     let archives = feed.asked_for(".tar.gz");
     assert_eq!(archives, 1, "a refused release was downloaded again");
-}
-
-/// Something still runs when the hold's time is up: the turns go, nothing switches, and why is
-/// shown with its reference.
-#[test]
-fn a_hold_that_waits_too_long_lets_the_turns_go() {
-    let dir = TempDir::new();
-    let data = dir.0.join("data");
-    let old = seed_copy(&data, "0.0.1");
-    let (feed, go) = (Feed::start(), dir.0.join("go"));
-    let held = held_recording(&dir.0);
-    let service = TestService::start_program(
-        &old,
-        &data,
-        &[
-            ("GATHR_APP_RELEASES", &feed.url()),
-            ("GATHR_APP_HOLD_MS", Path::new("1500")),
-            ("GATHR_CLAUDE_PATH", &replay_engine()),
-            ("GATHR_REPLAY", &held),
-            ("GATHR_REPLAY_HOLD", &go),
-        ],
-    );
-    let _next = Successor(data.clone());
-    service.signed_in(&data);
-    let chat = service.new_chat();
-    say(&service, &chat, "Say hi");
-    service.wait_for(&chat, 20, "the turn to run", |h| {
-        h["turns"][0]["status"] == "running"
-    });
-    publish(
-        &feed,
-        &dir.0,
-        VERSION,
-        env!("CARGO_BIN_EXE_gathrd"),
-        "new ui",
-    );
-    update_now(&service);
-
-    let app = until(30, "the hold to give up", || {
-        let app = service.call("GET", "/api/app").json();
-        let why = app["failed"]["why"].as_str().unwrap_or_default();
-        (why.contains("still running") && app["state"] != "updating").then_some(app)
-    });
-    assert_eq!(app["version"], "0.0.1", "{app}");
-    let hold = events(&data, "gathr.app.hold");
-    assert_eq!(hold.last().unwrap()["error_type"], "busy", "{hold:?}");
-    assert_eq!(app["failed"]["ref"], hold.last().unwrap()["ref"], "{app}");
-    std::fs::write(&go, "").unwrap();
-    service.wait_for(&chat, 20, "the turn to finish", |h| {
-        h["turns"][0]["status"] == "done"
-    });
-    let now = ServiceInfo::read(&DataDir::new(&data)).unwrap();
-    assert_eq!(now.pid, service.info.pid, "it switched after giving up");
 }
 
 /// Open at login starts the installed window, which isn't beside the folder's copy of the service
