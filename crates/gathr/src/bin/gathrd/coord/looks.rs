@@ -414,9 +414,10 @@ async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
             gathr::run::script(&shell, command, dir, &vars, LIMIT).await?
         }
     };
-    // Kept on the wait and said in its wake: never with a secret the command printed.
-    let printed: String = ran.out.chars().take(PRINTED_MOST).collect();
-    let printed = gathr::redact::redact(&printed);
+    // Kept on the wait and said in its wake: never with a secret the command printed. Hidden
+    // before the cut: a key the cut shortens is no longer known for one.
+    let printed = gathr::redact::redact(&ran.out);
+    let printed: String = printed.chars().take(PRINTED_MOST).collect();
     if ran.code != Some(0) {
         let exit = ran
             .code
@@ -613,5 +614,23 @@ mod tests {
             panic!("a check that exits 1 isn't met: {:?}", quiet.err());
         };
         assert_eq!(seen, "the check exited 1");
+    }
+
+    /// The output is cut to its first characters only once its secrets are hidden: cut first, a
+    /// key that straddles the cut is too short to be known for one, and its start is kept (#183's
+    /// second look).
+    #[tokio::test]
+    async fn a_secret_that_straddles_the_cut_is_hidden_whole() {
+        let root = std::env::temp_dir().join(format!("gathr-cut-{}", gathr::ids::span_id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let vars: Vars = env::fresh(std::env::vars_os().collect()).vars;
+        let pad = "x".repeat(PRINTED_MOST - 10);
+        let command = format!("echo {pad} ghp_0123456789abcdefghijABCDEFGHIJ012345; exit 1");
+        let looked = check(&command, &root, &vars).await;
+        let _ = std::fs::remove_dir_all(&root);
+        let Ok(Look::NotYet { seen, .. }) = looked else {
+            panic!("a check that exits 1 isn't met: {:?}", looked.err());
+        };
+        assert!(seen.contains(&pad) && !seen.contains("ghp_"), "{seen}");
     }
 }
