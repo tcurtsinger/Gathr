@@ -3,6 +3,10 @@
 Status: accepted (owner, 2026-11-11, on the plan for the chat redesign's fifth slice). Date: 2026-11-11.
 It ends 0037's line "Steps show no argument … until the service keeps them". Thinking is a later slice.
 
+Built: yes. Proof: `crates/gathr/tests/steps.rs`, `ui/src/chat/messages.test.ts`.
+
+Out of date below: a step opens to its Request instead of showing a tooltip, and keeps its request and result ([0044](0044-what-a-step-returned.md)); thinking is built ([0042](0042-thinking.md)).
+
 ## Choice
 
 - **A tool message keeps what it ran, inside its body:** `{"tool", "status", "duration_ms", "input"}`,

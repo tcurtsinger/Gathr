@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-07. The owner works from a Windows PC and a Mac and wants Gathr on both.
 
+Built: partly. Proof: `crates/gathr/tests/chats.rs`, `crates/gathr/tests/team.rs`, `crates/gathr/tests/service.rs`. Not built: keeping the Mac awake; the login watcher; a locked Keychain told apart from signed out; a stop that reaches everything an engine started (stopping an engine ends its own process only).
+
+Out of date below: only `PATH` is taken from the login shell, not its whole environment; engines are found as [0025](0025-engine-copies.md) says.
+
 ## Implementation status
 
 The macOS service, desktop window, menu bar, startup setting and isolated accounts are built. Preventing idle sleep, the login watcher and reporting a locked Keychain distinctly are not built yet. Engine discovery is superseded by 0025, as clarified below.

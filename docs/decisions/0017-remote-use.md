@@ -2,6 +2,8 @@
 
 Status: accepted. Date: 2026-11-07. Tailscale is the owner's pick.
 
+Built: no. Nothing of it is in the code.
+
 ## Implementation status
 
 Not built yet. Tailscale integration, remote device tokens and the remote client flow below are accepted plans.

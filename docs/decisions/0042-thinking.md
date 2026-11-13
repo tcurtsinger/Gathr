@@ -5,6 +5,8 @@ on 2026-11-12). Date: 2026-11-12. It ends 0037's line "Steps show no thinking un
 keeps it". Amended 2026-11-12: Codex is asked for a reasoning summary, which makes it say when a
 thought starts, so its row says "Thinking" live too.
 
+Built: yes. Proof: `crates/gathr/tests/thinking.rs`, `ui/src/chat/messages.test.ts`.
+
 ## Choice
 
 - **A thought is a message of kind `thinking`, with no text.** Its body is JSON, `{"status",

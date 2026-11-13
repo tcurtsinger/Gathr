@@ -2,6 +2,10 @@
 
 Status: accepted (owner, 2026-11-07; no borrowing confirmed 2026-11-09, task 1284). Both engines are implemented.
 
+Built: yes. Proof: `crates/gathr/tests/engine_copies.rs`, `crates/gathr/tests/codex_copies.rs`, `crates/gathr/tests/models.rs`.
+
+Out of date below: Gathr turns Codex's own update check off ([0033](0033-codex-driver.md)); the model list offers exact models only, so "Opus latest" no longer shows.
+
 ## Why
 
 Gathr owns its runtime and login lifecycle. Checked engine copies keep versions reproducible without changing the person's own installs; a previous known-good copy keeps a failed update recoverable.

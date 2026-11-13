@@ -2,6 +2,8 @@
 
 Status: accepted (the owner's picks D1 to D3, 2026-11-10). Date: 2026-11-10.
 
+Built: yes. Proof: `crates/gathr/tests/search.rs`, `ui/src/search/SearchFlyout.test.tsx`.
+
 ## Choice
 
 - **Index:** migration 0015 adds `message_search`, an SQLite FTS5 table over `messages.body` with external content

@@ -3,6 +3,8 @@
 Status: accepted (owner, 2026-11-11, on the plan for the chat redesign's fifth slice). Date: 2026-11-11.
 The sidebar's dot is the one 0038 left for a later slice. 0039 is the conversation map's.
 
+Built: yes. Proof: `crates/gathr/tests/chat_state.rs`, `ui/src/live-lists.test.tsx`.
+
 ## Choice
 
 - **Each chat in the list says two things.** `working`: a turn of it is running. `needs`: it waits on the

@@ -3,6 +3,8 @@
 Status: accepted (`process-wrap` approved by the owner, 2026-11-09). Date: 2026-11-09. Amends AGENTS.md's "one way
 to spawn a process".
 
+Built: yes. Proof: `crates/gathr/tests/run.rs`.
+
 ## Choice
 
 The programs the service runs and reads (`gathr::run`: git, gh, a wait's check) start through

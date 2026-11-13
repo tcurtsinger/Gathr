@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06, revised 2026-11-07 (one folder per account, the owner's call).
 
+Built: partly. Proof: `crates/gathr/tests/accounts.rs`, `crates/gathr/tests/sign_in.rs`. Not built: the login watcher, and login changes as events; sign-outs and renewals per account in Diagnostics; the stale probe through the renewal gate (the probe runs only on macOS, when the login reads signed out).
+
+Out of date below: nothing is copied into a login folder ([0024](0024-only-what-gathr-gives.md)), so "settings copied in" and dropping `apiKeyHelper` no longer apply; agents pick their own account ([0026](0026-agent-settings.md)).
+
 ## Implementation status
 
 Named accounts, isolated login folders and per-account gates are built. The background login watcher and its renewal/change history are not built yet. Codex login state follows 0033, as clarified below; the expiry-based state is specific to Claude Code.
@@ -51,7 +55,7 @@ Codex also passes the service's per-account start/turn gate, but Gathr does not 
 - **No account until the person adds one.** Gathr is standalone: a new data folder starts with none, and each is added and signed in through Gathr. Chats run on the oldest account until agents pick their own (0026); with none, a message waits as it does signed out. When that account changes, chats start new Claude Code sessions, because a session lives in the old account's folder. Turned down: a ready-made "Main" account, which read as something brought in from the person's own Claude.
 - **Sign out** runs the engine's own `claude auth logout` in the account's folder (2.1.318 removes `.credentials.json` and exits 0 in 0.4 s; on macOS it clears the Keychain entry, not verified), after the account's renewal gate, so it never lands under a renewal. Engines still running on the account aren't stopped: their next turn finds it signed out and waits. Turned down: deleting the login file ourselves, which can't reach the Keychain.
 - **Remove** (task 990): chats move to the next account first, then every engine on the account closes the gentle way (a turn under way ends as stopped). With its renewal gate held to the end, a folder that exists is signed out as above, and the folder `accounts/<id>` is deleted, tried for a second while Windows lets go of a closed process's files, as the previous app did. Only then is the account forgotten. If the sign-out or the delete fails, the account stays and the error carries a reference. An account never signed in has no folder and goes without Claude Code. Turned down: forgetting the account when its folder won't go (the previous app's way), which leaves a folder nothing points to.
-- **Codex accounts** are refused until the Codex driver exists; the table already takes them.
+- **Codex accounts** are accepted, each with its own folder ([0033](0033-codex-driver.md)).
 
 ## Turned down
 

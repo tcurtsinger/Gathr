@@ -5,6 +5,8 @@ Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's u
 longer between turns by itself; the window updates itself as before. Date: 2026-11-09. Follows
 [0025](0025-engine-copies.md)'s way of keeping engine copies.
 
+Built: yes. Proof: `crates/gathr/tests/app_update.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/update.test.tsx`. No test covers the window's own updater.
+
 ## Why
 
 The service outlives the window and active engine turns. Separate checked copies let the window update independently

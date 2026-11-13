@@ -2,6 +2,10 @@
 
 Status: accepted. Date: 2026-11-06.
 
+Built: partly. Proof: `crates/gathr/tests/service.rs`. Not built: the read-only pool (only `gathr diag` reads on its own connection); the local-disk check at start; the migration test on a copy made by the previous release; spilling large blobs to files; online backup.
+
+Out of date below: only migrations start with `BEGIN IMMEDIATE`; engine frames are stored as text, and only event attributes as JSONB; the read-only connection sets only its busy timeout.
+
 ## Implementation status
 
 SQLite, WAL, migrations and the writer thread are built. API reads currently use the writer thread too; a separate read-only pool, large-frame blob spill and online backups are not built yet.

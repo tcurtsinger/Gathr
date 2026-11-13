@@ -3,6 +3,8 @@
 Status: accepted (owner, 2026-11-09: "One shared project folder, then the agent folders all in the
 same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0029's folder guard.
 
+Built: yes. Proof: `crates/gathr/tests/agent_folder.rs`, `crates/gathr/tests/pr_cleanup.rs`, `crates/gathr/tests/archive.rs`.
+
 ## Choice
 
 - **One folder for all agents' work,** set in Settings > General as the agent folder:
@@ -114,9 +116,9 @@ keeps skipped cleanup durable rather than depending on another look at an alread
 - **A list of extra folders per project** (the earlier move-in plan): every project needs setting up,
   and plans and evidence end up wherever each list points.
 - **Agents cleaning up themselves:** unreliable, and it hands agents deletion outside their task.
-- **Removing a worktree when its task's PR merges:** a worktree belongs to the chat and agent, not
-  the task; the agent's next task in the chat carries on in it, on the same branch. Archive and
-  delete cover it.
+- **Removing a worktree when its task's PR merges** was turned down here at first (a worktree belongs
+  to the chat and agent, not the task). That was reversed for a PR that has merged or closed: see
+  the cleanup above and [0043](0043-checks-and-merge.md).
 - **A temporary folder per task:** an engine's environment is fixed when it starts, so each task
   switch would close and start the engine again, losing its prompt cache and background commands.
 - **Removing an archived chat's worktree with changes not committed:** archiving is undoable,

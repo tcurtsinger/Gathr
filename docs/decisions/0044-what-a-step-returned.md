@@ -1,8 +1,10 @@
 # 0044. A step keeps what it returned, and a command whole
 
-Status: accepted (owner, 2026-11-12, room tasks 140-146, on `Shared\plans\step-results.md`). Date: 2026-11-12.
+Status: accepted (owner, 2026-11-12, room tasks 140-146, on `Shared\archive\2026-11\plans\step-results.md`). Date: 2026-11-12.
 0043 is the checks-and-merge decision, so this one is 0044. It extends 0041 (what a step ran) for the work
 row's second slice: assistant-ui's Tool call shows a Request and a Result.
+
+Built: yes. Proof: `crates/gathr/tests/steps.rs`, `ui/src/chat/WorkRow.test.tsx`.
 
 ## Choice
 

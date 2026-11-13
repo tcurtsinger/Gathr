@@ -2,6 +2,8 @@
 
 Status: accepted and built (Settings > Engines and Agents).
 
+Built: yes. Proof: `ui/src/settings/Agents.test.tsx`, `ui/src/settings/Engines.test.tsx`, `crates/gathr/tests/agents.rs`.
+
 Agents are created and edited in Settings > Agents, inside the centred Settings
 panel. Edit agent in a chat's agent picker opens that same panel at that agent.
 The composer selects the recipient; engine, account, model and effort belong to

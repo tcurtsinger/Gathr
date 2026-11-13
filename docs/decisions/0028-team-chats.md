@@ -2,6 +2,10 @@
 
 Status: accepted (slice 2, F4). Date: 2026-11-08. Builds on [0013](0013-one-chat-model.md).
 
+Built: yes. Proof: `crates/gathr/tests/team.rs`, `crates/gathr/tests/projects.rs`.
+
+Out of date below: a worktree now lives in the agent folder ([0034](0034-agent-folder.md)); the screens exist; the two columns its order was drawn in are one timeline ([0037](0037-one-timeline.md)).
+
 ## Choice
 
 The service side of a chat with several agents, through the API until F8's screens.
@@ -14,7 +18,7 @@ The service side of a chat with several agents, through the API until F8's scree
 - **Each message's agent.** Every message carries `agent`: who it was for, or who wrote it (its turn's agent).
 - **Order.** A turn takes the chat's next `position` when it leaves the wait (starts, or fails before starting). Messages are shown in their turn's position, then in time. Replies from agents working at once never interleave; a turn not started yet shows last.
 - **Project folder.** Set only when the chat is made (0013), from its project, saved as its git top folder. A path that isn't in a git repository is refused.
-- **A worktree per agent.** The first time an agent's engine starts in a project chat, it gets `<data>/worktrees/<chat>/<agent>`, on a branch of its own (`gathr/<name>-<chat>-<agent id>`: two names can read the same in a branch), from the remote's default branch (`origin/HEAD`) fetched then; with no remote, from the project's `HEAD`. A failed fetch starts it from what was fetched last and says so on the `gathr.worktree.add` event. The engine runs there. A change to the chat's roles closes an agent's engine gently before its next turn, so its briefing names the new ones. Nothing removes a worktree: its work is the agent's until someone takes it. Adapted from the owner's SerenityOS `worktrees.ts`.
+- **A worktree per agent.** The first time an agent's engine starts in a project chat, it gets `<data>/worktrees/<chat>/<agent>`, on a branch of its own (`gathr/<name>-<chat>-<agent id>`: two names can read the same in a branch), from the remote's default branch (`origin/HEAD`) fetched then; with no remote, from the project's `HEAD`. A failed fetch starts it from what was fetched last and says so on the `gathr.worktree.add` event. The engine runs there. A change to the chat's roles closes an agent's engine gently before its next turn, so its briefing names the new ones. A worktree is removed when its chat is archived (its branch stays, and a restored chat checks it out again) or deleted, and once its PR has merged or closed ([0034](0034-agent-folder.md), [0043](0043-checks-and-merge.md)); until then its work is the agent's. Adapted from the owner's SerenityOS `worktrees.ts`.
 - **The person's PATH (G23).** Each engine and each git command gets the environment a new sign-in would give: on Windows the machine's and the person's variables read again from the registry (`reg export`, which writes UTF-16), on macOS the login shell's PATH (`-ilc`). The service's own PATH entries they lack follow. The engine's start event says where it came from (`gathr.env.from`) and why not, if it fell back.
 
 ## Why

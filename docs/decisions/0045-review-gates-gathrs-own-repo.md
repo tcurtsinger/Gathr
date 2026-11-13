@@ -1,6 +1,8 @@
 # 0045: Gathr's own repo: review and local tests are the gate, not GitHub CI
 
-Owner, 2026-11-12 (room tasks 167-169).
+Status: accepted (owner, 2026-11-12, room tasks 167-169). Date: 2026-11-12.
+
+Built: yes. Proof: `.github/workflows/ci.yml`, `AGENTS.md`. No test can prove a process: the proof is that CI gates nothing in the workflow and that AGENTS.md says the same. `main`'s branch protection isn't in the repo.
 
 ## The choice
 
@@ -14,8 +16,9 @@ Owner, 2026-11-12 (room tasks 167-169).
 - When a PR's CI is already running, the merger waits for it to finish and reads any failure before merging.
 - Everything else in the merge rule stays: the landing order, up to date with `main` before merging, the reviewed
   head pinned (`--match-head-commit`), a merge commit, no auto-merge.
-- Until Gathr's `merge` tool has a review-only setting for Required checks, the reviewer merges Gathr's own PRs with
-  `gh pr merge --merge --delete-branch --match-head-commit <reviewed head>`.
+- Gathr's `merge` tool has a Review only setting for Required checks ([0043](0043-checks-and-merge.md)), and
+  agents working in Gathr merge only with that tool ([0046](0046-github-tools.md)). By hand, outside Gathr, the
+  same merge is `gh pr merge --merge --delete-branch --match-head-commit <reviewed head>`.
 
 ## Why
 
