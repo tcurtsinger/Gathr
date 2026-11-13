@@ -1,7 +1,7 @@
 // Fails when the docs stop holding together: a decision without a status or a built line, a built
 // claim that names no file, a dead link or heading, a doc nothing links to, a decisions list that is
-// out of date, a rule tag in AGENTS.md that names no promise, or a part of the truth map that says
-// built and names a file or a test that isn't there.
+// out of date, a rule tag in AGENTS.md that names no promise, a part of the truth map that says
+// built and names a file or a test that isn't there, or a part with no scenario.
 // usage: node scripts/docs.check.mjs            checks
 //        node scripts/docs.check.mjs --write    rewrites docs/decisions/README.md first
 import { execFileSync } from 'node:child_process';
@@ -145,12 +145,14 @@ for (const [, tag] of tags) {
 const MAP = 'docs/truth-map.md';
 const states = { Written: 0, Partly: 0, Built: 0, Kept: 0 };
 const mapped = new Set();
+const mapParts = new Set();
 for (const row of read(MAP).matchAll(/^\| (\d+)\.\d+ \|.*$/gm)) {
   // Cells are split on the pipes Markdown splits on: an escaped one stays in its cell.
   const cells = row[0].trim().slice(1, -1).split(/(?<!\\)\|/).map((cell) => cell.trim());
   const [part, , state, code = '', test = ''] = cells;
   const at = `${MAP}: part ${part}`;
   mapped.add(`P${row[1]}`);
+  mapParts.add(part);
   if (cells.length !== 6) failures.push(`${at} has ${cells.length} cells, not 6`);
   if (!promises.has(`P${row[1]}`)) failures.push(`${at} is under a promise the charter doesn't have`);
   if (!Object.hasOwn(states, state)) {
@@ -185,6 +187,38 @@ for (const row of read(MAP).matchAll(/^\| (\d+)\.\d+ \|.*$/gm)) {
 }
 for (const p of promises) if (!mapped.has(p)) failures.push(`${MAP}: no part for promise ${p.slice(1)}`);
 
+// The scenarios: each is given, when, then, and names parts the truth map has; every part has one.
+const SCENARIOS = 'docs/scenarios.md';
+const proved = new Set();
+const scenarios = read(SCENARIOS).split(/^### /m).slice(1);
+const ids = new Set();
+for (const scenario of scenarios) {
+  const id = scenario.match(/^(\d+[a-z]|R\d)\. /)?.[1];
+  const at = `${SCENARIOS}: scenario ${id ?? `"${scenario.split('\n')[0]}"`}`;
+  if (!id) {
+    failures.push(`${at} isn't headed by a promise's number and a letter ("5b. "), or "R1. " for a run`);
+    continue;
+  }
+  if (ids.has(id)) failures.push(`${at} is there twice`);
+  ids.add(id);
+  for (const step of ['Given', 'When', 'Then']) {
+    if (!scenario.includes(`\n- **${step}**`)) failures.push(`${at} has no "- **${step}**" line`);
+  }
+  if (id.startsWith('R')) continue;
+  const named = scenario.match(/^Parts: (.+)$/m)?.[1].split(', ') ?? [];
+  const promise = id.slice(0, -1);
+  if (!named.some((part) => part.startsWith(`${promise}.`))) {
+    failures.push(`${at} names no part of promise ${promise} on a "Parts: " line`);
+  }
+  for (const part of named) {
+    if (!mapParts.has(part)) failures.push(`${at} names part ${part}, which ${MAP} doesn't have`);
+    proved.add(part);
+  }
+}
+for (const part of mapParts) {
+  if (!proved.has(part)) failures.push(`${MAP}: part ${part} has no scenario in ${SCENARIOS}`);
+}
+
 if (failures.length) {
   console.error(`docs: ${failures.length} to fix:\n${failures.join('\n')}`);
   process.exit(1);
@@ -192,5 +226,6 @@ if (failures.length) {
 const parts = Object.entries(states).map(([state, n]) => `${n} ${state}`);
 console.log(
   `docs: ok, ${decisions.length} decisions, ${count} links in ${tracked.length} files, ` +
-    `${tags.length} stopgap rules in AGENTS.md; the truth map: ${parts.join(', ')}`,
+    `${tags.length} stopgap rules in AGENTS.md; the truth map: ${parts.join(', ')}; ` +
+    `${scenarios.length} scenarios`,
 );

@@ -19,7 +19,8 @@ here isn't in its file. It can't tell whether the words are true: each row was r
 2026-11-12, at `main` b1453e7, and nothing was run to write it. Every row that says Built was then read a second time, test body and all, by a reviewer that hadn't written it. "Against" marks code that does the
 opposite of what the promise says.
 
-What each decision still lacks is in [the decisions list](decisions/README.md).
+What each decision still lacks is in [the decisions list](decisions/README.md). What each part must do,
+as a test will see it, is in [the scenarios](scenarios.md).
 
 ## 1. An assistant by default, your own specialists, and a team when the work needs one
 
@@ -152,6 +153,7 @@ What each decision still lacks is in [the decisions list](decisions/README.md).
 | 11.1 | A new project works on defaults | Partly | `crates/gathr/src/bin/gathrd/tools/briefing.rs` `text` | `crates/gathr/tests/tools.rs::each_turn_records_the_briefing_its_engine_was_given_and_whats_off` | Every agent gets one default briefing. No `AGENTS.md` is written from questions, and no role is told how it works. This repo's own `AGENTS.md` still carries 22 rules that stand in for the product |
 | 11.2 | Gathr counts how often you had to correct the room, and shows it | Written | | | Nothing counts a correction |
 | 11.3 | A scorecard in the app shows numbers from Gathr's own events | Written | | | No scorecard or analytics page |
+| 11.4 | Friction an agent or the person reports is recorded by Gathr | Written | | | Nothing records it. An agent ends a reply with a "Friction:" line, and the lead copies it into a file by hand (the Friction rule in [`AGENTS.md`](../AGENTS.md)). `read_chat` keeps the end of a message it cuts, so the line reaches a reader |
 
 ## 12. Open both ways
 
