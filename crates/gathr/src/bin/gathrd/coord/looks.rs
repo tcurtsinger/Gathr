@@ -114,16 +114,17 @@ pub async fn once(chats: &Arc<Chats>) {
         };
         let state = json_text(&answer, "state");
         let head = json_text(&answer, "headRefOid");
-        // A review's PR: Gathr runs the project's checks at each head it sees (0043 C3).
-        if state == "OPEN" && !head.is_empty() {
-            crate::check_runs::for_review(chats, &chat, task, &head).await;
-        }
-        let view: Value = serde_json::from_str(&answer).unwrap_or_default();
+        // Judged before the checks start: both use git in the same repository.
         let base = json_text(&answer, "baseRefName");
         let seen = match state.as_str() {
             "OPEN" => judged(chats, task, &head, &base, &dir).await,
             _ => None,
         };
+        // A review's PR: Gathr runs the project's checks at each head it sees (0043 C3).
+        if state == "OPEN" && !head.is_empty() {
+            crate::check_runs::for_review(chats, &chat, task, &head).await;
+        }
+        let view: Value = serde_json::from_str(&answer).unwrap_or_default();
         let t = trace.clone();
         apply(chats, "gathr.task.pr", &trace, move |c| {
             if matches!(state.as_str(), "MERGED" | "CLOSED") {
@@ -160,7 +161,8 @@ async fn judged(
         return Some((reviewed, !t.outdated));
     }
     let vars = super::fresh().await;
-    let covers = crate::merging::still_covers(dir, &reviewed, head, base, &vars).await;
+    // No verdict when git couldn't say: nothing is kept, and the next look asks again.
+    let covers = crate::merging::still_covers(dir, &reviewed, head, base, &vars).await?;
     Some((reviewed, covers))
 }
 

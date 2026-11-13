@@ -292,9 +292,11 @@ fn an_explicit_unfinished_review_revokes_its_prior_approval() {
     assert_eq!(room.main(), base);
 }
 
-/// The PR as Gathr's own look last saw it at `head`: the review task, once its `pr_head` is there.
-fn looked_at(room: &Room, head: &str) -> Value {
-    common::until(20, "Gathr's look at the PR", || {
+/// The review task once Gathr's own look has seen the PR at `head` and judged the review so. A
+/// look that finds git busy keeps no verdict and asks again, so the first answer may not be the last.
+fn looked_at(room: &Room, head: &str, outdated: bool) -> Value {
+    let what = format!("Gathr's look to find the review at {head} out of date: {outdated}");
+    common::until(20, &what, || {
         let tasks = room
             .service
             .call("GET", &format!("/api/chats/{}/tasks", room.chat))
@@ -303,7 +305,7 @@ fn looked_at(room: &Room, head: &str) -> Value {
             .as_array()?
             .iter()
             .find(|t| t["number"] == 1)?;
-        (task["pr_head"] == head).then(|| task.clone())
+        (task["pr_head"] == head && task["outdated"] == outdated).then(|| task.clone())
     })
 }
 
@@ -342,16 +344,17 @@ fn gathrs_look_puts_a_review_out_of_date_only_when_the_code_changed() {
     );
     let head = git(&room.other, &["rev-parse", "HEAD"]);
     publish(&mut room, &head);
-    let seen = looked_at(&room, &head);
-    assert_eq!(seen["outdated"], false, "only main came in: {seen}");
+    // Only main came in.
+    let seen = looked_at(&room, &head, false);
+    assert_eq!(seen["reviewed"], reviewed.as_str(), "{seen}");
 
     std::fs::write(room.other.join("author.txt"), "not reviewed\n").unwrap();
     git(&room.other, &["add", "."]);
     git(&room.other, &["commit", "-q", "-m", "author change"]);
     let head = git(&room.other, &["rev-parse", "HEAD"]);
     publish(&mut room, &head);
-    let seen = looked_at(&room, &head);
-    assert_eq!(seen["outdated"], true, "the author changed code: {seen}");
+    // The author changed code.
+    looked_at(&room, &head, true);
     let listed = text(&room.call(&vale, "list_tasks", json!({})));
     let says = format!(
         "reviewed at {}, out of date: #5 is at {}",
