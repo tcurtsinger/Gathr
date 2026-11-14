@@ -595,6 +595,53 @@ Parts: 8.7, 11.1
   is the one who asks the person, the reviewer checks plans and work it didn't make, the builder
   builds and reports. Nobody wrote a rulebook for it
 
+### 8h. A member's second task starts in a new conversation
+
+Parts: 8.8
+
+- **Given** a lead, Cass and Pia; Cass has done #1 and #2 and has 5 more tasks in the chat
+- **When** the lead gives Cass #8
+- **Then** all of this holds:
+  - #8 starts a new conversation, not a resume
+  - its first input opens with "This is a new conversation for task #8.", then 5 task lines, newest first, without #8
+  - Cass's context is empty until its first call
+  - a turn of the lead's on its own task closes no engine and opens no new conversation
+
+### 8i. It goes back to its first task's conversation
+
+Parts: 8.8
+
+- **Given** Cass worked #1, then #2
+- **When** a restart of #1 is given
+- **Then** all of this holds:
+  - the engine closes with "the next turn is on another task"
+  - it starts by resuming #1's conversation
+  - there is no opening
+  - #1's saved fill shows again
+
+### 8j. A hear-back and a fix go back to the work
+
+Parts: 8.8
+
+- **Given** Cass, on #1, gave #3 to Pia; #1 ended; Cass worked #2
+- **When** #3 settles
+- **Then** Cass's hear-back resumes #1's conversation, and a teammate's message naming "#1" runs in #2's
+- **Given** Cass's work task #4 on PR 7 and a review with notes
+- **When** Gathr gives the fix #6
+- **Then** #6 resumes #4's conversation; a fix whose work task has none starts new
+
+### 8k. A conversation that can't be resumed starts again from the brief
+
+Parts: 8.8
+
+- **Given** #1's row, with a conversation the engine refuses (Claude Code or Codex)
+- **When** a turn on #1 starts
+- **Then** all of this holds:
+  - `gathr.engine.resume_failed` is on that turn's trace
+  - the row is gone
+  - the same turn runs in a new conversation, with #1's brief once
+  - the turn ends done
+
 ## 9. Any engine, same behaviour
 
 ### 9a. Either engine in any seat

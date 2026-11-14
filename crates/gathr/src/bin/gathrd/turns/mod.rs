@@ -31,6 +31,7 @@ mod process;
 mod pushes;
 mod reading;
 mod records;
+mod session;
 mod state;
 mod thinking;
 mod waits;
@@ -204,6 +205,8 @@ struct Task {
     said_waits: waits::Said,
     /// The running turn the chats were last told is silent: its chat, and since when (0052).
     said_silent: Option<(String, String, i64)>,
+    /// The conversation the engine was opened in (0055).
+    session: session::Session,
 }
 
 pub async fn run(
@@ -242,6 +245,7 @@ pub async fn run(
         held_raw: Vec::new(),
         said_waits: HashMap::new(),
         said_silent: None,
+        session: Default::default(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.
@@ -606,6 +610,10 @@ impl Task {
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
         }
+        let (key, choice) = self.conversation(&next.ids, assigned.as_ref()).await;
+        if let Some(status) = self.switch(next, &choice).await {
+            return Ok(status);
+        }
         let kind = if assigned.as_ref().is_some_and(|a| a.engine == "codex") {
             "codex"
         } else {
@@ -660,8 +668,10 @@ impl Task {
             return Ok(self.hold_back(next, "waiting_sign_in").await);
         }
         let gate = self.chats.gate(&assigned.folder).pass().await;
+        let fresh = program.is_some();
         if let Some(program) = program {
-            self.spawn(&program, assigned, &next.ids.trace).await?;
+            self.spawn(&program, assigned, &next.ids.trace, (&key, &choice))
+                .await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         let compaction = self.compactions.contains(&next.ids.turn);
@@ -669,16 +679,18 @@ impl Task {
             true => format!("{}\n\n{}", gathr::context::SOON, next.text),
             false => next.text.clone(),
         };
+        let text = self.opening(next, &choice, fresh, text).await;
         let written = match compaction {
             true => self.write_compact(&next.ids.turn).await,
             false => self.write_user(&text, Some(&next.ids.turn)).await,
         };
         if let Err(e) = written {
             self.turn = None;
-            return Err(format!(
-                "{} didn't take the message: {e}",
-                self.engine_label()
-            ));
+            let why = format!("{} didn't take the message: {e}", self.engine_label());
+            return match self.refused(&next.ids, &why).await {
+                true => Ok("queued"),
+                false => Err(why),
+            };
         }
         self.set_turn(&next.ids, "running", None).await;
         Ok("running")

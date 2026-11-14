@@ -7,6 +7,13 @@ fn send(value: &Value) {
     std::io::stdout().flush().unwrap();
 }
 
+/// A thread id of its own for `thread/start`, as Codex makes one: Gathr gives it none.
+fn new_thread() -> String {
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    let nanos = now.map_or(0, |d| d.as_nanos());
+    format!("thread-{}-{nanos}", std::process::id())
+}
+
 pub fn run() {
     let folder = std::path::PathBuf::from(std::env::var_os("CODEX_HOME").unwrap_or_default());
     let recorded = std::env::var("GATHR_REPLAY")
@@ -75,6 +82,12 @@ pub fn run() {
                 };
                 models
             }
+            "thread/resume" if std::env::var("GATHR_REPLAY_RESUME").as_deref() == Ok("missing") => {
+                let thread = p["threadId"].as_str().unwrap_or_default();
+                let message = format!("test thread not found: {thread}");
+                send(&json!({"id":v["id"], "error":{"code":-32600, "message":message}}));
+                continue;
+            }
             "thread/start" | "thread/resume" => {
                 let recorded = rows
                     .iter()
@@ -88,6 +101,12 @@ pub fn run() {
                     Some("danger-full-access") => "dangerFullAccess",
                     _ => "workspaceWrite",
                 };
+                if std::env::var("GATHR_REPLAY_SESSION").as_deref() == Ok("echo") {
+                    result["thread"]["id"] = match p["threadId"].as_str() {
+                        Some(resumed) => resumed.into(),
+                        None => new_thread().into(),
+                    };
+                }
                 result["sandbox"] = json!({"type":sandbox});
                 result["approvalPolicy"] = p["approvalPolicy"].clone();
                 result

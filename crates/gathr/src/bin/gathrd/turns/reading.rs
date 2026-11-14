@@ -165,12 +165,19 @@ impl Task {
                 self.check_mode(&permission_mode);
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
                 let (account, agent) = (account.unwrap_or_default(), self.agent.clone());
+                let task = self.session.init(&session_id);
                 let saved = self
                     .chats
                     .writer
                     .call(move |conn| {
-                        let agent = agent.as_deref();
-                        store::set_engine_session(conn, &chat, agent, &session_id, &account)
+                        let (agent, id) = (agent.as_deref(), &session_id);
+                        store::set_engine_session(conn, &chat, agent, id, &account)?;
+                        match (task, agent) {
+                            (Some(task), Some(agent)) => {
+                                gathr::sessions::set(conn, task, agent, &chat, &account, id)
+                            }
+                            _ => Ok(()),
+                        }
                     })
                     .await;
                 if let Some(Err(e)) = saved {
@@ -521,6 +528,13 @@ impl Task {
         };
         // Ended, so the login needs no guarding: the next start mustn't wait on this one.
         turn.gate.release();
+        let said = end.message.clone().or(self.last_stderr.clone());
+        let said = said.unwrap_or_else(|| end.subtype.clone());
+        // A refused login isn't a refused conversation: that turn waits for a sign-in, as before.
+        let refused = !end.ok && !turn.stopping && !turn.signed_out;
+        if refused && self.refused(&turn.ids, &said).await {
+            return self.try_next().await;
+        }
         self.idle_since = std::time::Instant::now();
         // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
         let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;

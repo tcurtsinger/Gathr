@@ -37,6 +37,7 @@ pub mod redact;
 pub mod run;
 pub mod search;
 pub mod seed;
+pub mod sessions;
 pub mod steps;
 pub mod store;
 pub mod tasks;

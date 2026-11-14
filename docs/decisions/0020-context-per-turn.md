@@ -2,7 +2,7 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
-Built: partly. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/window.rs`, `crates/gathr/tests/context.rs`. Not built: standing rules; catch-up; the state block sent with each turn (agents ask with `list_tasks`); a fresh session per task, and for reviews; the analytics page; the quality comparison.
+Built: partly. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/window.rs`, `crates/gathr/tests/context.rs`. A member's task starts in a new session, and so does a review ([0055](0055-a-members-task-starts-in-a-new-session.md): `crates/gathr/tests/sessions.rs`). Not built: standing rules; catch-up; the state block sent with each turn (agents ask with `list_tasks`); the analytics page; the quality comparison.
 
 Out of date below: "Summarise now" and "Summarise at" are built as Compact and Auto-compact; the briefing gives teammates' names and roles, not what each knows.
 
@@ -28,10 +28,10 @@ Everything else is pulled, not pushed: Gathr's MCP tools read the chat's history
 
 ### How it stays lean
 
-- **A fresh session per task** when the agent already has other work in progress ([0010](0010-coordination-as-state.md#sessions)), with the catch-up above; the earlier session is set aside whole, not summarised away.
+- **A new session per task** for a member ([0010](0010-coordination-as-state.md#sessions), [0055](0055-a-members-task-starts-in-a-new-session.md)): its first turn is given the ask and the agent's last five tasks, not the other tasks' history; the earlier session is kept whole, not summarised away. The catch-up above isn't built.
 - **Compaction is the engine's,** plus the person's own Summarise now and Summarise at (kept from the previous app at the owner's request). Gathr never compacts behind the person's back.
 - **Gathr's tools return what was asked,** sized for a context: a long result comes back as a summary with an id to fetch the whole of it. Built-in engine tools are the engine's to manage.
-- **Reviews and plan checks run in a fresh session** with the plan, the diff and the files around it, not the builder's history.
+- **A review runs in its own new session, not the builder's; a review recorded again resumes it; a second look is a new review and starts new** ([0053](0053-a-review-asks-both-questions.md), [0055](0055-a-members-task-starts-in-a-new-session.md)). Plan checks aren't built.
 - **Stable first:** the briefing and the ask's fixed parts come first and don't change mid-session, so cached input (`gen_ai.usage.cache_read.input_tokens`) stays high.
 
 ### How it's measured
