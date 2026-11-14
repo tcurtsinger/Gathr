@@ -259,12 +259,14 @@ fn failures_count_every_event_and_keep_rare_causes() {
 fn a_bad_since_is_an_error_not_a_crash() {
     let dir = TempDir::new();
     assert!(gathr(&dir.0, &["seed"]).0);
-    for since in ["日", "1日", "m", "99999999999999999d"] {
-        let (ok, answer) = gathr(&dir.0, &["diag", "failures", "--since", since]);
-        assert!(!ok, "--since {since}: {answer}");
+    // A value of zero or less would reach past now, and a negative one overflowed it.
+    for since in ["日", "1日", "m", "99999999999999999d", "-1m", "0h"] {
+        let flag = format!("--since={since}");
+        let (ok, answer) = gathr(&dir.0, &["diag", "failures", &flag]);
+        assert!(!ok, "{flag}: {answer}");
         assert!(
-            answer.to_string().contains("--since"),
-            "--since {since}: {answer}"
+            answer.to_string().contains("since \\\""),
+            "{flag}: {answer}"
         );
     }
 }

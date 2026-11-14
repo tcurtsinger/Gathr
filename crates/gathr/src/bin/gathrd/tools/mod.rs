@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 pub mod briefing;
 mod checks;
 mod coord;
+mod diag;
 mod friction;
 mod github;
 mod hook;

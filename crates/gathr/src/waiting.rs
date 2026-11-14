@@ -387,10 +387,16 @@ fn queued_why(
         )?,
         None => false,
     };
-    Ok(match t.held.as_deref() {
+    // A pause the person lifted holds nothing, though its mark stays on the turn until the agent's
+    // queue reads the pauses again and lets it go.
+    let pause = pauses::holding(pauses, chat, t.agent.as_deref());
+    let held = t
+        .held
+        .as_deref()
+        .filter(|h| *h != "pause" || pause.is_some());
+    Ok(match held {
         Some("pause") => {
-            let stopped =
-                pauses::holding(pauses, chat, t.agent.as_deref()).is_some_and(|p| p.stopped);
+            let stopped = pause.is_some_and(|p| p.stopped);
             let why = match stopped {
                 true => "stopped by you, it carries on at Restart",
                 false => "paused",

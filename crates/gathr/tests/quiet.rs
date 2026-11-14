@@ -462,6 +462,28 @@ fn what_waits_on_the_person_or_moves_by_itself_ends_a_stretch() {
     assert_eq!(kept::<i64>(&conn, "reset_ts"), None);
 }
 
+/// The lead's wake doesn't end the stretch it was woken in when its queue marks it held by a pause
+/// the person has just lifted: the queue marked it from what it last read of the pauses, and lets
+/// it go once it reads them again. A pause in force on the lead does hold it, and ends the stretch.
+#[test]
+fn a_wake_marked_held_by_a_lifted_pause_doesnt_end_its_stretch() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let live = service();
+    idle(&mut conn, "ann");
+    let t0 = gathr::ids::now_us();
+    let woke = check(&mut conn, &live, t0);
+    assert_eq!(woke.len(), 1, "stuck: the lead is woken");
+    store::set_held(&conn, &woke[0].turn, Some("pause"), Some("paused")).unwrap();
+    assert!(check(&mut conn, &live, t0 + 2_000).is_empty());
+    assert_eq!(stretches(&conn), [], "ended by Gathr's own wake");
+    assert!(stuck(&conn));
+
+    pauses::pause(&conn, "agent", "lead", false, T).unwrap();
+    assert!(check(&mut conn, &live, t0 + 4_000).is_empty());
+    assert_eq!(stretches(&conn), [(4_000, "moved".to_string())]);
+}
+
 /// Scenario 6h: after a restart the lead isn't woken twice and the time down isn't counted. Time
 /// is counted check by check, so an hour with no check, the service down or the PC asleep, adds
 /// nothing.

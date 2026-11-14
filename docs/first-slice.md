@@ -1,6 +1,6 @@
 # The first slice: one chat, one engine, end to end
 
-Status: core implemented. The service, Claude Code driver, storage, event record, API and UI are built; later slices added team chats and Codex. The sections below retain the original scope, targets and check procedure. Diagnostics MCP tools and the other pending work explicitly listed in the decisions are not built yet.
+Status: core implemented. The service, Claude Code driver, storage, event record, API and UI are built; later slices added team chats and Codex. The sections below retain the original scope, targets and check procedure. The pending work explicitly listed in the decisions is not built yet.
 
 ## What it does
 

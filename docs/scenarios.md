@@ -445,6 +445,17 @@ Parts: 6.6
 - **Then** the lead's message shows a thumbs-up from the builder. No new message is posted, and nobody
   is woken by it
 
+### 6i. An agent reads why something failed, in its own chat
+
+Parts: 6.7
+
+- **Given** a tool call that failed in a chat with its reference, a task blocked with a secret in its
+  reason, a failure in another chat, and a turn of many tool calls
+- **When** an agent asks the `diag` tool for the trace, the failures and health
+- **Then** the forced failure is found from its reference. The secret comes back hidden. The other
+  chat's events don't come back, and aren't counted. A long answer is cut at the cap and says so,
+  with the failure first
+
 ## 7. Everything in its place
 
 ### 7a. Each agent works in its own place

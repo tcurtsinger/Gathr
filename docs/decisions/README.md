@@ -18,7 +18,7 @@ fails in CI when the two differ.
 | 0002 | [One login folder per account, shared by its agents through a renewal gate, never copied, never killed mid-renewal](0002-login-folders.md) | accepted | partly |
 | 0003 | [SQLite through rusqlite, one writer thread, migrations as numbered SQL files](0003-storage.md) | accepted | partly |
 | 0004 | [One service process, `gathrd`, with an HTTP and WebSocket API on localhost](0004-service-process.md) | accepted | partly |
-| 0005 | [One MCP tool server inside the service, over streamable HTTP, with rmcp](0005-mcp-server.md) | accepted | partly |
+| 0005 | [One MCP tool server inside the service, over streamable HTTP, with rmcp](0005-mcp-server.md) | accepted | yes |
 | 0010 | [Coordination is state in the service](0010-coordination-as-state.md) | accepted | partly |
 | 0011 | [One event record, named after OpenTelemetry's GenAI conventions](0011-event-record.md) | accepted | partly |
 | 0012 | [React and TypeScript, in a Tauri window, also served to a browser](0012-ui-shell.md) | accepted | partly |
