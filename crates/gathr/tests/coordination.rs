@@ -275,6 +275,39 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
 }
 
 /// The engine's working folder for the `n`th start.
+/// #223: a reason that already ends a sentence gets no second full stop in what finish_task answers,
+/// whether the report applies at once or was recorded before.
+#[test]
+fn a_reason_ending_a_sentence_is_answered_with_one_full_stop() {
+    let data = TempDir::new();
+    let team = team(&data.0, &twice(&data.0));
+    let lead_token = lead_turn(&team, &data.0, 0);
+    let port = team.service.info.port;
+    let ask = json!({ "to": "ann", "what": "Write the notes" });
+    text(&call_tool(port, &lead_token, "give_task", ask));
+    let ann = token(&data.0, 1);
+    let blocked = json!({ "how": "blocked", "note": "The cache is still there." });
+    text(&call_tool(port, &ann, "finish_task", blocked));
+    std::fs::write(data.0.join("go"), "").unwrap();
+    team.service
+        .wait_for(&team.chat, 20, "the task to be blocked", |_| {
+            tasks(&team)["tasks"][0]["state"] == "blocked"
+        });
+
+    // Reported again from outside any turn: it applies at once.
+    let done = json!({ "task": 1, "how": "done", "note": "The notes are written." });
+    let said = text(&call_tool(port, &ann, "finish_task", done.clone()));
+    assert_eq!(
+        said,
+        "Recorded: done. Task #1 is done: The notes are written."
+    );
+    let said = text(&call_tool(port, &ann, "finish_task", done));
+    assert_eq!(
+        said,
+        "Already recorded: task #1 is done: The notes are written. Its giver or the person can restart it."
+    );
+}
+
 fn cwd(data: &Path, n: usize) -> std::path::PathBuf {
     let text = std::fs::read_to_string(data.join("env.jsonl")).unwrap();
     let line: Value = serde_json::from_str(text.lines().nth(n).unwrap()).unwrap();

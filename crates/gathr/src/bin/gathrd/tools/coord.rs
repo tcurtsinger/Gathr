@@ -579,24 +579,25 @@ fn only_open(conn: &Connection, chat: &str, agent: &str) -> Result<i64, Error> {
 /// What Gathr says back to a report.
 fn taken(t: &tasks::Task, took: Took, how: &str) -> String {
     let n = t.number;
-    let reason = |lead: &str| {
-        let reason = t.reason.as_ref();
-        reason.map_or(String::new(), |r| format!("{lead}{r}"))
+    // The sentence's end: its reason, if any, ending with one full stop or its own mark.
+    let reason = || match &t.reason {
+        Some(r) => tasks::sentence(&format!(": {r}")),
+        None => ".".to_string(),
     };
     match took {
         Took::Kept => {
             format!("Recorded: {how}. It applies when the turn running on task #{n} ends.")
         }
         Took::Applied => format!(
-            "Recorded: {how}. Task #{n} is {}{}.",
+            "Recorded: {how}. Task #{n} is {}{}",
             t.state.as_str(),
-            reason(": ")
+            reason()
         ),
         Took::Already => format!(
-            "Already recorded: task #{n} is done{}. Its giver or the person can restart it.",
-            reason(": ")
+            "Already recorded: task #{n} is done{} Its giver or the person can restart it.",
+            reason()
         ),
-        Took::Cancelled => format!("Task #{n} was cancelled{}. Nothing changed.", reason(": ")),
+        Took::Cancelled => format!("Task #{n} was cancelled{} Nothing changed.", reason()),
     }
 }
 
