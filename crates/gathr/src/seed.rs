@@ -252,6 +252,17 @@ impl Seeder<'_> {
         Ok(())
     }
 
+    /// What Gathr says in a chat in no turn.
+    fn said(&mut self, chat: &str, body: &str) -> Result<(), Error> {
+        self.ts += 1_000;
+        self.conn.execute(
+            "INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4)",
+            params![ulid(self.ts), chat, self.ts, body],
+        )?;
+        self.made.messages += 1;
+        Ok(())
+    }
+
     fn event(&self, turn: &Turn, name: &str, phase: &'static str) -> Event {
         let mut event = Event::point(name).trace(&turn.trace);
         event.ts = self.ts;

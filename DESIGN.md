@@ -216,7 +216,8 @@ from", in a turn on that task), because the member's header says the task and th
 lists it; and Gathr's copy of an agent's message. A hear-back draws one line for each task it
 reports, in the state that hear-back gave, not the task's state now: "Vale completed: Review
 PR #138", "Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix
-up to date", also failed, stopped and cancelled. The person's answer reads "You answered
+up to date", also failed, stopped and cancelled. A task that ends done is such a line when it
+ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (0051). The person's answer reads "You answered
 Orin: Hold the button", a question "Orin asked you: Ship it?". Anything else (a wait's
 result, a wake-up, a stale-task nudge, a usage interruption) is drawn in Gathr's own words.
 13px, muted, the lead-in in the foreground colour at 500, an icon first, no Gathr speaker.
@@ -301,9 +302,10 @@ outside closes it. Top to bottom:
 A step or an agent's row is a button that closes Summary and opens that agent's panel, and the
 keyboard follows to the panel's tab.
 
-A round follows given_in/task/answers links to one main-line Supervisor turn, including nested
-tasks. Exclude person questions and cancelled tasks; order by task number. Only done tasks count.
-A round is finished once every task is settled and the Supervisor's hear-back on it has ended; it
+A round is what the service says it is on each task (`round`, 0051): the Supervisor's turn the
+person's message or answer began, with every task given since in answer to it, nested tasks
+included. Exclude person questions and cancelled tasks; order by task number. Only done tasks count.
+A round is finished once every task is settled and the Supervisor's hear-backs on it have ended; it
 then stays until the person's next message, and after that there is no Plan until the next hand-off.
 Never invent a step from prose, and never infer success from a finished turn: blocked, failed and
 stopped stay their own states and never count done. All steps, counts, working agents, assignments

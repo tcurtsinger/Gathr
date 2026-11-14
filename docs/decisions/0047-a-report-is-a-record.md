@@ -30,7 +30,9 @@ Amends [0010](0010-coordination-as-state.md)'s task rules. Serves promise 5 of [
 - **A turn that is stopped with its carry-on waiting doesn't settle its task.** After Stop now, or a usage limit
   that cuts a turn once a tool has run, the task stays as it was and says why nothing runs on it. Its giver hears
   how the carry-on ends, not that it stopped. An update already worked this way ([0032](0032-service-updates.md)).
-- **A hear-back says what is new.** It names only the tasks its giver hasn't heard about. A task that settles as
+- **A hear-back says what is new.** (When one goes is [0051](0051-the-giver-hears-when-all-is-in.md)'s: at once
+  on trouble, else when everything given from the same place is in.) It names only the tasks its giver hasn't
+  heard about. A task that settles as
   something other than what its giver last heard is heard once more, by itself; the same outcome reached again
   is not, unless its giver restarted the task: the giver asked for that run and hears how it ended. A task given `in_passing` doesn't hold the task whose turn gave it, and is heard back on by itself.
 - **A member's request the person has answered can't be cancelled out from under the work that waits on it:**

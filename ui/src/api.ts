@@ -122,6 +122,8 @@ export interface Task {
   owner: string | null;
   /** The turn that gave it. */
   given_in: string | null;
+  /** The round it was given in, named by the turn the person's word began (0051). */
+  round?: string | null;
   /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
   kind: 'work' | 'review' | 'person' | 'person_request';
   what: string;

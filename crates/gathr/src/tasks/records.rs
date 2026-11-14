@@ -16,7 +16,12 @@ pub fn set(
     reason: Option<&str>,
     trace: &str,
 ) -> Result<(), Error> {
-    // A task heard while held only on its merge (held.rs) is heard again when it settles, merged,
+    let was: Option<String> = tx
+        .query_row("SELECT state FROM tasks WHERE number = ?1", [task], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    // A task heard while held only on its merge (hear.rs) is heard again when it settles, merged,
     // closed or cancelled: its giver's own task is still held on it. So is one that settles as
     // something other than what its giver last heard (0047): blocked, then reported done.
     let chat: String = tx.query_row(
@@ -50,6 +55,9 @@ pub fn set(
              WHERE task = ?1 AND status IN ('queued', 'waiting_sign_in', 'running')",
             params![task, format!("its task #{task} was cancelled: {why}")],
         )?;
+    }
+    if state == State::Done && was.as_deref() != Some("done") {
+        super::hear::done_line(tx, task)?;
     }
     Ok(())
 }
@@ -122,6 +130,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 asked: r.get::<_, i64>(28)? > 0,
                 waiting_on: Vec::new(),
                 in_passing: r.get(29)?,
+                round: None,
                 judged: r.get(30)?,
                 signed_off: r.get(31)?,
             })

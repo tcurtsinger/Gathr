@@ -517,6 +517,44 @@ test('a hear-back reads as its own lines say, not as the task stands now', () =>
   ]);
 });
 
+test('5e: a task that ended done is a line when it ends, and the hear-back after it does not say it again', () => {
+  const state = round();
+  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask', { state: 'cancelled' })];
+  // Gathr says it in no turn, as Rowan's task ends; the note runs over two lines.
+  const line: Message = {
+    ...said('none', 'gathr', 'A task is done:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested'),
+    turn: null,
+  };
+  state.messages.push(line);
+  expect(lines(state)).toEqual([['Rowan completed:', 'Task 1', 'Task #1. Cursor fixed\nand tested']]);
+
+  // The round's hear-back names both: only what wasn't said shows.
+  heardBack(
+    state,
+    'b1',
+    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested\n' +
+      '- #2 Kit, Task 2: cancelled: not needed\nRead replies.',
+    5,
+  );
+  expect(lines(state)).toEqual([
+    ['Rowan completed:', 'Task 1', 'Task #1. Cursor fixed\nand tested'],
+    ['Kit cancelled:', 'Task 2', 'Task #2. not needed'],
+  ]);
+
+  // A hear-back with nothing left to say isn't drawn; one from before Gathr said such lines still is.
+  heardBack(
+    state,
+    'b2',
+    'The task you gave is settled:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested\nRead.',
+    6,
+  );
+  expect(lines(state)).toHaveLength(2);
+  const before = round();
+  before.tasks = [task(1, 'rowan', 'ask')];
+  heardBack(before, 'b1', 'The task you gave is settled:\n- #1 Rowan, Task 1: done\nRead replies.', 5);
+  expect(lines(before)).toEqual([['Rowan completed:', 'Task 1', 'Task #1']]);
+});
+
 test('what Gathr says that is not a hear-back is drawn in its own words, never replaced or dropped', () => {
   const state = round();
   state.tasks.push(task(54, 'kit', 'ask', { what: 'Open the PR' }));

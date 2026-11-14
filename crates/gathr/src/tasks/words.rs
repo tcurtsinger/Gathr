@@ -57,10 +57,28 @@ pub fn ask(t: &Task) -> String {
     )
 }
 
-/// What became of each task the giver gave in one turn, on the giver's `own` task when it has one
+/// The first line of what Gathr says in the chat when a task ends done (0051); its second is the
+/// task's `line`. The window reads both (`ui/src/chat/hearback.ts`).
+pub const DONE: &str = "A task is done:";
+
+/// A task as a hear-back names it: "- #<number> <owner>, <what>: <how>".
+pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
+    let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
+    let how = match (t.state, &t.reason) {
+        (State::Done, None) => "done".to_string(),
+        // Stopped as left, or with no report: the reason says which, in the owner's words.
+        (State::Blocked, Some(reason)) if left || (t.report.is_none() && t.asked) => reason.clone(),
+        (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
+        (state, None) => state.as_str().to_string(),
+    };
+    let owner = owner_name(conn, t.owner.as_deref())?;
+    Ok(format!("- #{} {owner}, {}: {how}", t.number, t.what))
+}
+
+/// What became of each task the giver hasn't heard of, on the giver's `own` task when it has one
 /// open.
 pub fn hear_back(conn: &Connection, settled: &[Task], own: Option<i64>) -> Result<String, Error> {
-    // A task held only on its merge comes back too (held.rs): not settled yet.
+    // A fix held only on its merge comes back to the reviewer who gave it (hear.rs): not settled.
     let all = settled.iter().all(|t| t.state.settled());
     let mut lines = vec![match (settled.len(), all) {
         (1, true) => "The task you gave is settled:".to_string(),
@@ -69,18 +87,7 @@ pub fn hear_back(conn: &Connection, settled: &[Task], own: Option<i64>) -> Resul
         (n, false) => format!("Where the {n} tasks you gave stand:"),
     }];
     for t in settled {
-        let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
-        let how = match (t.state, &t.reason) {
-            (State::Done, None) => "done".to_string(),
-            // Stopped as left, or with no report: the reason says which, in the owner's words.
-            (State::Blocked, Some(reason)) if left || (t.report.is_none() && t.asked) => {
-                reason.clone()
-            }
-            (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
-            (state, None) => state.as_str().to_string(),
-        };
-        let owner = owner_name(conn, t.owner.as_deref())?;
-        lines.push(format!("- #{} {owner}, {}: {how}", t.number, t.what));
+        lines.push(line(conn, t)?);
     }
     // One closing line: the window reads a hear-back's lines (`ui/src/chat/hearback.ts`).
     let mut close = "Read replies with read_chat, then continue.".to_string();
