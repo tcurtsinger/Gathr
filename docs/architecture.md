@@ -16,7 +16,8 @@ the planned read-only pool is not built yet. The CLI's diagnostics open a read-o
 ## Engines and accounts
 
 Claude Code uses a long-lived stream-json process; Codex uses a long-lived app-server.
-Each agent has at most one engine on one chat session at a time. Switching closes the old process gently;
+Each agent has at most one engine on one conversation at a time. A member's task has a conversation of its own (`task_sessions`,
+[0055](decisions/0055-a-members-task-starts-in-a-new-session.md)); the lead has one per chat. Switching closes the old process gently;
 Stop uses the provider's interrupt. The turn boundary uses a `Driver` enum and shared `Frame` values,
 not the originally planned shared trait. Shared process cleanup follows 0031.
 [0001](decisions/0001-engine-interface.md), [0031](decisions/0031-short-programs-end-together.md),
@@ -39,7 +40,7 @@ Only the Supervisor files person tasks. A task settles by its owner's report, ne
 One answer says what a chat waits on, and a chat where nothing moves wakes its lead, then tells the person, each
 only of what is new to them
 ([0050](decisions/0050-what-a-chat-waits-on.md), [0052](decisions/0052-a-quiet-chat-is-noticed.md)).
-Plan mode/checks, hand-off chains, side jobs and fresh sessions per task are not built yet.
+Plan mode/checks, hand-off chains and side jobs are not built yet.
 [0005](decisions/0005-mcp-server.md), [0010](decisions/0010-coordination-as-state.md),
 [0013](decisions/0013-one-chat-model.md), [0028](decisions/0028-team-chats.md).
 
@@ -75,7 +76,7 @@ The signed window updater and service handover are built.
 - Remote use across the person's computers: [0017](decisions/0017-remote-use.md).
 - Agents' browser, profiles, live stream and handover: [0018](decisions/0018-agent-browser.md).
 - Optional Decisions provider and settings: [0014](decisions/0014-decisions-provider.md).
-- Fresh-session context digests, stored binding decisions and quality comparisons:
+- Catch-up digests, stored binding decisions and quality comparisons:
   [0020](decisions/0020-context-per-turn.md).
 - Plan mode and further role/state defaults toward the no-prompting requirement:
   [0021](decisions/0021-no-prompting-needed.md).

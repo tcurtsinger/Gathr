@@ -71,6 +71,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   ALTER TABLE tasks DROP COLUMN signed_off; DROP TABLE landings;
                   DROP TABLE quiet; DROP INDEX messages_person; DROP TABLE review_notes;
                   DROP TABLE changes; ALTER TABLE tasks DROP COLUMN first_reviewed;
+                  DROP TABLE task_sessions;
                   ALTER TABLE agent_context DROP COLUMN told;
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;

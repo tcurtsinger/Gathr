@@ -36,6 +36,12 @@
 //! (a minute at most) before it answers, so a test can act while a model list is asked. `GATHR_REPLAY_CHILD` names a file: the engine starts a
 //! child holding its output pipes, which lives while the file does (a minute at most), as an
 //! engine's own children can outlive it.
+//!
+//! `GATHR_REPLAY_SESSION=echo` names the id it was started on (`--session-id` or `--resume`) as the
+//! session of every recorded frame that names one, its init too; the Codex stand-in answers it with
+//! the thread it resumes, or a new one. `GATHR_REPLAY_RESUME=missing` answers a `--resume` as
+//! Claude Code does an id it doesn't have (`resume_missing`), and the Codex stand-in a
+//! `thread/resume` with an error.
 
 use std::io::{BufRead, Write};
 #[path = "replay_engine/codex.rs"]
@@ -143,6 +149,17 @@ fn main() {
         .or_else(|_| recording_beside_me())
         .unwrap_or_default();
     record_start(&args);
+    let given = ["--session-id", "--resume"].iter().find_map(|flag| {
+        let at = args.iter().position(|a| a == flag)?;
+        Some((*flag, args.get(at + 1)?.clone()))
+    });
+    if let Some(("--resume", id)) = &given
+        && std::env::var("GATHR_REPLAY_RESUME").as_deref() == Ok("missing")
+    {
+        resume_missing(id);
+    }
+    let echo = std::env::var("GATHR_REPLAY_SESSION").as_deref() == Ok("echo");
+    let echoed = given.map(|(_, id)| id).filter(|_| echo);
     if let Some(file) = std::env::var_os("GATHR_REPLAY_CHILD") {
         let me = std::env::current_exe().unwrap();
         // Stdio is inherited: the child holds this engine's stdout and stderr, and outlives it.
@@ -171,7 +188,10 @@ fn main() {
                 }
             },
             Some("out") => {
-                writeln!(stdout, "{line}").unwrap();
+                match &echoed {
+                    Some(id) => writeln!(stdout, "{}", with_session(line, id)).unwrap(),
+                    None => writeln!(stdout, "{line}").unwrap(),
+                }
                 stdout.flush().unwrap();
             }
             Some("err") => writeln!(stderr, "{line}").unwrap(),
@@ -201,6 +221,27 @@ fn main() {
         let ms = ms.and_then(|ms| ms.parse().ok()).unwrap_or(60_000);
         std::thread::sleep(std::time::Duration::from_millis(ms));
     }
+}
+
+/// A recorded frame with the session it names set to `id`, as an engine started on that id says.
+fn with_session(line: &str, id: &str) -> String {
+    match serde_json::from_str::<serde_json::Value>(line) {
+        Ok(mut frame) if frame["session_id"].is_string() => {
+            frame["session_id"] = id.into();
+            frame.to_string()
+        }
+        _ => line.to_string(),
+    }
+}
+
+/// What Claude Code 2.1.318 did on `--resume` of an id it doesn't have (stage 4's probe, signed
+/// out): it exits 1 before it reads its input, with one `result` line and no init.
+fn resume_missing(id: &str) -> ! {
+    let result = serde_json::json!({ "type": "result", "subtype": "error_during_execution",
+        "is_error": true, "duration_api_ms": 0, "num_turns": 0, "session_id": id });
+    println!("{result}");
+    eprintln!("No conversation found with session ID: {id}");
+    std::process::exit(1);
 }
 
 /// One write per line: `writeln!` on a file writes in pieces, and a test polling the file read a

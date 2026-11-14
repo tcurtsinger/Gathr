@@ -65,6 +65,41 @@ pub fn brief(
     Ok(lines.join("\n"))
 }
 
+/// What a task's new conversation opens with, before its ask (0055, N6): the agent's last tasks in
+/// the chat but this one, and the brief when the ask isn't it (the task lost its conversation).
+/// The opening, and how many tasks it lists.
+pub fn opening(
+    conn: &Connection,
+    task: i64,
+    agent: &str,
+    ask: &str,
+) -> Result<(String, usize), Error> {
+    let t = super::records::read(conn, task)?;
+    let mut lines = vec![format!(
+        "This is a new conversation for task #{task}. Your earlier turns in this chat aren't in it: \
+         read_chat and list_tasks have them."
+    )];
+    let last: Vec<i64> = {
+        let mut stmt = conn.prepare_cached(
+            "SELECT number FROM tasks WHERE chat_id = ?1 AND owner = ?2 AND number != ?3
+             ORDER BY updated_ts DESC, number DESC LIMIT 5",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![t.chat, agent, task], |r| r.get(0))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    if !last.is_empty() {
+        lines.push("Your last tasks in this chat:".to_string());
+    }
+    for number in &last {
+        lines.push(line(conn, &super::records::read(conn, *number)?)?);
+    }
+    let brief = brief(conn, &t, &owner_name(conn, t.giver.as_deref())?, None)?;
+    if ask.lines().next() != brief.lines().next() {
+        lines.push(brief);
+    }
+    Ok((lines.join("\n"), last.len()))
+}
+
 /// The one ask for a report, after a turn on the task ended with none (0047).
 pub fn ask(t: &Task) -> String {
     format!(

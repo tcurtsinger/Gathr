@@ -359,7 +359,7 @@ fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
 }
 
 /// 0053: a review's notes point at its task and at the fix Gathr gave for them, so deleting the
-/// chat removes them first.
+/// chat removes them first; so does each task's session (0055).
 #[test]
 fn deleting_an_archived_chat_removes_its_review_notes() {
     let data = TempDir::new();
@@ -373,15 +373,21 @@ fn deleting_an_archived_chat_removes_its_review_notes() {
              VALUES (1, 'c', 'ann', 'bo', 'review', 'Review #7', 'blocked', 7, 1, 1),
                     (2, 'c', 'bo', 'ann', 'work', 'Fix the review of #7', 'ready', 7, 1, 1);
          INSERT INTO review_notes (task, reviewed, kind, file, says, fix, created_ts)
-             VALUES (1, 'abc1234', 'unasked', 'src/cache.rs', 'A cache nobody asked for', 2, 1);",
+             VALUES (1, 'abc1234', 'unasked', 'src/cache.rs', 'A cache nobody asked for', 2, 1);
+         INSERT INTO task_sessions (task, agent_id, chat_id, account_id, session_id)
+             VALUES (2, 'ann', 'c', 'acc', 's-fix');",
     )
     .unwrap();
     gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
     gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
-    let left: i64 = conn
-        .query_row("SELECT count(*) FROM review_notes", [], |r| r.get(0))
+    let left: (i64, i64) = conn
+        .query_row(
+            "SELECT (SELECT count(*) FROM review_notes), (SELECT count(*) FROM task_sessions)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
         .unwrap();
-    assert_eq!(left, 0);
+    assert_eq!(left, (0, 0), "(review notes, task sessions) left");
 }
 
 /// 0054: a landed change's record outlives its chat; one not landed goes with it.

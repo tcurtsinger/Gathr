@@ -64,3 +64,4 @@ fails in CI when the two differ.
 | 0052 | [A quiet chat is noticed, and its dead time has a number](0052-a-quiet-chat-is-noticed.md) | accepted | yes |
 | 0053 | [A review asks both questions, and a left review gets its fix](0053-a-review-asks-both-questions.md) | accepted | yes |
 | 0054 | [A change past the far end waits for the person, and every landed change is recorded](0054-a-change-past-the-far-end-waits-for-the-person.md) | accepted | yes |
+| 0055 | [A member's task starts in a new session](0055-a-members-task-starts-in-a-new-session.md) | accepted | yes |

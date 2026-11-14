@@ -2,13 +2,13 @@
 
 Status: accepted. Date: 2026-11-06.
 
-Built: partly. Proof: `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/pauses.rs`. Not built: plans and plan checks (no plan record, no `plan_check` task); side jobs; a fresh session per task (an agent keeps one session per chat); the Supervisor pausing a chat, and who paused; notifications; the gate's hold while a plan is checked.
+Built: partly. Proof: `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/pauses.rs`. A member's task has its own session ([0055](0055-a-members-task-starts-in-a-new-session.md): `crates/gathr/tests/sessions.rs`). Not built: plans and plan checks (no plan record, no `plan_check` task); side jobs; the lead's session per plan (the lead keeps one session per chat); the Supervisor pausing a chat, and who paused; notifications; the gate's hold while a plan is checked.
 
 Out of date below: how a task settles is [0047](0047-a-report-is-a-record.md)'s now (a report is kept, a turn that ends with none never marks its task done, and "left" stops the task instead of starting its owner again). Hand-off chains and their limit are built. `may_start` isn't one function: a task's state, archive, pauses and usage are each checked where they apply. Waits also have the kind `up_to_date` and the state `picked` ([0043](0043-checks-and-merge.md)). "Plan" here is a record with versions; [0001](0001-engine-interface.md) and [0038](0038-summary-holds-the-plan.md) use the word for other things, and one meaning is still to be chosen.
 
 ## Implementation status
 
-Tasks, turns, waits, person tasks, pause/Stop, usage holds, archive and stale handling are built. Plan mode/checks, hand-off chains, side jobs and a fresh session per task are not built yet. A task settles by its owner's report, never by its turn ending ([0047](0047-a-report-is-a-record.md)).
+Tasks, turns, waits, person tasks, pause/Stop, usage holds, archive and stale handling are built. Plan mode/checks, hand-off chains and side jobs are not built yet. A member's task runs in a session of its own ([0055](0055-a-members-task-starts-in-a-new-session.md)); the lead keeps one session per chat. A task settles by its owner's report, never by its turn ending ([0047](0047-a-report-is-a-record.md)).
 
 ## Choice
 
@@ -148,7 +148,7 @@ Rules:
 - Any exit other than 0 is "not yet" (G69: an exit 2 read as broken). A look that can't run at all (the command or `gh` doesn't start or finish, GitHub refuses) is a failure; three in a row show on the wait, in `gathr diag health` and as a `gathr.wait.failing` event with its reference. The previous app's wait failed silently for two hours.
 - Every call to GitHub is tried once more before it counts as failed (G5).
 - An agent lists its own waits with their ids and ends any of them (G54). A wait on an agent with nothing running or queued in the chat is refused, saying so.
-- A wait fires in the session it was left in.
+- A wait on a task fires in that task's session; a wait with no task fires in the agent's latest session ([0055](0055-a-members-task-starts-in-a-new-session.md)).
 - While its scope is paused, a wait doesn't fire; it fires on resume.
 
 ## Pause
@@ -210,7 +210,7 @@ Turned down: tracking them by process id. Claude Code's frames carry no pid, and
 
 An agent runs one turn at a time, across all its conversations, the way a member of the previous app got its next turn only when free. This also keeps each agent to one engine process on its account's shared login folder ([0002](0002-login-folders.md)), so fewer processes can renew one login at once.
 
-- A task gets a fresh engine session when its owner already has another task in progress; the earlier session is set aside, whole, and resumed by a wait it set or a task it holds. At most three are set aside per agent per chat. The previous app's members carried 200K tokens a request when every task shared one session.
+- A member's task gets its own engine session, kept in `task_sessions`, and a later turn on that task resumes it. The lead keeps one session per chat. There is no cap on how many are set aside ([0055](0055-a-members-task-starts-in-a-new-session.md)). The previous app's members carried 200K tokens a request when every task shared one session.
 - Switching sessions: when the agent's next turn is in another session than its open engine process, the driver closes that process the gentle way (end of input, then the engine's own exit, per [0001](0001-engine-interface.md)) and starts the next with that session's resume id. It never kills a process to switch. A process that hasn't exited after 30 seconds holds the switch, shows as a hold on the agent, and is recorded; it's never forced while it might be renewing its login.
 - An idle process (no turn for 10 minutes) is closed the same way, so a held process doesn't keep the folder.
 - Codex's app-server runs several threads in one process; the one-turn-at-a-time rule applies to it too, so both engines behave alike.

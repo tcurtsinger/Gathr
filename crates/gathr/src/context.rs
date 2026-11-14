@@ -204,6 +204,28 @@ pub fn untold(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
     Ok(())
 }
 
+/// The agent's engine opens another conversation than the one shown (0055, N7): a new one has no
+/// fill yet and hasn't been told; a task's resumed one brings both back from its row. Its context
+/// as now shown.
+pub fn switched(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    resumed: Option<i64>,
+) -> Result<Value, Error> {
+    let row = match resumed {
+        Some(task) => crate::sessions::context_of(conn, task, agent)?,
+        None => None,
+    };
+    let (used, told) = row.unwrap_or((None, false));
+    conn.execute(
+        "INSERT INTO agent_context (chat_id, agent_id, used, told, updated_ts) VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT (chat_id, agent_id) DO UPDATE SET used = ?3, told = ?4, updated_ts = ?5",
+        params![chat, agent, used, told, now_us()],
+    )?;
+    Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
+}
+
 /// Each member of a chat's history with how full its context is (`context`, null before its first call).
 pub fn on_members(conn: &Connection, chat: &str, history: &mut Value) -> Result<(), Error> {
     let Some(members) = history["members"].as_array_mut() else {

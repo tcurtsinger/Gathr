@@ -16,6 +16,8 @@ mod reports;
 mod review_evidence;
 #[path = "tasks/review_notes.rs"]
 mod review_notes;
+#[path = "tasks/sessions.rs"]
+mod task_sessions;
 #[path = "tasks/waits.rs"]
 mod waits_fire;
 
