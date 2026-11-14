@@ -107,6 +107,10 @@
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* A field with several values (a review's notes): each one under the first, never in the label column. */
+.task-fields dd + dd {
+  grid-column: 2;
+}
 /* Gathr's checks run on a task (0036 C6, the task-pass and task-fail mock-ups). */
 .task-checks {
   display: grid;

@@ -3,6 +3,8 @@ import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Task } from '../api';
 import { TaskView } from './TaskView';
+// The fields' grid, which TasksTab brings in for the app: a note's place in it is checked below.
+import './tasks.css';
 
 const task = (more: Partial<Task>): Task => ({
   number: 12,
@@ -148,8 +150,12 @@ test('a review lists its notes, each with its kind and file', async () => {
   expect(await fields(review)).toContain('Notes: Wrong · src/export.ts: The export skips archived chats');
   const notes = [...document.querySelectorAll('.task-fields dt')].find((dt) => dt.textContent === 'Notes');
   const lines: string[] = [];
-  for (let dd = notes?.nextElementSibling; dd?.tagName === 'DD'; dd = dd.nextElementSibling)
+  const lefts = new Set<number>();
+  for (let dd = notes?.nextElementSibling; dd?.tagName === 'DD'; dd = dd.nextElementSibling) {
     lines.push(dd.textContent ?? '');
+    lefts.add(Math.round(dd.getBoundingClientRect().left));
+  }
+  expect(lefts.size, 'every note sits in the value column, under the first').toBe(1);
   expect(lines).toEqual([
     'Wrong · src/export.ts: The export skips archived chats',
     'Unasked · src/cache.rs: A cache the ask does not need',
