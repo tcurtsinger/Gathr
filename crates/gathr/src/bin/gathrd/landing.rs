@@ -192,7 +192,7 @@ async fn acted(
 ) -> Result<Looked, String> {
     let vars = crate::coord::fresh().await;
     let pr = review.pr;
-    let seen = judge(chats, project, review, &vars).await?;
+    let seen = judge(chats, project, review, trace, &vars).await?;
     let (chat, head) = (review.chat.clone(), seen.head.clone());
     let did = db(chats, move |c| landings::did(c, &chat, pr, &head)).await?;
     let by = By {
@@ -321,12 +321,14 @@ async fn judge(
     chats: &Arc<Chats>,
     project: &Project,
     review: &Review,
+    trace: &str,
     vars: &Vars,
 ) -> Result<Seen, String> {
     let repo = &project.folder;
     let (view, head, base) = merging::open_pr(review.pr, repo).await?;
     let b = merging::fetched(repo, &base, vars).await?;
-    let stand = stand(chats, project, review, (&view, &head, &base, &b), vars).await?;
+    let at = (&view, head.as_str(), base.as_str(), b.as_str());
+    let stand = stand(chats, project, review, at, trace, vars).await?;
     Ok(Seen {
         stand,
         head,
@@ -343,6 +345,7 @@ async fn stand(
     project: &Project,
     review: &Review,
     (view, head, base, b): (&Value, &str, &str, &str),
+    trace: &str,
     vars: &Vars,
 ) -> Result<Stand, String> {
     let (repo, pr, at) = (&project.folder, review.pr, short(head));
@@ -374,7 +377,14 @@ async fn stand(
     if merging::ancestor(repo, head, b, vars).await {
         return Ok(Stand::Rests(format!("its head is in {base} already")));
     }
-    let needs = merging::sign_off_for(chats, project, b, head, vars).await?;
+    // Measured before it rests on the person: a smaller head withdraws the question first (0054).
+    let on = (review.chat.as_str(), pr, "landing");
+    let measured = crate::changes::landing(chats, project, on, (base, head, b), trace, vars);
+    let (files, rests) = measured.await?;
+    if let Some(why) = rests {
+        return Ok(Stand::Rests(why));
+    }
+    let needs = merging::sign_off_for(chats, project, b, &files, vars).await?;
     if !needs.is_empty() && !review.signed_off {
         return Ok(Stand::Stops(format!(
             "it needs your sign-off, as {}. Check they still test the code, then report this review done \
@@ -466,7 +476,7 @@ async fn default_branch(repo: &std::path::Path, vars: &Vars) -> Result<String, S
     named.ok_or_else(|| "origin didn't say which branch is its default".to_string())
 }
 
-async fn db<T: Send + 'static>(
+pub async fn db<T: Send + 'static>(
     chats: &Arc<Chats>,
     work: impl FnOnce(&mut rusqlite::Connection) -> Result<T, gathr::Error> + Send + 'static,
 ) -> Result<T, String> {

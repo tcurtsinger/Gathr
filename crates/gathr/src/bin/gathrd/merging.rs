@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+use gathr::changes::count::File;
 use gathr::event::Event;
 use gathr::platform::env::Vars;
 use gathr::tasks;
@@ -96,7 +97,14 @@ pub async fn merge(
         ));
     }
     checks_passed(chats, project, &head, &view).await?;
-    let needs_sign_off = sign_off_for(chats, project, &b, &head, &vars).await?;
+    let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
+    let on = (caller.chat.as_str(), pr, "merge");
+    let at = (base.as_str(), head.as_str(), b.as_str());
+    let (files, rests) = crate::changes::landing(chats, project, on, at, &trace, &vars).await?;
+    if let Some(why) = rests {
+        return Err(format!("#{pr} {why}"));
+    }
+    let needs_sign_off = sign_off_for(chats, project, &b, &files, &vars).await?;
     if !needs_sign_off.is_empty() && !(signed_off || asked.signed_off) {
         return Err(format!(
             "#{pr} needs your sign-off, as {}. Check they still test the code, then merge with signed_off: true",
@@ -106,7 +114,7 @@ pub async fn merge(
     let by = By {
         chat: caller.chat.clone(),
         agent: caller.agent.clone(),
-        trace: caller.trace().unwrap_or_else(gathr::ids::trace_id),
+        trace,
         landed: false,
     };
     let merged = push_merge(chats, &by, project, pr, (&head, &base, &b), &view, &vars).await?;
@@ -133,7 +141,7 @@ pub async fn sign_off_for(
     chats: &Arc<Chats>,
     project: &Project,
     b: &str,
-    head: &str,
+    files: &[File],
     vars: &Vars,
 ) -> Result<Vec<String>, String> {
     let repo = &project.folder;
@@ -142,10 +150,11 @@ pub async fn sign_off_for(
     if gathr_checks && first_baseline(chats, &project.id, repo, b, vars).await {
         needs.push("it brings the project's first passing checks on its main".to_string());
     }
-    // What the PR itself changes, from where it left its base: a PR behind its base reads the same.
-    let since = format!("{b}...{head}");
-    let changed = git(repo, &["diff", "--name-only", &since], vars).await?;
-    let tests: Vec<&str> = changed.lines().filter(|f| touches_checks(f)).collect();
+    // `files` is what the PR itself changes, from where it left its base, counted or not.
+    let tests: Vec<&str> = (files.iter())
+        .map(|f| f.path.as_str())
+        .filter(|f| touches_checks(f))
+        .collect();
     if !tests.is_empty() {
         needs.push(format!(
             "it changes tests or check settings: {}",
@@ -213,6 +222,9 @@ pub async fn push_merge(
         project.method
     );
     let reference = gathr::ids::reference(trace).to_string();
+    // Marked before GitHub is asked: a PR look may see the merge first, and it's still Gathr's (0054).
+    let id = project.id.clone();
+    crate::landing::db(chats, move |c| gathr::changes::pushed(c, &id, pr)).await?;
     // Settled only once GitHub says the PR merged, at the head and base checked: one that moved
     // or was retargeted after the push stays open, and its tasks aren't this merge's (Vale, #120).
     if let Err(seen) = confirmed(pr, repo, head, base).await {
@@ -637,7 +649,7 @@ async fn settle(
         .writer
         .call(move |c| -> Result<Vec<gathr::tasks::Start>, gathr::Error> {
             let open = format!(
-                "SELECT number FROM tasks WHERE chat_id = ?1 AND pr = ?2 AND (state NOT IN {} OR (kind = 'review' AND pr_closed = 0))",
+                "SELECT number FROM tasks WHERE chat_id = ?1 AND pr = ?2 AND kind != 'person' AND (state NOT IN {} OR (kind = 'review' AND pr_closed = 0))",
                 tasks::SETTLED
             );
             let mut stmt = c.prepare(&open)?;
@@ -664,6 +676,7 @@ async fn settle(
             Ok(kept)
         })
         .await;
+    crate::changes::ended(chats, &by.chat, pr, "MERGED", Some(head), true, &by.trace).await;
     match starts {
         Some(Ok(starts)) => {
             let clean = chats.clone();

@@ -251,7 +251,11 @@ pub(super) fn fix(tx: &Transaction, review: &Task, trace: &str) -> Result<Fixed,
 }
 
 /// The earliest work task in the chat on `pr` that isn't cancelled: its owner, and the task.
-fn work_on(conn: &Connection, chat: &str, pr: i64) -> Result<Option<(String, i64)>, Error> {
+pub(crate) fn work_on(
+    conn: &Connection,
+    chat: &str,
+    pr: i64,
+) -> Result<Option<(String, i64)>, Error> {
     Ok(conn
         .query_row(
             "SELECT owner, number FROM tasks WHERE chat_id = ?1 AND pr = ?2 AND kind = 'work'

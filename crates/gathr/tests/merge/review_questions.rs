@@ -6,7 +6,7 @@ use super::*;
 const NOTE: &str = "feature.txt isn't part of the ask";
 
 impl Room {
-    fn task(&self, number: i64) -> Value {
+    pub(super) fn task(&self, number: i64) -> Value {
         let tasks = self
             .service
             .call("GET", &format!("/api/chats/{}/tasks", self.chat))

@@ -6,6 +6,7 @@ mod agents;
 mod api;
 mod app_update;
 mod archive;
+mod changes;
 mod chat_state;
 mod chats;
 mod check_runs;

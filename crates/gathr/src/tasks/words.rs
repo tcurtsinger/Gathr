@@ -48,7 +48,8 @@ pub fn brief(
     }
     if let Some(carry) = carry {
         lines.push(format!(
-            "Continue from here: {carry}. Check what is already done before repeating work."
+            "Continue from here: {} Check what is already done before repeating work.",
+            sentence(carry)
         ));
     }
     if t.kind == Kind::Review {

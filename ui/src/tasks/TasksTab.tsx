@@ -2,7 +2,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { PersonTask, StaleTask, Task } from '../api';
 import { FailureNotice, Notice } from '../components/Notice';
-import { type Draft, ready } from './model';
+import { asker, type Draft, ready } from './model';
 import { TaskAnswer } from './TaskAnswer';
 import { TaskView, useTask } from './TaskView';
 import './tasks.css';
@@ -106,7 +106,7 @@ export function TasksTab(props: Props) {
           </h2>
           <p className="tasks-meta">
             <span>
-              {name(task.giver)}
+              {asker(task, name)}
               {task.for_agent && ` for ${name(task.for_agent)}`}
             </span>
             <span aria-hidden="true">·</span>

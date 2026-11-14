@@ -723,6 +723,43 @@ Parts: 10.6
   `nothing_unasked: true` and has no `wrong` or `unasked` notes, or it is refused with a reference. Its
   suggestions are heard with the done line and start no turn
 
+### 10h. A change past the project's far end waits for the person
+
+Parts: 10.7
+
+- **Given** a project whose main has 9 changes of 100 lines each, a lead, a builder and a reviewer, and a work task
+  #1 "Add a retry" from the lead to the builder, with PR #5
+- **When** the builder's head adds 2,000 lines in `src`, 9,000 in `Cargo.lock`, a png, and 500 lines in a file the
+  base's attributes mark generated, and its review is reported done
+- **Then** Gathr counts 2,000 lines against a line of 3,000 and lands it. Its row says so, with no question
+- **When** the builder's next head adds 3,200 lines and its review is reported done
+- **Then** Gathr doesn't land it. The person has one question from Gathr, with 3,200, 3,000, the largest file and
+  "It answers task #1 from" the lead. Task #1 is unchanged and no turn starts. The waiting answer says `#5 to land:
+  waits on your answer to #<question>`, and it waits on the person. The merge tool refuses with a reference
+- **When** the builder, and then the person in words alone, answer the question
+- **Then** both are refused, each with a reference: only the person answers it, with one of its choices
+- **When** the person picks "Let it go on"
+- **Then** the PR lands without waiting for the next look. Its row is the record: when it landed, 3,200 counted,
+  3,200 let through, landed by Gathr, the builder and the reviewer each with their engine, the commit its first
+  review named, and its `unasked` notes
+- **When** instead the head grows to 6,201 lines before the person answers, and they pick "Let it go on"
+- **Then** a second question is filed and it doesn't land. At 6,200 it lands
+- **When** instead the person picks "Send it back"
+- **Then** #1 is blocked with "sent #5 back", and one hear-back turn is queued for the lead. #5 doesn't land, and
+  a new review at that head changes nothing: its waiting line moves others, so the lead isn't woken for it. The
+  lead's restart of #1 carries the reason into its brief
+- **When** instead the question is open and the builder pushes a head that adds 500 lines, and its review is
+  reported done
+- **Then** landing cancels the question as no longer needed and lands the PR
+- **When** instead the question is open and the PR is merged outside Gathr
+- **Then** the question is cancelled, not answered. The row is the record, landed by hand, with its reviewer
+- **When** a push Gathr made and GitHub didn't confirm is seen merged later
+- **Then** the record says Gathr landed it
+- **When** main has 49 changes of 100 lines and one of 9,000
+- **Then** a PR adding 9,000 lines lands and one adding 9,001 is asked about
+- **Not built, for the owner to decide** ([0054](decisions/0054-a-change-past-the-far-end-waits-for-the-person.md)):
+  a question is asked at landing, not when the PR appears, and no turn on its tasks is held while it is open
+
 ## 11. No rulebook needed, and Gathr measures it
 
 ### 11a. A new project works on defaults

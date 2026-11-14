@@ -32,6 +32,15 @@ async function fields(shown: Task) {
   return terms.map((dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`);
 }
 
+// No giver means Gathr asked only on a question for the person; any other task was the person's own.
+test('a task with no giver names Gathr only when it is a question for the person', async () => {
+  const meta = () => [...document.querySelectorAll('.tasks-meta')].at(-1)?.textContent;
+  await fields(task({ giver: null }));
+  expect(meta()).toBe('you');
+  await fields(task({ number: 13, what: 'Let #5 go on?', kind: 'person', owner: null, giver: null }));
+  expect(meta()).toBe('Gathr');
+});
+
 test('a held task shows its report and what it waits on, each once', async () => {
   const held = task({
     state: 'held',

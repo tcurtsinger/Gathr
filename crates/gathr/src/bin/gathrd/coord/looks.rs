@@ -135,9 +135,10 @@ pub async fn once(chats: &Arc<Chats>) {
             crate::check_runs::for_review(chats, &chat, task, &head).await;
         }
         let view: Value = serde_json::from_str(&answer).unwrap_or_default();
-        let t = trace.clone();
+        let ended = matches!(state.as_str(), "MERGED" | "CLOSED");
+        let (t, on, was, at) = (trace.clone(), chat.clone(), state.clone(), head.clone());
         apply(chats, "gathr.task.pr", &trace, move |c| {
-            if matches!(state.as_str(), "MERGED" | "CLOSED") {
+            if ended {
                 crate::cleanup::queue(c, &chat, &view, &t)?;
             }
             tasks::pr_looked(
@@ -150,6 +151,10 @@ pub async fn once(chats: &Arc<Chats>) {
             )
         })
         .await;
+        if ended {
+            let at = Some(at.as_str()).filter(|h| !h.is_empty());
+            crate::changes::ended(chats, &on, pr, &was, at, false, &trace).await;
+        }
     }
     // Every PR whose newest review is done is among the tasks' PRs above (0049).
     crate::landing::sweep(chats.clone(), None).await;

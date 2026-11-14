@@ -198,6 +198,34 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
     Ok((task, starts))
 }
 
+/// Files Gathr's own question for the person (0054): no giver, a choice, about `pr`, under the work
+/// it answers. Its number.
+pub(crate) fn ask_as_gathr(
+    tx: &Transaction,
+    (chat, pr, parent): (&str, i64, Option<i64>),
+    (what, why): (&str, &str),
+    choices: &[Choice],
+    trace: &str,
+) -> Result<i64, Error> {
+    tx.execute(
+        "INSERT INTO tasks (chat_id, parent, kind, what, why, state, form, choices, pr, created_ts, updated_ts)
+         VALUES (?1, ?2, 'person', ?3, ?4, 'waiting', 'choice', ?5, ?6, ?7, ?7)",
+        params![chat, parent, what, why, json!(choices).to_string(), pr, now_us()],
+    )?;
+    let number = tx.last_insert_rowid();
+    set(tx, number, State::Ready, None, trace)?;
+    Event::point("gathr.task.give")
+        .trace(trace)
+        .chat(chat)
+        .task(number)
+        .ok()
+        .attr("gathr.task.giver", "gathr")
+        .attr("gathr.task.owner", "person")
+        .attr("gathr.task.kind", Kind::Person.as_str())
+        .insert(tx)?;
+    Ok(number)
+}
+
 /// What a Send did: the tasks it answered, those it couldn't with why (they stay open), and the
 /// turns it starts.
 #[derive(Debug, Default)]
@@ -232,7 +260,12 @@ pub fn answer_as(
             continue;
         }
         match answer_one(&tx, a, by, trace) {
-            Ok(()) => numbers.push(a.task),
+            Ok(()) => {
+                numbers.push(a.task);
+                let pick = a.pick.first().map(String::as_str);
+                sent.starts
+                    .extend(crate::changes::answered(&tx, a.task, pick, trace)?);
+            }
             Err(Error::Refused(why)) => {
                 Event::point("gathr.task.answer")
                     .trace(trace)
@@ -246,7 +279,7 @@ pub fn answer_as(
             Err(e) => return Err(e),
         }
     }
-    sent.starts = heard(&tx, &numbers, None, trace)?;
+    sent.starts.extend(heard(&tx, &numbers, None, trace)?);
     for &n in &numbers {
         sent.starts.extend(cascade(&tx, n, trace)?);
     }
@@ -266,6 +299,19 @@ fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Re
     if t.state != State::Ready {
         let state = t.state.as_str();
         return Err(refused(format!("#{} is already {state}", a.task)));
+    }
+    // Gathr's own question (0054): the person's call, on one of its choices.
+    if t.giver.is_none() && by.is_some() {
+        return Err(refused(format!(
+            "#{} is Gathr's question to the person: only the person answers it",
+            a.task
+        )));
+    }
+    if t.giver.is_none() && a.pick.len() != 1 {
+        return Err(refused(format!(
+            "Answer #{} with one of its choices",
+            a.task
+        )));
     }
     let mut line = answer_line(&t, a)?;
     if let Some(agent) = by {

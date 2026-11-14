@@ -11,10 +11,10 @@ use crate::ids::now_us;
 
 mod hear;
 mod held;
-mod notes;
+pub(crate) mod notes;
 pub mod person;
 mod prs;
-mod records;
+pub(crate) mod records;
 mod report;
 pub mod stale;
 pub mod touched;
@@ -28,7 +28,7 @@ pub use notes::{Note, NoteKind, NoteSaid};
 pub use prs::{Seen, pr_looked, with_prs};
 pub use report::{Finish, Report, Said, Took, finish};
 
-pub use words::{name_of, owner_name, wait_name};
+pub use words::{name_of, owner_name, sentence, wait_name};
 
 /// The longest `what` of a question for the person: one line, read at a glance.
 pub const WHAT_MOST: usize = 200;
@@ -553,7 +553,7 @@ pub fn restart(
         )));
     }
     let carry = match t.state {
-        State::Stopped | State::Failed => t.reason.clone(),
+        State::Stopped | State::Failed | State::Blocked => t.reason.clone(),
         _ => None,
     };
     let starts = match waiting_on(&tx, task)?.is_empty() {

@@ -2,6 +2,8 @@
 //! reference, unless the review is done on the PR's head, the project's checks passed there and
 //! the default branch is in it. One merge per repository at a time; the PR's tasks settle at once.
 
+#[path = "merge/changes.rs"]
+mod changes;
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;

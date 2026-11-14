@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure, type Task } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { idle, noteLines, reported, reviewedAt } from './model';
+import { asker, idle, noteLines, reported, reviewedAt } from './model';
 import { TaskChecks } from './TaskChecks';
 
 /** Only a settled task starts again (0010); an open one the person can only cancel. */
@@ -38,7 +38,7 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
       .finally(() => setBusy(false));
   };
   const meta = [
-    name(task.giver),
+    asker(task, name),
     chatTitle,
     task.pr ? `PR #${task.pr}` : undefined,
     task.stale_us ? idle(task.stale_us) : undefined,
