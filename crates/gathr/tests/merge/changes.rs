@@ -317,8 +317,13 @@ fn send_it_back_blocks_the_work_and_that_head_never_lands() {
     // Given now: a task that moved long ago is stale, and its giver is told (F11).
     let now = gathr::ids::now_us();
     let row = rusqlite::params![room.chat, room.lead, room.ann, gave, now];
-    room.db().execute(work, row).unwrap();
-    room.review(2, 5, Some(&head));
+    // With its review, in one write: alone, the work is stuck (working, and no turn on it), and
+    // Gathr's next check, every 100 ms here, rightly wakes the lead (0052).
+    let db = room.db();
+    let both = db.unchecked_transaction().unwrap();
+    both.execute(work, row).unwrap();
+    room.review_in(&both, 2, 5, Some(&head));
+    both.commit().unwrap();
     let n = room.question(0)["number"].as_i64().unwrap();
     let answered = room.person_answers(json!({ "task": n, "pick": [SEND_BACK] }));
     assert_eq!(answered["refused"], json!([]), "{answered}");
