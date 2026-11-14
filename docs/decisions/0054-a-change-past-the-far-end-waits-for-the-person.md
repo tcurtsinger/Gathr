@@ -91,10 +91,10 @@ reviewed, on what, and how much was unasked, so the room can be measured against
   question rests the PR at that head.
 - **A setting for the line.** It comes from what the project lands.
 
-## Not built, for the owner to decide
+## Left out, on the owner's word
 
-Two parts of the approved rules are left out, because the stop doesn't need them: it asks at landing, when the
-work is built and reviewed.
+Two parts of the rules as first approved are not built, and the owner agreed on 2026-11-14 ("Leave them out"):
+the stop asks at landing, when the work is built and reviewed, and doesn't need them.
 
 1. **Measuring a PR when it appears and at each new head.** It would add one `git fetch` for each new head in
    the 2-minute look, a map of failures so one isn't recorded again and again, and an event

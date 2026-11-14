@@ -757,7 +757,7 @@ Parts: 10.7
 - **Then** the record says Gathr landed it
 - **When** main has 49 changes of 100 lines and one of 9,000
 - **Then** a PR adding 9,000 lines lands and one adding 9,001 is asked about
-- **Not built, for the owner to decide** ([0054](decisions/0054-a-change-past-the-far-end-waits-for-the-person.md)):
+- **Left out, on the owner's word** ([0054](decisions/0054-a-change-past-the-far-end-waits-for-the-person.md)):
   a question is asked at landing, not when the PR appears, and no turn on its tasks is held while it is open
 
 ## 11. No rulebook needed, and Gathr measures it
