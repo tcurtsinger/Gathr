@@ -52,9 +52,9 @@ It supplies allowed folders to the engines and file-write guard; the limits in 0
 
 The local event record stores turn, tool, lifecycle and coordination events, timings and failure references.
 Engine frames are recorded for replay and troubleshooting. Settings > Diagnostics shows turn timelines;
-`gathr diag` supports `health`, `trace`, `failures`, `query`, `turn --raw` and `bundle`.
-OTLP export, retention/pruning, daily rollups, diagnostics MCP tools, `diag stalls` and `diag usage`
-are not built yet.
+`gathr diag` supports `health`, `trace`, `failures`, `query`, `turn --raw` and `bundle`. Agents have
+the `diag` tool too, with `health`, `failures` and `trace` for their own chat (`tools/diag.rs`).
+OTLP export, retention/pruning, daily rollups, `diag stalls` and `diag usage` are not built yet.
 [0011](decisions/0011-event-record.md), [0019](decisions/0019-troubleshooting.md).
 
 ## The UI and updates

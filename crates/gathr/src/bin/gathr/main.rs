@@ -137,7 +137,7 @@ fn main() -> ExitCode {
 
 fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
     match diag {
-        Diag::Health => return Ok(diag::health(data)),
+        Diag::Health => return Ok(diag::health(data, None)),
         Diag::Bundle => return diag::bundle(data),
         Diag::Waiting { chat } => return diag::waiting(data, &chat),
         _ => {}
@@ -146,9 +146,13 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
     match diag {
         Diag::Health | Diag::Bundle | Diag::Waiting { .. } => unreachable!("answered above"),
         Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw),
-        Diag::Trace { reference } => diag::trace(&conn, &reference),
-        Diag::Failures { since } => diag::failures(&conn, ids::now_us() - parse_since(&since)?),
-        Diag::Friction { since } => diag::friction(&conn, ids::now_us() - parse_since(&since)?),
+        Diag::Trace { reference } => diag::trace(&conn, &reference, None),
+        Diag::Failures { since } => {
+            diag::failures(&conn, ids::now_us() - diag::parse_since(&since)?, None)
+        }
+        Diag::Friction { since } => {
+            diag::friction(&conn, ids::now_us() - diag::parse_since(&since)?)
+        }
         Diag::Query { sql } => diag::query(&conn, &sql),
     }
 }
@@ -171,24 +175,4 @@ pub fn run_seed(data: &DataDir) -> Result<Value, Error> {
     let started = std::time::Instant::now();
     let made = seed::seed(&mut db::open(&data.db())?, &data.path().join("task-files"))?;
     Ok(json!({ "seeded": made, "ms": started.elapsed().as_millis() as u64 }))
-}
-
-/// `30m`, `24h` or `7d`, in microseconds.
-fn parse_since(since: &str) -> Result<i64, Error> {
-    let bad = || {
-        Error::Other(format!(
-            "--since {since:?}: use minutes, hours or days, like 30m, 24h or 7d"
-        ))
-    };
-    let (number, unit_us) = if let Some(n) = since.strip_suffix('m') {
-        (n, 60_000_000)
-    } else if let Some(n) = since.strip_suffix('h') {
-        (n, 3_600_000_000)
-    } else if let Some(n) = since.strip_suffix('d') {
-        (n, 86_400_000_000)
-    } else {
-        return Err(bad());
-    };
-    let number: i64 = number.parse().map_err(|_| bad())?;
-    number.checked_mul(unit_us).ok_or_else(bad)
 }

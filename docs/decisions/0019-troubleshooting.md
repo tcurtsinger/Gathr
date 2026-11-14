@@ -2,13 +2,13 @@
 
 Status: accepted (the owner's requirement). Date: 2026-11-07.
 
-Built: partly. Proof: `crates/gathr/tests/diag.rs`, `crates/gathr/tests/window.rs`, `ui/src/chat/Thread.test.tsx`. Not built: `diag stalls` and `diag usage`; the diagnostics tools for agents; the detailed-logs file; `bundle --hours`; `diag`'s own errors as events; engines, logins and Tailscale in the health event.
+Built: partly. Proof: `crates/gathr/tests/diag.rs`, `crates/gathr/tests/window.rs`, `ui/src/chat/Thread.test.tsx`, `crates/gathr/tests/diag_tool.rs`. Not built: `diag stalls` and `diag usage`; the detailed-logs file; `bundle --hours`; `diag`'s own errors as events; engines, logins and Tailscale in the health event.
 
 Out of date below: event names are [0011](0011-event-record.md)'s (`gathr.settings.change`; `gathr.ui.chat_open`, `chat_switch` and `first_token`, not `gathr.ui.timing`); warnings and errors become events, not every span; a reference opens Diagnostics, which is a Settings category ([0023](0023-settings-and-reply-states.md)); `diag turn` takes a reference.
 
 ## Implementation status
 
-Health, trace, failures, read-only query, turn/raw frames, support bundles and the UI timeline are built. `diag stalls`, `diag usage`, diagnostics MCP tools and the remaining settings described below are not built yet.
+Health, trace, failures, read-only query, turn/raw frames, support bundles, the UI timeline and the `diag` tool for agents are built. `diag stalls`, `diag usage` and the remaining settings described below are not built yet.
 
 The installer/app and service update archive ship `gathr` beside `gathrd`, built at the same version.
 Use its full installed path ([running](../running.md)); no PATH change or separate CLI installer.
@@ -40,7 +40,7 @@ Nothing here ever holds a secret; the redaction rules of 0011 apply to every row
 
 Read-only diagnostics, the same in two places:
 - **`gathr diag`**, a command-line tool for agents building Gathr and for the person. It reads from the running service; when the service is down, from the database opened read-only; and when the database won't open either (a failed migration, a corrupt or locked file), from the plain crash log directly, already redacted when written. In that last case `health` reports why the database didn't open and the crash log's last lines, and `bundle` includes them, so a service that can't start is still diagnosed with one command;
-- **diagnostics tools in Gathr's MCP server** ([0005](0005-mcp-server.md)), for agents working in Gathr, each allowed by the person per agent in Settings.
+- **the `diag` tool in Gathr's MCP server** ([0005](0005-mcp-server.md)), for every agent working in Gathr: `health`, `failures` and `trace` only, with the caller's chat's events and events of no chat. Its answer has secrets hidden and is cut at 16,000 characters. No `query` (raw SQL reads every chat) and no `bundle` (it writes a file).
 
 | Command | Answers |
 |---|---|
@@ -74,3 +74,15 @@ A feature PR shows its own events in the Diagnostics page and in `gathr diag`, a
 - **Text log files as the main record.** Not queryable, not linked to turns or traces, and the reason the previous app's troubleshooting was slow. A plain log remains only for before the database opens and for "Detailed logs".
 - **A hosted error tracker** (Sentry and the like). A paid or third-party service, and it would send data off the machine. OTLP export (0011) stays the opt-in way out.
 - **Diagnostics only in the UI.** Agents can't read a page as fast as they can run a query, and the UI may be what's broken.
+
+## Changes
+
+- 2026-11-13: the `diag` tool for agents is built (scenario 6i). Every agent has it, with `health`, `failures`
+  (`since`, 24h unless set) and `trace` (a reference). It reads the caller's chat's events and events of no chat,
+  chosen in SQL before anything is counted or cut. `health` shows only the caller's chat's open tasks, waits, held
+  turns and busy chats; the service, accounts, database and crash log are shown whole. The whole answer is redacted,
+  then cut at 16,000 characters with a last line that says how much was cut. A trace lists its errors first, each
+  part in time order, so a cut never loses the failure. `since` must be above zero, for the command line too.
+- The chat limit narrows what the tool answers. It is not a boundary: an agent's own shell can run `gathr diag`,
+  which reads every chat.
+- Events of no chat can name other chats' ids: a failed API request's `url.path`, and `gathr.chat.delete`.

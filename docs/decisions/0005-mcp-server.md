@@ -2,13 +2,13 @@
 
 Status: accepted. Date: 2026-11-06.
 
-Built: partly. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/coordination.rs`. Not built: the diagnostics tools ([0019](0019-troubleshooting.md)).
+Built: yes. Proof: `crates/gathr/tests/tools.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/diag_tool.rs`.
 
 Out of date below: the status below leaves out tools built since: GitHub, merge, checks and settings ([0043](0043-checks-and-merge.md), [0046](0046-github-tools.md)).
 
 ## Implementation status
 
-The in-process server, per-engine tokens, chat reading and coordination tools are built. Diagnostics MCP tools are not built yet (0019); agents use `gathr diag`.
+The in-process server, per-engine tokens, chat reading, coordination and diagnostics tools are built. The `diag` tool answers `health`, `failures` and `trace` for the caller's chat (0019).
 
 ## Choice
 

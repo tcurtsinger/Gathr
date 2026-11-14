@@ -14,11 +14,12 @@ pub const QUERY_CAP: usize = 1000;
 const CRASH_LINES: usize = 20;
 
 /// The service now, the database, the last start-up health check and the crash log's last lines.
-/// Answers even when the service is down or the database won't open.
-pub fn health(data: &DataDir) -> Value {
+/// Answers even when the service is down or the database won't open. With a `chat`, the open
+/// tasks, waits, held turns and busy chats are that chat's alone.
+pub fn health(data: &DataDir, chat: Option<&str>) -> Value {
     let opened = db::open_read_only(&data.db());
     let held = match &opened {
-        Ok((conn, _)) => held(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
+        Ok((conn, _)) => held(conn, chat).unwrap_or_else(|e| json!({ "why": e.to_string() })),
         Err(_) => Value::Null,
     };
     let accounts = match &opened {
@@ -26,11 +27,14 @@ pub fn health(data: &DataDir) -> Value {
         Err(_) => Value::Null,
     };
     let coordination = match &opened {
-        Ok((conn, _)) => coordination(conn).unwrap_or_else(|e| json!({ "why": e.to_string() })),
+        Ok((conn, _)) => {
+            coordination(conn, chat).unwrap_or_else(|e| json!({ "why": e.to_string() }))
+        }
         Err(_) => Value::Null,
     };
     let service = service_now(data);
-    let chats = chats(data, &service, opened.as_ref().ok().map(|(conn, _)| conn));
+    let conn = opened.as_ref().ok().map(|(conn, _)| conn);
+    let chats = chats(data, &service, conn, chat);
     let database = match opened {
         Ok((conn, version)) => json!({
             "opened": true,
@@ -89,7 +93,7 @@ fn accounts(data: &DataDir, conn: &Connection, held: Value) -> Value {
 /// window is compared against, by chat id (a title is conversation text, and a bundle is shared).
 /// `from` says who answered: the service while it runs, as an approval waiting is only in its
 /// memory; else the database, with why the service didn't.
-fn chats(data: &DataDir, service: &Value, conn: Option<&Connection>) -> Value {
+fn chats(data: &DataDir, service: &Value, conn: Option<&Connection>, chat: Option<&str>) -> Value {
     let asked = match service["running"] == true {
         true => ServiceInfo::read(data)
             .and_then(|info| Ok(http::call(info.port, &info.token, "GET", "/api/chats")?))
@@ -112,6 +116,7 @@ fn chats(data: &DataDir, service: &Value, conn: Option<&Connection>) -> Value {
     // A turn the database still calls running isn't, once the service has stopped.
     let working = |c: &Value| c["working"] == true && service["running"] == true;
     let rows = listed.as_array().into_iter().flatten();
+    let rows = rows.filter(|c| chat.is_none_or(|id| c["id"] == id));
     let busy = rows.filter(|c| working(c) || c["needs"] == true);
     let busy: Vec<Value> = busy
         .map(|c| json!({ "chat": c["id"], "working": working(c), "needs": c["needs"] }))
@@ -160,30 +165,41 @@ pub fn waiting(data: &DataDir, chat: &str) -> Result<Value, Error> {
 }
 
 /// Open tasks and waits (0010): each task's state and why, each wait's failing looks.
-fn coordination(conn: &Connection) -> Result<Value, Error> {
-    let tasks = query(
+fn coordination(conn: &Connection, chat: Option<&str>) -> Result<Value, Error> {
+    let tasks = of_chat(
         conn,
         "SELECT number AS task, chat_id AS chat, owner, state, reason FROM tasks
-         WHERE state NOT IN ('done', 'cancelled') ORDER BY number",
+         WHERE state NOT IN ('done', 'cancelled') AND (?1 IS NULL OR chat_id = ?1) ORDER BY number",
+        chat,
     )?;
-    let waits = query(
+    let waits = of_chat(
         conn,
         "SELECT id AS wait, chat_id AS chat, agent_id AS agent, task, kind, target, failures,
                 last_error, strftime('%Y-%m-%dT%H:%M:%fZ', until_ts / 1000000.0, 'unixepoch') AS until
-         FROM waits WHERE state = 'open' AND part_of IS NULL ORDER BY created_ts",
+         FROM waits WHERE state = 'open' AND part_of IS NULL AND (?1 IS NULL OR chat_id = ?1)
+         ORDER BY created_ts",
+        chat,
     )?;
-    Ok(json!({ "tasks": tasks["rows"], "waits": waits["rows"] }))
+    Ok(json!({ "tasks": tasks, "waits": waits }))
 }
 
 /// Messages waiting to be sent: for a sign-in, or behind a turn under way.
-fn held(conn: &Connection) -> Result<Value, Error> {
-    let rows = query(
+fn held(conn: &Connection, chat: Option<&str>) -> Result<Value, Error> {
+    of_chat(
         conn,
         "SELECT id AS turn, chat_id AS chat, status, substr(trace_id, 1, 8) AS ref,
                 strftime('%Y-%m-%dT%H:%M:%fZ', created_ts / 1000000.0, 'unixepoch') AS since
-         FROM turns WHERE status IN ('queued', 'waiting_sign_in') ORDER BY created_ts",
-    )?;
-    Ok(rows["rows"].clone())
+         FROM turns WHERE status IN ('queued', 'waiting_sign_in') AND (?1 IS NULL OR chat_id = ?1)
+         ORDER BY created_ts",
+        chat,
+    )
+}
+
+/// Up to `QUERY_CAP` rows of `sql`, whose `?1` is the chat, or null for every chat.
+fn of_chat(conn: &Connection, sql: &str, chat: Option<&str>) -> Result<Value, Error> {
+    let mut rows = rows_as_json(&mut conn.prepare(sql)?, [chat])?;
+    rows.truncate(QUERY_CAP);
+    Ok(rows.into())
 }
 
 fn last_start_health(conn: &Connection) -> Result<Value, Error> {
@@ -194,8 +210,9 @@ fn last_start_health(conn: &Connection) -> Result<Value, Error> {
     Ok(rows["rows"].get(0).cloned().unwrap_or(Value::Null))
 }
 
-/// Everything in one trace, in order, with each row's offset from the first.
-pub fn trace(conn: &Connection, reference: &str) -> Result<Value, Error> {
+/// Everything in one trace, in order, with each row's offset from the first. With a `chat`, only
+/// that chat's events and events of no chat: one trace can hold several chats' events.
+pub fn trace(conn: &Connection, reference: &str, chat: Option<&str>) -> Result<Value, Error> {
     let reference = reference.trim().to_ascii_lowercase();
     if reference.len() < 8 || !reference.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(Error::Other(format!(
@@ -205,9 +222,11 @@ pub fn trace(conn: &Connection, reference: &str) -> Result<Value, Error> {
     // Trace ids are lowercase hex, so every id starting with the reference sorts in [ref, ref + "g").
     let mut stmt = conn.prepare(
         "SELECT time, ts, name, phase, status, error_type, duration_us, trace_id, span_id, parent_span_id, conversation_id, attrs
-         FROM event_log WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY ts, id LIMIT ?2",
+         FROM event_log WHERE trace_id >= ?1 AND trace_id < ?1 || 'g'
+         AND (?3 IS NULL OR conversation_id = ?3 OR conversation_id IS NULL) ORDER BY ts, id LIMIT ?2",
     )?;
-    let mut rows = rows_as_json(&mut stmt, rusqlite::params![reference, QUERY_CAP as i64])?;
+    let params = rusqlite::params![reference, QUERY_CAP as i64, chat];
+    let mut rows = rows_as_json(&mut stmt, params)?;
     if rows.is_empty() {
         return Err(Error::Other(format!("no events for reference {reference}")));
     }
@@ -221,23 +240,26 @@ pub fn trace(conn: &Connection, reference: &str) -> Result<Value, Error> {
 }
 
 /// Failures since `since_us`, grouped by cause (event name and error type), newest group first,
-/// each with its five newest references. Grouped in SQL, so no cap hides a count or a cause.
-pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
+/// each with its five newest references. Grouped in SQL, so no cap hides a count or a cause. With
+/// a `chat`, only that chat's events and events of no chat are counted.
+pub fn failures(conn: &Connection, since_us: i64, chat: Option<&str>) -> Result<Value, Error> {
     let mut stmt = conn.prepare(
         "SELECT name, coalesce(error_type, '') AS error_type, count(*) AS count, max(time) AS latest
          FROM event_log WHERE status = 'error' AND ts >= ?1
+         AND (?2 IS NULL OR conversation_id = ?2 OR conversation_id IS NULL)
          GROUP BY name, coalesce(error_type, '') ORDER BY max(ts) DESC",
     )?;
-    let mut groups = rows_as_json(&mut stmt, [since_us])?;
+    let mut groups = rows_as_json(&mut stmt, rusqlite::params![since_us, chat])?;
     let mut refs = conn.prepare(
         "SELECT ref FROM event_log
          WHERE status = 'error' AND ts >= ?1 AND name = ?2 AND coalesce(error_type, '') = ?3 AND ref IS NOT NULL
+         AND (?4 IS NULL OR conversation_id = ?4 OR conversation_id IS NULL)
          GROUP BY ref ORDER BY max(ts) DESC LIMIT 5",
     )?;
     for group in &mut groups {
         let (name, error_type) = (group["name"].as_str(), group["error_type"].as_str());
         let references: Vec<Value> = refs
-            .query_map(rusqlite::params![since_us, name, error_type], |r| {
+            .query_map(rusqlite::params![since_us, name, error_type, chat], |r| {
                 r.get::<_, String>(0)
             })?
             .map(|r| r.map(Value::from))
@@ -245,6 +267,29 @@ pub fn failures(conn: &Connection, since_us: i64) -> Result<Value, Error> {
         group["references"] = references.into();
     }
     Ok(json!({ "since": crate::ids::utc(since_us), "groups": groups }))
+}
+
+/// `30m`, `24h` or `7d`, in microseconds. Above zero: now less it never reaches past now.
+pub fn parse_since(since: &str) -> Result<i64, Error> {
+    let bad = || {
+        Error::Other(format!(
+            "since {since:?}: use minutes, hours or days above zero, like 30m, 24h or 7d"
+        ))
+    };
+    let (number, unit_us) = if let Some(n) = since.strip_suffix('m') {
+        (n, 60_000_000)
+    } else if let Some(n) = since.strip_suffix('h') {
+        (n, 3_600_000_000)
+    } else if let Some(n) = since.strip_suffix('d') {
+        (n, 86_400_000_000)
+    } else {
+        return Err(bad());
+    };
+    let number: i64 = number.parse().map_err(|_| bad())?;
+    match number.checked_mul(unit_us) {
+        Some(us) if us > 0 => Ok(us),
+        _ => Err(bad()),
+    }
 }
 
 /// The friction agents reported since `since_us` (0048), newest first.
@@ -256,7 +301,7 @@ pub fn friction(conn: &Connection, since_us: i64) -> Result<Value, Error> {
 /// The turns behind a reference, with how each ended and its events; with `raw`, every engine
 /// frame in and out of each turn, as recorded (redacted).
 pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Error> {
-    let mut answer = trace(conn, reference)?;
+    let mut answer = trace(conn, reference, None)?;
     let reference = answer["reference"].as_str().unwrap_or_default().to_string();
     let mut stmt = conn.prepare(
         "SELECT id, status, why FROM turns WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY created_ts",
@@ -320,8 +365,8 @@ pub fn bundle(data: &DataDir) -> Result<Value, Error> {
     let bundle = json!({
         "made": crate::ids::utc(crate::ids::now_us()),
         "version": crate::VERSION,
-        "health": health(data),
-        "failures": failures(&conn, day_ago)?,
+        "health": health(data, None),
+        "failures": failures(&conn, day_ago, None)?,
         "events": all(events)?,
         "engine_frames": all(&frames)?,
     });

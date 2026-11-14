@@ -270,7 +270,7 @@ async fn trace(
     Path(reference): Path<String>,
 ) -> Answer {
     db(&s, &t, "Diagnostics failed", move |conn| {
-        gathr::diag::trace(conn, &reference)
+        gathr::diag::trace(conn, &reference, None)
     })
     .await
 }

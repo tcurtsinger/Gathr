@@ -81,6 +81,7 @@ impl Tools {
             + Tools::github_router()
             + Tools::settings_router()
             + Tools::waiting_router()
+            + Tools::diag_router()
     }
 }
 
