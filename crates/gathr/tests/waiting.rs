@@ -346,6 +346,7 @@ fn a_pr_to_land_says_where_gathrs_last_look_left_it() {
     begin(&mut conn, review);
     let done = Said {
         commit: Some("0123456"),
+        nothing_unasked: true,
         ..Said::default()
     };
     tasks::finish(&mut conn, "bo", review, Finish::Done, &done, T).unwrap();

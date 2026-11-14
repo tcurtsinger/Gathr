@@ -11,6 +11,7 @@ use crate::ids::now_us;
 
 mod hear;
 mod held;
+mod notes;
 pub mod person;
 mod prs;
 mod records;
@@ -23,6 +24,7 @@ use records::{OptionalTask, read, set, state_of};
 
 pub use hear::done_words;
 pub use held::{Hold, background_changed, holds};
+pub use notes::{Note, NoteKind, NoteSaid};
 pub use prs::{Seen, pr_looked, with_prs};
 pub use report::{Finish, Report, Said, Took, finish};
 
@@ -171,6 +173,9 @@ pub struct Task {
     /// The pair a look last judged its review for, "<commit reviewed>:<head>": `outdated` is that verdict.
     #[serde(skip)]
     pub judged: Option<String>,
+    /// A review's notes, from its newest report (0053).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -273,8 +278,16 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
         )));
     }
     let tx = conn.transaction()?;
-    crate::archive::refuse_archived(&tx, g.chat)?;
-    in_team(&tx, g.chat, g.owner)?;
+    let given = give_in(&tx, g, trace)?;
+    tx.commit()?;
+    Ok(given)
+}
+
+/// Gives a task in the caller's transaction, once its `what` is checked.
+fn give_in(tx: &Transaction, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
+    let what = g.what.trim();
+    crate::archive::refuse_archived(tx, g.chat)?;
+    in_team(tx, g.chat, g.owner)?;
     for &n in g.after.iter().chain(&g.parent) {
         let chat: Option<String> = tx
             .query_row("SELECT chat_id FROM tasks WHERE number = ?1", [n], |r| {
@@ -312,10 +325,10 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
         )?;
     }
     let mut starts = Vec::new();
-    if waiting_on(&tx, number)?.is_empty() {
-        starts.push(ready(&tx, number, None)?);
+    if waiting_on(tx, number)?.is_empty() {
+        starts.push(ready(tx, number, None)?);
     }
-    let task = read(&tx, number)?;
+    let task = read(tx, number)?;
     let event = Event::point("gathr.task.give").trace(trace).chat(g.chat);
     event
         .task(number)
@@ -324,8 +337,7 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
         .attr("gathr.task.owner", g.owner)
         .attr("gathr.task.state", task.state.as_str())
         .attr("gathr.task.given_in", g.given_in)
-        .insert(&tx)?;
-    tx.commit()?;
+        .insert(tx)?;
     Ok((task, starts))
 }
 
@@ -724,7 +736,7 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
         Some(id) => words::name_of(tx, id)?,
         None => "the person".to_string(),
     };
-    let text = words::brief(&t, &giver, carry);
+    let text = words::brief(tx, &t, &giver, carry)?;
     let on = (Some(task), t.given_in.as_deref());
     Start::queue(tx, (&t.chat, owner), on, text)
 }

@@ -23,8 +23,22 @@ pub fn owner_name(conn: &Connection, owner: Option<&str>) -> Result<String, Erro
     }
 }
 
+/// An agent's or the person's words as a sentence: a full stop is added when they end with no mark.
+pub fn sentence(text: &str) -> String {
+    let text = text.trim_end();
+    match text.ends_with(['.', '!', '?']) {
+        true => text.to_string(),
+        false => format!("{text}."),
+    }
+}
+
 /// The ask of a task's turn: what, why, a carry-on when it ran before, and how to finish it.
-pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
+pub fn brief(
+    conn: &Connection,
+    t: &Task,
+    giver: &str,
+    carry: Option<&str>,
+) -> Result<String, Error> {
     let mut lines = vec![format!("Task #{} from {giver}: {}", t.number, t.what)];
     if let Some(why) = &t.why {
         lines.push(format!("Why: {why}"));
@@ -41,12 +55,13 @@ pub fn brief(t: &Task, giver: &str, carry: Option<&str>) -> String {
         lines.push(
             "For a review, include the commit you reviewed when you finish the task.".to_string(),
         );
+        lines.extend(super::notes::brief_lines(conn, t)?);
     }
     lines.push(
         "Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it."
             .to_string(),
     );
-    lines.join("\n")
+    Ok(lines.join("\n"))
 }
 
 /// The one ask for a report, after a turn on the task ended with none (0047).

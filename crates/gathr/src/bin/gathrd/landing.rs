@@ -378,7 +378,7 @@ async fn stand(
     if !needs.is_empty() && !review.signed_off {
         return Ok(Stand::Stops(format!(
             "it needs your sign-off, as {}. Check they still test the code, then report this review done \
-             again with signed_off: true",
+             again with signed_off: true and nothing_unasked: true",
             needs.join("; and ")
         )));
     }

@@ -65,6 +65,13 @@ export function reviewedAt(task: Task): string | null {
     : `${at}. Out of date`;
 }
 
+const kinds = { wrong: 'Wrong', unasked: 'Unasked', suggestion: 'Suggestion' };
+
+/** A review's notes, one line each: "Unasked · src/cache.rs: what it is" (0053). */
+export function noteLines(task: Task): string[] {
+  return (task.notes ?? []).map((n) => `${kinds[n.kind]} · ${n.file ? `${n.file}: ` : ''}${n.says}`);
+}
+
 /** How long nothing has moved a stale task (F11): "Idle 4 days". */
 export function idle(sinceUs: number, now = Date.now()): string {
   const days = Math.max(1, Math.floor((now - sinceUs / 1000) / 86_400_000));

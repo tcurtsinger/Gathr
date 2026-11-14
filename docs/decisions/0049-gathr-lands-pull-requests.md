@@ -85,3 +85,4 @@ the merge and the waits all read a GitHub PR today.
   required.
 - [0043](0043-checks-and-merge.md): sign-off may be said with the review as well as with `merge`.
 - AGENTS.md: "The reviewer merges" is rewritten: the reviewer's done review lands the PR.
+- [0053](0053-a-review-asks-both-questions.md): a clean review also has no `wrong` or `unasked` notes, and says `nothing_unasked: true`.

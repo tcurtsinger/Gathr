@@ -783,6 +783,7 @@ fn reviewed_pr(conn: &mut Connection) -> landings::Review {
     let ran = begin(conn, review);
     let done = Said {
         commit: Some("0123456"),
+        nothing_unasked: true,
         ..Said::default()
     };
     tasks::finish(conn, "bo", review, Finish::Done, &done, T).unwrap();

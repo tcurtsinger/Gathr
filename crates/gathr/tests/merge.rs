@@ -5,6 +5,8 @@
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;
+#[path = "merge/review_questions.rs"]
+mod review_questions;
 #[path = "merge/review_updates.rs"]
 mod review_updates;
 
@@ -267,7 +269,8 @@ impl Room {
 
     /// The reviewer's review of task `task` done on `commit`.
     fn reviewed(&self, vale: &str, task: i64, commit: &str) {
-        let done = json!({ "how": "done", "task": task, "commit": commit });
+        let done =
+            json!({ "how": "done", "task": task, "commit": commit, "nothing_unasked": true });
         let finished = self.call(vale, "finish_task", done);
         assert_eq!(finished["isError"], false, "{finished}");
     }

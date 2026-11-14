@@ -167,7 +167,8 @@ fn a_clean_review_lands_the_pr_and_its_reviewer_is_told_in_the_answer() {
     let mut room = room(&data.0, &repos.0, false);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[5]);
-    let done = json!({ "how": "done", "task": 1, "commit": room.heads[0] });
+    let done =
+        json!({ "how": "done", "task": 1, "commit": room.heads[0], "nothing_unasked": true });
     let finished = room.call(&vale, "finish_task", done);
     let said = text(&finished);
     assert_eq!(finished["isError"], false, "{said}");
@@ -402,7 +403,8 @@ fn sign_off_given_with_the_review_lands_a_pr_that_changes_tests() {
     let mut room = room(&data.0, &repos.0, true);
     let lead = room.lead_turn();
     let vale = room.reviews(&lead, &[6]);
-    let done = json!({ "how": "done", "task": 1, "commit": room.heads[1] });
+    let done =
+        json!({ "how": "done", "task": 1, "commit": room.heads[1], "nothing_unasked": true });
     let unsigned = room.call(&vale, "finish_task", done.clone());
     let said = text(&unsigned);
     assert_eq!(unsigned["isError"], false, "{said}");

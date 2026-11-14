@@ -4,7 +4,7 @@
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::records::OptionalTask;
-use super::{Finish, Start, State, Task, cascade, read, ready, set, words};
+use super::{Finish, Kind, Start, State, Task, cascade, notes, read, ready, set, words};
 use crate::Error;
 
 /// Why a task is blocked once its owner was asked for a report and gave none.
@@ -161,12 +161,27 @@ pub fn settle(tx: &Transaction, t: &Task, trace: &str) -> Result<Vec<Start>, Err
         Some(Finish::Left) => {
             asked(0)?;
             let left = note.as_deref().unwrap_or("it isn't said what");
-            let why = format!("left: {left}");
+            let (fixed, starts) = match t.kind {
+                Kind::Review => notes::fix(tx, t, trace)?,
+                _ => (None, Vec::new()),
+            };
+            let why = match fixed {
+                Some((fix, builder)) => {
+                    let left = words::sentence(left);
+                    format!("left: {left} Gathr gave #{fix} to {builder} to fix it")
+                }
+                None => format!("left: {left}"),
+            };
             set(tx, task, State::Blocked, Some(&why), trace)?;
+            return Ok(starts);
         }
         Some(_) => {
             asked(0)?;
-            set(tx, task, State::Done, note.as_deref(), trace)?;
+            let why = match t.kind {
+                Kind::Review => notes::done_reason(tx, task, note.as_deref())?,
+                _ => note,
+            };
+            set(tx, task, State::Done, why.as_deref(), trace)?;
         }
         None if asks == 0 => {
             asked(1)?;

@@ -62,3 +62,4 @@ fails in CI when the two differ.
 | 0050 | [One answer to what a chat waits on](0050-what-a-chat-waits-on.md) | accepted | yes |
 | 0051 | [The giver hears when all is in, or at once on trouble](0051-the-giver-hears-when-all-is-in.md) | accepted | yes |
 | 0052 | [A quiet chat is noticed, and its dead time has a number](0052-a-quiet-chat-is-noticed.md) | accepted | yes |
+| 0053 | [A review asks both questions, and a left review gets its fix](0053-a-review-asks-both-questions.md) | accepted | yes |

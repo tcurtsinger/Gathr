@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use axum::http::request::Parts;
 use gathr::Error;
-use gathr::tasks::{self, Finish, Give, Kind, Said, Start, State, Took};
+use gathr::tasks::{self, Finish, Give, Kind, NoteKind, NoteSaid, Said, Start, State, Took};
 use gathr::waits::{self, Leave, Part};
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
@@ -56,6 +56,22 @@ pub struct FinishTask {
     /// settings, or brings the project its first checks): yes once you checked they still test
     /// the code.
     signed_off: Option<bool>,
+    /// For a review: what you found, one note each. `wrong`: what fails against the ask, said in
+    /// `says`. `unasked`: what in the change the ask doesn't need. `suggestion`: an idea for the lead,
+    /// never work. A review with wrong or unasked notes is reported left.
+    notes: Option<Vec<ReviewNote>>,
+    /// For a review that is done: true when nothing in the change goes past what was asked.
+    nothing_unasked: Option<bool>,
+}
+
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+pub struct ReviewNote {
+    /// `wrong`, `unasked` or `suggestion`
+    kind: String,
+    /// The file it is about, if one
+    file: Option<String>,
+    /// What it is: for `wrong`, what fails
+    says: String,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -171,7 +187,8 @@ impl Tools {
                        left) or blocked (say on what). Any task of yours, from any turn. While a turn runs on the task the \
                        report applies when that turn ends; otherwise at once. A task with open waits or PRs stays held until \
                        they end. A review reported done is the word to land its PR: Gathr merges it once its checks pass, and \
-                       the answer says where it stands. Don't wait on its CI or call merge."
+                       the answer says where it stands. Don't wait on its CI or call merge. A review's done needs \
+                       `nothing_unasked: true`. Wrong or unasked notes go with left: Gathr gives the PR's builder a fix."
     )]
     async fn finish_task(
         &self,
@@ -199,6 +216,20 @@ impl Tools {
                         "there's no task #{task} in this chat"
                     )));
                 }
+                let notes = ask.notes.as_deref().unwrap_or_default();
+                let notes = notes
+                    .iter()
+                    .map(|n| {
+                        let kind = NoteKind::named(&n.kind).ok_or_else(|| {
+                            Error::Refused(format!(
+                                "{} isn't a note's kind: wrong, unasked or suggestion",
+                                n.kind
+                            ))
+                        })?;
+                        let (file, says) = (n.file.as_deref(), n.says.as_str());
+                        Ok(NoteSaid { kind, file, says })
+                    })
+                    .collect::<Result<Vec<_>, Error>>()?;
                 let said = Said {
                     note: ask.note.as_deref(),
                     on_task: ask.on_task,
@@ -206,6 +237,8 @@ impl Tools {
                     commit: ask.commit.as_deref(),
                     file: ask.file.as_deref(),
                     signed_off: ask.signed_off == Some(true),
+                    notes: &notes,
+                    nothing_unasked: ask.nothing_unasked == Some(true),
                 };
                 let (t, took, starts) = tasks::finish(c, &agent, task, how, &said, &trace)?;
                 // Not a cancelled review's: nothing changed, and an older one may still stand.

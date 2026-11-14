@@ -69,7 +69,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   DROP TABLE friction;
                   ALTER TABLE waits DROP COLUMN seen;
                   ALTER TABLE tasks DROP COLUMN signed_off; DROP TABLE landings;
-                  DROP TABLE quiet; DROP INDEX messages_person;
+                  DROP TABLE quiet; DROP INDEX messages_person; DROP TABLE review_notes;
                   ALTER TABLE agent_context DROP COLUMN told;
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;
@@ -104,6 +104,7 @@ fn a_done_review_is_recorded_again_at_a_newer_commit() {
 
     let newer = Said {
         commit: Some("def5678"),
+        nothing_unasked: true,
         ..Said::default()
     };
     let (again, took, starts) =
@@ -169,6 +170,7 @@ fn a_looks_verdict_counts_only_for_the_commit_reviewed_now() {
     // Recorded again at a commit that isn't the head: out of date until the look judges it.
     let older = Said {
         commit: Some("0000aaa"),
+        nothing_unasked: true,
         ..Said::default()
     };
     let (t, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &older, T).unwrap();

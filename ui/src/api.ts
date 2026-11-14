@@ -150,6 +150,15 @@ export interface Task {
   asked?: boolean;
   /** What a held task still has open, each in a few words. */
   waiting_on?: string[];
+  /** A review's notes from its newest report (0053). */
+  notes?: ReviewNote[];
+}
+
+/** What a review found: `wrong` fails against the ask, `unasked` the ask doesn't need, `suggestion` is an idea. */
+export interface ReviewNote {
+  kind: 'wrong' | 'unasked' | 'suggestion';
+  file: string | null;
+  says: string;
 }
 
 /** What an owner said of its task: for work, `see` is a commit or file to look at. */

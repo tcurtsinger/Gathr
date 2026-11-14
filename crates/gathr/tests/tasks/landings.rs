@@ -16,6 +16,7 @@ fn done_at<'a>(commit: &'a str, signed_off: bool) -> Said<'a> {
     Said {
         commit: Some(commit),
         signed_off,
+        nothing_unasked: true,
         ..Said::default()
     }
 }

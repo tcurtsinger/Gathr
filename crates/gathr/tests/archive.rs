@@ -357,3 +357,29 @@ fn a_start_under_way_when_its_chat_is_archived_never_waits_for_a_sign_in() {
     assert_eq!(turns.len(), 1, "{history}");
     assert_eq!(turns[0]["status"], "stopped", "{history}");
 }
+
+/// 0053: a review's notes point at its task and at the fix Gathr gave for them, so deleting the
+/// chat removes them first.
+#[test]
+fn deleting_an_archived_chat_removes_its_review_notes() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+             ('ann', 'Ann', 'ann', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 1);
+         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, pr, created_ts, updated_ts)
+             VALUES (1, 'c', 'ann', 'bo', 'review', 'Review #7', 'blocked', 7, 1, 1),
+                    (2, 'c', 'bo', 'ann', 'work', 'Fix the review of #7', 'ready', 7, 1, 1);
+         INSERT INTO review_notes (task, reviewed, kind, file, says, fix, created_ts)
+             VALUES (1, 'abc1234', 'unasked', 'src/cache.rs', 'A cache nobody asked for', 2, 1);",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let left: i64 = conn
+        .query_row("SELECT count(*) FROM review_notes", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(left, 0);
+}

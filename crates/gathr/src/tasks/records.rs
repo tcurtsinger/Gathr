@@ -133,6 +133,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 round: None,
                 judged: r.get(30)?,
                 signed_off: r.get(31)?,
+                notes: Vec::new(),
             })
         },
     )?;
@@ -143,6 +144,9 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
         .collect::<Result<_, _>>()?;
     if t.state == State::Held {
         t.waiting_on = super::held::open_on(conn, task)?;
+    }
+    if t.kind == Kind::Review {
+        t.notes = super::notes::of(conn, task)?;
     }
     Ok(t)
 }

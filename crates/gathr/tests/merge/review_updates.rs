@@ -235,7 +235,7 @@ fn the_owner_can_record_done_again_on_its_existing_held_review() {
     let done = room.call(
         &vale,
         "finish_task",
-        json!({"task":1,"how":"done","commit":room.heads[0]}),
+        json!({"task":1,"how":"done","commit":room.heads[0],"nothing_unasked":true}),
     );
     assert_eq!(
         done["isError"],
@@ -254,7 +254,7 @@ fn the_owner_can_record_done_again_on_its_existing_held_review() {
         "the exception only records a done review"
     );
     for extra in [json!({"pr":6}), json!({"on_task":99})] {
-        let mut args = json!({"task":1,"how":"done","commit":room.heads[0]});
+        let mut args = json!({"task":1,"how":"done","commit":room.heads[0],"nothing_unasked":true});
         args.as_object_mut()
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
@@ -267,7 +267,7 @@ fn the_owner_can_record_done_again_on_its_existing_held_review() {
     let denied = room.call(
         &lead,
         "finish_task",
-        json!({"task":1,"how":"done","commit":room.heads[0]}),
+        json!({"task":1,"how":"done","commit":room.heads[0],"nothing_unasked":true}),
     );
     assert_eq!(denied["isError"], true, "{}", text(&denied));
     assert!(text(&denied).contains("isn't yours"), "{}", text(&denied));
