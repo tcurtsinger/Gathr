@@ -38,6 +38,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         asked: false,
         waiting_on: Vec::new(),
         in_passing: false,
+        round: None,
         judged: None,
     }
 }

@@ -2,6 +2,8 @@ import type { Task } from '../api';
 import type { ChatState } from './state';
 import { open, team } from './team';
 
+const going = ['queued', 'waiting_sign_in', 'running'];
+
 /** A step's state: a task's own, with held counted as at work. Blocked, failed and stopped never count done. */
 export type StepState = 'done' | 'active' | 'pending' | 'blocked' | 'failed' | 'stopped';
 
@@ -14,9 +16,9 @@ export interface Step {
   state: StepState;
 }
 
-/** The Supervisor's current round (DESIGN.md "Summary"): the tasks given from its newest hand-off. */
+/** The Supervisor's current round (DESIGN.md "Summary"): the tasks given since the person's last word. */
 export interface Round {
-  /** The main-line turn whose hand-off it is. */
+  /** The turn that began it. */
   root: string;
   steps: Step[];
   done: number;
@@ -32,9 +34,9 @@ export function stepState(t: Task): StepState {
 }
 
 /**
- * The round's steps are tasks only, from the service's links (each task's `given_in`, followed up
- * through tasks given inside the hand-off to its main-line turn), never prose. The current round is the
- * newest such turn of the Supervisor's with tasks. Questions for the person and cancelled tasks are left out.
+ * The round's steps are tasks only, never prose. The service says which round each task is in (0051):
+ * the turn the person's message or answer began, and every turn that answers it. The current round is
+ * the newest of the Supervisor's with tasks. Questions for the person and cancelled tasks are left out.
  * None once that round is finished and the person has written since.
  */
 export function currentRound(state: ChatState): Round | undefined {
@@ -44,7 +46,7 @@ export function currentRound(state: ChatState): Round | undefined {
   for (const t of state.tasks) {
     if (!t.owner || !t.given_in || t.kind === 'person' || t.kind === 'person_request') continue;
     if (t.state === 'cancelled') continue;
-    const root = crew.rootOf(t.given_in) ?? t.given_in;
+    const root = t.round ?? t.given_in;
     const by = state.turns[root]?.agent;
     if (lead && by && by !== lead) continue;
     rounds.set(root, [...(rounds.get(root) ?? []), t]);
@@ -54,13 +56,15 @@ export function currentRound(state: ChatState): Round | undefined {
   const newest = [...rounds].sort(([a, x], [b, y]) => place(a) - place(b) || latest(x) - latest(y)).at(-1);
   if (!newest) return undefined;
   const [root, tasks] = newest;
-  // Finished (every task settled and the Supervisor's hear-back on them ended), it stays until the person's
-  // next message; after that it is no longer the plan (ux-issues 19).
-  const hearBacks = Object.values(state.turns).filter((u) => u.answers === root && u.agent === lead);
+  // Finished (every task settled and the Supervisor's hear-backs on them ended), it stays until the person's
+  // next message; after that it is no longer the plan (ux-issues 19). A hear-back answers a turn of the
+  // Supervisor's own that gave some of the round, on no task.
+  const gave = new Set(tasks.filter((t) => t.giver === lead).map((t) => t.given_in));
+  const hearBacks = Object.values(state.turns).filter(
+    (u) => u.agent === lead && u.task == null && !!u.answers && gave.has(u.answers),
+  );
   const finished =
-    tasks.every((t) => !open(t)) &&
-    hearBacks.length > 0 &&
-    hearBacks.every((u) => !['queued', 'waiting_sign_in', 'running'].includes(u.status));
+    tasks.every((t) => !open(t)) && hearBacks.length > 0 && hearBacks.every((u) => !going.includes(u.status));
   const heard = state.messages.findLastIndex((m) => hearBacks.some((u) => u.id === m.turn));
   if (finished && heard >= 0 && state.messages.slice(heard + 1).some((m) => m.role === 'user'))
     return undefined;

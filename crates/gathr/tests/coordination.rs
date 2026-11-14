@@ -648,10 +648,12 @@ fn with_reviewer(team: &Team) {
     assert_eq!(changed.status, 200, "{}", changed.body);
 }
 
-// Found live (#85, #86): Ann's work was reviewed and held on its merge, and Lead, who gave it,
-// never heard, so nobody saw it was ready to merge.
+/// 5e (0051): Ann's work is reviewed clean. Nobody is woken: Ann reported it done and has nothing
+/// to do, and Lead hears when it has landed, which Gathr sees to (0049). The review's end is a line
+/// in the chat, said by Gathr in no turn and sent to the window as it is said. (Found live, #85 and
+/// #86: such work sat unmerged while its giver heard nothing. Then its giver was woken to merge it.)
 #[test]
-fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
+fn a_clean_review_wakes_nobody_and_its_end_is_a_line_in_the_chat() {
     let data = TempDir::new();
     let team = team(&data.0, &one_at_a_time(&data.0));
     with_reviewer(&team);
@@ -670,21 +672,17 @@ fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
     call_tool(port, &ann, "finish_task", json!({ "how": "done" }));
     running_on(&team, 2, 1);
     let rev = token(&data.0, 2);
+    let mut live = team.service.live();
     let done = json!({ "how": "done", "commit": "abc1234" });
     call_tool(port, &rev, "finish_task", done);
-    // Ann's turn on the review says nothing more: with only the merge open her task stays held on it.
     let go = data.0.join("go");
-    let history = until(20, "Lead hears back", || {
+    let history = until(20, "every turn to end", || {
         let history = team
             .service
             .call("GET", &format!("/api/chats/{}", team.chat))
             .json();
         let turns = history["turns"].as_array().cloned().unwrap_or_default();
-        let lead = team.lead.as_str();
-        if turns
-            .iter()
-            .any(|t| t["agent"] == lead && !t["answers"].is_null())
-        {
+        if turns.iter().all(|t| t["status"] == "done") {
             return Some(history);
         }
         if !go.exists() {
@@ -693,39 +691,60 @@ fn work_held_on_its_merge_after_its_review_wakes_its_giver() {
         None
     });
     let listed = tasks(&team);
-    let held = &listed["tasks"][1];
+    let (reviewed, held) = (&listed["tasks"][0], &listed["tasks"][1]);
+    assert_eq!(reviewed["state"], "done", "{listed}");
     assert_eq!(held["state"], "held", "{listed}");
     assert_eq!(held["reason"], "done, waiting on #85 to merge", "{listed}");
-    let back = history["messages"]
+    // Three turns, one each: Lead's, Ann's on the work, Rev's on the review. No hear-back.
+    let turns = history["turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 3, "{history}");
+    // The service says the round: both tasks are in the one Lead's turn began.
+    let first = turns
+        .iter()
+        .find(|t| t["agent"] == team.lead.as_str())
+        .unwrap();
+    assert_eq!(reviewed["round"], first["id"], "{listed}");
+    assert_eq!(held["round"], first["id"], "{listed}");
+
+    let said: Vec<&Value> = history["messages"]
         .as_array()
         .unwrap()
         .iter()
-        .rfind(|m| m["role"] == "gathr")
-        .and_then(|m| m["body"].as_str())
-        .unwrap();
-    let line = "#1 Ann, Fix the summary: held: done, waiting on #85 to merge";
+        .filter(|m| m["role"] == "gathr" && m["turn"].is_null())
+        .collect();
+    assert_eq!(said.len(), 1, "one task ended done: {history}");
+    let line = said[0]["body"].as_str().unwrap();
     assert!(
-        back.starts_with("Where the task you gave stands:"),
-        "{back}"
+        line.starts_with("A task is done:\n- #2 Rev, Review #85: done"),
+        "{line}"
     );
-    assert!(back.contains(line), "{back}");
-    let sql = format!(
-        "SELECT ref FROM event_log WHERE name = 'gathr.task.hear_back'
-         AND json_extract(attrs, '$.\"gen_ai.agent.id\"') = '{}'",
-        team.lead
-    );
-    let (ok, rows) = gathr(&data.0, &["diag", "query", &sql]);
+    // The window had it as it was said.
+    let sent = until(20, "the line on the live socket", || {
+        let event = common::next_live(&mut live);
+        (event["type"] == "message" && event["message"]["id"] == said[0]["id"]).then_some(event)
+    });
+    assert_eq!(sent["chat"], team.chat.as_str(), "{sent}");
+
+    // Why nobody was woken is on record, and found from its reference (0019).
+    let sql = "SELECT ref, attrs FROM event_log WHERE name = 'gathr.task.hear_back'";
+    let (ok, rows) = gathr(&data.0, &["diag", "query", sql]);
     assert!(ok, "{rows}");
-    assert_eq!(rows["rows"].as_array().unwrap().len(), 1, "{rows}");
-    let reference = rows["rows"][0]["ref"].as_str().unwrap();
+    let rows = rows["rows"].as_array().unwrap();
+    assert_eq!(
+        rows.len(),
+        1,
+        "Ann's, on the review; none for Lead: {rows:?}"
+    );
+    assert_eq!(rows[0]["attrs"]["gathr.hear_back.turn"], false, "{rows:?}");
+    let reference = rows[0]["ref"].as_str().unwrap();
     let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
     assert!(ok, "{trace}");
-    let trace = trace.to_string();
-    // On the trace of whichever turn settled the round last: Ann's, Rev's or Lead's own.
-    assert!(trace.contains("gathr.task.hear_back"), "{trace}");
-    // The PR's proof: `cargo test --test coordination work_held -- --nocapture`.
+    assert!(
+        trace.to_string().contains("gathr.task.hear_back"),
+        "{trace}"
+    );
+    // The PR's proof: `cargo test --test coordination a_clean_review -- --nocapture`.
     println!("diag trace {reference}: {trace}");
-    std::fs::write(&go, "").unwrap();
 }
 
 /// 0043 C12 (owner, task 1450): a wait for a PR to be up to date with its base is its own kind,

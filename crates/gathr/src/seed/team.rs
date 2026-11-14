@@ -56,6 +56,12 @@ impl Seeder<'_> {
             }
             for g in &given {
                 self.work(&chat, &team, g, &lead.id, &mut place)?;
+                // A task that ends done is a line in the chat, as Gathr says it (0051).
+                let task = crate::tasks::get(self.conn, g.number)?;
+                let line = task.map(|t| crate::tasks::done_words(self.conn, &t));
+                if let Some(line) = line.transpose()?.flatten() {
+                    self.said(&chat, &line)?;
+                }
             }
             self.hear_back(&chat, &team, &given, &lead.id, &mut place)?;
             if round + 1 == ROUNDS {

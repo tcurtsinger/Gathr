@@ -1,7 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
 import { fold, type Given, type Work } from './fold';
-import { hearBack, outcome } from './hearback';
+import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
 import type { Approval, ChatState } from './state';
 import { type Team, team } from './team';
@@ -112,6 +112,12 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
   const groups = place(grouped(state), state);
   const gave = givenBy(state, crew);
+  // The tasks whose end Gathr said in a line of its own (0051), each with where that line is.
+  const said = new Map<number, number>();
+  state.messages.forEach((m, at) => {
+    const task = m.role === 'gathr' && !m.turn ? ended(m.body as string, state.tasks) : undefined;
+    if (task !== undefined && !said.has(task)) said.set(task, at);
+  });
   const items: ThreadMessageLike[] = [];
   /** Each group's block; one not drawn has none. */
   const shown = new Map<Group, { id: string; msgs: Message[] }>();
@@ -133,7 +139,7 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
       continue;
     }
     if (g.kind === 'gathr') {
-      const lines = heard(g, state, crew);
+      const lines = heard(g, state, crew, said);
       if (!lines.length) continue;
       endTalk();
       add(eventsOf(cache, g.key, lines), [g]);
@@ -383,9 +389,10 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
 /**
  * What Gathr told an agent, as lines: the person's answers it heard, the tasks a hear-back reports as
  * that hear-back said them, else its own words. None for the brief of the turn's own task: the member's
- * block is headed by the task.
+ * block is headed by the task. A task whose end a line above already said (`said`: where) isn't said
+ * again by the hear-back that follows.
  */
-function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
+function heard(group: Group, state: ChatState, crew: Team, said: Map<number, number>): EventLine[] {
   const m = group.msgs[0];
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
@@ -401,7 +408,9 @@ function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
       }),
     );
   if (answers.length) return answers;
-  const back = hearBack(text, state.tasks)?.map(
+  const shown = (task: number, how: string) => how === 'done' && (said.get(task) ?? group.at) < group.at;
+  const reported = hearBack(text, state.tasks)?.filter((r) => !shown(r.task.number, r.state));
+  const back = reported?.map(
     ({ task, state: how, reason }): EventLine => ({
       kind: 'task',
       who: `${crew.name(task.owner) ?? 'An agent'} ${outcome(how)}:`,

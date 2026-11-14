@@ -3,6 +3,7 @@
 //! change, it's noted, and a change rolled back notes nothing.
 
 use rusqlite::Connection;
+use serde_json::Value;
 
 use crate::Error;
 
@@ -40,7 +41,12 @@ pub fn watch(conn: &Connection) -> Result<(), Error> {
              BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
          CREATE TEMP TRIGGER landing_looked AFTER UPDATE OF saw, moving ON landings
              WHEN NEW.saw IS NOT OLD.saw OR NEW.moving IS NOT OLD.moving
-             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;",
+             BEGIN INSERT OR IGNORE INTO touched_waiting VALUES (NEW.chat_id); END;
+         -- What Gathr said in a chat in no turn (0051): no agent's turn is there to send it.
+         CREATE TEMP TABLE said (id TEXT PRIMARY KEY, chat_id TEXT NOT NULL);
+         CREATE TEMP TRIGGER gathr_said AFTER INSERT ON messages
+             WHEN NEW.turn_id IS NULL AND NEW.role = 'gathr'
+             BEGIN INSERT OR IGNORE INTO said VALUES (NEW.id, NEW.chat_id); END;",
     )?;
     Ok(())
 }
@@ -68,6 +74,25 @@ pub fn take_waiting(conn: &Connection) -> Result<Vec<String>, Error> {
         conn.execute("DELETE FROM temp.touched_waiting", [])?;
     }
     Ok(chats)
+}
+
+/// What Gathr said in no turn since the last call, committed, oldest first: each chat and the
+/// message as the API shows it; noted no more.
+pub fn take_said(conn: &Connection) -> Result<Vec<(String, Value)>, Error> {
+    let noted: Vec<(String, String)> = {
+        let mut stmt = conn.prepare_cached("SELECT id, chat_id FROM temp.said ORDER BY id")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    if noted.is_empty() {
+        return Ok(Vec::new());
+    }
+    conn.execute("DELETE FROM temp.said", [])?;
+    let mut said = Vec::new();
+    for (id, chat) in noted {
+        said.push((chat, crate::store::message(conn, &id)?));
+    }
+    Ok(said)
 }
 
 #[cfg(test)]

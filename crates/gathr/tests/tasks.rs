@@ -766,69 +766,29 @@ fn to(starts: &[Start], agent: &str) -> Vec<String> {
     mine.map(|s| s.text.clone()).collect()
 }
 
-// Found live (#85, #86): the work was held on its merge after its review, and its giver, the one
-// to see it merged, never heard.
-#[test]
-fn a_task_held_only_on_its_merge_wakes_its_giver_once_its_review_is_done() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let fix = work_on_pr(&mut conn, 85);
-    tasks::started(&mut conn, fix, T).unwrap();
-    turn(&conn, "ann-turn", "ann", Some(fix), "running");
-    let review = review_by_bo(&mut conn, 85, "ann-turn");
-    finish(&mut conn, "ann", fix, Finish::Done, &Said::default()).unwrap();
-    tasks::ended(&mut conn, fix, Outcome::Ok, T).unwrap();
-    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-turn'", [])
-        .unwrap();
-    let starts = reviewed(&mut conn, review);
-    assert_eq!(to(&starts, "ann").len(), 1, "Ann hears back on the review");
-    let starts = work(&mut conn, fix, Some(Finish::Done));
-    let held = Some("done, waiting on #85 to merge".to_string());
-    assert_eq!(state(&conn, fix), (State::Held, held));
-    let lead = to(&starts, "lead");
-    assert_eq!(
-        lead.len(),
-        1,
-        "Lead hears it waits on the merge: {starts:?}"
-    );
-    assert!(lead[0].contains("waiting on #85 to merge"), "{}", lead[0]);
-    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, None, T).unwrap();
-    let lead = to(&merged, "lead");
-    assert_eq!(lead.len(), 1, "Lead hears the merge too: {merged:?}");
-    assert!(lead[0].contains("#85 merged"), "{}", lead[0]);
-}
-
-#[test]
-fn a_review_still_open_holds_the_hear_back_until_it_settles() {
-    let dir = TempDir::new();
-    let mut conn = team(&dir);
-    let fix = work_on_pr(&mut conn, 86);
-    turn(&conn, "ann-other", "ann", None, "running");
-    let review = review_by_bo(&mut conn, 86, "ann-other");
-    let starts = work(&mut conn, fix, Some(Finish::Done));
-    assert!(
-        to(&starts, "lead").is_empty(),
-        "the review leads to the merge"
-    );
-    let starts = reviewed(&mut conn, review);
-    let lead = to(&starts, "lead");
-    assert_eq!(lead.len(), 1, "{starts:?}");
-    assert!(lead[0].contains("waiting on #86 to merge"), "{}", lead[0]);
-}
-
-/// Ann's work on `pr` held only on its merge, already heard by Lead (Vale's #100 review).
-fn heard_while_held(conn: &mut Connection, pr: i64) -> i64 {
+/// Ann's work on `pr`, reported done and held only on its merge. Lead isn't told: Gathr lands it
+/// (0049), and Lead hears when it has (found live, #85 and #86: work sat reviewed and unmerged
+/// while its giver heard nothing; then the giver was told so that someone would merge).
+fn held_on_its_merge(conn: &mut Connection, pr: i64) -> i64 {
     let fix = work_on_pr(conn, pr);
     let starts = work(conn, fix, Some(Finish::Done));
-    assert_eq!(to(&starts, "lead").len(), 1, "{starts:?}");
+    let held = Some(format!("done, waiting on #{pr} to merge"));
+    assert_eq!(state(conn, fix), (State::Held, held));
+    assert!(to(&starts, "lead").is_empty(), "{starts:?}");
     fix
 }
 
 #[test]
-fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
+fn work_held_on_its_merge_is_heard_once_when_it_lands_closes_or_is_cancelled() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
-    let fix = heard_while_held(&mut conn, 87);
+    let fix = held_on_its_merge(&mut conn, 85);
+    let merged = tasks::pr_looked(&mut conn, fix, "MERGED", None, None, T).unwrap();
+    let lead = to(&merged, "lead");
+    assert_eq!(lead.len(), 1, "{merged:?}");
+    assert!(lead[0].contains("#85 merged"), "{}", lead[0]);
+
+    let fix = held_on_its_merge(&mut conn, 87);
     let closed = tasks::pr_looked(&mut conn, fix, "CLOSED", None, None, T).unwrap();
     let lead = to(&closed, "lead");
     assert_eq!(lead.len(), 1, "{closed:?}");
@@ -839,7 +799,8 @@ fn a_heard_task_whose_pr_closes_or_is_cancelled_wakes_its_giver_once_more() {
     );
     let again = tasks::pr_looked(&mut conn, fix, "CLOSED", None, None, T).unwrap();
     assert!(to(&again, "lead").is_empty(), "heard once: {again:?}");
-    let fix = heard_while_held(&mut conn, 88);
+
+    let fix = held_on_its_merge(&mut conn, 88);
     let cancelled = tasks::cancel(&mut conn, None, fix, "not needed", T).unwrap();
     assert_eq!(to(&cancelled, "lead").len(), 1, "{cancelled:?}");
 }

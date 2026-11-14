@@ -290,11 +290,17 @@ Parts: 5.5, 5.6
 
 Parts: 5.7
 
-- **Given** a lead gave a task
-- **When** the task settles: done, left, blocked, cancelled, or stopped by the person
-- **Then** the lead hears back once, with that outcome and what to look at, and the hear-back names
-  only what the lead has not heard yet. If the work carries on after a stop and then ends, the lead
-  hears that outcome too. An outcome that changes after the lead heard it is heard once more
+- **Given** a lead gave tasks, in three turns of one round, and a builder gave its PR's review
+- **When** the tasks end: one blocked while others run, the rest done; the review comes back clean
+- **Then** the lead is woken at once for the blocked one, by itself. For the rest it hears once, when
+  all of the round is in, in a turn that answers the newest of the three, and the hear-back names
+  only what the lead has not heard yet. Work from a later message of the person's doesn't hold that
+  back. The builder gets no turn for its clean review: its task's reason names only its merge. A
+  second task of the builder's that it never reported done gets its hear-back turn. Each task that
+  ends done is a line in the chat when it ends, shown once. The window's plan of the round reads
+  the round from the service and shows it finished. If the work carries on after a stop and then
+  ends, the lead hears that outcome too. An outcome that changes after the lead heard it is heard
+  once more. A task given in passing is heard by itself, and the person's answer still wakes at once
 
 ### 5f. A review is of an exact version
 

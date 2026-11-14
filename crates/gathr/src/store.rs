@@ -112,7 +112,7 @@ pub fn chat_exists(conn: &Connection, chat: &str) -> Result<bool, Error> {
 /// working at once never interleave, and a turn not started yet shows last.
 pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
-        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY t.position IS NULL, t.position, m.ts, m.id"
+        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.turn_id IS NULL, m.ts, m.id"
     ))?;
     let messages = stmt
         .query_map([chat], message_row)?
@@ -163,6 +163,12 @@ const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
+/// Where a message reads among a chat's turns: with its turn. One said in no turn (0051) reads
+/// after the block of whoever spoke last before it.
+const PLACE: &str = "COALESCE(t.position, (SELECT u.position FROM messages x JOIN turns u ON u.id = x.turn_id
+     WHERE x.chat_id = m.chat_id AND x.ts <= m.ts AND x.role = 'assistant' AND u.position IS NOT NULL
+     ORDER BY x.ts DESC LIMIT 1))";
+
 /// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     let (kind, body): (String, String) = (r.get(4)?, r.get(5)?);
@@ -185,7 +191,8 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
     }))
 }
 
-fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
+/// A saved message, as the API shows it.
+pub fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
     let sql = format!("{MESSAGE} WHERE m.id = ?1");
     Ok(conn.prepare_cached(&sql)?.query_row([id], message_row)?)
 }
@@ -207,6 +214,17 @@ pub fn add_message(
     body: &str,
 ) -> Result<Value, Error> {
     add_message_at(conn, chat, turn, role, kind, body, now_us())
+}
+
+/// What Gathr says in a chat in no turn (0051): a line the person reads, which starts nothing.
+pub fn say(conn: &Connection, chat: &str, body: &str) -> Result<Value, Error> {
+    let ts = now_us();
+    let id = ulid(ts);
+    conn.prepare_cached(
+        "INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4)",
+    )?
+    .execute(params![id, chat, ts, body])?;
+    message(conn, &id)
 }
 
 /// When a message that began at `began` may say it began (a thought known only once it's over,

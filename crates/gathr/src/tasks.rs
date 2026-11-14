@@ -9,6 +9,7 @@ use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
 
+mod hear;
 mod held;
 pub mod person;
 mod prs;
@@ -20,6 +21,7 @@ mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
+pub use hear::done_words;
 pub use held::{Hold, background_changed, holds};
 pub use prs::{Seen, pr_looked, with_prs};
 pub use report::{Finish, Report, Said, Took, finish};
@@ -57,7 +59,7 @@ const STATES: [(State, &str); 9] = [
     (State::Cancelled, "cancelled"),
 ];
 
-/// The states nobody is on: the giver hears back once all its tasks from one turn are in one.
+/// The states nobody is on: a task in one of them is settled, and its giver hears of it (0051).
 pub const SETTLED: &str = "('done', 'blocked', 'failed', 'stopped', 'cancelled')";
 
 impl State {
@@ -162,6 +164,10 @@ pub struct Task {
     pub waiting_on: Vec<String>,
     /// Given in passing: it doesn't hold the task whose turn gave it (G164).
     pub in_passing: bool,
+    /// The round it was given in: the turn that began it, on the person's message, say (0051).
+    /// Said only where a chat's tasks are listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub round: Option<String>,
     /// The pair a look last judged its review for, "<commit reviewed>:<head>": `outdated` is that verdict.
     #[serde(skip)]
     pub judged: Option<String>,
@@ -408,9 +414,9 @@ fn ended_in(
     Ok(starts)
 }
 
-/// A turn has ended: the agents who gave tasks in it hear back, once each is settled.
+/// A turn has ended: its agent hears back on what it gave from there, when that is due.
 pub fn turn_ended(conn: &mut Connection, turn: &str, trace: &str) -> Result<Vec<Start>, Error> {
-    in_tx(conn, |tx| held::hear_backs(tx, turn, trace))
+    in_tx(conn, |tx| hear::hear_backs(tx, turn, trace))
 }
 
 /// A turn whose status changed.
@@ -463,7 +469,7 @@ pub fn turn_moved(
             (Some(task), _) => starts.extend(ended_in(tx, task, outcome, m.trace)?),
             (None, _) => {}
         }
-        starts.extend(held::hear_backs(tx, m.turn, m.trace)?);
+        starts.extend(hear::hear_backs(tx, m.turn, m.trace)?);
         if let Some(agent) = m.agent {
             starts.extend(crate::waits::agent_free_in(tx, m.chat, agent, m.trace)?);
         }
@@ -600,7 +606,7 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     for turn in &giving {
         let why = Some("the service stopped during this turn");
         crate::store::set_turn(&tx, turn, "failed", why)?;
-        held::hear_backs(&tx, turn, &trace)?;
+        hear::hear_backs(&tx, turn, &trace)?;
     }
     tx.commit()?;
     Ok(working.len())
@@ -637,7 +643,12 @@ pub fn list(conn: &Connection, chat: &str) -> Result<Vec<Task>, Error> {
         let rows = stmt.query_map([chat], |r| r.get(0))?;
         rows.collect::<Result<_, _>>()?
     };
-    numbers.into_iter().map(|n| read(conn, n)).collect()
+    let mut listed: Vec<Task> = numbers
+        .into_iter()
+        .map(|n| read(conn, n))
+        .collect::<Result<_, _>>()?;
+    hear::rounds(conn, chat, &mut listed)?;
+    Ok(listed)
 }
 
 pub fn get(conn: &Connection, task: i64) -> Result<Option<Task>, Error> {
@@ -719,7 +730,7 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
-/// the giver's hear-back once all it gave in that turn are settled.
+/// its giver's hear-back when that is due.
 fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
     let Some(state) = state_of(tx, task)? else {
         return Ok(Vec::new());
@@ -800,10 +811,7 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         |r| r.get(0),
     )?;
     if let Some(turn) = given_in {
-        starts.extend(held::hear_backs(tx, &turn, trace)?);
-    }
-    if state.settled() {
-        starts.extend(held::after_review(tx, task, trace)?);
+        starts.extend(hear::hear_backs(tx, &turn, trace)?);
     }
     Ok(starts)
 }

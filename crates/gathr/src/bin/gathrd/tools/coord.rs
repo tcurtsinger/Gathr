@@ -99,8 +99,9 @@ pub struct Nothing {}
 #[tool_router(router = coord_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back when every task you gave \
-            this turn is settled, and your own task waits on them. Set `in_passing` for a task that isn't part of your own work. \
+        description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back once all you gave from \
+            this task (or, with no task, since the person last wrote) has ended, and at once when one is blocked, \
+            failed or stopped. Your own task waits on them. Set `in_passing` for a task that isn't part of your own work. \
             Check the returned tasks and PRs for duplicates."
     )]
     async fn give_task(

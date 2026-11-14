@@ -60,3 +60,4 @@ fails in CI when the two differ.
 | 0048 | [Gathr records friction, starting with what agents report](0048-gathr-records-friction.md) | accepted | partly |
 | 0049 | [Gathr lands a pull request](0049-gathr-lands-pull-requests.md) | accepted | yes |
 | 0050 | [One answer to what a chat waits on](0050-what-a-chat-waits-on.md) | accepted | partly |
+| 0051 | [The giver hears when all is in, or at once on trouble](0051-the-giver-hears-when-all-is-in.md) | accepted | yes |
