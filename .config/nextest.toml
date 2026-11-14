@@ -1,0 +1,11 @@
+# The merge tests each run a service, its engines and a stream of short git, gh and reg.exe
+# processes (one test alone starts about 20 git processes a second). At one test per core they
+# took the whole PC and ran 5 to 10 times slower than alone: a `finish_task` the service answers
+# in about 2 s alone took over 30 s, past the tests' request timeout. Eight at once stay close to
+# their time alone.
+[test-groups]
+merge = { max-threads = 8 }
+
+[[profile.default.overrides]]
+filter = 'package(gathr) & binary(merge)'
+test-group = 'merge'

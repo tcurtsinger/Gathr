@@ -61,6 +61,17 @@ impl Room {
 
     /// A review of `pr` given to Vale, as its turn left it: done on `commit`, or still open.
     pub(super) fn review(&self, task: i64, pr: i64, commit: Option<&str>) {
+        self.review_in(&self.db(), task, pr, commit);
+    }
+
+    /// `review`, written on `db`: inside a test's own transaction, with the rows it goes with.
+    pub(super) fn review_in(
+        &self,
+        db: &rusqlite::Connection,
+        task: i64,
+        pr: i64,
+        commit: Option<&str>,
+    ) {
         let sql = "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, pr, finish, reviewed,
                                       review_done, finish_ts, created_ts, updated_ts)
                    VALUES (?1, ?2, ?3, ?4, 'review', 'Review it', ?5, ?6, ?7, ?8, ?9, ?1, 1, 1)";
@@ -79,7 +90,7 @@ impl Room {
             commit,
             commit.is_some()
         ];
-        self.db().execute(sql, row).unwrap();
+        db.execute(sql, row).unwrap();
     }
 
     /// A newer run of Gathr's checks at `head`, in `state`.
