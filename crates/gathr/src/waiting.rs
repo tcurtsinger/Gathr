@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use rusqlite::{Connection, params};
 use serde::Serialize;
 
-use crate::Error;
 use crate::pauses::{self, Pause};
 use crate::tasks::{self, Hold};
 use crate::waits;
+use crate::{Error, changes};
 
 pub(crate) mod words;
 
@@ -492,7 +492,22 @@ fn pr_lines(conn: &Connection, chat: &str, lines: &mut Vec<Line>) -> Result<(), 
             Some((saw, moving, looked)) => (saw, moving, Some(looked)),
             None => ("Gathr looks at it within 2 minutes".to_string(), true, None),
         };
-        let moves = if moving { Moves::Itself } else { Moves::Nobody };
+        // Past its project's line, it waits on the person's answer, or on a new head (0054).
+        let (saw, moves) = match changes::standing(conn, chat, r.pr)? {
+            Some(changes::Standing::Asked(q)) => {
+                (format!("waits on your answer to #{q}"), Moves::You)
+            }
+            Some(changes::Standing::SentBack) => {
+                let why = "you sent it back; waits on a new head";
+                (why.to_string(), Moves::Others)
+            }
+            Some(changes::Standing::Cancelled(q)) => {
+                let why = format!("you cancelled #{q}; waits on a new head");
+                (why, Moves::Others)
+            }
+            None if moving => (saw, Moves::Itself),
+            None => (saw, Moves::Nobody),
+        };
         let mut line = Line::new("pr", format!("#{} to land: {saw}", r.pr), moves);
         line.looked_us = looked;
         line.agent = Some(r.reviewer.clone());
@@ -614,11 +629,14 @@ fn task_lines(
                 };
                 // Told, its giver has done nothing since: nobody is on it. Not yet told, it hears next.
                 let (moves, told) = match (o.heard || o.giver.is_none(), o.giver.is_some()) {
-                    (true, true) => (Moves::Nobody, format!(". {giver} was told")),
+                    (true, true) => (Moves::Nobody, format!("{giver} was told")),
                     (true, false) => (Moves::Nobody, String::new()),
-                    (false, _) => (Moves::Others, format!(". {giver} hears of it next")),
+                    (false, _) => (Moves::Others, format!("{giver} hears of it next")),
                 };
-                let what = format!("{this} is {state}: {reason}{told}");
+                let what = match told.is_empty() {
+                    true => format!("{this} is {state}: {reason}"),
+                    false => format!("{this} is {state}: {} {told}", tasks::sentence(reason)),
+                };
                 push(Line::new("trouble", what, moves), o.updated);
             }
         }

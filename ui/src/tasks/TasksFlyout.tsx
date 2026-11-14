@@ -2,7 +2,7 @@ import { ListTodo } from 'lucide-react';
 import { useState } from 'react';
 import type { PersonTask, StaleTask } from '../api';
 import { NavFlyout } from '../components/NavFlyout';
-import { idle } from './model';
+import { asker, idle } from './model';
 
 interface Props {
   tasks: PersonTask[];
@@ -30,7 +30,7 @@ export function TasksFlyout({ tasks, stale, name, onOpen }: Props) {
     >
       <span>{t.what}</span>
       <small>
-        {t.stale_us ? (t.owner ? name(t.owner) : 'For you') : name(t.giver)} · {t.chat_title}
+        {t.stale_us ? (t.owner ? name(t.owner) : 'For you') : asker(t, name)} · {t.chat_title}
       </small>
       {t.stale_us && (
         <small>

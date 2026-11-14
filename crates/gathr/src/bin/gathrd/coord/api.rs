@@ -212,11 +212,13 @@ async fn person_answer(
     Json(body): Json<Answers>,
 ) -> Answer {
     let trace = t.0.clone();
-    let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
-    let kept = starts.clone();
+    let after = Arc::new(std::sync::Mutex::new((Vec::new(), false)));
+    let kept = after.clone();
     let answer = db(&s, &t, "Answer failed", move |c| {
         let sent = person::answer(c, &body.answers, &trace)?;
-        *kept.lock().expect("never poisoned") = sent.starts;
+        // Gathr's own question answered (0054): its PR may land now, not at the next look.
+        let gathrs = sent.answered.iter().any(|t| t.giver.is_none());
+        *kept.lock().expect("never poisoned") = (sent.starts, gathrs);
         let reference = gathr::ids::reference(&trace);
         let refused: Vec<_> = sent
             .refused
@@ -226,8 +228,11 @@ async fn person_answer(
         Ok(json!({ "answered": sent.answered, "refused": refused }))
     })
     .await;
-    s.chats
-        .start(std::mem::take(&mut *starts.lock().expect("never poisoned")));
+    let (starts, gathrs) = std::mem::take(&mut *after.lock().expect("never poisoned"));
+    s.chats.start(starts);
+    if gathrs {
+        crate::landing::soon(&s.chats, None);
+    }
     answer
 }
 

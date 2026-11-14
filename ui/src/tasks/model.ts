@@ -1,5 +1,16 @@
 import type { PersonAnswer, PersonTask, Task } from '../api';
 
+/** Who asks a question no agent gave: Gathr itself, as the far end's stop does (0054). */
+const GATHR = 'Gathr';
+
+/**
+ * Who gave a task, by name. A question for the person that no agent gave is Gathr's own; any other
+ * task with no giver is the person's.
+ */
+export function asker(task: Pick<Task, 'kind' | 'giver'>, name: (agent: string | null) => string): string {
+  return task.kind === 'person' && task.giver === null ? GATHR : name(task.giver);
+}
+
 /** What the person has staged for a question: kept through Back, Next, tabs and chats until Send. */
 export interface Draft {
   values: string[];
@@ -17,16 +28,22 @@ export function options(task: PersonTask): { id: string; label: string; descript
   return task.choices.map((c, i) => ({
     id: c.label,
     label: c.label,
-    // The asker's pick comes first (DESIGN.md).
+    // The asker's pick comes first (DESIGN.md); Gathr's own question has no pick to recommend.
     description:
-      task.form === 'choice' && i === 0 ? ['Recommended', c.detail].filter(Boolean).join(' · ') : c.detail,
+      task.form === 'choice' && task.giver !== null && i === 0
+        ? ['Recommended', c.detail].filter(Boolean).join(' · ')
+        : c.detail,
   }));
 }
 
-/** Whether Send would answer it. Notes alone answer any question in words: "none of these" is an answer (G152). */
+/**
+ * Whether Send would answer it. Notes alone answer an agent's question in words: "none of these" is an
+ * answer (G152). Gathr's own question takes one of its choices: it can't act on words.
+ */
 export function ready(task: PersonTask, draft: Draft | undefined): boolean {
   if (!draft) return false;
   if (task.form === 'text') return !!draft.values[0]?.trim();
+  if (task.giver === null) return draft.values.length === 1;
   return draft.values.length > 0 || !!draft.notes.trim();
 }
 

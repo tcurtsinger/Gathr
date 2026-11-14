@@ -2,6 +2,8 @@
 //! and what a task is held on.
 
 mod common;
+#[path = "tasks/changes.rs"]
+mod far_end;
 #[path = "tasks/hear_backs.rs"]
 mod hear_backs;
 #[path = "tasks/commands.rs"]

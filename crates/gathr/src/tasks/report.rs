@@ -200,7 +200,8 @@ pub fn finish(
                           outdated = CASE WHEN ?8 IS NULL THEN outdated WHEN pr_head IS NULL THEN 0
                               WHEN substr(pr_head, 1, length(?8)) = ?8 OR substr(?8, 1, length(pr_head)) = pr_head
                               THEN 0 ELSE 1 END,
-                          judged = CASE WHEN ?8 IS NULL THEN judged ELSE NULL END
+                          judged = CASE WHEN ?8 IS NULL THEN judged ELSE NULL END,
+                          first_reviewed = CASE WHEN kind = 'review' THEN coalesce(first_reviewed, ?8) ELSE first_reviewed END
          WHERE number = ?1",
         params![
             task,

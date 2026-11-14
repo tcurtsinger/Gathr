@@ -8,7 +8,7 @@ const PR_LOOK: &str = "state,headRefOid,headRefName,baseRefName,isCrossRepositor
 
 /// A room whose service looks every 100 ms, as it does every 2 minutes, with GitHub answering an
 /// update: it takes it, and the test makes the commit GitHub would.
-fn looking(data: &Path, repos: &Path, test_change: bool) -> Room {
+pub(super) fn looking(data: &Path, repos: &Path, test_change: bool) -> Room {
     let room = room_replay(data, repos, test_change, true);
     room.answer(
         json!({ "args": ["repo", "view"], "out": r#"{"defaultBranchRef":{"name":"main"}}"# }),
@@ -25,7 +25,7 @@ pub(super) fn running(name: &str) -> Value {
 }
 
 impl Room {
-    fn answers(&self) -> Value {
+    pub(super) fn answers(&self) -> Value {
         let text = std::fs::read_to_string(self.data.join("gh.json")).unwrap();
         serde_json::from_str(&text).unwrap()
     }
@@ -38,7 +38,7 @@ impl Room {
     }
 
     /// GitHub's view of PR `n` (0 is #5, 1 is #6), changed in place.
-    fn view(&self, n: usize, change: impl Fn(&mut Value)) {
+    pub(super) fn view(&self, n: usize, change: impl Fn(&mut Value)) {
         let mut all = self.answers();
         for key in ["out", "out_merged"] {
             let mut view: Value = serde_json::from_str(all[n][key].as_str().unwrap()).unwrap();
@@ -60,7 +60,7 @@ impl Room {
     }
 
     /// A review of `pr` given to Vale, as its turn left it: done on `commit`, or still open.
-    fn review(&self, task: i64, pr: i64, commit: Option<&str>) {
+    pub(super) fn review(&self, task: i64, pr: i64, commit: Option<&str>) {
         let sql = "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, pr, finish, reviewed,
                                       review_done, finish_ts, created_ts, updated_ts)
                    VALUES (?1, ?2, ?3, ?4, 'review', 'Review it', ?5, ?6, ?7, ?8, ?9, ?1, 1, 1)";
@@ -83,7 +83,7 @@ impl Room {
     }
 
     /// A newer run of Gathr's checks at `head`, in `state`.
-    fn run(&self, head: &str, state: &str) {
+    pub(super) fn run(&self, head: &str, state: &str) {
         let sql = "INSERT INTO check_runs (id, project_id, head, state, trace_id, started_ts)
                    VALUES (?1, ?2, ?3, ?4, 't', 5)
                    ON CONFLICT (id) DO UPDATE SET state = excluded.state";
@@ -97,7 +97,7 @@ impl Room {
     }
 
     /// Returns once the service has looked at its PRs again, from start to end, landing included.
-    fn looked(&self) {
+    pub(super) fn looked(&self) {
         let before = self.calls(PR_LOOK);
         let prs: i64 = self
             .db()
@@ -125,7 +125,7 @@ impl Room {
         });
     }
 
-    fn chat(&self) -> Value {
+    pub(super) fn chat(&self) -> Value {
         self.service
             .call("GET", &format!("/api/chats/{}", self.chat))
             .json()

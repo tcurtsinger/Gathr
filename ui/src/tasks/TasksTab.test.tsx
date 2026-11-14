@@ -32,8 +32,8 @@ const tasks = [
 ];
 
 /** The tab as the app holds it: drafts live outside it, and Send settles what the service takes. */
-function Tab({ refuse = [] }: { refuse?: Refusal[] }) {
-  const [open, setOpen] = useState(tasks);
+function Tab({ refuse = [], list = tasks }: { refuse?: Refusal[]; list?: PersonTask[] }) {
+  const [open, setOpen] = useState(list);
   const [selected, setSelected] = useState<number | null>(null);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
   const [sent, setSent] = useState('');
@@ -45,7 +45,7 @@ function Tab({ refuse = [] }: { refuse?: Refusal[] }) {
         onSelect={setSelected}
         drafts={drafts}
         onDraft={(n, d) => setDrafts((all) => ({ ...all, [n]: d }))}
-        name={() => 'Mira'}
+        name={(agent) => (agent ? 'Mira' : 'An agent')}
         onOpenFile={() => {}}
         onReference={() => {}}
         onSend={async (ready) => {
@@ -101,6 +101,33 @@ test('Back and Next focus the new heading before the next frame', async () => {
     window.requestAnimationFrame = frame;
     for (const callback of held) callback(performance.now());
   }
+});
+
+// Gathr's own question (giver null) is answered only by one of its choices, and Gathr has no pick to recommend.
+test('gathrs_question_names_gathr_offers_no_recommended_and_needs_a_pick', async () => {
+  const question: PersonTask = {
+    ...ask(9, "#5 adds 3,200 lines, over this project's line of 3,000: let it go on?", 'choice'),
+    giver: null,
+    given_in: null,
+    pr: 5,
+    choices: [
+      { label: 'Let it go on', detail: 'It lands once its review and checks pass.' },
+      { label: 'Send it back', detail: '#1 is blocked, and Lead is told.' },
+    ],
+  };
+  const screen = await render(<Tab list={[question]} />);
+  await expect.element(screen.getByText('Gathr', { exact: true })).toBeVisible();
+  const go = screen.getByRole('button', { name: /Let it go on/ });
+  await expect.element(go).toHaveAccessibleName(/It lands once its review and checks pass\./);
+  await expect.element(go).not.toHaveAccessibleName(/Recommended/);
+  await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('looks fine');
+  await expect.element(screen.getByText('0 ready')).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  await go.click();
+  await screen.getByRole('button', { name: 'Send' }).click();
+  await expect
+    .element(screen.getByLabelText('Sent'))
+    .toHaveTextContent('[{"task":9,"pick":["Let it go on"],"text":"looks fine"}]');
 });
 
 test('Send shows the first refused question, still open, with why', async () => {

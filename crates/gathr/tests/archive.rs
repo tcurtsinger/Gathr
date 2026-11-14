@@ -383,3 +383,26 @@ fn deleting_an_archived_chat_removes_its_review_notes() {
         .unwrap();
     assert_eq!(left, 0);
 }
+
+/// 0054: a landed change's record outlives its chat; one not landed goes with it.
+#[test]
+fn deleting_an_archived_chat_keeps_its_landed_changes() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO changes (project_id, pr, chat_id, head, counted, removed, top, line, measured_ts, landed_ts)
+             VALUES ('p', 5, 'c', 'abc1234', 10, 0, '[]', 3000, 1, 2),
+                    ('p', 6, 'c', 'def5678', 10, 0, '[]', 3000, 1, NULL);",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let mut stmt = conn.prepare("SELECT pr FROM changes ORDER BY pr").unwrap();
+    let kept: Vec<i64> = stmt
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert_eq!(kept, [5]);
+}
