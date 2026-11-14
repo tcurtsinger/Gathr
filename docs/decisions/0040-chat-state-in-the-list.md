@@ -60,3 +60,10 @@ Built: yes. Proof: `crates/gathr/tests/chat_state.rs`, `ui/src/live-lists.test.t
 - **A push or check Gathr asked about, whose caller gave up waiting,** stops counting only when its turn
   ends: nothing tells the service at the moment the caller leaves.
 - **The dot says the chat, not who.** Which agent works or asks is in Summary (0038).
+
+## Changes
+
+- [0052](0052-a-quiet-chat-is-noticed.md), 2026-11-13: `needs` has a fourth cause. A chat Gathr told the
+  person isn't moving needs them until that stretch ends: when something moves, or when they write in it. It
+  is saved state (`quiet.told_ts`) read by the same query, so the list, the live event, the state after a
+  restart and `gathr diag health` all have it.

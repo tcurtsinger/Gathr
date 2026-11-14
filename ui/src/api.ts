@@ -223,11 +223,14 @@ export interface WaitingLine {
   seen: string | null;
   looked_us: number | null;
   error: string | null;
+  /** A running turn that makes no progress: when it last did, in microseconds. */
+  silent_us: number | null;
 }
 
 /** Where one agent of the chat stands, as the service works it out (0050). */
 export interface Standing {
   agent: string;
+  name: string;
   state: 'needs_you' | 'working' | 'waiting' | 'free';
   /** In a phrase: "Waiting for CI on #157", "Held", "Usage limit". */
   words: string;

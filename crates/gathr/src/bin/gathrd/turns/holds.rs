@@ -14,7 +14,7 @@ use gathr::store;
 use gathr::tasks::Start;
 use serde_json::json;
 
-use super::{Ids, Task};
+use super::{Ids, Running, Task};
 
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
 use gathr::carry::CHECK_FIRST;
@@ -25,6 +25,20 @@ pub const STOP_NOW: &str = "Stop now";
 const STOPPED: &str = "Stopped by you. Carries on at Restart";
 /// Why nothing runs on a task whose turn a usage limit cut off.
 const LIMITED: &str = "The account is out of usage. Carries on when it is back";
+
+impl Running {
+    /// For how long it has made no progress (text, or a tool starting or ending), once that is
+    /// past the limit: the stall time, twice that while a tool runs. Never while an approval of it
+    /// waits: it then waits on the person.
+    pub(super) fn silent_for(&self, stall: Duration) -> Option<Duration> {
+        let limit = match self.tools.is_empty() {
+            true => stall,
+            false => stall * 2,
+        };
+        let quiet = self.progress_at.elapsed();
+        (quiet >= limit && !self.asks()).then_some(quiet)
+    }
+}
 
 impl Task {
     /// What holds the queued turn from starting: the update the person asked for, installing now
@@ -410,24 +424,19 @@ impl Task {
         self.set_turn(&ids, "running", None).await;
     }
 
-    /// A turn with no progress (text, or a tool starting or ending) for the stall time, twice that
-    /// while a tool runs, is flagged once to the person: never stopped (F10).
+    /// A turn that goes silent is flagged, once, and its chat's lead is told (0052): never
+    /// stopped (F10). While it stays silent it shows in what its chat waits on (`say_silent`).
     pub(super) fn check_stall(&mut self) {
         let stall = self.times.stall;
-        let Some(turn) = self.turn.as_mut() else {
+        let Some(turn) = self.turn.as_mut().filter(|t| !t.stalled) else {
             return;
         };
-        let limit = if turn.tools.is_empty() {
-            stall
-        } else {
-            stall * 2
-        };
-        if turn.stalled || turn.progress_at.elapsed() < limit {
+        let Some(quiet) = turn.silent_for(stall) else {
             return;
-        }
+        };
         turn.stalled = true;
         let ids = turn.ids.clone();
-        let quiet_ms = turn.progress_at.elapsed().as_millis() as i64;
+        let quiet_ms = quiet.as_millis() as i64;
         let event = Event::point("gathr.turn.stalled")
             .trace(&ids.trace)
             .chat(&ids.chat);
@@ -437,12 +446,12 @@ impl Task {
                 .attr("quiet_ms", quiet_ms)
                 .attr("gen_ai.agent.id", ids.agent.clone()),
         );
-        let reference = gathr::ids::reference(&ids.trace);
-        self.publish(
-            &ids.chat,
-            json!({ "type": "stalled", "turn": ids.turn, "agent": ids.agent,
-            "quiet_ms": quiet_ms, "ref": reference }),
-        );
+        if let Some(agent) = ids.agent {
+            let chats = self.chats.clone();
+            let told =
+                crate::coord::quiet::silent(chats, ids.chat, agent, ids.task, quiet_ms, ids.trace);
+            tokio::spawn(told);
+        }
     }
 
     /// A turn whose task was cancelled stops and says why (S72): looked at on the stall timer, so

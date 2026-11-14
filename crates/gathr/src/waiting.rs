@@ -13,7 +13,7 @@ use crate::pauses::{self, Pause};
 use crate::tasks::{self, Hold};
 use crate::waits;
 
-mod words;
+pub(crate) mod words;
 
 pub use words::text;
 
@@ -44,6 +44,8 @@ pub struct Live {
     pub approvals: Vec<String>,
     /// The version Gathr is updating to.
     pub updating: Option<String>,
+    /// The running turns that have made no progress past the limit, each with when it last did.
+    pub silent: HashMap<String, i64>,
 }
 
 /// One thing the chat waits on.
@@ -67,6 +69,11 @@ pub struct Line {
     pub seen: Option<String>,
     pub looked_us: Option<i64>,
     pub error: Option<String>,
+    /// A running turn that has made no progress past the limit: when it last did.
+    pub silent_us: Option<i64>,
+    /// The turn a `turn`, `queued`, `sign_in` or `approval` line is about.
+    #[serde(skip)]
+    pub turn: Option<String>,
 }
 
 impl Line {
@@ -83,6 +90,8 @@ impl Line {
             seen: None,
             looked_us: None,
             error: None,
+            silent_us: None,
+            turn: None,
         }
     }
 
@@ -202,7 +211,7 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
     wait_lines(conn, chat, &pauses, &waiting, &mut lines)?;
     command_lines(conn, chat, &mut lines)?;
     pr_lines(conn, chat, &mut lines)?;
-    task_lines(conn, chat, &open, &turns, &mut lines)?;
+    task_lines(conn, chat, &pauses, &open, &turns, &mut lines)?;
     if let Some(version) = &live.updating {
         let mut line = Line::new(
             "update",
@@ -318,10 +327,20 @@ fn turn_lines(
                     let mut asks =
                         Line::new("approval", what, Moves::You).of(agent, t.task, t.created);
                     asks.from = "service";
+                    asks.turn = Some(t.id.clone());
                     lines.push(asks);
                 }
                 match live.running {
-                    true => Line::new("turn", format!("{who} is working{on_task}"), Moves::Itself),
+                    true => {
+                        let working = format!("{who} is working{on_task}");
+                        let mut line = Line::new("turn", working, Moves::Itself);
+                        // It runs, with no progress past the limit: it moves nothing.
+                        if let Some(since) = live.silent.get(&t.id) {
+                            line.moves = Moves::Nobody;
+                            line.silent_us = Some(*since);
+                        }
+                        line
+                    }
                     false => Line::new(
                         "turn",
                         format!("{who}'s turn{on_task} was running when the service stopped"),
@@ -342,7 +361,10 @@ fn turn_lines(
                 line
             }
         };
-        lines.push(line.of(agent, t.task, t.created));
+        lines.push(Line {
+            turn: Some(t.id.clone()),
+            ..line.of(agent, t.task, t.created)
+        });
     }
     Ok(())
 }
@@ -475,10 +497,12 @@ fn pr_lines(conn: &Connection, chat: &str, lines: &mut Vec<Line>) -> Result<(), 
     Ok(())
 }
 
-/// The agents' tasks no turn is on: each says what it waits for, or that nothing is on it.
+/// The agents' tasks no turn is on: each says what it waits for, or that nothing is on it. One
+/// whose owner a pause holds waits on the person, whatever else it waits for.
 fn task_lines(
     conn: &Connection,
     chat: &str,
+    pauses: &[Pause],
     open: &[Open],
     turns: &[Turn],
     lines: &mut Vec<Line>,
@@ -496,8 +520,14 @@ fn task_lines(
         let this = format!("#{} ({owner})", o.number);
         let named =
             |b: &Open| -> Result<String, Error> { tasks::owner_name(conn, b.owner.as_deref()) };
-        let mut push =
-            |line: Line, since: i64| lines.push(line.of(Some(agent), Some(o.number), since));
+        let paused = pauses::holding(pauses, chat, Some(agent)).is_some();
+        let mut push = |mut line: Line, since: i64| {
+            if paused {
+                line.moves = Moves::You;
+                line.what.push_str(", paused");
+            }
+            lines.push(line.of(Some(agent), Some(o.number), since))
+        };
         let blocker = o.blocked_on.and_then(find);
         match o.state.as_str() {
             "waiting" => {

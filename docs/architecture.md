@@ -36,6 +36,9 @@ A chat has one to five agents; team chats have a Supervisor and an optional Revi
 The service persists tasks, person requests, waits, pause/Stop, usage holds and archive/stale handling.
 Agents use Gathr's in-process MCP server to read chat history and change coordination state.
 Only the Supervisor files person tasks. A task settles by its owner's report, never by its turn ending ([0047](decisions/0047-a-report-is-a-record.md)).
+One answer says what a chat waits on, and a chat where nothing moves wakes its lead, then tells the person, each
+only of what is new to them
+([0050](decisions/0050-what-a-chat-waits-on.md), [0052](decisions/0052-a-quiet-chat-is-noticed.md)).
 Plan mode/checks, hand-off chains, side jobs and fresh sessions per task are not built yet.
 [0005](decisions/0005-mcp-server.md), [0010](decisions/0010-coordination-as-state.md),
 [0013](decisions/0013-one-chat-model.md), [0028](decisions/0028-team-chats.md).

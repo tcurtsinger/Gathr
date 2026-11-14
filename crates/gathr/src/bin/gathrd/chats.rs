@@ -144,6 +144,9 @@ pub struct Chats {
     /// Why each queued turn hasn't started, as its agent's queue last said it (0050). Only what
     /// no table holds.
     queued: Mutex<HashMap<String, QueuedWhy>>,
+    /// The running turns that have made no progress past the limit, as their agents' queues last
+    /// said (0052): each one's chat, and when it last made progress.
+    silent: Mutex<HashMap<String, (String, i64)>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
     /// Accounts being removed, never picked even while their rows remain.
@@ -175,6 +178,7 @@ impl Chats {
             tasks: Mutex::default(),
             holds: Mutex::default(),
             queued: Mutex::default(),
+            silent: Mutex::default(),
             account: Mutex::default(),
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
@@ -367,6 +371,24 @@ impl Chats {
         let queued = self.queued.lock().expect("never poisoned");
         let of = queued.iter().filter(|(_, why)| why.chat == chat);
         of.map(|(turn, why)| (turn.clone(), why.clone())).collect()
+    }
+
+    /// An agent's queue says its running turn has gone silent, in which chat and since when, or
+    /// that it no longer is.
+    pub fn say_silent(&self, turn: &str, said: Option<(String, i64)>) {
+        let mut silent = self.silent.lock().expect("never poisoned");
+        match said {
+            Some(said) => silent.insert(turn.to_string(), said),
+            None => silent.remove(turn),
+        };
+    }
+
+    /// The chat's silent turns, each with when it last made progress.
+    pub fn silent_in(&self, chat: &str) -> Vec<(String, i64)> {
+        let silent = self.silent.lock().expect("never poisoned");
+        let of = silent.iter().filter(|(_, (c, _))| c == chat);
+        of.map(|(turn, (_, since))| (turn.clone(), *since))
+            .collect()
     }
 
     /// The account folder's renewal gate (0002).

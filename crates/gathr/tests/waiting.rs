@@ -463,6 +463,76 @@ fn a_turn_behind_a_sign_in_waits_on_the_person_and_nothing_moves_while_the_servi
     assert!(text.contains("Waiting on you:"), "{text}");
 }
 
+/// Scenario 6d: a running turn that has made no progress past the limit isn't moving anything,
+/// and says since when. The service says which turns are silent; the answer is built with that.
+#[test]
+fn a_silent_turn_is_not_moving_and_says_since_when() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "lead", None, "done");
+    let task = give(&mut conn, "ann", &[], "giving");
+    let running = begin(&mut conn, task);
+    let now = gathr::ids::now_us();
+    let since = now - 12 * 60_000_000;
+    let live = Live {
+        silent: HashMap::from([(running, since)]),
+        ..service()
+    };
+    let said = waiting::answer(&conn, "c", &live, now).unwrap();
+    let found = line(&said, "turn", "Ann is working");
+    assert_eq!((found.moves, found.silent_us), (Moves::Nobody, Some(since)));
+    let shown = serde_json::to_value(found).unwrap();
+    assert_eq!(shown["silent_us"], since, "{shown}");
+    assert_eq!(
+        shown.get("turn"),
+        None,
+        "the turn's id is the service's own"
+    );
+    let text = waiting::text(&said, now);
+    let words = format!(
+        "Not moving:
+- Ann is working on #{task}, for under a minute, silent for 12 min"
+    );
+    assert!(text.contains(&words), "{text}");
+    let ann = said.agents.iter().find(|a| a.name == "Ann").unwrap();
+    assert_eq!(ann.state, "working", "it still runs");
+
+    let said = waiting::answer(&conn, "c", &service(), now).unwrap();
+    let found = line(&said, "turn", "Ann is working");
+    assert_eq!((found.moves, found.silent_us), (Moves::Itself, None));
+    assert!(!waiting::text(&said, now).contains("silent"));
+}
+
+/// Scenario 6h: a task held by a pause of the person's, on its owner, the chat or the app, waits
+/// on them, as a paused agent's wait does. Nobody else's task changes.
+#[test]
+fn a_task_whose_owner_is_paused_waits_on_the_person() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "lead", None, "done");
+    let anns = give(&mut conn, "ann", &[], "giving");
+    let bos = give(&mut conn, "bo", &[], "giving");
+    conn.execute("DELETE FROM turns WHERE task IS NOT NULL", [])
+        .unwrap();
+    let stands = |conn: &Connection, has: &str| {
+        let said = answer(conn, &service());
+        let found = line(&said, "idle", has);
+        (found.moves, found.what.ends_with(", paused"))
+    };
+    let (anns, bos) = (format!("#{anns} (Ann)"), format!("#{bos} (Bo)"));
+    for (scope, target) in [("agent", "ann"), ("chat", "c"), ("app", "")] {
+        assert_eq!(stands(&conn, &anns), (Moves::Nobody, false), "{scope}");
+        gathr::pauses::pause(&conn, scope, target, false, T).unwrap();
+        assert_eq!(stands(&conn, &anns), (Moves::You, true), "{scope}");
+        let others = match scope {
+            "agent" => (Moves::Nobody, false),
+            _ => (Moves::You, true),
+        };
+        assert_eq!(stands(&conn, &bos), others, "{scope}");
+        gathr::pauses::resume(&conn, scope, target, T).unwrap();
+    }
+}
+
 /// The answer in words, as the `waiting` tool and `gathr diag waiting --text` give it.
 #[test]
 fn the_answer_reads_in_words_grouped_by_who_can_end_each_hold() {

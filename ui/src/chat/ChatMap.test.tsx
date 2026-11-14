@@ -141,9 +141,10 @@ test('the map shows from three ticks up, long for the person and short for the l
 });
 
 /**
- * The map follows a scroll at the page's next frames. On WebKit on CI it once hadn't within the poll's default
- * second (main at 9fe0852; 120 runs since didn't), cause unproven: a slow page or a missed scroll. It gets five,
- * and a failure prints what it measured since the scroll, so few frames read apart from a missed scroll (G177).
+ * The map follows a scroll at the page's next frames. On WebKit on CI it twice hadn't within the poll's default
+ * second (main at 9fe0852, 120 runs since didn't; then a day's tick, in #187's run), cause unproven: a slow page
+ * or a missed scroll. It gets five, and a failure prints what it measured since the scroll, so few frames read
+ * apart from a missed scroll, and both from a chat that moved again (G177).
  */
 const FOLLOW = { timeout: 5000 };
 function following(id: string, middle: number) {
@@ -258,9 +259,10 @@ test("a day's tick opens the day's first message, though it was not drawn", asyn
   expect(below('u9-0')).toBeUndefined();
   await userEvent.click(tick(`${weekday(9)} · 100 messages from you`));
   await expect.poll(() => offTop('u9-0')).toBeLessThan(1);
+  // WebKit's click answers before the map has followed. Measured from the top's 32px, where the tick put it.
   await expect
-    .poll(() => tick(`${weekday(9)} · 100 messages from you`).getAttribute('aria-current'))
-    .toBe('true');
+    .poll(following('u9-0', 32), FOLLOW)
+    .toEqual(measured([`${weekday(9)} · 100 messages from you`]));
 });
 
 test('at the end of the chat the latest message on screen is current, though it sits below the middle', async () => {

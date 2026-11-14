@@ -1,6 +1,7 @@
-//! The waiting answer in words, for an agent's `waiting` tool and `gathr diag waiting --text`.
+//! The waiting answer in words, for an agent's `waiting` tool and `gathr diag waiting --text`, and
+//! what Gathr says of a chat where nothing moves (0052).
 
-use super::{Answer, Line, Moves};
+use super::{Answer, Line, Moves, Standing};
 
 /// Names in a sentence: "Ann", "Ann and Bo", "Ann, Bo and Cy".
 pub(super) fn list(names: &[&str]) -> String {
@@ -22,6 +23,34 @@ fn ago(us: i64) -> String {
     }
 }
 
+/// One line of the answer: what it is, for how long, and what its last look saw.
+fn line(l: &Line, now_us: i64) -> String {
+    let mut line = format!("- {}", l.what);
+    if let Some(since) = l.since_us {
+        line.push_str(&format!(", for {}", ago(now_us - since)));
+    }
+    if let Some(silent) = l.silent_us {
+        line.push_str(&format!(", silent for {}", ago(now_us - silent)));
+    }
+    match (&l.seen, l.looked_us) {
+        (Some(seen), Some(looked)) => {
+            line.push_str(&format!(
+                ". Last look, {} ago: {seen}",
+                ago(now_us - looked)
+            ));
+        }
+        (Some(seen), None) => line.push_str(&format!(". Last look: {seen}")),
+        _ => {}
+    }
+    if let Some(error) = &l.error {
+        line.push_str(&format!(". Its looks fail: {error}"));
+    }
+    if l.from == "service" {
+        line.push_str(" (from the running service)");
+    }
+    line
+}
+
 /// The lines grouped by who can end each, what waits on the person first, then each agent.
 pub fn text(answer: &Answer, now_us: i64) -> String {
     let mut said = Vec::new();
@@ -41,29 +70,7 @@ pub fn text(answer: &Answer, now_us: i64) -> String {
             continue;
         }
         said.push(heading.to_string());
-        for l in of {
-            let mut line = format!("- {}", l.what);
-            if let Some(since) = l.since_us {
-                line.push_str(&format!(", for {}", ago(now_us - since)));
-            }
-            match (&l.seen, l.looked_us) {
-                (Some(seen), Some(looked)) => {
-                    line.push_str(&format!(
-                        ". Last look, {} ago: {seen}",
-                        ago(now_us - looked)
-                    ));
-                }
-                (Some(seen), None) => line.push_str(&format!(". Last look: {seen}")),
-                _ => {}
-            }
-            if let Some(error) = &l.error {
-                line.push_str(&format!(". Its looks fail: {error}"));
-            }
-            if l.from == "service" {
-                line.push_str(" (from the running service)");
-            }
-            said.push(line);
-        }
+        said.extend(of.into_iter().map(|l| line(l, now_us)));
     }
     if said.is_empty() {
         said.push("Nothing is waiting, and no turn runs.".to_string());
@@ -85,4 +92,71 @@ pub fn text(answer: &Answer, now_us: i64) -> String {
         said.push(format!("Agents: {}", agents.join("; ")));
     }
     said.join("\n")
+}
+
+/// A chat where nothing moves, in a phrase: the first thing of `not_moving`, for how long, and how
+/// many more there are. The answer has the longest wait first, and the rule that notices a stuck
+/// chat puts what is new before it. What only follows those isn't counted.
+pub fn headline(not_moving: &[&Line], agents: &[Standing], now_us: i64) -> String {
+    let Some(first) = not_moving.first() else {
+        return "Nothing is moving".to_string();
+    };
+    let whose = first.agent.as_deref();
+    let who = agents.iter().find(|a| Some(a.agent.as_str()) == whose);
+    let who = who.map_or("The chat", |a| a.name.as_str());
+    let name = match (first.task, &first.on) {
+        (Some(task), _) => format!("#{task} ({who})"),
+        (None, Some(on)) => on.clone(),
+        (None, None) => format!("{who}'s turn"),
+    };
+    // A wake goes at the first check that finds the chat stuck: "for under a minute" says nothing.
+    let age = match first.silent_us.or(first.since_us) {
+        Some(since) if now_us - since >= 60_000_000 => format!(" for {}", ago(now_us - since)),
+        _ => String::new(),
+    };
+    let more = match not_moving.len() - 1 {
+        0 => String::new(),
+        more => format!(" and {more} more"),
+    };
+    format!("Not moving{age}: {name}{more}")
+}
+
+fn listed(lines: &[&Line], now_us: i64) -> String {
+    let each: Vec<String> = lines.iter().map(|l| line(l, now_us)).collect();
+    each.join("\n")
+}
+
+/// What Gathr asks the lead of a chat where nothing moves: `lines` is all the chat waits on.
+pub(crate) fn wake(
+    not_moving: &[&Line],
+    lines: &[&Line],
+    agents: &[Standing],
+    now_us: i64,
+) -> String {
+    format!(
+        "{}. Nothing waits on the person.\n{}\n\
+         Move it on: give, restart or cancel work, or ask the person. If nothing can be done, say why.",
+        headline(not_moving, agents, now_us),
+        listed(lines, now_us)
+    )
+}
+
+/// What Gathr tells the person of it. The window shows a line of Gathr's cut to its first line,
+/// so that one carries the news.
+pub(crate) fn stuck(not_moving: &[&Line], agents: &[Standing], now_us: i64) -> String {
+    format!(
+        "{}. Write here to move it on.\n{}",
+        headline(not_moving, agents, now_us),
+        listed(not_moving, now_us)
+    )
+}
+
+/// What Gathr tells the lead of an agent's turn that has made no progress for `quiet_ms`.
+pub(crate) fn silent(name: &str, task: Option<i64>, quiet_ms: i64) -> String {
+    let on = task.map_or(String::new(), |n| format!(" on #{n}"));
+    format!(
+        "{name}'s turn{on} has made no progress for {}. It is still running. \
+         A message to them reaches that turn.",
+        ago(quiet_ms * 1000)
+    )
 }

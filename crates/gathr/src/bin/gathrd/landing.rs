@@ -285,7 +285,8 @@ async fn saw(chats: &Arc<Chats>, review: &Review, head: &str, words: &str, movin
 }
 
 /// Tells the reviewer what stops the PR at this head, once: woken on no task, or, when its own
-/// report had Gathr look, in the answer to it.
+/// report had Gathr look, in the answer to it. That the PR is left to them is kept in the same
+/// write as their wake, so nothing reads the chat as stuck between the two (0052).
 async fn tell(
     chats: &Arc<Chats>,
     review: &Review,
@@ -295,14 +296,6 @@ async fn tell(
     trace: &str,
 ) -> Result<Looked, String> {
     let said = format!("Gathr can't land #{} at {}: {why}.", review.pr, short(head));
-    saw(
-        chats,
-        review,
-        head,
-        &format!("left to its reviewer: {why}"),
-        false,
-    )
-    .await;
     let own = asker.is_some_and(|a| a.agent.as_deref() == Some(review.reviewer.as_str()));
     let wake = (!own).then(|| {
         format!(

@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec; the line's place is the owner's pick). Date: 2026-11-13.
 
-Built: partly. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `ui/src/chat/Waiting.test.tsx`. Not built: a silent turn in the line, and Gathr acting on a chat where nothing moves (both with the rest of promise 6's part 6.3).
+Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `ui/src/chat/Waiting.test.tsx`.
 
 Serves promise 6 of [the charter](../charter.md#the-promises): the room explains itself (parts 6.1 and 6.2 of [the truth map](../truth-map.md)).
 
@@ -61,3 +61,8 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
 - [0049](0049-gathr-lands-pull-requests.md): each look at a PR to land keeps what it saw and whether the PR moves
   by itself from there (`landings.saw`, `moving`, `looked_ts`, migration 0038).
 - `ui/src/chat/waits.ts` is gone.
+- [0052](0052-a-quiet-chat-is-noticed.md), 2026-11-13: a running turn that has made no progress for ten minutes,
+  twenty while a tool is open, is a line nobody is on, with since when (`silent_us`), and the line at the foot
+  reads "Working: Cass silent 12m" in place of "Working". A task whose owner is paused, by the agent's pause,
+  the chat's or the app's, waits on you and says ", paused", as a wait under a pause does; its line didn't
+  name the pause before. Gathr now acts on a chat where nothing moves, which is 0052's own.

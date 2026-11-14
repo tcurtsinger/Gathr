@@ -171,7 +171,10 @@ Built: yes. Proof: `crates/gathr/tests/thinking.rs`, `ui/src/chat/messages.test.
 `thinking_codex.jsonl` and `thinking_codex_live.jsonl`
 in `crates/gathr/tests/frames` are **hand-written, not recordings**, in the shapes above, each
 saying so in its first row. Nothing in them comes from a real conversation. `thinking_codex` holds
-`sleep` rows: the quiet a mark is timed by is real time, 1.1 s twice. `thinking_codex_live` holds
+`sleep` rows: the quiet a mark is timed by is real time, 1.1 s twice. The second begins at a
+`hold` row, let go when the test hears the command end: the service counts that quiet from when
+it handled the end, so a sleep begun when the engine wrote it is counted short by however far
+behind the service was (1.1 s as 944 ms once, on Windows in CI). `thinking_codex_live` holds
 two thoughts with summaries, each a `sleep` of 1.2 s long; its test also fails if a summary's
 words reach the chat's history, a live event or the turn's trace.
 

@@ -34,19 +34,20 @@ fn held(data: &Path) -> PathBuf {
     )
 }
 
-/// A service whose Codex is the stand-in playing `file`, and a signed-in Codex account's id.
-fn codex(data: &Path, file: &Path) -> (TestService, String) {
+/// A service whose Codex is the stand-in playing `file`, with `more` in its environment, and a
+/// signed-in Codex account's id.
+fn codex(data: &Path, file: &Path, more: &[(&str, &Path)]) -> (TestService, String) {
     let replay = common::replay_engine();
-    let service = TestService::with_engine(
-        data,
-        &[
-            ("GATHR_CODEX_PATH", &replay),
-            ("GATHR_REPLAY", file),
-            ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
-            ("GATHR_REPLAY_HOLD", &data.join("go")),
-            ("GATHR_WAIT_EVERY_MS", Path::new("100")),
-        ],
-    );
+    let (tokens, go) = (data.join("env.jsonl"), data.join("go"));
+    let mut env = vec![
+        ("GATHR_CODEX_PATH", replay.as_path()),
+        ("GATHR_REPLAY", file),
+        ("GATHR_REPLAY_ENV", tokens.as_path()),
+        ("GATHR_REPLAY_HOLD", go.as_path()),
+        ("GATHR_WAIT_EVERY_MS", Path::new("100")),
+    ];
+    env.extend_from_slice(more);
+    let service = TestService::with_engine(data, &env);
     let account = service
         .send(
             "POST",
@@ -76,7 +77,7 @@ fn agent(service: &TestService, name: &str, account: &str, mode: &str) -> Value 
 }
 
 fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
-    let (service, account) = codex(data, file);
+    let (service, account) = codex(data, file, &[]);
     let agent = json!({ "id": agent(&service, "Test", &account, mode) });
     let made = service.send(
         "POST",
@@ -457,13 +458,14 @@ fn token(data: &Path, n: usize) -> String {
     })
 }
 
-/// Scenarios 5b and 5c on Codex, with a lead and a member (0047). The member's turn on the task
-/// ends with no report: the task isn't done, she is asked once, and the lead hears "no report".
-/// Then she reports it done from outside any turn, on a task Gathr holds as blocked: it's taken.
-#[test]
-fn on_codex_a_turn_that_ends_is_not_a_task_done_and_a_late_report_is_taken() {
-    let data = TempDir::new();
-    let (service, account) = codex(&data.0, &replies(&data.0));
+/// A lead and a member on Codex, the lead's turn holding with Ann's turn on task #1 under way: the
+/// service, the chat and the lead.
+fn lead_gives_ann_a_task(
+    data: &Path,
+    file: &Path,
+    more: &[(&str, &Path)],
+) -> (TestService, String, String) {
+    let (service, account) = codex(data, file, more);
     let lead = agent(&service, "Lead", &account, "auto");
     let ann = agent(&service, "Ann", &account, "auto");
     let members = json!([{"agent":lead,"role":"supervisor"},{"agent":ann,"role":"member"}]);
@@ -476,10 +478,53 @@ fn on_codex_a_turn_that_ends_is_not_a_task_done_and_a_late_report_is_taken() {
         json!({"text":"Plan it"}),
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
-    let (port, lead) = (service.info.port, first_token(&data.0));
     let ask = json!({"to":"Ann","what":"Write the notes"});
-    let given = call_tool(port, &lead, "give_task", ask);
+    let given = call_tool(service.info.port, &first_token(data), "give_task", ask);
     assert_eq!(given["isError"], false, "{}", text(&given));
+    (service, chat, lead.as_str().unwrap().to_string())
+}
+
+/// Scenario 6d on Codex: a member's turn that makes no progress shows as silent, and its lead is
+/// told once.
+#[test]
+fn a_silent_codex_turn_shows_and_its_lead_is_told_once() {
+    let data = TempDir::new();
+    // A turn that says a word, then holds. The word lets the next start on the account through
+    // (0016): a second engine on it waits up to 30 s for the first one's turn to answer.
+    let said_then_held = recording(
+        &data.0,
+        vec![
+            ("in", json!({"method":"turn/start"})),
+            ("out", json!({"id":3,"result":{"turn":{"id":"u1"}}})),
+            (
+                "out",
+                json!({"method":"turn/started","params":{"turn":{"id":"u1"}}}),
+            ),
+            (
+                "out",
+                json!({"method":"item/agentMessage/delta","params":{"delta":"Working"}}),
+            ),
+            ("hold", json!("")),
+            (
+                "out",
+                json!({"method":"turn/completed","params":{"turn":{"id":"u1","status":"completed"}}}),
+            ),
+        ],
+    );
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("200"))];
+    let (service, chat, lead) = lead_gives_ann_a_task(&data.0, &said_then_held, &stall);
+    common::silent_turn_shows_and_its_lead_is_told_once(&service, &data.0, &chat, &lead);
+    std::fs::write(data.0.join("go"), "").unwrap();
+}
+
+/// Scenarios 5b and 5c on Codex, with a lead and a member (0047). The member's turn on the task
+/// ends with no report: the task isn't done, she is asked once, and the lead hears "no report".
+/// Then she reports it done from outside any turn, on a task Gathr holds as blocked: it's taken.
+#[test]
+fn on_codex_a_turn_that_ends_is_not_a_task_done_and_a_late_report_is_taken() {
+    let data = TempDir::new();
+    let (service, chat, _) = lead_gives_ann_a_task(&data.0, &replies(&data.0), &[]);
+    let port = service.info.port;
 
     // The lead's turn ends, and every turn after it runs through: nobody reports anything.
     std::fs::write(data.0.join("go"), "").unwrap();

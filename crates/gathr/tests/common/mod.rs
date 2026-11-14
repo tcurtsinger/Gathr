@@ -529,6 +529,101 @@ pub fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService,
     (service, chat, lead)
 }
 
+/// What the chat waits on, as `GET /api/chats/<id>/waiting` answers.
+pub fn waiting(service: &TestService, chat: &str) -> Value {
+    let said = service.call("GET", &format!("/api/chats/{chat}/waiting"));
+    assert_eq!(said.status, 200, "{}", said.body);
+    said.json()
+}
+
+/// The rows of a read-only query on the service's data, as `gathr diag query` answers.
+pub fn rows(data: &Path, sql: &str) -> Vec<Value> {
+    let (ok, found) = gathr(data, &["diag", "query", sql]);
+    assert!(ok, "{found}");
+    found["rows"].as_array().cloned().unwrap_or_default()
+}
+
+/// Scenario 6d, on either engine. In `chat` the lead's turn and Ann's turn on task #1 both hold,
+/// with the stall time short. Ann's turn shows as not moving, with since when; her lead is told
+/// once, in a turn on no task, however long the silence lasts; the lead's own silent turn tells
+/// nobody; and the telling is found from the silent turn's reference (0019).
+pub fn silent_turn_shows_and_its_lead_is_told_once(
+    service: &TestService,
+    data: &Path,
+    chat: &str,
+    lead: &str,
+) {
+    let silent = || {
+        let said = waiting(service, chat);
+        let lines = said["lines"].as_array().cloned().unwrap_or_default();
+        let found = |l: &&Value| l["kind"] == "turn" && l["task"] == 1 && l["silent_us"].is_i64();
+        let line = lines.iter().find(found)?.clone();
+        Some((line, said))
+    };
+    let (line, said) = until(20, "Ann's turn on #1 to show as silent", silent);
+    assert_eq!(line["moves"], "nobody", "{said}");
+    let in_words = said["in_words"].as_str().unwrap_or_default();
+    let shown = "- Ann is working on #1, for under a minute, silent for under a minute";
+    assert!(in_words.contains(shown), "{said}");
+    let ann = line["agent"].as_str().unwrap().to_string();
+
+    let told = "Ann's turn on #1 has made no progress for under a minute. It is still running. \
+                A message to them reaches that turn.";
+    let tellings = |h: &Value| {
+        let messages = h["messages"].as_array().cloned().unwrap_or_default();
+        let of = |m: &&Value| m["role"] == "gathr" && m["body"] == told;
+        messages.iter().filter(of).cloned().collect::<Vec<Value>>()
+    };
+    service.wait_for(chat, 20, "the lead to be told", |h| !tellings(h).is_empty());
+    // The silence is looked at four times in each stall time: a second on, twenty times more.
+    until(20, "the silence to be a second old", || {
+        let (line, said) = silent()?;
+        let age = said["at_us"].as_i64()? - line["silent_us"].as_i64()?;
+        (age >= 1_000_000).then_some(())
+    });
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let said = tellings(&history);
+    assert_eq!(said.len(), 1, "told once: {history}");
+    let turns = history["turns"].as_array().unwrap();
+    let telling = turns.iter().find(|t| t["id"] == said[0]["turn"]);
+    let telling = telling.unwrap_or_else(|| panic!("the telling is in no turn: {history}"));
+    assert_eq!(
+        (&telling["agent"], &telling["task"]),
+        (&json!(lead), &Value::Null),
+        "the lead's, on no task: {history}"
+    );
+
+    let stalled = rows(
+        data,
+        "SELECT ref, attrs FROM event_log WHERE name = 'gathr.turn.stalled'",
+    );
+    let whose = |e: &Value| e["attrs"]["gen_ai.agent.id"].clone();
+    let mut agents: Vec<Value> = stalled.iter().map(whose).collect();
+    agents.sort_by_key(|a| a != lead);
+    assert_eq!(
+        agents,
+        [json!(lead), json!(ann)],
+        "each flagged once: {stalled:?}"
+    );
+    let told = rows(
+        data,
+        "SELECT attrs FROM event_log WHERE name = 'gathr.turn.silent_told'",
+    );
+    assert_eq!(told.len(), 1, "the lead's own tells nobody: {told:?}");
+    assert_eq!(
+        (whose(&told[0]), &told[0]["attrs"]["lead"]),
+        (json!(ann), &json!(lead)),
+        "{told:?}"
+    );
+    let flagged = stalled.iter().find(|e| whose(e) == ann.as_str()).unwrap();
+    let (ok, trace) = gathr(data, &["diag", "trace", flagged["ref"].as_str().unwrap()]);
+    let found = trace.to_string();
+    assert!(
+        ok && found.contains("gathr.turn.stalled") && found.contains("gathr.turn.silent_told"),
+        "the telling isn't found from the silent turn's reference: {trace}"
+    );
+}
+
 /// The token of the first engine the replay engine started, from `GATHR_REPLAY_ENV`.
 pub fn first_token(data: &Path) -> String {
     until(10, "the engine's token", || {

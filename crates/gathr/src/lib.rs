@@ -31,6 +31,7 @@ pub mod pauses;
 pub mod platform;
 pub mod projects;
 pub mod pushes;
+pub mod quiet;
 pub mod redact;
 pub mod run;
 pub mod search;
