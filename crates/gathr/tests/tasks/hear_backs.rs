@@ -418,7 +418,8 @@ fn the_persons_answer_begins_a_new_round() {
 
 /// Found in real use: a chat reads in the order its turns began, and a line said in no turn has
 /// none, so on a reload every such line sat at the foot of the chat. It reads after the block of
-/// whoever spoke last before it.
+/// whoever spoke last before it, first when nobody has spoken yet, and never after a turn that
+/// hasn't started, which reads last.
 #[test]
 fn a_line_said_in_no_turn_reads_where_it_was_said() {
     let dir = TempDir::new();
@@ -430,8 +431,11 @@ fn a_line_said_in_no_turn_reads_where_it_was_said() {
         gathr::store::add_turn(&conn, "c", id, T, (Some(agent), None, None)).unwrap();
         gathr::store::set_turn(&conn, id, "running", None).unwrap();
     }
+    gathr::store::say(&conn, "c", "Said before anyone spoke").unwrap();
     say("first", "Ann starts");
     say("second", "Bo starts");
+    gathr::store::add_turn(&conn, "c", "third", T, (Some("ann"), None, None)).unwrap();
+    gathr::store::add_message(&conn, "c", "third", "gathr", "text", "Not started yet").unwrap();
     say("first", "Ann ends");
     gathr::store::say(&conn, "c", "A task is done:\n- #1 Ann, Fix the build: done").unwrap();
     say("second", "Bo goes on");
@@ -444,11 +448,13 @@ fn a_line_said_in_no_turn_reads_where_it_was_said() {
         .map(|m| m["body"].as_str().unwrap().lines().next().unwrap())
         .collect();
     let order = [
+        "Said before anyone spoke",
         "Ann starts",
         "Ann ends",
         "A task is done:",
         "Bo starts",
         "Bo goes on",
+        "Not started yet",
     ];
     assert_eq!(read, order);
 }

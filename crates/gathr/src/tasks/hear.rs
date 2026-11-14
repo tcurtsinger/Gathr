@@ -2,6 +2,7 @@
 //! it can act on. Trouble at once; the rest when everything given from the same place is in. And
 //! the line in the chat for a task that ends done, which wakes nobody.
 
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -20,6 +21,8 @@ pub(super) struct Rounds {
     answers: HashMap<String, Option<String>>,
     /// The turns the person's answers woke.
     woken: HashSet<String>,
+    /// The rounds found so far: a long round is walked once, not once for each of its tasks.
+    known: RefCell<HashMap<String, String>>,
 }
 
 impl Rounds {
@@ -34,21 +37,36 @@ impl Rounds {
         let woken = woken
             .query_map([chat], |r| r.get(0))?
             .collect::<Result<_, _>>()?;
-        Ok(Rounds { answers, woken })
+        Ok(Rounds {
+            answers,
+            woken,
+            known: RefCell::default(),
+        })
     }
 
     /// The round `turn` is part of.
     pub(super) fn round(&self, turn: &str) -> String {
-        let mut at = turn;
-        // No more steps than there are turns: a loop of links ends.
-        for _ in 0..self.answers.len() {
-            let above = self.answers.get(at).and_then(|a| a.as_deref());
-            match above.filter(|a| !self.woken.contains(at) && self.answers.contains_key(*a)) {
-                Some(above) => at = above,
-                None => break,
+        let mut known = self.known.borrow_mut();
+        let (mut at, mut passed) = (turn, Vec::new());
+        let round = loop {
+            if let Some(round) = known.get(at) {
+                break round.clone();
             }
+            let above = self.answers.get(at).and_then(|a| a.as_deref());
+            let above = above.filter(|a| !self.woken.contains(at) && self.answers.contains_key(*a));
+            match above {
+                // No more steps than there are turns: a loop of links ends.
+                Some(above) if passed.len() < self.answers.len() => {
+                    passed.push(at);
+                    at = above;
+                }
+                _ => break at.to_string(),
+            }
+        };
+        for turn in passed {
+            known.insert(turn.to_string(), round.clone());
         }
-        at.to_string()
+        round
     }
 }
 

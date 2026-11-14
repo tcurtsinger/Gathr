@@ -51,7 +51,7 @@ Settled while building, each the smaller choice:
 - **The line is a message with role `gathr` and no turn,** in the words a hear-back uses for a task, so the
   window reads it with the code it had.
 - **A line reads where it was said.** A chat reads in the order its turns began, and a line has no turn, so
-  it reads after the block of whoever spoke last before it. Found in real use: on a reload every line sat
+  it reads after the block of whoever spoke last before it, and first when nobody had. Found in real use: on a reload every line sat
   at the foot of the chat.
 - **A seeded team chat says these lines too** (`gathr seed`), so the window can be looked at with them.
 

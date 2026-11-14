@@ -163,11 +163,13 @@ const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
-/// Where a message reads among a chat's turns: with its turn. One said in no turn (0051) reads
-/// after the block of whoever spoke last before it.
-const PLACE: &str = "COALESCE(t.position, (SELECT u.position FROM messages x JOIN turns u ON u.id = x.turn_id
-     WHERE x.chat_id = m.chat_id AND x.ts <= m.ts AND x.role = 'assistant' AND u.position IS NOT NULL
-     ORDER BY x.ts DESC LIMIT 1))";
+/// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
+/// said in no turn (0051) reads after the block of whoever spoke last before it, and first when
+/// nobody had.
+const PLACE: &str = "CASE WHEN m.turn_id IS NOT NULL THEN t.position ELSE COALESCE(
+     (SELECT u.position FROM messages x JOIN turns u ON u.id = x.turn_id
+      WHERE x.chat_id = m.chat_id AND x.ts <= m.ts AND x.role = 'assistant' AND u.position IS NOT NULL
+      ORDER BY x.ts DESC LIMIT 1), 0) END";
 
 /// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
