@@ -24,6 +24,8 @@ impl Task {
         let Some((tool, input, _)) = turn.approvals.remove(request_id) else {
             return false;
         };
+        // It waited on the person until now: that was no silence of its own (0052).
+        turn.progress_at = std::time::Instant::now();
         if let Some((kind, reply)) = turn.service_approvals.remove(request_id) {
             return self.answer_service(kind, request_id, allow, reply);
         }

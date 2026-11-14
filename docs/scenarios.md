@@ -373,19 +373,50 @@ Parts: 6.2
 
 Parts: 6.3, 10.4
 
-- **Given** work is owed and nothing is running or expected: a task ready with its owner free, or a PR
-  reviewed and green that nobody is merging
-- **When** that has lasted longer than the set time
-- **Then** Gathr wakes whoever can act and tells the lead what was stuck and for how long, before the
-  person has written anything. The time is recorded, so dead time has a number
+- **Given** a team chat where work is owed and nothing moves: a task ready with no turn on it, nothing
+  that moves by itself, and nothing that waits on the person
+- **When** Gathr checks the chat, and it stays so
+- **Then** the lead is woken once, on no task, with what isn't moving and for how long, before the
+  person has written anything. Once the chat has been stuck 5 minutes in all, the person is told in
+  a line in the chat, once, and the chat is marked as needing them. A PR left to its reviewer wakes
+  its reviewer and not the lead as well. When something moves, or the person writes, the mark goes
+  and the stretch is recorded with its length, what wasn't moving and what ended it, so dead time
+  has a number. If the same task still isn't moving after they wrote, the person isn't told of it
+  again, however long it lasts. A second thing that stops moving gets its own 5 minutes: then the
+  person is told, in a line that names the new thing first. A task that is restarted and fails
+  again is a new thing; one whose giver has since heard of it is not
 
 ### 6d. A turn that goes silent is seen
 
 Parts: 6.3
 
-- **Given** a builder's turn has made no progress for ten minutes
-- **When** Gathr flags it
-- **Then** the chat shows that turn as silent, with for how long, and its lead is told
+- **Given** a builder's turn on a task has made no progress for ten minutes, or twenty while a tool
+  is open, on either engine
+- **When** Gathr looks
+- **Then** the chat shows that turn as silent, with for how long, at its foot and in the list of what
+  it waits on, and its lead is told once for that turn. The turn is never stopped, and reads as
+  working again once it makes progress. A turn that waits for an approval is never silent, however
+  late the answer comes. A lead's own silent turn wakes nobody: if nothing else moves, the person is
+  told at 5 minutes
+
+### 6h. A quiet room is noticed once, and only when it is quiet
+
+Parts: 6.3
+
+- **Given** chats with work owed: one whose lead's wake changes nothing; one whose trouble its lead
+  has already heard; one that waits only on the person; one whose task's owner is paused; a paused
+  chat; an archived chat; one that waits on a queued CI job; one whose task its lead restarts, and
+  which fails again, three times over; and one where the lead was woken for a task, the person
+  wrote, and a second and a third task then stop moving
+- **When** Gathr checks each again and again, and the service is stopped and started in between
+- **Then** a wake that changes nothing isn't repeated, and the person is still told at 5 minutes. A
+  lead that already heard the trouble isn't woken again. The lead is woken again only for what
+  wasn't in its last wake, named first, and never while that wake is still queued or running: the
+  person's message doesn't make the first task news again. The chat that waits on the person, the one
+  whose owner is paused, the paused one, the archived one and the one waiting on CI are never told
+  as stuck. After the restart the lead isn't woken twice, and the time the service was down isn't
+  counted. The task that fails again and again still gets the person told, once 5 minutes of stuck
+  time have added up
 
 ### 6g. CI says what happened to each job
 
@@ -825,7 +856,6 @@ changes with it:
   should still protect the person's own checkout isn't decided.
 - **Where a hand-over shows** (1e). In the chat the person started, as written here, or in a chat of
   the specialist's.
-- **How long a quiet room is left** (6c) before Gathr acts.
 - **Tools that answer for the person** (12c). Agents hold tools that can answer an approval or a
   question when the person asks them to. A guest gets none of them; what an agent may do with them
   isn't decided.

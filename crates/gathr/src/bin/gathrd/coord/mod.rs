@@ -7,18 +7,26 @@ use std::time::Duration;
 use gathr::event::Event;
 use gathr::tasks::{self, Moved, Start};
 use serde_json::{Value, json};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::chats::Chats;
 
 mod api;
 mod looks;
+pub mod quiet;
 
 pub use api::{Change as SettingsChange, change_settings_as, present, routes, settings_shown};
 pub use looks::fresh;
 
 /// How often waits are looked at, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).
 const EVERY: Duration = Duration::from_secs(120);
+
+/// How far apart the service's looks are.
+fn every() -> Duration {
+    let ms = std::env::var("GATHR_WAIT_EVERY_MS").ok();
+    let ms = ms.and_then(|ms| ms.parse().ok());
+    ms.map_or(EVERY, Duration::from_millis)
+}
 
 /// Saves a turn's status with what it moves (its task, its giver's hear-back, waits on its agent),
 /// in one transaction, and starts the turns that calls for.
@@ -54,7 +62,8 @@ pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::E
 }
 
 /// What only the running service knows of what the chat waits on (0050): why its queued turns
-/// wait, as their agents' queues say, the turns with an approval waiting, and Gathr's own update.
+/// wait, as their agents' queues say, the turns with an approval waiting, those that have gone
+/// silent, and Gathr's own update.
 pub fn live_now(chats: &Chats, chat: &str) -> gathr::waiting::Live {
     let said = chats.queued_in(chat);
     let behind = said
@@ -69,6 +78,7 @@ pub fn live_now(chats: &Chats, chat: &str) -> gathr::waiting::Live {
             .collect(),
         approvals: chats.states.asking_in(chat),
         updating: chats.updating(),
+        silent: chats.silent_in(chat).into_iter().collect(),
     }
 }
 
@@ -86,10 +96,12 @@ pub fn person_listed(
 }
 
 /// Runs after each write: every chat whose tasks or waits it changed goes out live, whole, for
-/// the window's Summary (F8b), then the person's list across chats for the Tasks badge (F9).
+/// the window's Summary (F8b), then the person's list across chats for the Tasks badge (F9). Each
+/// chat the write may have moved is named on `quiet`, to be looked at for being stuck (0052).
 pub fn live_tasks(
     live: broadcast::Sender<Value>,
     states: Arc<crate::chat_state::States>,
+    quiet: mpsc::UnboundedSender<String>,
 ) -> impl FnMut(&mut rusqlite::Connection) + Send + 'static {
     move |conn| {
         let sent = tasks::touched::take(conn).and_then(|chats| {
@@ -112,6 +124,7 @@ pub fn live_tasks(
             waiting.retain(|chat| !chats.contains(chat));
             for chat in chats.iter().chain(&waiting) {
                 let _ = live.send(json!({ "type": "waiting", "chat": chat }));
+                let _ = quiet.send(chat.clone());
             }
             if chats.is_empty() || live.receiver_count() == 0 {
                 return Ok(());
@@ -159,11 +172,7 @@ pub async fn github(args: &[&str], dir: &std::path::Path) -> Result<String, Stri
 
 /// Looks at every open wait now, then every two minutes, for as long as the service runs.
 pub async fn run(chats: Arc<Chats>) {
-    let every = std::env::var("GATHR_WAIT_EVERY_MS")
-        .ok()
-        .and_then(|ms| ms.parse().ok())
-        .map_or(EVERY, Duration::from_millis);
-    let mut tick = tokio::time::interval(every);
+    let mut tick = tokio::time::interval(every());
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tick.tick().await;
@@ -201,6 +210,7 @@ mod tests {
         let mut conn = gathr::db::open(&dir.join("gathr.db")).unwrap();
         tasks::touched::watch(&conn).unwrap();
         let (live, mut heard) = broadcast::channel(8);
+        let (quiet, mut named) = mpsc::unbounded_channel();
         let states = Arc::new(crate::chat_state::States::new(live.clone()));
         conn.execute_batch(
             "INSERT INTO chats (id, title, created_ts) VALUES ('c1', 'Made up', 0);
@@ -210,11 +220,13 @@ mod tests {
         )
         .unwrap();
 
-        live_tasks(live, states)(&mut conn);
+        live_tasks(live, states, quiet)(&mut conn);
 
         let sent: Vec<Value> = std::iter::from_fn(|| heard.try_recv().ok()).collect();
         let types: Vec<&str> = sent.iter().filter_map(|e| e["type"].as_str()).collect();
         assert_eq!(types, ["waiting", "tasks", "person_tasks"], "{sent:?}");
+        let named: Vec<String> = std::iter::from_fn(|| named.try_recv().ok()).collect();
+        assert_eq!(named, ["c1"], "the chat is looked at for being stuck");
         assert_eq!(sent[1]["chat"], "c1");
         let failed = "SELECT conversation_id, error_type, ref, attrs FROM event_log \
                       WHERE name = 'gathr.chat.state'";

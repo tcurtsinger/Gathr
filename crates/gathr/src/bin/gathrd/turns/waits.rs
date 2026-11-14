@@ -1,10 +1,12 @@
 //! Why an agent's queued turns haven't started, said for whoever asks what a chat waits on (0050).
 //! A pause, an update, usage and a missing engine are saved on the turn. The rest lives only here,
 //! in the agent's one queue across all its chats: the turn it is behind, an engine that is closing,
-//! a message its engine hasn't read yet, a compaction waiting for background commands.
+//! a message its engine hasn't read yet, a compaction waiting for background commands. So does
+//! whether its running turn has gone silent (0052).
 
 use std::collections::HashMap;
 
+use gathr::ids::now_us;
 use serde_json::json;
 
 use super::{Ids, Task};
@@ -17,6 +19,7 @@ impl Task {
     /// Tells the chats why each queued turn waits, when that has changed since it last did, and
     /// each chat it changed for that its answer may have.
     pub(super) fn say_waits(&mut self) {
+        self.say_silent();
         let now = self.queued_whys();
         if now == self.said_waits {
             return;
@@ -38,6 +41,32 @@ impl Task {
         chats.sort();
         chats.dedup();
         for chat in chats {
+            self.chats
+                .publish(json!({ "type": "waiting", "chat": chat }));
+        }
+    }
+
+    /// Tells the chats when the running turn goes silent, with when it last made progress, and
+    /// when it no longer is: it made progress, asks for an approval, or ended (0052).
+    fn say_silent(&mut self) {
+        let silent = self.turn.as_ref().and_then(|t| {
+            let quiet = t.silent_for(self.times.stall)?;
+            // Said once, the time stands for as long as the turn stays silent.
+            let said = self.said_silent.as_ref().filter(|s| s.0 == t.ids.turn);
+            let since = said.map_or_else(|| now_us() - quiet.as_micros() as i64, |s| s.2);
+            Some((t.ids.turn.clone(), t.ids.chat.clone(), since))
+        });
+        if silent == self.said_silent {
+            return;
+        }
+        let was = std::mem::replace(&mut self.said_silent, silent);
+        if let Some((turn, _, _)) = &was {
+            self.chats.say_silent(turn, None);
+        }
+        if let Some((turn, chat, since)) = &self.said_silent {
+            self.chats.say_silent(turn, Some((chat.clone(), *since)));
+        }
+        for (_, chat, _) in was.iter().chain(&self.said_silent) {
             self.chats
                 .publish(json!({ "type": "waiting", "chat": chat }));
         }

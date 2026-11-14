@@ -240,6 +240,9 @@ fn mark(
 /// ask, or nothing more when the reviewer is told where it stands (the answer to its own report).
 /// Its done review stands either way (0047: a turn on a task would change it). None when the
 /// reviewer was told for this head already.
+///
+/// That the PR is left to its reviewer is kept with the wake, in one write: kept first, the PR
+/// would be nobody's until the wake was queued, and the chat's lead woken for it (0052).
 pub fn tell(
     conn: &mut Connection,
     review: &Review,
@@ -249,7 +252,10 @@ pub fn tell(
     trace: &str,
 ) -> Result<Option<Start>, Error> {
     let tx = conn.transaction()?;
-    if !mark(&tx, (&review.chat, review.pr, head), "told_ts")? {
+    let at = (review.chat.as_str(), review.pr, head);
+    looked(&tx, at, &format!("left to its reviewer: {why}"), false)?;
+    if !mark(&tx, at, "told_ts")? {
+        tx.commit()?;
         return Ok(None);
     }
     let start = match wake {

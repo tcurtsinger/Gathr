@@ -69,6 +69,8 @@ pub async fn once(chats: &Arc<Chats>) {
         Ok(tasks::stale::sweep(c, now, day, &paused, &t)?.starts)
     })
     .await;
+    // At every look, whether or not a wait or a PR is open (0052).
+    super::quiet::look(chats).await;
     crate::cleanup::sweep(chats, None).await;
     crate::check_runs::sweep(chats, day_us()).await;
     let found = chats.writer.call(|c| waits::to_look_at(c)).await;

@@ -2,7 +2,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import type { WaitingLine as Line, Waiting } from '../api';
+import type { WaitingLine as Line, Standing, Waiting } from '../api';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
 import { headline } from './Waiting';
@@ -30,6 +30,7 @@ const line = (kind: string, what: string, moves: Line['moves'], more: Partial<Li
   seen: null,
   looked_us: null,
   error: null,
+  silent_us: null,
   ...more,
 });
 /** The lines a test shows, made when it runs: their ages are counted from then. */
@@ -45,7 +46,14 @@ function made() {
   );
   const question = line('question', 'A question for you: Pick a colour', 'you');
   const failing = line('wait', 'Made-up Lead waits for a check', 'nobody', { error: 'gh: not signed in' });
-  return { ci, blocked, question, failing };
+  // A running turn with no progress: it began 30 minutes ago and last did something 12 minutes ago.
+  const silent = line('turn', 'Made-up Member is working on #4', 'nobody', {
+    agent: 'b',
+    task: 4,
+    since_us: minutesAgo(30),
+    silent_us: minutesAgo(12),
+  });
+  return { ci, blocked, question, failing, silent };
 }
 
 const members = [
@@ -53,6 +61,9 @@ const members = [
   { agent: 'b', name: 'Made-up Member', role: 'member' },
 ];
 const history = { chat: 'c', messages: [], turns: [], approvals: [], members };
+const agents: Standing[] = [
+  { agent: 'b', name: 'Made-up Member', state: 'working', words: 'Working', on: [], until_us: null },
+];
 
 // What the service answers now; a test changes it as the service would, then says so live.
 let answer: Waiting = { lines: [], agents: [] };
@@ -93,25 +104,43 @@ const Chat = () => (
 
 const foot = () => page.getByRole('button', { name: /^(Waiting|Not moving)/ });
 const list = page.getByRole('dialog', { name: 'What this chat waits on' });
+/** The open list: each group's heading with its count, and what its lines say. */
+const groups = () =>
+  [...document.querySelectorAll('.waiting-list section')].map((s) => [
+    s.querySelector('h3')?.textContent,
+    [...s.querySelectorAll('li')].map((li) => li.querySelector('.waiting-what')?.textContent),
+  ]);
+const read = () => document.querySelector('.waiting-list')?.textContent ?? '';
 
 test('the line says what waits on the person first, then what has waited longest, then what nobody is on', () => {
-  const { ci, blocked, question } = made();
-  expect(headline([ci, blocked])).toMatchObject({
+  const { ci, blocked, question, silent } = made();
+  expect(headline([ci, blocked], agents)).toMatchObject({
     lead: 'Waiting',
     words: 'Made-up Member waits for CI on #157',
     more: 1,
   });
-  expect(headline([blocked])).toMatchObject({ lead: 'Not moving', words: blocked.what, more: 0 });
+  expect(headline([blocked], agents)).toMatchObject({ lead: 'Not moving', words: blocked.what, more: 0 });
   // Lines that only follow others aren't stuck.
   const follows = line('trouble', '#4 is blocked. Made-up Lead hears of it next', 'others');
-  expect(headline([follows])).toMatchObject({ lead: 'Waiting', moves: 'others', more: 0 });
+  expect(headline([follows], agents)).toMatchObject({ lead: 'Waiting', moves: 'others', more: 0 });
   const approval = line('approval', 'Made-up Member needs your approval', 'you');
   const paused = line('queued', "Made-up Lead's turn is queued: paused", 'you');
-  expect(headline([question, { ...question, what: 'Another' }, approval, paused, ci])).toMatchObject({
+  expect(headline([question, { ...question, what: 'Another' }, approval, paused, ci], agents)).toMatchObject({
     lead: 'Waiting on you',
     words: '2 questions, 1 approval, 1 paused',
     more: 1,
   });
+  // A silent turn comes after what waits on the person and before the rest, by its agent's name.
+  expect(headline([blocked, silent, ci], agents)).toMatchObject({
+    moves: 'nobody',
+    lead: 'Working',
+    words: 'Made-up Member silent',
+    silent: silent.silent_us,
+    more: 2,
+  });
+  expect(headline([question, silent], agents)).toMatchObject({ lead: 'Waiting on you', more: 1 });
+  // A turn sent to no agent of the chat.
+  expect(headline([{ ...silent, agent: null }], agents)).toMatchObject({ words: 'An agent silent' });
 });
 
 test('with no turn running, the foot of the chat says what it waits on and for how long, and opens the whole list', async () => {
@@ -126,17 +155,11 @@ test('with no turn running, the foot of the chat says what it waits on and for h
     .element(screen.getByRole('status').filter({ hasText: 'Waiting: Made-up Member waits for CI on #157' }))
     .toBeInTheDocument();
   await foot().click();
-  const groups = () =>
-    [...document.querySelectorAll('.waiting-list section')].map((s) => [
-      s.querySelector('h3')?.textContent,
-      [...s.querySelectorAll('li')].map((li) => li.querySelector('.waiting-what')?.textContent),
-    ]);
   await expect.element(list).toBeVisible();
   expect(groups()).toEqual([
     ['Not moving2', [blocked.what, failing.what]],
     ['Moving by itself1', [ci.what]],
   ]);
-  const read = () => document.querySelector('.waiting-list')?.textContent ?? '';
   expect(read()).toContain('Last look 1m ago: 1 of 2 checks on #157');
   expect(read()).toContain('Its looks fail: gh: not signed in');
   await userEvent.keyboard('{Escape}');
@@ -184,4 +207,23 @@ test('while a turn runs the foot says Working, not what waits', async () => {
   const screen = await render(<Chat />);
   await expect.element(screen.getByRole('button', { name: /Working/ })).toBeVisible();
   await expect.element(foot()).not.toBeInTheDocument();
+});
+
+test('a silent turn says who and for how long, and opens the list', async () => {
+  const { silent } = made();
+  service({ lines: [silent], agents }, [{ id: 't', status: 'running', why: null, ref: 'r', agent: 'b' }]);
+  const screen = await render(<Chat />);
+  // Scenario 6d: in Working's place, so the line opens the list.
+  const quiet = screen.getByRole('button', { name: /^Working: / });
+  await expect.element(quiet).toHaveTextContent('Working: Made-up Member silent 12m');
+  expect(document.querySelector('.working-spinner')).toBeNull();
+  await quiet.click();
+  await expect.element(list).toBeVisible();
+  expect(groups()).toEqual([['Not moving1', [silent.what]]]);
+  expect(read()).toContain('silent 12m');
+  // The turn makes progress again: the service says the answer may have changed, and Working is back.
+  answer = { lines: [{ ...silent, moves: 'itself', silent_us: null }], agents };
+  for (const listener of live) listener({ type: 'waiting', chat: 'c' });
+  await expect.element(quiet).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: /^Working Made-up Member/ })).toBeVisible();
 });

@@ -202,6 +202,8 @@ struct Task {
     held_raw: Vec<(Option<String>, u32, &'static str, String)>,
     /// Why each queued turn waits, as the chats were last told (0050).
     said_waits: waits::Said,
+    /// The running turn the chats were last told is silent: its chat, and since when (0052).
+    said_silent: Option<(String, String, i64)>,
 }
 
 pub async fn run(
@@ -239,6 +241,7 @@ pub async fn run(
         compactions: HashSet::new(),
         held_raw: Vec::new(),
         said_waits: HashMap::new(),
+        said_silent: None,
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
     // asking for the chat more often than this would hold a waiting message forever.

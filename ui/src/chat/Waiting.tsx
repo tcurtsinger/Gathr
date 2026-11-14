@@ -1,5 +1,5 @@
 import { Popover } from 'radix-ui';
-import type { WaitingLine as Line, Waiting } from '../api';
+import type { WaitingLine as Line, Standing, Waiting } from '../api';
 import { Elapsed } from './Working';
 import './summary.css';
 import './waiting.css';
@@ -32,10 +32,11 @@ function asks(lines: Line[]): string {
 }
 
 /**
- * The line's words, the first that applies: what waits on the person; else the thing that has waited
- * longest among those that move by themselves; else what nobody is on. `more` is every other line.
+ * The line's words, the first that applies: what waits on the person; else a running turn that makes
+ * no progress; else the thing that has waited longest among those that move by themselves; else what
+ * nobody is on. `more` is every other line.
  */
-export function headline(lines: Line[]) {
+export function headline(lines: Line[], agents: Standing[]) {
   const you = lines.filter((l) => l.moves === 'you');
   if (you.length)
     return {
@@ -43,6 +44,15 @@ export function headline(lines: Line[]) {
       lead: 'Waiting on you',
       words: asks(you),
       more: lines.length - you.length,
+    };
+  const silent = lines.find((l) => l.silent_us);
+  if (silent)
+    return {
+      moves: silent.moves,
+      lead: 'Working',
+      words: `${agents.find((a) => a.agent === silent.agent)?.name ?? 'An agent'} silent`,
+      silent: silent.silent_us,
+      more: lines.length - 1,
     };
   const moving = lines.find((l) => l.moves === 'itself');
   const idle = lines.find((l) => l.moves === 'nobody');
@@ -58,14 +68,14 @@ export function headline(lines: Line[]) {
 }
 
 /**
- * What the chat waits on, at the foot of the chat while no turn runs (0050; the owner's pick, where
- * "Working" shows): one line, the most pressing first, that opens the whole list. Nothing when the
- * answer has no line.
+ * What the chat waits on, at the foot of the chat while no turn runs or a running one is silent (0050;
+ * the owner's pick, where "Working" shows): one line, the most pressing first, that opens the whole
+ * list. Nothing when the answer has no line.
  */
 export function WaitingLine({ waiting }: { waiting?: Waiting }) {
   const lines = waiting?.lines ?? [];
   if (lines.length === 0) return null;
-  const said = headline(lines);
+  const said = headline(lines, waiting?.agents ?? []);
   const words = `${said.lead}: ${said.words}`;
   return (
     <Popover.Root>
@@ -73,7 +83,16 @@ export function WaitingLine({ waiting }: { waiting?: Waiting }) {
         <Popover.Trigger asChild>
           <button type="button" aria-haspopup="dialog" title={words}>
             <span className="waiting-mark" data-moves={said.moves} aria-hidden="true" />
-            <span className="waiting-words">{words}</span>
+            <span className="waiting-words">
+              {words}
+              {said.silent && (
+                // Not read out: it is redrawn as time passes.
+                <span aria-hidden="true">
+                  {' '}
+                  <Elapsed since={said.silent / 1000} to="minute" bare />
+                </span>
+              )}
+            </span>
             {said.since !== undefined && (
               // Not read out: it is redrawn as time passes.
               <span className="working-time" aria-hidden="true">
@@ -131,6 +150,11 @@ function Row({ line }: { line: Line }) {
         {line.since_us !== null && (
           <span>
             <Elapsed since={line.since_us / 1000} to="minute" bare />
+          </span>
+        )}
+        {line.silent_us && (
+          <span>
+            silent <Elapsed since={line.silent_us / 1000} to="minute" bare />
           </span>
         )}
         {line.seen && (

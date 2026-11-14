@@ -111,7 +111,8 @@ fn start(
         .map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let live = tokio::sync::broadcast::channel(4096).0;
     let states = Arc::new(chat_state::States::new(live.clone()));
-    let after = coord::live_tasks(live.clone(), states.clone());
+    let (moved, quiet) = tokio::sync::mpsc::unbounded_channel();
+    let after = coord::live_tasks(live.clone(), states.clone(), moved);
     let writer = Writer::start(conn, crash_log.clone(), after);
     logs::install(writer.clone(), crash_log.clone());
     if !early_lines.is_empty() {
@@ -123,6 +124,7 @@ fn start(
     let served = runtime.block_on(serve(
         data,
         (writer, live, states),
+        quiet,
         port,
         ui,
         early_lines.len(),
@@ -176,6 +178,7 @@ async fn serve(
         tokio::sync::broadcast::Sender<serde_json::Value>,
         Arc<chat_state::States>,
     ),
+    quiet: tokio::sync::mpsc::UnboundedReceiver<String>,
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
@@ -236,6 +239,7 @@ async fn serve(
     // Before the queues fill: what a pause holds stays held after a restart.
     chats.pauses_changed().await;
     chats.take_over().await;
+    tokio::spawn(coord::quiet::run(chats.clone(), quiet));
     tokio::spawn(coord::run(chats.clone()));
     tokio::spawn(updates::run(updates.clone(), chats.clone()));
     tokio::spawn(updates::run(codex_updates.clone(), chats.clone()));

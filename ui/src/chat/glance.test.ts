@@ -32,6 +32,7 @@ const task = (number: number, owner: string, more: Partial<Task> = {}): Task => 
 });
 const stands = (agent: string, more: Partial<Standing> = {}): Standing => ({
   agent,
+  name: 'Made-up',
   state: 'waiting',
   words: 'Waiting',
   on: [],

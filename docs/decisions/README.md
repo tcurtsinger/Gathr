@@ -59,5 +59,6 @@ fails in CI when the two differ.
 | 0047 | [A task's report is a record, and Gathr works out where the task stands](0047-a-report-is-a-record.md) | accepted | yes |
 | 0048 | [Gathr records friction, starting with what agents report](0048-gathr-records-friction.md) | accepted | partly |
 | 0049 | [Gathr lands a pull request](0049-gathr-lands-pull-requests.md) | accepted | yes |
-| 0050 | [One answer to what a chat waits on](0050-what-a-chat-waits-on.md) | accepted | partly |
+| 0050 | [One answer to what a chat waits on](0050-what-a-chat-waits-on.md) | accepted | yes |
 | 0051 | [The giver hears when all is in, or at once on trouble](0051-the-giver-hears-when-all-is-in.md) | accepted | yes |
+| 0052 | [A quiet chat is noticed, and its dead time has a number](0052-a-quiet-chat-is-noticed.md) | accepted | yes |

@@ -117,6 +117,7 @@ export function ChatView(props: Props) {
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
+  const silent = waiting?.lines.some((l) => l.silent_us);
   const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
   // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
@@ -283,16 +284,18 @@ export function ChatView(props: Props) {
               !archived && (
                 <>
                   <RunLine run={run} members={state.members} />
-                  {run.state === 'running' && (
+                  {run.state === 'running' && !silent && (
                     <Working
                       state={state}
                       summary={summary.open}
                       onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
                     />
                   )}
-                  {/* In Working's place while none runs: what the chat waits on. A queued turn
-                      that hasn't started is one of the things it says. */}
-                  {run.state === 'running' && !working(state) && <WaitingLine waiting={waiting} />}
+                  {/* In Working's place while none runs, or one that runs makes no progress: what the
+                      chat waits on. A queued turn that hasn't started is one of the things it says. */}
+                  {run.state === 'running' && (silent || !working(state)) && (
+                    <WaitingLine waiting={waiting} />
+                  )}
                 </>
               )
             }

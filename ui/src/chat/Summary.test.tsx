@@ -211,6 +211,7 @@ test('the team is one line each: what it is doing and its tasks done, in order o
   // What the lead waits for is the service's answer; the two with nothing to do are free.
   const stands = (agent: string, state: 'waiting' | 'free', words: string) => ({
     agent,
+    name: 'Made-up',
     state,
     words,
     on: [],
