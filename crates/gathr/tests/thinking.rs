@@ -14,24 +14,27 @@ use serde_json::{Value, json};
 /// A service whose engines replay `name`, with a signed-in account for `engine`, and the chat
 /// of one agent on it.
 fn service(data: &Path, engine: &str, name: &str) -> (TestService, String, Value) {
-    service_stalling_after(data, engine, name, "600000")
+    service_with(data, engine, name, &[])
 }
 
-/// The same, flagging a turn as stalled after `stall` milliseconds without progress.
-fn service_stalling_after(
+/// The same, with more set for the service: another stall time, or the file its engine's `hold`
+/// row waits for.
+fn service_with(
     data: &Path,
     engine: &str,
     name: &str,
-    stall: &str,
+    more: &[(&str, &Path)],
 ) -> (TestService, String, Value) {
     let (replay, played) = (common::replay_engine(), recording(name));
-    let env = [
-        ("GATHR_STALL_AFTER_MS", Path::new(stall)),
+    let started = data.join("env.jsonl");
+    let mut env = vec![
+        ("GATHR_STALL_AFTER_MS", Path::new("600000")),
         ("GATHR_CLAUDE_PATH", replay.as_path()),
         ("GATHR_CODEX_PATH", replay.as_path()),
         ("GATHR_REPLAY", played.as_path()),
-        ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
+        ("GATHR_REPLAY_ENV", started.as_path()),
     ];
+    env.extend_from_slice(more);
     let service = TestService::start_with(data, &env);
     let body = json!({ "engine": engine, "name": "Thinking test" });
     let account = service.send("POST", "/api/accounts", body).json()["id"]
@@ -60,6 +63,18 @@ fn service_stalling_after(
 /// One turn in the chat: its history once the turn is `status`, and every live event up to the
 /// turn's end.
 fn one_turn(service: &TestService, chat: &str, agent: &Value, status: &str) -> (Value, Vec<Value>) {
+    one_turn_letting_go(service, chat, agent, status, None)
+}
+
+/// The same, making the file `go` when a step's end is heard: the recording's `hold` row waits
+/// for it, so what the engine does next comes after the service has handled that end.
+fn one_turn_letting_go(
+    service: &TestService,
+    chat: &str,
+    agent: &Value,
+    status: &str,
+    go: Option<&Path>,
+) -> (Value, Vec<Value>) {
     let mut live = service.live();
     let path = format!("/api/chats/{chat}/messages");
     let body = json!({ "text": "Think it through", "agent": agent });
@@ -68,6 +83,10 @@ fn one_turn(service: &TestService, chat: &str, agent: &Value, status: &str) -> (
     let mut heard = Vec::new();
     loop {
         let event = next_live(&mut live);
+        let step_ended = event["type"] == "tool" && event["body"]["tool"].is_string();
+        if let Some(go) = go.filter(|_| step_ended) {
+            std::fs::write(go, "").unwrap();
+        }
         let ended = event["type"] == "turn" && event["status"] != "running";
         heard.push(event);
         if ended {
@@ -266,11 +285,17 @@ fn a_restart_stops_the_steps_a_dead_service_left_running() {
 /// Codex says only that it thought, once it has: each mark is timed by the quiet before it. Of
 /// the fixture's four, the one after a second of quiet and the one a second after the command
 /// ended are kept; the one right after another and the one while the command ran are not.
+///
+/// The engine holds before that second quiet until the command's end is heard here. The service
+/// counts the quiet from when it handled the end, which a busy machine makes later than the engine
+/// wrote it: begun at the write, a quiet of 1.1 s was counted as 944 ms and dropped (CI, Windows).
 #[test]
 fn a_codex_mark_is_a_thought_as_long_as_the_quiet_before_it_or_nothing() {
     let data = TempDir::new();
-    let (service, chat, agent) = service(&data.0, "codex", "thinking_codex");
-    let (history, heard) = one_turn(&service, &chat, &agent, "done");
+    let go = data.0.join("go");
+    let held = [("GATHR_REPLAY_HOLD", go.as_path())];
+    let (service, chat, agent) = service_with(&data.0, "codex", "thinking_codex", &held);
+    let (history, heard) = one_turn_letting_go(&service, &chat, &agent, "done", Some(&go));
     assert_eq!(
         kinds(&history),
         ["thinking", "Shell", "thinking", "text"],
@@ -356,8 +381,8 @@ fn a_codex_thought_under_way_opens_live_then_closes_with_its_time_and_none_of_it
 #[test]
 fn a_long_codex_thought_whose_summary_keeps_coming_is_not_a_stall() {
     let data = TempDir::new();
-    let (service, chat, agent) =
-        service_stalling_after(&data.0, "codex", "thinking_codex_long", "1200");
+    let stall = [("GATHR_STALL_AFTER_MS", Path::new("1200"))];
+    let (service, chat, agent) = service_with(&data.0, "codex", "thinking_codex_long", &stall);
     let (history, _) = one_turn(&service, &chat, &agent, "done");
     assert_eq!(kinds(&history), ["thinking", "text"], "{history}");
     let took = thoughts(&history)[0]["body"]["duration_ms"]
