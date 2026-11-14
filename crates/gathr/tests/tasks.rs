@@ -12,6 +12,8 @@ mod landing_records;
 mod reports;
 #[path = "tasks/reviews.rs"]
 mod review_evidence;
+#[path = "tasks/review_notes.rs"]
+mod review_notes;
 #[path = "tasks/waits.rs"]
 mod waits_fire;
 
@@ -497,6 +499,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
     );
     let said = Said {
         commit: Some("abc1234"),
+        nothing_unasked: true,
         ..Said::default()
     };
     finish(&mut conn, "bo", task.number, Finish::Done, &said).unwrap();
@@ -754,6 +757,7 @@ fn reviewed(conn: &mut Connection, review: i64) -> Vec<Start> {
     tasks::started(conn, review, T).unwrap();
     let said = Said {
         commit: Some("abc1234"),
+        nothing_unasked: true,
         ..Said::default()
     };
     finish(conn, "bo", review, Finish::Done, &said).unwrap();

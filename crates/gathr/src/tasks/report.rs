@@ -5,7 +5,7 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 
 use super::records::{read, state_of};
-use super::{Kind, Start, State, Task, cascade, held, refused, turn_running};
+use super::{Kind, NoteSaid, Start, State, Task, cascade, held, notes, refused, turn_running};
 use crate::Error;
 use crate::ids::now_us;
 
@@ -49,6 +49,10 @@ pub struct Said<'a> {
     /// For a review that is done: its reviewer checked that the PR's tests and check settings
     /// still test the code (0049).
     pub signed_off: bool,
+    /// For a review: what it found, one note each (0053).
+    pub notes: &'a [NoteSaid<'a>],
+    /// For a review that is done: nothing in the change goes past what was asked.
+    pub nothing_unasked: bool,
 }
 
 /// How Gathr took a report.
@@ -99,6 +103,13 @@ pub fn finish(
     if said.signed_off && (t.kind != Kind::Review || how != Finish::Done) {
         return Err(refused("`signed_off` goes with a review that is done"));
     }
+    if (!said.notes.is_empty() || said.nothing_unasked) && t.kind != Kind::Review {
+        return Err(refused("`notes` and `nothing_unasked` go with a review"));
+    }
+    if said.notes.iter().any(|n| n.says.trim().is_empty()) {
+        return Err(refused("Each note says what it is, in `says`"));
+    }
+    let asks_work = notes::ask_for_work(said.notes);
     // A review that is done is recorded again at another commit while its PR is open (G170): the
     // task stays done, and no fresh review task is made only to re-record an approval. The same
     // review recorded again with its sign-off is taken too (0049).
@@ -112,6 +123,14 @@ pub fn finish(
             [task],
             |r| r.get::<_, bool>(0),
         )?;
+    // A done review's notes are its own (0053): what it found later is a new review's.
+    if t.state == State::Done && !again && t.kind == Kind::Review && asks_work {
+        let at = t.reviewed.as_deref().unwrap_or_default();
+        return Err(refused(format!(
+            "Review #{task} is done at {}. New notes need a new review: ask its giver.",
+            at.get(..7).unwrap_or(at)
+        )));
+    }
     match t.state {
         State::Done if !again => return Ok((t, Took::Already, Vec::new())),
         State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
@@ -145,6 +164,12 @@ pub fn finish(
         (_, Kind::Review) if commit.as_deref().is_some_and(|c| !names_a_commit(c)) => {
             Some("Give 7 to 40 characters of the commit you reviewed, as git names it")
         }
+        (Finish::Done, Kind::Review) if !said.nothing_unasked || asks_work => Some(
+            "A done review says nothing_unasked: true and has no wrong or unasked notes. Report those as left.",
+        ),
+        (_, Kind::Review) if !said.notes.is_empty() && commit.is_none() => {
+            Some("Include the reviewed commit with your notes")
+        }
         (Finish::Done, Kind::Work) if !shown => {
             Some("Say what to look at when work is done: a PR, a commit, a file or a note")
         }
@@ -164,6 +189,7 @@ pub fn finish(
         Kind::Review => (commit, None),
         _ => (None, file.or(commit)),
     };
+    let now = now_us();
     tx.execute(
         "UPDATE tasks SET finish = ?2, finish_note = ?3, finish_see = ?4, finish_ts = ?5, asks = 0,
                           blocked_on = CASE WHEN ?2 = 'blocked' THEN ?6 ELSE NULL END,
@@ -181,13 +207,19 @@ pub fn finish(
             how.as_str(),
             note,
             see,
-            now_us(),
+            now,
             said.on_task,
             said.pr,
             reviewed,
             said.signed_off
         ],
     )?;
+    if let Some(reviewed) = reviewed.as_deref()
+        && (!said.notes.is_empty() || how == Finish::Done)
+    {
+        let nothing_unasked = said.nothing_unasked;
+        notes::record(&tx, &t, reviewed, said.notes, now, nothing_unasked, trace)?;
+    }
     let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;

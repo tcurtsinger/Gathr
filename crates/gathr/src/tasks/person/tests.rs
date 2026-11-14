@@ -40,6 +40,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         in_passing: false,
         round: None,
         judged: None,
+        notes: Vec::new(),
     }
 }
 

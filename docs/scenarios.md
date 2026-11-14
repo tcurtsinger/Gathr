@@ -712,6 +712,17 @@ Parts: 10.4
 - **Then** its reviewer is woken once for that commit, on no task, with what Gathr saw, and its
   review stands. A merge that GitHub doesn't confirm settles nothing and isn't made again
 
+### 10g. A review asks what fails and what wasn't asked
+
+Parts: 10.6
+
+- **Given** a PR whose builder was asked for something small, and a reviewer given its review
+- **When** the reviewer finds code the ask doesn't need, and reports the review left with an `unasked` note
+- **Then** the PR isn't landed, and the builder is given a task to take it out, in passing, with the note in its
+  why. The reviewer's giver hears that the review is blocked and who has the fix. A done review says
+  `nothing_unasked: true` and has no `wrong` or `unasked` notes, or it is refused with a reference. Its
+  suggestions are heard with the done line and start no turn
+
 ## 11. No rulebook needed, and Gathr measures it
 
 ### 11a. A new project works on defaults

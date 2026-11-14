@@ -154,6 +154,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM waits WHERE chat_id = ?1".into(),
         "DELETE FROM landings WHERE chat_id = ?1".into(),
         "DELETE FROM quiet WHERE chat_id = ?1".into(),
+        format!("DELETE FROM review_notes WHERE task IN {of_tasks}"),
         "DELETE FROM tasks WHERE chat_id = ?1".into(),
         "DELETE FROM chat_members WHERE chat_id = ?1".into(),
         "DELETE FROM engine_sessions WHERE chat_id = ?1".into(),

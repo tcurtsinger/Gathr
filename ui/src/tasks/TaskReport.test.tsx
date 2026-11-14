@@ -130,3 +130,29 @@ test("a review shows the commit it is of, and the PR's head once it is out of da
     'Reviewed at: abc1234. Out of date: #18 is at def5678',
   ]);
 });
+
+test('a review lists its notes, each with its kind and file', async () => {
+  const review = task({
+    kind: 'review',
+    state: 'blocked',
+    reason: 'left: two notes. Gathr gave #14 to sol to fix it',
+    pr: 18,
+    reviewed: 'abc1234def',
+    report: { how: 'left', note: 'two notes', see: null, at_us: 1 },
+    notes: [
+      { kind: 'wrong', file: 'src/export.ts', says: 'The export skips archived chats' },
+      { kind: 'unasked', file: 'src/cache.rs', says: 'A cache the ask does not need' },
+      { kind: 'suggestion', file: null, says: 'Name the button Export' },
+    ],
+  });
+  expect(await fields(review)).toContain('Notes: Wrong · src/export.ts: The export skips archived chats');
+  const notes = [...document.querySelectorAll('.task-fields dt')].find((dt) => dt.textContent === 'Notes');
+  const lines: string[] = [];
+  for (let dd = notes?.nextElementSibling; dd?.tagName === 'DD'; dd = dd.nextElementSibling)
+    lines.push(dd.textContent ?? '');
+  expect(lines).toEqual([
+    'Wrong · src/export.ts: The export skips archived chats',
+    'Unasked · src/cache.rs: A cache the ask does not need',
+    'Suggestion · Name the button Export',
+  ]);
+});

@@ -673,7 +673,7 @@ fn a_clean_review_wakes_nobody_and_its_end_is_a_line_in_the_chat() {
     running_on(&team, 2, 1);
     let rev = token(&data.0, 2);
     let mut live = team.service.live();
-    let done = json!({ "how": "done", "commit": "abc1234" });
+    let done = json!({ "how": "done", "commit": "abc1234", "nothing_unasked": true });
     call_tool(port, &rev, "finish_task", done);
     let go = data.0.join("go");
     let history = until(20, "every turn to end", || {
