@@ -469,34 +469,25 @@ impl Task {
             text,
             held: None,
         };
-        let row = queued.ids.clone();
-        let added = self
-            .chats
-            .writer
-            .call(move |conn| {
-                store::add_turn(
-                    conn,
-                    &row.chat,
-                    &row.turn,
-                    &row.trace,
-                    (row.agent.as_deref(), row.task, row.answers.as_deref()),
-                    gathr::words::Opened::Person,
-                )
-            })
-            .await;
-        let ids = &queued.ids;
-        if let Some(Err(e)) = added {
-            return Err(self.fail_send(ids, e.to_string()));
-        }
-        let message = self.db_message(ids, "user", "text", &queued.text).await;
-        let message = match message {
-            Ok(message) => message,
-            Err(why) => {
-                // Its turn row is there already: it ends failed, not queued for good.
-                self.set_turn(ids, "failed", Some(&why)).await;
-                return Err(self.fail_send(ids, why));
-            }
+        let (row, text) = (queued.ids.clone(), queued.text.clone());
+        // The turn and the message that opens it are one write, as Gathr's own are: a check between
+        // two would see the person's turn move the chat, and not that they wrote (0052).
+        let saved = self.chats.writer.call(move |conn| {
+            let tx = conn.transaction()?;
+            let of = (row.agent.as_deref(), row.task, row.answers.as_deref());
+            let opened = gathr::words::Opened::Person;
+            store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, opened)?;
+            let message = store::add_message(&tx, &row.chat, &row.turn, "user", "text", &text)?;
+            tx.commit()?;
+            Ok::<_, gathr::Error>(message)
+        });
+        let saved = match saved.await {
+            Some(saved) => saved.map_err(|e| e.to_string()),
+            None => Err("the database didn't answer".to_string()),
         };
+        let ids = &queued.ids;
+        let message = saved
+            .map_err(|why| self.fail_send(ids, format!("A user message wasn't saved: {why}")))?;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             Event::point("gathr.chat.send")
