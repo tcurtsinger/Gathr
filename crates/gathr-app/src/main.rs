@@ -1,10 +1,13 @@
-//! Gathr's window (0012): it shows the web UI and holds no state. Installed, it finds the service
-//! on the data folder or starts `gathrd` beside it, and signs in through a one-time link (0004).
+//! Gathr's window (0012): it shows the web UI and holds no state but, in memory, for each chat that
+//! needs the person, whether it was told, whether a pause holds it, and what waited on the person in
+//! it at its last read (0058). Installed, it finds the service on the data folder or starts
+//! `gathrd` beside it, and signs in through a one-time link (0004).
 //! Closing it hides it to the tray (the menu bar on macOS); Quit there stops the service and the
 //! window. Opening Gathr again shows the same window: one per data folder.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod follow;
+mod notify;
 mod update;
 
 use std::path::PathBuf;
@@ -73,10 +76,11 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
     let app = tauri::Builder::default()
         // A second launch on this folder hands over to this one and exits before its own setup runs.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            reopen(app, "second launch")
+            reopen(app, "second launch", None)
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(Service {
             data,
             info: Mutex::new(None),
@@ -103,8 +107,8 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             tray(app.handle())?;
             // Started at login (`gathr::platform::login`), or after an update made while hidden:
             // in the tray, its window ready to show.
-            let hidden = std::env::args().any(|a| a == "--hidden")
-                | update::take_restart_hidden(app.handle());
+            let after_update = update::take_restart_hidden(app.handle());
+            let hidden = after_update || std::env::args().any(|a| a == "--hidden");
             if !hidden {
                 window.show()?;
             }
@@ -114,13 +118,14 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             }
             update::run(app.handle());
             follow::run(app.handle());
+            notify::run(app.handle(), after_update);
             Ok(())
         })
         .build(context)
         .unwrap_or_else(|e| exit(&format!("Start failed: {e}")));
     app.run(|app, event| match event {
         #[cfg(target_os = "macos")]
-        RunEvent::Reopen { .. } => reopen(app, "dock"),
+        RunEvent::Reopen { .. } => reopen(app, "dock", None),
         // Quit in the tray, Cmd+Q, or the system ending the session: the service goes too, gently.
         // Not for an update: only the window restarts.
         RunEvent::Exit => {
@@ -157,8 +162,8 @@ fn connect(app: &AppHandle) -> (tauri::Url, Option<bool>) {
 }
 
 /// Shows the hidden window. The service may have stopped meanwhile: then it's found or started
-/// again, as a fresh launch would, and the window loads it.
-fn reopen(app: &AppHandle, via: &'static str) {
+/// again, as a fresh launch would, and the window loads it. With a chat, the page opens it.
+fn reopen(app: &AppHandle, via: &'static str, chat: Option<String>) {
     let app = app.clone();
     // Off the event loop: starting the service can take a while.
     std::thread::spawn(move || {
@@ -183,7 +188,11 @@ fn reopen(app: &AppHandle, via: &'static str) {
         let shown = window
             .unminimize()
             .and_then(|()| window.show())
-            .and_then(|()| window.set_focus());
+            .and_then(|()| window.set_focus())
+            .and_then(|()| match &chat {
+                Some(chat) => window.eval(format!("window.gathrOpenChat?.({chat:?})")),
+                None => Ok(()),
+            });
         let attrs = serde_json::json!({ "via": via, "started_service": started });
         report(
             &app,
@@ -249,7 +258,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                 let app = app.clone();
                 std::thread::spawn(move || update::install(&app, "tray"));
             }
-            "open" => reopen(app, "tray"),
+            "open" => reopen(app, "tray", None),
             "pause" => pause_all(app, true),
             "resume" => pause_all(app, false),
             "quit" => app.exit(0),
@@ -269,7 +278,7 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
                 }
             );
             if cfg!(windows) && click {
-                reopen(tray.app_handle(), "tray");
+                reopen(tray.app_handle(), "tray", None);
             }
         });
     if let Some(icon) = app.default_window_icon() {
@@ -320,11 +329,7 @@ fn show_paused(app: &AppHandle) {
         let Ok(answer) = http::call(info.port, &info.token, "GET", "/api/pauses") else {
             return;
         };
-        let pauses = answer.json()["pauses"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
-        let paused = pauses.iter().any(|p| p["scope"] == "app");
+        let paused = gathr::notice::app_paused(&answer.json());
         let items = app.state::<PauseItems>();
         let _ = items.pause.set_enabled(!paused);
         let _ = items.resume.set_enabled(paused);

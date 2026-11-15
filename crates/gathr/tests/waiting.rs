@@ -124,7 +124,7 @@ fn one_answer_names_each_agent_with_its_task_and_whether_it_works_waits_or_is_fr
     );
 
     let asked = Live {
-        approvals: vec![running],
+        approvals: HashMap::from([(running, 42)]),
         ..service()
     };
     let said = answer(&conn, &asked);
@@ -133,7 +133,13 @@ fn one_answer_names_each_agent_with_its_task_and_whether_it_works_waits_or_is_fr
         (ann.state, ann.words.as_str()),
         ("needs_you", "Needs your approval")
     );
-    assert_eq!(line(&said, "approval", "Ann").moves, Moves::You);
+    let asks = line(&said, "approval", "Ann");
+    assert_eq!(asks.moves, Moves::You);
+    assert_eq!(
+        asks.since_us,
+        Some(42),
+        "as old as the approval, not its turn"
+    );
 }
 
 /// Scenario 6b: one answer lists every hold, each with who can end it and since when.

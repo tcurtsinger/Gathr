@@ -2,7 +2,7 @@
 
 Status: accepted. Date: 2026-11-06. The framework is the owner's choice (React + TypeScript).
 
-Built: partly. Proof: `crates/gathr/tests/installed.rs`, `crates/gathr/tests/window.rs`, `ui/src/settings/General.test.tsx`. Not built: notifications.
+Built: partly. Proof: `crates/gathr/tests/installed.rs`, `crates/gathr/tests/window.rs`, `ui/src/settings/General.test.tsx`. Notifications: [0058](0058-gathr-tells-you-outside-the-window.md).
 
 Out of date below: the window keeps a few preferences in cookies; "no component library" was changed by [0022](0022-ui-tooling.md) and [0030](0030-ui-foundation.md).
 
@@ -15,7 +15,7 @@ The React UI, browser client and Windows/macOS desktop window are built. Remote 
 - The UI is a React and TypeScript web app. It talks to the service only over the service's HTTP and WebSocket API, the same API any client uses.
 - The service serves the built UI on localhost, so a browser on this machine can use Gathr.
 - The desktop app is a Tauri 2 window that shows that UI and adds what a browser can't: a tray icon (the menu bar on macOS), notifications, opening at login, and the window itself. It runs on Windows and macOS ([0016](0016-macos.md)).
-- The window holds no state and owns no engines. Closing or reloading it never touches a running turn.
+- The window holds no state but, in memory, for each chat that needs the person, whether it was told, whether a pause holds it, and what waited on the person in it at its last read ([0058](0058-gathr-tells-you-outside-the-window.md)). It owns no engines. Closing or reloading it never touches a running turn.
 
 ## Why
 

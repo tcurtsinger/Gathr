@@ -162,9 +162,9 @@ States per scope: `running`, `pausing` (paused, but turns or commands still run)
 - `pausing` becomes `paused` when the service's own state shows no turn, check, side job or tracked background command in the scope. The service then says once: "Everything is paused. Nothing is running." Agents never say it.
 - While `pausing`, the service lists what still runs and whose.
 - Stop now (the person's alone): interrupts every turn in the scope, ends the background commands those turns started by the engine's own id (never by name), and holds a carry-on per agent naming what was ended. The scope stays paused as `stopped`; Restart is its resume.
-- F10 builds the person's pauses. The Supervisor's chat pause, the hand-off limit's pause and holding notifications come with the features that need them.
+- F10 builds the person's pauses. The Supervisor's chat pause, the hand-off limit's pause and holding notifications come with the features that need them (built: [0058](0058-gathr-tells-you-outside-the-window.md)).
 - Who may pause: the whole app, the person only; a chat, the person or its Supervisor; an agent, the person. The Supervisor may resume only its own pause, or the person's once the person has written in the chat since.
-- Notifications and sounds are held during an app-wide pause, except sign-in and security problems; resume shows one summary.
+- Notifications and sounds are held during an app-wide pause, except sign-in and security problems; resume shows one summary. Built ([0058](0058-gathr-tells-you-outside-the-window.md)): the whole app's pause holds notifications except a sign-in and an approval Gathr asks for.
 
 ## Plans and plan checks
 

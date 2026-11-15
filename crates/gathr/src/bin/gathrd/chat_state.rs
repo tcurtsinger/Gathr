@@ -7,6 +7,7 @@ use std::sync::Mutex;
 
 use gathr::Error;
 use gathr::event::Event;
+use gathr::ids::now_us;
 use gathr::store;
 use rusqlite::Connection;
 use serde_json::{Value, json};
@@ -31,8 +32,9 @@ pub struct States {
 
 #[derive(Default)]
 struct Known {
-    /// Turns with an approval waiting, each with its chat: approvals are in no table.
-    asking: HashMap<String, String>,
+    /// Turns with an approval waiting, each with its chat and when its approvals began waiting:
+    /// approvals are in no table.
+    asking: HashMap<String, (String, i64)>,
     /// What the windows were last told of each chat that works or needs the person.
     sent: HashMap<String, (bool, bool)>,
 }
@@ -48,25 +50,31 @@ impl States {
     /// Notes whether the turn has an approval waiting. What the chat waits on may have changed.
     pub fn asking(&self, turn: &str, chat: &str, open: bool) {
         let mut known = self.known.lock().expect("never poisoned");
-        let was = match open {
-            true => known.asking.insert(turn.to_string(), chat.to_string()),
-            false => known.asking.remove(turn),
-        };
-        if was.is_some() != open {
+        let was = known.asking.contains_key(turn);
+        // The time stays while one stays open; one asked after an answer is new (0058).
+        if open {
+            let asked = known.asking.entry(turn.to_string());
+            asked.or_insert_with(|| (chat.to_string(), now_us()));
+        } else {
+            known.asking.remove(turn);
+        }
+        if was != open {
             let _ = self.live.send(json!({ "type": "waiting", "chat": chat }));
         }
     }
 
-    /// The chat's turns with an approval waiting.
-    pub fn asking_in(&self, chat: &str) -> Vec<String> {
+    /// The chat's turns with an approval waiting, each with when its approvals began waiting.
+    pub fn asking_in(&self, chat: &str) -> HashMap<String, i64> {
         let known = self.known.lock().expect("never poisoned");
-        let turns = known.asking.iter().filter(|(_, c)| *c == chat);
-        turns.map(|(turn, _)| turn.clone()).collect()
+        let turns = known.asking.iter().filter(|(_, (c, _))| c == chat);
+        turns
+            .map(|(turn, (_, since))| (turn.clone(), *since))
+            .collect()
     }
 
     /// Whether an approval waits in the chat.
     fn asked(known: &Known, chat: &str) -> bool {
-        known.asking.values().any(|c| c == chat)
+        known.asking.values().any(|(c, _)| c == chat)
     }
 
     /// Adds the approvals waiting to the list's rows, as `chat_state` counts them.

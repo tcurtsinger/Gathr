@@ -171,6 +171,20 @@ export function App() {
     setSelected(id);
     setFresh(null);
   };
+  // A click on a system notification opens its chat: the desktop app calls this (0058).
+  const chooseNow = useRef(choose);
+  chooseNow.current = choose;
+  useEffect(() => {
+    const page = window as { gathrOpenChat?: (id: string) => void };
+    page.gathrOpenChat = (id) => {
+      const { chats, archived } = lists.current;
+      if ([...chats, ...archived].some((c) => c.id === id)) chooseNow.current(id);
+      else report({ name: 'gathr.ui.notify', error: 'gone', attrs: { outcome: 'clicked', chat: id } });
+    };
+    return () => {
+      delete page.gathrOpenChat;
+    };
+  }, []);
   // An archived chat stays open, read only; a deleted one gives way to its neighbour in the sidebar.
   const archive = (c: Chat) => api.archive(c.id).then(reloadLists);
   const restore = (c: Chat) => {

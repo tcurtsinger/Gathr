@@ -40,8 +40,8 @@ pub struct Live {
     pub queued: HashMap<String, String>,
     /// The turn each of those is behind, when it is behind one: in this chat or another.
     pub behind: HashMap<String, String>,
-    /// The turns with an approval waiting.
-    pub approvals: Vec<String>,
+    /// The turns with an approval waiting, each with when its approvals began waiting.
+    pub approvals: HashMap<String, i64>,
     /// The version Gathr is updating to.
     pub updating: Option<String>,
     /// The running turns that have made no progress past the limit, each with when it last did.
@@ -322,10 +322,10 @@ fn turn_lines(
         let on_task = t.task.map_or(String::new(), |n| format!(" on #{n}"));
         let line = match t.status.as_str() {
             "running" => {
-                if live.approvals.contains(&t.id) {
+                if let Some(since) = live.approvals.get(&t.id) {
                     let what = format!("{who} needs your approval");
                     let mut asks =
-                        Line::new("approval", what, Moves::You).of(agent, t.task, t.created);
+                        Line::new("approval", what, Moves::You).of(agent, t.task, *since);
                     asks.from = "service";
                     asks.turn = Some(t.id.clone());
                     lines.push(asks);
@@ -696,7 +696,7 @@ fn standings(
         let usage = usage_until(conn, id, now_us)?;
         let on = waits_for(conn, id, open, waiting)?;
         let held = |words: &str| ("waiting", words.to_string());
-        let (state, words) = if running.iter().any(|t| live.approvals.contains(&t.id)) {
+        let (state, words) = if running.iter().any(|t| live.approvals.contains_key(&t.id)) {
             ("needs_you", "Needs your approval".to_string())
         } else if asked {
             ("needs_you", "Asked you a question".to_string())
