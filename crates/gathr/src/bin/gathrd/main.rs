@@ -1,5 +1,7 @@
 //! `gathrd`: Gathr's service (docs/decisions/0004-service-process.md).
-#![windows_subsystem = "windows"]
+// Not in the test build: a test program with no console gives each console child of its tests a
+// window of its own on the desktop.
+#![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod accounts;
 mod agents;
@@ -355,5 +357,25 @@ async fn os_stop_signal() {
     tokio::select! {
         _ = ctrl_c => {}
         _ = term => {}
+    }
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use std::io::Read;
+
+    #[test]
+    fn the_test_build_is_a_console_program_so_its_children_open_no_windows() {
+        let mut head = Vec::new();
+        let exe = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+        exe.take(4096).read_to_end(&mut head).unwrap();
+        let pe = u32::from_le_bytes(head[0x3C..0x40].try_into().unwrap()) as usize;
+        let field = pe + 4 + 20 + 68;
+        let subsystem = u16::from_le_bytes(head[field..field + 2].try_into().unwrap());
+        assert_eq!(
+            subsystem, 3,
+            "expected the test build's PE subsystem to be 3 (console), got {subsystem} (2 is GUI): \
+             a GUI test build has no console, so each console program its tests start opens a window"
+        );
     }
 }
