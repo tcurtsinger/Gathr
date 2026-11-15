@@ -33,7 +33,7 @@ fn room() -> Room {
     let service = TestService::with_engine(
         &data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
             ("GATHR_REPLAY_HOLD", &data.0.join("go")),
             ("GATHR_REPLAY_ENV", &data.0.join("env.jsonl")),
             ("GATHR_GH_PATH", &fake_gh()),
@@ -86,7 +86,7 @@ fn room() -> Room {
         service.info.port,
         token,
         "give_task",
-        json!({"to":"Ann","what":"Implement it","pr":5}),
+        common::briefed(json!({"to":"Ann","what":"Implement it","pr":5})),
     );
     assert_eq!(given["isError"], false, "{}", text(&given));
     let started = nth(&data.0.join("env.jsonl"), 1);
@@ -318,7 +318,7 @@ fn pending_pr_cleanup_survives_a_service_restart_after_the_task_settled() {
     let _again = TestService::with_engine(
         &r.data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&r.data.0)),
+            ("GATHR_REPLAY", &held_recording(&r.data.0, "signed_in")),
             ("GATHR_WAIT_EVERY_MS", Path::new("100")),
             ("GATHR_GH_PATH", &fake_gh()),
             ("GATHR_FAKE_GH", &r.data.0.join("gh.json")),

@@ -29,6 +29,27 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
     ),
     (
+        "brief",
+        "brief: complete",
+        "Task #1 from Lead: Fix the build\n\
+         Why: CI is red\n\
+         Done when: CI on main is green\n\
+         Proof: the CI run on the PR\n\
+         Where: the project's worktree, on a new branch\n\
+         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
+    ),
+    (
+        "brief",
+        "brief: size",
+        "Task #2 from Lead: Fix the build\n\
+         Why: CI is red\n\
+         Done when: CI on main is green\n\
+         Proof: the CI run on the PR\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/build.rs, about 40 lines\n\
+         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
+    ),
+    (
         "review_brief",
         "review_brief: head seen, a task",
         "Task #4 from Lead: Review #70\n\

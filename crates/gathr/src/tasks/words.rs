@@ -43,6 +43,7 @@ pub fn brief(
     if let Some(why) = &t.why {
         lines.push(format!("Why: {why}"));
     }
+    lines.extend(super::brief::lines(t));
     if t.kind == Kind::PersonRequest {
         lines.extend(super::person::request_lines(t, giver));
     }

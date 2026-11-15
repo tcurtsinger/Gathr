@@ -123,7 +123,10 @@ fn a_command_ending_refreshes_a_hold_that_still_waits_on_its_merge() {
             parent: None,
             kind,
             what: "PR #5",
-            why: None,
+            brief: match kind {
+                Kind::Work => common::COMPLETE,
+                _ => Brief::default(),
+            },
             after,
             pr: Some(5),
             in_passing: false,

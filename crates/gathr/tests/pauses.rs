@@ -27,7 +27,7 @@ fn joined(dir: &Path, name: &str, parts: &[PathBuf]) -> PathBuf {
 }
 
 fn held(dir: &Path) -> PathBuf {
-    common::held_recording(dir)
+    common::held_recording(dir, "signed_in")
 }
 
 fn send(service: &TestService, chat: &str, text: &str) -> Value {
@@ -89,7 +89,12 @@ fn a_pause_holds_gathrs_turns_not_the_persons_and_outlasts_a_restart() {
     );
     let lead = token(&data.0);
     let ask = json!({ "to": "Ann", "what": "Write the notes" });
-    let given = text(&call_tool(service.info.port, &lead, "give_task", ask));
+    let given = text(&call_tool(
+        service.info.port,
+        &lead,
+        "give_task",
+        common::briefed(ask),
+    ));
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
     let history = service.wait_for(&chat, 10, "Ann's turn held", |h| {
         h["turns"][1]["held"] == "pause"
@@ -417,7 +422,7 @@ fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
         service.info.port,
         &token(&data.0),
         "give_task",
-        json!({ "to": "Lead", "what": "Run the pings" }),
+        common::briefed(json!({ "to": "Lead", "what": "Run the pings" })),
     );
     assert_ne!(given["isError"], true, "{given}");
     let tasks = format!("/api/chats/{chat}/tasks");
@@ -494,7 +499,12 @@ fn a_usage_limit_after_a_tool_leaves_the_task_as_it_was() {
         h["turns"][0]["status"] == "done"
     });
     let ask = json!({ "to": "Lead", "what": "Run the steps" });
-    let given = call_tool(service.info.port, &token(&data.0), "give_task", ask);
+    let given = call_tool(
+        service.info.port,
+        &token(&data.0),
+        "give_task",
+        common::briefed(ask),
+    );
     assert_ne!(given["isError"], true, "{given}");
     let history = service.wait_for(&chat, 10, "the carry-on held for the account", |h| {
         h["turns"][1]["status"] == "stopped" && h["turns"][2]["held"] == "usage"
@@ -545,7 +555,12 @@ fn an_engine_that_exits_after_stop_now_leaves_the_task_to_its_carry_on() {
         h["turns"][0]["status"] == "done"
     });
     let ask = json!({ "to": "Lead", "what": "Run the steps" });
-    let given = call_tool(service.info.port, &token(&data.0), "give_task", ask);
+    let given = call_tool(
+        service.info.port,
+        &token(&data.0),
+        "give_task",
+        common::briefed(ask),
+    );
     assert_ne!(given["isError"], true, "{given}");
     service.wait_for(&chat, 10, "the task's turn", |h| {
         h["turns"][1]["status"] == "running"

@@ -94,7 +94,7 @@ impl Room {
     fn built_and_reviewed(&mut self) -> (String, String, String) {
         let lead = self.lead_turn();
         let work = json!({ "to": "Ann", "what": "Add the feature", "pr": 5 });
-        let given = text(&self.call(&lead, "give_task", work));
+        let given = text(&self.call(&lead, "give_task", crate::common::briefed(work)));
         assert!(given.starts_with("Task #1 for Ann"), "{given}");
         let ann = self.token();
         let vale = self.reviews(&lead, &[5]);

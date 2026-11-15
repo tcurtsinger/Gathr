@@ -75,7 +75,7 @@ fn a_review_left_with_an_unasked_note_holds_its_pr_and_a_clean_one_lands_it() {
     put_answers(&data.0, &answers);
     let lead = room.lead_turn();
     let work = json!({ "to": "Ann", "what": "Add the feature", "pr": 5 });
-    let given = text(&room.call(&lead, "give_task", work));
+    let given = text(&room.call(&lead, "give_task", crate::common::briefed(work)));
     assert!(given.starts_with("Task #1 for Ann"), "{given}");
     room.token();
     let vale = room.reviews(&lead, &[5]);

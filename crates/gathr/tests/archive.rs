@@ -18,7 +18,7 @@ fn listed(service: &common::TestService, query: &str) -> Vec<String> {
 #[test]
 fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
     let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &common::held_recording(&data.0), &[]);
+    let (service, chat, _) = team(&data.0, &common::held_recording(&data.0, "signed_in"), &[]);
     let sent = service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),
@@ -30,11 +30,11 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
         port,
         &lead,
         "give_task",
-        json!({ "to": "Ann", "what": "Notes" }),
+        common::briefed(json!({ "to": "Ann", "what": "Notes" })),
     ));
     assert!(first.starts_with("Task #1 for Ann: ready."), "{first}");
     let after = json!({ "to": "Ann", "what": "Review notes", "after": [1] });
-    text(&call_tool(port, &lead, "give_task", after));
+    text(&call_tool(port, &lead, "give_task", common::briefed(after)));
     let check = json!({ "check": "exit 1", "then": "merge it" });
     let left = text(&call_tool(port, &lead, "wait", check.clone()));
     assert!(left.starts_with("Waiting ("), "{left}");
@@ -62,16 +62,12 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
         let turns = h["turns"].as_array().unwrap();
         turns.iter().all(|t| t["status"] != "running")
     });
-    assert_eq!(
-        history["turns"].as_array().unwrap().len(),
-        2,
-        "nothing new: {history}"
-    );
-    let stops = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.turn.stop'";
-    let (_, counted) = gathr(&data.0, &["diag", "query", stops]);
-    assert_eq!(
-        counted["rows"][0]["n"], 2,
-        "both turns were stopped: {counted}"
+    let turns = history["turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 2, "nothing new: {history}");
+    // Ann's turn is stopped running, or dropped before it's sent if the archive came first (0059).
+    assert!(
+        turns.iter().all(|t| t["status"] == "stopped"),
+        "both turns were stopped: {history}"
     );
     assert!(history["archived"].is_string(), "{history}");
     let tasks = service
@@ -121,7 +117,11 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
 fn archiving_ends_a_wait_check_that_runs_and_one_not_started_yet() {
     let data = TempDir::new();
     let fast = [("GATHR_WAIT_EVERY_MS", Path::new("100"))];
-    let (service, chat, _) = team(&data.0, &common::held_recording(&data.0), &fast);
+    let (service, chat, _) = team(
+        &data.0,
+        &common::held_recording(&data.0, "signed_in"),
+        &fast,
+    );
     let sent = service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),
@@ -230,7 +230,11 @@ fn the_stale_days_are_read_saved_and_refused_out_of_range_and_stale_tasks_reach_
         ("GATHR_STALE_DAY_MS", Path::new("1")),
         ("GATHR_WAIT_EVERY_MS", Path::new("100")),
     ];
-    let (service, chat, _) = team(&data.0, &common::held_recording(&data.0), &fast);
+    let (service, chat, _) = team(
+        &data.0,
+        &common::held_recording(&data.0, "signed_in"),
+        &fast,
+    );
     let read = service.call("GET", "/api/settings").json();
     assert_eq!(
         (&read["stale_days"], &read["cancel_days"]),

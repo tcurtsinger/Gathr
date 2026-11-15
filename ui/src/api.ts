@@ -133,6 +133,16 @@ export interface Task {
   reason: string | null;
   /** Tasks it waits for before it starts. */
   after: number[];
+  /** A work task's brief: what is true when it's done, how that is shown, and where the work goes. */
+  done?: string;
+  proof?: string;
+  where?: string;
+  /** The files or area it touches, and the rough number of lines it adds. */
+  size?: string;
+  lines?: number;
+  /** Its giver's last edit before it started, and the fields it changed, in brief order. */
+  edited_us?: number;
+  edited?: TaskField[];
   /** Its last move, once it has gone the stale days without one (F11). */
   stale_us?: number | null;
   created_us: number;
@@ -153,6 +163,8 @@ export interface Task {
   /** A review's notes from its newest report (0053). */
   notes?: ReviewNote[];
 }
+
+export type TaskField = 'what' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';
 
 /** What a review found: `wrong` fails against the ask, `unasked` the ask doesn't need, `suggestion` is an idea. */
 export interface ReviewNote {

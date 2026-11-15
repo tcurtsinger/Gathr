@@ -109,7 +109,7 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
         json!({ "args": ["pr", "view", (n + 5).to_string()], "out": pr("OPEN"), "out_merged": pr("MERGED"), "merged_if": when })
     };
     std::fs::write(&answers, json!([view(0), view(1)]).to_string()).unwrap();
-    let recording = held_recording(data);
+    let recording = held_recording(data, "signed_in");
     if waking {
         let held = std::fs::read_to_string(&recording)
             .unwrap()
@@ -250,7 +250,7 @@ impl Room {
         let port = self.service.info.port;
         for pr in prs {
             let review = json!({ "to": "Vale", "what": format!("Review #{pr}"), "kind": "review", "pr": pr });
-            let given = text(&call_tool(port, lead, "give_task", review));
+            let given = text(&call_tool(port, lead, "give_task", common::briefed(review)));
             assert!(given.starts_with("Task #"), "{given}");
         }
         self.token()

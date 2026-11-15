@@ -5,7 +5,10 @@ use std::time::Instant;
 
 use axum::http::request::Parts;
 use gathr::Error;
-use gathr::tasks::{self, Finish, Give, Kind, NoteKind, NoteSaid, Said, Start, State, Took};
+use gathr::tasks::{
+    self, DONE_MOST, Edit, Finish, Give, Kind, NoteKind, NoteSaid, PROOF_MOST, SIZE_MOST, Said,
+    Start, State, TITLE_MOST, Took, WHERE_MOST,
+};
 use gathr::waits::{self, Leave, Part};
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
@@ -21,9 +24,28 @@ pub struct GiveTask {
     /// The agent who does it, by name: one of this chat's.
     to: String,
     /// A short title, at most 80 characters: the details go in `why`.
+    #[schemars(length(max = TITLE_MOST))]
     what: String,
-    /// Why, the details, and anything the owner needs to know.
+    /// Why, the details, and anything the owner needs to know. Required on a work task.
     why: Option<String>,
+    /// What is true when it's done, at most 300 characters. Required on a work task.
+    #[schemars(length(max = DONE_MOST))]
+    done: Option<String>,
+    /// How that is shown: the test, command, run or screenshot, at most 300 characters. Required on a
+    /// work task.
+    #[schemars(length(max = PROOF_MOST))]
+    proof: Option<String>,
+    /// Where the work goes: the folder and branch, or "no code", at most 200 characters. Required on a
+    /// work task.
+    #[serde(rename = "where")]
+    #[schemars(length(max = WHERE_MOST))]
+    place: Option<String>,
+    /// The files or area it touches, at most 200 characters, with `lines`.
+    #[schemars(length(max = SIZE_MOST))]
+    size: Option<String>,
+    /// With `size`: the rough number of lines it adds.
+    #[schemars(range(min = 1))]
+    lines: Option<i64>,
     /// Task numbers that must be done before this one starts.
     after: Option<Vec<i64>>,
     /// `work` (the default) or `review`.
@@ -33,6 +55,39 @@ pub struct GiveTask {
     /// True for a task that isn't part of your own: your task doesn't wait on it, and you hear back
     /// on it by itself. Leave it out for work your own task needs.
     in_passing: Option<bool>,
+}
+
+#[derive(serde::Deserialize, schemars::JsonSchema)]
+pub struct EditTask {
+    /// The task's number.
+    task: i64,
+    /// A new short title, at most 80 characters.
+    #[schemars(length(max = TITLE_MOST))]
+    what: Option<String>,
+    /// New details: why, and anything the owner needs to know. Required on a work task.
+    why: Option<String>,
+    /// What is true when it's done, at most 300 characters. Required on a work task.
+    #[schemars(length(max = DONE_MOST))]
+    done: Option<String>,
+    /// How that is shown: the test, command, run or screenshot, at most 300 characters. Required on a
+    /// work task.
+    #[schemars(length(max = PROOF_MOST))]
+    proof: Option<String>,
+    /// Where the work goes: the folder and branch, or "no code", at most 200 characters. Required on a
+    /// work task.
+    #[serde(rename = "where")]
+    #[schemars(length(max = WHERE_MOST))]
+    place: Option<String>,
+    /// The files or area it touches, at most 200 characters, with `lines`. An empty one removes the
+    /// size and its lines.
+    #[schemars(length(max = SIZE_MOST))]
+    size: Option<String>,
+    /// With `size`: the rough number of lines it adds. Alone, it changes the lines of a task that has
+    /// a size.
+    #[schemars(range(min = 1))]
+    lines: Option<i64>,
+    /// Task numbers that must be done before it starts. Replaces the list; [] clears it.
+    after: Option<Vec<i64>>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -118,6 +173,7 @@ impl Tools {
         description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back once all you gave from \
             this task (or, with no task, since the person last wrote) has ended, and at once when one is blocked, \
             failed or stopped. Your own task waits on them. Set `in_passing` for a task that isn't part of your own work. \
+            A work task needs why, done, proof and where; a review takes none of them. \
             Check the returned tasks and PRs for duplicates."
     )]
     async fn give_task(
@@ -132,10 +188,16 @@ impl Tools {
         let giver = caller.agent.clone();
         let given = self
             .db(move |c| {
-                let kind = ask.kind.as_deref().unwrap_or("work");
-                let kind = Kind::named(kind).ok_or_else(|| {
-                    Error::Refused(format!("{kind} isn't a kind: work or review"))
-                })?;
+                let kind = match ask.kind.as_deref().unwrap_or("work") {
+                    "work" => Kind::Work,
+                    "review" => Kind::Review,
+                    kind => {
+                        return Err(Error::Refused(format!(
+                            "{kind} isn't a kind: work or review"
+                        )));
+                    }
+                };
+                let size = tasks::sized(ask.size.as_deref(), ask.lines)?;
                 let owner = agent_named(c, &chat, &ask.to)?;
                 let g = Give {
                     chat: &chat,
@@ -145,7 +207,13 @@ impl Tools {
                     parent: on.as_ref().and_then(|o| o.task),
                     kind,
                     what: &ask.what,
-                    why: ask.why.as_deref(),
+                    brief: tasks::Brief {
+                        why: ask.why.as_deref(),
+                        done: ask.done.as_deref(),
+                        proof: ask.proof.as_deref(),
+                        place: ask.place.as_deref(),
+                        size,
+                    },
                     after: ask.after.as_deref().unwrap_or_default(),
                     pr: ask.pr,
                     in_passing: ask.in_passing.unwrap_or(false),
@@ -180,6 +248,60 @@ impl Tools {
             Err(why) => Err(why),
         };
         Ok(self.respond(&caller, "give_task", started, answer).await)
+    }
+
+    #[tool(
+        description = "Change a task you gave until its first turn starts: what, why, done, proof, where, size and lines, \
+            or after. Give only what changes; after replaces the list. Once its owner has started, message the owner or \
+            cancel the task instead."
+    )]
+    async fn edit_task(
+        &self,
+        Parameters(ask): Parameters<EditTask>,
+        Extension(parts): Extension<Parts>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let caller = caller_of(&parts)?;
+        let started = Instant::now();
+        let (chat, by, trace) = (caller.chat.clone(), caller.agent.clone(), trace_of(&caller));
+        let edited = self
+            .db(move |c| {
+                let e = Edit {
+                    chat: &chat,
+                    by: by.as_deref(),
+                    task: ask.task,
+                    what: ask.what.as_deref(),
+                    why: ask.why.as_deref(),
+                    done: ask.done.as_deref(),
+                    proof: ask.proof.as_deref(),
+                    place: ask.place.as_deref(),
+                    size: ask.size.as_deref(),
+                    lines: ask.lines,
+                    after: ask.after.as_deref(),
+                };
+                let (t, starts, message) = tasks::edit(c, &e, &trace)?;
+                let state = match (t.state, &t.reason) {
+                    (State::Waiting, _) => format!("waiting on {}", numbers(&t.after)),
+                    (State::Blocked, Some(reason)) => format!("blocked ({reason})"),
+                    (state, _) => state.as_str().to_string(),
+                };
+                let fields = t.edited.join(", ");
+                Ok((
+                    format!("Task #{} edited ({fields}): {state}.", t.number),
+                    starts,
+                    message,
+                ))
+            })
+            .await;
+        let done = edited.map(|(said, starts, message)| {
+            if let Some(message) = message {
+                let chat = &caller.chat;
+                self.chats.publish(
+                    serde_json::json!({ "type": "message", "chat": chat, "message": message }),
+                );
+            }
+            (said, starts)
+        });
+        Ok(self.answer(&caller, "edit_task", started, done).await)
     }
 
     #[tool(

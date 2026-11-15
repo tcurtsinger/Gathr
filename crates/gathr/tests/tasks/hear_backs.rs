@@ -100,7 +100,7 @@ fn a_task_given_in_passing_holds_nothing_and_is_heard_back_on_by_itself() {
         parent: None,
         kind: Kind::Work,
         what: "Tidy the notes",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: None,
         in_passing: true,

@@ -378,6 +378,11 @@ pub struct Waiting {
     pub person: bool,
 }
 
+/// A turn's whole ask, for a turn `t`: every message the person or Gathr put in it, in order. A
+/// message another agent sent before it started joined it.
+pub const ASK: &str = "(SELECT group_concat(body, char(10) || char(10) ORDER BY ts) FROM messages m
+                        WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr'))";
+
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. Turns that were running then can't
 /// be continued: they're marked failed, with why, and the steps they left running are stopped.
@@ -403,15 +408,12 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
         [],
     )?;
-    let mut stmt = conn.prepare(
-        "SELECT t.id, t.chat_id, t.trace_id, t.status,
-                (SELECT group_concat(body, char(10) || char(10) ORDER BY ts) FROM messages m
-                 WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')),
-                t.agent_id, t.task, t.answers,
+    let mut stmt = conn.prepare(&format!(
+        "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.task, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
                  ORDER BY ts LIMIT 1) = 'user'
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
-    )?;
+    ))?;
     let rows = stmt.query_map([], |r| {
         Ok(Waiting {
             turn: r.get(0)?,

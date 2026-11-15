@@ -53,7 +53,7 @@ fn a_ready_release_waits_for_the_person_then_its_agents_carry_on() {
     let data = dir.0.join("data");
     let old = seed_copy(&data, "0.0.1");
     let (feed, go) = (Feed::start(), dir.0.join("go"));
-    let held = held_recording(&dir.0);
+    let held = held_recording(&dir.0, "signed_in");
     let service = TestService::start_program(
         &old,
         &data,

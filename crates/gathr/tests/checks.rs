@@ -45,7 +45,7 @@ fn room(data: &Path, repos: &Path) -> Room {
     let service = TestService::with_engine(
         data,
         &[
-            ("GATHR_REPLAY", &held_recording(data)),
+            ("GATHR_REPLAY", &held_recording(data, "signed_in")),
             ("GATHR_REPLAY_HOLD", &data.join("go")),
             ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
         ],

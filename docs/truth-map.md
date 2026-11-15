@@ -53,12 +53,13 @@ as a test will see it, is in [the scenarios](scenarios.md).
 | Part | What the promise says | State | Code | Test | Missing, or against |
 |---|---|---|---|---|---|
 | 3.1 | A task carries what to do | Built | `crates/gathr/src/tasks.rs` `give`, `crates/gathr/src/tasks/words.rs` `brief` | `crates/gathr/tests/tasks.rs::a_task_waits_for_its_after_tasks_then_starts_its_owners_turn` | One line of at most 80 characters |
-| 3.2 | A task carries why | Partly | `crates/gathr/src/tasks/words.rs` `brief` | | Optional, and no test fails if the brief drops it |
-| 3.3 | A task carries what done means and how it's proved | Written | | | Neither field exists |
-| 3.4 | A task carries where the work lives | Partly | `crates/gathr/src/tasks.rs` `pr_looked` | `crates/gathr/tests/tasks.rs::a_tasks_pr_settles_it_and_a_review_follows_its_commit` | A task may name its PR. Its branch and folder aren't on it, and the brief doesn't say where to work |
+| 3.2 | A task carries why | Built | `crates/gathr/src/tasks/brief.rs` `checked`, `crates/gathr/src/tasks/words.rs` `brief` | `crates/gathr/tests/tasks/briefs.rs::a_work_task_without_why_done_proof_or_where_is_refused_naming_each` | Required on work tasks; reviews take none |
+| 3.3 | A task carries what done means and how it's proved | Built | `crates/gathr/src/tasks/brief.rs` `checked`, `crates/gathr/src/tasks/words.rs` `brief` | `crates/gathr/tests/tasks/briefs.rs::a_work_task_without_why_done_proof_or_where_is_refused_naming_each`, `crates/gathr/tests/tasks/words.rs::briefs_are_the_kept_samples` | Required on work tasks. Gathr doesn't check that the proof was run |
+| 3.4 | A task carries where the work lives | Built | `crates/gathr/src/tasks/brief.rs` `checked`, `crates/gathr/src/tasks/words.rs` `brief` | `crates/gathr/tests/tasks/briefs.rs::a_work_task_without_why_done_proof_or_where_is_refused_naming_each`, `crates/gathr/tests/tasks/words.rs::briefs_are_the_kept_samples` | Free text: Gathr doesn't check that the folder or branch exists |
 | 3.5 | Approving a plan makes the tasks from its parts | Written | | | No plan (2.1) |
 | 3.6 | A task set after another starts only when that one's work is done | Built | `crates/gathr/src/tasks.rs` `may_start`, `waiting_on`, `cascade` | `crates/gathr/tests/tasks.rs::a_task_waits_for_its_after_tasks_then_starts_its_owners_turn`, `crates/gathr/tests/tasks.rs::a_task_done_and_held_only_on_its_pr_lets_the_tasks_after_it_start` | Done, or reported done and held only on its PR's merge |
 | 3.7 | An agent with no memory of the chat can do the task right | Written | | | Nothing tries a task from its brief alone. An agent keeps one session per chat, so it has always had the chat |
+| 3.8 | A task can be corrected until it starts | Built | `crates/gathr/src/tasks/edit.rs` `edit`, `crates/gathr/src/bin/gathrd/turns/given.rs` `ask_now` | `crates/gathr/tests/tasks/briefs.rs::the_giver_edits_a_waiting_tasks_title_and_after_and_its_brief_and_order_follow`, `crates/gathr/tests/edit_task.rs::a_brief_edited_while_its_turn_waits_is_the_one_claude_gets_and_an_edit_after_it_starts_is_refused` | Only the task's giver, with `edit_task`. The person can't edit in the window |
 
 ## 4. One voice to you
 

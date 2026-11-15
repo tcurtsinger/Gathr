@@ -23,7 +23,10 @@ fn work_and_review(conn: &mut Connection) -> (i64, i64, String) {
         parent: None,
         kind: Kind::Work,
         what: "Build the page.",
-        why: Some("Pages load slowly."),
+        brief: Brief {
+            why: Some("Pages load slowly."),
+            ..common::COMPLETE
+        },
         after: &[],
         pr: Some(7),
         in_passing: false,
@@ -46,7 +49,7 @@ fn review_of(conn: &mut Connection, pr: Option<i64>) -> (i64, String) {
         parent: None,
         kind: Kind::Review,
         what: "Review the page",
-        why: None,
+        brief: Brief::default(),
         after: &[],
         pr,
         in_passing: false,
@@ -282,11 +285,26 @@ fn a_review_left_with_an_unasked_note_gives_its_builder_a_fix_in_passing() {
         fix.why.as_deref(),
         Some(
             format!(
-                "Review #{review} by Bo, at abc1234, left these notes on PR #7:\n- Unasked: src/cache.rs: {UNASKED}\n\
-                 Make what is wrong work and take out what the ask doesn't need, on PR #7. Then report this task done."
+                "Review #{review} by Bo, at abc1234, left these notes on PR #7:\n- Unasked: src/cache.rs: {UNASKED}"
             )
             .as_str()
         )
+    );
+    let done = format!(
+        "On PR #7, what review #{review} found wrong works, and what the ask doesn't need is out."
+    );
+    assert_eq!(
+        (
+            fix.done.as_deref(),
+            fix.proof.as_deref(),
+            fix.place.as_deref()
+        ),
+        (
+            Some(done.as_str()),
+            Some("A second look by Bo at PR #7."),
+            common::COMPLETE.place
+        ),
+        "the work task's where"
     );
     assert_eq!(
         (
@@ -365,7 +383,7 @@ fn a_wrong_note_after_gathrs_fix_gets_a_second_fix() {
     assert!(second.number > fix);
     let why = second.why.unwrap();
     assert!(
-        why.contains("\n- Wrong: src/page.rs: The page still loads slowly\n"),
+        why.ends_with("\n- Wrong: src/page.rs: The page still loads slowly"),
         "{why}"
     );
 }
@@ -468,7 +486,7 @@ fn no_fix_when_the_reviewer_gave_one_or_no_task_names_the_pr() {
         parent: Some(review),
         kind: Kind::Work,
         what: "Take the cache out",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: Some(7),
         in_passing: true,

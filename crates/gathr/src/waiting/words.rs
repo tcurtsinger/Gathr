@@ -4,7 +4,7 @@
 use super::{Answer, Line, Moves, Standing};
 
 /// Names in a sentence: "Ann", "Ann and Bo", "Ann, Bo and Cy".
-pub(super) fn list(names: &[&str]) -> String {
+pub(crate) fn list(names: &[&str]) -> String {
     match names {
         [] => String::new(),
         [one] => one.to_string(),

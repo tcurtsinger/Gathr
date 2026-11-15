@@ -1,6 +1,8 @@
 //! Tasks' and waits' transitions (0010) on a real database: who may make each, what each starts,
 //! and what a task is held on.
 
+#[path = "tasks/briefs.rs"]
+mod briefs;
 mod common;
 #[path = "tasks/changes.rs"]
 mod far_end;
@@ -27,7 +29,7 @@ mod waits_fire;
 
 use common::TempDir;
 use gathr::Error;
-use gathr::tasks::{self, Finish, Give, Kind, Outcome, Said, Start, State};
+use gathr::tasks::{self, Brief, Finish, Give, Kind, Outcome, Said, Start, State};
 use gathr::waits::{self, Leave, Part};
 use rusqlite::{Connection, params};
 
@@ -82,7 +84,7 @@ fn give(
         parent: None,
         kind: Kind::Work,
         what: "Fix the build",
-        why: Some("CI is red"),
+        brief: common::COMPLETE,
         after,
         pr: None,
         in_passing: false,
@@ -509,7 +511,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         parent: None,
         kind: Kind::Review,
         what: "Review #54",
-        why: None,
+        brief: Brief::default(),
         after: &[],
         pr: Some(54),
         in_passing: false,
@@ -558,6 +560,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         owner: "ann",
         kind: Kind::Work,
         what: "Fix #61",
+        brief: common::COMPLETE,
         pr: Some(61),
         ..review
     };
@@ -599,7 +602,7 @@ fn fix_with_pr(conn: &mut Connection) -> i64 {
         parent: None,
         kind: Kind::Work,
         what: "Fix the label",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: Some(69),
         in_passing: false,
@@ -677,7 +680,7 @@ fn a_task_is_refused_with_why() {
         parent: None,
         kind: Kind::Work,
         what: "Fix it",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: None,
         in_passing: false,
@@ -745,7 +748,7 @@ fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
         parent: None,
         kind: Kind::Work,
         what: "Fix the summary",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: Some(pr),
         in_passing: false,
@@ -767,7 +770,7 @@ fn review_by_bo(conn: &mut Connection, pr: i64, given_in: &str) -> i64 {
         parent: None,
         kind: Kind::Review,
         what: "Review the fix",
-        why: None,
+        brief: Brief::default(),
         after: &[],
         pr: Some(pr),
         in_passing: false,
@@ -847,7 +850,7 @@ fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
         parent: None,
         kind: Kind::Review,
         what: "Review #90",
-        why: None,
+        brief: Brief::default(),
         after: &[],
         pr: Some(90),
         in_passing: false,
@@ -863,7 +866,7 @@ fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
         parent: None,
         kind: Kind::Work,
         what: "Fix the note",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: Some(90),
         in_passing: false,

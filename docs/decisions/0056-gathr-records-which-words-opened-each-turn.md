@@ -34,7 +34,7 @@ Builds on [0011](0011-event-record.md) and [0019](0019-troubleshooting.md). Serv
 
   | Kind | Samples |
   |---|---|
-  | `brief` | no why; with a why; picked up again with "Continue from here" (one carry reason, the restart's) |
+  | `brief` | no why; with a why; picked up again with "Continue from here" (one carry reason, the restart's); complete (why, done, proof, where); with a size ([0059](0059-a-work-task-carries-a-complete-brief.md) added the last two: version 2) |
   | `review_brief` | a PR whose head is seen, answering a task; a review with no PR |
   | `request_brief` | a choice with the member's pick; free text |
   | `report_ask` | the one ask |

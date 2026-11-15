@@ -29,7 +29,7 @@ fn lead_turn(service: &TestService, data: &Path, chat: &str, n: usize) -> String
 
 /// `held_recording`, then a second turn on the same engine: the giver's hear-back.
 fn twice(dir: &Path) -> PathBuf {
-    let first = std::fs::read_to_string(held_recording(dir)).unwrap();
+    let first = std::fs::read_to_string(held_recording(dir, "signed_in")).unwrap();
     let second = std::fs::read_to_string(recording("signed_in")).unwrap();
     let both = dir.join("twice.jsonl");
     std::fs::write(&both, format!("{}\n{second}", first.trim_end())).unwrap();
@@ -58,7 +58,7 @@ fn give(port: u16, lead: &str, to: &str, what: &str) {
         port,
         lead,
         "give_task",
-        json!({ "to": to, "what": what }),
+        common::briefed(json!({ "to": to, "what": what })),
     ));
     assert!(given.starts_with("Task #"), "{given}");
 }
@@ -66,7 +66,7 @@ fn give(port: u16, lead: &str, to: &str, what: &str) {
 #[test]
 fn a_forced_failure_is_found_from_its_reference() {
     let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &held_recording(&data.0), &[]);
+    let (service, chat, _) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
     let lead = lead_turn(&service, &data.0, &chat, 0);
     let port = service.info.port;
     let reference = forced_failure(port, &lead);
@@ -127,7 +127,7 @@ fn a_secret_in_a_tasks_reason_comes_back_hidden() {
 #[test]
 fn another_chats_events_dont_come_back() {
     let data = TempDir::new();
-    let (service, chat_a, _) = team(&data.0, &held_recording(&data.0), &[]);
+    let (service, chat_a, _) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
     let port = service.info.port;
     // B has agents of its own: one agent's turns run one at a time, so a turn of A's would hold
     // B's, and one left queued when the service stops outlives the test.
@@ -218,7 +218,7 @@ fn another_chats_events_dont_come_back() {
 #[test]
 fn a_long_answer_is_cut_at_the_cap_and_says_so() {
     let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &held_recording(&data.0), &[]);
+    let (service, chat, _) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
     let lead = lead_turn(&service, &data.0, &chat, 0);
     let port = service.info.port;
     for _ in 0..80 {

@@ -81,7 +81,8 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
         "SELECT number, chat_id, giver, owner, given_in, parent, kind, what, why, state, reason,
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
                 stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
-                in_passing, judged, signed_off
+                in_passing, judged, signed_off, done, proof, place, size, size_lines, started_ts, carry,
+                edited_ts, edited
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -134,6 +135,17 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 judged: r.get(30)?,
                 signed_off: r.get(31)?,
                 notes: Vec::new(),
+                done: r.get(32)?,
+                proof: r.get(33)?,
+                place: r.get(34)?,
+                size: r.get(35)?,
+                size_lines: r.get(36)?,
+                started_us: r.get(37)?,
+                carry: r.get(38)?,
+                edited_us: r.get(39)?,
+                edited: r
+                    .get::<_, Option<String>>(40)?
+                    .map_or(Vec::new(), |e| e.split(',').map(String::from).collect()),
             })
         },
     )?;

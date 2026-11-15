@@ -172,7 +172,7 @@ pub(super) fn fix(tx: &Transaction, review: &Task, trace: &str) -> Result<Fixed,
         outcome("no_work_task", None)?;
         return Ok((None, Vec::new()));
     };
-    let Some((builder, _)) = work_on(tx, &review.chat, pr)? else {
+    let Some((builder, work)) = work_on(tx, &review.chat, pr)? else {
         outcome("no_work_task", None)?;
         return Ok((None, Vec::new()));
     };
@@ -208,17 +208,21 @@ pub(super) fn fix(tx: &Transaction, review: &Task, trace: &str) -> Result<Fixed,
         return Ok((None, Vec::new()));
     }
     let reviewed = review.reviewed.as_deref().unwrap_or_default();
+    let reviewer_name = words::name_of(tx, reviewer)?;
     let mut why = vec![format!(
-        "Review #{} by {}, at {}, left these notes on PR #{pr}:",
+        "Review #{} by {reviewer_name}, at {}, left these notes on PR #{pr}:",
         review.number,
-        words::name_of(tx, reviewer)?,
         short(reviewed)
     )];
     why.extend(notes.iter().map(|(_, n)| format!("- {}", n.line())));
-    why.push(format!(
-        "Make what is wrong work and take out what the ask doesn't need, on PR #{pr}. Then report this task done."
-    ));
     let (what, why) = (format!("Fix the review of #{pr}"), why.join("\n"));
+    let done = format!(
+        "On PR #{pr}, what review #{} found wrong works, and what the ask doesn't need is out.",
+        review.number
+    );
+    let proof = format!("A second look by {reviewer_name} at PR #{pr}.");
+    let place = super::records::read(tx, work)?.place;
+    let place = place.unwrap_or_else(|| format!("PR #{pr}'s branch"));
     let g = Give {
         chat: &review.chat,
         giver: Some(reviewer),
@@ -227,7 +231,13 @@ pub(super) fn fix(tx: &Transaction, review: &Task, trace: &str) -> Result<Fixed,
         parent: Some(review.number),
         kind: Kind::Work,
         what: &what,
-        why: Some(&why),
+        brief: super::Brief {
+            why: Some(&why),
+            done: Some(&done),
+            proof: Some(&proof),
+            place: Some(&place),
+            size: None,
+        },
         after: &[],
         pr: Some(pr),
         in_passing: true,
