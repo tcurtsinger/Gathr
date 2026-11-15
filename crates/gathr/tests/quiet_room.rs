@@ -251,13 +251,16 @@ fn a_restart_wakes_nobody_twice_and_counts_no_time_down() {
 /// A chat is looked at as soon as a write may have moved it, not only at the service's next look.
 /// With the looks two minutes apart, as they are, the first is made as the service starts, and by
 /// the time the lead is woken it is over. The person's message then ends the stretch, well before
-/// the second.
+/// the second. Written once the wake is over, it starts a turn of its own: a check that saw that
+/// turn and not the message ended the stretch as moved (macOS CI).
 #[test]
 fn a_chat_is_looked_at_when_a_write_may_have_moved_it() {
     let data = TempDir::new();
-    let (service, chat, _) = owing(&data.0, &[]);
+    let (service, chat, lead) = owing(&data.0, &[]);
     resume(&service, &chat);
-    service.wait_for(&chat, 20, "the lead's wake", |h| !said(h, WAKE).is_empty());
+    service.wait_for(&chat, 20, "the lead's wake to end", |h| {
+        turns_of(h, &lead).iter().any(|t| t["status"] == "done")
+    });
     write(&service, &chat, "Go on");
     let stretch = until(20, "the stretch to end before the next look", || {
         stretches(&data.0).into_iter().next()
