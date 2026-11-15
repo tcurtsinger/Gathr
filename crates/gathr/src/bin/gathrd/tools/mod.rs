@@ -16,6 +16,7 @@ mod hook;
 mod merge;
 mod message;
 mod person;
+mod react;
 mod server;
 mod settings;
 mod waiting;

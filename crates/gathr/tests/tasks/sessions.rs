@@ -298,7 +298,8 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
     gathr::store::set_engine_session(&conn, "c", Some("bo"), "s-bo", "acc").unwrap();
     conn.execute_batch(
         "DROP TABLE task_sessions; ALTER TABLE turns DROP COLUMN opened_by;
-         ALTER TABLE turns DROP COLUMN opened_version; PRAGMA user_version = 41;",
+         ALTER TABLE turns DROP COLUMN opened_version; DROP TABLE reactions;
+         PRAGMA user_version = 41;",
     )
     .unwrap();
     drop(conn);

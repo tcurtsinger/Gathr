@@ -54,7 +54,9 @@ export type Custom = {
   /** A message that never reached the service. */
   unsent?: SendFailure;
   /** Messages between agents, one for each text of the block: "Juno to Orin". */
-  exchange?: { id: string; from?: string; by?: string; to?: string; time: string }[];
+  exchange?: { id: string; from?: string; by?: string; to?: string; time: string; agreed: string[] }[];
+  /** Who gave its text a thumbs-up, in the order given. */
+  agreed?: string[];
   events?: EventLine[];
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message, or
@@ -315,13 +317,27 @@ function block(
   const tick = toPerson
     ? (group.msgs.findLast((m) => m.kind === 'text')?.time ?? turn?.created ?? '')
     : undefined;
-  const who = `${agent}|${role}|${on}|${head}|${tick}`;
+  // Only the shown text's: an earlier text folds into the row, and its thumbs-up would sit under words
+  // the giver didn't agree with.
+  const last = group.msgs.at(-1);
+  const agreed = !partial && last?.kind === 'text' ? agreedBy(state, crew, last.id) : [];
+  const who = `${agent}|${role}|${on}|${head}|${tick}|${agreed}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = role ? (group.msgs[0]?.time ?? turn?.created) : undefined;
-  const custom: Custom = { agent, by: turn?.agent ?? undefined, role, time, on, head, approvals, tick };
+  const custom: Custom = {
+    agent,
+    by: turn?.agent ?? undefined,
+    role,
+    time,
+    on,
+    head,
+    approvals,
+    tick,
+    agreed,
+  };
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave, carried);
   cache.set(group.key, { sig, value });
   return value;
@@ -358,6 +374,10 @@ function toReply(
   };
 }
 
+/** Who gave a message a thumbs-up, by name, in the order given; a giver Gathr can't name is left out. */
+const agreedBy = (state: ChatState, crew: Team, message: string) =>
+  state.reactions.flatMap((r) => (r.message === message && crew.name(r.agent)) || []);
+
 /** The agent's id while it is in the chat: one that left it has no panel to open. */
 const member = (state: ChatState, agent?: string | null) =>
   state.members.some((m) => m.agent === agent) ? (agent ?? undefined) : undefined;
@@ -371,6 +391,7 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
     by: member(state, state.turns[m.turn ?? '']?.agent),
     to: crew.name(m.to),
     time: m.time,
+    agreed: agreedBy(state, crew, m.id),
   }));
   const sig = JSON.stringify(said);
   const hit = cache.get(key);

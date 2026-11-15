@@ -76,6 +76,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   ALTER TABLE agent_context DROP COLUMN window_of;
                   ALTER TABLE agent_context DROP COLUMN ran;
                   ALTER TABLE turns DROP COLUMN opened_by; ALTER TABLE turns DROP COLUMN opened_version;
+                  DROP TABLE reactions;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);

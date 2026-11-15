@@ -1,4 +1,4 @@
-import type { Failure, History, Member, Message, Task, Turn, Wait } from '../api';
+import type { Failure, History, Member, Message, Reaction, Task, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -22,6 +22,7 @@ export interface ChatState {
   members: Member[];
   tasks: Task[];
   waits: Wait[];
+  reactions: Reaction[];
 }
 
 export const empty: ChatState = {
@@ -32,6 +33,7 @@ export const empty: ChatState = {
   members: [],
   tasks: [],
   waits: [],
+  reactions: [],
 };
 
 export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
@@ -52,6 +54,7 @@ export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wai
     members: history.members ?? [],
     tasks: work?.tasks ?? [],
     waits: work?.waits ?? [],
+    reactions: history.reactions ?? [],
   };
 }
 
@@ -115,6 +118,12 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
       return { ...state, turns: { ...state.turns, [event.turn]: turn }, approvals };
+    }
+    case 'reaction': {
+      // One the history already holds may also arrive while the chat loads.
+      const { message, agent } = event.reaction;
+      if (state.reactions.some((r) => r.message === message && r.agent === agent)) return state;
+      return { ...state, reactions: [...state.reactions, event.reaction] };
     }
     case 'approval': {
       const approval = { turn: event.turn, request: event.request_id, tool: event.tool, input: event.input };

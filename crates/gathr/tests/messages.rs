@@ -579,3 +579,213 @@ fn a_message_to_a_held_member_names_the_pause_that_holds_it() {
         assert!(sent.contains(says), "{scope}: {sent}");
     }
 }
+
+impl Room {
+    fn react(&self, token: &str, message: &str) -> Value {
+        let ask = json!({ "message": message });
+        call_tool(self.service.info.port, token, "react", ask)
+    }
+
+    /// The rows `diag query` gives for `sql`.
+    fn rows(&self, sql: &str) -> Vec<Value> {
+        let (ok, rows) = gathr(&self.data, &["diag", "query", sql]);
+        assert!(ok, "{sql}: {rows}");
+        rows["rows"].as_array().unwrap().clone()
+    }
+
+    /// The attributes of each `gathr.message.reaction` event.
+    fn reaction_events(&self) -> Vec<Value> {
+        let sql = "SELECT attrs FROM event_log WHERE name = 'gathr.message.reaction'";
+        let rows = self.rows(sql).into_iter();
+        rows.map(|r| r["attrs"].clone()).collect()
+    }
+
+    /// The lead messages Ann: the lead's token, Ann's, and the id of the lead's message.
+    fn lead_wrote_to_ann(&self) -> (String, String, String) {
+        let lead = self.turn_of(&self.lead, 0);
+        let sent = self.message(&lead, "Ann", "The plan is in Shared");
+        assert_eq!(sent["isError"], false, "{sent}");
+        let ann = nth(&self.data.join("env.jsonl"), 1)["GATHR_AGENT_TOKEN"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let history = self.history();
+        let mut shown = history["messages"].as_array().unwrap().iter();
+        let sent = shown.find(|m| m["to"] == self.ann.as_str()).unwrap();
+        (lead, ann, sent["id"].as_str().unwrap().to_string())
+    }
+}
+
+/// Scenario 6f (Stage 3, part C): what Gathr tells Ann carries the lead's message's id, and her
+/// thumbs-up on it is one row and one event: no message, no turn, no hand-off.
+#[test]
+fn a_thumbs_up_is_one_row_on_the_message_and_posts_starts_and_wakes_nothing() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let (_, ann, sent) = room.lead_wrote_to_ann();
+    let anns = room.turns_of(&room.ann);
+    let told = room.said_in(&anns[0]).join("\n");
+    let carried = told
+        .split_once("(message ")
+        .and_then(|(_, rest)| rest.split_once(')'))
+        .map(|(id, _)| id.to_string());
+    assert_eq!(carried.as_deref(), Some(sent.as_str()), "{told}");
+
+    let before = room.history();
+    let counted = |h: &Value| {
+        let messages = h["messages"].as_array().unwrap().len();
+        let turns = h["turns"].as_array().unwrap().len();
+        (messages, turns)
+    };
+    let handoffs = "SELECT count(*) AS n FROM handoffs";
+    let sends = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.message.send'";
+    let (handed, sent_events) = (room.rows(handoffs), room.rows(sends));
+    let given = room.react(&ann, &sent);
+    assert_eq!(given["isError"], false, "{given}");
+    assert_eq!(text(&given), format!("Gave {sent} a thumbs-up."));
+
+    let after = room.history();
+    let reactions = after["reactions"].as_array().cloned().unwrap_or_default();
+    assert_eq!(reactions.len(), 1, "{after}");
+    assert_eq!(reactions[0]["message"], sent.as_str(), "{after}");
+    assert_eq!(reactions[0]["agent"], room.ann.as_str(), "{after}");
+    assert!(reactions[0]["time"].is_string(), "{after}");
+    assert_eq!(
+        counted(&after),
+        counted(&before),
+        "(messages, turns) changed"
+    );
+    assert_eq!(room.rows(handoffs), handed, "a hand-off was counted");
+    assert_eq!(room.rows(sends), sent_events, "a message was sent");
+    let events = room.reaction_events();
+    assert_eq!(events.len(), 1, "{events:?}");
+    assert_eq!(events[0]["message"], sent.as_str(), "{events:?}");
+    assert_eq!(events[0]["agent"], room.ann.as_str(), "{events:?}");
+}
+
+#[test]
+fn a_second_thumbs_up_from_the_same_agent_changes_nothing() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let (_, ann, sent) = room.lead_wrote_to_ann();
+    room.react(&ann, &sent);
+    let again = room.react(&ann, &sent);
+    assert_eq!(again["isError"], false, "{again}");
+    assert_eq!(text(&again), format!("{sent} already has your thumbs-up."));
+    let history = room.history();
+    let rows = history["reactions"].as_array().map(Vec::len);
+    assert_eq!(rows, Some(1), "{history}");
+    assert_eq!(room.reaction_events().len(), 1);
+}
+
+#[test]
+fn a_thumbs_up_on_gathrs_copy_lands_on_the_message_it_carries() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let (_, ann, sent) = room.lead_wrote_to_ann();
+    let history = room.history();
+    let mut all = history["messages"].as_array().unwrap().iter();
+    let copy = all.find(|m| m["copy_of"] == sent.as_str()).unwrap();
+    let copy = copy["id"].as_str().unwrap();
+    assert_ne!(copy, sent);
+    let given = room.react(&ann, copy);
+    assert_eq!(given["isError"], false, "{given}");
+    let history = room.history();
+    let on = &history["reactions"][0]["message"];
+    assert_eq!(on, sent.as_str(), "{history}");
+}
+
+#[test]
+fn a_thumbs_up_on_its_own_the_persons_another_chats_or_a_missing_message_is_refused_with_a_reference()
+ {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let (lead, ann, sent) = room.lead_wrote_to_ann();
+    let history = room.history();
+    let mut all = history["messages"].as_array().unwrap().iter();
+    let persons = all.find(|m| m["role"] == "user").unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let elsewhere = room.service.send(
+        "POST",
+        "/api/chats",
+        json!({ "members": [{ "agent": room.ann, "role": "supervisor" }] }),
+    );
+    let elsewhere = elsewhere.json()["id"].as_str().unwrap().to_string();
+    let path = format!("/api/chats/{elsewhere}/messages");
+    let body = json!({ "text": "Over here", "agent": room.ann });
+    assert_eq!(room.service.send("POST", &path, body).status, 200);
+    let there = room.service.call("GET", &format!("/api/chats/{elsewhere}"));
+    let theirs = there.json()["messages"][0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let agents = "a thumbs-up goes on another agent's message.";
+    let unknown = "in this chat: use an id that read_chat or a message to you gives.";
+    let nope = "nope".to_string();
+    for (token, id, why) in [
+        (
+            &lead,
+            &sent,
+            format!("{sent} is your own message: {agents}"),
+        ),
+        (
+            &ann,
+            &persons,
+            format!("{persons} isn't an agent's message: {agents}"),
+        ),
+        (&ann, &theirs, format!("No message {theirs} {unknown}")),
+        (&ann, &nope, format!("No message nope {unknown}")),
+    ] {
+        let refused = room.react(token, id);
+        let said = text(&refused);
+        assert_eq!(refused["isError"], true, "{id}: {said}");
+        let starts = format!("react failed: {why} (ref ");
+        assert!(said.starts_with(&starts), "{id}: {said}");
+        let reference = said.rsplit("(ref ").next().unwrap().trim_end_matches(')');
+        let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+        let events = trace["events"].as_array().cloned().unwrap_or_default();
+        let found = events.iter().any(|e| {
+            e["name"] == "gathr.tool.call"
+                && e["attrs"]["gen_ai.tool.name"] == "react"
+                && e["attrs"]["why"] == why.as_str()
+        });
+        assert!(ok && found, "{id}: {trace}");
+    }
+    let history = room.history();
+    let reactions = history["reactions"].as_array().cloned();
+    assert_eq!(reactions, Some(vec![]), "{history}");
+    assert!(room.reaction_events().is_empty());
+}
+
+/// G161: a window keeps only the live events that name its chat. A second thumbs-up sends nothing.
+#[test]
+fn a_thumbs_up_goes_out_live_naming_its_chat() {
+    let data = TempDir::new();
+    let room = room(&data.0);
+    let (lead, ann, sent) = room.lead_wrote_to_ann();
+    let mut live = room.service.live();
+    room.react(&ann, &sent);
+    let heard = until(10, "the thumbs-up, live", || {
+        let event = common::next_live(&mut live);
+        (event["type"] == "reaction").then_some(event)
+    });
+    assert_eq!(heard["chat"], room.chat.as_str(), "{heard}");
+    let history = room.history();
+    let saved = &history["reactions"][0];
+    assert_eq!(&heard["reaction"], saved, "live and history differ");
+
+    room.react(&ann, &sent);
+    room.message(&lead, "Ann", "After the second");
+    let next = until(10, "the message after the second thumbs-up", || {
+        let event = common::next_live(&mut live);
+        let after = event["message"]["body"] == "After the second";
+        (event["type"] == "reaction" || after).then_some(event)
+    });
+    assert_eq!(
+        next["type"], "message",
+        "a second thumbs-up went out: {next}"
+    );
+}

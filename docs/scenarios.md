@@ -441,9 +441,9 @@ Parts: 6.4, 6.5
 Parts: 6.6
 
 - **Given** a builder got a message from the lead
-- **When** all the builder has to say is that it agrees
-- **Then** the lead's message shows a thumbs-up from the builder. No new message is posted, and nobody
-  is woken by it
+- **When** all the builder has to say is that it agrees, it reacts to the id the message carried
+- **Then** the lead's message shows a thumbs-up from the builder, with the builder's name in its
+  tooltip. No new message is posted, and nobody is woken by it. The window shows it at once
 
 ### 6i. An agent reads why something failed, in its own chat
 

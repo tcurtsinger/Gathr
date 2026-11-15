@@ -67,6 +67,17 @@ test('a chat opened mid-stream shows each streamed piece once, whatever the hist
   expect(both.partial.t).toBe('Second partial.');
 });
 
+test('a thumbs-up both in the history and held from the socket shows once', () => {
+  const kept = { message: 'm1', agent: 'b', time: '2026-11-08T09:01:00Z' };
+  const later = { message: 'm1', agent: 'c', time: '2026-11-08T09:02:00Z' };
+  const held: LiveEvent[] = [
+    { type: 'reaction', chat: 'c', reaction: kept },
+    { type: 'reaction', chat: 'c', reaction: later },
+  ];
+  const loaded = { ...history([block('m1', 'Made-up words')], ''), reactions: [kept] };
+  expect(fromLoad(loaded, work, held).reactions).toEqual([kept, later]);
+});
+
 test("a live context update moves that member's fill and window alone", () => {
   const state = {
     ...empty,

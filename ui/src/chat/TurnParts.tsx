@@ -1,5 +1,5 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import { Bell, CircleCheck, CircleHelp, PenLine, Send } from 'lucide-react';
+import { Bell, CircleCheck, CircleHelp, PenLine, Send, ThumbsUp } from 'lucide-react';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   CollapsibleContent,
@@ -9,9 +9,10 @@ import {
 import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/elements/run-activity';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
-import { clock } from './team';
+import { clock, list } from './team';
 import { Elapsed } from './Working';
 import './team.css';
 
@@ -174,9 +175,30 @@ export function Exchange({
             onOpen={by ? () => onOpenAgent(by) : undefined}
           />
           <div className="reply-body">{text(index)}</div>
+          {m.agreed.length > 0 && <Agreed names={m.agreed} />}
         </div>
       ))}
     </MessagePrimitive.Root>
+  );
+}
+
+/** Agents' thumbs-ups on the words above: how many, and who in the tooltip, on hover or focus. */
+export function Agreed({ names }: { names: string[] }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" className="agreed" aria-label={`Thumbs-up from ${list(names)}`}>
+            <ThumbsUp aria-hidden="true" />
+            {names.length}
+          </button>
+        </TooltipTrigger>
+        {/* Under the mark, so it never covers the words it is about. */}
+        <TooltipContent side="bottom" align="start" collisionPadding={8}>
+          {list(names)}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
