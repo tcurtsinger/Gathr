@@ -390,6 +390,25 @@ fn deleting_an_archived_chat_removes_its_review_notes() {
     assert_eq!(left, (0, 0), "(review notes, task sessions) left");
 }
 
+/// A thumbs-up points at its message and chat, so deleting the chat removes it first.
+#[test]
+fn deleting_an_archived_chat_removes_its_reactions() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES ('m', 'c', 1, 'assistant', 'text', 'Done');
+         INSERT INTO reactions (message_id, agent_id, chat_id, created_ts) VALUES ('m', 'ann', 'c', 2);",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let left: i64 = conn
+        .query_row("SELECT count(*) FROM reactions", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(left, 0, "reactions left");
+}
+
 /// 0054: a landed change's record outlives its chat; one not landed goes with it.
 #[test]
 fn deleting_an_archived_chat_keeps_its_landed_changes() {

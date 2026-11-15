@@ -2,12 +2,12 @@
 // and the approvals docked above the composer.
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { server, userEvent } from 'vitest/browser';
+import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
 import { toThread } from './messages';
-import { type ChatState, empty } from './state';
+import { apply, type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
 
 vi.mock('../live', () => ({ listen: () => () => {} }));
@@ -212,6 +212,60 @@ test('agents’ messages to each other read as one block, each headed by who wro
   expect(heads).toEqual(['MLMade-up Leadto Made-up Member', 'MMMade-up Memberto Made-up Lead'].reverse());
   // Gathr's copy of the question in the receiver's turn isn't drawn.
   expect(screen.getByText(/wrote to you/).query()).toBeNull();
+});
+
+test('a thumbs-up shows under the words it was given to, with who gave it, and one given live adds its name', async () => {
+  const given = (message: string, agent: string, minute: number) => ({
+    message,
+    agent,
+    time: `2026-11-08T09:0${minute}:00Z`,
+  });
+  const before: ChatState = {
+    ...empty,
+    members: [...members, { agent: 'c', name: 'Made-up Reviewer', role: 'reviewer' }],
+    turns: { lead: turn('lead', 'a', 0), ask: turn('ask', 'b', 1) },
+    messages: [
+      said('u', 'lead', 'Made-up ask', { role: 'user' }),
+      said('early', 'lead', 'Made-up first thought'),
+      tool('t1', 'lead', 'Read'),
+      said('final', 'lead', 'Made-up final answer'),
+      said('q', 'ask', 'Made-up question', { to: 'a' }),
+    ],
+    // An agent Gathr no longer knows isn't named, nor counted.
+    reactions: [
+      given('final', 'gone', 0),
+      given('final', 'c', 1),
+      given('early', 'b', 2),
+      given('q', 'c', 3),
+      given('u', 'c', 4),
+    ],
+  };
+  const screen = await render(<View state={before} />);
+  await expect.element(screen.getByText('Made-up final answer')).toBeVisible();
+  const reply = screen.getByText('Made-up final answer').element().closest('.reply') as HTMLElement;
+  const talk = document.querySelector('.exchange') as HTMLElement;
+  // Under the shown text and the exchange message; none under the folded text or the person's message.
+  expect([...document.querySelectorAll('.agreed')].map((a) => a.closest('.reply'))).toEqual([
+    reply,
+    talk.querySelector('.reply'),
+  ]);
+  expect(document.querySelector('.user-message .agreed')).toBeNull();
+  const mark = page.elementLocator(reply).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' });
+  await expect.element(mark).toHaveTextContent('1');
+  await expect
+    .element(page.elementLocator(talk).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' }))
+    .toHaveTextContent('1');
+
+  // Given live by a second agent: the count goes up and the names follow the order given.
+  const live = { type: 'reaction' as const, chat: 'c', reaction: given('final', 'b', 5) };
+  await screen.rerender(<View state={apply(before, live)} />);
+  const again = screen.getByText('Made-up final answer').element().closest('.reply') as HTMLElement;
+  const both = page
+    .elementLocator(again)
+    .getByRole('button', { name: 'Thumbs-up from Made-up Reviewer and Made-up Member' });
+  await expect.element(both).toHaveTextContent('2');
+  (both.element() as HTMLElement).focus();
+  await expect.element(page.getByRole('tooltip')).toHaveTextContent('Made-up Reviewer and Made-up Member');
 });
 
 test('an event line opens in place to what more there is, and its task opens from there', async () => {

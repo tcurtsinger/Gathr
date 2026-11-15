@@ -385,6 +385,15 @@ export interface History {
   members: Member[];
   /** Replies still streaming, so a chat opened mid-turn shows what arrived so far. */
   streaming?: { turn: string; agent: string | null; text: string }[];
+  /** Agents' thumbs-ups, oldest first. */
+  reactions?: Reaction[];
+}
+
+/** An agent's thumbs-up on another agent's message: the original's id, never Gathr's copy. */
+export interface Reaction {
+  message: string;
+  agent: string;
+  time: string;
 }
 
 export interface Engine {

@@ -2,7 +2,7 @@
 
 Status: accepted (the owner's call). Date: 2026-11-07.
 
-Built: partly. Proof: `crates/gathr/tests/team.rs`, `crates/gathr/tests/chats.rs`. Not built: a review task that starts by itself ([0043](0043-checks-and-merge.md), C9); plan checks; the thumbs-up reaction; the global shortcut for a new chat.
+Built: partly. Proof: `crates/gathr/tests/team.rs`, `crates/gathr/tests/chats.rs`. Not built: a review task that starts by itself ([0043](0043-checks-and-merge.md), C9); plan checks; the global shortcut for a new chat.
 
 Out of date below: adding a second agent makes the first one the Supervisor by itself, without asking. [The charter](../charter.md) names the two jobs assistant and lead: this file's Supervisor is the lead, and no assistant exists yet.
 
@@ -30,7 +30,7 @@ Changing the Supervisor or Reviewer is a setting on the chat, recorded as an eve
 
 - Coordination scopes are the app, a chat and an agent ([0010](0010-coordination-as-state.md)). Where 0010 says "chat", a one-agent chat simply has nobody to hand off to.
 - An agent can be in many chats. It runs one turn at a time across all of them ([0010, Sessions](0010-coordination-as-state.md#sessions)).
-- An agent may react to a message with a thumbs-up through a tool instead of posting a message that only agrees. A reaction is an event, not a turn for anyone else. Not built yet.
+- An agent may react to a message with a thumbs-up through a tool instead of posting a message that only agrees. A reaction is an event, not a turn for anyone else. Built ([0057](0057-agreeing-is-a-reaction.md)).
 - "One main agent" is a chat whose Supervisor is the agent the person talks to most; it needs nothing extra in this model.
 
 ## Why

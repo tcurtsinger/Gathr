@@ -5,6 +5,7 @@ import type {
   Message,
   Pauses,
   PersonTask,
+  Reaction,
   StaleTask,
   Task,
   ThinkingBody,
@@ -19,6 +20,8 @@ export type LiveEvent =
   | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody | ThinkingBody }
+  // An agent's new thumbs-up; a repeat sends nothing.
+  | { type: 'reaction'; chat: string; reaction: Reaction }
   // `agent`: the agent the turn was sent to, null for none.
   | {
       type: 'turn';

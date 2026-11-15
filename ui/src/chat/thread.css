@@ -143,6 +143,35 @@
 .reply[data-speaker] > :not(.speaker) {
   margin-left: 34px;
 }
+/* Agents' thumbs-ups under the words: the icon lines up with them, its padding outside the indent. */
+.agreed {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  /* Not a touch target: narrow windows give buttons 44px, which would lift it off its words. */
+  min-height: 0;
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: default;
+}
+.reply[data-speaker] > .agreed {
+  margin-left: 26px;
+}
+.agreed:hover {
+  background: var(--hover-tint);
+  color: var(--foreground);
+}
+.agreed svg {
+  width: 14px;
+  height: 14px;
+}
 /* A search hit opened here: a short attention tint (DESIGN.md "Navigation and workspace"). */
 [data-search-hit] {
   border-radius: 8px;

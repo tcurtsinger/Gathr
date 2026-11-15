@@ -149,7 +149,8 @@ pub fn text(facts: &Facts) -> String {
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
-         cancel_task and restart_task for tasks; message for one member of a team chat; wait and \
+         cancel_task and restart_task for tasks; message for one member of a team chat; react to give \
+         another agent's message your thumbs-up, by its id; wait and \
          end_wait instead of polling in a loop; waiting for what this chat waits on and where each agent \
          stands; diag for Gathr's own record of what went wrong (health, failures, trace with a reference); \
          ask_person for anything you need from the person."

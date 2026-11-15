@@ -51,6 +51,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0041_changes.sql"),
     include_str!("../migrations/0042_task_sessions.sql"),
     include_str!("../migrations/0043_turn_opened.sql"),
+    include_str!("../migrations/0044_reactions.sql"),
 ];
 
 /// The schema version this build writes.

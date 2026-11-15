@@ -185,13 +185,14 @@ impl Tools {
     /// Hands the message to the member's own worker, which says where it went.
     async fn deliver(&self, caller: &Caller, sent: &Sent, text: &str) -> &'static str {
         let (reply, answer) = oneshot::channel();
-        let ask = format!("{} wrote to you: {text}", sent.from_name);
+        let id = sent.shown["id"].as_str().unwrap_or_default().to_string();
+        let ask = format!("{} wrote to you (message {id}): {text}", sent.from_name);
         let task = self.chats.task(&caller.chat, Some(&sent.to));
         let command = Cmd::Message {
             chat: caller.chat.clone(),
             ask,
             answers: sent.answers.clone(),
-            copy_of: sent.shown["id"].as_str().unwrap_or_default().to_string(),
+            copy_of: id,
             reply,
         };
         let _ = task.send(command);

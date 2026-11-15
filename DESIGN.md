@@ -208,7 +208,7 @@ Messages agents write to each other are their own block: the card surface, a 6% 
 hairline, 16px radius, 14px 16px padding, 14px between messages, text at 15px. Each is headed
 "Juno to Orin" with its time. Messages that follow each other share one block, and an answer
 sits beside the message it answers. Gathr's copy of a message in the receiver's turn is never
-shown. The reviewer's agreement stays a named reaction; a question stays a reply.
+shown. The reviewer's agreement stays a named reaction; a question stays a reply. A reaction is the thumbs-up icon and a count of the agents who gave it, under the words it was given to, at their indent, in the type of an event line: 13px, muted. Hovering or focusing it shows who gave it, in the shared tooltip. The line has no label.
 
 Everything Gathr tells an agent is a one-line event, with two exceptions that are never
 drawn: the brief of a member's own task (Gathr's message that opens with "Task #<number>

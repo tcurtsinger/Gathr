@@ -66,3 +66,4 @@ fails in CI when the two differ.
 | 0054 | [A change past the far end waits for the person, and every landed change is recorded](0054-a-change-past-the-far-end-waits-for-the-person.md) | accepted | yes |
 | 0055 | [A member's task starts in a new session](0055-a-members-task-starts-in-a-new-session.md) | accepted | yes |
 | 0056 | [Gathr records which words opened each turn](0056-gathr-records-which-words-opened-each-turn.md) | accepted | yes |
+| 0057 | [Agreeing is a thumbs-up, not a message](0057-agreeing-is-a-reaction.md) | accepted | yes |

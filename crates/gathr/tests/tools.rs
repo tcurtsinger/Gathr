@@ -126,6 +126,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "merge",
         "message",
         "pr",
+        "react",
         "read_chat",
         "report_friction",
         "restart_task",
@@ -251,6 +252,10 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
     assert!(
         briefing.contains("diag for Gathr's own record"),
         "the briefing doesn't name the diag tool: {briefing}"
+    );
+    assert!(
+        briefing.contains("react to give"),
+        "the briefing doesn't name the react tool: {briefing}"
     );
     // G21: what's off is said before the agent tries it.
     assert!(

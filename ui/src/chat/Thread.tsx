@@ -20,7 +20,7 @@ import { useFound, useLatest } from './found';
 import type { Custom, SendFailure, TurnNotice } from './messages';
 import { useOlder } from './older';
 import type { Approval } from './state';
-import { Events, Exchange, FoundContext, Speaker, WorkRow } from './TurnParts';
+import { Agreed, Events, Exchange, FoundContext, Speaker, WorkRow } from './TurnParts';
 import { roleName } from './team';
 import './thread.css';
 
@@ -233,7 +233,7 @@ const parts = { Text: TextPart };
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, by, role, on, work, notice, approvals } = own;
+  const { agent, by, role, on, work, notice, approvals, agreed } = own;
   const actions = useActions();
   if (own.exchange)
     return (
@@ -263,6 +263,7 @@ function AssistantMessage() {
       <div className="reply-body">
         <MessagePrimitive.Parts components={parts} />
       </div>
+      {!!agreed?.length && <Agreed names={agreed} />}
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
