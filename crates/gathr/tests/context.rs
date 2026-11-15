@@ -668,6 +668,8 @@ fn compact_runs_claude_codes_compact_with_its_slash_commands_and_says_so() {
     });
     let line = "Compacted Made-up's conversation: 23K to 3.6K";
     assert_eq!(gathr_lines(&history), [line], "{history}");
+    let compaction = common::opened(&data.0, &history["turns"][1]["id"]);
+    assert_eq!(compaction, (json!("compaction"), Value::Null), "{history}");
     let asks = history["messages"].as_array().unwrap();
     assert_eq!(
         asks.iter().filter(|m| m["role"] == "user").count(),

@@ -7,6 +7,7 @@ use rusqlite::{Connection, params};
 use crate::Error;
 use crate::ids::now_us;
 use crate::tasks::Start;
+use crate::words::Opened;
 
 /// What every carry-on ends with.
 pub const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
@@ -61,7 +62,13 @@ pub fn save_all(conn: &mut Connection, by: &str) -> Result<Vec<Saved>, Error> {
     };
     let save = |place: &Place, turn: &str, task: Option<i64>, ended: String| {
         let on = (task, Some(turn));
-        Start::save(&tx, (&place.0, place.1.as_deref()), on, &said(by, &ended))
+        Start::save(
+            &tx,
+            (&place.0, place.1.as_deref()),
+            on,
+            Opened::CarryOn,
+            &said(by, &ended),
+        )
     };
     let mut saved = Vec::new();
     for (place, turn, task) in &running {

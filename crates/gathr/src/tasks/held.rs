@@ -6,9 +6,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use super::records::OptionalTask;
 use super::{Finish, Kind, Start, State, Task, cascade, notes, read, ready, set, words};
 use crate::Error;
+use crate::words::Opened;
 
 /// Why a task is blocked once its owner was asked for a report and gave none.
-const NO_REPORT: &str = "no report: two turns ended without one";
+pub(crate) const NO_REPORT: &str = "no report: two turns ended without one";
 
 /// Tasks `t` its owner called done that are held only until their PR merges, read from the reason
 /// `settle` writes. They count as done for the tasks `after` them: a review of that PR may be what
@@ -202,7 +203,7 @@ fn ask(tx: &Transaction, t: &Task, trace: &str) -> Result<Start, Error> {
     })?;
     set(tx, t.number, State::Ready, None, trace)?;
     let on = (Some(t.number), t.given_in.as_deref());
-    Start::queue(tx, (&t.chat, owner), on, words::ask(t))
+    Start::queue(tx, (&t.chat, owner), on, Opened::ReportAsk, words::ask(t))
 }
 
 /// Commands that ended: the turn that started each, and that turn's task.

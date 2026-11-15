@@ -288,19 +288,32 @@ pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Er
 }
 
 /// A new turn, run as `agent`, or on the oldest account when it's sent to none; on `task` when it
-/// works on one (0010); answering the turn `answers` when Gathr starts it (F8b).
+/// works on one (0010); answering the turn `answers` when Gathr starts it (F8b); with the kind
+/// of words that opened it.
 pub fn add_turn(
     conn: &Connection,
     chat: &str,
     id: &str,
     trace: &str,
     (agent, task, answers): (Option<&str>, Option<i64>, Option<&str>),
+    opened: crate::words::Opened,
 ) -> Result<(), Error> {
     conn.prepare_cached(
-        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers)
-         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7)",
+        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers,
+                            opened_by, opened_version)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9)",
     )?
-    .execute(params![id, chat, trace, now_us(), agent, task, answers])?;
+    .execute(params![
+        id,
+        chat,
+        trace,
+        now_us(),
+        agent,
+        task,
+        answers,
+        opened.as_str(),
+        opened.version()
+    ])?;
     Ok(())
 }
 

@@ -8,6 +8,8 @@ mod far_end;
 mod hear_backs;
 #[path = "tasks/commands.rs"]
 mod held_commands;
+#[path = "tasks/words.rs"]
+mod kept_words;
 #[path = "tasks/landings.rs"]
 mod landing_records;
 #[path = "tasks/reports.rs"]
@@ -16,6 +18,8 @@ mod reports;
 mod review_evidence;
 #[path = "tasks/review_notes.rs"]
 mod review_notes;
+#[path = "words/samples.rs"]
+mod samples;
 #[path = "tasks/sessions.rs"]
 mod task_sessions;
 #[path = "tasks/waits.rs"]
@@ -48,7 +52,15 @@ fn team(dir: &TempDir) -> Connection {
 
 /// A turn of `agent`'s in chat `c`, on `task`, with `status`.
 fn turn(conn: &Connection, id: &str, agent: &str, task: Option<i64>, status: &str) {
-    gathr::store::add_turn(conn, "c", id, T, (Some(agent), task, None)).unwrap();
+    gathr::store::add_turn(
+        conn,
+        "c",
+        id,
+        T,
+        (Some(agent), task, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     conn.execute(
         "UPDATE turns SET status = ?2 WHERE id = ?1",
         params![id, status],
@@ -105,7 +117,15 @@ fn begin(conn: &mut Connection, task: i64) -> String {
             .query_row("SELECT count(*) FROM turns", [], |r| r.get(0))
             .unwrap();
         let id = format!("work-{turns}");
-        gathr::store::add_turn(conn, "c", &id, T, (Some(&owner), Some(task), None)).unwrap();
+        gathr::store::add_turn(
+            conn,
+            "c",
+            &id,
+            T,
+            (Some(&owner), Some(task), None),
+            gathr::words::Opened::Person,
+        )
+        .unwrap();
         id
     });
     gathr::store::set_turn(conn, &id, "running", None).unwrap();

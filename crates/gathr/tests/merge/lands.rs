@@ -253,9 +253,12 @@ fn a_pr_that_cant_land_wakes_its_reviewer_once_for_that_head() {
             && told.contains("1 failed (Rust (macOS))"),
         "{told}"
     );
+    super::samples::same("landing: can't land", &told.replace(&head[..7], "<head>"));
     let chat = room.chat();
     let woken: Vec<&Value> = chat["turns"].as_array().unwrap().iter().collect();
     assert_eq!(woken.len(), 1, "{chat}");
+    let kept = (json!("landing"), json!(gathr::words::LANDING));
+    assert_eq!(common::opened(&room.data, &woken[0]["id"]), kept);
     assert_eq!(woken[0]["agent"], room.vale.as_str(), "{chat}");
     assert!(woken[0]["task"].is_null(), "woken on a task: {chat}");
     room.looked();

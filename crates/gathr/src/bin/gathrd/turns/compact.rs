@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 
 use super::{Ids, Queued, Task};
 use crate::chats::Failed;
+use gathr::words::Opened;
 
 /// What Claude Code is sent; Codex is asked with its own request instead.
 pub(super) const COMMAND: &str = "/compact";
@@ -51,7 +52,14 @@ impl Task {
         let row = ids.clone();
         let added = self.chats.writer.call(move |conn| {
             let by = (row.agent.as_deref(), None, None);
-            store::add_turn(conn, &row.chat, &row.turn, &row.trace, by)
+            store::add_turn(
+                conn,
+                &row.chat,
+                &row.turn,
+                &row.trace,
+                by,
+                Opened::Compaction,
+            )
         });
         if let Some(Err(e)) = added.await {
             return Err(refused(e.to_string()));

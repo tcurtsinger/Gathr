@@ -32,7 +32,15 @@ fn team(dir: &TempDir) -> Connection {
 }
 
 fn turn(conn: &Connection, id: &str, agent: &str, task: Option<i64>, status: &str) {
-    gathr::store::add_turn(conn, "c", id, T, (Some(agent), task, None)).unwrap();
+    gathr::store::add_turn(
+        conn,
+        "c",
+        id,
+        T,
+        (Some(agent), task, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     gathr::store::set_turn(conn, id, status, None).unwrap();
 }
 

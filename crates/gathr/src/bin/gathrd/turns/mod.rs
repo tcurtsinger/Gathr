@@ -171,7 +171,7 @@ struct Task {
     /// as signed out until the file changes, so a refused login doesn't start an engine every poll.
     refused: Option<(PathBuf, Option<std::time::SystemTime>, Instant)>,
     /// Messages sent into a turn under way that the engine hasn't read yet: their id and text.
-    unread: Vec<(String, String)>,
+    unread: Vec<(String, String, gathr::words::Opened)>,
     /// The model the agent's last main-session call named: whose window its context is in.
     context_model: Option<String>,
     /// The model the running engine's compaction point is for, when it started with one.
@@ -449,7 +449,7 @@ impl Task {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, text));
+            self.unread.push((id, text, gathr::words::Opened::Person));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             let steer = Event::point("gathr.turn.steer").trace(&ids.trace);
             self.record(steer.chat(&ids.chat).ok());
@@ -480,6 +480,7 @@ impl Task {
                     &row.turn,
                     &row.trace,
                     (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                    gathr::words::Opened::Person,
                 )
             })
             .await;
@@ -729,7 +730,7 @@ impl Task {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
-        for (at, (message, text)) in std::mem::take(&mut self.unread).into_iter().enumerate() {
+        for (at, (message, text, by)) in std::mem::take(&mut self.unread).into_iter().enumerate() {
             let ids = Ids {
                 chat: chat.clone(),
                 turn: ulid(now_us()),
@@ -750,6 +751,7 @@ impl Task {
                         &row.turn,
                         &row.trace,
                         (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                        by,
                     )?;
                     store::move_message(conn, &message, &row.turn)
                 })

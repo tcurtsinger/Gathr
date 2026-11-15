@@ -79,7 +79,12 @@ impl Task {
     }
 
     /// A turn the engine began itself, to answer a message sent into the last one.
-    pub(super) async fn begin_read_turn(&mut self, message: &str, ask_chars: usize) {
+    pub(super) async fn begin_read_turn(
+        &mut self,
+        message: &str,
+        opened: gathr::words::Opened,
+        ask_chars: usize,
+    ) {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
@@ -103,6 +108,7 @@ impl Task {
                     &row.turn,
                     &row.trace,
                     (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                    opened,
                 )?;
                 store::move_message(conn, &id, &row.turn)
             })

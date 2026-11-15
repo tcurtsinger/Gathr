@@ -11,6 +11,8 @@ mod lands;
 mod review_questions;
 #[path = "merge/review_updates.rs"]
 mod review_updates;
+#[path = "words/samples.rs"]
+mod samples;
 
 use std::path::{Path, PathBuf};
 

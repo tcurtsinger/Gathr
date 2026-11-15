@@ -83,6 +83,12 @@ enum Diag {
     },
     /// Writes health, recent failures, events and engine frames (no bodies) to one file to share.
     Bundle,
+    /// Turns by the words that opened them: with no tool call, finish_task turned away, no report.
+    Words {
+        /// How far back: 24h, 7d, 30d.
+        #[arg(long, default_value = "7d")]
+        since: String,
+    },
 }
 
 fn main() -> ExitCode {
@@ -142,10 +148,10 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
         Diag::Waiting { chat } => return diag::waiting(data, &chat),
         _ => {}
     }
-    let (conn, _) = db::open_read_only(&data.db())?;
+    let (conn, schema) = db::open_read_only(&data.db())?;
     match diag {
         Diag::Health | Diag::Bundle | Diag::Waiting { .. } => unreachable!("answered above"),
-        Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw),
+        Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw, schema),
         Diag::Trace { reference } => diag::trace(&conn, &reference, None),
         Diag::Failures { since } => {
             diag::failures(&conn, ids::now_us() - diag::parse_since(&since)?, None)
@@ -154,6 +160,9 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
             diag::friction(&conn, ids::now_us() - diag::parse_since(&since)?)
         }
         Diag::Query { sql } => diag::query(&conn, &sql),
+        Diag::Words { since } => {
+            diag::words(&conn, schema, ids::now_us() - diag::parse_since(&since)?)
+        }
     }
 }
 

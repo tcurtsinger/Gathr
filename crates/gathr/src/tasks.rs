@@ -8,9 +8,10 @@ use serde::Serialize;
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
+use crate::words::Opened;
 
 mod hear;
-mod held;
+pub(crate) mod held;
 pub(crate) mod notes;
 pub mod person;
 mod prs;
@@ -203,9 +204,11 @@ impl Start {
         conn: &Connection,
         (chat, agent): (&str, &str),
         (task, answers): (Option<i64>, Option<&str>),
+        opened: Opened,
         text: String,
     ) -> Result<Start, Error> {
-        let (turn, trace, message) = Self::save(conn, (chat, Some(agent)), (task, answers), &text)?;
+        let saved = Self::save(conn, (chat, Some(agent)), (task, answers), opened, &text)?;
+        let (turn, trace, message) = saved;
         Ok(Start {
             chat: chat.to_string(),
             agent: agent.to_string(),
@@ -225,10 +228,11 @@ impl Start {
         conn: &Connection,
         (chat, agent): (&str, Option<&str>),
         (task, answers): (Option<i64>, Option<&str>),
+        opened: Opened,
         text: &str,
     ) -> Result<(String, String, serde_json::Value), Error> {
         let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
-        crate::store::add_turn(conn, chat, &turn, &trace, (agent, task, answers))?;
+        crate::store::add_turn(conn, chat, &turn, &trace, (agent, task, answers), opened)?;
         let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", text)?;
         Ok((turn, trace, message))
     }
@@ -738,7 +742,12 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
     };
     let text = words::brief(tx, &t, &giver, carry)?;
     let on = (Some(task), t.given_in.as_deref());
-    Start::queue(tx, (&t.chat, owner), on, text)
+    let opened = match t.kind {
+        Kind::Review => Opened::ReviewBrief,
+        Kind::PersonRequest => Opened::RequestBrief,
+        _ => Opened::Brief,
+    };
+    Start::queue(tx, (&t.chat, owner), on, opened, text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and

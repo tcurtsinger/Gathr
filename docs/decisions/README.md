@@ -65,3 +65,4 @@ fails in CI when the two differ.
 | 0053 | [A review asks both questions, and a left review gets its fix](0053-a-review-asks-both-questions.md) | accepted | yes |
 | 0054 | [A change past the far end waits for the person, and every landed change is recorded](0054-a-change-past-the-far-end-waits-for-the-person.md) | accepted | yes |
 | 0055 | [A member's task starts in a new session](0055-a-members-task-starts-in-a-new-session.md) | accepted | yes |
+| 0056 | [Gathr records which words opened each turn](0056-gathr-records-which-words-opened-each-turn.md) | accepted | yes |

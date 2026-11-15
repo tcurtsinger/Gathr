@@ -228,7 +228,7 @@ impl Task {
             }
             Frame::ToolShape { tool, field } => self.tool_shape(tool, field),
             Frame::Read(text) => {
-                let unread = self.unread.iter().position(|(_, t)| *t == text);
+                let unread = self.unread.iter().position(|(_, t, _)| *t == text);
                 let read = unread.map(|i| self.unread.remove(i));
                 // Read inside the turn: part of what it was given (0020), recorded now, so the
                 // turn keeps it however it ends.
@@ -242,13 +242,14 @@ impl Task {
                         .attr("gathr.context.ask.tokens_estimate", chars.div_ceil(4));
                     self.record(event);
                 }
-                if let Some((message, _)) = read
+                if let Some((message, _, opened)) = read
                     && self.turn.is_none()
                 {
                     // Checked live (2.1.318): with no step to stop at, Claude Code ends the
                     // turn, then reads the message sent into it and answers it as a turn of
                     // its own. That turn gets its row here, and the message moves to it.
-                    self.begin_read_turn(&message, text.chars().count()).await;
+                    self.begin_read_turn(&message, opened, text.chars().count())
+                        .await;
                 }
                 let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
                 self.publish(&chat, json!({ "type": "read", "turn": turn, "text": text }));

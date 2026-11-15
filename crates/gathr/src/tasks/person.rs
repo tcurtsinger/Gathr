@@ -12,6 +12,7 @@ use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
 use crate::team::Role;
+use crate::words::Opened;
 
 /// The most choices a question offers, and the longest label: picked at a glance.
 const CHOICES_MOST: usize = 8;
@@ -424,7 +425,13 @@ pub(super) fn heard(
             .attr("gathr.task.count", settled.len())
             .insert(tx)?;
         let text = heard_words(tx, &settled)?;
-        let start = Start::queue(tx, (&chat, &giver), (own, turn.as_deref()), text)?;
+        let start = Start::queue(
+            tx,
+            (&chat, &giver),
+            (own, turn.as_deref()),
+            Opened::Answered,
+            text,
+        )?;
         for t in &settled {
             tx.execute(
                 "UPDATE tasks SET heard_in = ?2 WHERE number = ?1",
