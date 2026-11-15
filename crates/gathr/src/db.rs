@@ -52,6 +52,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0042_task_sessions.sql"),
     include_str!("../migrations/0043_turn_opened.sql"),
     include_str!("../migrations/0044_reactions.sql"),
+    include_str!("../migrations/0045_task_briefs.sql"),
 ];
 
 /// The schema version this build writes.
@@ -331,6 +332,41 @@ mod tests {
             )
             .unwrap();
         assert!(plan.contains("messages_by_chat"), "{plan}");
+    }
+
+    /// 0045: a giver may edit a task until it starts; a task that ran before counts as started.
+    /// Blocked by its `after`, or cancelled, a task may never have run: only its turns tell.
+    #[test]
+    fn tasks_that_ran_before_0045_count_as_started() {
+        let path = temp_db("briefs");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..44] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 44;
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
+                 VALUES (1, 'c', 'lead', 'ann', 'work', 'one', 'working', 1, 7),
+                        (2, 'c', 'lead', 'bo', 'work', 'two', 'waiting', 2, 8),
+                        (3, 'c', 'lead', 'bo', 'work', 'three', 'blocked', 3, 9),
+                        (4, 'c', 'lead', 'bo', 'work', 'four', 'cancelled', 4, 10),
+                        (5, 'c', 'lead', 'ann', 'work', 'five', 'blocked', 5, 11);
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, task) VALUES
+                 ('ran', 'c', 'x', 'done', 5, 5), ('dropped', 'c', 'x', 'queued', 4, 4);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT number, started_ts FROM tasks ORDER BY number")
+            .unwrap();
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        let started: Vec<(i64, Option<i64>)> = rows.map(Result::unwrap).collect();
+        assert_eq!(
+            started,
+            [(1, Some(7)), (2, None), (3, None), (4, None), (5, Some(11))]
+        );
     }
 
     #[test]

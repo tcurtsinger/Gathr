@@ -241,7 +241,7 @@ impl Room {
             self.service.info.port,
             &self.token(0),
             "give_task",
-            ask,
+            super::briefed(ask),
         ));
         assert!(given.starts_with("Task #1 for ann: ready."), "{given}");
         self.go();

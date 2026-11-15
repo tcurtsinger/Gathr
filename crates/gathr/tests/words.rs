@@ -21,6 +21,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "ae3396d9e478c5ca1271bc733a725070ef1309fc1e2ad11f727fe1f06a253960",
     ),
     (
+        "brief",
+        2,
+        "7f380f7d6e856f440308e8b771f53b3f246dc7d5e9155407538c73c84096ecc1",
+    ),
+    (
         "review_brief",
         1,
         "e669125e4d03cdde446a93940ef509a65c0a869dbb4186ce78b8284754265bd4",
@@ -253,7 +258,7 @@ fn in_text(data: &Path, args: &[&str]) -> String {
 fn turns_record_the_words_that_opened_them_and_diag_counts_each_kind() {
     let data = TempDir::new();
     // Each engine runs two turns: the first held until `go` exists.
-    let first = std::fs::read_to_string(common::held_recording(&data.0)).unwrap();
+    let first = std::fs::read_to_string(common::held_recording(&data.0, "signed_in")).unwrap();
     let second = std::fs::read_to_string(common::recording("signed_in")).unwrap();
     let twice = data.0.join("twice.jsonl");
     std::fs::write(&twice, format!("{}\n{second}", first.trim_end())).unwrap();
@@ -270,7 +275,7 @@ fn turns_record_the_words_that_opened_them_and_diag_counts_each_kind() {
         .unwrap()
         .to_string();
     let port = service.info.port;
-    let ask = json!({ "to": "ann", "what": "Add a retry" });
+    let ask = common::briefed(json!({ "to": "ann", "what": "Add a retry" }));
     let given = text(&call_tool(port, &lead, "give_task", ask));
     assert!(given.starts_with("Task #1 for ann: ready."), "{given}");
     service.wait_for(&chat, 20, "Ann's turn on #1 to run", |h| {

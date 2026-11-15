@@ -479,7 +479,12 @@ fn lead_gives_ann_a_task(
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     let ask = json!({"to":"Ann","what":"Write the notes"});
-    let given = call_tool(service.info.port, &first_token(data), "give_task", ask);
+    let given = call_tool(
+        service.info.port,
+        &first_token(data),
+        "give_task",
+        common::briefed(ask),
+    );
     assert_eq!(given["isError"], false, "{}", text(&given));
     (service, chat, lead.as_str().unwrap().to_string())
 }

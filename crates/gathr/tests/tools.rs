@@ -59,7 +59,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
     let service = TestService::with_engine(
         &data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
             ("GATHR_REPLAY_HOLD", &go),
             ("GATHR_REPLAY_ARGS", &args),
             ("GATHR_REPLAY_ENV", &env),
@@ -119,6 +119,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "checks",
         "ci_failures",
         "diag",
+        "edit_task",
         "end_wait",
         "finish_task",
         "give_task",
@@ -139,6 +140,22 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "waiting",
     ];
     assert_eq!(names, all, "{tools}");
+    // Each brief field's limit is in the schema, as the refusal says it (0059).
+    for tool in ["give_task", "edit_task"] {
+        let found = tools.as_array().unwrap().iter().find(|t| t["name"] == tool);
+        let fields = &found.unwrap()["inputSchema"]["properties"];
+        let limit = |field: &str, key: &str| fields[field][key].as_f64();
+        let limits = [
+            limit("what", "maxLength"),
+            limit("done", "maxLength"),
+            limit("proof", "maxLength"),
+            limit("where", "maxLength"),
+            limit("size", "maxLength"),
+            limit("lines", "minimum"),
+        ];
+        let want = [80.0, 300.0, 300.0, 200.0, 200.0, 1.0].map(Some);
+        assert_eq!(limits, want, "{tool}: {fields}");
+    }
 
     // As Orin, in the chat the engine runs: the person's message, by its author.
     let read = call_tool(port, &engine.token, "read_chat", json!({}));
@@ -182,6 +199,12 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "{trace}"
     );
 
+    // An agent gives only work and reviews: the person's questions are asked with ask_person.
+    let person = json!({ "to": "Orin", "what": "Pick a name", "kind": "person" });
+    let refused = text(&call_tool(port, &engine.token, "give_task", person));
+    let said = "give_task failed: person isn't a kind: work or review (ref ";
+    assert!(refused.starts_with(said), "{refused}");
+
     // Only an engine's token opens /mcp: not the service's, not a made-up one.
     for (token, why) in [
         (service.info.token.as_str(), "the service's"),
@@ -222,7 +245,7 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
     let service = TestService::with_engine(
         &data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
             ("GATHR_REPLAY_HOLD", &go),
             ("GATHR_REPLAY_ARGS", &args),
             ("GATHR_REPLAY_ENV", &env),
@@ -252,6 +275,10 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
     assert!(
         briefing.contains("diag for Gathr's own record"),
         "the briefing doesn't name the diag tool: {briefing}"
+    );
+    assert!(
+        briefing.contains("give_task, edit_task, finish_task"),
+        "the briefing doesn't name the edit_task tool: {briefing}"
     );
     assert!(
         briefing.contains("react to give"),
@@ -320,7 +347,7 @@ fn an_exited_engines_token_ends_before_the_next_engine_starts() {
     let service = TestService::with_engine(
         &data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
             ("GATHR_REPLAY_HOLD", &go),
             ("GATHR_REPLAY_ARGS", &args),
             ("GATHR_REPLAY_ENV", &env),

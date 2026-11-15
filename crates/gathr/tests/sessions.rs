@@ -169,7 +169,12 @@ fn quiet(room: &Room) -> Value {
 
 /// `give_task` as the agent whose token it is: the task's number.
 fn give(room: &Room, token: &str, ask: Value) -> i64 {
-    let given = text(&call_tool(room.service.info.port, token, "give_task", ask));
+    let given = text(&call_tool(
+        room.service.info.port,
+        token,
+        "give_task",
+        common::briefed(ask),
+    ));
     let number = given
         .strip_prefix("Task #")
         .and_then(|r| r.split(' ').next());

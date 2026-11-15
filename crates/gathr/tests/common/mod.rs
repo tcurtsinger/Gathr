@@ -414,13 +414,44 @@ pub fn project(root: &Path) -> (PathBuf, String) {
     (root.join("project"), git(&other, &["rev-parse", "HEAD"]))
 }
 
-/// `signed_in` with the engine held after the message arrives, until `go` exists.
-pub fn held_recording(dir: &Path) -> PathBuf {
+/// The recording `name` with the engine held after the message arrives, until `go` exists.
+pub fn held_recording(dir: &Path, name: &str) -> PathBuf {
     let held = dir.join("held.jsonl");
-    let frames = std::fs::read_to_string(recording("signed_in")).unwrap();
-    let (first, rest) = frames.split_once('\n').unwrap();
-    std::fs::write(&held, format!("{first}\n{{\"dir\":\"hold\"}}\n{rest}")).unwrap();
+    let frames = std::fs::read_to_string(recording(name)).unwrap();
+    let mut lines: Vec<&str> = frames.lines().collect();
+    // Codex's stand-in plays each turn from its `turn/start`: it holds once the turn has said a word,
+    // which lets the next engine on the account start (0016). Claude Code's reads the message first.
+    let at = lines.iter().position(|l| l.contains("agentMessage/delta"));
+    lines.insert(at.map_or(1, |at| at + 1), r#"{"dir":"hold"}"#);
+    std::fs::write(&held, lines.join("\n") + "\n").unwrap();
     held
+}
+
+/// A made-up complete brief for a work task (0059).
+pub const COMPLETE: gathr::tasks::Brief<'static> = gathr::tasks::Brief {
+    why: Some("CI is red"),
+    done: Some("CI on main is green"),
+    proof: Some("the CI run on the PR"),
+    place: Some("the project's worktree, on a new branch"),
+    size: None,
+};
+
+/// A `give_task` ask with `COMPLETE`'s why, done, proof and where where a work task has none.
+pub fn briefed(mut ask: Value) -> Value {
+    if ask["kind"].as_str().is_none_or(|kind| kind == "work") {
+        let fields = [
+            ("why", COMPLETE.why),
+            ("done", COMPLETE.done),
+            ("proof", COMPLETE.proof),
+            ("where", COMPLETE.place),
+        ];
+        for (field, said) in fields {
+            if ask.get(field).is_none() {
+                ask[field] = said.into();
+            }
+        }
+    }
+    ask
 }
 
 /// Ends a process outright, as a crash would.

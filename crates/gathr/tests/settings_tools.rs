@@ -32,7 +32,7 @@ struct Team {
 }
 
 fn started(data: &Path) -> Team {
-    let (service, chat, lead) = team(data, &held_recording(data), &[]);
+    let (service, chat, lead) = team(data, &held_recording(data, "signed_in"), &[]);
     let release = Release(data.join("go"));
     let members = service.send("GET", &format!("/api/chats/{chat}"), json!(null));
     let ann = members.json()["members"]
@@ -227,7 +227,7 @@ fn held_model_change(
     std::fs::write(&asked, "").unwrap();
     let (service, chat, lead) = team(
         &data.0,
-        &held_recording(&data.0),
+        &held_recording(&data.0, "signed_in"),
         &[("GATHR_REPLAY_INIT_HOLD", &asked)],
     );
     let _release = Release(data.0.join("go"));

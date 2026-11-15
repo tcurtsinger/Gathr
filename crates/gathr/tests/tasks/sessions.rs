@@ -299,6 +299,11 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
     conn.execute_batch(
         "DROP TABLE task_sessions; ALTER TABLE turns DROP COLUMN opened_by;
          ALTER TABLE turns DROP COLUMN opened_version; DROP TABLE reactions;
+         ALTER TABLE tasks DROP COLUMN done; ALTER TABLE tasks DROP COLUMN proof;
+         ALTER TABLE tasks DROP COLUMN place; ALTER TABLE tasks DROP COLUMN size;
+         ALTER TABLE tasks DROP COLUMN size_lines; ALTER TABLE tasks DROP COLUMN started_ts;
+         ALTER TABLE tasks DROP COLUMN carry; ALTER TABLE tasks DROP COLUMN edited_ts;
+         ALTER TABLE tasks DROP COLUMN edited;
          PRAGMA user_version = 41;",
     )
     .unwrap();

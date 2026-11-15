@@ -148,7 +148,7 @@ pub fn text(facts: &Facts) -> String {
         "Check facts in code, current documentation or a live run. Say what you could not verify.".to_string(),
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
-         earlier messages and other agents' replies; give_task, finish_task, list_tasks, \
+         earlier messages and other agents' replies; give_task, edit_task, finish_task, list_tasks, \
          cancel_task and restart_task for tasks; message for one member of a team chat; react to give \
          another agent's message your thumbs-up, by its id; wait and \
          end_wait instead of polling in a loop; waiting for what this chat waits on and where each agent \

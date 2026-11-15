@@ -10,6 +10,8 @@ use crate::event::Event;
 use crate::ids::now_us;
 use crate::words::Opened;
 
+mod brief;
+mod edit;
 mod hear;
 pub(crate) mod held;
 pub(crate) mod notes;
@@ -23,6 +25,8 @@ mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
+pub use brief::{Brief, DONE_MOST, Give, PROOF_MOST, SIZE_MOST, WHERE_MOST, sized};
+pub use edit::{Edit, claim_ask, edit};
 pub use hear::done_words;
 pub use held::{Hold, background_changed, holds};
 pub use notes::{Note, NoteKind, NoteSaid};
@@ -177,6 +181,27 @@ pub struct Task {
     /// A review's notes, from its newest report (0053).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<Note>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub done: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proof: Option<String>,
+    #[serde(rename = "where", skip_serializing_if = "Option::is_none")]
+    pub place: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub size: Option<String>,
+    #[serde(rename = "lines", skip_serializing_if = "Option::is_none")]
+    pub size_lines: Option<i64>,
+    /// When its first turn was taken to be sent: its giver may edit it until then (0059).
+    #[serde(skip)]
+    pub started_us: Option<i64>,
+    /// The carry-on its queued brief was built with.
+    #[serde(skip)]
+    pub carry: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edited_us: Option<i64>,
+    /// The fields its giver's last edit changed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub edited: Vec<String>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -238,22 +263,6 @@ impl Start {
     }
 }
 
-/// A new task.
-pub struct Give<'a> {
-    pub chat: &'a str,
-    pub giver: Option<&'a str>,
-    pub owner: &'a str,
-    pub given_in: Option<&'a str>,
-    pub parent: Option<i64>,
-    pub kind: Kind,
-    pub what: &'a str,
-    pub why: Option<&'a str>,
-    pub after: &'a [i64],
-    pub pr: Option<i64>,
-    /// Given in passing: the giver's own task doesn't wait on it, and it's heard back on by itself.
-    pub in_passing: bool,
-}
-
 /// How a turn on a task ended.
 pub enum Outcome {
     /// It ended well.
@@ -268,45 +277,24 @@ fn refused(why: impl Into<String>) -> Error {
 
 /// Gives a task: `waiting` while its `after` tasks aren't all done, else `ready` with its turn.
 pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
-    let what = g.what.trim();
-    if what.is_empty() || what.contains('\n') {
-        return Err(refused(format!(
-            "`what` is one line of 1 to {TITLE_MOST} characters"
-        )));
-    }
-    let long = what.chars().count();
-    if long > TITLE_MOST {
-        return Err(refused(format!(
-            "`what` is {long} characters: cut {} to fit {TITLE_MOST}, and put the details in `why`",
-            long - TITLE_MOST
-        )));
-    }
+    brief::checked(g.kind, g.what, &g.brief)?;
     let tx = conn.transaction()?;
     let given = give_in(&tx, g, trace)?;
     tx.commit()?;
     Ok(given)
 }
 
-/// Gives a task in the caller's transaction, once its `what` is checked.
+/// Gives a task in the caller's transaction, once its `what` and brief are checked.
 fn give_in(tx: &Transaction, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
     let what = g.what.trim();
     crate::archive::refuse_archived(tx, g.chat)?;
     in_team(tx, g.chat, g.owner)?;
-    for &n in g.after.iter().chain(&g.parent) {
-        let chat: Option<String> = tx
-            .query_row("SELECT chat_id FROM tasks WHERE number = ?1", [n], |r| {
-                r.get(0)
-            })
-            .optional()?;
-        if chat.as_deref() != Some(g.chat) {
-            return Err(refused(format!("there's no task #{n} in this chat")));
-        }
-    }
+    edit::in_chat(tx, g.chat, g.after.iter().chain(&g.parent))?;
     let now = now_us();
     tx.execute(
         "INSERT INTO tasks (chat_id, giver, owner, given_in, parent, kind, what, why, state, pr,
-                            created_ts, updated_ts, in_passing)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10, ?11)",
+                            created_ts, updated_ts, in_passing, done, proof, place, size, size_lines)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
         params![
             g.chat,
             g.giver,
@@ -315,10 +303,15 @@ fn give_in(tx: &Transaction, g: &Give, trace: &str) -> Result<(Task, Vec<Start>)
             g.parent,
             g.kind.as_str(),
             what,
-            g.why.map(str::trim).filter(|w| !w.is_empty()),
+            brief::given(g.brief.why),
             g.pr,
             now,
-            g.in_passing
+            g.in_passing,
+            brief::given(g.brief.done),
+            brief::given(g.brief.proof),
+            brief::given(g.brief.place),
+            g.brief.size.map(|(size, _)| size.trim()),
+            g.brief.size.map(|(_, lines)| lines)
         ],
     )?;
     let number = tx.last_insert_rowid();
@@ -381,6 +374,7 @@ fn started_in(tx: &Transaction, task: i64, carries_on: bool, trace: &str) -> Res
     let Some(was) = state_of(tx, task)? else {
         return Ok(());
     };
+    tx.execute(edit::STARTED, params![task, now_us()])?;
     if !was.settled() || matches!(was, State::Blocked | State::Failed | State::Stopped) {
         set(tx, task, State::Working, None, trace)?;
         // Its owner is at work on what it left: that word no longer stands. A done does (0047).
@@ -476,7 +470,11 @@ pub fn turn_moved(
             "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
             _ => return Ok(starts),
         };
-        match (m.task, m.carries_on) {
+        // Marked by a cancel, or by an edit that made its task wait: whoever marked it already put
+        // the task where it belongs, and a restart or an edit may have queued its next turn since.
+        let marked = stop_why(tx, m.turn)?.is_some();
+        let task = m.task.filter(|_| !marked);
+        match (task, m.carries_on) {
             (Some(task), Some(waits)) if status == "stopped" => {
                 if state_of(tx, task)? == Some(State::Working) {
                     set(tx, task, State::Working, Some(waits), m.trace)?;
@@ -730,6 +728,10 @@ fn waiting_on(conn: &Connection, task: i64) -> Result<Vec<i64>, Error> {
 /// Makes the task `ready`, with the turn that starts it.
 fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Error> {
     set(tx, task, State::Ready, None, &crate::ids::trace_id())?;
+    tx.execute(
+        "UPDATE tasks SET carry = ?2 WHERE number = ?1",
+        params![task, carry],
+    )?;
     let t = read(tx, task)?;
     let owner = t.owner.as_deref().ok_or_else(|| {
         refused(format!(
@@ -742,12 +744,7 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
     };
     let text = words::brief(tx, &t, &giver, carry)?;
     let on = (Some(task), t.given_in.as_deref());
-    let opened = match t.kind {
-        Kind::Review => Opened::ReviewBrief,
-        Kind::PersonRequest => Opened::RequestBrief,
-        _ => Opened::Brief,
-    };
-    Start::queue(tx, (&t.chat, owner), on, opened, text)
+    Start::queue(tx, (&t.chat, owner), on, brief::opened(t.kind), text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and

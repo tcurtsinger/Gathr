@@ -1,4 +1,5 @@
-import type { PersonAnswer, PersonTask, Task } from '../api';
+import type { PersonAnswer, PersonTask, Task, TaskField } from '../api';
+import { began, list } from '../chat/team';
 
 /** Who asks a question no agent gave: Gathr itself, as the far end's stop does (0054). */
 const GATHR = 'Gathr';
@@ -87,6 +88,28 @@ const kinds = { wrong: 'Wrong', unasked: 'Unasked', suggestion: 'Suggestion' };
 /** A review's notes, one line each: "Unasked · src/cache.rs: what it is" (0053). */
 export function noteLines(task: Task): string[] {
   return (task.notes ?? []).map((n) => `${kinds[n.kind]} · ${n.file ? `${n.file}: ` : ''}${n.says}`);
+}
+
+/** A task's size: "src/export.ts, about 120 lines". */
+export function sized(task: Task): string | null {
+  return task.size ? `${task.size}, about ${task.lines} lines` : null;
+}
+
+const fieldWords: Record<TaskField, string> = {
+  what: 'title',
+  why: 'why',
+  done: 'done when',
+  proof: 'proof',
+  where: 'where',
+  size: 'size',
+  after: 'after',
+};
+
+/** Its giver's last edit: "Title and after · 14:02". */
+export function edited(task: Task): string | null {
+  if (!task.edited?.length || !task.edited_us) return null;
+  const words = list(task.edited.map((f) => fieldWords[f]));
+  return `${words[0].toUpperCase()}${words.slice(1)} · ${began(task.edited_us)}`;
 }
 
 /** How long nothing has moved a stale task (F11): "Idle 4 days". */

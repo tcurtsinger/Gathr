@@ -2,6 +2,7 @@
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Task } from '../api';
+import { began } from '../chat/team';
 import { TaskView } from './TaskView';
 // The fields' grid, which TasksTab brings in for the app: a note's place in it is checked below.
 import './tasks.css';
@@ -139,6 +140,31 @@ test("a review shows the commit it is of, and the PR's head once it is out of da
     'State: done',
     'Report: Done',
     'Reviewed at: abc1234. Out of date: #18 is at def5678',
+  ]);
+});
+
+test('a task shows its brief, its order and its last edit', async () => {
+  const edited_us = Date.now() * 1000;
+  const briefed = task({
+    state: 'waiting',
+    after: [3, 5],
+    done: 'A CSV opens in a spreadsheet',
+    proof: 'the CI run on the PR',
+    where: "the project's worktree, on a new branch",
+    size: 'src/export.ts',
+    lines: 120,
+    edited_us,
+    edited: ['what', 'after'],
+  });
+  expect(await fields(briefed)).toEqual([
+    'Assigned to: sol',
+    'State: waiting',
+    'Done when: A CSV opens in a spreadsheet',
+    'Proof: the CI run on the PR',
+    "Where: the project's worktree, on a new branch",
+    'Size: src/export.ts, about 120 lines',
+    'After: #3, #5',
+    `Edited: Title and after · ${began(edited_us)}`,
   ]);
 });
 

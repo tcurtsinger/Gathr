@@ -566,8 +566,7 @@ impl Task {
     /// start (0010's gate); or why it couldn't. A turn that doesn't run stays first in the queue.
     async fn start(&mut self, next: &Queued) -> Result<&'static str, String> {
         if let Some(why) = self.gate(&next.ids).await {
-            self.set_turn(&next.ids, "stopped", Some(&why)).await;
-            return Ok("dropped");
+            return Ok(self.dropped(&next.ids, &why).await);
         }
         if self.closing.is_some() || self.awaiting_read() {
             return Ok(self.hold_back(next, "queued").await);
@@ -660,6 +659,12 @@ impl Task {
             return Ok(self.hold_back(next, "waiting_sign_in").await);
         }
         let gate = self.chats.gate(&assigned.folder).pass().await;
+        // Before the spawn: a turn dropped here leaves no engine waiting with nothing sent, whose
+        // first frame (Codex's thread opening) would read as a turn it began by itself.
+        let next = &match self.ask_now(next).await {
+            Ok(next) => next,
+            Err(why) => return Ok(self.dropped(&next.ids, &why).await),
+        };
         let fresh = program.is_some();
         if let Some(program) = program {
             self.spawn(&program, assigned, &next.ids.trace, (&key, &choice))
@@ -695,8 +700,7 @@ impl Task {
         // there, queued or said live (F1).
         if let Some(why) = self.hold(&next.ids, status).await {
             self.queue.retain(|q| q.ids.turn != next.ids.turn);
-            self.set_turn(&next.ids, "stopped", Some(&why)).await;
-            return "dropped";
+            return self.dropped(&next.ids, &why).await;
         }
         let first = !self.queue.iter().any(|q| q.ids.turn == next.ids.turn);
         if first {

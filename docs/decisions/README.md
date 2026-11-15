@@ -68,3 +68,4 @@ fails in CI when the two differ.
 | 0056 | [Gathr records which words opened each turn](0056-gathr-records-which-words-opened-each-turn.md) | accepted | yes |
 | 0057 | [Agreeing is a thumbs-up, not a message](0057-agreeing-is-a-reaction.md) | accepted | yes |
 | 0058 | [When a chat needs you, Gathr tells you outside the window](0058-gathr-tells-you-outside-the-window.md) | accepted | yes |
+| 0059 | [A work task carries a complete brief, and its giver can edit it until it starts](0059-a-work-task-carries-a-complete-brief.md) | accepted | yes |

@@ -174,7 +174,7 @@ Parts: 3.1, 3.2, 3.3, 3.4
 - **When** a task is given
 - **Then** it carries what to do, why, what done means, how it's proved, and where the work lives: the
   project, the folder and the branch. A task that lacks one of these is refused, naming what is
-  missing
+  missing. Its brief says each of them, and its size when given
 
 ### 3b. Approving a plan makes its tasks
 
@@ -211,6 +211,15 @@ Parts: 3.6
 - **Given** a task set after another, which was left, failed or stopped
 - **When** that other task is restarted and finishes
 - **Then** the task set after it starts, and so does the next one down the chain
+
+### 3f. The giver corrects a task before it starts
+
+Parts: 3.8
+
+- **Given** a task waiting for its first turn
+- **When** its giver changes its title and what it comes after
+- **Then** its brief and its order follow, and the task shows the change. Once its first turn has
+  started, a change is refused, with the reason
 
 ## 4. One voice to you
 

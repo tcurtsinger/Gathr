@@ -273,11 +273,17 @@ fn a_chat_is_looked_at_when_a_write_may_have_moved_it() {
 fn a_silent_turn_shows_and_its_lead_is_told_once() {
     let data = TempDir::new();
     let stall = env(&[("GATHR_STALL_AFTER_MS", "200")]);
-    let (service, chat, lead) = common::team(&data.0, &held_recording(&data.0), &stall);
+    let (service, chat, lead) =
+        common::team(&data.0, &held_recording(&data.0, "signed_in"), &stall);
     write(&service, &chat, "Plan it");
     let ask = json!({ "to": "Ann", "what": "Write the notes" });
     let token = first_token(&data.0);
-    let given = text(&call_tool(service.info.port, &token, "give_task", ask));
+    let given = text(&call_tool(
+        service.info.port,
+        &token,
+        "give_task",
+        common::briefed(ask),
+    ));
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
 
     common::silent_turn_shows_and_its_lead_is_told_once(&service, &data.0, &chat, &lead);

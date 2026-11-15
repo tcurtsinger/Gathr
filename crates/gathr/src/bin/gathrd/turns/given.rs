@@ -61,6 +61,36 @@ impl Task {
         unread(asked)
     }
 
+    /// The turn as the runner takes it to send it (0059), with its ask read again while its task
+    /// hasn't started: what its giver's edit made it, which the queue keeps for a turn the engine
+    /// refuses. The gate is asked again in the same write: a cancel, or an edit that made the task
+    /// wait, since the gate is why the turn must be dropped.
+    pub(super) async fn ask_now(&mut self, next: &Queued) -> Result<Queued, String> {
+        let (chat, task, turn) = (next.ids.chat.clone(), next.ids.task, next.ids.turn.clone());
+        let read = self
+            .chats
+            .writer
+            .call(move |conn| match why_not(conn, &chat, task, &turn)? {
+                Some(why) => Ok(Err(why)),
+                None => Ok(Ok(gathr::tasks::claim_ask(conn, &turn)?)),
+            })
+            .await;
+        let ask = read_or_why(read)??.unwrap_or_else(|| next.text.clone());
+        if let Some(queued) = self.queue.iter_mut().find(|q| q.ids.turn == next.ids.turn) {
+            queued.text.clone_from(&ask);
+        }
+        Ok(Queued {
+            text: ask,
+            ..next.clone()
+        })
+    }
+
+    /// Drops a turn its gate refuses, wherever it's asked: it ends `stopped` with why, live.
+    pub(super) async fn dropped(&self, ids: &Ids, why: &str) -> &'static str {
+        self.set_turn(ids, "stopped", Some(why)).await;
+        "dropped"
+    }
+
     /// Saves the turn as waiting (`queued`, `waiting_sign_in`) in the same call that asks the gate,
     /// so archiving can't fall between them (F1): `None` once saved, else why it may not wait,
     /// and the turn isn't touched. A turn that ended meanwhile keeps its end.
@@ -100,9 +130,13 @@ fn why_not(
 }
 
 fn unread(asked: Option<Result<Option<String>, gathr::Error>>) -> Option<String> {
+    read_or_why(asked).unwrap_or_else(Some)
+}
+
+fn read_or_why<T>(asked: Option<Result<T, gathr::Error>>) -> Result<T, String> {
     match asked {
-        Some(Ok(why)) => why,
-        Some(Err(e)) => Some(format!("its chat or task wasn't read: {e}")),
-        None => Some("its chat or task wasn't read: the database didn't answer".into()),
+        Some(Ok(read)) => Ok(read),
+        Some(Err(e)) => Err(format!("its chat or task wasn't read: {e}")),
+        None => Err("its chat or task wasn't read: the database didn't answer".into()),
     }
 }

@@ -45,7 +45,7 @@ fn room(data: &Path, repos: &Path, gh: Value) -> Room {
     let service = TestService::with_engine(
         data,
         &[
-            ("GATHR_REPLAY", &held_recording(data)),
+            ("GATHR_REPLAY", &held_recording(data, "signed_in")),
             ("GATHR_REPLAY_HOLD", &data.join("go")),
             ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
             ("GATHR_GH_PATH", &common::fake_gh()),
@@ -92,7 +92,12 @@ fn room(data: &Path, repos: &Path, gh: Value) -> Room {
     };
     let lead = token(0);
     let review = json!({ "to": "Vale", "what": "Review #5", "kind": "review", "pr": 5 });
-    let given = text(&call_tool(service.info.port, &lead, "give_task", review));
+    let given = text(&call_tool(
+        service.info.port,
+        &lead,
+        "give_task",
+        common::briefed(review),
+    ));
     assert!(given.starts_with("Task #"), "{given}");
     Room {
         _release: Release(data.join("go")),
@@ -272,7 +277,7 @@ fn a_chat_outside_a_project_has_no_repository_to_ask_about() {
     std::fs::write(&answers, "[]").unwrap();
     let (service, chat, lead) = common::team(
         &data.0,
-        &held_recording(&data.0),
+        &held_recording(&data.0, "signed_in"),
         &[
             ("GATHR_GH_PATH", &common::fake_gh()),
             ("GATHR_FAKE_GH", &answers),
@@ -307,7 +312,7 @@ fn live_reads_of_a_real_pr() {
     let service = TestService::with_engine(
         &data.0,
         &[
-            ("GATHR_REPLAY", &held_recording(&data.0)),
+            ("GATHR_REPLAY", &held_recording(&data.0, "signed_in")),
             ("GATHR_REPLAY_HOLD", &data.0.join("go")),
             ("GATHR_REPLAY_ENV", &data.0.join("env.jsonl")),
         ],

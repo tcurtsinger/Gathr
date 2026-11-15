@@ -2,6 +2,7 @@
 //! from fixed made-up input, each with the kind and version its turn records.
 
 use super::*;
+use gathr::tasks::Brief;
 use gathr::tasks::person::{self, Answer, Ask, Choice, File};
 use gathr::words;
 
@@ -32,7 +33,10 @@ fn work_for(owner: &'static str, kind: Kind, what: &'static str, pr: Option<i64>
         parent: None,
         kind,
         what,
-        why: None,
+        brief: match kind {
+            Kind::Work => common::COMPLETE,
+            _ => Brief::default(),
+        },
         after: &[],
         pr,
         in_passing: false,
@@ -44,22 +48,27 @@ fn briefs_are_the_kept_samples() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let brief = ("brief", words::BRIEF);
-    let (_, starts) = given(
-        &mut conn,
-        &work_for("ann", Kind::Work, "Fix the build", None),
-    );
+    // Tasks given before 0059 have no done, proof or where, and some no why: their briefs still
+    // start them when they are restarted.
+    conn.execute_batch(
+        "INSERT INTO tasks (chat_id, giver, owner, kind, what, why, state, created_ts, updated_ts) VALUES
+             ('c', 'lead', 'ann', 'work', 'Fix the build', NULL, 'cancelled', 1, 1),
+             ('c', 'lead', 'ann', 'work', 'Fix the build', 'CI is red', 'cancelled', 1, 1);",
+    )
+    .unwrap();
+    let starts = tasks::restart(&mut conn, Some("lead"), 1, T).unwrap();
     sampled(&conn, "brief: no why", &starts[0], brief);
-    let (task, starts) = give(&mut conn, "ann", &[], None);
+    let starts = tasks::restart(&mut conn, Some("lead"), 2, T).unwrap();
     sampled(&conn, "brief: why", &starts[0], brief);
-    tasks::started(&mut conn, task, T).unwrap();
+    tasks::started(&mut conn, 2, T).unwrap();
     let failed = Outcome::Failed("the engine exited".into());
-    tasks::ended(&mut conn, task, failed, T).unwrap();
-    let starts = tasks::restart(&mut conn, Some("lead"), task, T).unwrap();
+    tasks::ended(&mut conn, 2, failed, T).unwrap();
+    let starts = tasks::restart(&mut conn, Some("lead"), 2, T).unwrap();
     sampled(&conn, "brief: carry", &starts[0], brief);
 
     let review = ("review_brief", words::REVIEW_BRIEF);
     let mut fix = work_for("ann", Kind::Work, "Fix the label", Some(70));
-    fix.why = Some("the label is cut off");
+    fix.brief.why = Some("the label is cut off");
     let (fix, _) = given(&mut conn, &fix);
     tasks::pr_looked(&mut conn, fix, "OPEN", Some("abc1234def5678"), None, T).unwrap();
     let (_, starts) = given(
@@ -70,6 +79,16 @@ fn briefs_are_the_kept_samples() {
     let no_pr = work_for("bo", Kind::Review, "Review the notes", None);
     let (_, starts) = given(&mut conn, &no_pr);
     sampled(&conn, "review_brief: no PR", &starts[0], review);
+
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let complete = work_for("ann", Kind::Work, "Fix the build", None);
+    let (_, starts) = given(&mut conn, &complete);
+    sampled(&conn, "brief: complete", &starts[0], brief);
+    let mut sized = work_for("ann", Kind::Work, "Fix the build", None);
+    sized.brief.size = Some(("src/build.rs", 40));
+    let (_, starts) = given(&mut conn, &sized);
+    sampled(&conn, "brief: size", &starts[0], brief);
 }
 
 #[test]

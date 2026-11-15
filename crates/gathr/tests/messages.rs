@@ -20,7 +20,7 @@ struct Room {
 
 /// Lead (Supervisor) and Ann in a chat, each engine held once its message arrives.
 fn room(data: &Path) -> Room {
-    let (service, chat, lead) = team(data, &held_recording(data), &[]);
+    let (service, chat, lead) = team(data, &held_recording(data, "signed_in"), &[]);
     let history = service.call("GET", &format!("/api/chats/{chat}")).json();
     let ann = history["members"]
         .as_array()
@@ -230,7 +230,7 @@ fn a_message_to_itself_a_stranger_or_in_a_chat_of_one_is_refused_with_a_referenc
     }
 
     let alone = TempDir::new();
-    let (service, chat, solo) = team(&alone.0, &held_recording(&alone.0), &[]);
+    let (service, chat, solo) = team(&alone.0, &held_recording(&alone.0, "signed_in"), &[]);
     let one = json!({ "members": [{ "agent": solo, "role": "supervisor" }] });
     assert_eq!(
         service
@@ -482,7 +482,12 @@ fn what_a_chat_waits_on_is_one_answer_by_the_route_the_tool_and_the_command_line
     room.turn_of(&room.ann, 1);
     // Ann's task from Lead waits behind the turn Ann is running.
     let task = json!({ "to": "Ann", "what": "Fix the build" });
-    let given = call_tool(room.service.info.port, &lead, "give_task", task);
+    let given = call_tool(
+        room.service.info.port,
+        &lead,
+        "give_task",
+        common::briefed(task),
+    );
     assert_eq!(given["isError"], false, "{}", text(&given));
     let path = format!("/api/chats/{}/waiting", room.chat);
     let behind = "is queued: behind this agent's turn";

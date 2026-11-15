@@ -88,7 +88,7 @@ fn ended(service: &TestService, chat: &str) -> Value {
 
 /// A service whose engine holds each turn until `go` exists.
 fn held(data: &Path) -> TestService {
-    let (replay, go) = (held_recording(data), data.join("go"));
+    let (replay, go) = (held_recording(data, "signed_in"), data.join("go"));
     TestService::with_engine(
         data,
         &[("GATHR_REPLAY", &replay), ("GATHR_REPLAY_HOLD", &go)],
@@ -363,7 +363,7 @@ fn an_approval_nobody_answered_goes_with_its_turn() {
 
 /// A team chat whose Supervisor, mid-turn, waits on a check and asks the person a question.
 fn asked_the_person(data: &Path) -> (TestService, String) {
-    let (service, chat, _) = team(data, &held_recording(data), &[]);
+    let (service, chat, _) = team(data, &held_recording(data, "signed_in"), &[]);
     say(&service, &chat, None);
     let (port, lead) = (service.info.port, first_token(data));
     let check = json!({ "check": "exit 1", "then": "merge it" });
@@ -531,7 +531,7 @@ const PUSH: [(&str, &str); 2] = [
 #[test]
 fn a_push_gathr_asks_about_needs_the_person_until_it_is_answered() {
     let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &held_recording(&data.0), &[]);
+    let (service, chat, _) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
     let mut live = service.live();
     say(&service, &chat, None);
     let (port, auth) = (
@@ -607,7 +607,7 @@ fn stop_now_for_everything_ends_a_chats_working_and_its_held_carry_on_isnt_worki
 #[test]
 fn two_agents_turns_in_one_chat_ending_together_end_its_working_once() {
     let data = TempDir::new();
-    let (service, chat, lead) = team(&data.0, &held_recording(&data.0), &[]);
+    let (service, chat, lead) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
     let mut live = service.live();
     let members = service.call("GET", &format!("/api/chats/{chat}")).json();
     let members = members["members"].as_array().unwrap().clone();

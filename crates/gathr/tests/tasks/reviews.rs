@@ -12,7 +12,7 @@ fn a_work_tasks_commit_is_what_to_look_at_never_a_review() {
         parent: None,
         kind: Kind::Work,
         what: "Fix",
-        why: None,
+        brief: common::COMPLETE,
         after: &[],
         pr: Some(5),
         in_passing: false,
@@ -77,6 +77,11 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   ALTER TABLE agent_context DROP COLUMN ran;
                   ALTER TABLE turns DROP COLUMN opened_by; ALTER TABLE turns DROP COLUMN opened_version;
                   DROP TABLE reactions;
+                  ALTER TABLE tasks DROP COLUMN done; ALTER TABLE tasks DROP COLUMN proof;
+                  ALTER TABLE tasks DROP COLUMN place; ALTER TABLE tasks DROP COLUMN size;
+                  ALTER TABLE tasks DROP COLUMN size_lines; ALTER TABLE tasks DROP COLUMN started_ts;
+                  ALTER TABLE tasks DROP COLUMN carry; ALTER TABLE tasks DROP COLUMN edited_ts;
+                  ALTER TABLE tasks DROP COLUMN edited;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);
