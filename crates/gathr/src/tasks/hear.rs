@@ -245,5 +245,11 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     let text = words::hear_back(tx, &due, own)?;
     let mut start = Start::queue(tx, (&chat, &giver), (own, answers), Opened::HearBack, text)?;
     start.hear_back = true;
+    // With no task of its own, it serves the ask of what it reports: after a split (0061) the
+    // turn it answers may be on another ask.
+    if own.is_none() {
+        let sql = "UPDATE turns SET ask_id = COALESCE((SELECT ask_id FROM tasks WHERE number = ?2), ask_id) WHERE id = ?1";
+        tx.execute(sql, params![start.turn, newest])?;
+    }
     Ok(vec![start])
 }

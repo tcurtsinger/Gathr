@@ -58,7 +58,8 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
 pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::Error> {
     let tasks = tasks::list(conn, chat)?;
     let waits = gathr::waits::in_chat(conn, chat, None)?;
-    Ok(json!({ "tasks": tasks, "waits": waits }))
+    let asks = gathr::asks::in_chat(conn, chat)?;
+    Ok(json!({ "tasks": tasks, "waits": waits, "asks": asks }))
 }
 
 /// What only the running service knows of what the chat waits on (0050): why its queued turns

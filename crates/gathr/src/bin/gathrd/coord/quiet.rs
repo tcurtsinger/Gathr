@@ -35,6 +35,18 @@ pub async fn check(chats: &Arc<Chats>, chat: &str) {
         .writer
         .call(move |conn| quiet::check(conn, &id, &live, now_us(), times(), &t));
     started(chats, checked.await, ("gathr.quiet.check", chat, &trace));
+    // After what the write committed, the giver's hear-back included: a repair's "Fixed" (0061).
+    let (id, t) = (chat.to_string(), trace.clone());
+    let fixed = chats
+        .writer
+        .call(move |conn| gathr::asks::fixed(conn, &id, &t));
+    if let Some(Err(e)) = fixed.await {
+        let event = Event::point("gathr.ask.fixed")
+            .trace(&trace)
+            .chat(chat)
+            .error("sqlite");
+        chats.writer.record(event.attr("why", e.to_string()));
+    }
     // Told, or no longer stuck, the chat needs the person or stops needing them (0040).
     crate::chat_state::changed(chats, chat, &trace).await;
 }

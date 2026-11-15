@@ -110,11 +110,12 @@ Parts: 1.9
 
 Parts: 2.4, 10.3
 
-- **Given** a project with a lead
-- **When** the person asks a question, reports something broken, and asks for a new feature
-- **Then** each ask has a size on record: everyday, repair, new. The question is answered with no task
-  and no plan. The repair gets a short brief. The feature starts a plan. An ask the lead leaves
-  unsized is treated as new
+- **Given** a team chat with a lead
+- **When** the person reports something broken, and then asks for a new feature
+- **Then** each ask has a size on record: repair or new, and the window shows it as a line, "Fix" or
+  "Plan", after the lead's turn that sized it. The repair gets a short brief. The feature starts a
+  plan. An ask the lead leaves unsized is treated as new: its line reads "Plan" once it has a task,
+  and it has no line before then
 
 ### 2b. Nothing new is handed out before its plan is approved
 
@@ -161,8 +162,28 @@ Parts: 2.6
 - **Given** an ask sized as a repair
 - **When** the lead gives its short brief
 - **Then** the task is handed out with no plan and no approval, and is built and reviewed. When it
-  lands, the person is shown what was fixed and its proof, and can mark it "this should have been
-  asked"
+  lands, the person is shown "Fixed: <the ask>", which opens to its PRs and proof, and can change it
+  to Plan, which Gathr counts
+
+### 2j. The person changes a running repair to new
+
+Parts: 2.4
+
+- **Given** an ask sized as a repair, with work running
+- **When** the person opens its size line and chooses "Plan it with me first."
+- **Then** Gathr records the new size and that the person set it, and the line reads "You: Plan". The
+  lead can't change it back. Changing a repair to new is counted as a correction. (When part I lands:
+  its tasks not started wait for a plan, and the lead is told.)
+
+### 2k. A follow-up joins the ask it follows
+
+Parts: 2.4
+
+- **Given** an ask sized as a repair, with work open
+- **When** the person sends "also check X"
+- **Then** it joins the repair: no new ask is made, and the chat shows no second size line. (When part I
+  lands: the lead's next gives and writes are not held.) When the lead calls `size` with that
+  message, it becomes an ask of its own, with its own size and its own line
 
 ## 3. Every task stands on its own
 
@@ -757,9 +778,9 @@ Parts: 10.5
 
 Parts: 10.3
 
-- **Given** an everyday ask and a new ask in the same project
+- **Given** a repair and a new ask in the same project
 - **When** each is carried out
-- **Then** the everyday ask made no plan, no task for the person and no review. The new ask went
+- **Then** the repair made no plan and no question for the person. The new ask went
   through every step of the loop in order, and none could be skipped
 
 ### 10d. Work that isn't code is checked, and saved where it belongs
@@ -936,8 +957,8 @@ The whole product, end to end. They are the last scenarios to pass.
 - **When** they start a new chat, name nobody, and ask for something small: "summarise this file", with
   the file attached
 - **Then** all of this holds:
-  1. The assistant gets the ask ([1a](#1a-a-new-chat-with-nobody-named-is-with-the-assistant)), and it
-     is sized as everyday ([2a](#2a-every-ask-is-sized-and-gathr-holds-the-size)).
+  1. The assistant gets the ask ([1a](#1a-a-new-chat-with-nobody-named-is-with-the-assistant)). Sizing
+     an everyday ask is the assistant's, written with a later stage.
   2. The assistant does it with its own tools and answers in the chat.
   3. No team was proposed, no plan was made, no task reached the person, and nothing was reviewed
      ([10c](#10c-the-size-of-the-process-fits-the-size-of-the-ask)).

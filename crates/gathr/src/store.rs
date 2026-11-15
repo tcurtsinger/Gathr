@@ -205,7 +205,7 @@ pub fn message(conn: &Connection, id: &str) -> Result<Value, Error> {
 pub const UNTITLED: &str = "New chat";
 
 /// A chat's name from its first message: the first line with text, up to 60 characters.
-fn title_from(text: &str) -> Option<String> {
+pub(crate) fn title_from(text: &str) -> Option<String> {
     Some(crate::text::cut(crate::text::first_line(text)?, 60, false))
 }
 
@@ -262,6 +262,9 @@ pub fn add_message_at(
         conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
             .execute(params![chat, title, UNTITLED])?;
     }
+    if role == "user" {
+        crate::asks::for_message(conn, chat, turn, &id)?;
+    }
     message(conn, &id)
 }
 
@@ -281,7 +284,19 @@ pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), E
 
 /// Moves a message to another turn: one sent into a turn that the engine answered after it.
 /// The message as it is now, for the live socket.
+/// The new turn, with no ask yet, takes the message's own ask when it is one (split off, 0061),
+/// else the ask of the turn the message was saved in; a teammate's copy, that of the turn holding
+/// the original.
 pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Error> {
+    conn.prepare_cached(
+        "UPDATE turns SET ask_id = (SELECT COALESCE(
+             (SELECT a.id FROM asks a WHERE a.id = ?1),
+             (SELECT o.ask_id FROM messages c JOIN messages s ON s.id = c.copy_of
+                  JOIN turns o ON o.id = s.turn_id WHERE c.id = ?1),
+             (SELECT u.ask_id FROM messages m JOIN turns u ON u.id = m.turn_id WHERE m.id = ?1)))
+         WHERE id = ?2 AND ask_id IS NULL",
+    )?
+    .execute(params![id, turn])?;
     conn.prepare_cached("UPDATE messages SET turn_id = ?2 WHERE id = ?1")?
         .execute(params![id, turn])?;
     message(conn, id)
@@ -289,7 +304,7 @@ pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Er
 
 /// A new turn, run as `agent`, or on the oldest account when it's sent to none; on `task` when it
 /// works on one (0010); answering the turn `answers` when Gathr starts it (F8b); with the kind
-/// of words that opened it.
+/// of words that opened it; serving the ask of its task, else of the turn it answers (0061).
 pub fn add_turn(
     conn: &Connection,
     chat: &str,
@@ -300,8 +315,9 @@ pub fn add_turn(
 ) -> Result<(), Error> {
     conn.prepare_cached(
         "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers,
-                            opened_by, opened_version)
-         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9)",
+                            opened_by, opened_version, ask_id)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9, (SELECT COALESCE(
+             (SELECT ask_id FROM tasks WHERE number = ?6), (SELECT ask_id FROM turns WHERE id = ?7))))",
     )?
     .execute(params![
         id,

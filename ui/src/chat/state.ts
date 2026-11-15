@@ -1,4 +1,4 @@
-import type { Failure, History, Member, Message, Reaction, Task, Turn, Wait } from '../api';
+import type { Ask, Failure, History, Member, Message, Reaction, Task, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -22,6 +22,8 @@ export interface ChatState {
   members: Member[];
   tasks: Task[];
   waits: Wait[];
+  /** The person's asks, oldest first, each with its size (0061). */
+  asks: Ask[];
   reactions: Reaction[];
 }
 
@@ -33,10 +35,14 @@ export const empty: ChatState = {
   members: [],
   tasks: [],
   waits: [],
+  asks: [],
   reactions: [],
 };
 
-export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wait[] }): ChatState {
+export function fromHistory(
+  history: History,
+  work?: { tasks: Task[]; waits: Wait[]; asks?: Ask[] },
+): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
   const approvals = history.approvals.map((a) => ({
     turn: a.turn,
@@ -54,6 +60,7 @@ export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wai
     members: history.members ?? [],
     tasks: work?.tasks ?? [],
     waits: work?.waits ?? [],
+    asks: work?.asks ?? [],
     reactions: history.reactions ?? [],
   };
 }
@@ -65,7 +72,7 @@ export function fromHistory(history: History, work?: { tasks: Task[]; waits: Wai
  */
 export function fromLoad(
   history: History,
-  work: { tasks: Task[]; waits: Wait[] },
+  work: { tasks: Task[]; waits: Wait[]; asks?: Ask[] },
   held: LiveEvent[],
 ): ChatState {
   const saved = new Set(history.messages.map((m) => m.id));
@@ -130,7 +137,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, approvals: [...state.approvals, approval] };
     }
     case 'tasks':
-      return { ...state, tasks: event.tasks, waits: event.waits };
+      return { ...state, tasks: event.tasks, waits: event.waits, asks: event.asks };
     case 'members':
       return { ...state, members: event.members };
     case 'context':

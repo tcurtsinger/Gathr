@@ -1,5 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import { fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
 import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
@@ -26,13 +27,15 @@ export interface TurnNotice {
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
-  kind: 'task' | 'answer' | 'question' | 'note';
+  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan';
   /** Who did what, ahead of the text: "Vale completed:". */
   who?: string;
   text: string;
   /** What a click on the line adds: the reason, the question. */
   more?: string;
   task?: number;
+  /** A size line's ask: it opens to the ask's two sizes (0061). */
+  ask?: string;
 }
 
 /** Gathr's own part of a message, read by the thread's message components. */
@@ -114,6 +117,7 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
   const groups = place(grouped(state), state);
   const gave = givenBy(state, crew);
+  const sizes = sizeLines(state, groups, crew);
   // The tasks whose end Gathr said in a line of its own (0051), each with where that line is.
   const said = new Map<number, number>();
   state.messages.forEach((m, at) => {
@@ -164,6 +168,10 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
     const who = `${turn?.agent}|${on}`;
     add(block(cache, g, state, crew, gave, { on, head: who !== speaker }), [g]);
     speaker = who;
+    for (const size of sizes.get(g) ?? []) {
+      items.push(eventsOf(cache, `size-${size.ask}`, [size]));
+      speaker = undefined;
+    }
     const asked = g.bound && g.turn ? questions(state, g.turn, crew) : [];
     if (asked.length) {
       items.push(eventsOf(cache, `asked-${g.turn}`, asked));
@@ -429,6 +437,8 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
       }),
     );
   if (answers.length) return answers;
+  const fix = m.turn ? undefined : fixed(text);
+  if (fix) return [fix];
   const shown = (task: number, how: string) => how === 'done' && (said.get(task) ?? group.at) < group.at;
   const reported = hearBack(text, state.tasks)?.filter((r) => !shown(r.task.number, r.state));
   const back = reported?.map(

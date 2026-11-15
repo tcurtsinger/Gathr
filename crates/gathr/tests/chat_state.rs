@@ -496,7 +496,8 @@ fn a_state_that_cant_be_read_fails_with_a_reference_that_finds_why() {
     let service = TestService::start(&data.0);
     let chat = service.new_chat();
     let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
-    db.execute("ALTER TABLE tasks RENAME TO tasks_gone", [])
+    // Not `tasks`: saving a turn reads it for the turn's ask (0061), and the send would fail first.
+    db.execute("ALTER TABLE quiet RENAME TO quiet_gone", [])
         .unwrap();
 
     let listed = service.call("GET", "/api/chats");

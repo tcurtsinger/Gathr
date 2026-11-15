@@ -196,7 +196,14 @@ const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } 
 
 /** Gathr's notes that belong to no turn's row. */
 function SystemItem() {
-  return <Events events={useAuiState(custom).events ?? []} onOpenTask={useActions().openTask} />;
+  const actions = useActions();
+  return (
+    <Events
+      events={useAuiState(custom).events ?? []}
+      onOpenTask={actions.openTask}
+      onReference={actions.reference}
+    />
+  );
 }
 
 function UserMessage() {

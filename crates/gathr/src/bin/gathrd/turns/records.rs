@@ -30,9 +30,15 @@ impl Task {
         began: Option<i64>,
     ) -> Result<Value, String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
-        let add = move |conn: &mut rusqlite::Connection| match began {
-            Some(began) => store::add_message_at(conn, &chat, &turn, role, kind, &body, began),
-            None => store::add_message(conn, &chat, &turn, role, kind, &body),
+        // One write: a person's message and the ask it starts or joins (0061).
+        let add = move |conn: &mut rusqlite::Connection| {
+            let tx = conn.transaction()?;
+            let added = match began {
+                Some(began) => store::add_message_at(&tx, &chat, &turn, role, kind, &body, began),
+                None => store::add_message(&tx, &chat, &turn, role, kind, &body),
+            }?;
+            tx.commit()?;
+            Ok::<_, gathr::Error>(added)
         };
         let added = self.chats.writer.call(add).await;
         let why = match added {

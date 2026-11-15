@@ -200,6 +200,8 @@ pub struct Task {
     pub carry: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub edited_us: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ask: Option<String>,
     /// The fields its giver's last edit changed.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub edited: Vec<String>,
@@ -317,6 +319,7 @@ fn give_in(tx: &Transaction, g: &Give, trace: &str) -> Result<(Task, Vec<Start>)
         ],
     )?;
     let number = tx.last_insert_rowid();
+    crate::asks::inherit(tx, number)?;
     for after in g.after {
         tx.execute(
             "INSERT OR IGNORE INTO task_after (task, after_task) VALUES (?1, ?2)",

@@ -174,7 +174,7 @@ A plan is a record with its own file and versions. States: `drafting`, `checking
 - The Supervisor answers objections with a new version or a reason it stands. Only those who objected re-check a later version, and only their points.
 - If the check stalls (a checker's turn fails, or 10 minutes pass), the plan reaches the person anyway, saying who didn't finish.
 - On the person's card: who checked it and what changed because of it.
-- Outside plan mode, a Supervisor's turn that gives two or more tasks, or names a plan file, is a plan: its tasks wait in `waiting` until the check is done.
+- Outside plan mode, a Supervisor's turn that names a plan file is a plan: its tasks wait in `waiting` until the check is done. Giving two or more tasks no longer makes a plan: the size of the ask does ([0061](0061-every-ask-has-a-size.md)).
 - Each plan keeps its own record and file until it's built or dropped. A second plan never replaces the first.
 - In plan mode the Supervisor may start read-only side jobs and write its own notes; changes to the project wait for Build.
 - A member who finds the plan wrong for its part says so (`blocked`, with evidence) before building on it.

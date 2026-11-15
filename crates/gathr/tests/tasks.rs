@@ -1,6 +1,8 @@
 //! Tasks' and waits' transitions (0010) on a real database: who may make each, what each starts,
 //! and what a task is held on.
 
+#[path = "tasks/asks.rs"]
+mod asks;
 #[path = "tasks/briefs.rs"]
 mod briefs;
 mod common;

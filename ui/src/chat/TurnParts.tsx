@@ -1,5 +1,5 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import { Bell, CircleCheck, CircleHelp, PenLine, Send, ThumbsUp } from 'lucide-react';
+import { Bell, CircleCheck, CircleHelp, ClipboardList, PenLine, Send, ThumbsUp, Wrench } from 'lucide-react';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   CollapsibleContent,
@@ -12,6 +12,7 @@ import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
+import { SizeChoice } from './Size';
 import { clock, list } from './team';
 import { Elapsed } from './Working';
 import './team.css';
@@ -202,15 +203,30 @@ export function Agreed({ names }: { names: string[] }) {
   );
 }
 
-const ICON = { task: CircleCheck, answer: PenLine, question: CircleHelp, note: Bell };
+const ICON = {
+  task: CircleCheck,
+  answer: PenLine,
+  question: CircleHelp,
+  note: Bell,
+  fix: Wrench,
+  plan: ClipboardList,
+};
 
 /** Gathr's notes that belong to no turn's row, one line each. */
-export function Events({ events, onOpenTask }: { events: EventLine[]; onOpenTask: (task: number) => void }) {
+export function Events({
+  events,
+  onOpenTask,
+  onReference,
+}: {
+  events: EventLine[];
+  onOpenTask: (task: number) => void;
+  onReference?: (ref: string) => void;
+}) {
   return (
     <MessagePrimitive.Root className="events">
       {events.map((e, index) => (
         // Two lines can read the same ("You answered Orin: Done"): its task tells them apart, else its place.
-        <Event key={e.task ?? `at-${index}`} event={e} onOpenTask={onOpenTask} />
+        <Event key={e.task ?? `at-${index}`} event={e} onOpenTask={onOpenTask} onReference={onReference} />
       ))}
     </MessagePrimitive.Root>
   );
@@ -218,10 +234,18 @@ export function Events({ events, onOpenTask }: { events: EventLine[]; onOpenTask
 
 /**
  * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27) and
- * its task, which opens in the Tasks tab (room task 70).
+ * its task, which opens in the Tasks tab (room task 70), or an ask's sizes (0061).
  */
-function Event({ event, onOpenTask }: { event: EventLine; onOpenTask: (task: number) => void }) {
-  const { who, text, more, task } = event;
+function Event({
+  event,
+  onOpenTask,
+  onReference,
+}: {
+  event: EventLine;
+  onOpenTask: (task: number) => void;
+  onReference?: (ref: string) => void;
+}) {
+  const { who, text, more, task, ask } = event;
   const Icon = ICON[event.kind];
   return (
     <CollapsibleRoot>
@@ -232,13 +256,16 @@ function Event({ event, onOpenTask }: { event: EventLine; onOpenTask: (task: num
           {text}
         </span>
       </CollapsibleTrigger>
-      {(more || task !== undefined) && (
+      {(more || task !== undefined || ask) && (
         <CollapsibleContent className="event-more">
           {more && <span>{more}</span>}
           {task !== undefined && (
             <button type="button" className="link" onClick={() => onOpenTask(task)}>
               Open task
             </button>
+          )}
+          {ask && (
+            <SizeChoice ask={ask} size={event.kind === 'fix' ? 'repair' : 'new'} onReference={onReference} />
           )}
         </CollapsibleContent>
       )}
