@@ -120,9 +120,15 @@ fn registry(key: &str) -> Result<Vec<(String, String, bool)>, String> {
 }
 
 /// A registry key as `reg export` writes it: UTF-16, where `reg query` prints in a code page that
-/// varies by computer.
+/// varies by computer. Exports started at once can fail or hand back another's key (a test got the
+/// machine's for its own, exit 0), so a second try follows either.
 #[cfg(windows)]
 pub(super) fn export(key: &str) -> Result<Vec<u8>, String> {
+    export_once(key).or_else(|_| export_once(key))
+}
+
+#[cfg(windows)]
+fn export_once(key: &str) -> Result<Vec<u8>, String> {
     let file = std::env::temp_dir().join(format!("gathr-reg-{}.reg", crate::ids::span_id()));
     let mut command = reg();
     command.args(["export", key]).arg(&file).arg("/y");
@@ -130,7 +136,7 @@ pub(super) fn export(key: &str) -> Result<Vec<u8>, String> {
     let read = std::fs::read(&file);
     let _ = std::fs::remove_file(&file);
     ran.map_err(|e| format!("{key} wasn't exported: {e}"))?;
-    read.map_err(|e| format!("{key} wasn't read: {e}"))
+    of_key(key, read.map_err(|e| format!("{key} wasn't read: {e}"))?)
 }
 
 /// `reg.exe` by its full path, so the PATH can't swap it.
@@ -174,6 +180,32 @@ pub(super) fn run(mut command: Command, limit: Duration) -> Result<Vec<u8>, Stri
         return Err(format!("{name} failed ({}): {said}", out.status));
     }
     Ok(out.stdout)
+}
+
+/// The export, if it's of `key`: its first `[…]` line names the key, which `reg` writes with the
+/// root in full (`HKLM\` as `HKEY_LOCAL_MACHINE\`).
+#[cfg(any(windows, test))]
+fn of_key(key: &str, bytes: Vec<u8>) -> Result<Vec<u8>, String> {
+    let full = |key: &str| {
+        let key = key.to_lowercase();
+        let roots = [
+            ("hklm\\", "hkey_local_machine\\"),
+            ("hkcu\\", "hkey_current_user\\"),
+        ];
+        roots
+            .iter()
+            .find_map(|(short, root)| Some(format!("{root}{}", key.strip_prefix(short)?)))
+            .unwrap_or(key)
+    };
+    let text = utf16le(&bytes);
+    let found = text
+        .lines()
+        .find_map(|line| line.trim().strip_prefix('[')?.strip_suffix(']'));
+    match found {
+        Some(found) if full(found) == full(key) => Ok(bytes),
+        Some(found) => Err(format!("{key} was exported as {found}")),
+        None => Err(format!("{key} was exported with no key in it")),
+    }
 }
 
 /// The variables in a `reg export` file: quoted strings and `hex(2)` (expandable) values.
@@ -397,6 +429,32 @@ mod tests {
                 ("Quote".into(), r#"say "hi""#.into(), false),
             ]
         );
+    }
+
+    /// Two `reg export`s run at once handed a test the machine's key for the one it asked.
+    #[test]
+    fn an_export_of_another_key_is_refused_and_one_of_the_key_asked_is_read() {
+        let machine =
+            r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
+        let file = utf16(&format!(
+            "Windows Registry Editor Version 5.00\r\n\r\n[{machine}]\r\n\"OS\"=\"Made_Up_NT\"\r\n\r\n"
+        ));
+        let asked = r"HKEY_CURRENT_USER\Software\GathrTest-x";
+        let refused = of_key(asked, file.clone()).map(|b| parse_reg(&b));
+        assert!(
+            refused
+                .as_ref()
+                .is_err_and(|e| e.contains(asked) && e.contains(machine)),
+            "{refused:?}"
+        );
+        let one = vec![("OS".to_string(), "Made_Up_NT".to_string(), false)];
+        for asked in [
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            r"hkey_local_machine\system\currentcontrolset\control\session manager\ENVIRONMENT",
+        ] {
+            let read = of_key(asked, file.clone()).map(|b| parse_reg(&b));
+            assert_eq!(read, Ok(one.clone()), "{asked}");
+        }
     }
 
     fn var(vars: &Vars, name: &str) -> String {
