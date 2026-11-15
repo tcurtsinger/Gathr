@@ -11,6 +11,8 @@ use crate::{Error, db, http};
 
 /// The most rows `query` returns.
 pub const QUERY_CAP: usize = 1000;
+/// The schema from which turns record the words that opened them (migration 0043).
+const OPENED_SCHEMA: i64 = 43;
 const CRASH_LINES: usize = 20;
 
 /// The service now, the database, the last start-up health check and the crash log's last lines.
@@ -298,14 +300,19 @@ pub fn friction(conn: &Connection, since_us: i64) -> Result<Value, Error> {
     Ok(json!({ "since": crate::ids::utc(since_us), "friction": friction }))
 }
 
-/// The turns behind a reference, with how each ended and its events; with `raw`, every engine
-/// frame in and out of each turn, as recorded (redacted).
-pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Error> {
+/// The turns behind a reference, with how each ended, the words that opened it (on a database at
+/// a `schema` that records them) and its events; with `raw`, every engine frame in and out of each
+/// turn, as recorded (redacted).
+pub fn turn(conn: &Connection, reference: &str, raw: bool, schema: i64) -> Result<Value, Error> {
     let mut answer = trace(conn, reference, None)?;
     let reference = answer["reference"].as_str().unwrap_or_default().to_string();
-    let mut stmt = conn.prepare(
-        "SELECT id, status, why FROM turns WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY created_ts",
-    )?;
+    let opened = match schema < OPENED_SCHEMA {
+        true => "",
+        false => ", opened_by, opened_version",
+    };
+    let mut stmt = conn.prepare(&format!(
+        "SELECT id, status, why{opened} FROM turns WHERE trace_id >= ?1 AND trace_id < ?1 || 'g' ORDER BY created_ts",
+    ))?;
     let mut turns = rows_as_json(&mut stmt, [&reference])?;
     if raw {
         let mut frames = conn.prepare(
@@ -332,6 +339,42 @@ pub fn turn(conn: &Connection, reference: &str, raw: bool) -> Result<Value, Erro
     }
     answer["turns"] = turns.into();
     Ok(answer)
+}
+
+/// The turns made since `since_us`, by the words that opened them and their version: each kind's
+/// turns with no tool call, `finish_task` calls turned away and task turns that ended with no
+/// report. A database at a `schema` from before turns recorded their words has nothing to count.
+pub fn words(conn: &Connection, schema: i64, since_us: i64) -> Result<Value, Error> {
+    let since = crate::ids::utc(since_us);
+    if schema < OPENED_SCHEMA {
+        let in_words = format!(
+            "Nothing is recorded before schema {OPENED_SCHEMA}. This database is at schema {schema}."
+        );
+        return Ok(json!({ "since": since, "kinds": [], "schema": schema, "in_words": in_words }));
+    }
+    let kinds = crate::words::counted(conn, since_us)?;
+    let wide = kinds.iter().map(|k| k.kind.len()).max().unwrap_or(0).max(4);
+    let mut lines = vec![
+        format!("Turns since {since}, by the words that opened them"),
+        format!(
+            "{:<wide$}  version  turns  no tool  finish refused  no report",
+            "kind"
+        ),
+    ];
+    for k in &kinds {
+        let version = k.version.map_or("-".to_string(), |v| v.to_string());
+        let (turns, none, refused, unreported) =
+            (k.turns, k.no_tool, k.finish_refused, k.no_report);
+        lines.push(format!(
+            "{:<wide$}  {version:>7}  {turns:>5}  {none:>7}  {refused:>14}  {unreported:>9}",
+            k.kind
+        ));
+    }
+    let in_words = match kinds.is_empty() {
+        true => format!("No turns since {since}."),
+        false => lines.join("\n"),
+    };
+    Ok(json!({ "since": since, "kinds": kinds, "in_words": in_words }))
 }
 
 /// What someone helping needs, in one file in `<data>/bundles`: health, the last day's

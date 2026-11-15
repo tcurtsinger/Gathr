@@ -9,6 +9,7 @@ use crate::Error;
 use crate::event::Event;
 use crate::ids::{now_us, ulid};
 use crate::tasks::Start;
+use crate::words::Opened;
 
 pub mod ci;
 
@@ -513,7 +514,7 @@ fn fire(
     }
     let at = (wait.chat.as_str(), wait.agent.as_str());
     let on = (wait.task, wait.left_in.as_deref());
-    Ok(vec![Start::queue(tx, at, on, text)?])
+    Ok(vec![Start::queue(tx, at, on, Opened::WaitFired, text)?])
 }
 
 fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<String>, Error> {

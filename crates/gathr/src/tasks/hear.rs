@@ -12,6 +12,7 @@ use super::records::{OptionalTask, heard_as};
 use super::{Finish, Kind, SETTLED, Start, State, Task, read, words};
 use crate::Error;
 use crate::event::Event;
+use crate::words::Opened;
 
 /// A chat's rounds. A round is the turn the person's word began (their message, or their answer
 /// to a question: G158) and every turn that answers it, directly or through another. It is named
@@ -242,7 +243,7 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
         return released(tx, own, trace);
     }
     let text = words::hear_back(tx, &due, own)?;
-    let mut start = Start::queue(tx, (&chat, &giver), (own, answers), text)?;
+    let mut start = Start::queue(tx, (&chat, &giver), (own, answers), Opened::HearBack, text)?;
     start.hear_back = true;
     Ok(vec![start])
 }

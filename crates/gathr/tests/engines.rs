@@ -401,4 +401,6 @@ fn a_message_the_engine_never_read_becomes_the_chats_next_turn() {
         .iter()
         .any(|m| m["body"] == "Follow up" && m["turn"] == second);
     assert!(moved, "the follow-up isn't the new turn's: {history}");
+    let requeued = common::opened(&data.0, &second);
+    assert_eq!(requeued, (json!("person"), Value::Null), "{history}");
 }

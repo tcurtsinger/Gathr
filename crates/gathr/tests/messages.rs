@@ -139,6 +139,8 @@ fn a_message_to_an_idle_member_shows_and_wakes_it_once_answering_the_senders_tur
     assert_eq!(anns.len(), 1, "{anns:?}");
     assert_eq!(anns[0]["answers"], lead_turn, "{anns:?}");
     assert_eq!(anns[0]["task"], Value::Null, "{anns:?}");
+    let teammate = (json!("teammate"), Value::Null);
+    assert_eq!(common::opened(&data.0, &anns[0]["id"]), teammate);
     let asked = room.said_in(&anns[0]).join("\n");
     assert!(
         asked.contains("Please look at #12") && asked.contains("Lead"),
@@ -348,7 +350,15 @@ fn a_queued_turn_a_message_joined_keeps_its_whole_ask_across_a_stop() {
         [],
     )
     .unwrap();
-    gathr::store::add_turn(&conn, "c", "t", "trace", (Some("ann"), None, None)).unwrap();
+    gathr::store::add_turn(
+        &conn,
+        "c",
+        "t",
+        "trace",
+        (Some("ann"), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     let say = |text: &str| gathr::store::add_message(&conn, "c", "t", "gathr", "text", text);
     say("Lead wrote to you: First").unwrap();
     say("Lead wrote to you: Then").unwrap();

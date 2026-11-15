@@ -46,6 +46,7 @@ pub mod text;
 pub mod timeline;
 pub mod waiting;
 pub mod waits;
+pub mod words;
 pub mod worktree;
 pub mod writer;
 

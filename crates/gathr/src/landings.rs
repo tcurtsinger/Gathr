@@ -8,6 +8,7 @@ use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
 use crate::tasks::Start;
+use crate::words::Opened;
 
 /// After Gathr asked GitHub to bring a PR up to date, how long its head may stay as it was before
 /// its reviewer is told.
@@ -263,6 +264,7 @@ pub fn tell(
             &tx,
             (&review.chat, &review.reviewer),
             (None, None),
+            Opened::Landing,
             text.to_string(),
         )?),
         None => None,

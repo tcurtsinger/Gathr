@@ -20,8 +20,24 @@ fn store(dir: &TempDir) -> Connection {
          INSERT INTO chats (id, title, created_ts) VALUES ('road', 'Gravel road', 1), ('other', 'Other', 2);",
     )
     .unwrap();
-    add_turn(&conn, "road", "t1", T, (Some("ann"), None, None)).unwrap();
-    add_turn(&conn, "other", "t2", T, (Some("ann"), None, None)).unwrap();
+    add_turn(
+        &conn,
+        "road",
+        "t1",
+        T,
+        (Some("ann"), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
+    add_turn(
+        &conn,
+        "other",
+        "t2",
+        T,
+        (Some("ann"), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     conn
 }
 
@@ -166,7 +182,15 @@ fn the_index_follows_every_change_and_the_backup_copy() {
         [],
     )
     .unwrap();
-    add_turn(&conn, "gone", "t3", T, (Some("ann"), None, None)).unwrap();
+    add_turn(
+        &conn,
+        "gone",
+        "t3",
+        T,
+        (Some("ann"), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     let first = say(&conn, "road", "user", "gravel first");
     for n in 0..5 {
         add_message(

@@ -14,6 +14,7 @@ use super::{Start, cancel_in, words};
 use crate::Error;
 use crate::event::Event;
 use crate::pauses::{self, Pause};
+use crate::words::Opened;
 
 /// After how many days without a move a task is stale, and how many days stale it's cancelled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -203,7 +204,7 @@ fn tell_lead(
     } else {
         text.push('.');
     }
-    Start::queue(tx, (chat, &lead.agent), (None, None), text).map(Some)
+    Start::queue(tx, (chat, &lead.agent), (None, None), Opened::Stale, text).map(Some)
 }
 
 /// An agent's stale task, for the person's list: the person's own are among their open tasks.

@@ -26,7 +26,15 @@ fn team(dir: &TempDir) -> Connection {
 }
 
 fn running(conn: &Connection, chat: &str, id: &str, agent: &str, task: Option<i64>) {
-    gathr::store::add_turn(conn, chat, id, T, (Some(agent), task, None)).unwrap();
+    gathr::store::add_turn(
+        conn,
+        chat,
+        id,
+        T,
+        (Some(agent), task, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     conn.execute("UPDATE turns SET status = 'running' WHERE id = ?1", [id])
         .unwrap();
     if let Some(task) = task {

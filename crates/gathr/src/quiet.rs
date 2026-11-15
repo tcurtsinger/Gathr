@@ -15,6 +15,7 @@ use crate::event::Event;
 use crate::tasks::Start;
 use crate::team::{self, Member, Role};
 use crate::waiting::{self, Line, Live, Moves, words};
+use crate::words::Opened;
 
 /// The rule's two times.
 #[derive(Debug, Clone, Copy)]
@@ -255,7 +256,7 @@ pub fn check(
         let named = |l: &&Line| fresh(l) || not_moving.contains(l);
         let named: Vec<&Line> = all.iter().copied().filter(named).collect();
         let text = words::wake(&named, &all, &answer.agents, now_us);
-        let start = Start::queue(&tx, (chat, &lead.agent), (None, None), text)?;
+        let start = Start::queue(&tx, (chat, &lead.agent), (None, None), Opened::Wake, text)?;
         let event = Event::point("gathr.quiet.woke").trace(trace).chat(chat);
         let event = event.ok().attr("gen_ai.agent.id", lead.agent.clone());
         event.attr("turn", start.turn.clone()).insert(&tx)?;
@@ -323,7 +324,7 @@ pub fn silent_turn(
     };
     let name = crate::tasks::name_of(&tx, agent)?;
     let text = words::silent(&name, task, quiet_ms);
-    let start = Start::queue(&tx, (chat, &lead.agent), (None, None), text)?;
+    let start = Start::queue(&tx, (chat, &lead.agent), (None, None), Opened::Silent, text)?;
     let event = Event::point("gathr.turn.silent_told").trace(trace);
     let event = event.chat(chat).ok().attr("gen_ai.agent.id", agent);
     let event = event.attr("lead", lead.agent).attr("quiet_ms", quiet_ms);

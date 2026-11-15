@@ -89,6 +89,8 @@ fn pause_sets_the_flag_in_the_scheduler() {
 
 **Flaky is broken.** A test that fails at random is fixed or deleted the day it's seen, never rerun until green.
 
+**Gathr's words to agents are held by kept samples** ([0056](decisions/0056-gathr-records-which-words-opened-each-turn.md)). A change to a kind's main form changes its sample in `crates/gathr/tests/words/samples.rs` and raises its version in `crates/gathr/src/words.rs`, with a new row in `KEPT` in `crates/gathr/tests/words.rs`; a new main form comes with its sample.
+
 ## The loop
 
 1. Take the plan's next seam.

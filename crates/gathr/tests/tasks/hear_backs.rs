@@ -137,7 +137,15 @@ fn turn_on(conn: &Connection, task: i64) -> String {
 
 /// A turn of Lead's on no task that has ended, answering `answers`.
 fn lead_turn(conn: &Connection, id: &str, answers: Option<&str>) {
-    gathr::store::add_turn(conn, "c", id, T, (Some("lead"), None, answers)).unwrap();
+    gathr::store::add_turn(
+        conn,
+        "c",
+        id,
+        T,
+        (Some("lead"), None, answers),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     gathr::store::set_turn(conn, id, "done", None).unwrap();
 }
 
@@ -428,13 +436,29 @@ fn a_line_said_in_no_turn_reads_where_it_was_said() {
         gathr::store::add_message(&conn, "c", turn, "assistant", "text", text).unwrap();
     };
     for (id, agent) in [("first", "ann"), ("second", "bo")] {
-        gathr::store::add_turn(&conn, "c", id, T, (Some(agent), None, None)).unwrap();
+        gathr::store::add_turn(
+            &conn,
+            "c",
+            id,
+            T,
+            (Some(agent), None, None),
+            gathr::words::Opened::Person,
+        )
+        .unwrap();
         gathr::store::set_turn(&conn, id, "running", None).unwrap();
     }
     gathr::store::say(&conn, "c", "Said before anyone spoke").unwrap();
     say("first", "Ann starts");
     say("second", "Bo starts");
-    gathr::store::add_turn(&conn, "c", "third", T, (Some("ann"), None, None)).unwrap();
+    gathr::store::add_turn(
+        &conn,
+        "c",
+        "third",
+        T,
+        (Some("ann"), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     gathr::store::add_message(&conn, "c", "third", "gathr", "text", "Not started yet").unwrap();
     say("first", "Ann ends");
     gathr::store::say(&conn, "c", "A task is done:\n- #1 Ann, Fix the build: done").unwrap();

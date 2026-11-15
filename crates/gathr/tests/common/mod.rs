@@ -543,6 +543,18 @@ pub fn rows(data: &Path, sql: &str) -> Vec<Value> {
     found["rows"].as_array().cloned().unwrap_or_default()
 }
 
+/// The kind and version of the words that opened `turn`, as the service recorded them.
+pub fn opened(data: &Path, turn: &Value) -> (Value, Value) {
+    let id = turn
+        .as_str()
+        .unwrap_or_else(|| panic!("no turn id: {turn}"));
+    let sql = format!("SELECT opened_by, opened_version FROM turns WHERE id = '{id}'");
+    let (ok, found) = gathr(data, &["diag", "query", &sql]);
+    assert!(ok, "{found}");
+    let row = &found["rows"][0];
+    (row["opened_by"].clone(), row["opened_version"].clone())
+}
+
 /// Scenario 6d, on either engine. In `chat` the lead's turn and Ann's turn on task #1 both hold,
 /// with the stall time short. Ann's turn shows as not moving, with since when; her lead is told
 /// once, in a turn on no task, however long the silence lasts; the lead's own silent turn tells

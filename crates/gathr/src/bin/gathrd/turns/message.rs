@@ -8,6 +8,7 @@ use gathr::tasks::Start;
 use serde_json::json;
 
 use super::{Ids, Task};
+use gathr::words::Opened;
 
 impl Task {
     pub(super) async fn take_message(
@@ -31,7 +32,7 @@ impl Task {
                 return "failed";
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, ask));
+            self.unread.push((id, ask, Opened::Teammate));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             return "in_turn";
         }
@@ -57,7 +58,10 @@ impl Task {
         let saved = self
             .chats
             .writer
-            .call(move |conn| Start::queue(conn, (&c, &agent), (None, Some(&answers)), text))
+            .call(move |conn| {
+                let on = (None, Some(answers.as_str()));
+                Start::queue(conn, (&c, &agent), on, Opened::Teammate, text)
+            })
             .await;
         let Some(Ok(mut start)) = saved else {
             return "failed";

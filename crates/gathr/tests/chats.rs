@@ -304,6 +304,8 @@ fn a_message_sent_into_a_turn_and_read_after_it_gets_its_own_turn_and_answer() {
                 .all(|t| t["status"] == "done")
     });
     let second_turn = history["turns"][1]["id"].clone();
+    let read_after = common::opened(&data.0, &second_turn);
+    assert_eq!(read_after, (json!("person"), Value::Null), "{history}");
     let in_second: Vec<&Value> = history["messages"]
         .as_array()
         .unwrap()

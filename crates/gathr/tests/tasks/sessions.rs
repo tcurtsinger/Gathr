@@ -22,7 +22,15 @@ fn task(conn: &Connection, number: i64, owner: &str, what: &str, state: &str, up
 
 /// A turn of `agent`'s with no task, answering `answers`.
 fn answering(conn: &Connection, id: &str, agent: Option<&str>, answers: &str) {
-    gathr::store::add_turn(conn, "c", id, T, (agent, None, Some(answers))).unwrap();
+    gathr::store::add_turn(
+        conn,
+        "c",
+        id,
+        T,
+        (agent, None, Some(answers)),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
 }
 
 #[test]
@@ -288,8 +296,11 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
     turn(&conn, "failed-4", "bo", Some(4), "failed");
     gathr::store::set_engine_session(&conn, "c", Some("ann"), "s-ann", "acc").unwrap();
     gathr::store::set_engine_session(&conn, "c", Some("bo"), "s-bo", "acc").unwrap();
-    conn.execute_batch("DROP TABLE task_sessions; PRAGMA user_version = 41;")
-        .unwrap();
+    conn.execute_batch(
+        "DROP TABLE task_sessions; ALTER TABLE turns DROP COLUMN opened_by;
+         ALTER TABLE turns DROP COLUMN opened_version; PRAGMA user_version = 41;",
+    )
+    .unwrap();
     drop(conn);
 
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();

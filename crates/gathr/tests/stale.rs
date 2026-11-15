@@ -3,6 +3,8 @@
 //! move it, and a task that can never go on is cancelled at once, in any chat.
 
 mod common;
+#[path = "words/samples.rs"]
+mod samples;
 
 use common::TempDir;
 use gathr::pauses::Pause;
@@ -151,7 +153,15 @@ fn a_stale_task_that_moves_is_stale_no_more() {
     sweep(&mut conn, 5 * DAY, &[]);
     assert!(task(&conn, n).stale_us.is_some());
     // A message in a turn on it, with no change of state, is a move too.
-    gathr::store::add_turn(&conn, "c", "late", T, (Some("ann"), Some(n), None)).unwrap();
+    gathr::store::add_turn(
+        &conn,
+        "c",
+        "late",
+        T,
+        (Some("ann"), Some(n), None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     conn.execute(
         "UPDATE turns SET status = 'done', created_ts = ?1, ended_ts = ?1 WHERE id = 'late'",
         [5 * DAY + 1],
@@ -437,4 +447,32 @@ fn the_days_are_saved_and_refused_out_of_range() {
             other => panic!("expected a refusal, got {other:?}"),
         }
     }
+}
+
+/// Stage 3, part A: the lead is told of stale tasks in the kept samples' words, and its turn
+/// records their kind and version.
+#[test]
+fn the_leads_stale_notice_is_the_kept_samples() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let one = Days {
+        stale: 1,
+        cancel: 1,
+    };
+    stale::set_days(&conn, one).unwrap();
+    idle_task(&mut conn, &[], DAY);
+    let swept = sweep(&mut conn, 2 * DAY + 1, &[]);
+    let told = &swept.starts[0];
+    samples::same("stale: one task, one day", &told.text);
+    let kept = (Some("stale".to_string()), Some(gathr::words::STALE));
+    assert_eq!(samples::opened(&conn, &told.turn), kept);
+
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    idle_task(&mut conn, &[], DAY);
+    idle_task(&mut conn, &[], DAY);
+    let swept = sweep(&mut conn, 4 * DAY + 1, &[]);
+    let told = &swept.starts[0];
+    samples::same("stale: several tasks, several days", &told.text);
+    assert_eq!(samples::opened(&conn, &told.turn), kept);
 }

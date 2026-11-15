@@ -18,6 +18,7 @@ use super::{Ids, Running, Task};
 
 /// What a turn that a usage limit cut off partway, or Stop now, says when it carries on.
 use gathr::carry::CHECK_FIRST;
+use gathr::words::Opened;
 
 /// Who stops a scope's turns when the person presses Stop now.
 pub const STOP_NOW: &str = "Stop now";
@@ -200,7 +201,8 @@ impl Task {
         let (chat, agent) = (ids.chat.clone(), ids.agent.clone());
         let (task, answers, said) = (ids.task, ids.turn.clone(), text.clone());
         let saved = self.chats.writer.call(move |c| {
-            Start::save(c, (&chat, agent.as_deref()), (task, Some(&answers)), &said)
+            let on = (task, Some(answers.as_str()));
+            Start::save(c, (&chat, agent.as_deref()), on, Opened::CarryOn, &said)
         });
         match saved.await {
             Some(Ok((turn, trace, message))) => {
@@ -403,6 +405,7 @@ impl Task {
                 &row.turn,
                 &row.trace,
                 (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                Opened::Engine,
             )
         });
         if let Some(Err(e)) = saved.await {

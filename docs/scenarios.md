@@ -846,6 +846,17 @@ Parts: 11.4
 - **Then** Gathr keeps each one, with who reported it, when and on which task, where the person and
   the lead can read them all. Nobody copied anything by hand
 
+### 11e. Gathr's words to agents are measured
+
+Parts: 11.5
+
+- **Given** a team chat
+- **When** the person writes, the lead gives a member a task, the member's turn ends with no report after
+  one turned-away report, and Gathr asks once
+- **Then** each turn records which words opened it and their version. `gathr diag words` counts, for each
+  kind and version, its turns, its turns with no tool call, the `finish_task` calls turned away, and the
+  task turns that ended with no report. A change to a kind's main form without a new version fails a test
+
 ## 12. Open both ways
 
 ### 12a. An outside AI the person allowed brings something, and hears back

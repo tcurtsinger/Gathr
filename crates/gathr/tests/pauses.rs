@@ -4,6 +4,8 @@
 //! the turn Claude Code starts itself when a background command ends is kept.
 
 mod common;
+#[path = "words/samples.rs"]
+mod samples;
 
 use std::path::{Path, PathBuf};
 
@@ -148,7 +150,9 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     let said = said
         .map(|m| m["body"].as_str().unwrap())
         .unwrap_or_default();
-    assert!(said.starts_with("Stop now ended your turn."), "{said}");
+    samples::same("carry_on: Stop now", said);
+    let kept = (json!("carry_on"), json!(gathr::words::CARRY_ON));
+    assert_eq!(common::opened(&data.0, &history["turns"][1]["id"]), kept);
     pause(&service, "/api/pauses/resume", &chat);
     let history = service.wait_for(&chat, 20, "the carry-on after Restart", |h| {
         h["turns"][1]["status"] == "done"
@@ -341,6 +345,8 @@ fn the_turn_claude_code_starts_when_a_background_command_ends_is_kept() {
         history["turns"][1]["answers"], history["turns"][0]["id"],
         "{history}"
     );
+    let engine = common::opened(&data.0, &history["turns"][1]["id"]);
+    assert_eq!(engine, (json!("engine"), Value::Null), "{history}");
     let last = history["messages"].as_array().unwrap().last().unwrap()["body"].clone();
     assert!(
         last.as_str().unwrap().starts_with("The first ping"),
@@ -494,6 +500,15 @@ fn a_usage_limit_after_a_tool_leaves_the_task_as_it_was() {
         h["turns"][1]["status"] == "stopped" && h["turns"][2]["held"] == "usage"
     });
     assert_eq!(history["turns"][2]["task"], 1, "{history}");
+    let carry = &history["turns"][2]["id"];
+    let mut said = history["messages"].as_array().unwrap().iter();
+    let said = said.find(|m| m["role"] == "gathr" && m["turn"] == *carry);
+    samples::same(
+        "carry_on: usage limit",
+        said.unwrap()["body"].as_str().unwrap(),
+    );
+    let kept = (json!("carry_on"), json!(gathr::words::CARRY_ON));
+    assert_eq!(common::opened(&data.0, carry), kept);
     let listed = service
         .call("GET", &format!("/api/chats/{chat}/tasks"))
         .json();

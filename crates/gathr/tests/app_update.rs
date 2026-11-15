@@ -1,6 +1,8 @@
 //! Gathr updates its own service between turns (docs/decisions/0032-service-updates.md), through
 //! copies of the real `gathrd` in a test data folder and a stand-in release feed on 127.0.0.1.
 mod common;
+#[path = "words/samples.rs"]
+mod samples;
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -105,6 +107,16 @@ fn a_ready_release_waits_for_the_person_then_its_agents_carry_on() {
     );
     let told = format!("Gathr's update to {VERSION} ended your turn");
     assert!(history.to_string().contains(&told), "{history}");
+    let carry = &history["turns"][1]["id"];
+    let mut said = history["messages"].as_array().unwrap().iter();
+    let said = said.find(|m| m["role"] == "gathr" && m["turn"] == *carry);
+    let said = said.unwrap()["body"]
+        .as_str()
+        .unwrap()
+        .replace(VERSION, "<version>");
+    samples::same("carry_on: update", &said);
+    let kept = (json!("carry_on"), json!(gathr::words::CARRY_ON));
+    assert_eq!(common::opened(&data, carry), kept);
     let switched = events(&data, "gathr.app.switch");
     assert_eq!(switched.len(), 1, "{switched:?}");
     assert_eq!(switched[0]["attrs"]["from"], "0.0.1", "{switched:?}");

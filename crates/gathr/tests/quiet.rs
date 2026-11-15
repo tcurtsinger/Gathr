@@ -3,6 +3,10 @@
 //! passed in and what only the running service knows built by hand.
 
 mod common;
+#[path = "quiet/words.rs"]
+mod kept_words;
+#[path = "words/samples.rs"]
+mod samples;
 
 use std::collections::HashMap;
 
@@ -104,7 +108,15 @@ fn fail(conn: &mut Connection, task: i64) {
 }
 
 fn turn(conn: &Connection, id: &str, agent: &str, status: &str) {
-    store::add_turn(conn, "c", id, T, (Some(agent), None, None)).unwrap();
+    store::add_turn(
+        conn,
+        "c",
+        id,
+        T,
+        (Some(agent), None, None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     store::set_turn(conn, id, status, None).unwrap();
 }
 
@@ -228,7 +240,15 @@ fn a_stuck_chat_wakes_its_lead_once_then_tells_the_person_at_five_minutes() {
     assert_eq!(said(&conn).len(), 1, "told once");
 
     // A turn on the task: it moves by itself again, and the stretch is an event with its length.
-    store::add_turn(&conn, "c", "work", T, (Some("ann"), Some(task), None)).unwrap();
+    store::add_turn(
+        &conn,
+        "c",
+        "work",
+        T,
+        (Some("ann"), Some(task), None),
+        gathr::words::Opened::Person,
+    )
+    .unwrap();
     store::set_turn(&conn, "work", "running", None).unwrap();
     assert!(check(&mut conn, &live, t0 + 410 * S).is_empty());
     let ended = events(&conn, "gathr.quiet.stretch");
