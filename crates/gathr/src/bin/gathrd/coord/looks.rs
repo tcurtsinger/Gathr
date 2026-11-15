@@ -551,21 +551,35 @@ mod tests {
                 .current_dir(&root)
                 .env_clear()
                 .envs(vars.iter().cloned());
-            assert!(command.output().unwrap().status.success(), "git {args:?}");
+            let out = command.output().unwrap();
+            assert!(
+                out.status.success(),
+                "git {args:?} exited {:?}: {}{}",
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout),
+                String::from_utf8_lossy(&out.stderr)
+            );
         };
         git(&["init", "-q"]);
-        for (key, value) in [
+        let set = |pairs: &[(&str, &str)]| {
+            for (key, value) in pairs {
+                git(&["config", key, value]);
+            }
+        };
+        set(&[
             ("user.name", "t"),
             ("user.email", "t@example.invalid"),
             ("core.autocrlf", "false"),
-            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
-            ("filter.x.clean", "echo > filter; cat"),
-        ] {
-            git(&["config", key, value]);
-        }
+        ]);
         std::fs::write(root.join("a.txt"), "a\n").unwrap();
         git(&["add", "."]);
         git(&["commit", "-qm", "a"]);
+        // After the first commit: `git add .` failed once at random with the hook already set (it
+        // writes `fsmonitor` into the tree `git add .` is reading). The set-up needs no hook.
+        set(&[
+            ("core.fsmonitor", "echo > fsmonitor; exit 1"),
+            ("filter.x.clean", "echo > filter; cat"),
+        ]);
         std::fs::write(root.join(".git/info/attributes"), "*.txt filter=x\n").unwrap();
         let marks = || ["fsmonitor", "filter"].map(|m| root.join(m).exists());
         let change = |text: &str| {
