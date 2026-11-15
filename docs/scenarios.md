@@ -221,6 +221,17 @@ Parts: 3.8
 - **Then** its brief and its order follow, and the task shows the change. Once its first turn has
   started, a change is refused, with the reason
 
+### 3g. A PR's review is given by Gathr
+
+Parts: 3.6, 10.8
+
+- **Given** a chat with a Reviewer, and a builder with a work task
+- **When** the builder's done report first names PR 7
+- **Then** the Reviewer gets one review task for PR 7, given as the builder, which starts when the
+  builder's work is held only on its merge. A review of it given while that one is open is refused,
+  saying which review is open and who gave it. A second report naming it makes none and says nothing
+  more
+
 ## 4. One voice to you
 
 ### 4a. A member's question goes through the lead, in the lead's words

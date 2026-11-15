@@ -687,35 +687,6 @@ fn running_on(team: &Team, task: i64, n: usize) {
     });
 }
 
-/// Adds Rev to the team as its Reviewer.
-fn with_reviewer(team: &Team) {
-    let lead = team
-        .service
-        .call("GET", &format!("/api/agents/{}", team.lead));
-    let account = lead.json()["account"].clone();
-    let made = team.service.send(
-        "POST",
-        "/api/agents",
-        json!({ "name": "Rev", "account": account }),
-    );
-    assert_eq!(made.status, 200, "{}", made.body);
-    let chat = team
-        .service
-        .call("GET", &format!("/api/chats/{}", team.chat));
-    let mut members: Vec<Value> = chat.json()["members"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| json!({ "agent": m["agent"], "role": m["role"] }))
-        .collect();
-    members.push(json!({ "agent": made.json()["id"], "role": "reviewer" }));
-    let path = format!("/api/chats/{}", team.chat);
-    let changed = team
-        .service
-        .send("PATCH", &path, json!({ "members": members }));
-    assert_eq!(changed.status, 200, "{}", changed.body);
-}
-
 /// 5e (0051): Ann's work is reviewed clean. Nobody is woken: Ann reported it done and has nothing
 /// to do, and Lead hears when it has landed, which Gathr sees to (0049). The review's end is a line
 /// in the chat, said by Gathr in no turn and sent to the window as it is said. (Found live, #85 and
@@ -724,7 +695,7 @@ fn with_reviewer(team: &Team) {
 fn a_clean_review_wakes_nobody_and_its_end_is_a_line_in_the_chat() {
     let data = TempDir::new();
     let team = team(&data.0, &one_at_a_time(&data.0));
-    with_reviewer(&team);
+    common::with_reviewer(&team.service, &team.chat);
     let port = team.service.info.port;
     let lead = lead_turn(&team, &data.0, 0);
     let fix = json!({ "to": "Ann", "what": "Fix the summary", "pr": 85 });

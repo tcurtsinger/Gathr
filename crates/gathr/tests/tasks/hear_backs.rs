@@ -68,7 +68,7 @@ fn an_outcome_that_changes_after_it_was_heard_is_heard_once_more() {
     assert_eq!(to_lead(&starts).len(), 1, "{starts:?}");
 
     // Its owner reports it done from another turn: its giver hears that.
-    let (_, _, starts) = tasks::finish(
+    let (_, _, starts, _) = tasks::finish(
         &mut conn,
         "ann",
         task,

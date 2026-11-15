@@ -6,6 +6,8 @@ mod briefs;
 mod common;
 #[path = "tasks/changes.rs"]
 mod far_end;
+#[path = "tasks/gathr_reviews.rs"]
+mod gathr_reviews;
 #[path = "tasks/hear_backs.rs"]
 mod hear_backs;
 #[path = "tasks/commands.rs"]
@@ -106,7 +108,7 @@ fn finish(
     how: Finish,
     said: &Said,
 ) -> Result<tasks::Task, Error> {
-    tasks::finish(conn, agent, task, how, said, T).map(|(t, _, _)| t)
+    tasks::finish(conn, agent, task, how, said, T).map(|(t, ..)| t)
 }
 
 /// Starts a turn of its owner's on the task: the one Gathr queued on it, else a new one. Its id.

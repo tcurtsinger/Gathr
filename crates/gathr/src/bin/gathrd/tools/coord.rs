@@ -101,7 +101,8 @@ pub struct FinishTask {
     note: Option<String>,
     /// Blocked until this existing task is done, instead of a new one.
     on_task: Option<i64>,
-    /// The PR your work is in: the task settles when it merges.
+    /// The PR your work is in: the task settles when it merges. Name it when you report done, and
+    /// Gathr gives the chat's Reviewer its review.
     pr: Option<i64>,
     /// For a review: the commit you reviewed. For work: a commit to look at.
     commit: Option<String>,
@@ -321,7 +322,9 @@ impl Tools {
         let started = Instant::now();
         let agent = caller.agent.clone().unwrap_or_default();
         let chat = caller.chat.clone();
-        let current = caller.on().and_then(|o| o.task);
+        let on = caller.on();
+        let current = on.as_ref().and_then(|o| o.task);
+        let turn = on.map(|o| o.turn);
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
         let finished = self
             .db(move |c| {
@@ -361,18 +364,19 @@ impl Tools {
                     signed_off: ask.signed_off == Some(true),
                     notes: &notes,
                     nothing_unasked: ask.nothing_unasked == Some(true),
+                    turn: turn.as_deref(),
                 };
-                let (t, took, starts) = tasks::finish(c, &agent, task, how, &said, &trace)?;
+                let (t, took, starts, given) = tasks::finish(c, &agent, task, how, &said, &trace)?;
                 // Not a cancelled review's: nothing changed, and an older one may still stand.
                 let review = t.kind == Kind::Review
                     && how == Finish::Done
                     && t.pr.is_some()
                     && took != Took::Cancelled;
-                Ok((
-                    taken(&t, took, &ask.how),
-                    starts,
-                    review.then_some(t.number),
-                ))
+                let mut answer = taken(&t, took, &ask.how);
+                if let (Some((n, reviewer)), Some(pr)) = (given, t.pr) {
+                    answer.push_str(&format!("\nGathr gave #{n} to {reviewer} to review #{pr}."));
+                }
+                Ok((answer, starts, review.then_some(t.number)))
             })
             .await;
         let finished = match finished {

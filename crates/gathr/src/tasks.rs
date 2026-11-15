@@ -19,6 +19,7 @@ pub mod person;
 mod prs;
 pub(crate) mod records;
 mod report;
+mod review;
 pub mod stale;
 pub mod touched;
 mod words;
@@ -279,6 +280,7 @@ fn refused(why: impl Into<String>) -> Error {
 pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
     brief::checked(g.kind, g.what, &g.brief)?;
     let tx = conn.transaction()?;
+    review::refuse_second(&tx, g)?;
     let given = give_in(&tx, g, trace)?;
     tx.commit()?;
     Ok(given)
