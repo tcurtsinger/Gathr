@@ -74,7 +74,7 @@ fn sign_off_is_kept_with_the_review_it_was_given_with() {
     assert!(!signed(&conn));
 
     // The same done review recorded again with it is taken, though the task is done already.
-    let (_, took, _) = tasks::finish(
+    let (_, took, _, _) = tasks::finish(
         &mut conn,
         "bo",
         review,

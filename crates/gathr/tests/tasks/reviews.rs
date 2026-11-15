@@ -116,7 +116,7 @@ fn a_done_review_is_recorded_again_at_a_newer_commit() {
         nothing_unasked: true,
         ..Said::default()
     };
-    let (again, took, starts) =
+    let (again, took, starts, _) =
         tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
     assert_eq!(took, tasks::Took::Applied);
     assert!(starts.is_empty(), "nobody is told twice: {starts:?}");
@@ -125,7 +125,7 @@ fn a_done_review_is_recorded_again_at_a_newer_commit() {
         (State::Done, Some("def5678"), false)
     );
     // The same commit again changes nothing.
-    let (_, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
+    let (_, took, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &newer, T).unwrap();
     assert_eq!(took, tasks::Took::Already);
     // Once the PR has merged or closed there is nothing left to review.
     tasks::pr_looked(&mut conn, review, "MERGED", Some("def5678aaaa"), None, T).unwrap();
@@ -133,7 +133,8 @@ fn a_done_review_is_recorded_again_at_a_newer_commit() {
         commit: Some("0123abc"),
         ..Said::default()
     };
-    let (kept, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &late, T).unwrap();
+    let (kept, took, _, _) =
+        tasks::finish(&mut conn, "bo", review, Finish::Done, &late, T).unwrap();
     assert_eq!(took, tasks::Took::Already);
     assert_eq!(kept.reviewed.as_deref(), Some("def5678"));
 }
@@ -182,7 +183,7 @@ fn a_looks_verdict_counts_only_for_the_commit_reviewed_now() {
         nothing_unasked: true,
         ..Said::default()
     };
-    let (t, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &older, T).unwrap();
+    let (t, _, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &older, T).unwrap();
     assert_eq!((t.outdated, t.judged), (true, None));
 
     // A verdict worked out for abc1234 while that happened is for another review: not taken.

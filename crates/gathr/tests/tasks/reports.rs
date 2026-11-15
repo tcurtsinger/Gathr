@@ -62,7 +62,7 @@ fn a_report_is_taken_in_every_state_a_task_can_be_in() {
     let mut conn = team(&dir);
     // Ready, its turn not started: done settles it, and its queued turn never starts (G124).
     let (ready, _) = give(&mut conn, "ann", &[], None);
-    let (_, took, _) =
+    let (_, took, _, _) =
         tasks::finish(&mut conn, "ann", ready, Finish::Done, &note("PR #9"), T).unwrap();
     assert_eq!(took, tasks::Took::Applied);
     assert_eq!(
@@ -121,7 +121,7 @@ fn a_report_is_taken_in_every_state_a_task_can_be_in() {
     }
 
     // Done already: answered with what is recorded, never an error (G184).
-    let (_, took, starts) =
+    let (_, took, starts, _) =
         tasks::finish(&mut conn, "ann", ready, Finish::Done, &note("again"), T).unwrap();
     assert_eq!(took, tasks::Took::Already);
     assert!(starts.is_empty());
@@ -130,7 +130,7 @@ fn a_report_is_taken_in_every_state_a_task_can_be_in() {
     // Cancelled: answered, and nothing changes.
     let (cancelled, _) = give(&mut conn, "ann", &[], None);
     tasks::cancel(&mut conn, None, cancelled, "dropped", T).unwrap();
-    let (_, took, _) =
+    let (_, took, _, _) =
         tasks::finish(&mut conn, "ann", cancelled, Finish::Done, &note("late"), T).unwrap();
     assert_eq!(took, tasks::Took::Cancelled);
     assert_eq!(state(&conn, cancelled).0, State::Cancelled);
@@ -175,7 +175,7 @@ fn left_with_nothing_open_stops_and_tells_the_giver() {
     let task = given_by_the_lead(&mut conn);
     let t1 = begin(&mut conn, task);
     let said = note("the drivers and the PR remain");
-    let (_, took, _) = tasks::finish(&mut conn, "ann", task, Finish::Left, &said, T).unwrap();
+    let (_, took, _, _) = tasks::finish(&mut conn, "ann", task, Finish::Left, &said, T).unwrap();
     assert_eq!(took, tasks::Took::Kept, "its turn is running");
     assert_eq!(state(&conn, task).0, State::Working);
     gathr::store::set_turn(&conn, &t1, "done", None).unwrap();

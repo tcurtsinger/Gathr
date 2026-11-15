@@ -5,7 +5,9 @@ use rusqlite::{Connection, params};
 use serde::Serialize;
 
 use super::records::{read, state_of};
-use super::{Kind, NoteSaid, Start, State, Task, cascade, held, notes, refused, turn_running};
+use super::{
+    Kind, NoteSaid, Start, State, Task, cascade, held, notes, refused, review, turn_running,
+};
 use crate::Error;
 use crate::ids::now_us;
 
@@ -53,6 +55,9 @@ pub struct Said<'a> {
     pub notes: &'a [NoteSaid<'a>],
     /// For a review that is done: nothing in the change goes past what was asked.
     pub nothing_unasked: bool,
+    /// The turn the report is made in: a review Gathr gives for the PR it first names is given there
+    /// when it is on the task (0060).
+    pub turn: Option<&'a str>,
 }
 
 /// How Gathr took a report.
@@ -89,7 +94,7 @@ pub fn finish(
     how: Finish,
     said: &Said,
     trace: &str,
-) -> Result<(Task, Took, Vec<Start>), Error> {
+) -> Result<(Task, Took, Vec<Start>, review::Given), Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
     if t.owner.as_deref() != Some(agent) {
@@ -132,8 +137,8 @@ pub fn finish(
         )));
     }
     match t.state {
-        State::Done if !again => return Ok((t, Took::Already, Vec::new())),
-        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new())),
+        State::Done if !again => return Ok((t, Took::Already, Vec::new(), None)),
+        State::Cancelled => return Ok((t, Took::Cancelled, Vec::new(), None)),
         _ => {}
     }
     if let Some(on) = said.on_task
@@ -224,7 +229,7 @@ pub fn finish(
     let running = turn_running(&tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
-    let (took, starts) = if again {
+    let (took, mut starts) = if again {
         (Took::Applied, Vec::new())
     } else if running {
         (Took::Kept, Vec::new())
@@ -235,9 +240,15 @@ pub fn finish(
         starts.extend(cascade(&tx, task, trace)?);
         (Took::Applied, starts)
     };
+    let mut review = None;
+    if let (Kind::Work, None, Some(pr)) = (t.kind, t.pr, said.pr) {
+        let (given, more) = review::give(&tx, &t, (how, pr), said.turn, trace)?;
+        review = given;
+        starts.extend(more);
+    }
     let task = read(&tx, task)?;
     tx.commit()?;
-    Ok((task, took, starts))
+    Ok((task, took, starts, review))
 }
 
 /// Whether the text is how git names a commit, in full or cut short: 7 to 40 hex digits.

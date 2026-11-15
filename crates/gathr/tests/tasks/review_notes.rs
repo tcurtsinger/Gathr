@@ -262,7 +262,8 @@ fn new_notes_on_a_done_review_are_refused() {
     assert!(review_done, "the done review stands");
     assert_eq!(rows(&conn), 0);
     // A plain repeat of done is what it was.
-    let (_, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &done(&[]), T).unwrap();
+    let (_, took, _, _) =
+        tasks::finish(&mut conn, "bo", review, Finish::Done, &done(&[]), T).unwrap();
     assert_eq!(took, tasks::Took::Already);
 }
 
@@ -572,7 +573,7 @@ fn again_adds_notes_and_a_replaced_report_isnt_shown() {
     );
     // Already recorded: nothing is added.
     let e = [note(NoteKind::Suggestion, None, "Another idea")];
-    let (_, took, _) =
+    let (_, took, _, _) =
         tasks::finish(&mut conn, "bo", review, Finish::Done, &done(HEAD, &e), T).unwrap();
     assert_eq!(took, tasks::Took::Already);
     assert_eq!(rows(&conn), 4);
@@ -583,7 +584,7 @@ fn again_adds_notes_and_a_replaced_report_isnt_shown() {
         "Cut the comment",
     )];
     let again = done("def5678", &f);
-    let (_, took, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &again, T).unwrap();
+    let (_, took, _, _) = tasks::finish(&mut conn, "bo", review, Finish::Done, &again, T).unwrap();
     assert_eq!(took, tasks::Took::Applied);
     assert_eq!(rows(&conn), 5);
     assert_eq!(

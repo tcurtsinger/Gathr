@@ -560,6 +560,97 @@ pub fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService,
     (service, chat, lead)
 }
 
+/// A signed-in team chat on `engine` (Lead, supervisor; Ann, member) whose engines hold their
+/// first turn until `go` exists: the service and the chat.
+pub fn team_on(data: &Path, engine: &str) -> (TestService, String) {
+    let recorded = match engine {
+        "codex" => "codex_signed_in",
+        _ => "signed_in",
+    };
+    let (held, replay) = (held_recording(data, recorded), replay_engine());
+    let (go, tokens) = (data.join("go"), data.join("env.jsonl"));
+    let env = [
+        ("GATHR_CLAUDE_PATH", replay.as_path()),
+        ("GATHR_CODEX_PATH", &replay),
+        ("GATHR_REPLAY", &held),
+        ("GATHR_REPLAY_HOLD", &go),
+        ("GATHR_REPLAY_ENV", &tokens),
+    ];
+    let service = TestService::start_with(data, &env);
+    let body = json!({ "engine": engine, "name": engine });
+    let added = service.send("POST", "/api/accounts", body);
+    assert_eq!(added.status, 200, "{}", added.body);
+    let account = added.json()["id"].as_str().unwrap().to_string();
+    match engine {
+        "codex" => {
+            let folder = data.join("accounts").join(&account).join("codex");
+            std::fs::create_dir_all(&folder).unwrap();
+            let login = r#"{"tokens":{"refresh_token":"made-up"}}"#;
+            std::fs::write(folder.join("auth.json"), login).unwrap();
+        }
+        _ => sign_in_account(data, &account),
+    }
+    let agent = |name: &str| {
+        let body = json!({ "name": name, "account": account });
+        let made = service.send("POST", "/api/agents", body);
+        assert_eq!(made.status, 200, "{}", made.body);
+        made.json()["id"].as_str().unwrap().to_string()
+    };
+    let (lead, ann) = (agent("Lead"), agent("Ann"));
+    let members =
+        json!([{ "agent": lead, "role": "supervisor" }, { "agent": ann, "role": "member" }]);
+    let made = service.send("POST", "/api/chats", json!({ "members": members }));
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = made.json()["id"].as_str().unwrap().to_string();
+    (service, chat)
+}
+
+/// The id of the turn on `task` once its status is one of `statuses`.
+pub fn turn_on(service: &TestService, chat: &str, task: i64, statuses: &[&str]) -> String {
+    let what = format!("a turn on #{task} to be {statuses:?}");
+    let history = service.wait_for(chat, 30, &what, |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        turns
+            .iter()
+            .any(|t| t["task"] == task && statuses.iter().any(|s| t["status"] == *s))
+    });
+    let turns = history["turns"].as_array().unwrap();
+    let found = turns
+        .iter()
+        .find(|t| t["task"] == task && statuses.iter().any(|s| t["status"] == *s));
+    let found = found.unwrap();
+    found["id"].as_str().unwrap().to_string()
+}
+
+/// Adds Rev to the chat as its Reviewer, on its Supervisor's account: Rev's id.
+pub fn with_reviewer(service: &TestService, chat: &str) -> String {
+    let path = format!("/api/chats/{chat}");
+    let members: Vec<Value> = service.call("GET", &path).json()["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| json!({ "agent": m["agent"], "role": m["role"] }))
+        .collect();
+    let lead = members.iter().find(|m| m["role"] == "supervisor").unwrap();
+    let lead = service.call(
+        "GET",
+        &format!("/api/agents/{}", lead["agent"].as_str().unwrap()),
+    );
+    let account = lead.json()["account"].clone();
+    let made = service.send(
+        "POST",
+        "/api/agents",
+        json!({ "name": "Rev", "account": account }),
+    );
+    assert_eq!(made.status, 200, "{}", made.body);
+    let rev = made.json()["id"].as_str().unwrap().to_string();
+    let mut members = members;
+    members.push(json!({ "agent": rev, "role": "reviewer" }));
+    let changed = service.send("PATCH", &path, json!({ "members": members }));
+    assert_eq!(changed.status, 200, "{}", changed.body);
+    rev
+}
+
 /// What the chat waits on, as `GET /api/chats/<id>/waiting` answers.
 pub fn waiting(service: &TestService, chat: &str) -> Value {
     let said = service.call("GET", &format!("/api/chats/{chat}/waiting"));
