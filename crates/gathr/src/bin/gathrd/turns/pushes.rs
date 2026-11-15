@@ -94,7 +94,8 @@ impl Task {
             ),
             _ => {
                 let risk = risk.unwrap_or_default();
-                ("git push".to_string(), format!("Gathr asks because {risk}"))
+                let why = format!("{} {risk}", gathr::approvals::GATHR_ASKS);
+                ("git push".to_string(), why)
             }
         };
         let asked = (tool.clone(), input.clone(), Some(why.to_string()));

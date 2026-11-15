@@ -7,6 +7,10 @@ use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
+/// How the reason of every approval Gathr itself asks for begins: the window lets these through
+/// an app-wide pause (0058).
+pub const GATHR_ASKS: &str = "Gathr asks because";
+
 /// Why Gathr asks the person before this tool call, or `None` to leave it to the agent's mode.
 /// `folders` are where it writes without asking, the engine's own first: a relative path is in it.
 /// `data` is Gathr's data folder, never written without asking, though a link in a folder leads

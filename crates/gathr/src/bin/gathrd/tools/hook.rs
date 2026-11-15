@@ -108,5 +108,5 @@ async fn pre_tool_use(
         .attr("gen_ai.agent.id", caller.agent.clone())
         .attr("why", why);
     s.writer.record(event);
-    decide("ask", format!("Gathr asks because {why}"))
+    decide("ask", format!("{} {why}", gathr::approvals::GATHR_ASKS))
 }

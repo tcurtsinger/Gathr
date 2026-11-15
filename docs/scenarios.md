@@ -456,6 +456,19 @@ Parts: 6.7
   chat's events don't come back, and aren't counted. A long answer is cut at the cap and says so,
   with the failure first
 
+### 6j. When a chat needs you, you're told outside the window
+
+Parts: 6.8
+
+- **Given** the window is hidden
+- **When** a chat starts needing the person, or something new starts waiting on them in a chat that
+  already does
+- **Then** one notification is decided for it, with the chat's title and what now waits on them. None
+  while the window is in front. None a second time for that chat before the window has been in front,
+  if only for a moment between reads, and then one for what came after. None during an app-wide
+  pause, except a sign-in and Gathr's own ask. One summary on resume, and one at a start with chats
+  already needing them
+
 ## 7. Everything in its place
 
 ### 7a. Each agent works in its own place
@@ -961,6 +974,8 @@ built:
 - That an agent with only the brief does the task right, and one that was compacted finishes it right
   (3d, 8d).
 - That the default briefing is enough for each role to work as described (8g, 11a, R2).
+- That the system shows a notification, that a click on it opens the chat, and that Claude Code passes
+  the hook's reason back word for word (6j).
 
 ## Not settled yet
 

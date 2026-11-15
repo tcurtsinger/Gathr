@@ -62,6 +62,7 @@ OTLP export, retention/pruning, daily rollups, `diag stalls` and `diag usage` ar
 
 React and TypeScript run in a Tauri 2 window or a local browser. Windows uses WebView2; macOS uses WKWebView.
 The desktop window closes to the tray/menu bar and Quit ends it and its service.
+When something starts waiting on the person in a chat and the window isn't in front, the desktop app shows a system notification (`gathr::notice` decides, `crates/gathr-app/src/notify.rs` shows; [0058](decisions/0058-gathr-tells-you-outside-the-window.md)).
 Local Theme and panel widths persist in the client. Vite builds the UI; Biome, TypeScript and Vitest check it.
 [0012](decisions/0012-ui-shell.md), [0016](decisions/0016-macos.md), [0022](decisions/0022-ui-tooling.md).
 
