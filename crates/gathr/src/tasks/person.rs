@@ -176,6 +176,7 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
         ],
     )?;
     let number = tx.last_insert_rowid();
+    crate::asks::inherit(&tx, number)?;
     let starts = match to_person {
         // The person's is open from the start: there's no turn to queue.
         true => {
@@ -214,6 +215,7 @@ pub(crate) fn ask_as_gathr(
         params![chat, parent, what, why, json!(choices).to_string(), pr, now_us()],
     )?;
     let number = tx.last_insert_rowid();
+    crate::asks::inherit(tx, number)?;
     set(tx, number, State::Ready, None, trace)?;
     Event::point("gathr.task.give")
         .trace(trace)

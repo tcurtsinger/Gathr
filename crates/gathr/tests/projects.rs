@@ -140,7 +140,7 @@ fn a_new_chat_in_a_project_copies_its_folder_and_team_and_nothing_else() {
         .json();
     assert_eq!(
         tasks,
-        json!({ "tasks": [], "waits": [] }),
+        json!({ "tasks": [], "waits": [], "asks": [] }),
         "a new chat inherited work"
     );
     let chats = service.call("GET", "/api/chats").json();

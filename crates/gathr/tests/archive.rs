@@ -413,6 +413,30 @@ fn deleting_an_archived_chat_removes_its_reactions() {
     assert_eq!(left, 0, "reactions left");
 }
 
+/// 0061: turns and tasks point at their ask, so deleting the chat removes its asks after them.
+#[test]
+fn deleting_an_archived_chat_removes_its_asks() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', 'repair');
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, ask_id)
+             VALUES ('t', 'c', 'x', 'done', 1, 'm1');
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
+             VALUES ('m1', 'c', 't', 1, 'user', 'text', 'Fix the export');
+         INSERT INTO tasks (chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts, ask_id)
+             VALUES ('c', 'lead', 'ann', 't', 'work', 'Fix the export', 'done', 1, 1, 'm1');",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let left: i64 = conn
+        .query_row("SELECT count(*) FROM asks", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(left, 0, "asks left");
+}
+
 /// 0054: a landed change's record outlives its chat; one not landed goes with it.
 #[test]
 fn deleting_an_archived_chat_keeps_its_landed_changes() {

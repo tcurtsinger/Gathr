@@ -19,6 +19,7 @@ mod person;
 mod react;
 mod server;
 mod settings;
+mod size;
 mod waiting;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};

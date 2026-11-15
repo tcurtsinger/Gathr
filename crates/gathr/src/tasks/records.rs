@@ -82,7 +82,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 blocked_on, pr, reviewed, outdated, form, choices, files, request, answer, created_ts,
                 stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
                 in_passing, judged, signed_off, done, proof, place, size, size_lines, started_ts, carry,
-                edited_ts, edited
+                edited_ts, edited, ask_id
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -146,6 +146,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 edited: r
                     .get::<_, Option<String>>(40)?
                     .map_or(Vec::new(), |e| e.split(',').map(String::from).collect()),
+                ask: r.get(41)?,
             })
         },
     )?;

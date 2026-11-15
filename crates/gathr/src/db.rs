@@ -53,6 +53,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0043_turn_opened.sql"),
     include_str!("../migrations/0044_reactions.sql"),
     include_str!("../migrations/0045_task_briefs.sql"),
+    include_str!("../migrations/0046_asks.sql"),
 ];
 
 /// The schema version this build writes.
@@ -366,6 +367,66 @@ mod tests {
         assert_eq!(
             started,
             [(1, Some(7)), (2, None), (3, None), (4, None), (5, Some(11))]
+        );
+    }
+
+    /// 0046: no backfill. Work in flight at the upgrade serves no ask, and the person's next
+    /// message starts one of its own though that work is open.
+    #[test]
+    fn turns_and_tasks_from_before_0046_serve_no_ask() {
+        let path = temp_db("asks");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..45] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 45;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('lead', 'Lead', 'lead', 'acc', 1), ('ann', 'Ann', 'ann', 'acc', 1);
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO chat_members VALUES ('c', 'lead', 'supervisor', 1), ('c', 'ann', 'member', 1);
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id)
+                 VALUES ('old', 'c', 'x', 'running', 1, 'lead');
+             INSERT INTO tasks (number, chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts)
+                 VALUES (1, 'c', 'lead', 'ann', 'old', 'work', 'one', 'working', 1, 1);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let asks = |conn: &Connection| -> (i64, Option<String>, Option<String>) {
+            conn.query_row(
+                "SELECT (SELECT count(*) FROM asks), (SELECT ask_id FROM turns WHERE id = 'old'),
+                        (SELECT ask_id FROM tasks WHERE number = 1)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap()
+        };
+        assert_eq!(asks(&conn), (0, None, None));
+        let opened = crate::words::Opened::Answered;
+        crate::store::add_turn(
+            &conn,
+            "c",
+            "after",
+            "x",
+            (Some("lead"), None, Some("old")),
+            opened,
+        )
+        .unwrap();
+        let ask_of = |turn: &str| -> Option<String> {
+            let sql = "SELECT ask_id FROM turns WHERE id = ?1";
+            conn.query_row(sql, [turn], |r| r.get(0)).unwrap()
+        };
+        assert_eq!(ask_of("after"), None, "a turn answering one from before");
+        let person = crate::words::Opened::Person;
+        crate::store::add_turn(&conn, "c", "new", "x", (Some("lead"), None, None), person).unwrap();
+        let said = crate::store::add_message(&conn, "c", "new", "user", "text", "Go on").unwrap();
+        let said = said["id"].as_str().map(String::from);
+        assert_eq!(
+            ask_of("new"),
+            said,
+            "the old work is no ask's: a new one starts"
         );
     }
 

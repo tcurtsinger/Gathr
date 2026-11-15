@@ -25,6 +25,7 @@ pub fn routes() -> Router<Arc<State>> {
         .route("/api/chats/{chat}/waiting", get(waiting))
         .route("/api/tasks/{task}/cancel", post(cancel))
         .route("/api/tasks/{task}/restart", post(restart))
+        .route("/api/asks/{ask}/size", post(resize))
         .route("/api/person-tasks", get(person_open))
         .route("/api/person-tasks/answer", post(person_answer))
         .route("/api/tasks/{task}/files/{index}", get(file))
@@ -289,6 +290,25 @@ async fn restart(
     let trace = t.0.clone();
     changed(&s, &t, "Restart failed", task, move |c| {
         tasks::restart(c, None, task, &trace)
+    })
+    .await
+}
+
+#[derive(Deserialize)]
+pub struct Size {
+    size: String,
+}
+
+/// The person changes an ask's size (0061): the ask as the chat's tasks list has it.
+async fn resize(
+    Extract(s): Extract<Arc<State>>,
+    Extension(t): Extension<Trace>,
+    Path(ask): Path<String>,
+    Json(body): Json<Size>,
+) -> Answer {
+    let trace = t.0.clone();
+    db(&s, &t, "Size failed", move |c| {
+        Ok(json!(gathr::asks::resize(c, &ask, &body.size, &trace)?))
     })
     .await
 }

@@ -162,6 +162,20 @@ export interface Task {
   waiting_on?: string[];
   /** A review's notes from its newest report (0053). */
   notes?: ReviewNote[];
+  /** The ask it serves: the person's message that started it (0061). */
+  ask?: string;
+}
+
+/** The person's ask in a team chat, named by the message that started it, and its size (0061). */
+export interface Ask {
+  id: string;
+  title: string;
+  /** None yet counts as new. */
+  size: 'repair' | 'new' | null;
+  /** Who sized it last: the lead's agent id, or `person`. */
+  by: string | null;
+  /** The lead's turn that sized it last. */
+  sized_in: string | null;
 }
 
 export type TaskField = 'what' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';
@@ -498,12 +512,14 @@ export const api = {
   caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
-  tasks: (chat: string) => call<{ tasks: Task[]; waits: Wait[] }>('GET', `/api/chats/${chat}/tasks`),
+  tasks: (chat: string) =>
+    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[] }>('GET', `/api/chats/${chat}/tasks`),
   waiting: (chat: string) => call<Waiting>('GET', `/api/chats/${chat}/waiting`),
   /** The person's open questions, and agents' stale tasks across chats. */
   personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
   cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),
   restartTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/restart`),
+  resizeAsk: (ask: string, size: 'repair' | 'new') => call<Ask>('POST', `/api/asks/${ask}/size`, { size }),
   search: (q: string) =>
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),

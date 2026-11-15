@@ -170,7 +170,10 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     );
     // Summary follows the task live, in the shape `GET /api/chats/<id>/tasks` answers.
     let states: Vec<Value> = std::iter::from_fn(|| Some(common::next_live(&mut live)))
-        .filter(|u| u["type"] == "tasks" && u["chat"] == team.chat.as_str())
+        // The person's message starts an ask (0061), which goes out before any task.
+        .filter(|u| {
+            u["type"] == "tasks" && u["chat"] == team.chat.as_str() && u["tasks"][0].is_object()
+        })
         .map(|u| u["tasks"][0]["state"].clone())
         .take_while(|state| state != "blocked")
         .collect();

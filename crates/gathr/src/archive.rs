@@ -160,6 +160,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         // A landed change's record outlives its chat (0054).
         "DELETE FROM changes WHERE chat_id = ?1 AND landed_ts IS NULL".into(),
         "DELETE FROM tasks WHERE chat_id = ?1".into(),
+        "DELETE FROM asks WHERE chat_id = ?1".into(),
         "DELETE FROM chat_members WHERE chat_id = ?1".into(),
         "DELETE FROM engine_sessions WHERE chat_id = ?1".into(),
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1".into(),

@@ -89,7 +89,8 @@ test('a refused load says why with Back; a later update shows the task, another 
   await expect.element(screen.getByRole('button', { name: 'Back' })).toBeVisible();
 
   refuse = false;
-  for (const on of live) on({ type: 'tasks', chat: 'c1', tasks: [agentTask(82, 'Fix it')], waits: [] });
+  for (const on of live)
+    on({ type: 'tasks', chat: 'c1', tasks: [agentTask(82, 'Fix it')], waits: [], asks: [] });
   await expect.element(screen.getByRole('heading', { name: 'Fix it' })).toBeVisible();
   await expect.element(screen.getByText('made-up refusal')).not.toBeInTheDocument();
 

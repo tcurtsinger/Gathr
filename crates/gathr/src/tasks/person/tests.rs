@@ -50,6 +50,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         carry: None,
         edited_us: None,
         edited: Vec::new(),
+        ask: None,
     }
 }
 

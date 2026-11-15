@@ -16,6 +16,11 @@ pub fn watch(conn: &Connection) -> Result<(), Error> {
              BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          CREATE TEMP TRIGGER task_changed AFTER UPDATE ON tasks
              BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         -- An ask's size or its first task goes out with the tasks (0061).
+         CREATE TEMP TRIGGER ask_added AFTER INSERT ON asks
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER ask_changed AFTER UPDATE ON asks
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          CREATE TEMP TRIGGER wait_added AFTER INSERT ON waits
              BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          -- Not on every look: a look only stamps when it looked.

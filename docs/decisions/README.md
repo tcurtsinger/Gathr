@@ -70,3 +70,4 @@ fails in CI when the two differ.
 | 0058 | [When a chat needs you, Gathr tells you outside the window](0058-gathr-tells-you-outside-the-window.md) | accepted | yes |
 | 0059 | [A work task carries a complete brief, and its giver can edit it until it starts](0059-a-work-task-carries-a-complete-brief.md) | accepted | yes |
 | 0060 | [Gathr gives the review task](0060-gathr-gives-the-review-task.md) | accepted | yes |
+| 0061 | [Every ask in a team chat has a size](0061-every-ask-has-a-size.md) | accepted | yes |
