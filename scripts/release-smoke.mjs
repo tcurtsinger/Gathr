@@ -41,5 +41,7 @@ try {
   console.log(JSON.stringify(report));
 } finally {
   // The runner is disposable: do not start the window, engines or an uninstaller's copied process.
-  rmSync(dir, { recursive: true, force: true });
+  // Windows can hold a just-installed file for a moment (EPERM): retried, or a release whose checks
+  // passed fails on its own clean-up.
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
 }
