@@ -61,6 +61,18 @@ impl Caller {
     pub fn on(&self) -> Option<OnTurn> {
         self.turn.lock().expect("never poisoned").clone()
     }
+
+    /// Where a held turn writes (0063 I2.3): its worktree, refused, and its own folder and Shared,
+    /// each when it was given it (`turns/workspace.rs`).
+    pub fn place(&self) -> gathr::hold::Place<'_> {
+        let shared = |f: &&PathBuf| f.file_name().is_some_and(|n| n == gathr::folders::SHARED);
+        let beside = self.folders.iter().skip(1);
+        gathr::hold::Place {
+            worktree: &self.cwd,
+            own: beside.clone().find(|f| !shared(f)).map(PathBuf::as_path),
+            shared: beside.clone().find(shared).map(PathBuf::as_path),
+        }
+    }
 }
 
 /// The tokens of the engines running now.

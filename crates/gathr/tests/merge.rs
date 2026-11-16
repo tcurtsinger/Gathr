@@ -253,7 +253,15 @@ impl Room {
             let given = text(&call_tool(port, lead, "give_task", common::briefed(review)));
             assert!(given.starts_with("Task #"), "{given}");
         }
-        self.token()
+        let token = self.token();
+        // Its engine starts before its turn does: a held turn's start look (0063) comes between.
+        let ran =
+            "SELECT count(*) FROM turns WHERE task IS NOT NULL AND status IN ('running', 'done')";
+        common::until(30, "Vale's first review to run", || {
+            let n: i64 = self.db().query_row(ran, [], |r| r.get(0)).ok()?;
+            (n > 0).then_some(())
+        });
+        token
     }
 
     fn call(&self, token: &str, tool: &str, arguments: Value) -> Value {

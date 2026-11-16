@@ -66,7 +66,8 @@ pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::E
     let waits = gathr::waits::in_chat(conn, chat, None)?;
     let asks = gathr::asks::in_chat(conn, chat)?;
     let plans = gathr::plans::in_chat(conn, chat)?;
-    Ok(json!({ "tasks": tasks, "waits": waits, "asks": asks, "plans": plans }))
+    let caught = gathr::hold::look::caught(conn, chat)?;
+    Ok(json!({ "tasks": tasks, "waits": waits, "asks": asks, "plans": plans, "caught": caught }))
 }
 
 /// What only the running service knows of what the chat waits on (0050): why its queued turns

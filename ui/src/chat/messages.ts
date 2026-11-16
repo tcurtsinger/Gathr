@@ -1,7 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
 import { planLine, versionOf } from '../plans/plans';
-import { fixed, sizeLines } from './asks';
+import { changed, fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
 import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
@@ -28,7 +28,7 @@ export interface TurnNotice {
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
-  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan' | 'version';
+  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan' | 'version' | 'changed';
   /** Who did what, ahead of the text: "Vale completed:". */
   who?: string;
   text: string;
@@ -469,6 +469,7 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
  */
 function heard(group: Group, state: ChatState, crew: Team, said: Map<number, number>): EventLine[] {
   const m = group.msgs[0];
+  if (state.caught.includes(m.id)) return [changed(m.body as string)];
   const plan = planLine(m, state, crew);
   if (plan) return [plan];
   const text = m.body as string;

@@ -71,6 +71,7 @@ const plan = (more: Partial<Plan> = {}): Plan => ({
   state: 'waiting',
   asked: 'Add tags to notes',
   questions: [],
+  changed: [],
   versions: [version(1, { decided: 'sent_back', decided_line: 'sb' }), version(2)],
   ...more,
 });
@@ -188,6 +189,41 @@ test("Check gains the version's Findings, the Answers to the version before's, a
       'Any colours?Open',
     ].join(' | '),
   );
+});
+
+test("Changed lists each caught turn's agent and its files", async () => {
+  const changed = [
+    { agent: 'ann', files: ['src/notes.rs', 'src/tags.rs'], message: 'g1' },
+    { agent: 'bo', files: ['new.txt'], message: 'g2' },
+  ];
+  serve(plan({ changed }));
+  const screen = await render(tab());
+  await expect.element(screen.getByText('3 findings from Bo')).toBeVisible();
+  const fields = screen.getByRole('region', { name: 'Plan' }).element().querySelector('dl.task-fields');
+  expect(rows(fields)).toContain('Changed | Ann: src/notes.rs, src/tags.rs | Bo: new.txt');
+});
+
+test('Changed names 20 files of a catch and counts the rest, as the chat line does', async () => {
+  const many = Array.from({ length: 25 }, (_, i) => `f${String(i + 1).padStart(2, '0')}.txt`);
+  const changed = [
+    { agent: 'ann', files: many, message: 'g1' },
+    { agent: 'bo', files: ['a.txt', 'b.txt'], message: 'g2' },
+  ];
+  serve(plan({ changed }));
+  const screen = await render(tab());
+  await expect.element(screen.getByText('3 findings from Bo')).toBeVisible();
+  const fields = screen.getByRole('region', { name: 'Plan' }).element().querySelector('dl.task-fields');
+  const named =
+    'f01.txt, f02.txt, f03.txt, f04.txt, f05.txt, f06.txt, f07.txt, f08.txt, f09.txt, f10.txt, ' +
+    'f11.txt, f12.txt, f13.txt, f14.txt, f15.txt, f16.txt, f17.txt, f18.txt, f19.txt, f20.txt';
+  expect(rows(fields).split('Changed | ')[1]).toBe(`Ann: ${named} and 5 more | Bo: a.txt, b.txt`);
+});
+
+test('a plan with nothing caught has no Changed', async () => {
+  serve(plan());
+  const screen = await render(tab());
+  await expect.element(screen.getByText('3 findings from Bo')).toBeVisible();
+  expect(screen.getByText('Changed', { exact: true }).elements()).toHaveLength(0);
 });
 
 test('the parts carry Changed, New and Removed against the version before, and an open part its Was', async () => {

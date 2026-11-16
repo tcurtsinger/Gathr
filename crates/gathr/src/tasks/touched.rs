@@ -26,6 +26,9 @@ pub fn watch(conn: &Connection) -> Result<(), Error> {
              BEGIN INSERT OR IGNORE INTO touched SELECT chat_id FROM plans WHERE id = NEW.plan_id; END;
          CREATE TEMP TRIGGER plan_changed AFTER UPDATE ON plan_versions
              BEGIN INSERT OR IGNORE INTO touched SELECT chat_id FROM plans WHERE id = NEW.plan_id; END;
+         -- A held turn's caught line goes out with the tasks (0063).
+         CREATE TEMP TRIGGER held_line AFTER UPDATE OF line ON held_turns
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          CREATE TEMP TRIGGER wait_added AFTER INSERT ON waits
              BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
          -- Not on every look: a look only stamps when it looked.

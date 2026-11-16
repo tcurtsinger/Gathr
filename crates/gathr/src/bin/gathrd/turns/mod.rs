@@ -24,6 +24,7 @@ mod context;
 mod driver;
 mod ended;
 mod given;
+mod hold;
 mod holds;
 mod message;
 mod opening;

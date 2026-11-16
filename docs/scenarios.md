@@ -188,9 +188,14 @@ Parts: 2.2
   the lead the reason ends by what its plan needs (size a repair, wait for the check, wait for the
   Approve). The notes are written. The push is refused with "held: <the ask> has no approved plan, so
   nothing is pushed for it", on either engine. When the person chooses "Just fix it.", the same write
-  goes on. A write the hold can't be read for goes on, and says why in Diagnostics. (When the second PR
-  of part I lands: a shell command's or Codex's change to the worktree is found at the turn's end and
-  shown.)
+  goes on. A write the hold can't be read for goes on, and says why in Diagnostics. A shell command's or Codex's change to the
+  worktree, which Gathr can't refuse, is found at the turn's end: the chat shows one line in that turn,
+  "Lead changed 1 file before the plan was approved", opening to the file (a build into an ignored
+  folder and a pull or a checkout to read something add nothing), and the plan's tab shows it as
+  Changed. The agent's next turn opens with "In your last turn you changed 1 file in <worktree>: new.txt.
+  The person sees them." and the reason for the hold, naming the worktree, its own folder and Shared.
+  A turn released by "Just fix it." before its end reports nothing, and a look that fails says why in
+  Diagnostics and finds nothing.
 
 ### 2j. The person changes a running repair to new
 
@@ -225,8 +230,8 @@ Parts: 2.2
   into" heads its view. The member's write into its worktree is denied and its notes are written. Its
   work task is refused, and a look-into task it gives is taken. Its done report, with a note or a file,
   reaches the lead as any task's does, and names no PR. After the plan is approved, the task's write
-  into the worktree is still denied. (When the second PR of part I lands: a shell command's change is
-  found at the turn's end and shown.)
+  into the worktree is still denied. A shell command's change to the worktree is found at
+  the turn's end and shown as "<member> changed 1 file on look-into task #12".
 
 ## 3. Every task stands on its own
 

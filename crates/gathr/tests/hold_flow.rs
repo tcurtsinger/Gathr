@@ -1,7 +1,7 @@
 //! 0063 through a real service, on each engine's replay stand-in: a held ask refuses building gives
 //! and a fix lets them go on (scenarios 2b, 2l), a queued task waits for its plan through the runner
 //! (2j), and a held turn's worktree writes and pushes are refused while its own folder and Shared
-//! stay writable (2g).
+//! stay writable (2g); what a held turn changes all the same is caught, shown and told (2g).
 
 mod common;
 
@@ -377,4 +377,274 @@ fn a_held_write_is_denied_and_a_push_refused_on_claude() {
 #[test]
 fn a_held_write_is_denied_and_a_push_refused_on_codex() {
     a_held_write_is_denied_and_a_push_refused("codex");
+}
+
+/// Each turn of the stand-in holds until `go` exists: Codex's plays its hold in every turn, and
+/// Claude Code's is given its held recording once per turn.
+fn every_turn_holds(data: &Path, engine: &str) {
+    if engine == "claude" {
+        let held = std::fs::read_to_string(data.join("held.jsonl")).unwrap();
+        std::fs::write(data.join("held.jsonl"), held.repeat(8)).unwrap();
+    }
+}
+
+/// The project's remote ignores `out/` before any worktree is made of it.
+fn ignore_out(data: &Path) {
+    let other = data.join("other");
+    std::fs::write(other.join(".gitignore"), "out/\n").unwrap();
+    common::git(&other, &["add", ".gitignore"]);
+    common::git(&other, &["commit", "-q", "-m", "ignore out"]);
+    common::git(&other, &["push", "-q", "origin", "main"]);
+}
+
+/// The person sends `said`; once the lead's turn on it runs: its id.
+fn held_turn(service: &TestService, chat: &str, said: &str) -> String {
+    let turn = send(service, chat, said)["turn"].clone();
+    running(service, chat, &turn);
+    turn.as_str().unwrap().to_string()
+}
+
+/// Lets the running turn `turn` end, and holds the next one again once it has.
+fn end(service: &TestService, data: &Path, chat: &str, turn: &str) {
+    std::fs::write(data.join("go"), "").unwrap();
+    service.wait_for(chat, 30, "the turn to end", |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        turns
+            .iter()
+            .any(|t| t["id"] == turn && t["status"] == "done")
+    });
+    std::fs::remove_file(data.join("go")).unwrap();
+}
+
+/// The `gathr.hold.look` events of `turn`, once there are `n`.
+fn looks(data: &Path, turn: &str, n: usize) -> Vec<Value> {
+    let sql = format!(
+        "SELECT ref, status, attrs FROM event_log WHERE name = 'gathr.hold.look' \
+         AND attrs ->> '$.\"gathr.turn.id\"' = '{turn}' ORDER BY id"
+    );
+    common::until(30, &format!("{n} looks at {turn}"), || {
+        let found = rows(data, &sql);
+        (found.len() >= n).then_some(found)
+    })
+}
+
+/// Gathr's messages in `turn`.
+fn gathr_said(service: &TestService, chat: &str, turn: &str) -> Vec<Value> {
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let messages = history["messages"].as_array().cloned().unwrap_or_default();
+    let of = |m: &&Value| m["role"] == "gathr" && m["turn"] == turn;
+    messages.iter().filter(of).cloned().collect()
+}
+
+/// What the engine was sent for `turn`, frames joined.
+fn sent(data: &Path, turn: &str) -> String {
+    let sql = format!(
+        "SELECT body FROM engine_raw WHERE direction = 'in' AND turn_id = '{turn}' ORDER BY id"
+    );
+    let bodies = rows(data, &sql);
+    bodies
+        .iter()
+        .filter_map(|r| r["body"].as_str())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// `text` as it reads inside a JSON string.
+fn in_json(text: &str) -> String {
+    serde_json::to_string(text)
+        .unwrap()
+        .trim_matches('"')
+        .to_string()
+}
+
+/// The ask `turn` serves, as the tasks answer shows it.
+fn ask_of(service: &TestService, data: &Path, chat: &str, turn: &str) -> Value {
+    let sql = format!("SELECT ask_id FROM turns WHERE id = '{turn}'");
+    let id = rows(data, &sql)[0]["ask_id"].clone();
+    let asks = listed(service, chat)["asks"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    let found = asks.into_iter().find(|a| a["id"] == id);
+    found.unwrap_or_else(|| panic!("{turn}'s ask {id} isn't listed"))
+}
+
+fn a_held_turns_shell_change_is_caught_shown_and_told(engine: &str) {
+    let data = TempDir::new();
+    let (service, chat) = project_team(&data.0, engine);
+    ignore_out(&data.0);
+    every_turn_holds(&data.0, engine);
+    let _go = LetGo(data.0.join("go"));
+    let port = service.info.port;
+    // A repair first: its turn makes the lead's worktree.
+    let typo = held_turn(&service, &chat, "Fix the typo in the README");
+    common::fix_it(port, &common::first_token(&data.0));
+    end(&service, &data.0, &chat, &typo);
+    let started = nth(&data.0.join("env.jsonl"), 0);
+    let worktree = PathBuf::from(started["cwd"].as_str().unwrap());
+    std::fs::write(worktree.join("README.md"), "changed before the turn\n").unwrap();
+
+    // A shell's writes in a held turn, as the engine would make them.
+    let tags = held_turn(&service, &chat, TAGS);
+    std::fs::write(worktree.join("new.txt"), "made up\n").unwrap();
+    std::fs::create_dir_all(worktree.join("out")).unwrap();
+    std::fs::write(worktree.join("out").join("build.o"), "built\n").unwrap();
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let line = "Lead changed 1 file before the plan was approved\nnew.txt";
+    service.wait_for(&chat, 30, "the caught line", |h| {
+        let messages = h["messages"].as_array().cloned().unwrap_or_default();
+        messages
+            .iter()
+            .any(|m| m["role"] == "gathr" && m["turn"] == tags.as_str())
+    });
+    end(&service, &data.0, &chat, &tags);
+    let said = gathr_said(&service, &chat, &tags);
+    assert_eq!(said.len(), 1, "said once: {said:?}");
+    assert_eq!(said[0]["body"], line, "{said:?}");
+    let id = said[0]["id"].clone();
+    let changed = rows(
+        &data.0,
+        "SELECT attrs FROM event_log WHERE name = 'gathr.hold.changed'",
+    );
+    assert_eq!(changed.len(), 1, "{changed:?}");
+    let attrs = &changed[0]["attrs"];
+    assert_eq!(
+        (&attrs["gathr.hold.files"], &attrs["gathr.message.id"]),
+        (&json!(["new.txt"]), &id),
+        "{attrs}"
+    );
+    assert_eq!(listed(&service, &chat)["caught"], json!([id]));
+    assert_eq!(ask_of(&service, &data.0, &chat, &tags)["held"], true);
+    for look in looks(&data.0, &tags, 2) {
+        eprintln!("{engine}: gathr.hold.look {}", look["attrs"]);
+    }
+
+    // Told in the opening of the lead's next turn, before the person's words.
+    let next = "Keep the tags short";
+    let told_in = held_turn(&service, &chat, next);
+    let title = ask_of(&service, &data.0, &chat, &told_in)["title"].clone();
+    let title = title.as_str().unwrap();
+    let own = worktree.parent().unwrap();
+    let shared = own.parent().unwrap().join("Shared");
+    let (wt, own) = (worktree.display(), own.display());
+    let told = format!(
+        "In your last turn you changed 1 file in {wt}: new.txt. The person sees them.\nHeld until the plan for \
+         \"{title}\" is approved: don't change files in {wt}. Write notes, experiments and mock-ups in {own} or {} \
+         instead. If it is a repair, size it repair with size.",
+        shared.display()
+    );
+    let frames = sent(&data.0, &told_in);
+    let (at, then) = (
+        frames.find(&in_json(&format!("{told}\n\n"))),
+        frames.find(&in_json(next)),
+    );
+    assert!(
+        at.is_some() && at < then,
+        "told words, then the ask: {frames}"
+    );
+    end(&service, &data.0, &chat, &told_in);
+
+    // The forced failure: a look that fails is found from its reference, and the turn still ends.
+    let broken = held_turn(&service, &chat, "Sort the notes by tag");
+    let dot_git = worktree.join(".git");
+    let kept = std::fs::read_to_string(&dot_git).unwrap();
+    std::fs::write(&dot_git, "gitdir: nowhere\n").unwrap();
+    end(&service, &data.0, &chat, &broken);
+    let failed = looks(&data.0, &broken, 2);
+    std::fs::write(&dot_git, kept).unwrap();
+    let status = rows(
+        &data.0,
+        &format!("SELECT status FROM turns WHERE id = '{broken}'"),
+    );
+    assert_eq!(
+        status[0]["status"], "done",
+        "a look that failed failed its turn"
+    );
+    assert_eq!(failed[1]["status"], "error", "{failed:?}");
+    let (ok, trace) = gathr(
+        &data.0,
+        &["diag", "trace", failed[1]["ref"].as_str().unwrap()],
+    );
+    let found = trace["events"].as_array().cloned().unwrap_or_default();
+    let look = found
+        .iter()
+        .find(|e| e["name"] == "gathr.hold.look" && e["error_type"] == "git");
+    assert!(
+        ok && look.is_some_and(|e| e["attrs"]["why"].is_string()),
+        "{trace}"
+    );
+    assert!(
+        !sent(&data.0, &broken).contains("In your last turn"),
+        "told twice"
+    );
+
+    // Released mid-turn: what it changes after "Just fix it." is allowed work.
+    let fixed = held_turn(&service, &chat, "Rename the notes view");
+    let ask = ask_of(&service, &data.0, &chat, &fixed)["id"].clone();
+    let path = format!("/api/asks/{}/size", ask.as_str().unwrap());
+    let sized = service.send("POST", &path, json!({ "size": "repair" }));
+    assert_eq!(sized.status, 200, "{}", sized.body);
+    std::fs::write(worktree.join("fixed.txt"), "fixed\n").unwrap();
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let released = looks(&data.0, &fixed, 2);
+    assert_eq!(
+        released[1]["attrs"]["gathr.hold.released"], true,
+        "{released:?}"
+    );
+    assert!(
+        gathr_said(&service, &chat, &fixed).is_empty(),
+        "a line in a released turn"
+    );
+    let changed = rows(
+        &data.0,
+        "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.hold.changed'",
+    );
+    assert_eq!(changed[0]["n"], 1, "a released turn's change was counted");
+}
+
+#[test]
+fn a_held_turns_shell_change_is_caught_shown_and_told_on_claude() {
+    a_held_turns_shell_change_is_caught_shown_and_told("claude");
+}
+
+#[test]
+fn a_held_turns_shell_change_is_caught_shown_and_told_on_codex() {
+    a_held_turns_shell_change_is_caught_shown_and_told("codex");
+}
+
+/// I2a.7: a change a held turn made before the service stopped is caught at the lead's next turn,
+/// and said in the stopped turn.
+#[test]
+fn a_change_cut_off_by_a_stop_is_caught_at_the_next_turn() {
+    let data = TempDir::new();
+    let (service, chat) = project_team(&data.0, "claude");
+    every_turn_holds(&data.0, "claude");
+    let _go = LetGo(data.0.join("go"));
+    let cut = held_turn(&service, &chat, TAGS);
+    let started = nth(&data.0.join("env.jsonl"), 0);
+    let worktree = PathBuf::from(started["cwd"].as_str().unwrap());
+    std::fs::write(worktree.join("new.txt"), "made up\n").unwrap();
+    service.stop();
+
+    let (replay, held) = (common::replay_engine(), data.0.join("held.jsonl"));
+    let (go, tokens) = (data.0.join("go"), data.0.join("env.jsonl"));
+    let env = [
+        ("GATHR_CLAUDE_PATH", replay.as_path()),
+        ("GATHR_REPLAY", &held),
+        ("GATHR_REPLAY_HOLD", &go),
+        ("GATHR_REPLAY_ENV", &tokens),
+    ];
+    let service = TestService::start_with(&data.0, &env);
+    std::fs::write(&go, "").unwrap();
+    send(&service, &chat, "Keep the tags short");
+    let line = "Lead changed 1 file before the plan was approved\nnew.txt";
+    let history = service.wait_for(&chat, 30, "the line in the stopped turn", |h| {
+        let messages = h["messages"].as_array().cloned().unwrap_or_default();
+        messages
+            .iter()
+            .any(|m| m["role"] == "gathr" && m["turn"] == cut.as_str())
+    });
+    let said = gathr_said(&service, &chat, &cut);
+    assert_eq!(said.len(), 1, "{history}");
+    assert_eq!(said[0]["body"], line, "{history}");
 }

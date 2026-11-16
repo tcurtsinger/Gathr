@@ -154,7 +154,8 @@ const LOG_OPTIONS: [&str; 26] = [
 ];
 
 /// What a read-only check runs with, over what the repository's config says (which an agent can
-/// change): no pager, signature check or configured default format. `git status` isn't read-only
+/// change): no pager, signature check, configured default format or fsmonitor (0063's looks run
+/// `git status` with it). `git status` isn't read-only
 /// here: it runs any filter the repository names, from places outside the tree as well
 /// (`.git/info/attributes`, `core.attributesFile`), so it asks.
 pub fn read_only_env() -> Vec<(String, String)> {
@@ -162,6 +163,7 @@ pub fn read_only_env() -> Vec<(String, String)> {
         ("core.pager", "cat"),
         ("log.showSignature", "false"),
         ("format.pretty", "medium"),
+        ("core.fsmonitor", "false"),
     ];
     let mut vars = vec![("GIT_CONFIG_COUNT".to_string(), pairs.len().to_string())];
     for (i, (key, value)) in pairs.iter().enumerate() {

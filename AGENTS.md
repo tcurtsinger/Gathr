@@ -8,7 +8,7 @@ Status: early. What Gathr is for, the loop work follows and its promises are in 
 
 ## How we build
 
-- **Plans before code.** Nothing is built until its plan is approved. Each decision gets a file in `docs/decisions/`: the choice, why, and what was turned down, under a `Status:` line and a `Built:` line ([the list](docs/decisions/README.md) says what each means). (P2)
+- **Plans before code.** Each decision gets a file in `docs/decisions/`: the choice, why, and what was turned down, under a `Status:` line and a `Built:` line ([the list](docs/decisions/README.md) says what each means).
 - **One feature, one PR,** its engine and its screens together, opened when the feature is done. From your own branch and your own git worktree (never the main checkout), base `main`, marked ready. Don't stack a PR on another PR's branch: merging that branch closes it.
 - **Every change that can break has its check:** a test, or a command anyone can run that fails if the change breaks.
 - **Tests where they earn it, not one per function.** Test behaviour that can go wrong: logic with branches, parsers and protocols (an engine driver against replayed raw frames), coordination state and its transitions, logins, security and data that could be lost, and every bug fixed (its test first). Don't test what can't really break: plain glue, getters, constants, what the type system already guarantees, or a layout a screenshot proves. One test per behaviour, through the real code where it's cheap, not mocks of our own code. A test that can't fail is deleted. Tests are written test first, at the seams the plan names: read [docs/testing.md](docs/testing.md) before the first test of a change.

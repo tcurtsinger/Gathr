@@ -222,9 +222,9 @@ ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (
 Orin: Hold the button", a question "Orin asked you: Ship it?". The size of an ask is one too,
 after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix"
 or "You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn
-only once the ask has a task or Gathr held something of it (a refused give, write or push: 0063), with a wrench for Fix and a clipboard for Plan. Opened, it shows
+only once the ask has a task or Gathr held something of it (a refused give, write or push, or a caught change: 0063), with a wrench for Fix and a clipboard for Plan. Opened, it shows
 the two sizes, "Just fix it." and "Plan it with me first.", the current one marked, and nothing
-that explains them (0061). When a repair's work is in, Gathr says "Fixed: <the ask>", a check
+that explains them (0061). A change Gathr caught in a held turn is one too, of a kind apart (`changed`, the `FilePen` icon): "Mira changed 3 files before the plan was approved" ("on look-into task #12" for a look-into task; "1 file" for one), opening to one file per line, at most 20, then "and 2 more", then "Committed: 1" when some came from commits (0063). It reads after the turn's last block, not as a note. When a repair's work is in, Gathr says "Fixed: <the ask>", a check
 icon, which opens to each finished task with its PR and its proof. The plan's lines are one
 too, of a kind apart from the size line, with a clipboard: the lead-in "Plan v1:" and "Bo agrees",
 "3 findings" or "Bo didn't finish" (opening to the plan's title), "Sent back" (opening to the
@@ -415,7 +415,7 @@ Cancel (ghost) and Send back, disabled until the field has words. No sentence ex
 The workspace lies over the chat at 1200px and under, as every tab does, and the foot's three
 buttons fit at 432px. The Check field also lists the version's Findings (a suggestion is left out) in a task's
 note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
-("Changed: ..." or "Kept: ..."), and the ask's Questions, each with its answer or "Open". Each
+("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", and Changed, one row for each turn of the ask in which Gathr caught a change, "Ann: src/notes.rs, src/tags.rs", shown only when there is one. Each
 part is a line that opens to its brief, one at a time and none at first: Why, Done when, Proof,
 Where, Size and After, in the classes of a task's fields. Against the version before, a part
 carries a mark in the attention colour at the end of its line, Changed or New, matched by what it

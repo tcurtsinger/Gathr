@@ -631,6 +631,7 @@ pub fn get(conn: &Connection, plan: i64) -> Result<Option<Value>, Error> {
         Ok(json!({ "number": number, "what": what, "answer": answer }))
     })?;
     shown["questions"] = Value::Array(rows.collect::<Result<_, _>>()?);
+    shown["changed"] = Value::Array(crate::hold::look::of_ask(conn, &summary.ask)?);
     for (i, v) in summary.versions.iter().enumerate() {
         let detail = check::version_detail(conn, v.id)?;
         if let (Some(into), Value::Object(detail)) = (shown["versions"][i].as_object_mut(), detail)

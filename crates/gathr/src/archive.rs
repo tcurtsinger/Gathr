@@ -170,6 +170,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM engine_sessions WHERE chat_id = ?1".into(),
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1".into(),
         "DELETE FROM events WHERE conversation_id = ?1".into(),
+        "DELETE FROM held_turns WHERE chat_id = ?1".into(),
         "DELETE FROM chats WHERE id = ?1".into(),
     ] {
         tx.execute(&sql, [chat])?;
