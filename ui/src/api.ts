@@ -150,6 +150,8 @@ export interface Task {
   created_us: number;
   /** The turn its giver heard it was settled in: a person task's answer shows there. */
   heard_in?: string | null;
+  /** A person task's answer as sent; each Discuss keeps the turn that heard it. */
+  answer?: { discussed?: { text: string; turn: string }[] } | null;
   /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
   pr?: number | null;
   pr_head?: string | null;
@@ -311,6 +313,8 @@ export interface PersonAnswer {
   yes?: boolean;
   done?: boolean;
   text?: string;
+  /** The text goes to the asker as a message, and the question waits off the list (0065). */
+  discuss?: boolean;
 }
 
 /** What an agent waits on (0010): another agent, CI, a PR or a check. */

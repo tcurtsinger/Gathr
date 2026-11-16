@@ -461,7 +461,7 @@ fn open_version(conn: &Connection, ask: &str) -> Result<Option<(i64, i64, i64)>,
 
 /// A question of the lead's to the person open for the ask, but `except` (H3.1).
 fn open_question(conn: &Connection, ask: &str, except: i64) -> Result<Option<i64>, Error> {
-    let sql = "SELECT number FROM tasks WHERE ask_id = ?1 AND kind = 'person' AND state = 'ready'
+    let sql = "SELECT number FROM tasks WHERE ask_id = ?1 AND kind = 'person' AND state IN ('ready', 'held')
                  AND giver IS NOT NULL AND number != ?2
                ORDER BY number LIMIT 1";
     Ok(conn

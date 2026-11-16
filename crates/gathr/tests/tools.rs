@@ -158,6 +158,14 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         let want = [80.0, 300.0, 300.0, 200.0, 200.0, 1.0].map(Some);
         assert_eq!(limits, want, "{tool}: {fields}");
     }
+    // The files' limit is read before the first ask (G121).
+    let ask = tools
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == "ask_person");
+    let files = &ask.unwrap()["inputSchema"]["properties"]["files"];
+    assert_eq!(files["maxItems"], 5, "{files}");
 
     // As Orin, in the chat the engine runs: the person's message, by its author.
     let read = call_tool(port, &engine.token, "read_chat", json!({}));

@@ -36,6 +36,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "eb1881cfb324a2c433b6246eae2d321554cccd5ddd541c21ac693bede700310b",
     ),
     (
+        "request_brief",
+        2,
+        "f7f6490e1f0ea84625251ed109bab39cc7621089e09840c3ba547799fc8e6cae",
+    ),
+    (
         "report_ask",
         1,
         "63f9511fb29f42bb19ac806963220da7f5ae9bab0e58591c0ac271ab437403fe",
@@ -49,6 +54,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "answered",
         1,
         "bf72ea9b5350d9857006f2df029fb0da378a80782ab02b8cb5374c74ccb33bc7",
+    ),
+    (
+        "answered",
+        2,
+        "e89abe05b16499c815f0b11335636a900d9704a51b6adfbcd02bd64cbd2b7ea3",
     ),
     (
         "wake",

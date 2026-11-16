@@ -342,7 +342,7 @@ Parts: 4.1, 4.3
 - **When** the builder needs an answer from the person
 - **Then** the builder's ask becomes a request the lead owns, and the builder never asks the person
   directly. The lead answers it when it can. Otherwise the question that reaches the person is
-  text the lead wrote: Gathr has no way to forward the builder's text as it is
+  text the lead wrote: Gathr refuses to forward the builder's text as it is
 
 ### 4b. A question is a record, with the lead's pick first
 
@@ -350,9 +350,9 @@ Parts: 4.2
 
 - **Given** the lead asks a question with three options and names its pick
 - **When** the person opens it
-- **Then** the pick is first and marked as the lead's pick. The person can choose an option, or answer
-  in their own words without choosing one. The question, its options, the pick and the answer are
-  held
+- **Then** the pick is first and marked as the lead's pick. The person can choose an option, answer
+  in their own words without choosing one, or Discuss it with the lead. An agent hears the pick and
+  the words apart. The question, its options, the pick and the answer are held
 
 ### 4c. An answer reaches everyone who waits on it, at once
 
@@ -362,7 +362,18 @@ Parts: 4.4, 4.5
 - **When** the person answers
 - **Then** the builder gets the answer and carries on with no turn of the lead's in between, and the
   lead is told too. Until the answer comes, the builder's task stays open and says it waits on the
-  question
+  question, and the builder isn't told it's blocked
+
+### 4e. The person discusses a question with the lead
+
+Parts: 4.2, 4.4
+
+- **Given** a question the lead asked for a builder, open on the person's list
+- **When** the person turns on Discuss, writes a message and sends it
+- **Then** the question leaves the person's list and the message reaches the lead alone, as its next
+  turn. The builder keeps waiting and hears nothing. When the lead's turn ends without a new question,
+  the question is back on the list as it was. When the lead asks a new question in that turn, the new
+  one takes the old one's place
 
 ## 5. Work tells the truth
 

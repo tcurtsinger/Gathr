@@ -16,10 +16,15 @@ export function asker(task: Pick<Task, 'kind' | 'giver'>, name: (agent: string |
 export interface Draft {
   values: string[];
   notes: string;
+  /** Discuss is on: the notes go to the asker alone, and the picks wait, kept, until it's off. */
+  discuss?: boolean;
 }
 
 /** The rows to pick from. Labels are unique within a question, so a label is its id. */
-export function options(task: PersonTask): { id: string; label: string; description?: string }[] {
+export function options(
+  task: PersonTask,
+  name: (agent: string | null) => string,
+): { id: string; label: string; description?: string }[] {
   if (task.form === 'yesno')
     return [
       { id: 'Yes', label: 'Yes' },
@@ -32,7 +37,7 @@ export function options(task: PersonTask): { id: string; label: string; descript
     // The asker's pick comes first (DESIGN.md); Gathr's own question has no pick to recommend.
     description:
       task.form === 'choice' && task.giver !== null && i === 0
-        ? ['Recommended', c.detail].filter(Boolean).join(' · ')
+        ? [`${asker(task, name)}'s pick`, c.detail].filter(Boolean).join(' · ')
         : c.detail,
   }));
 }
@@ -43,6 +48,7 @@ export function options(task: PersonTask): { id: string; label: string; descript
  */
 export function ready(task: PersonTask, draft: Draft | undefined): boolean {
   if (!draft) return false;
+  if (draft.discuss) return !!draft.notes.trim();
   if (task.form === 'text') return !!draft.values[0]?.trim();
   if (task.giver === null) return draft.values.length === 1;
   return draft.values.length > 0 || !!draft.notes.trim();
@@ -51,6 +57,7 @@ export function ready(task: PersonTask, draft: Draft | undefined): boolean {
 /** The staged draft as the service takes it; notes go with a pick as its text. */
 export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   const notes = draft.notes.trim() ? { text: draft.notes.trim() } : {};
+  if (draft.discuss) return { task: task.number, discuss: true, text: draft.notes.trim() };
   if (task.form === 'text') return { task: task.number, text: draft.values[0].trim() };
   if (draft.values.length === 0) return { task: task.number, text: draft.notes.trim() };
   if (task.form === 'yesno') return { task: task.number, yes: draft.values[0] === 'Yes', ...notes };
@@ -62,6 +69,8 @@ const said = { done: 'Done', left: 'Left', blocked: 'Blocked' };
 
 /** What a task's owner last reported, in a line, or that it has reported nothing (0047). */
 export function reported(task: Task): string | null {
+  // The person's question has no owner to report: held, it is only waiting off the list (0065).
+  if (task.kind === 'person') return null;
   const report = task.report;
   if (report) {
     const words = [said[report.how], report.note].filter(Boolean).join(': ');

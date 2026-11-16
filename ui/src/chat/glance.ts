@@ -69,8 +69,9 @@ function standing(
   const task = running.find((t) => t.task != null)?.task ?? undefined;
   if (state.approvals.some((a) => unanswered(a) && state.turns[a.turn]?.agent === m.agent))
     return { standing: 'needs', doing: 'Needs your approval', task };
-  // By its giver: the chat's tasks don't say which member a question was asked for (0038).
-  if (state.tasks.some((t) => t.kind === 'person' && t.giver === m.agent && open(t)))
+  // By its giver: the chat's tasks don't say which member a question was asked for (0038). A held one is
+  // being discussed, off the person's list (0065).
+  if (state.tasks.some((t) => t.kind === 'person' && t.giver === m.agent && t.state === 'ready'))
     return { standing: 'needs', doing: 'Asked you a question', task };
   if (running.length) {
     const starts = running

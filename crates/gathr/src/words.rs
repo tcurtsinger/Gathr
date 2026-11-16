@@ -9,10 +9,10 @@ pub use counted::{Counted, counted};
 
 pub const BRIEF: i64 = 3;
 pub const REVIEW_BRIEF: i64 = 1;
-pub const REQUEST_BRIEF: i64 = 1;
+pub const REQUEST_BRIEF: i64 = 2;
 pub const REPORT_ASK: i64 = 1;
 pub const HEAR_BACK: i64 = 2;
-pub const ANSWERED: i64 = 1;
+pub const ANSWERED: i64 = 2;
 pub const WAKE: i64 = 1;
 pub const SILENT: i64 = 1;
 pub const WAIT_FIRED: i64 = 1;

@@ -630,7 +630,14 @@ fn task_lines(
                 // A member's request filed as a question to the person waits for that answer.
                 let asked: Vec<&Open> = open
                     .iter()
-                    .filter(|q| q.kind == "person" && q.request == Some(o.number))
+                    .filter(|q| {
+                        q.kind == "person" && q.request == Some(o.number) && q.state == "ready"
+                    })
+                    .filter(|q| {
+                        !holds
+                            .iter()
+                            .any(|h| matches!(h, Hold::Given { number, .. } if *number == q.number))
+                    })
                     .collect();
                 for q in &asked {
                     let what = format!("{this} waits for your answer to #{}", q.number);

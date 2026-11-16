@@ -197,7 +197,9 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     let (mut due, mut rest, mut pending) = (Vec::new(), Vec::new(), false);
     for (number, heard, _) in &group {
         let t = read(tx, *number)?;
-        let stands = t.state.settled() || waits_on_its_giver(tx, *number)?;
+        // A request folded onto an open question waits for its answer, quietly (0065).
+        let quiet = super::person::links::folded(tx, &t)?;
+        let stands = !quiet && (t.state.settled() || waits_on_its_giver(tx, *number)?);
         let trouble = matches!(t.state, State::Blocked | State::Failed | State::Stopped);
         // A plan check wakes its lead only with findings: else its version reaches the person (0062).
         let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
@@ -211,7 +213,10 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
                     params![t.number, heard_as(t.state, t.reason.as_deref())],
                 )?;
             }
-            (true, false) if trouble || t.in_passing => due.push(t),
+            // A settled request carries the person's answer: its member hears it at once.
+            (true, false) if trouble || t.in_passing || t.kind == Kind::PersonRequest => {
+                due.push(t)
+            }
             (true, false) => rest.push(t),
         }
     }

@@ -504,6 +504,7 @@ pub fn turn_moved(
             (Some(task), _) => starts.extend(ended_in(tx, task, outcome, m.trace)?),
             (None, _) => {}
         }
+        person::links::back_on_list(tx, m.turn, m.trace)?;
         starts.extend(hear::hear_backs(tx, m.turn, m.trace)?);
         if let Some(agent) = m.agent {
             starts.extend(crate::waits::agent_free_in(tx, m.chat, agent, m.trace)?);
@@ -628,7 +629,9 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     // Background commands ended with their engines: a task held only on one carries on.
     crate::background::clear(&tx)?;
     let holding: Vec<i64> = {
-        let mut stmt = tx.prepare("SELECT number FROM tasks WHERE state = 'held'")?;
+        // A discussed question has no turn to start: the sweep brings it back.
+        let mut stmt =
+            tx.prepare("SELECT number FROM tasks WHERE state = 'held' AND kind != 'person'")?;
         let rows = stmt.query_map([], |r| r.get(0))?;
         rows.collect::<Result<_, _>>()?
     };
@@ -638,6 +641,7 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
             ready(&tx, task, Some(carry))?;
         }
     }
+    person::links::recover(&tx, &trace)?;
     for turn in &giving {
         let why = Some("the service stopped during this turn");
         crate::store::set_turn(&tx, turn, "failed", why)?;
@@ -843,7 +847,7 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                     "UPDATE tasks SET blocked_on = NULL WHERE number = ?1",
                     [blocked],
                 )?;
-                let carry = format!("the task blocking this one, #{task}, is done");
+                let carry = person::links::carry(tx, task, blocked)?;
                 starts.extend(ready(tx, blocked, Some(&carry))?);
             }
             State::Cancelled => {

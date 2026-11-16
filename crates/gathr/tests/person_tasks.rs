@@ -117,16 +117,18 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
         "not on the person's list before the check"
     );
 
-    // The lead files it as it is.
+    // The lead files it in its own words.
     running(&conn, "c", "lead-1", "lead", Some(request.number));
-    let mut filing = ask("c", "lead", "lead-1", None);
+    let mut filing = ask(
+        "c",
+        "lead",
+        "lead-1",
+        Some("Which notice text should ship?"),
+    );
     filing.request = Some(request.number);
-    filing.choices.clear();
     let (asked, starts) = person::ask(&mut conn, filing, T).unwrap();
     assert!(starts.is_empty(), "the person's task starts no turn");
     assert_eq!((asked.kind, asked.owner.clone()), (Kind::Person, None));
-    assert_eq!(asked.what, "What should the reconnect notice say?");
-    assert_eq!(asked.choices.len(), 2, "copied from the request");
     assert_eq!(asked.request, Some(request.number));
     let open = person::open(&conn, None).unwrap();
     let listed = (
@@ -143,7 +145,9 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
         Some(format!("waiting on #{} (the person)", asked.number).as_str())
     );
 
-    // The person answers: the lead hears back on the request, told to pass it on.
+    // The person answers: the request is done with it, and Ann hears it at once, then the lead.
+    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-1'", [])
+        .unwrap();
     let answer = Answer {
         task: asked.number,
         pick: vec!["Connection lost".into()],
@@ -157,50 +161,24 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
         answered[0].reason.as_deref(),
         Some("Connection lost: and say we retry")
     );
-    assert_eq!(starts.len(), 1, "{starts:?}");
-    let back = &starts[0];
-    assert_eq!(
-        (back.agent.as_str(), back.task),
-        ("lead", Some(request.number))
+    let (n, r) = (asked.number, request.number);
+    let agents: Vec<&str> = starts.iter().map(|s| s.agent.as_str()).collect();
+    assert_eq!(agents, ["ann", "lead"], "{starts:?}");
+    assert!(
+        starts[0].text.contains(&format!(
+            "#{r} Lead, What should the reconnect notice say?: done: the person answered #{n} (Which notice text \
+             should ship?): Picked: Connection lost. Their words: and say we retry"
+        )),
+        "{}",
+        starts[0].text
     );
+    let back = &starts[1];
     assert_eq!(
-        back.answers.as_deref(),
-        Some("lead-1"),
+        (back.task, back.answers.as_deref()),
+        (None, Some("lead-1")),
         "under the turn that asked"
     );
-    let (n, r) = (asked.number, request.number);
-    assert!(back.text.contains(&format!(
-        "- #{n} What should the reconnect notice say?: Connection lost"
-    )));
-    assert!(back.text.contains(&format!(
-        "Use finish_task to mark #{r} done and put the answer in note."
-    )));
-
-    // The lead passes it back: Ann hears it on her task, under the turn she asked in.
-    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'ann-1'", [])
-        .unwrap();
-    // The hear-back's turn was queued with it: it starts.
-    conn.execute(
-        "UPDATE turns SET status = 'running' WHERE id = ?1",
-        [&back.turn],
-    )
-    .unwrap();
-    tasks::started(&mut conn, r, T).unwrap();
-    let note = Said {
-        note: Some("Connection lost, and say we retry"),
-        ..Default::default()
-    };
-    tasks::finish(&mut conn, "lead", r, Finish::Done, &note, T).unwrap();
-    let starts = ended(&mut conn, &back.turn, "lead", Some(r));
-    let to_ann = starts
-        .iter()
-        .find(|s| s.agent == "ann")
-        .expect("Ann hears back");
-    assert!(
-        to_ann.text.contains(&format!("#{r} Lead, What should the reconnect notice say?: done: Connection lost, and say we retry")),
-        "{}",
-        to_ann.text
-    );
+    assert!(back.text.contains("Ann has the answer."), "{}", back.text);
 }
 
 #[test]
@@ -242,7 +220,7 @@ fn each_answer_in_a_send_is_answered_or_refused_on_its_own() {
     );
     assert_eq!(sent.starts.len(), 1, "one hear-back for one Send");
     assert!(
-        sent.starts[0].text.contains("Ship it today?: Yes"),
+        sent.starts[0].text.contains("Ship it today?: Picked: Yes"),
         "{}",
         sent.starts[0].text
     );
@@ -317,10 +295,10 @@ fn the_chats_only_agent_asks_the_person_itself_and_hears_when_its_ask_is_cancell
 }
 
 /// G183, live: a member's request was cancelled after the person had answered it, and the member's
-/// work, blocked on the request, was cancelled with it. An answered request settles as done with
-/// the answer, so what waited on it carries on.
+/// work, blocked on the request, was cancelled with it. The answer settles the request as done at
+/// once (0065), so what waited on it carries on with the answer.
 #[test]
-fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer() {
+fn work_blocked_on_a_request_the_person_answers_carries_on_with_the_answer() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     let g = tasks::Give {
@@ -354,9 +332,13 @@ fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer()
     );
     // The lead files it, and the person answers.
     running(&conn, "c", "lead-1", "lead", Some(request.number));
-    let mut filing = ask("c", "lead", "lead-1", None);
+    let mut filing = ask(
+        "c",
+        "lead",
+        "lead-1",
+        Some("Which notice text should ship?"),
+    );
     filing.request = Some(request.number);
-    filing.choices.clear();
     let (asked, _) = person::ask(&mut conn, filing, T).unwrap();
     ended(&mut conn, "lead-1", "lead", Some(request.number));
     let answer = Answer {
@@ -364,13 +346,15 @@ fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer()
         pick: vec!["Connection lost".into()],
         ..Default::default()
     };
-    person::answer(&mut conn, &[answer], T).unwrap();
-
-    let starts = tasks::cancel(&mut conn, None, request.number, "not needed", T).unwrap();
+    let starts = person::answer(&mut conn, &[answer], T).unwrap().starts;
     let settled = tasks::get(&conn, request.number).unwrap().unwrap();
+    let answered = format!(
+        "the person answered #{} (Which notice text should ship?): Picked: Connection lost",
+        asked.number
+    );
     assert_eq!(
         (settled.state, settled.reason.as_deref()),
-        (State::Done, Some("Connection lost")),
+        (State::Done, Some(answered.as_str())),
         "done, with the answer"
     );
     let carried = tasks::get(&conn, work.number).unwrap().unwrap();
@@ -379,6 +363,9 @@ fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer()
         .iter()
         .find(|s| s.agent == "ann" && s.task == Some(work.number));
     let to_ann = to_ann.expect("Ann's work starts again");
-    let carry = format!("the task blocking this one, #{}, is done", request.number);
+    let carry = format!(
+        "the task blocking this one, #{}, is done: {answered}",
+        request.number
+    );
     assert!(to_ann.text.contains(&carry), "{}", to_ann.text);
 }

@@ -132,6 +132,7 @@ export function TasksTab(props: Props) {
             task={task}
             draft={drafts[task.number] ?? { values: [], notes: '' }}
             onDraft={(d) => onDraft(task.number, d)}
+            name={name}
           />
         </div>
       </div>

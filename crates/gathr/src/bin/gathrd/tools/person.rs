@@ -31,7 +31,9 @@ pub struct AskPerson {
     form: Option<String>,
     /// For a choice: your pick first, each with a few words on it.
     choices: Option<Vec<ChoiceIn>>,
-    /// Files the person reads beside it (a design's pages, a plan), as paths in your folder.
+    /// Files the person reads beside it (a design's pages, a plan): paths in your worktree, your own
+    /// folder or Shared, relative to your worktree or absolute. At most 5, each up to 10 MB.
+    #[schemars(length(max = FILES_MOST))]
     files: Option<Vec<String>>,
     /// Supervisor only: the member's request this files. Unset, the request this turn works on.
     for_task: Option<i64>,
@@ -62,12 +64,12 @@ impl Tools {
             .path()
             .join("task-files")
             .join(gathr::ids::uuid());
-        let (paths, cwd, to) = (
+        let (paths, folders, to) = (
             ask.files.clone().unwrap_or_default(),
-            caller.cwd.clone(),
+            caller.folders.clone(),
             folder.clone(),
         );
-        let copied = tokio::task::spawn_blocking(move || copy_files(&paths, &cwd, &to)).await;
+        let copied = tokio::task::spawn_blocking(move || copy_files(&paths, &folders, &to)).await;
         let files = match copied.unwrap_or_else(|e| Err(e.to_string())) {
             Ok(files) => files,
             Err(why) => {
@@ -121,10 +123,24 @@ impl Tools {
                     request,
                 };
                 let (task, starts) = person::ask(c, a, &trace)?;
-                let said = match &task.owner {
-                    None => format!("Task #{} is on the person's Tasks list. Their answer wakes you here.", task.number),
-                    Some(lead) => format!(
-                        "{} will review request #{} as the Supervisor and pass the answer back to you.",
+                let listed = format!(
+                    "Task #{} is on the person's Tasks list. Their answer wakes you here",
+                    task.number
+                );
+                let said = match (
+                    &task.owner,
+                    task.request
+                        .map(|r| tasks::get(c, r))
+                        .transpose()?
+                        .flatten(),
+                ) {
+                    (None, None) => format!("{listed}."),
+                    (None, Some(r)) => format!(
+                        "{listed}, and reaches {}.",
+                        tasks::owner_name(c, r.giver.as_deref())?
+                    ),
+                    (Some(lead), _) => format!(
+                        "{} checks request #{} first. The person's answer comes back to you here.",
                         tasks::name_of(c, lead)?,
                         task.number
                     ),
@@ -139,15 +155,20 @@ impl Tools {
     }
 }
 
-/// Copies the named files, each inside the engine's folder, into `to`: the person reads what the
-/// agent meant even after its worktree moves on.
-fn copy_files(paths: &[String], cwd: &Path, to: &Path) -> Result<Vec<File>, String> {
+/// Copies the named files, each inside one of the folders the engine writes without asking (its
+/// worktree first, its own folder, Shared), into `to`: the person reads what the agent meant even
+/// after its worktree moves on. A relative path is read from the worktree.
+fn copy_files(paths: &[String], folders: &[PathBuf], to: &Path) -> Result<Vec<File>, String> {
     if paths.len() > FILES_MOST {
         return Err(format!("at most {FILES_MOST} files"));
     }
-    let root = cwd
+    let root = folders
+        .first()
+        .map_or(Path::new(""), PathBuf::as_path)
         .canonicalize()
         .map_err(|e| format!("your folder can't be read: {e}"))?;
+    let beside = folders.iter().skip(1).filter_map(|f| f.canonicalize().ok());
+    let roots: Vec<PathBuf> = std::iter::once(root.clone()).chain(beside).collect();
     let mut files = Vec::new();
     for (i, path) in paths.iter().enumerate() {
         let found: PathBuf = root.join(path);
@@ -155,8 +176,8 @@ fn copy_files(paths: &[String], cwd: &Path, to: &Path) -> Result<Vec<File>, Stri
             .canonicalize()
             .map_err(|_| format!("{path} isn't there"))?;
         let meta = std::fs::metadata(&found).map_err(|e| format!("{path}: {e}"))?;
-        if !found.starts_with(&root) || !meta.is_file() {
-            return Err(format!("{path} isn't a file in your folder"));
+        if !roots.iter().any(|r| found.starts_with(r)) || !meta.is_file() {
+            return Err(format!("{path} isn't a file in your folders"));
         }
         if meta.len() > FILE_BYTES_MOST {
             return Err(format!("{path} is over 10 MB"));
