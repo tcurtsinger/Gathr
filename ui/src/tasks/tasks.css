@@ -51,6 +51,13 @@
   flex-direction: column;
   gap: 24px;
 }
+.tasks-discuss {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
 .tasks-footer {
   flex: none;
   padding: 0 24px;

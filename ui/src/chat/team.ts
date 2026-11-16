@@ -23,9 +23,13 @@ export function team(state: ChatState, names: Map<string, string>): Team {
     if (t?.task == null) return undefined;
     return tasks.get(t.task)?.given_in ?? t.answers ?? undefined;
   };
-  // Turns the person's answers woke (each answered question's `heard_in`): the Supervisor answering
-  // the person, on the main line whatever task it runs on (G158). What it hands on from there is team work.
-  const heard = new Set(state.tasks.filter((t) => t.kind === 'person' && t.heard_in).map((t) => t.heard_in));
+  // Turns the person's answers and Discusses woke (each question's `heard_in`, and each Discuss's turn): the
+  // Supervisor answering the person, on the main line whatever task it runs on (G158). What it hands on from
+  // there is team work.
+  const asked = state.tasks.filter((t) => t.kind === 'person');
+  const heard = new Set(
+    asked.flatMap((t) => [t.heard_in, ...(t.answer?.discussed ?? []).map((d) => d.turn)]),
+  );
   const roots = new Map<string, string | undefined>();
   const rootOf = (turn: string): string | undefined => {
     if (roots.has(turn)) return roots.get(turn);

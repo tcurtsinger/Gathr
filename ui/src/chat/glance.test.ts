@@ -87,6 +87,15 @@ test('an agent that is not working says what the service says it waits for: held
   expect(doing(working, held).c).toBe('Working');
 });
 
+test('a lead whose question is being discussed reads as working, not as asking the person', () => {
+  const question = task(12, 'person', { kind: 'person', giver: 'a', state: 'held' });
+  const state: ChatState = { ...empty, members, turns: { t: turn('t', 'a', 'running') }, tasks: [question] };
+  const lead = (s: ChatState) => glances(s, new Map()).find((g) => g.member.agent === 'a');
+  expect([lead(state)?.standing, lead(state)?.doing]).toEqual(['working', 'Working']);
+  const back = { ...state, tasks: [{ ...question, state: 'ready' as const }] };
+  expect([lead(back)?.standing, lead(back)?.doing]).toEqual(['needs', 'Asked you a question']);
+});
+
 test('an agent whose glance reads as before keeps its object, so its panel is not drawn again', () => {
   const state: ChatState = {
     ...empty,

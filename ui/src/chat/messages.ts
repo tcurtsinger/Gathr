@@ -476,15 +476,21 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
   const answers = state.tasks
-    .filter((t) => t.kind === 'person' && t.state === 'done' && !!turn && t.heard_in === turn.id)
-    .map(
-      (t): EventLine => ({
-        kind: 'answer',
-        who: `You answered ${crew.name(t.giver) ?? 'an agent'}:`,
-        text: t.reason ?? 'Done',
-        more: `Question #${t.number}: ${t.what}`,
-        task: t.number,
-      }),
+    .filter((t) => t.kind === 'person' && !!turn)
+    .flatMap((t) =>
+      [
+        ...(t.state === 'done' && t.heard_in === turn?.id ? [['You answered', t.reason ?? 'Done']] : []),
+        // A Discuss stays at the turn it reached, wherever a later answer is heard (0065).
+        ...(t.answer?.discussed ?? []).filter((d) => d.turn === turn?.id).map((d) => ['You to', d.text]),
+      ].map(
+        ([who, text]): EventLine => ({
+          kind: 'answer',
+          who: `${who} ${crew.name(t.giver) ?? 'an agent'}:`,
+          text,
+          more: `Question #${t.number}: ${t.what}`,
+          task: t.number,
+        }),
+      ),
     );
   if (answers.length) return answers;
   const fix = m.turn ? undefined : fixed(text);

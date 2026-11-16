@@ -168,6 +168,7 @@ pub(crate) fn finish_in(
             "there's no other task #{on} to be blocked on"
         )));
     }
+    super::person::links::refuse_blocked(tx, &t, how)?;
     // A task's PR is what it's about (a review's above all, G73): a report can't move it to another.
     if let (Some(said), Some(its)) = (said.pr, t.pr)
         && said != its

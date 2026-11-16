@@ -121,7 +121,7 @@ test('the button names who needs the person and who works, and stacks their init
   const both: ChatState = {
     ...idle,
     turns: turns(turn('t1', 'a'), turn('t2', 'b'), turn('t3', 'c', { status: 'done' })),
-    tasks: [task(9, null, { kind: 'person', giver: 'c', given_in: 't3', state: 'waiting' })],
+    tasks: [task(9, null, { kind: 'person', giver: 'c', given_in: 't3', state: 'ready' })],
   };
   await screen.rerender(<Shown state={both} />);
   const name = 'Summary: Made-up Third needs you, Made-up Lead and Made-up Member working';

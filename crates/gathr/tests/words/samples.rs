@@ -89,11 +89,10 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          1. Reconnecting… (their pick): it comes back by itself\n\
          2. Connection lost\n\
          Files: notice.png\n\
-         Use ask_person with for_task 2 to file it; omit `what` to forward it unchanged. If an existing question \
-         covers it, use finish_task blocked with on_task set to that question. To answer it yourself, use \
-         finish_task done with the answer in note. When the person answers, finish #2 done with their answer in \
-         note to pass it back to Ann.\n\
-         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
+         To ask the person, use ask_person with for_task 2 and your own `what`, your pick first. If an open \
+         question of yours already asks it, use finish_task blocked with on_task set to that question: this request \
+         comes back to you with its answer. To answer it yourself, use finish_task done with the answer in note.\n\
+         If you ask the person, their answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
     ),
     (
         "request_brief",
@@ -101,11 +100,10 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "Task #3 from Ann: Which port should the dev service use?\n\
          Ann needs the person's answer. Check it's the person's call, not already answered, and the pick is sound.\n\
          Answer: words\n\
-         Use ask_person with for_task 3 to file it; omit `what` to forward it unchanged. If an existing question \
-         covers it, use finish_task blocked with on_task set to that question. To answer it yourself, use \
-         finish_task done with the answer in note. When the person answers, finish #3 done with their answer in \
-         note to pass it back to Ann.\n\
-         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
+         To ask the person, use ask_person with for_task 3 and your own `what`, your pick first. If an open \
+         question of yours already asks it, use finish_task blocked with on_task set to that question: this request \
+         comes back to you with its answer. To answer it yourself, use finish_task done with the answer in note.\n\
+         If you ask the person, their answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
     ),
     (
         "report_ask",
@@ -146,16 +144,25 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "answered",
         "answered: the agent's own question",
         "The person answered:\n\
-         - #1 Which name should the app use?: Gathr: keep it short\n\
+         - #1 Which name should the app use?: Picked: Gathr. Their words: keep it short\n\
          Continue.",
     ),
     (
         "answered",
         "answered: a member's request",
         "The person answered:\n\
-         - #4 What should the reconnect notice say?: Connection lost: and say we retry\n\
-         #4 answers the request from Ann. Use finish_task to mark #2 done and put the answer in note.\n\
+         - #4 What should the reconnect notice say?: Picked: Connection lost. Their words: and say we retry\n\
+         #4 was asked for Ann (#2): Ann has the answer.\n\
          Continue.",
+    ),
+    (
+        "answered",
+        "answered: discussed",
+        "The person wants to discuss:\n\
+         - #4 What should the reconnect notice say?: Does it retry by itself?\n\
+         #4 was asked for Ann (#2), who keeps waiting.\n\
+         #4 is off the person's list until this turn ends. Reply to them here. To change the question, ask a new one \
+         with ask_person: it takes #4's place.",
     ),
     (
         "wake",

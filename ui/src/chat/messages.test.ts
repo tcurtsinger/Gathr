@@ -475,6 +475,51 @@ test('a question no agent gave reads as Gathr’s in the turn it was given in; a
   ]);
 });
 
+test('a Discuss reads "You to Mira:" at the turn it reached, on the main line, and stays so once answered', () => {
+  const state = round();
+  // Rowan's request #3, filed by Mira as #12; the person's Discuss woke her turn on #3.
+  state.turns.file = { ...turn('file', 'mira', { task: 3, answers: 'rowan' }), position: 5 };
+  state.turns.talk = { ...turn('talk', 'mira', { task: 3, answers: 'file' }), position: 6 };
+  const talk = 'The person wants to discuss:\n- #12 Which notice text should ship?: Does it retry by itself?';
+  state.messages.push(said('talk', 'gathr', talk), said('talk', 'assistant', 'It does'));
+  const discussed = [{ text: 'Does it retry by itself?', turn: 'talk' }];
+  const question = task(12, 'mira', 'file', {
+    kind: 'person',
+    owner: null,
+    what: 'Which notice text should ship?',
+  });
+  state.tasks.push(task(3, 'mira', 'rowan', { kind: 'person_request', giver: 'rowan', state: 'held' }), {
+    ...question,
+    state: 'held',
+    heard_in: 'talk',
+    answer: { discussed },
+  });
+  const line = {
+    kind: 'answer',
+    who: 'You to Mira:',
+    text: 'Does it retry by itself?',
+    more: 'Question #12: Which notice text should ship?',
+    task: 12,
+  };
+  const lines = (items: ThreadMessageLike[], at: string) =>
+    custom(items.find((m) => m.id?.startsWith(at))).events;
+  // Mira answers the person there, not inside Rowan's thread: her reply is a main-line word with its time.
+  const mainLine = (items: ThreadMessageLike[]) => custom(byId(items, 'a-talk')).tick;
+  expect(lines(view(state).items, 'talk-gathr')).toEqual([line]);
+  expect(mainLine(view(state).items)).toBeTruthy();
+
+  // Answered later: the answer has its own turn, and the Discuss keeps its own.
+  state.turns.answered = { ...turn('answered', 'mira', { answers: 'file' }), position: 7 };
+  state.messages.push(
+    said('answered', 'gathr', 'The person answered:\n- #12 Which notice text should ship?: Picked: A'),
+  );
+  state.tasks[3] = { ...question, state: 'done', reason: 'A', heard_in: 'answered', answer: { discussed } };
+  const { items } = view(state);
+  expect(lines(items, 'talk-gathr')).toEqual([line]);
+  expect(mainLine(items)).toBeTruthy();
+  expect(lines(items, 'answered-gathr')).toEqual([{ ...line, who: 'You answered Mira:', text: 'A' }]);
+});
+
 test('a speaker is named when it changes, not on each of its blocks in a row', () => {
   const state = round();
   state.turns.again = { ...turn('again', 'kit', { task: 2 }), position: 5 };

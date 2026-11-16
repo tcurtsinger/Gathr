@@ -45,7 +45,7 @@ function Tab({ refuse = [], list = tasks }: { refuse?: Refusal[]; list?: PersonT
         onSelect={setSelected}
         drafts={drafts}
         onDraft={(n, d) => setDrafts((all) => ({ ...all, [n]: d }))}
-        name={(agent) => (agent ? 'Mira' : 'An agent')}
+        name={(agent) => (agent === 'mira' ? 'Mira' : 'An agent')}
         onOpenFile={() => {}}
         onReference={() => {}}
         onSend={async (ready) => {
@@ -128,6 +128,58 @@ test('gathrs_question_names_gathr_offers_no_recommended_and_needs_a_pick', async
   await expect
     .element(screen.getByLabelText('Sent'))
     .toHaveTextContent('[{"task":9,"pick":["Let it go on"],"text":"looks fine"}]');
+});
+
+const gathrs: PersonTask = {
+  ...ask(9, 'Let it go on?', 'choice', ['Let it go on', 'Send it back']),
+  giver: null,
+};
+
+test("the lead's pick is first and named", async () => {
+  const notice: PersonTask = {
+    ...ask(1, 'Which notice text should ship?', 'choice'),
+    choices: [{ label: 'Connection lost', detail: 'it comes back by itself' }, { label: 'Offline' }],
+  };
+  // A giver since deleted reads by the window's fallback name.
+  const gone: PersonTask = { ...ask(2, 'Keep the draft?', 'choice', ['Keep it', 'Drop it']), giver: 'gone' };
+  const screen = await render(<Tab list={[notice, gone, gathrs]} />);
+  await expect
+    .element(screen.getByRole('button', { name: /Connection lost/ }))
+    .toHaveAccessibleName(/Mira's pick · it comes back by itself/);
+  await expect.element(screen.getByRole('button', { name: /Offline/ })).not.toHaveAccessibleName(/pick/);
+  await screen.getByRole('button', { name: 'Next' }).click();
+  await expect
+    .element(screen.getByRole('button', { name: /Keep it/ }))
+    .toHaveAccessibleName(/An agent's pick/);
+  await screen.getByRole('button', { name: 'Next' }).click();
+  await expect.element(screen.getByRole('button', { name: /Let it go on/ })).not.toHaveAccessibleName(/pick/);
+});
+
+test('Discuss sends the message alone', async () => {
+  const screen = await render(<Tab list={[tasks[0]]} />);
+  await screen.getByRole('button', { name: /Start fresh/ }).click();
+  await screen.getByRole('switch', { name: 'Discuss' }).click();
+  await expect.element(screen.getByRole('button', { name: /Start fresh/ })).not.toBeInTheDocument();
+  const message = screen.getByRole('textbox', { name: /Your message/ });
+  await expect.element(message).toBeRequired();
+  await expect.element(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+  // Off again, the pick staged before is still picked.
+  await screen.getByRole('switch', { name: 'Discuss' }).click();
+  await expect
+    .element(screen.getByRole('button', { name: /Start fresh/ }))
+    .toHaveAttribute('aria-pressed', 'true');
+  await screen.getByRole('switch', { name: 'Discuss' }).click();
+  await message.fill('Does it retry by itself?');
+  await screen.getByRole('button', { name: 'Send' }).click();
+  await expect
+    .element(screen.getByLabelText('Sent'))
+    .toHaveTextContent('[{"task":1,"discuss":true,"text":"Does it retry by itself?"}]');
+});
+
+test("Gathr's own question has no Discuss", async () => {
+  const screen = await render(<Tab list={[gathrs]} />);
+  await expect.element(screen.getByRole('button', { name: /Let it go on/ })).toBeVisible();
+  await expect.element(screen.getByRole('switch')).not.toBeInTheDocument();
 });
 
 test('Send shows the first refused question, still open, with why', async () => {

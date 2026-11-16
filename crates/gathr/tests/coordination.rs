@@ -373,7 +373,7 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
     let need = json!({ "what": "Ship it today?", "form": "yesno" });
     let routed = text(&call_tool(port, &ann_token, "ask_person", need));
     assert!(
-        routed.starts_with("Lead will review request #3 as the Supervisor"),
+        routed.starts_with("Lead checks request #3 first."),
         "{routed}"
     );
     let open = team.service.call("GET", "/api/person-tasks").json();
@@ -436,7 +436,9 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
             said(h).is_some()
         });
     assert!(
-        said(&history).unwrap().contains("- #1 Which notice?: Long"),
+        said(&history)
+            .unwrap()
+            .contains("- #1 Which notice?: Picked: Long"),
         "{history}"
     );
 }

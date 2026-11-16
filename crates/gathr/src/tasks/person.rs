@@ -1,7 +1,8 @@
 //! The person's tasks (F9, docs/decisions/0010-coordination-as-state.md). Only a chat's Supervisor
 //! gives them: a member's ask reaches the Supervisor first, as a `person_request` it checks, then
-//! files, folds into one the person already has, or answers itself. The person's answers go back to
-//! the Supervisor as they're sent, and from there to the member who needed them.
+//! files in its own words, folds into one the person already has, or answers itself. The person's
+//! answer settles the request it was filed for, so its member hears at once, and the Supervisor
+//! hears too (0065).
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,8 @@ use crate::event::Event;
 use crate::ids::now_us;
 use crate::team::Role;
 use crate::words::Opened;
+
+pub(super) mod links;
 
 /// The most choices a question offers, and the longest label: picked at a glance.
 const CHOICES_MOST: usize = 8;
@@ -88,7 +91,7 @@ pub struct Ask<'a> {
     pub giver: &'a str,
     pub given_in: Option<&'a str>,
     pub parent: Option<i64>,
-    /// None only with `request`: the request is filed as it is.
+    /// Refused when none: a request is filed in the lead's own words.
     pub what: Option<&'a str>,
     pub why: Option<&'a str>,
     /// None: `choice` with choices, else `text` for a question, else `done`.
@@ -110,6 +113,9 @@ pub struct Answer {
     #[serde(default)]
     pub done: bool,
     pub text: Option<String>,
+    /// The person's words go to the lead instead, and the question waits for its reply (0065).
+    #[serde(default)]
+    pub discuss: bool,
 }
 
 /// Files the ask for the person when the giver is the chat's lead (its Supervisor, or the chat's only
@@ -124,7 +130,12 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
     };
     let what = match (a.what.map(str::trim).filter(|w| !w.is_empty()), &from) {
         (Some(what), _) => what.to_string(),
-        (None, Some(r)) => r.what.clone(),
+        (None, Some(r)) => {
+            return Err(refused(format!(
+                "Write `what` in your own words: request #{} isn't sent to the person as it is",
+                r.number
+            )));
+        }
         (None, None) => return Err(refused("say `what` the person is asked")),
     };
     if what.contains('\n') || what.chars().count() > WHAT_MOST {
@@ -132,16 +143,14 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
             "`what` is one line of 1 to {WHAT_MOST} characters"
         )));
     }
-    // Without `what`, the request goes to the person as the member wrote it.
-    let (why, choices, form) = match (&from, a.what.is_none()) {
-        (Some(r), true) => (r.why.clone(), r.choices.clone(), r.form),
-        _ => (a.why.map(String::from), a.choices, a.form),
-    };
-    let form = form.unwrap_or(match (choices.is_empty(), what.ends_with('?')) {
-        (false, _) => Form::Choice,
-        (true, true) => Form::Text,
-        (true, false) => Form::Done,
-    });
+    let (why, choices) = (a.why, a.choices);
+    let form = a
+        .form
+        .unwrap_or(match (choices.is_empty(), what.ends_with('?')) {
+            (false, _) => Form::Choice,
+            (true, true) => Form::Text,
+            (true, false) => Form::Done,
+        });
     check_choices(form, &choices)?;
     let mut files = a.files;
     if files.is_empty()
@@ -167,7 +176,7 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
             a.parent,
             kind.as_str(),
             what,
-            why.as_deref().map(str::trim).filter(|w| !w.is_empty()),
+            why.map(str::trim).filter(|w| !w.is_empty()),
             form.as_str(),
             (!choices.is_empty()).then(|| json!(choices).to_string()),
             (!files.is_empty()).then(|| stored(&files)),
@@ -177,6 +186,9 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
     )?;
     let number = tx.last_insert_rowid();
     crate::asks::inherit(&tx, number)?;
+    if to_person {
+        links::replace(&tx, number, trace)?;
+    }
     // One question at a time for an ask that may get a plan (0062, H3.1).
     if to_person && let Some(q) = crate::plans::held_question(&tx, number)? {
         return Err(refused(format!(
@@ -262,7 +274,7 @@ pub fn answer_as(
 ) -> Result<Sent, Error> {
     let tx = conn.transaction()?;
     let mut sent = Sent::default();
-    let mut numbers: Vec<i64> = Vec::new();
+    let (mut numbers, mut talk): (Vec<i64>, Vec<(i64, String)>) = (Vec::new(), Vec::new());
     for a in answers {
         if numbers.contains(&a.task) {
             sent.refused
@@ -270,28 +282,43 @@ pub fn answer_as(
             continue;
         }
         match answer_one(&tx, a, by, trace) {
-            Ok(()) => {
+            Ok(Some(words)) => {
                 numbers.push(a.task);
+                talk.push((a.task, words));
+            }
+            Ok(None) => {
+                numbers.push(a.task);
+                sent.starts
+                    .extend(links::settle_request(&tx, a.task, trace)?);
                 let pick = a.pick.first().map(String::as_str);
                 sent.starts
                     .extend(crate::changes::answered(&tx, a.task, pick, trace)?);
             }
             Err(Error::Refused(why)) => {
-                Event::point("gathr.task.answer")
+                let mut event = Event::point("gathr.task.answer")
                     .trace(trace)
                     .task(a.task)
                     .error("refused")
                     .attr("why", why.as_str())
-                    .attr("by", by)
-                    .insert(&tx)?;
+                    .attr("by", by);
+                let sql = "SELECT chat_id FROM tasks WHERE number = ?1";
+                let chat: Option<String> = tx.query_row(sql, [a.task], |r| r.get(0)).optional()?;
+                if let Some(chat) = &chat {
+                    event = event.chat(chat);
+                }
+                event.insert(&tx)?;
                 sent.refused.push((a.task, why));
             }
             Err(e) => return Err(e),
         }
     }
     sent.starts.extend(heard(&tx, &numbers, None, trace)?);
-    for &n in &numbers {
-        sent.starts.extend(cascade(&tx, n, trace)?);
+    for (q, words) in &talk {
+        links::discuss(&tx, *q, words, trace)?;
+    }
+    // Nothing waits on a discussed question: it isn't answered.
+    for n in numbers.iter().filter(|&&n| talk.iter().all(|t| t.0 != n)) {
+        sent.starts.extend(cascade(&tx, *n, trace)?);
     }
     sent.answered = numbers
         .iter()
@@ -301,7 +328,13 @@ pub fn answer_as(
     Ok(sent)
 }
 
-fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Result<(), Error> {
+/// Answers the task, or with Discuss holds it off the person's list: then its words.
+fn answer_one(
+    tx: &Transaction,
+    a: &Answer,
+    by: Option<&str>,
+    trace: &str,
+) -> Result<Option<String>, Error> {
     let t = read(tx, a.task).map_err(|_| refused(format!("there's no task #{}", a.task)))?;
     if t.kind != Kind::Person {
         return Err(refused(format!("#{} isn't yours to answer", a.task)));
@@ -323,6 +356,22 @@ fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Re
             a.task
         )));
     }
+    if a.discuss {
+        let words = a.text.as_deref().map(str::trim).filter(|w| !w.is_empty());
+        let words = words.ok_or_else(|| refused(format!("Discuss #{} with a message", a.task)))?;
+        if !a.pick.is_empty() || a.yes.is_some() || a.done {
+            let why = format!("Discuss #{} with a message alone, not a choice", a.task);
+            return Err(refused(why));
+        }
+        set(
+            tx,
+            a.task,
+            State::Held,
+            Some(&format!("Discuss: {words}")),
+            trace,
+        )?;
+        return Ok(Some(words.to_string()));
+    }
     let mut line = answer_line(&t, a)?;
     if let Some(agent) = by {
         let member = match t.request {
@@ -334,7 +383,8 @@ fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Re
             .any(|g| g.as_deref() == Some(agent))
         {
             return Err(refused(format!(
-                "#{} is its own question to the person: an agent never answers its own question to the person,                  the person does",
+                "#{} is its own question to the person: an agent never answers its own question to the person, \
+                 the person does",
                 a.task
             )));
         }
@@ -343,12 +393,17 @@ fn answer_one(tx: &Transaction, a: &Answer, by: Option<&str>, trace: &str) -> Re
             words::name_of(tx, agent)?
         );
     }
-    let sent = json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text, "by": by });
+    let mut sent =
+        json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text, "by": by });
+    if let Some(talk) = t.answer.as_ref().and_then(|was| was.get("discussed")) {
+        sent["discussed"] = talk.clone();
+    }
     tx.execute(
         "UPDATE tasks SET answer = ?2 WHERE number = ?1",
         params![a.task, sent.to_string()],
     )?;
-    set(tx, a.task, State::Done, Some(&line), trace)
+    set(tx, a.task, State::Done, Some(&line), trace)?;
+    Ok(None)
 }
 
 /// One of the person's open tasks, with its chat's title and the member it was asked for.
@@ -385,9 +440,9 @@ pub fn open(conn: &Connection, chat: Option<&str>) -> Result<Vec<Open>, Error> {
         .collect()
 }
 
-/// The person's tasks settled (answered or cancelled): each giver hears back once on those it gave
-/// in one turn, on its own task from that turn while it's open, and is told to pass an answer back
-/// to the member who asked. A giver that cancelled its own isn't told.
+/// The person's tasks answered, cancelled or discussed: each giver hears back once on those it gave
+/// in one turn, on its own task from that turn while it's open. A giver that cancelled its own
+/// isn't told.
 pub(super) fn heard(
     tx: &Transaction,
     numbers: &[i64],
@@ -460,11 +515,10 @@ pub(super) fn request_lines(t: &Task, member: &str) -> Vec<String> {
     )];
     lines.extend(form_lines(t));
     lines.push(format!(
-        "Use ask_person with for_task {n} to file it; omit `what` to forward it unchanged. If an existing question \
-            covers it, use finish_task blocked with on_task set to that question. To answer it yourself, use \
-            finish_task done with the answer in note. When the person answers, finish #{n} done with their answer in \
-            note to pass it back to {member}.",
-        n = t.number
+        "To ask the person, use ask_person with for_task {} and your own `what`, your pick first. If an open \
+         question of yours already asks it, use finish_task blocked with on_task set to that question: this request \
+         comes back to you with its answer. To answer it yourself, use finish_task done with the answer in note.",
+        t.number
     ));
     lines
 }
@@ -489,28 +543,59 @@ fn form_lines(t: &Task) -> Vec<String> {
     lines
 }
 
+/// Answers and the person's messages apart: a Discuss is never read as an answer.
 fn heard_words(conn: &Connection, settled: &[Task]) -> Result<String, Error> {
-    let mut lines = vec!["The person answered:".to_string()];
-    for t in settled {
+    let (talk, said): (Vec<&Task>, Vec<&Task>) =
+        settled.iter().partition(|t| t.state == State::Held);
+    let mut lines = Vec::new();
+    for (i, t) in said.iter().enumerate() {
+        if i == 0 {
+            lines.push("The person answered:".to_string());
+        }
         let how = match (t.state, &t.reason) {
-            (State::Done, Some(line)) => line.clone(),
+            (State::Done, _) => links::answer_words(conn, t)?,
             (state, Some(why)) => format!("{} ({why})", state.as_str()),
             (state, None) => state.as_str().to_string(),
         };
         lines.push(format!("- #{} {}: {how}", t.number, t.what));
     }
+    for (i, t) in talk.iter().enumerate() {
+        if i == 0 {
+            lines.push("The person wants to discuss:".to_string());
+        }
+        let words = t.reason.as_deref().unwrap_or_default();
+        let words = words.strip_prefix("Discuss: ").unwrap_or(words);
+        lines.push(format!("- #{} {}: {words}", t.number, t.what));
+    }
     for t in settled {
         let Some(r) = t.request else { continue };
-        let asker = match read(conn, r)?.giver {
-            Some(member) => words::name_of(conn, &member)?,
+        let request = read(conn, r)?;
+        let member = match &request.giver {
+            Some(member) => words::name_of(conn, member)?,
             None => "the member".to_string(),
         };
+        lines.push(match (request.state, t.state) {
+            (State::Cancelled, _) => continue,
+            (_, State::Done) => format!(
+                "#{} was asked for {member} (#{r}): {member} has the answer.",
+                t.number
+            ),
+            _ => format!(
+                "#{} was asked for {member} (#{r}), who keeps waiting.",
+                t.number
+            ),
+        });
+    }
+    for t in &talk {
         lines.push(format!(
-            "#{} answers the request from {asker}. Use finish_task to mark #{r} done and put the answer in note.",
-            t.number
+            "#{q} is off the person's list until this turn ends. Reply to them here. To change the question, ask a \
+             new one with ask_person: it takes #{q}'s place.",
+            q = t.number
         ));
     }
-    lines.push("Continue.".to_string());
+    if !said.is_empty() {
+        lines.push("Continue.".to_string());
+    }
     Ok(lines.join("\n"))
 }
 
@@ -521,13 +606,7 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
     if let Some(wrong) = a.pick.iter().find(|p| !labels.contains(&p.as_str())) {
         return Err(refused(format!("#{} has no choice {wrong}", t.number)));
     }
-    let picked = match form {
-        Form::Done => a.done.then(|| "Done".to_string()),
-        Form::Yesno => a.yes.map(|y| if y { "Yes" } else { "No" }.to_string()),
-        Form::Choice if a.pick.len() == 1 => Some(a.pick[0].clone()),
-        Form::Choices if !a.pick.is_empty() => Some(a.pick.join(", ")),
-        _ => None,
-    };
+    let picked = picked(form, &a.pick, a.yes, a.done);
     let text = a.text.as_deref().map(str::trim).filter(|t| !t.is_empty());
     match (picked, text) {
         (Some(p), Some(words)) => Ok(format!("{p}: {words}")),
@@ -538,6 +617,17 @@ fn answer_line(t: &Task, a: &Answer) -> Result<String, Error> {
             t.number,
             form.needs()
         ))),
+    }
+}
+
+/// What a pick, yes or done answers for the form: none when it answers nothing.
+fn picked(form: Form, pick: &[String], yes: Option<bool>, done: bool) -> Option<String> {
+    match form {
+        Form::Done => done.then(|| "Done".to_string()),
+        Form::Yesno => yes.map(|y| if y { "Yes" } else { "No" }.to_string()),
+        Form::Choice if pick.len() == 1 => Some(pick[0].clone()),
+        Form::Choices if !pick.is_empty() => Some(pick.join(", ")),
+        _ => None,
     }
 }
 

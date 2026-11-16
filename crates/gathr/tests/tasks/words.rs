@@ -142,17 +142,20 @@ fn a_members_requests_brief_its_lead_and_the_answers_come_back_as_kept() {
     let (_, starts) = person::ask(&mut conn, words_only, T).unwrap();
     sampled(&conn, "request_brief: text", &starts[0], request);
 
-    // The lead files the first as it is, and the person answers it.
+    // The lead files the first in its words; the person discusses it, then answers it.
     turn(&conn, "lead-1", "lead", Some(asked.number), "running");
     let filing = Ask {
         chat: "c",
         giver: "lead",
         given_in: Some("lead-1"),
         parent: None,
-        what: None,
+        what: Some("What should the reconnect notice say?"),
         why: None,
         form: None,
-        choices: Vec::new(),
+        choices: vec![
+            choice("Connection lost", None),
+            choice("Reconnecting…", None),
+        ],
         files: Vec::new(),
         request: Some(asked.number),
     };
@@ -166,6 +169,21 @@ fn a_members_requests_brief_its_lead_and_the_answers_come_back_as_kept() {
         carries_on: None,
     };
     tasks::turn_moved(&mut conn, &moved, "done", None).unwrap();
+    let discuss = Answer {
+        task: filed.number,
+        discuss: true,
+        text: Some("Does it retry by itself?".into()),
+        ..Default::default()
+    };
+    let sent = person::answer(&mut conn, &[discuss], T).unwrap();
+    let answered = ("answered", words::ANSWERED);
+    sampled(&conn, "answered: discussed", &sent.starts[0], answered);
+    let replied = tasks::Moved {
+        turn: &sent.starts[0].turn,
+        ..moved
+    };
+    tasks::turn_moved(&mut conn, &replied, "running", None).unwrap();
+    tasks::turn_moved(&mut conn, &replied, "done", None).unwrap();
     let answer = Answer {
         task: filed.number,
         pick: vec!["Connection lost".into()],
@@ -173,7 +191,7 @@ fn a_members_requests_brief_its_lead_and_the_answers_come_back_as_kept() {
         ..Default::default()
     };
     let sent = person::answer(&mut conn, &[answer], T).unwrap();
-    let answered = ("answered", words::ANSWERED);
+    assert!(sent.refused.is_empty(), "{sent:?}");
     sampled(
         &conn,
         "answered: a member's request",

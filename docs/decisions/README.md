@@ -74,3 +74,4 @@ fails in CI when the two differ.
 | 0062 | [A plan is a checked record, and Approve hands it out](0062-a-plan-is-checked-and-approve-hands-it-out.md) | accepted | yes |
 | 0063 | [Building waits until a new ask's plan is approved; a repair goes](0063-building-waits-for-a-new-asks-plan.md) | accepted | yes |
 | 0064 | [A change far past its Fix or its part stops and asks](0064-a-change-far-past-its-fix-or-its-part-stops-and-asks.md) | accepted | yes |
+| 0065 | [Questions are in the lead's words, and an answer reaches the member at once](0065-questions-in-the-leads-words.md) | accepted | yes |
