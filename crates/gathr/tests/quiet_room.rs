@@ -292,15 +292,19 @@ fn a_silent_turn_shows_and_its_lead_is_told_once() {
 }
 
 /// The recording that asks for an approval, held once the answer arrives until `go` exists: the
-/// turn then runs on with nothing said.
-fn approval_then_held(dir: &Path) -> PathBuf {
+/// turn then runs on with nothing said. With `start`, the engine is that slow to start once it has
+/// the message: a `sleep` row of that many milliseconds.
+fn approval_then_held(dir: &Path, start: Option<&str>) -> PathBuf {
     let frames = std::fs::read_to_string(recording("approval")).unwrap();
     let rows: Vec<&str> = frames.lines().collect();
     let answer = rows
         .iter()
         .rposition(|row| row.starts_with(r#"{"dir":"in""#));
     let answer = answer.expect("the recording takes an answer");
-    let mut held = rows[..=answer].to_vec();
+    let mut held = rows[..1].to_vec();
+    let slow = start.map(|ms| format!(r#"{{"dir":"sleep","line":"{ms}"}}"#));
+    held.extend(slow.as_deref());
+    held.extend(&rows[1..=answer]);
     held.push(r#"{"dir":"hold"}"#);
     held.extend(&rows[answer + 1..]);
     let path = dir.join("approval-then-held.jsonl");
@@ -312,16 +316,31 @@ fn approval_then_held(dir: &Path) -> PathBuf {
 /// Answered late, its silence is counted from the answer, not from before it asked.
 #[test]
 fn an_approval_answered_late_doesnt_flag_its_turn() {
+    approval_answered_late(None);
+}
+
+/// The same, with an engine slower to start than the stall time: Ann's turn is flagged before it
+/// asks, so her lead is woken and its turn, on the same recording, goes silent while hers waits.
+/// Only Ann's turn is looked at.
+#[test]
+fn an_approval_answered_late_after_a_slow_start_doesnt_flag_its_turn() {
+    approval_answered_late(Some("300"));
+}
+
+fn approval_answered_late(start: Option<&str>) {
     let data = TempDir::new();
     let stall = env(&[("GATHR_STALL_AFTER_MS", "200")]);
-    let (service, chat, _) = common::team(&data.0, &approval_then_held(&data.0), &stall);
+    let replay = approval_then_held(&data.0, start);
+    let (service, chat, _) = common::team(&data.0, &replay, &stall);
     let ann = member(&service, &chat, "Ann");
     let path = format!("/api/chats/{chat}/messages");
     let sent = service.send("POST", &path, json!({ "text": "Write it", "agent": ann }));
     assert_eq!(sent.status, 200, "{}", sent.body);
-    let history = service.wait_for(&chat, 20, "Ann's turn to ask", |h| {
-        !h["approvals"].as_array().unwrap().is_empty()
-    });
+    let anns = |h: &Value| {
+        let approvals = h["approvals"].as_array().cloned().unwrap_or_default();
+        approvals.into_iter().find(|a| a["agent"] == ann)
+    };
+    let history = service.wait_for(&chat, 20, "Ann's turn to ask", |h| anns(h).is_some());
 
     // The limit is 400 ms while a tool is open: a second on, the wait is well past it.
     let seen = gathr::ids::now_us();
@@ -330,10 +349,13 @@ fn an_approval_answered_late_doesnt_flag_its_turn() {
         (said["at_us"].as_i64()? >= seen + 1_000_000).then_some(said)
     });
     let lines = asked["lines"].as_array().unwrap();
-    assert!(lines.iter().any(|l| l["kind"] == "approval"), "{asked}");
+    let asks = |l: &Value| l["kind"] == "approval" && l["agent"] == ann;
+    assert!(lines.iter().any(asks), "{asked}");
     let silent = |said: &Value| {
         let lines = said["lines"].as_array().cloned().unwrap_or_default();
-        lines.into_iter().find(|l| l["silent_us"].is_i64())
+        lines
+            .into_iter()
+            .find(|l| l["agent"] == ann && l["silent_us"].is_i64())
     };
     assert_eq!(
         silent(&asked),
@@ -341,9 +363,11 @@ fn an_approval_answered_late_doesnt_flag_its_turn() {
         "silent while it waits on the person: {asked}"
     );
     // From when it was seen to ask: an engine slow to start may have been flagged before it asked.
+    // Only the flag: its lead is told when the writer gets to it, which may be after `seen`.
     let flags = format!(
-        "SELECT name, attrs FROM event_log WHERE ts >= {seen}
-         AND name IN ('gathr.turn.stalled', 'gathr.turn.silent_told')"
+        "SELECT name, attrs FROM event_log WHERE ts >= {seen} AND name = 'gathr.turn.stalled'
+         AND json_extract(attrs, '$.\"gen_ai.agent.id\"') = '{}'",
+        ann.as_str().unwrap()
     );
     assert_eq!(
         rows(&data.0, &flags),
@@ -352,8 +376,8 @@ fn an_approval_answered_late_doesnt_flag_its_turn() {
     );
 
     let answered = gathr::ids::now_us();
-    let approval = history["approvals"][0]["request_id"].as_str().unwrap();
-    let to = format!("/api/chats/{chat}/approvals/{approval}");
+    let approval = anns(&history).unwrap()["request_id"].clone();
+    let to = format!("/api/chats/{chat}/approvals/{}", approval.as_str().unwrap());
     let allowed = service.send("POST", &to, json!({ "allow": true }));
     assert_eq!(allowed.status, 200, "{}", allowed.body);
     // The engine holds from here: the turn does go silent, and only from the answer on.
