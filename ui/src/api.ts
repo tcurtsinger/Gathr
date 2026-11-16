@@ -164,6 +164,81 @@ export interface Task {
   notes?: ReviewNote[];
   /** The ask it serves: the person's message that started it (0061). */
   ask?: string;
+  /** A plan check: the version it checks (0062). */
+  checks?: number;
+  /** The plan whose part made it. */
+  plan?: number;
+}
+
+/** The lead's plan for an ask (0062): its state is read from its newest version and that version's check. */
+export interface PlanSummary {
+  id: number;
+  ask: string;
+  /** The newest version's. */
+  title: string;
+  /** The Supervisor that wrote it, by id. */
+  lead: string;
+  state: 'checking' | 'waiting' | 'revising' | 'approved' | 'dropped';
+  versions: PlanVersionSummary[];
+}
+
+export interface PlanVersionSummary {
+  id: number;
+  n: number;
+  /** The lead's message that is this version. */
+  message: string;
+  parts: number;
+  /** Gathr's line saying how its check ended. */
+  check_line: string | null;
+  /** When it reached the person. */
+  sent: string | null;
+  decided: 'approved' | 'sent_back' | 'dropped' | null;
+  /** Gathr's line for Approve or Drop, or the message of the lead's turn a send-back queued. */
+  decided_line: string | null;
+}
+
+/** A plan whole, as `GET /api/plans/{plan}` answers. */
+export interface Plan extends Omit<PlanSummary, 'versions'> {
+  /** The ask's message. */
+  asked: string | null;
+  questions: { number: number; what: string; answer: string | null }[];
+  versions: PlanVersion[];
+}
+
+export interface PlanVersion extends Omit<PlanVersionSummary, 'parts'> {
+  title: string;
+  text: string;
+  created: string;
+  /** The person's words when it was sent back. */
+  words: string | null;
+  answers: { note: number; changed: boolean; why: string }[];
+  check: {
+    task: number;
+    by: string | null;
+    state: TaskState;
+    outcome: 'agrees' | 'findings' | 'unfinished' | 'late' | null;
+    notes: { id: number; kind: ReviewNote['kind']; file: string | null; says: string }[];
+  } | null;
+  parts: PlanPart[];
+}
+
+/** A part of a version: a complete task, which Approve makes word for word. */
+export interface PlanPart {
+  n: number;
+  /** The agent it is for, by id. */
+  owner: string;
+  what: string;
+  why: string;
+  done: string;
+  proof: string;
+  where: string;
+  size: string;
+  lines: number;
+  /** Earlier parts it starts after, by number, and tasks of the chat. */
+  after: number[];
+  after_tasks: number[];
+  /** The task Approve made of it. */
+  task: number | null;
 }
 
 /** The person's ask in a team chat, named by the message that started it, and its size (0061). */
@@ -513,7 +588,18 @@ export const api = {
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) =>
-    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[] }>('GET', `/api/chats/${chat}/tasks`),
+    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[] }>(
+      'GET',
+      `/api/chats/${chat}/tasks`,
+    ),
+  plan: (plan: number) => call<Plan>('GET', `/api/plans/${plan}`),
+  // Each answers the plan's summary.
+  approvePlan: (plan: number, version: number) =>
+    call<PlanSummary>('POST', `/api/plans/${plan}/approve`, { version }),
+  sendBackPlan: (plan: number, version: number, words: string) =>
+    call<PlanSummary>('POST', `/api/plans/${plan}/send-back`, { version, words }),
+  dropPlan: (plan: number, version: number) =>
+    call<PlanSummary>('POST', `/api/plans/${plan}/drop`, { version }),
   waiting: (chat: string) => call<Waiting>('GET', `/api/chats/${chat}/waiting`),
   /** The person's open questions, and agents' stale tasks across chats. */
   personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),

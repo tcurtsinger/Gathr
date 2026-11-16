@@ -26,12 +26,16 @@ pub struct Ask {
     pub sized_in: Option<String>,
 }
 
-/// An ask has open work while an agent's task of it isn't done or cancelled, or a turn of it is
-/// queued or running. The person's own questions don't count: Gathr never stale-cancels them.
+/// An ask has open work while an agent's task of it isn't done or cancelled, a turn of it is
+/// queued or running, or its plan is open: checked, waiting on the person or sent back (0062). The
+/// person's own questions don't count: Gathr never stale-cancels them.
 const OPEN: &str = "(EXISTS (SELECT 1 FROM tasks t WHERE t.ask_id = a.id AND t.owner IS NOT NULL
          AND t.state NOT IN ('done', 'cancelled'))
      OR EXISTS (SELECT 1 FROM turns u WHERE u.ask_id = a.id
-         AND u.status IN ('queued', 'waiting_sign_in', 'running')))";
+         AND u.status IN ('queued', 'waiting_sign_in', 'running'))
+     OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.ask_id = a.id
+         AND (v.decided IS NULL OR v.decided = 'sent_back')
+         AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
 const ASK: &str = "SELECT a.id, m.body, a.size, a.sized_by, a.sized_in FROM asks a LEFT JOIN messages m ON m.id = a.id";
 
@@ -246,16 +250,34 @@ fn split(
         tx.query_row("SELECT size FROM asks WHERE id = ?1", [&j.from], |r| {
             r.get(0)
         })?;
-    tx.execute(
-        "INSERT INTO asks (id, chat_id, size, sized_by, sized_in, sized_ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![message, s.chat, s.size, s.agent, turn, now_us()],
-    )?;
     let opened: bool = tx.query_row(
         "SELECT task IS NULL AND NOT EXISTS (SELECT 1 FROM messages WHERE turn_id = ?1 AND rowid < ?2)
          FROM turns WHERE id = ?1",
         params![j.turn, j.rowid],
         |r| r.get(0),
     )?;
+    // A plan, its check and its tasks stay with its ask (0062).
+    let wrote: Option<i64> = match opened {
+        true => tx
+            .query_row(
+                "SELECT plan_id FROM plan_versions WHERE turn_id = ?1 LIMIT 1",
+                [&j.turn],
+                |r| r.get(0),
+            )
+            .optional()?,
+        false => None,
+    };
+    if let Some(plan) = wrote {
+        return Err(refused(format!(
+            "Message {message}'s turn wrote plan #{plan}, which belongs to its ask: it can't be split off."
+        )));
+    }
+    tx.execute(
+        "INSERT INTO asks (id, chat_id, size, sized_by, sized_in, sized_ts) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![message, s.chat, s.size, s.agent, turn, now_us()],
+    )?;
+    let planned =
+        "AND checks IS NULL AND number NOT IN (SELECT task FROM plan_parts WHERE task IS NOT NULL)";
     let tasks = match opened {
         true => {
             tx.execute(
@@ -263,12 +285,14 @@ fn split(
                 [&j.turn, message],
             )?;
             tx.execute(
-                "UPDATE tasks SET ask_id = ?2 WHERE given_in = ?1 AND ask_id = ?3",
+                &format!("UPDATE tasks SET ask_id = ?2 WHERE given_in = ?1 AND ask_id = ?3 {planned}"),
                 [&j.turn, message, &j.from],
             )?
         }
         false => tx.execute(
-            "UPDATE tasks SET ask_id = ?2 WHERE given_in = ?1 AND created_ts >= ?4 AND ask_id = ?3",
+            &format!(
+                "UPDATE tasks SET ask_id = ?2 WHERE given_in = ?1 AND created_ts >= ?4 AND ask_id = ?3 {planned}"
+            ),
             params![j.turn, message, j.from, j.ts],
         )?,
     };

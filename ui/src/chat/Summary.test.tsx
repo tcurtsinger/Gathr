@@ -161,10 +161,10 @@ test('the plan lists the current round: each step, who has it, who waits on the 
   };
   const screen = await render(<Shown state={state} />);
   await screen.getByRole('button', { name: /^Summary/ }).click();
-  const plan = page.getByRole('region', { name: 'Plan' });
-  await expect.element(plan.getByRole('heading')).toHaveTextContent('Plan1 of 6 done');
+  const plan = page.getByRole('region', { name: 'Round' });
+  await expect.element(plan.getByRole('heading')).toHaveTextContent('Round1 of 6 done');
   await expect
-    .element(plan.getByRole('progressbar', { name: 'Plan progress' }))
+    .element(plan.getByRole('progressbar', { name: 'Round progress' }))
     .toHaveAttribute('aria-valuenow', '1');
   expect(
     plan

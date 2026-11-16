@@ -20,7 +20,7 @@ import { useFound, useLatest } from './found';
 import type { Custom, SendFailure, TurnNotice } from './messages';
 import { useOlder } from './older';
 import type { Approval } from './state';
-import { Agreed, Events, Exchange, FoundContext, Speaker, WorkRow } from './TurnParts';
+import { Agreed, Events, Exchange, FoundContext, PlanChip, Speaker, WorkRow } from './TurnParts';
 import { roleName } from './team';
 import './thread.css';
 
@@ -38,6 +38,8 @@ export interface Actions {
   openTask: (task: number) => void;
   /** Opens an agent's panel in the workspace. */
   openAgent: (agent: string) => void;
+  /** Opens a plan's tab in the workspace at a version (0062). */
+  openPlan?: (plan: number, version: number) => void;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
@@ -159,6 +161,7 @@ export function useStable(actions: Actions): Actions {
       approve: (request, allow) => latest.current.approve(request, allow),
       openTask: (task) => latest.current.openTask(task),
       openAgent: (agent) => latest.current.openAgent(agent),
+      openPlan: (plan, version) => latest.current.openPlan?.(plan, version),
     }),
     [],
   );
@@ -201,6 +204,7 @@ function SystemItem() {
     <Events
       events={useAuiState(custom).events ?? []}
       onOpenTask={actions.openTask}
+      onOpenPlan={actions.openPlan}
       onReference={actions.reference}
     />
   );
@@ -240,7 +244,7 @@ const parts = { Text: TextPart };
 
 function AssistantMessage() {
   const own = useAuiState(custom);
-  const { agent, by, role, on, work, notice, approvals, agreed } = own;
+  const { agent, by, role, on, work, notice, approvals, agreed, plan } = own;
   const actions = useActions();
   if (own.exchange)
     return (
@@ -267,6 +271,13 @@ function AssistantMessage() {
         />
       )}
       {work && <WorkRow work={work} onOpenTask={actions.openTask} />}
+      {plan && (
+        <PlanChip
+          version={plan.version}
+          parts={plan.parts}
+          onOpen={() => actions.openPlan?.(plan.plan, plan.version)}
+        />
+      )}
       <div className="reply-body">
         <MessagePrimitive.Parts components={parts} />
       </div>

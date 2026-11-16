@@ -56,7 +56,7 @@ pub fn sized(size: Option<&str>, lines: Option<i64>) -> Result<Option<(&str, i64
 
 /// A task's title and brief as they would be saved: its title, then a review's fields, then what a
 /// work task lacks, then each field's length, then its lines.
-pub(super) fn checked(kind: Kind, what: &str, b: &Brief) -> Result<(), Error> {
+pub(crate) fn checked(kind: Kind, what: &str, b: &Brief) -> Result<(), Error> {
     let what = what.trim();
     if what.is_empty() || what.contains('\n') {
         return Err(refused(format!(
@@ -138,9 +138,12 @@ pub(super) fn lines(t: &Task) -> Vec<String> {
     lines
 }
 
-/// The words a task's brief is, by its kind.
-pub(super) fn opened(kind: Kind) -> Opened {
-    match kind {
+/// The words a task's brief is, by its kind; a plan check's are its own (0062).
+pub(super) fn opened(t: &Task) -> Opened {
+    if t.checks.is_some() {
+        return Opened::PlanCheck;
+    }
+    match t.kind {
         Kind::Review => Opened::ReviewBrief,
         Kind::PersonRequest => Opened::RequestBrief,
         _ => Opened::Brief,

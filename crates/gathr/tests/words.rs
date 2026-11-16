@@ -80,6 +80,21 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "aa923edc4ff88aebeb7bf6708fb0908c027f303219d99dbafe68398e69b1bd55",
     ),
+    (
+        "hear_back",
+        2,
+        "0d809789abf8f9349065c0aac9cf2e947869f5c78587c3cd47aa68975dccb5f0",
+    ),
+    (
+        "plan_check",
+        1,
+        "e488746765bf295adadcc51023fc04969c9fc4c156f52c1489bcf66d8c360943",
+    ),
+    (
+        "sent_back",
+        1,
+        "074479489631eb5291d177966d7c325a7af4b1e9ba82d751008e9ed3e6b47dba",
+    ),
 ];
 
 /// Every file that asserts samples.
@@ -90,6 +105,9 @@ const SOURCES: &[&str] = &[
     include_str!("merge/lands.rs"),
     include_str!("app_update.rs"),
     include_str!("pauses.rs"),
+    include_str!("plans/write.rs"),
+    include_str!("plans/check.rs"),
+    include_str!("plans/decide.rs"),
 ];
 
 /// The lowercase hex SHA-256 of a kind's sample texts, in order, each followed by a NUL byte.

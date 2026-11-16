@@ -36,7 +36,7 @@ export function stepState(t: Task): StepState {
 /**
  * The round's steps are tasks only, never prose. The service says which round each task is in (0051):
  * the turn the person's message or answer began, and every turn that answers it. The current round is
- * the newest of the Supervisor's with tasks. Questions for the person and cancelled tasks are left out.
+ * the newest of the Supervisor's with tasks. Questions for the person, plan checks and cancelled tasks are left out.
  * None once that round is finished and the person has written since.
  */
 export function currentRound(state: ChatState): Round | undefined {
@@ -45,7 +45,8 @@ export function currentRound(state: ChatState): Round | undefined {
   const rounds = new Map<string, Task[]>();
   for (const t of state.tasks) {
     if (!t.owner || !t.given_in || t.kind === 'person' || t.kind === 'person_request') continue;
-    if (t.state === 'cancelled') continue;
+    // A plan's check is Gathr's, not a step of the lead's, and has no hear-back to finish its round.
+    if (t.state === 'cancelled' || t.checks) continue;
     const root = t.round ?? t.given_in;
     const by = state.turns[root]?.agent;
     if (lead && by && by !== lead) continue;

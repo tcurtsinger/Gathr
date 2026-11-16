@@ -51,7 +51,7 @@ pub struct Live {
 /// One thing the chat waits on.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Line {
-    /// `turn`, `queued`, `sign_in`, `approval`, `question`, `wait`, `command`, `pr`, `given`,
+    /// `turn`, `queued`, `sign_in`, `approval`, `question`, `plan`, `wait`, `command`, `pr`, `given`,
     /// `merge`, `after`, `idle`, `trouble`, `update`, or `stopped` when the service isn't running.
     pub kind: &'static str,
     /// The line in words.
@@ -207,6 +207,10 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
         let what = format!("A question for you: {}", q.what);
         let line = Line::new("question", what, Moves::You);
         lines.push(line.of(q.giver.as_deref(), Some(q.number), q.created));
+    }
+    for (lead, title, sent) in crate::plans::waiting(conn, chat)? {
+        let line = Line::new("plan", format!("A plan for you: {title}"), Moves::You);
+        lines.push(line.of(Some(&lead), None, sent));
     }
     wait_lines(conn, chat, &pauses, &waiting, &mut lines)?;
     command_lines(conn, chat, &mut lines)?;

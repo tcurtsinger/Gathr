@@ -72,6 +72,8 @@ interface Props {
   agentOpen?: { agent: string; shown: boolean };
   /** Opens an agent's panel in the workspace, from Summary or its initial in the timeline. */
   onOpenAgent?: (agent: string) => void;
+  /** Opens a plan's tab in the workspace at a version, from its chip or a plan line (0062). */
+  onOpenPlan?: (plan: number, version: number) => void;
   /** Closes the workspace: it lies over the composer when Message is pressed in a narrow window. */
   onCloseWorkspace?: () => void;
   /**
@@ -163,6 +165,7 @@ export function ChatView(props: Props) {
     },
     approve,
     openTask: (task) => props.onOpenTask?.(task),
+    openPlan: (plan, version) => props.onOpenPlan?.(plan, version),
     // Only an agent of this chat has a panel: one that left it can still be named in the timeline.
     openAgent: (id) => {
       if (crew.some((g) => g.member.agent === id)) props.onOpenAgent?.(id);

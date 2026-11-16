@@ -13,7 +13,7 @@ use crate::approvals::GATHR_ASKS;
 pub const EVERY: Duration = Duration::from_secs(5);
 
 /// The kinds of waiting line that make a chat need the person.
-const NEEDS: [&str; 3] = ["sign_in", "approval", "question"];
+const NEEDS: [&str; 4] = ["sign_in", "approval", "question", "plan"];
 
 /// The chats that need the person, each with its title, and whether the whole app is paused.
 #[derive(Debug)]
@@ -557,6 +557,25 @@ mod tests {
             [show("x", "ann needs your approval", true)]
         );
         assert_eq!(room.tick(false).0, []);
+    }
+
+    /// 0062: a plan waiting on the person makes its chat need them.
+    #[test]
+    fn a_waiting_plan_needs_the_person() {
+        let mut room = started();
+        let plan = line(
+            "plan",
+            "A plan for you: Tags on notes",
+            "mira",
+            None,
+            7,
+            "you",
+        );
+        room.needs("x", vec![plan]);
+        assert_eq!(
+            room.tick(false).0,
+            [show("x", "A plan for you: Tags on notes", true)]
+        );
     }
 
     #[test]

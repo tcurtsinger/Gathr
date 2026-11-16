@@ -563,19 +563,25 @@ pub fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService,
 /// A signed-in team chat on `engine` (Lead, supervisor; Ann, member) whose engines hold their
 /// first turn until `go` exists: the service and the chat.
 pub fn team_on(data: &Path, engine: &str) -> (TestService, String) {
+    team_on_with(data, engine, &[])
+}
+
+/// `team_on`, with more environment variables for the service.
+pub fn team_on_with(data: &Path, engine: &str, more: &[(&str, &Path)]) -> (TestService, String) {
     let recorded = match engine {
         "codex" => "codex_signed_in",
         _ => "signed_in",
     };
     let (held, replay) = (held_recording(data, recorded), replay_engine());
     let (go, tokens) = (data.join("go"), data.join("env.jsonl"));
-    let env = [
+    let mut env = vec![
         ("GATHR_CLAUDE_PATH", replay.as_path()),
         ("GATHR_CODEX_PATH", &replay),
         ("GATHR_REPLAY", &held),
         ("GATHR_REPLAY_HOLD", &go),
         ("GATHR_REPLAY_ENV", &tokens),
     ];
+    env.extend_from_slice(more);
     let service = TestService::start_with(data, &env);
     let body = json!({ "engine": engine, "name": engine });
     let added = service.send("POST", "/api/accounts", body);

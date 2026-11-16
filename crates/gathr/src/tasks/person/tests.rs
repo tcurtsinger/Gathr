@@ -51,6 +51,8 @@ fn task(form: Form, labels: &[&str]) -> Task {
         edited_us: None,
         edited: Vec::new(),
         ask: None,
+        checks: None,
+        plan: None,
     }
 }
 

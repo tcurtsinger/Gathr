@@ -11,7 +11,7 @@ pub const BRIEF: i64 = 2;
 pub const REVIEW_BRIEF: i64 = 1;
 pub const REQUEST_BRIEF: i64 = 1;
 pub const REPORT_ASK: i64 = 1;
-pub const HEAR_BACK: i64 = 1;
+pub const HEAR_BACK: i64 = 2;
 pub const ANSWERED: i64 = 1;
 pub const WAKE: i64 = 1;
 pub const SILENT: i64 = 1;
@@ -19,6 +19,8 @@ pub const WAIT_FIRED: i64 = 1;
 pub const STALE: i64 = 1;
 pub const LANDING: i64 = 1;
 pub const CARRY_ON: i64 = 1;
+pub const PLAN_CHECK: i64 = 1;
+pub const SENT_BACK: i64 = 1;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +47,10 @@ pub enum Opened {
     Landing,
     /// An update, Stop now or a usage limit ended the turn.
     CarryOn,
+    /// A plan check's brief (0062).
+    PlanCheck,
+    /// The person sent a plan back to its lead.
+    SentBack,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -54,7 +60,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 16] = [
+    pub const ALL: [Opened; 18] = [
         Opened::Brief,
         Opened::ReviewBrief,
         Opened::RequestBrief,
@@ -67,6 +73,8 @@ impl Opened {
         Opened::Stale,
         Opened::Landing,
         Opened::CarryOn,
+        Opened::PlanCheck,
+        Opened::SentBack,
         Opened::Person,
         Opened::Teammate,
         Opened::Compaction,
@@ -87,6 +95,8 @@ impl Opened {
             Opened::Stale => "stale",
             Opened::Landing => "landing",
             Opened::CarryOn => "carry_on",
+            Opened::PlanCheck => "plan_check",
+            Opened::SentBack => "sent_back",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -109,6 +119,8 @@ impl Opened {
             Opened::Stale => Some(STALE),
             Opened::Landing => Some(LANDING),
             Opened::CarryOn => Some(CARRY_ON),
+            Opened::PlanCheck => Some(PLAN_CHECK),
+            Opened::SentBack => Some(SENT_BACK),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }

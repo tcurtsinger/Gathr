@@ -437,6 +437,45 @@ fn deleting_an_archived_chat_removes_its_asks() {
     assert_eq!(left, 0, "asks left");
 }
 
+/// 0062: a plan points at its chat and ask, its parts at their tasks, and its check at its version,
+/// so deleting the chat removes its plans in that order.
+#[test]
+fn deleting_an_archived_chat_removes_its_plans() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', 'new');
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, ask_id)
+             VALUES ('t', 'c', 'x', 'done', 1, 'm1');
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
+             VALUES ('m1', 'c', 't', 1, 'user', 'text', 'Add tags'),
+                    ('v1', 'c', 't', 2, 'assistant', 'text', 'Plan: Tags');
+         INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'm1', 'lead', 2);
+         INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, sent_ts,
+                                    decided, decided_ts)
+             VALUES (1, 1, 1, 'v1', 't', 'Tags', 'Add tags', 2, 3, 'approved', 4);
+         INSERT INTO tasks (number, chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts,
+                            ask_id, checks)
+             VALUES (1, 'c', 'lead', 'bo', 't', 'review', 'Check plan v1: Tags', 'done', 2, 3, 'm1', 1),
+                    (2, 'c', 'lead', 'ann', 't', 'work', 'Add the tags table', 'ready', 4, 4, 'm1', NULL);
+         INSERT INTO plan_parts (version_id, n, owner, what, why, done, proof, place, size, size_lines, task)
+             VALUES (1, 1, 'ann', 'Add the tags table', 'Tags', 'A table', 'A test', 'no code', 'db', 10, 2);",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let left: (i64, i64, i64) = conn
+        .query_row(
+            "SELECT (SELECT count(*) FROM plans), (SELECT count(*) FROM plan_versions),
+                    (SELECT count(*) FROM plan_parts)",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap();
+    assert_eq!(left, (0, 0, 0), "(plans, versions, parts) left");
+}
+
 /// 0054: a landed change's record outlives its chat; one not landed goes with it.
 #[test]
 fn deleting_an_archived_chat_keeps_its_landed_changes() {

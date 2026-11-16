@@ -10,8 +10,8 @@ use crate::event::Event;
 use crate::ids::now_us;
 use crate::words::Opened;
 
-mod brief;
-mod edit;
+pub(crate) mod brief;
+pub(crate) mod edit;
 mod hear;
 pub(crate) mod held;
 pub(crate) mod notes;
@@ -22,7 +22,7 @@ mod report;
 mod review;
 pub mod stale;
 pub mod touched;
-mod words;
+pub(crate) mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
@@ -32,6 +32,7 @@ pub use hear::done_words;
 pub use held::{Hold, background_changed, holds};
 pub use notes::{Note, NoteKind, NoteSaid};
 pub use prs::{Seen, pr_looked, with_prs};
+pub(crate) use report::finish_in;
 pub use report::{Finish, Report, Said, Took, finish};
 
 pub use words::{name_of, opening, owner_name, sentence, wait_name};
@@ -205,6 +206,12 @@ pub struct Task {
     /// The fields its giver's last edit changed.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub edited: Vec<String>,
+    /// A plan check: the version it checks (0062).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checks: Option<i64>,
+    /// The plan whose part made it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<i64>,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -289,7 +296,11 @@ pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<S
 }
 
 /// Gives a task in the caller's transaction, once its `what` and brief are checked.
-fn give_in(tx: &Transaction, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
+pub(crate) fn give_in(
+    tx: &Transaction,
+    g: &Give,
+    trace: &str,
+) -> Result<(Task, Vec<Start>), Error> {
     let what = g.what.trim();
     crate::archive::refuse_archived(tx, g.chat)?;
     in_team(tx, g.chat, g.owner)?;
@@ -518,7 +529,7 @@ pub fn cancel(
 ) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    may_change(&t, by, "cancel")?;
+    may_change(&tx, &t, by, "cancel")?;
     if matches!(t.state, State::Done | State::Cancelled) {
         let state = t.state.as_str();
         return Err(refused(format!("task #{task} is already {state}")));
@@ -551,7 +562,7 @@ pub fn restart(
 ) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    may_change(&t, by, "restart")?;
+    may_change(&tx, &t, by, "restart")?;
     crate::archive::refuse_archived(&tx, &t.chat)?;
     if !t.state.settled() || t.state == State::Done {
         let state = t.state.as_str();
@@ -693,8 +704,11 @@ fn turn_due(conn: &Connection, task: i64) -> Result<bool, Error> {
     )?)
 }
 
-/// Who may cancel or restart: the giver, or the person (`by` none).
-fn may_change(t: &Task, by: Option<&str>, what: &str) -> Result<(), Error> {
+/// Who may cancel or restart: the giver, or the person (`by` none). A plan check is Gathr's (0062).
+fn may_change(conn: &Connection, t: &Task, by: Option<&str>, what: &str) -> Result<(), Error> {
+    if let Some(version) = t.checks {
+        crate::plans::check::refuse_change(conn, t.number, version, by, what)?;
+    }
     match by.is_none() || by == t.giver.as_deref() {
         true => Ok(()),
         false => Err(refused(format!(
@@ -749,7 +763,7 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
     };
     let text = words::brief(tx, &t, &giver, carry)?;
     let on = (Some(task), t.given_in.as_deref());
-    Start::queue(tx, (&t.chat, owner), on, brief::opened(t.kind), text)
+    Start::queue(tx, (&t.chat, owner), on, brief::opened(&t), text)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
@@ -895,7 +909,12 @@ pub(crate) fn cancelled_with(
 }
 
 /// Cancels the task with why: its open waits end, and what follows it moves.
-fn cancel_in(tx: &Transaction, task: i64, why: &str, trace: &str) -> Result<Vec<Start>, Error> {
+pub(crate) fn cancel_in(
+    tx: &Transaction,
+    task: i64,
+    why: &str,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
     set(tx, task, State::Cancelled, Some(why), trace)?;
     end_waits(tx, task, "its task was cancelled")?;
     cascade(tx, task, trace)

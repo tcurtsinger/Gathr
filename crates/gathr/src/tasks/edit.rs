@@ -153,6 +153,11 @@ fn edit_in(
 /// Who may edit the task, and when: its giver, until its first turn starts.
 fn may_edit(conn: &Connection, t: &Task, by: Option<&str>) -> Result<(), Error> {
     let n = t.number;
+    if t.checks.is_some() {
+        return Err(refused(format!(
+            "Task #{n} is a plan check: Gathr writes it."
+        )));
+    }
     if matches!(t.kind, Kind::Person | Kind::PersonRequest) {
         return Err(refused(format!(
             "Task #{n} is a question for the person: edit_task changes work and review tasks."
@@ -180,7 +185,7 @@ fn may_edit(conn: &Connection, t: &Task, by: Option<&str>) -> Result<(), Error> 
 }
 
 /// Refuses a task number that isn't of this chat.
-pub(super) fn in_chat<'a>(
+pub(crate) fn in_chat<'a>(
     conn: &Connection,
     chat: &str,
     numbers: impl IntoIterator<Item = &'a i64>,
@@ -251,7 +256,7 @@ fn reordered(tx: &Transaction, t: &Task, after: &[i64], trace: &str) -> Result<V
 
 /// Rewrites the brief of the task's queued turn from its row as it is now, with the carry it was
 /// queued with: the turn and its message, when the text changed.
-fn rewritten(tx: &Transaction, task: i64) -> Result<Option<(String, Value)>, Error> {
+pub(crate) fn rewritten(tx: &Transaction, task: i64) -> Result<Option<(String, Value)>, Error> {
     let queued: Option<(String, String, String)> = tx
         .query_row(
             "SELECT u.id, m.id, m.body FROM turns u JOIN messages m ON m.turn_id = u.id AND m.role = 'gathr'
@@ -272,8 +277,12 @@ fn rewritten(tx: &Transaction, task: i64) -> Result<Option<(String, Value)>, Err
     }
     crate::store::set_message_body(tx, &message, &text)?;
     tx.execute(
-        "UPDATE turns SET opened_version = ?2 WHERE id = ?1",
-        params![turn, brief::opened(t.kind).version()],
+        "UPDATE turns SET opened_by = ?2, opened_version = ?3 WHERE id = ?1",
+        params![
+            turn,
+            brief::opened(&t).as_str(),
+            brief::opened(&t).version()
+        ],
     )?;
     Ok(Some((turn, crate::store::message(tx, &message)?)))
 }

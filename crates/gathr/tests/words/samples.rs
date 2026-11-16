@@ -123,6 +123,14 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Read replies with read_chat, then continue. This turn is on your task #1: end it with finish_task.",
     ),
     (
+        "hear_back",
+        "hear_back: a plan check left",
+        "The task you gave is settled:\n\
+         - #1 Bo, Check plan v1: Tags on notes: left: Two gaps. Findings: note 1, wrong, src/notes.rs: The list query \
+         misses tags; note 2, unasked: Export isn't asked. Answer each in the next version's answers.\n\
+         Read replies with read_chat, then continue.",
+    ),
+    (
         "answered",
         "answered: the agent's own question",
         "The person answered:\n\
@@ -187,6 +195,91 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "Gathr can't land #5 at <head>: CI on <head> has a failure, which the project doesn't require to pass: \
          1 passed, 1 failed (Rust (macOS)). Read it with ci_failures. Your review stands, and this is yours to \
          judge: give its author a fix, or merge it with `merge`.",
+    ),
+    (
+        "plan_check",
+        "plan_check: first",
+        "Task #10 from Mira: Check plan v1: Tags on notes\n\
+         Check version 1 of Mira's plan \"Tags on notes\" before the person sees it. Say what is wrong or missing \
+         (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that proves \
+         nothing) and what the ask doesn't need, with file and line.\n\
+         The person asked: Add tags to notes\n\
+         The plan, message <id>:\n\
+         Plan: Tags on notes (version 1, 3 parts)\n\
+         Let notes carry tags, shown in the list and used to filter.\n\
+         \n\
+         1. Add the tags table (Ann)\n\
+         Why: Notes need tags\n\
+         Done when: A note carries its tags\n\
+         Proof: tests/tags.rs passes\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/tags.rs, about 60 lines\n\
+         \n\
+         2. Show tags in the list (Bo), after part 1\n\
+         Why: Notes need tags\n\
+         Done when: A note carries its tags\n\
+         Proof: tests/tags.rs passes\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/tags.rs, about 60 lines\n\
+         \n\
+         3. Filter by tag (Ann), after part 2 and #9\n\
+         Why: Notes need tags\n\
+         Done when: A note carries its tags\n\
+         Proof: tests/tags.rs passes\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/tags.rs, about 60 lines\n\
+         If you agree, give message <id> a thumbs-up with react: that finishes this task. Else finish_task left, \
+         with notes: wrong, unasked or suggestion, each with its evidence in says.",
+    ),
+    (
+        "plan_check",
+        "plan_check: again",
+        "Task #2 from Mira: Check plan v2: Tags on notes\n\
+         Check version 2 of Mira's plan \"Tags on notes\" for your findings on version 1 only, with Mira's answers:\n\
+         - Note 1, wrong: src/notes.rs: The list query misses tags. Mira: changed: The list reads tags now\n\
+         - Note 2, unasked: Export isn't asked. Mira: kept: The person asked for export last week\n\
+         The plan, message <id>:\n\
+         Plan: Tags on notes (version 2, 1 part)\n\
+         Let notes carry tags, shown in the list and used to filter.\n\
+         \n\
+         1. Add the tags table (Ann)\n\
+         Why: Notes need tags\n\
+         Done when: A note carries its tags\n\
+         Proof: tests/tags.rs passes\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/tags.rs, about 60 lines\n\
+         If the answers hold, give message <id> a thumbs-up with react: that finishes this task. Else finish_task \
+         left, with notes on what still fails.",
+    ),
+    (
+        "plan_check",
+        "plan_check: carry",
+        "Task #2 from Mira: Check plan v1: Tags on notes\n\
+         Check version 1 of Mira's plan \"Tags on notes\" before the person sees it. Say what is wrong or missing \
+         (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that proves \
+         nothing) and what the ask doesn't need, with file and line.\n\
+         The person asked: Add folders\n\
+         The plan, message <id>:\n\
+         Plan: Tags on notes (version 1, 1 part)\n\
+         Let notes carry tags, shown in the list and used to filter.\n\
+         \n\
+         1. Add the tags table (Ann)\n\
+         Why: Notes need tags\n\
+         Done when: A note carries its tags\n\
+         Proof: tests/tags.rs passes\n\
+         Where: the project's worktree, on a new branch\n\
+         Size: src/tags.rs, about 60 lines\n\
+         Continue from here: your engine closed and ended your background command. Check what is already done \
+         before repeating work.\n\
+         If you agree, give message <id> a thumbs-up with react: that finishes this task. Else finish_task left, \
+         with notes: wrong, unasked or suggestion, each with its evidence in says.",
+    ),
+    (
+        "sent_back",
+        "sent_back",
+        "The person sent back version 1 of your plan \"Tags on notes\" (plan #1):\n\
+         Split part 2\n\
+         Write the next version with plan.",
     ),
     (
         "carry_on",

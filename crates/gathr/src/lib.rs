@@ -31,6 +31,7 @@ pub mod landings;
 pub mod launch;
 pub mod notice;
 pub mod pauses;
+pub mod plans;
 pub mod platform;
 pub mod projects;
 pub mod pushes;

@@ -40,7 +40,7 @@ Only the Supervisor files person tasks. A task settles by its owner's report, ne
 One answer says what a chat waits on, and a chat where nothing moves wakes its lead, then tells the person, each
 only of what is new to them
 ([0050](decisions/0050-what-a-chat-waits-on.md), [0052](decisions/0052-a-quiet-chat-is-noticed.md)).
-Plan mode/checks, hand-off chains and side jobs are not built yet.
+A plan is a record with versions that Gathr has checked before the person sees it, and Approve makes its tasks ([0062](decisions/0062-a-plan-is-checked-and-approve-hands-it-out.md)); plan mode and side jobs are not built yet.
 [0005](decisions/0005-mcp-server.md), [0010](decisions/0010-coordination-as-state.md),
 [0013](decisions/0013-one-chat-model.md), [0028](decisions/0028-team-chats.md).
 
