@@ -587,3 +587,95 @@ fn gathrs_review_goes_as_one_the_builder_gave() {
         heard[0].text
     );
 }
+
+#[test]
+fn a_pr_asked_about_at_its_done_report_waits_on_the_person_not_on_nobody() {
+    use gathr::changes::report::Counted;
+    use gathr::changes::{self, Measure, Standing, count::Count};
+    use gathr::tasks::person::{self, Answer};
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    reviewing(&conn);
+    conn.execute_batch(
+        "INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES ('p', 'Site', 'site', 'x', 1);
+         UPDATE chats SET project_id = 'p';",
+    )
+    .unwrap();
+    let (work, _) = give(&mut conn, "ann", &[], None);
+    let ann = begin(&mut conn, work);
+    let m = Measure {
+        project: "p".into(),
+        chat: "c".into(),
+        pr: 5,
+        head: "aaaa111122223333".into(),
+        count: Count {
+            added: 1240,
+            removed: 0,
+            top: vec![("src/export.rs".to_string(), 1240)],
+        },
+        line: 1000,
+        line_of: "fix",
+        by: "report",
+    };
+    let said = Said {
+        note: Some("see #5"),
+        pr: Some(5),
+        turn: Some(&ann),
+        count: Counted::Measured(m, 1),
+        ..Said::default()
+    };
+    let (.., given) = tasks::finish(&mut conn, "ann", work, Finish::Done, &said, T).unwrap();
+    assert_eq!((given, reviews(&conn)), (None, vec![]), "a review given");
+    ended(&mut conn, &ann);
+    let Some(Standing::Asked(q)) = changes::standing(&conn, "c", 5).unwrap() else {
+        panic!("no question open about #5");
+    };
+    let held = format!("done, waiting on #{q} (the person), #5 to merge");
+    assert_eq!(state(&conn, work), (State::Held, Some(held)));
+
+    let live = Live {
+        running: true,
+        ..Live::default()
+    };
+    let lines = |conn: &Connection| {
+        waiting::answer(conn, "c", &live, gathr::ids::now_us())
+            .unwrap()
+            .lines
+    };
+    let said = lines(&conn);
+    let all: Vec<(&str, Moves)> = said.iter().map(|l| (l.what.as_str(), l.moves)).collect();
+    assert!(
+        !all.iter()
+            .any(|(what, _)| what.contains("which has no review")),
+        "{all:?}"
+    );
+    let nobody = said
+        .iter()
+        .any(|l| l.task == Some(work) && l.moves == Moves::Nobody);
+    assert!(!nobody, "a line nobody moves: {all:?}");
+    assert!(
+        all.iter()
+            .any(|(what, _)| what.starts_with("A question for you: ")),
+        "{all:?}"
+    );
+    let waits = format!("#{work} (Ann) waits for #{q} (the person)");
+    assert!(all.iter().any(|(what, _)| *what == waits), "{all:?}");
+
+    let go_on = Answer {
+        task: q,
+        pick: vec!["Let it go on".to_string()],
+        ..Answer::default()
+    };
+    person::answer_as(&mut conn, &[go_on], None, T).unwrap();
+    assert_eq!(reviews(&conn).len(), 1, "its review");
+    let said = lines(&conn);
+    let merge = said
+        .iter()
+        .find(|l| l.kind == "merge")
+        .expect("a merge line");
+    let expected = format!("#{work} (Ann) is done and waits for #5 to merge");
+    assert_eq!(
+        (merge.what.as_str(), merge.moves),
+        (expected.as_str(), Moves::Others)
+    );
+}
