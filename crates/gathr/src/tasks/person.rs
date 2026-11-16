@@ -295,13 +295,18 @@ pub fn answer_as(
                     .extend(crate::changes::answered(&tx, a.task, pick, trace)?);
             }
             Err(Error::Refused(why)) => {
-                Event::point("gathr.task.answer")
+                let mut event = Event::point("gathr.task.answer")
                     .trace(trace)
                     .task(a.task)
                     .error("refused")
                     .attr("why", why.as_str())
-                    .attr("by", by)
-                    .insert(&tx)?;
+                    .attr("by", by);
+                let sql = "SELECT chat_id FROM tasks WHERE number = ?1";
+                let chat: Option<String> = tx.query_row(sql, [a.task], |r| r.get(0)).optional()?;
+                if let Some(chat) = &chat {
+                    event = event.chat(chat);
+                }
+                event.insert(&tx)?;
                 sent.refused.push((a.task, why));
             }
             Err(e) => return Err(e),

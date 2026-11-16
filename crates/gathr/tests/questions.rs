@@ -231,7 +231,7 @@ fn the_lead_files_a_request_only_in_its_own_words() {
              question of yours already asks it, use finish_task blocked with on_task set to that question: this \
              request comes back to you with its answer. To answer it yourself, use finish_task done with the answer \
              in note.",
-            "The person's answer reaches Ann by itself: after ask_person, end your turn with no finish_task."
+            "If you ask the person, their answer reaches Ann by itself: after ask_person, end your turn with no finish_task."
         ]
     );
     running(&conn, "mira-3", "mira", Some(request.number));
@@ -580,8 +580,10 @@ fn a_second_members_request_waits_quietly_on_the_first_question() {
         .iter()
         .find(|s| s.agent == "mira" && s.task == Some(folded));
     let carried = carried.unwrap_or_else(|| panic!("Mira's turn on #5: {:?}", sent.starts));
-    let carry =
-        format!("Continue from here: the task blocking this one, #4, is done: {PICKED}. Check");
+    let carry = format!(
+        "Continue from here: the task blocking this one, #4, is done: {PICKED}. Finish #5 done with this answer in \
+         note: Bo hears it then. Check"
+    );
     assert!(carried.text.contains(&carry), "{}", carried.text);
 
     moved(&mut conn, &carried.turn, "running");

@@ -116,7 +116,8 @@ pub(crate) fn folded(conn: &Connection, t: &Task) -> Result<bool, Error> {
 
 /// What a task blocked on `task`, now done, carries on from: with the answer when `task` is a
 /// question or a request. A member's own task blocked on its request hears it there, so the
-/// request counts as heard.
+/// request counts as heard. A request folded on the question is the lead's to finish with the
+/// answer: its member hears nothing until then.
 pub(crate) fn carry(tx: &Transaction, task: i64, blocked: i64) -> Result<String, Error> {
     let t = read(tx, task)?;
     let answer = match t.kind {
@@ -132,10 +133,19 @@ pub(crate) fn carry(tx: &Transaction, task: i64, blocked: i64) -> Result<String,
         _ => None,
     };
     let carry = format!("the task blocking this one, #{task}, is done");
-    Ok(match answer {
-        Some(answer) => format!("{carry}: {answer}"),
-        None => carry,
-    })
+    let Some(answer) = answer else {
+        return Ok(carry);
+    };
+    let carry = format!("{carry}: {answer}");
+    let b = read(tx, blocked)?;
+    if t.kind != Kind::Person || b.kind != Kind::PersonRequest {
+        return Ok(carry);
+    }
+    let member = words::owner_name(tx, b.giver.as_deref())?;
+    Ok(format!(
+        "{} Finish #{blocked} done with this answer in note: {member} hears it then.",
+        words::sentence(&carry)
+    ))
 }
 
 fn discussed(t: &Task, how: &str, trace: &str) -> Event {
@@ -212,7 +222,10 @@ pub(crate) fn replace(tx: &Transaction, new: i64, trace: &str) -> Result<(), Err
     )?;
     // `set` cleared it as the held question settled: the request's hold reads it.
     tx.execute("UPDATE tasks SET heard = 1 WHERE number = ?1", [old])?;
-    let sql = "UPDATE tasks SET blocked_on = ?2 WHERE blocked_on = ?1 AND state = 'blocked'";
+    // A reason in `held::settle`'s default form names the question, so it follows; a note stays.
+    let sql = "UPDATE tasks SET blocked_on = ?2,
+                 reason = CASE WHEN reason = 'blocked on #' || ?1 THEN 'blocked on #' || ?2 ELSE reason END
+               WHERE blocked_on = ?1 AND state = 'blocked'";
     tx.execute(sql, [old, new])?;
     discussed(&read(tx, old)?, "replaced", trace)
         .attr("gathr.task.question", new)

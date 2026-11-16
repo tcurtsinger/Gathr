@@ -38,7 +38,7 @@ const KEPT: &[(&str, i64, &str)] = &[
     (
         "request_brief",
         2,
-        "f7f6490e1f0ea84625251ed109bab39cc7621089e09840c3ba547799fc8e6cae",
+        "e953eec83c9f42a437e817afd524a85d9329f4bb1aacbdf8fd2193510c8a9b8d",
     ),
     (
         "report_ask",

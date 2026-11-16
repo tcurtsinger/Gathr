@@ -723,9 +723,10 @@ fn standings(
             on: Vec::new(),
             until_us: None,
         };
+        // A discussed question is held, off the person's list: it doesn't need them.
         let asked = open
             .iter()
-            .any(|o| o.kind == "person" && o.giver.as_deref() == Some(id) && o.under_way());
+            .any(|o| o.kind == "person" && o.giver.as_deref() == Some(id) && o.state == "ready");
         let mine = open
             .iter()
             .any(|o| o.owner.as_deref() == Some(id) && o.under_way());

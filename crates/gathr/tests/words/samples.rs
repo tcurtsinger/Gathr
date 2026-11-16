@@ -92,7 +92,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          To ask the person, use ask_person with for_task 2 and your own `what`, your pick first. If an open \
          question of yours already asks it, use finish_task blocked with on_task set to that question: this request \
          comes back to you with its answer. To answer it yourself, use finish_task done with the answer in note.\n\
-         The person's answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
+         If you ask the person, their answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
     ),
     (
         "request_brief",
@@ -103,7 +103,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          To ask the person, use ask_person with for_task 3 and your own `what`, your pick first. If an open \
          question of yours already asks it, use finish_task blocked with on_task set to that question: this request \
          comes back to you with its answer. To answer it yourself, use finish_task done with the answer in note.\n\
-         The person's answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
+         If you ask the person, their answer reaches Ann by itself: after ask_person, end your turn with no finish_task.",
     ),
     (
         "report_ask",

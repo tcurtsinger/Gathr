@@ -68,7 +68,8 @@ pub fn brief(
     }
     lines.push(match t.kind {
         Kind::PersonRequest => format!(
-            "The person's answer reaches {giver} by itself: after ask_person, end your turn with no finish_task."
+            "If you ask the person, their answer reaches {giver} by itself: after ask_person, end your turn with no \
+             finish_task."
         ),
         _ => "Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it."
             .to_string(),

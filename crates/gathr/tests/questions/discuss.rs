@@ -3,6 +3,14 @@
 
 use super::*;
 
+/// Mira's standing in the chat's waiting answer.
+fn mira_stands(conn: &Connection) -> (&'static str, String) {
+    let live = gathr::waiting::Live::default();
+    let said = gathr::waiting::answer(conn, "c", &live, gathr::ids::now_us()).unwrap();
+    let mira = said.agents.into_iter().find(|a| a.agent == "mira").unwrap();
+    (mira.state, mira.words)
+}
+
 /// F5.1 to F5.4, scenario 4e.
 #[test]
 fn discuss_takes_the_question_off_the_list_and_reaches_the_lead_only() {
@@ -25,6 +33,8 @@ fn discuss_takes_the_question_off_the_list_and_reaches_the_lead_only() {
         "{:#?}",
         said.lines
     );
+    let stands = mira_stands(&conn);
+    assert_ne!(stands.0, "needs_you", "{stands:?}");
     assert_eq!(
         (task(&conn, request).state, task(&conn, 1).state),
         (State::Held, State::Held)
@@ -91,6 +101,29 @@ fn discuss_takes_the_question_off_the_list_and_reaches_the_lead_only() {
         refused(&mut conn, gathrs),
         "Answer #6 with one of its choices"
     );
+    let missing = Answer {
+        task: 99,
+        ..Default::default()
+    };
+    let sent = person::answer(&mut conn, &[missing], T).unwrap();
+    assert_eq!(sent.refused[0].1, "there's no task #99");
+    let sql = "SELECT task_id, conversation_id FROM events WHERE name = 'gathr.task.answer' AND error_type = 'refused'
+               ORDER BY ts, rowid";
+    let mut stmt = conn.prepare(sql).unwrap();
+    let chats: Vec<(Option<String>, Option<String>)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let c = Some("c".to_string());
+    let in_chat = |t: &str| (Some(t.to_string()), c.clone());
+    let refusals = [
+        in_chat("5"),
+        in_chat("5"),
+        in_chat("6"),
+        (Some("99".into()), None),
+    ];
+    assert_eq!(chats, refusals, "a refusal is in its task's chat");
 }
 
 /// The person's message in a new turn of Mira's on an ask with no plan yet: the turn.
@@ -182,6 +215,8 @@ fn a_discussed_question_comes_back_when_the_leads_turn_ends() {
         assert_eq!((back.state, back.reason), (State::Ready, None), "{status}");
         assert_eq!(listed(&conn), [q], "{status}");
         assert_eq!(needs(&conn), true, "{status}");
+        let asked = ("needs_you", "Asked you a question".to_string());
+        assert_eq!(mira_stands(&conn), asked, "{status}");
         if status == "done" {
             let r = task(&conn, request);
             let waits = (r.state, r.reason.as_deref());
@@ -290,7 +325,13 @@ fn the_leads_new_question_in_that_turn_takes_the_old_ones_place() {
             json!({ "gathr.discuss.how": "replaced", "gathr.task.question": 6 })
         )
     );
-    assert_eq!(task(&conn, folded).blocked_on, Some(6), "the fold follows");
+    let fold = task(&conn, folded);
+    let follows = (fold.blocked_on, fold.reason.as_deref());
+    assert_eq!(
+        follows,
+        (Some(6), Some("blocked on #6")),
+        "the fold follows"
+    );
 
     moved(&mut conn, &turn, "done");
     let r = task(&conn, request);
