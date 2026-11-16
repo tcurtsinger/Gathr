@@ -93,7 +93,8 @@ pub(super) fn done_line(conn: &Connection, task: i64) -> Result<(), Error> {
 
 /// The words of that line: none for a task that gets no line.
 pub fn done_words(conn: &Connection, t: &Task) -> Result<Option<String>, Error> {
-    if t.owner.is_none() || !matches!(t.kind, Kind::Work | Kind::Review) {
+    // A plan check's line is its plan's (0062).
+    if t.owner.is_none() || !matches!(t.kind, Kind::Work | Kind::Review) || t.checks.is_some() {
         return Ok(None);
     }
     Ok(Some(format!("{}\n{}", words::DONE, words::line(conn, t)?)))
@@ -198,9 +199,18 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
         let t = read(tx, *number)?;
         let stands = t.state.settled() || waits_on_its_giver(tx, *number)?;
         let trouble = matches!(t.state, State::Blocked | State::Failed | State::Stopped);
+        // A plan check wakes its lead only with findings: else its version reaches the person (0062).
+        let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
         match (stands, *heard) {
             (false, _) => pending |= !t.in_passing,
             (true, true) => {}
+            (true, false) if t.checks.is_some() && !(left && t.state == State::Blocked) => {
+                let sql = "UPDATE tasks SET heard = 1, heard_as = ?2 WHERE number = ?1";
+                tx.execute(
+                    sql,
+                    params![t.number, heard_as(t.state, t.reason.as_deref())],
+                )?;
+            }
             (true, false) if trouble || t.in_passing => due.push(t),
             (true, false) => rest.push(t),
         }

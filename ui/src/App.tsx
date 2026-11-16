@@ -9,6 +9,7 @@ import { Confirm } from './components/Confirm';
 import { FailureNotice } from './components/Notice';
 import { listen } from './live';
 import { NewProject } from './NewProject';
+import { PlanTab } from './plans/PlanTab';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
@@ -44,7 +45,8 @@ export function App() {
   const person = usePersonTasks(setFailure);
   const pauses = usePauses(setFailure);
   const appUpdate = useAppUpdate(setFailure);
-  // Each chat's workspace: the files opened from its questions, the agent opened from Summary, and the tab shown.
+  // Each chat's workspace: the files opened from its questions, the agent opened from Summary, the plan opened
+  // from the timeline, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, Tabs>>({});
   // An agent's task opened in a chat's Tasks tab, from Summary or a hand-off line (room task 70).
   const [opened, setOpened] = useState<Record<string, number | undefined>>({});
@@ -208,6 +210,24 @@ export function App() {
   const setTab = (c: string, change: (t: Tabs) => Partial<Tabs>) =>
     setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
   const name = (agent: string | null) => agents.find((a) => a.id === agent)?.name ?? 'An agent';
+  // The plan's tab at the version shown; the newest when the plan has no such version yet.
+  const planTab = (of: string, plan: Tabs['plan']) =>
+    plan && {
+      version: plan.version,
+      view: (
+        <PlanTab
+          key={plan.id}
+          chat={of}
+          plan={plan.id}
+          version={plan.version}
+          name={name}
+          onVersion={(version) => setTab(of, () => ({ plan: { ...plan, version } }))}
+          onReference={openReference}
+        />
+      ),
+      onClose: () =>
+        setTab(of, (t) => ({ plan: undefined, selected: t.selected === 'plan' ? 'tasks' : t.selected })),
+    };
   // A chat this window hasn't loaded yet: load the lists first; a failure shows in its place.
   const openChat = (id: string, then: () => void) => {
     const open = () => {
@@ -335,6 +355,10 @@ export function App() {
             });
             document.getElementById('workspace-tab-agent')?.focus();
           }}
+          onOpenPlan={(id, version) => {
+            setTab(chat.id, () => ({ plan: { id, version }, selected: 'plan' }));
+            person.setOpen(chat.id, true);
+          }}
           onCloseWorkspace={() => person.setOpen(chat.id, false)}
           found={found?.chat === chat.id ? found : undefined}
           onFound={() => setFound(null)}
@@ -349,6 +373,7 @@ export function App() {
                     selected: t.selected === 'agent' ? 'tasks' : t.selected,
                   }))
                 }
+                plan={planTab(chat.id, tabsOf(chat.id).plan)}
                 waiting={chatTasks.length > 0}
                 files={tabsOf(chat.id).files}
                 selected={tabsOf(chat.id).selected}
@@ -445,10 +470,14 @@ export function App() {
 const agentOpen = (tabs?: Tabs) =>
   tabs?.agent === undefined ? undefined : { agent: tabs.agent, shown: tabs.selected === 'agent' };
 
-/** A chat's workspace tabs: its opened files, the agent whose panel is open, and the tab shown. */
+/**
+ * A chat's workspace tabs: its opened files, the agent whose panel is open, the plan at the version shown, and
+ * the tab shown.
+ */
 interface Tabs {
   files: FileTab[];
   agent?: string;
+  plan?: { id: number; version: number };
   selected: string;
 }
 

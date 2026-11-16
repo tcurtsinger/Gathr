@@ -224,7 +224,11 @@ or "You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn
 only once the ask has a task, with a wrench for Fix and a clipboard for Plan. Opened, it shows
 the two sizes, "Just fix it." and "Plan it with me first.", the current one marked, and nothing
 that explains them (0061). When a repair's work is in, Gathr says "Fixed: <the ask>", a check
-icon, which opens to each finished task with its PR and its proof. Anything else (a wait's
+icon, which opens to each finished task with its PR and its proof. The plan's lines are one
+too, of a kind apart from the size line, with a clipboard: the lead-in "Plan v1:" and "Bo agrees",
+"3 findings" or "Bo didn't finish" (opening to the plan's title), "Sent back" (opening to the
+person's words), and "Plan v2:" "Approved" or "Dropped"; each opens to the whole line and Open plan
+(0062). Anything else (a wait's
 result, a wake-up, a stale-task nudge, a usage interruption) is drawn in Gathr's own words.
 13px, muted, the lead-in in the foreground colour at 500, an icon first, no Gathr speaker.
 Closed, a line stays on one line, with an ellipsis (…) for overflow. Click or Enter opens it
@@ -387,6 +391,27 @@ Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 Team status appears in Summary, and each agent's detail in its panel. Progress must
 derive from real task completion, not a decorative timer. Plans have their own
 identity and tab. A typed note is never approval.
+
+A plan's version is the lead's own block in the timeline: the speaker header, then a chip, a
+button with the clipboard icon, "Plan · version 2" and "9 parts" in muted small type, then the
+thumbs-up names under it, the same as under a reply. Text the lead writes after the plan reads
+after the chip, in a block of its own. The chip opens the plan's tab, after the agent's tab, labelled
+"Plan v2" with a close button. The tab reads top to bottom as the page of a task does, in the same
+classes: a refusal in the shared failure notice, "Plan · version 2" (and the versions as links
+`v1 · v2`, the one shown as text), the title, the lead's name, the time and one state word when it
+isn't waiting on you (Checking, Revising, Approved, Dropped, or Replaced on an older version), a
+quote of what you asked ("You asked", muted), the plan's text, one field, Check ("Bo agrees", "3
+findings from Bo", "Bo is checking", "Bo didn't finish"), then "9 parts": an ordered list, each
+part whole, its number and what, the owner and what it comes after muted, and Why, Done when,
+Proof, Where and Size as text lines. After Send back, the shared inline form with one required
+multiline field, "What to change". The foot has three cells: Drop (ghost) at the left on the newest
+version while the plan is open, "Saving" in the middle while a request runs, and at the right, on
+the newest version once it has reached you, Send back (outline) and Approve; after Send back,
+Cancel (ghost) and Send back, disabled until the field has words. No sentence explains a button.
+The workspace lies over the chat at 1200px and under, as every tab does, and the foot's three
+buttons fit at 432px. Part H's second PR adds Findings, Answers and Questions to the Check field,
+parts that open one at a time, the marks Changed, New and Removed with "Was", and the plan in the
+needs dock; the dock is not built yet.
 
 ### Human tasks
 

@@ -19,12 +19,13 @@ const count = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 /** What waits on the person, counted by kind: "2 questions, 1 approval". */
 function asks(lines: Line[]): string {
   const of = (kind: string) => lines.filter((l) => l.kind === kind).length;
-  const [questions, approvals, signIns] = [of('question'), of('approval'), of('sign_in')];
-  const paused = lines.length - questions - approvals - signIns;
+  const [questions, approvals, signIns, plans] = [of('question'), of('approval'), of('sign_in'), of('plan')];
+  const paused = lines.length - questions - approvals - signIns - plans;
   return [
     questions && count(questions, 'question'),
     approvals && count(approvals, 'approval'),
     signIns && count(signIns, 'sign-in'),
+    plans && count(plans, 'plan'),
     paused && `${paused} paused`,
   ]
     .filter(Boolean)

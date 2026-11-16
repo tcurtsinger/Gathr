@@ -2,7 +2,7 @@
 
 Status: accepted. Date: 2026-11-06.
 
-Built: partly. Proof: `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/pauses.rs`. A member's task has its own session ([0055](0055-a-members-task-starts-in-a-new-session.md): `crates/gathr/tests/sessions.rs`). Not built: plans and plan checks (no plan record, no `plan_check` task); side jobs; the lead's session per plan (the lead keeps one session per chat); the Supervisor pausing a chat, and who paused; notifications; the gate's hold while a plan is checked.
+Built: partly. Proof: `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/pauses.rs`. A member's task has its own session ([0055](0055-a-members-task-starts-in-a-new-session.md): `crates/gathr/tests/sessions.rs`). Plans and plan checks are built as [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md) says, in part. Not built: side jobs; the lead's session per plan (the lead keeps one session per chat); the Supervisor pausing a chat, and who paused; notifications; the gate's hold while a plan is checked.
 
 Out of date below: how a task settles is [0047](0047-a-report-is-a-record.md)'s now (a report is kept, a turn that ends with none never marks its task done, and "left" stops the task instead of starting its owner again). Hand-off chains and their limit are built. `may_start` isn't one function: a task's state, archive, pauses and usage are each checked where they apply. Waits also have the kind `up_to_date` and the state `picked` ([0043](0043-checks-and-merge.md)). "Plan" here is a record with versions; [0001](0001-engine-interface.md) and [0038](0038-summary-holds-the-plan.md) use the word for other things, and one meaning is still to be chosen.
 
@@ -48,7 +48,7 @@ The previous app listed more than a dozen start paths that each needed their own
 
 A task is work owed by one agent, or by the person.
 
-Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `review`, `person`, `person_request`, `plan_check`), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
+Fields: number (one sequence for agents' and the person's tasks), giver, owner, chat, the turn that gave it (`given_in`), `what` (one line, at most 200 characters, no paths), `why`, files, `after` (task numbers), parent (the task the giving turn worked on), kind (`work`, `review`, `person`, `person_request`; a plan's check is a `review` with `checks` set, [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md)), its PR, for a review the commit reviewed, and for decisions the choices with the giver's pick.
 
 Each turn records the task it works on. Together with `given_in`, this links a member's work to its actual assignment. 0015's accepted split chat uses these links to identify hand-off replies for the chronological team column and tasks for the round, rather than guessing from prose or the preceding message.
 
@@ -168,14 +168,16 @@ States per scope: `running`, `pausing` (paused, but turns or commands still run)
 
 ## Plans and plan checks
 
-A plan is a record with its own file and versions. States: `drafting`, `checking`, `revising`, `waiting_on_person`, then `built`, `sent_back`, `replaced` or `dropped`.
+Amended by [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): where this section differs from it, 0062 stands.
 
-- When the Supervisor finishes a plan in a chat with other agents, they check it before the person sees it. Checkers: the chat's Reviewer if one is set, else every free member. They read it against the code: wrong files, a missed caller, a missing step, a part given to the wrong member, a check that proves nothing. An agree is one line; an objection is a few lines with evidence.
-- The Supervisor answers objections with a new version or a reason it stands. Only those who objected re-check a later version, and only their points.
+A plan is a record with versions and no file. Its state is read from its rows and its check, never stored apart: `checking`, `revising`, `waiting` on the person, then `approved` or `dropped`; an older version is replaced.
+
+- When the Supervisor finishes a plan in a chat with other agents, they check it before the person sees it. The checker is the chat's Reviewer if one is set, else the free member that has checked least; after findings, the one who objected. They read it against the code: wrong files, a missed caller, a missing step, a part given to the wrong member, a check that proves nothing. An agree is one line; an objection is a few lines with evidence.
+- The Supervisor answers every finding in its next version, with a reason where it stands (`answers`). Only the one who objected re-checks it, and only those points.
 - If the check stalls (a checker's turn fails, or 10 minutes pass), the plan reaches the person anyway, saying who didn't finish.
 - On the person's card: who checked it and what changed because of it.
-- Outside plan mode, a Supervisor's turn that names a plan file is a plan: its tasks wait in `waiting` until the check is done. Giving two or more tasks no longer makes a plan: the size of the ask does ([0061](0061-every-ask-has-a-size.md)).
-- Each plan keeps its own record and file until it's built or dropped. A second plan never replaces the first.
+- A plan is written with the `plan` tool, and on the person's Approve each part becomes a task, word for word. Giving two or more tasks no longer makes a plan: the size of the ask does ([0061](0061-every-ask-has-a-size.md)). Nothing yet holds a building give while a plan is open (part I).
+- Each plan keeps its own record until it's approved or dropped. A second plan never replaces the first.
 - In plan mode the Supervisor may start read-only side jobs and write its own notes; changes to the project wait for Build.
 - A member who finds the plan wrong for its part says so (`blocked`, with evidence) before building on it.
 

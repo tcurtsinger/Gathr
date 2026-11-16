@@ -26,6 +26,16 @@ fn times() -> Times {
     }
 }
 
+/// How long a version's check has before the version reaches the person anyway, unless
+/// `GATHR_PLAN_CHECK_MS` says (dev and tests only).
+const PLAN_CHECK_US: i64 = 600_000_000;
+
+fn plan_check_us() -> i64 {
+    let ms = std::env::var("GATHR_PLAN_CHECK_MS").ok();
+    let ms = ms.and_then(|ms| ms.parse::<i64>().ok());
+    ms.map_or(PLAN_CHECK_US, |ms| ms * 1000)
+}
+
 /// Looks at one chat now.
 pub async fn check(chats: &Arc<Chats>, chat: &str) {
     let live = super::live_now(chats, chat);
@@ -42,6 +52,18 @@ pub async fn check(chats: &Arc<Chats>, chat: &str) {
         .call(move |conn| gathr::asks::fixed(conn, &id, &t));
     if let Some(Err(e)) = fixed.await {
         let event = Event::point("gathr.ask.fixed")
+            .trace(&trace)
+            .chat(chat)
+            .error("sqlite");
+        chats.writer.record(event.attr("why", e.to_string()));
+    }
+    // A version whose check runs late reaches the person (0062).
+    let (id, t) = (chat.to_string(), trace.clone());
+    let late = chats
+        .writer
+        .call(move |conn| gathr::plans::overdue(conn, &id, now_us(), plan_check_us(), &t));
+    if let Some(Err(e)) = late.await {
+        let event = Event::point("gathr.plan.checked")
             .trace(&trace)
             .chat(chat)
             .error("sqlite");

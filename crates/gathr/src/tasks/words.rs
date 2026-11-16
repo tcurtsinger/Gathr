@@ -39,6 +39,9 @@ pub fn brief(
     giver: &str,
     carry: Option<&str>,
 ) -> Result<String, Error> {
+    if t.checks.is_some() {
+        return crate::plans::check::check_brief(conn, t, giver, carry);
+    }
     let mut lines = vec![format!("Task #{} from {giver}: {}", t.number, t.what)];
     if let Some(why) = &t.why {
         lines.push(format!("Why: {why}"));
@@ -48,10 +51,7 @@ pub fn brief(
         lines.extend(super::person::request_lines(t, giver));
     }
     if let Some(carry) = carry {
-        lines.push(format!(
-            "Continue from here: {} Check what is already done before repeating work.",
-            sentence(carry)
-        ));
+        lines.push(carry_line(carry));
     }
     if t.kind == Kind::Review {
         lines.push(
@@ -64,6 +64,14 @@ pub fn brief(
             .to_string(),
     );
     Ok(lines.join("\n"))
+}
+
+/// D's carry line: where a task's brief goes on from.
+pub(crate) fn carry_line(carry: &str) -> String {
+    format!(
+        "Continue from here: {} Check what is already done before repeating work.",
+        sentence(carry)
+    )
 }
 
 /// What a task's new conversation opens with, before its ask (0055, N6): the agent's last tasks in

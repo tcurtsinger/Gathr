@@ -1,7 +1,7 @@
 //! An owner's report on its task (0047): kept on the task, taken whatever state the task is in,
 //! and applied when the task's running turn ends or, with none running, at once.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, Transaction, params};
 use serde::Serialize;
 
 use super::records::{read, state_of};
@@ -96,7 +96,21 @@ pub fn finish(
     trace: &str,
 ) -> Result<(Task, Took, Vec<Start>, review::Given), Error> {
     let tx = conn.transaction()?;
-    let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
+    let finished = finish_in(&tx, agent, task, how, said, trace)?;
+    tx.commit()?;
+    Ok(finished)
+}
+
+/// `finish`, in the caller's transaction: a thumbs-up finishes a plan check so (0062).
+pub(crate) fn finish_in(
+    tx: &Transaction,
+    agent: &str,
+    task: i64,
+    how: Finish,
+    said: &Said,
+    trace: &str,
+) -> Result<(Task, Took, Vec<Start>, review::Given), Error> {
+    let t = read(tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
     if t.owner.as_deref() != Some(agent) {
         return Err(refused(format!("task #{task} isn't yours")));
     }
@@ -105,6 +119,9 @@ pub fn finish(
         text.map(String::from)
     };
     let (note, commit, file) = (given(said.note), given(said.commit), given(said.file));
+    if t.checks.is_some() {
+        check_said(task, t.state, how, said, commit.is_some())?;
+    }
     if said.signed_off && (t.kind != Kind::Review || how != Finish::Done) {
         return Err(refused("`signed_off` goes with a review that is done"));
     }
@@ -142,7 +159,7 @@ pub fn finish(
         _ => {}
     }
     if let Some(on) = said.on_task
-        && (state_of(&tx, on)?.is_none() || on == task)
+        && (state_of(tx, on)?.is_none() || on == task)
     {
         return Err(refused(format!(
             "there's no other task #{on} to be blocked on"
@@ -161,7 +178,7 @@ pub fn finish(
     }
     let shown = note.is_some() || commit.is_some() || file.is_some() || said.pr.or(t.pr).is_some();
     let missing = match (how, t.kind) {
-        (Finish::Done, Kind::Review) if commit.is_none() => {
+        (Finish::Done, Kind::Review) if commit.is_none() && t.checks.is_none() => {
             Some("Include the reviewed commit when you finish a review")
         }
         // As the merge tool asks (0043): fewer characters could name another commit, and one that
@@ -172,7 +189,7 @@ pub fn finish(
         (Finish::Done, Kind::Review) if !said.nothing_unasked || asks_work => Some(
             "A done review says nothing_unasked: true and has no wrong or unasked notes. Report those as left.",
         ),
-        (_, Kind::Review) if !said.notes.is_empty() && commit.is_none() => {
+        (_, Kind::Review) if !said.notes.is_empty() && commit.is_none() && t.checks.is_none() => {
             Some("Include the reviewed commit with your notes")
         }
         (Finish::Done, Kind::Work) if !shown => {
@@ -220,13 +237,22 @@ pub fn finish(
             said.signed_off
         ],
     )?;
-    if let Some(reviewed) = reviewed.as_deref()
+    // A plan check's notes are kept at the version's message; the task records no commit (0062).
+    let noted_at = match t.checks {
+        Some(v) => Some(tx.query_row(
+            "SELECT message_id FROM plan_versions WHERE id = ?1",
+            [v],
+            |r| r.get(0),
+        )?),
+        None => reviewed.clone(),
+    };
+    if let Some(at) = noted_at.as_deref()
         && (!said.notes.is_empty() || how == Finish::Done)
     {
         let nothing_unasked = said.nothing_unasked;
-        notes::record(&tx, &t, reviewed, said.notes, now, nothing_unasked, trace)?;
+        notes::record(tx, &t, at, said.notes, now, nothing_unasked, trace)?;
     }
-    let running = turn_running(&tx, task)?;
+    let running = turn_running(tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
     let (took, mut starts) = if again {
@@ -236,19 +262,45 @@ pub fn finish(
     } else if in_line {
         (Took::Applied, Vec::new())
     } else {
-        let mut starts = held::settle(&tx, &t, trace)?;
-        starts.extend(cascade(&tx, task, trace)?);
+        let mut starts = held::settle(tx, &t, trace)?;
+        starts.extend(cascade(tx, task, trace)?);
         (Took::Applied, starts)
     };
     let mut review = None;
     if let (Kind::Work, None, Some(pr)) = (t.kind, t.pr, said.pr) {
-        let (given, more) = review::give(&tx, &t, (how, pr), said.turn, trace)?;
+        let (given, more) = review::give(tx, &t, (how, pr), said.turn, trace)?;
         review = given;
         starts.extend(more);
     }
-    let task = read(&tx, task)?;
-    tx.commit()?;
+    let task = read(tx, task)?;
     Ok((task, took, starts, review))
+}
+
+/// What a plan check's report may say (0062): the version is what it checked, and left names what fails.
+fn check_said(
+    task: i64,
+    state: State,
+    how: Finish,
+    said: &Said,
+    commit: bool,
+) -> Result<(), Error> {
+    if commit || said.pr.is_some() || said.signed_off {
+        return Err(refused(
+            "A plan check takes no pr, commit or signed_off: Gathr records the version you checked.",
+        ));
+    }
+    let asks_work = notes::ask_for_work(said.notes);
+    if state == State::Done && asks_work {
+        return Err(refused(format!(
+            "Check #{task} is done. Findings on a later version go on its own check."
+        )));
+    }
+    if how == Finish::Left && !asks_work {
+        return Err(refused(
+            "A check that agrees gives a thumbs-up with react; left needs a wrong or unasked note.",
+        ));
+    }
+    Ok(())
 }
 
 /// Whether the text is how git names a commit, in full or cut short: 7 to 40 hex digits.

@@ -1,4 +1,4 @@
-import type { Ask, Failure, History, Member, Message, Reaction, Task, Turn, Wait } from '../api';
+import type { Ask, Failure, History, Member, Message, PlanSummary, Reaction, Task, Turn, Wait } from '../api';
 import type { LiveEvent } from '../live';
 
 export interface Approval {
@@ -24,6 +24,8 @@ export interface ChatState {
   waits: Wait[];
   /** The person's asks, oldest first, each with its size (0061). */
   asks: Ask[];
+  /** The lead's plans, oldest first (0062). */
+  plans: PlanSummary[];
   reactions: Reaction[];
 }
 
@@ -36,12 +38,13 @@ export const empty: ChatState = {
   tasks: [],
   waits: [],
   asks: [],
+  plans: [],
   reactions: [],
 };
 
 export function fromHistory(
   history: History,
-  work?: { tasks: Task[]; waits: Wait[]; asks?: Ask[] },
+  work?: { tasks: Task[]; waits: Wait[]; asks?: Ask[]; plans?: PlanSummary[] },
 ): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
   const approvals = history.approvals.map((a) => ({
@@ -61,6 +64,7 @@ export function fromHistory(
     tasks: work?.tasks ?? [],
     waits: work?.waits ?? [],
     asks: work?.asks ?? [],
+    plans: work?.plans ?? [],
     reactions: history.reactions ?? [],
   };
 }
@@ -72,7 +76,7 @@ export function fromHistory(
  */
 export function fromLoad(
   history: History,
-  work: { tasks: Task[]; waits: Wait[]; asks?: Ask[] },
+  work: { tasks: Task[]; waits: Wait[]; asks?: Ask[]; plans?: PlanSummary[] },
   held: LiveEvent[],
 ): ChatState {
   const saved = new Set(history.messages.map((m) => m.id));
@@ -137,7 +141,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, approvals: [...state.approvals, approval] };
     }
     case 'tasks':
-      return { ...state, tasks: event.tasks, waits: event.waits, asks: event.asks };
+      return { ...state, tasks: event.tasks, waits: event.waits, asks: event.asks, plans: event.plans ?? [] };
     case 'members':
       return { ...state, members: event.members };
     case 'context':

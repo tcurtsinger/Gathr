@@ -202,14 +202,14 @@ function Plan({
 }) {
   const { steps, done } = round;
   return (
-    <section className="summary-plan" aria-label="Plan">
+    <section className="summary-plan" aria-label="Round">
       <h3>
-        Plan
+        Round
         <small className="summary-note">
           <span
             className="plan-segments"
             role="progressbar"
-            aria-label="Plan progress"
+            aria-label="Round progress"
             aria-valuemin={0}
             aria-valuemax={steps.length}
             aria-valuenow={done}

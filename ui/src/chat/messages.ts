@@ -1,5 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import { planLine, versionOf } from '../plans/plans';
 import { fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
 import { ended, hearBack, outcome } from './hearback';
@@ -27,7 +28,7 @@ export interface TurnNotice {
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
-  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan';
+  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan' | 'version';
   /** Who did what, ahead of the text: "Vale completed:". */
   who?: string;
   text: string;
@@ -36,6 +37,8 @@ export interface EventLine {
   task?: number;
   /** A size line's ask: it opens to the ask's two sizes (0061). */
   ask?: string;
+  /** A plan line's version: it opens the plan's tab there (0062). */
+  plan?: { id: number; version: number };
 }
 
 /** Gathr's own part of a message, read by the thread's message components. */
@@ -61,6 +64,8 @@ export type Custom = {
   /** Who gave its text a thumbs-up, in the order given. */
   agreed?: string[];
   events?: EventLine[];
+  /** A version of the lead's plan: its chip opens the plan's tab (0062). */
+  plan?: { plan: number; version: number; parts: number };
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message, or
    * the lead's reply to them, which is the last block of each of its main-line turns once it has ended.
@@ -87,7 +92,7 @@ export interface Group {
   key: string;
   turn: string | null;
   msgs: Message[];
-  kind: 'person' | 'gathr' | 'reply' | 'to';
+  kind: 'person' | 'gathr' | 'reply' | 'to' | 'version';
   /** Where its first message is among the chat's saved ones; one with none yet sits after its turn's latest. */
   at: number;
   /** It opens its turn: the message that started it, or its first reply. */
@@ -153,6 +158,13 @@ export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[
       continue;
     }
     endTalk();
+    if (g.kind === 'version') {
+      // Named as the lead's reply blocks are: the lead's turn works on no task.
+      const who = `${state.turns[g.turn ?? '']?.agent}|${undefined}`;
+      add(versionBlock(cache, g, state, crew, who !== speaker), [g]);
+      speaker = who;
+      continue;
+    }
     if (g.kind === 'person') {
       add(
         kept(cache, g.key, g.msgs[0].body as string, () => toUser(g.msgs[0])),
@@ -226,6 +238,7 @@ function grouped(state: ChatState): Group[] {
   const open = new Map<string, Group>();
   // Each turn's latest saved message, of any kind.
   const latest = new Map<string, number>();
+  const versions = new Set(state.plans.flatMap((p) => p.versions.map((v) => v.message)));
   state.messages.forEach((m, at) => {
     const bound = !!m.turn && !latest.has(m.turn);
     if (m.turn) latest.set(m.turn, at);
@@ -235,6 +248,10 @@ function grouped(state: ChatState): Group[] {
       if (m.turn) open.delete(m.turn);
     } else if (m.role === 'gathr') {
       if (!m.copy_of) groups.push({ ...one, key: m.id, kind: 'gathr', bound });
+    } else if (versions.has(m.id)) {
+      // The lead's text after the plan call starts a new block after the chip, never above it.
+      groups.push({ ...one, key: m.id, kind: 'version', bound });
+      if (m.turn) open.delete(m.turn);
     } else if (m.to) {
       // An answer follows the message it answers: a turn that has only worked since that message
       // shows after what it sent, so the talk reads as one block.
@@ -280,7 +297,8 @@ function givenBy(state: ChatState, crew: Team) {
   const gave = new Map<string, Given>();
   for (const [turn, made] of calls) {
     const tasks = state.tasks
-      .filter((t) => t.given_in === turn && t.kind !== 'person')
+      // A plan's check and its parts' tasks are Gathr's gives, with no call of the turn's.
+      .filter((t) => t.given_in === turn && t.kind !== 'person' && !t.checks && t.plan == null)
       .sort((a, b) => a.number - b.number);
     // Only when they pair off: a call for each task, a task for each call.
     if (tasks.length !== made.length) continue;
@@ -390,6 +408,34 @@ const agreedBy = (state: ChatState, crew: Team, message: string) =>
 const member = (state: ChatState, agent?: string | null) =>
   state.members.some((m) => m.agent === agent) ? (agent ?? undefined) : undefined;
 
+/** A version of the lead's plan: the speaker, its chip and who gave it a thumbs-up; its words are the tab's. */
+function versionBlock(
+  cache: Cache,
+  group: Group,
+  state: ChatState,
+  crew: Team,
+  head: boolean,
+): ThreadMessageLike {
+  const m = group.msgs[0];
+  const found = versionOf(state.plans, m.id);
+  const agent = state.turns[group.turn ?? '']?.agent;
+  const custom: Custom = {
+    agent: crew.name(agent),
+    by: agent ?? undefined,
+    role: crew.role(agent),
+    time: m.time,
+    head,
+    agreed: agreedBy(state, crew, m.id),
+    plan: found && { plan: found.plan.id, version: found.version.n, parts: found.version.parts },
+  };
+  return kept(cache, group.key, JSON.stringify(custom), () => ({
+    id: group.key,
+    role: 'assistant',
+    content: [],
+    metadata: { custom },
+  }));
+}
+
 /** Messages between agents that follow each other, as one block: a text and its header for each. */
 function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): ThreadMessageLike {
   const key = groups[0].key;
@@ -423,6 +469,8 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
  */
 function heard(group: Group, state: ChatState, crew: Team, said: Map<number, number>): EventLine[] {
   const m = group.msgs[0];
+  const plan = planLine(m, state, crew);
+  if (plan) return [plan];
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
   const answers = state.tasks
@@ -440,7 +488,10 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   const fix = m.turn ? undefined : fixed(text);
   if (fix) return [fix];
   const shown = (task: number, how: string) => how === 'done' && (said.get(task) ?? group.at) < group.at;
-  const reported = hearBack(text, state.tasks)?.filter((r) => !shown(r.task.number, r.state));
+  // A plan's check has no line of its own: its plan's line says how it ended.
+  const reported = hearBack(text, state.tasks)?.filter(
+    (r) => !shown(r.task.number, r.state) && r.task.checks == null,
+  );
   const back = reported?.map(
     ({ task, state: how, reason }): EventLine => ({
       kind: 'task',

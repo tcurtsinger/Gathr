@@ -1,4 +1,4 @@
-import { FileText, ListTodo, PanelRight, X } from 'lucide-react';
+import { ClipboardList, FileText, ListTodo, PanelRight, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Initial } from '../chat/Initial';
@@ -26,7 +26,9 @@ interface Props {
   files: FileTab[];
   /** The agent opened from Summary or the timeline: its tab's name and its panel. One at a time. */
   agent?: { name: string; panel: ReactNode };
-  /** 'tasks', 'agent', or a file tab's id. */
+  /** The plan opened from its chip or a plan line, at a version, and its view. One at a time (0062). */
+  plan?: { version: number; view: ReactNode; onClose: () => void };
+  /** 'tasks', 'agent', 'plan', or a file tab's id. */
   selected: string;
   onSelect: (id: string) => void;
   onCloseFile: (id: string) => void;
@@ -37,15 +39,16 @@ interface Props {
 
 /**
  * The chat's workspace beside the conversation (DESIGN.md "Navigation and workspace"): Tasks, the agent
- * opened from Summary, then a tab for each file opened from a question. The prototype's other tabs come
- * with their features.
+ * opened from Summary, the plan opened from the timeline, then a tab for each file opened from a question.
+ * The prototype's other tabs come with their features.
  */
 export function Workspace(props: Props) {
-  const { waiting, files, agent, onSelect, onCloseFile, onCloseAgent, onClose, tasks } = props;
+  const { waiting, files, agent, plan, onSelect, onCloseFile, onCloseAgent, onClose, tasks } = props;
   // An agent that left the chat takes its tab with it.
   const selected = props.selected === 'agent' && !agent ? 'tasks' : props.selected;
-  const ids = ['tasks', ...(agent ? ['agent'] : []), ...files.map(fileId)];
-  const close = (id: string) => (id === 'agent' ? onCloseAgent() : onCloseFile(id));
+  const ids = ['tasks', ...(agent ? ['agent'] : []), ...(plan ? ['plan'] : []), ...files.map(fileId)];
+  const close = (id: string) =>
+    id === 'agent' ? onCloseAgent() : id === 'plan' ? plan?.onClose() : onCloseFile(id);
   const keys = (e: KeyboardEvent) => {
     const at = ids.indexOf(selected);
     const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: ids.length - 1 }[e.key];
@@ -97,6 +100,7 @@ export function Workspace(props: Props) {
         >
           {tab('tasks', 'Tasks', <ListTodo aria-hidden="true" />, waiting && <i className="attention" />)}
           {agent && tab('agent', agent.name, <Initial name={agent.name} size="s" />)}
+          {plan && tab('plan', `Plan v${plan.version}`, <ClipboardList aria-hidden="true" />)}
           {files.map((f) => tab(fileId(f), f.name, <FileText aria-hidden="true" />))}
         </div>
         <TooltipIconButton
@@ -126,6 +130,17 @@ export function Workspace(props: Props) {
           hidden={selected !== 'agent'}
         >
           {agent.panel}
+        </section>
+      )}
+      {plan && (
+        <section
+          id="workspace-view-plan"
+          role="tabpanel"
+          aria-labelledby="workspace-tab-plan"
+          className="workspace-view"
+          hidden={selected !== 'plan'}
+        >
+          {plan.view}
         </section>
       )}
       {files.map((f) => (

@@ -13,10 +13,15 @@ use crate::chats::Chats;
 
 mod api;
 mod looks;
+mod plans;
 pub mod quiet;
 
-pub use api::{Change as SettingsChange, change_settings_as, present, routes, settings_shown};
+pub use api::{Change as SettingsChange, change_settings_as, present, settings_shown};
 pub use looks::fresh;
+
+pub fn routes() -> axum::Router<Arc<crate::api::State>> {
+    api::routes().merge(plans::routes())
+}
 
 /// How often waits are looked at, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).
 const EVERY: Duration = Duration::from_secs(120);
@@ -54,12 +59,14 @@ pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Opt
     apply(chats, "gathr.turn.status", m.trace, work).await;
 }
 
-/// A chat's tasks and waits, as `GET /api/chats/<id>/tasks` answers and the live socket sends.
+/// A chat's tasks, waits, asks and plans, as `GET /api/chats/<id>/tasks` answers and the live
+/// socket sends.
 pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::Error> {
     let tasks = tasks::list(conn, chat)?;
     let waits = gathr::waits::in_chat(conn, chat, None)?;
     let asks = gathr::asks::in_chat(conn, chat)?;
-    Ok(json!({ "tasks": tasks, "waits": waits, "asks": asks }))
+    let plans = gathr::plans::in_chat(conn, chat)?;
+    Ok(json!({ "tasks": tasks, "waits": waits, "asks": asks, "plans": plans }))
 }
 
 /// What only the running service knows of what the chat waits on (0050): why its queued turns

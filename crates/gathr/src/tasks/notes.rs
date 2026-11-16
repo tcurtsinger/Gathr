@@ -125,7 +125,7 @@ pub(super) fn of(conn: &Connection, task: i64) -> Result<Vec<Note>, Error> {
 }
 
 /// The newest report's notes with their rows; with `work`, only the wrong and unasked ones.
-fn newest(conn: &Connection, task: i64, work: bool) -> Result<Vec<(i64, Note)>, Error> {
+pub(crate) fn newest(conn: &Connection, task: i64, work: bool) -> Result<Vec<(i64, Note)>, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT n.id, n.kind, n.file, n.says FROM review_notes n JOIN tasks t ON t.number = n.task
          WHERE n.task = ?1 AND n.created_ts = t.finish_ts AND (NOT ?2 OR n.kind != 'suggestion')

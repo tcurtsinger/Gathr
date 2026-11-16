@@ -177,6 +177,13 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
     )?;
     let number = tx.last_insert_rowid();
     crate::asks::inherit(&tx, number)?;
+    // One question at a time for an ask that may get a plan (0062, H3.1).
+    if to_person && let Some(q) = crate::plans::held_question(&tx, number)? {
+        return Err(refused(format!(
+            "Question #{q} to the person is still open for this ask. Until its plan is approved, ask one at a time: \
+             wait for its answer, or cancel #{q} first."
+        )));
+    }
     let starts = match to_person {
         // The person's is open from the start: there's no turn to queue.
         true => {

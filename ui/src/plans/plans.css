@@ -1,0 +1,115 @@
+/* A version of the lead's plan in its turn (0062 H5.1, the plan-card mock-up v2): it opens the plan's tab. */
+.plan-chip {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+  border-radius: 12px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.plan-chip:hover {
+  background: var(--hover-tint);
+}
+.plan-chip svg {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
+.plan-chip small {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+/* The plan's tab, on the Tasks tab's page (0062 H5.4). */
+.plan-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.plan-versions {
+  display: flex;
+  gap: 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.plan-asked {
+  margin: 0 0 24px;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--border);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.plan-asked small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+.plan-text {
+  margin: 0 0 24px;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.plan-page h3 {
+  margin: 28px 0 12px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.plan-parts {
+  display: grid;
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.plan-parts li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 0 10px;
+}
+.plan-part-n {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.plan-parts p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.plan-parts p > span {
+  color: var(--muted-foreground);
+}
+.plan-parts .plan-part-what {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+.plan-parts .plan-part-meta {
+  margin-bottom: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.plan-back {
+  margin-top: 28px;
+}

@@ -126,6 +126,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "list_tasks",
         "merge",
         "message",
+        "plan",
         "pr",
         "react",
         "read_chat",
@@ -288,6 +289,10 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
     assert!(
         briefing.contains("size, for the Supervisor, to record the person's ask as repair or new;"),
         "the briefing doesn't name the size tool: {briefing}"
+    );
+    assert!(
+        briefing.contains("plan, for the Supervisor, to write the plan for a new ask;"),
+        "the briefing doesn't name the plan tool: {briefing}"
     );
     // G21: what's off is said before the agent tries it.
     assert!(

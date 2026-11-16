@@ -98,6 +98,10 @@ Where the code differs from the detail the owner approved, the code stands.
 - **The mock-up's explaining words and its third choice.** The line says Fix or Plan, and nothing explains it.
 - **A setting for any of it.**
 
+## Amended by
+
+- [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): an open plan (being checked, waiting on the person or being revised) is open work of its ask, so G1a's follow-up joins it; and a split never moves a plan, its check or the tasks Approve made, and is refused when the message's turn wrote a plan version.
+
 ## Amends
 
 - [0010](0010-coordination-as-state.md): the rule that a Supervisor's turn giving two or more tasks is a plan goes. The size replaces it: what makes new work wait for a plan is an ask sized new, with parts H to J.

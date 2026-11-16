@@ -130,20 +130,25 @@ Parts: 2.2
 
 Parts: 2.3
 
-- **Given** the lead has written a plan
-- **When** the lead puts it to the person
-- **Then** Gathr gives it to the reviewer first. The person sees the plan only with the check's result
-  on it: agreed, or objections with their evidence and the lead's answer to each
+- **Given** the lead has written a version of a plan with the `plan` tool
+- **When** Gathr gives the check to the reviewer
+- **Then** the version is the lead's own message in the chat, with a chip, and its tab says it is being
+  checked: there is no Approve. A thumbs-up from the checker on that message agrees. Gathr's line says
+  how the check ended ("Bo agrees", "3 findings" or "Bo didn't finish"), and the chat then needs the
+  person. A check that left findings wakes the lead, who answers each in its next version, and only
+  the one who objected checks that version, on those points. A check still open 10 minutes after the
+  version was written reaches the person as "didn't finish"
 
 ### 2d. A plan is a record with versions and states
 
 Parts: 2.1
 
-- **Given** a plan the person sent back with notes
-- **When** the lead revises it
-- **Then** Gathr holds both versions and the notes. The new version is checked again before the person
-  sees it. At every moment the plan is in one state: being written, being checked, with the person,
-  approved, sent back, or dropped
+- **Given** a plan the person sent back with words
+- **When** the lead writes the next version
+- **Then** Gathr holds both versions, the words and the lead's answers. The new version is checked again
+  before the person sees it, and the old one reads as replaced. From its first version a plan is in one
+  state at every moment, read from its rows: checking, revising, waiting on the person, approved or
+  dropped. A second plan for an ask keeps the first
 
 ### 2e. The lead asks its questions first, one at a time
 
@@ -152,8 +157,8 @@ Parts: 2.5
 - **Given** an ask sized as new, where two things must be decided before a plan can be written
 - **When** the lead asks the person
 - **Then** the first question arrives alone, with options and the lead's pick. The second arrives after
-  the first is answered. Both, with their answers, are held with the plan, and the plan can't go to
-  its check while a question is open
+  the first is answered. Both, with their answers, are held with the plan, and the plan can't be
+  written while a question is open
 
 ### 2f. A repair doesn't wait for the person, and is shown after
 
@@ -204,8 +209,9 @@ Parts: 3.5
 - **Given** a checked plan in three parts, each with an owner, what done means, how it's proved and
   its order
 - **When** the person approves it
-- **Then** Gathr makes three tasks, each with its part's brief, owner and order. Nobody types them
-  again
+- **Then** Gathr makes three tasks in one step, each with its part's brief, owner and order, word for
+  word, and starts the ones with nothing to wait on. No turn of the lead's is spent on it, and the lead
+  hears back on the tasks as on any it gave. Nobody types them again
 
 ### 3c. A task set after another starts when that one's work is done
 

@@ -1,9 +1,11 @@
 //! `react`: an agent puts its thumbs-up on another agent's message in its own chat. One row and
-//! one event: it posts no message, counts no hand-off and wakes nobody.
+//! one event: it posts no message, counts no hand-off and wakes nobody, but a plan's checker's
+//! thumbs-up on the version it checks finishes that check (0062).
 
 use std::time::Instant;
 
 use axum::http::request::Parts;
+use gathr::tasks::Took;
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -46,13 +48,17 @@ impl Tools {
             message.clone(),
         );
         let giver = from.clone();
-        let added = self
+        let (added, agreed) = self
             .db(move |c| {
                 let tx = c.transaction()?;
                 gathr::archive::refuse_archived(&tx, &chat)?;
                 let added = gathr::reactions::add(&tx, &chat, &asked, &giver, &on.trace)?;
+                let agreed = match added.new {
+                    true => gathr::plans::agreed(&tx, &chat, &asked, &giver, &on.trace)?,
+                    false => None,
+                };
                 tx.commit()?;
-                Ok(added)
+                Ok((added, agreed))
             })
             .await?;
         if !added.new {
@@ -62,6 +68,17 @@ impl Tools {
         let reaction = json!({ "message": added.message, "agent": from, "time": added.time });
         self.chats
             .publish(json!({ "type": "reaction", "chat": caller.chat, "reaction": reaction }));
-        Ok(format!("Gave {message} a thumbs-up."))
+        let mut said = format!("Gave {message} a thumbs-up.");
+        if let Some(a) = agreed {
+            self.chats.start(a.starts);
+            let (n, v) = (a.check, a.version);
+            said.push_str(&match a.took {
+                Took::Kept => format!(
+                    "\nRecorded: your check #{n} of version {v} is done when the turn running on it ends."
+                ),
+                _ => format!("\nYour check #{n} of version {v} is done."),
+            });
+        }
+        Ok(said)
     }
 }

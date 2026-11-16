@@ -10,12 +10,14 @@ import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/el
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { counted } from '../plans/plans';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { SizeChoice } from './Size';
 import { clock, list } from './team';
 import { Elapsed } from './Working';
 import './team.css';
+import '../plans/plans.css';
 
 /** The text a search hit opened at. */
 export const FoundContext = createContext<string | undefined>(undefined);
@@ -203,6 +205,22 @@ export function Agreed({ names }: { names: string[] }) {
   );
 }
 
+/** A version of the lead's plan in its turn (0062): it opens the plan's tab there. */
+export function PlanChip({ version, parts, onOpen }: { version: number; parts: number; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      className="plan-chip"
+      aria-label={`Plan · version ${version}, ${counted(parts, 'part')}`}
+      onClick={onOpen}
+    >
+      <ClipboardList aria-hidden="true" />
+      <span>Plan · version {version}</span>
+      <small>{counted(parts, 'part')}</small>
+    </button>
+  );
+}
+
 const ICON = {
   task: CircleCheck,
   answer: PenLine,
@@ -210,23 +228,32 @@ const ICON = {
   note: Bell,
   fix: Wrench,
   plan: ClipboardList,
+  version: ClipboardList,
 };
 
 /** Gathr's notes that belong to no turn's row, one line each. */
 export function Events({
   events,
   onOpenTask,
+  onOpenPlan,
   onReference,
 }: {
   events: EventLine[];
   onOpenTask: (task: number) => void;
+  onOpenPlan?: (plan: number, version: number) => void;
   onReference?: (ref: string) => void;
 }) {
   return (
     <MessagePrimitive.Root className="events">
       {events.map((e, index) => (
         // Two lines can read the same ("You answered Orin: Done"): its task tells them apart, else its place.
-        <Event key={e.task ?? `at-${index}`} event={e} onOpenTask={onOpenTask} onReference={onReference} />
+        <Event
+          key={e.task ?? `at-${index}`}
+          event={e}
+          onOpenTask={onOpenTask}
+          onOpenPlan={onOpenPlan}
+          onReference={onReference}
+        />
       ))}
     </MessagePrimitive.Root>
   );
@@ -239,13 +266,15 @@ export function Events({
 function Event({
   event,
   onOpenTask,
+  onOpenPlan,
   onReference,
 }: {
   event: EventLine;
   onOpenTask: (task: number) => void;
+  onOpenPlan?: (plan: number, version: number) => void;
   onReference?: (ref: string) => void;
 }) {
-  const { who, text, more, task, ask } = event;
+  const { who, text, more, task, ask, plan } = event;
   const Icon = ICON[event.kind];
   return (
     <CollapsibleRoot>
@@ -256,12 +285,17 @@ function Event({
           {text}
         </span>
       </CollapsibleTrigger>
-      {(more || task !== undefined || ask) && (
+      {(more || task !== undefined || ask || plan) && (
         <CollapsibleContent className="event-more">
           {more && <span>{more}</span>}
           {task !== undefined && (
             <button type="button" className="link" onClick={() => onOpenTask(task)}>
               Open task
+            </button>
+          )}
+          {plan && onOpenPlan && (
+            <button type="button" className="link" onClick={() => onOpenPlan(plan.id, plan.version)}>
+              Open plan
             </button>
           )}
           {ask && (

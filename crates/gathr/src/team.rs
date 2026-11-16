@@ -109,6 +109,22 @@ pub fn set_members(
     Ok(())
 }
 
+/// The chat's agent with this name, ignoring case.
+pub fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, Error> {
+    let members = members(conn, chat)?;
+    let wanted = name.trim().trim_start_matches('@').to_lowercase();
+    match members.iter().find(|m| m.name.to_lowercase() == wanted) {
+        Some(m) => Ok(m.agent.clone()),
+        None => {
+            let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
+            Err(Error::Refused(format!(
+                "no agent {name} in this chat: its agents are {}",
+                names.join(", ")
+            )))
+        }
+    }
+}
+
 /// The title of a chat the agent is in, if any: an agent isn't deleted while a chat has it.
 pub fn a_chat_of(conn: &Connection, agent: &str) -> Result<Option<String>, Error> {
     use rusqlite::OptionalExtension;

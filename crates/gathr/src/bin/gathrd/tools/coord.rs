@@ -9,6 +9,7 @@ use gathr::tasks::{
     self, DONE_MOST, Edit, Finish, Give, Kind, NoteKind, NoteSaid, PROOF_MOST, SIZE_MOST, Said,
     Start, State, TITLE_MOST, Took, WHERE_MOST,
 };
+use gathr::team::agent_named;
 use gathr::waits::{self, Leave, Part};
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
@@ -627,23 +628,6 @@ impl Tools {
 
 fn trace_of(caller: &Caller) -> String {
     caller.trace().unwrap_or_else(gathr::ids::trace_id)
-}
-
-/// The chat's agent with this name, ignoring case.
-fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, Error> {
-    let members = gathr::team::members(conn, chat)?;
-    let wanted = name.trim().trim_start_matches('@').to_lowercase();
-    let found = members.iter().find(|m| m.name.to_lowercase() == wanted);
-    match found {
-        Some(m) => Ok(m.agent.clone()),
-        None => {
-            let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
-            Err(Error::Refused(format!(
-                "no agent {name} in this chat: its agents are {}",
-                names.join(", ")
-            )))
-        }
-    }
 }
 
 fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {

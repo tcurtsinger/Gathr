@@ -130,6 +130,12 @@ test('the line says what waits on the person first, then what has waited longest
     words: '2 questions, 1 approval, 1 paused',
     more: 1,
   });
+  // A plan is counted as a plan, before what is paused.
+  const plan = line('plan', 'A plan for you: Made-up plan', 'you');
+  expect(headline([paused, plan], agents)).toMatchObject({ words: '1 plan, 1 paused' });
+  expect(headline([plan, approval, { ...plan, what: 'Another' }], agents)).toMatchObject({
+    words: '1 approval, 2 plans',
+  });
   // A silent turn comes after what waits on the person and before the rest, by its agent's name.
   expect(headline([blocked, silent, ci], agents)).toMatchObject({
     moves: 'nobody',
