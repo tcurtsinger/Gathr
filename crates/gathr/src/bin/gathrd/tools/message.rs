@@ -186,7 +186,7 @@ impl Tools {
     async fn deliver(&self, caller: &Caller, sent: &Sent, text: &str) -> &'static str {
         let (reply, answer) = oneshot::channel();
         let id = sent.shown["id"].as_str().unwrap_or_default().to_string();
-        let ask = format!("{} wrote to you (message {id}): {text}", sent.from_name);
+        let ask = gathr::handoffs::told(&sent.from_name, &id, text);
         let task = self.chats.task(&caller.chat, Some(&sent.to));
         let command = Cmd::Message {
             chat: caller.chat.clone(),

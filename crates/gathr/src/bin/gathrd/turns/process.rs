@@ -308,7 +308,11 @@ impl Task {
             let text = briefing::text(&facts);
             let (agent, chat) = (assigned.agent.clone(), &assigned.chat);
             let caller = (agent, chat.as_str(), place);
-            Pass::new(&self.chats.passes, folder, caller, &text).map_err(|e| e.to_string())
+            let mut pass =
+                Pass::new(&self.chats.passes, folder, caller, &text).map_err(|e| e.to_string())?;
+            let version = |r| (!gathr::roles::lines(r).is_empty()).then_some(gathr::words::ROLE);
+            pass.role = facts.role.map(|r| (r, version(r)));
+            Ok(pass)
         });
         made.map_err(|e| {
             let why = format!("the engine's briefing wasn't written: {e}");

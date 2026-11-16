@@ -735,9 +735,12 @@ Parts: 8.7, 11.1
 
 - **Given** a new project on Gathr's defaults, with a lead, a reviewer and a builder
 - **When** each starts its first turn
-- **Then** each is told its team, its own role, and what that role does: the lead sizes and plans and
-  is the one who asks the person, the reviewer checks plans and work it didn't make, the builder
-  builds and reports. Nobody wrote a rulebook for it
+- **Then** each is told its team, its own role, and the few things that role must do that Gathr's tools
+  don't already make it do, each shipped only after the trial on real engines showed it changed what
+  agents do ([11f](#11f-a-line-ships-only-when-it-did-clearly-better-with-it-than-without)): the
+  builder to make the smallest change that does what was asked, and all three to agree with a
+  thumbs-up. The lead and the reviewer have no line of their own. Sizing, plans, who asks the person,
+  checks and reports come from Gathr's tools and state. Nobody wrote a rulebook for it
 
 ### 8h. A member's second task starts in a new conversation
 
@@ -1005,6 +1008,20 @@ Parts: 11.5
   kind and version, its turns, its turns with no tool call, the `finish_task` calls turned away, and the
   task turns that ended with no report. A change to a kind's main form without a new version fails a test
 
+### 11f. A line ships only when it did clearly better with it than without
+
+Parts: 11.1, 8.7, 6.6
+
+- **Given** a line of role text and the case that measures it, on a made-up project, on the engines the
+  room uses for that role
+- **When** the case runs with the line and without it, alternating block by block, on one build and one
+  set of engine copies, and Gathr's records and the diff are counted: no model judges another
+- **Then** the line ships only if the runs with it did clearly better on every engine, and a line that
+  made no clear difference is left out, with its case. Each shipped line has its text's hash and a
+  `kept` decision in the trial's committed file, and a test fails for a line that has none. Of the four
+  lines tried, the member's and the thumbs-up shipped; the lead's and the code review's made no
+  difference and were removed
+
 ## 12. Open both ways
 
 ### 12a. An outside AI the person allowed brings something, and hears back
@@ -1109,6 +1126,8 @@ built:
 - That an agent with only the brief does the task right, and one that was compacted finishes it right
   (3d, 8d).
 - That the default briefing is enough for each role to work as described (8g, 11a, R2).
+- What a line of role text does to a real model: the trial in `docs/testing.md` runs it on real engines
+  by hand (11f), and a replay never does.
 - That the system shows a notification, that a click on it opens the chat, and that Claude Code passes
   the hook's reason back word for word (6j).
 

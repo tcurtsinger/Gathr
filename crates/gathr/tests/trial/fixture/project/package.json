@@ -1,0 +1,10 @@
+{
+  "name": "durations",
+  "version": "1.0.0",
+  "description": "Durations as short text, read into milliseconds",
+  "main": "src/duration.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

@@ -115,6 +115,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "c453e3a17f6b08ccb7b60b53a1c9f7c5d9381a0090b2109e98a7a7a8eb6aa9fb",
     ),
+    (
+        "role",
+        1,
+        "0cb35e37d095928928ad396191fdd7c8eff8a4c00e1a333cd1c5b57d3bb95354",
+    ),
 ];
 
 /// Every file that asserts samples.
@@ -130,6 +135,7 @@ const SOURCES: &[&str] = &[
     include_str!("plans/decide.rs"),
     include_str!("hold/give.rs"),
     include_str!("hold/wait.rs"),
+    include_str!("roles.rs"),
 ];
 
 /// The lowercase hex SHA-256 of a kind's sample texts, in order, each followed by a NUL byte.
@@ -209,10 +215,12 @@ fn check(
 
 #[test]
 fn each_kinds_samples_match_the_hash_kept_for_its_version() {
-    let kinds: Vec<(&str, Option<i64>)> = Opened::ALL
+    let mut kinds: Vec<(&str, Option<i64>)> = Opened::ALL
         .iter()
         .map(|o| (o.as_str(), o.version()))
         .collect();
+    // A team's role lines open no turn, but their words are versioned the same way (0066).
+    kinds.push(("role", Some(gathr::words::ROLE)));
     let failures = check(&kinds, samples::SAMPLES, KEPT, SOURCES);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

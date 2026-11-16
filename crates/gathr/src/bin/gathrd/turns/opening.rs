@@ -27,6 +27,7 @@ impl Task {
         // report totals only, so the parts are Gathr's own count, labelled an estimate).
         let briefing = self.pass.as_ref().map_or(0, |p| p.briefing_chars);
         let estimate = |chars: usize| chars.div_ceil(4);
+        let role = self.pass.as_ref().and_then(|p| p.role);
         self.record(
             Event::point(&format!("invoke_agent {}", self.engine_name()))
                 .attr("gathr.context.briefing.chars", briefing)
@@ -34,6 +35,8 @@ impl Task {
                 .attr("gathr.context.ask.chars", ask_chars)
                 .attr("gathr.context.ask.tokens_estimate", estimate(ask_chars))
                 .attr("gathr.tools.off", crate::tools::briefing::off())
+                .attr("gathr.role", role.map(|(r, _)| r.as_str()))
+                .attr("gathr.role.version", role.and_then(|(_, v)| v))
                 .trace(&ids.trace)
                 .chat(&ids.chat)
                 .span("start", &span)

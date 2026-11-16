@@ -211,7 +211,11 @@ fn notes_go_with_a_review_and_a_commit_and_each_says_what() {
     );
 
     begin(&mut conn, review);
-    let notes = [note(NoteKind::Wrong, None, "The page still loads slowly")];
+    let notes = [note(
+        NoteKind::Wrong,
+        Some("src/page.rs:12"),
+        "The page still loads slowly",
+    )];
     let no_commit = Said {
         note: Some("slow"),
         notes: &notes,
@@ -520,7 +524,7 @@ fn again_adds_notes_and_a_replaced_report_isnt_shown() {
     let mut conn = team(&dir);
     let (_, review, _) = work_and_review(&mut conn);
     let id = begin(&mut conn, review);
-    let first = [note(NoteKind::Wrong, None, "It fails")];
+    let first = [note(NoteKind::Wrong, Some("src/page.rs:4"), "It fails")];
     finish(
         &mut conn,
         "bo",

@@ -22,6 +22,8 @@ pub const CARRY_ON: i64 = 1;
 pub const PLAN_CHECK: i64 = 1;
 pub const SENT_BACK: i64 = 1;
 pub const RESIZED: i64 = 1;
+/// A team's role lines in the briefing (`crate::roles`, 0066): no turn opens with them.
+pub const ROLE: i64 = 1;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

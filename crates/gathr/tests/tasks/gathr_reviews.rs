@@ -453,7 +453,7 @@ fn a_second_review_of_a_pr_with_an_open_one_is_refused_naming_it() {
     let id = begin(&mut conn, review);
     let notes = [NoteSaid {
         kind: NoteKind::Wrong,
-        file: None,
+        file: Some("src/page.rs:3"),
         says: "It fails",
     }];
     let left = Said {
@@ -540,7 +540,7 @@ fn gathrs_review_goes_as_one_the_builder_gave() {
     let id = begin(&mut conn, review);
     let notes = [NoteSaid {
         kind: NoteKind::Wrong,
-        file: None,
+        file: Some("src/page.rs:3"),
         says: "It fails",
     }];
     let left = Said {

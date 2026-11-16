@@ -131,7 +131,7 @@ pub struct FinishTask {
 pub struct ReviewNote {
     /// `wrong`, `unasked` or `suggestion`
     kind: String,
-    /// The file it is about, if one
+    /// The file it is about, with its line when there is one: path:line. Required on a wrong note in a code review.
     file: Option<String>,
     /// What it is: for `wrong`, what fails
     says: String,

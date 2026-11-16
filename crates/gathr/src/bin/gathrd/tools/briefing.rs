@@ -14,7 +14,8 @@ use rusqlite::{Connection, OptionalExtension};
 pub struct Facts {
     title: String,
     name: Option<String>,
-    role: Option<Role>,
+    /// Named in a chat of two or more only.
+    pub role: Option<Role>,
     others: Vec<String>,
     team: bool,
     /// The agent's folder and the project it's a worktree of.
@@ -109,6 +110,9 @@ pub fn text(facts: &Facts) -> String {
         "{who} in Gathr, in the chat \"{}\"{role}.",
         facts.title
     )];
+    if let Some(role) = facts.role {
+        lines.extend(gathr::roles::lines(role).into_iter().map(String::from));
+    }
     if !facts.others.is_empty() {
         let lead = match facts.team {
             true => "The chat's other agents",

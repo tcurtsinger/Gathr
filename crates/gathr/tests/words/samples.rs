@@ -80,6 +80,23 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
     ),
     (
+        "role",
+        "role: supervisor",
+        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+    ),
+    (
+        "role",
+        "role: member",
+        "Make the smallest change that does what was asked: no fallback, guard, abstraction or compatibility \
+         nobody asked for, and remove what it replaces.\n\
+         When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+    ),
+    (
+        "role",
+        "role: reviewer",
+        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+    ),
+    (
         "request_brief",
         "request_brief: choice",
         "Task #2 from Ann: What should the reconnect notice say?\n\
