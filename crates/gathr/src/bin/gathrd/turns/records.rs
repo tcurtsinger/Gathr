@@ -144,8 +144,19 @@ impl Task {
             trace: &ids.trace,
             carries_on,
         };
+        // A turn the engine began itself never passes the runner's start (0063 I2a.2).
+        let began = self
+            .turn
+            .as_ref()
+            .filter(|t| t.ids.turn == ids.turn && t.engine_began);
+        if status == "running" && began.is_some() {
+            self.look_before(ids).await;
+        }
         crate::coord::turn_moved(&self.chats, moved, status, why).await;
         self.announce_turn(ids, status, why).await;
+        if matches!(status, "done" | "failed" | "stopped") {
+            self.look_after(ids).await;
+        }
     }
 
     /// Sends a turn's status live, once it's saved: what pauses wait on may have changed with it.

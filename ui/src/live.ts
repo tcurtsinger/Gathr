@@ -41,8 +41,16 @@ export type LiveEvent =
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
-  // The chat's tasks, waits, asks and plans, whole, after any change to them.
-  | { type: 'tasks'; chat: string; tasks: Task[]; waits: Wait[]; asks: Ask[]; plans?: PlanSummary[] }
+  // The chat's tasks, waits, asks, plans and caught lines, whole, after any change to them.
+  | {
+      type: 'tasks';
+      chat: string;
+      tasks: Task[];
+      waits: Wait[];
+      asks: Ask[];
+      plans?: PlanSummary[];
+      caught?: string[];
+    }
   // What the chat waits on may have changed (0050): ask the service again.
   | { type: 'waiting'; chat: string }
   // The person's open questions across chats, whole, after any change to any task.

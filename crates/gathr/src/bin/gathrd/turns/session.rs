@@ -173,6 +173,7 @@ impl Task {
         fresh: bool,
         text: String,
     ) -> String {
+        let text = self.held_start(&next.ids, text).await;
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
             return text;

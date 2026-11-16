@@ -1,5 +1,15 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import { Bell, CircleCheck, CircleHelp, ClipboardList, PenLine, Send, ThumbsUp, Wrench } from 'lucide-react';
+import {
+  Bell,
+  CircleCheck,
+  CircleHelp,
+  ClipboardList,
+  FilePen,
+  PenLine,
+  Send,
+  ThumbsUp,
+  Wrench,
+} from 'lucide-react';
 import { createContext, type ReactNode, useContext, useState } from 'react';
 import {
   CollapsibleContent,
@@ -229,6 +239,7 @@ const ICON = {
   fix: Wrench,
   plan: ClipboardList,
   version: ClipboardList,
+  changed: FilePen,
 };
 
 /** Gathr's notes that belong to no turn's row, one line each. */

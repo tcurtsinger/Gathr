@@ -18,6 +18,12 @@ export function fixed(text: string): EventLine | undefined {
   };
 }
 
+/** Gathr's line for a held turn's caught change (0063): its first line, opening to the files. */
+export function changed(text: string): EventLine {
+  const [first, ...files] = text.split('\n');
+  return { kind: 'changed', text: first, more: files.join('\n') || undefined };
+}
+
 /**
  * Each ask's size line, by the block it follows (0061 G5.2): the first block below the message of the
  * lead's turn that sized it, else of the message's own turn, so a line never sits above the message it

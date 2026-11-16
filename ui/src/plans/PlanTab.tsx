@@ -31,6 +31,9 @@ const word: Record<Plan['state'], string | undefined> = {
   dropped: 'Dropped',
 };
 
+/** The files a catch names, as Gathr's line in the chat does; the rest are counted. */
+const NAMED = 20;
+
 /**
  * The lead's plan in its own tab (0062 H5.4, the plan-card mock-up v2): a version, its check with the findings
  * and answers, the ask's questions, and its parts, one open at a time, marked against the version before; with
@@ -140,7 +143,7 @@ export function PlanTab({ chat, plan: id, version, name, onVersion, onReference,
             </blockquote>
           )}
           <p className="plan-text">{v.text}</p>
-          <Checked plan={plan} version={v} before={before} check={check} />
+          <Checked plan={plan} version={v} before={before} check={check} name={name} />
           <h3>{counted(v.parts.length, 'part')}</h3>
           <ol className="plan-parts">
             {v.parts.map((p, i) => {
@@ -240,15 +243,18 @@ function Checked({
   version: v,
   before,
   check,
+  name,
 }: {
   plan: Plan;
   version: PlanVersion;
   before?: PlanVersion;
   check?: string;
+  name: Name;
 }) {
   const findings = (v.check?.notes ?? []).filter((n) => n.kind !== 'suggestion');
   const answered = (note: number) => before?.check?.notes.find((n) => n.id === note);
-  if (!check && !findings.length && !v.answers.length && !plan.questions.length) return null;
+  if (!check && !findings.length && !v.answers.length && !plan.questions.length && !plan.changed.length)
+    return null;
   return (
     <dl className="task-fields">
       {check && (
@@ -288,6 +294,17 @@ function Checked({
             <dd key={q.number}>
               <span>{q.what}</span>
               <span className="plan-said">{q.answer ?? 'Open'}</span>
+            </dd>
+          ))}
+        </>
+      )}
+      {plan.changed.length > 0 && (
+        <>
+          <dt>Changed</dt>
+          {plan.changed.map((c) => (
+            <dd key={c.message}>
+              {name(c.agent)}: {c.files.slice(0, NAMED).join(', ')}
+              {c.files.length > NAMED && ` and ${c.files.length - NAMED} more`}
             </dd>
           ))}
         </>

@@ -2,6 +2,8 @@
 //! repair goes ahead. One rule says whether a turn is held, read whenever a caller acts, never
 //! stored: a held turn's building gives are refused here, its writes and pushes by the hooks.
 
+pub mod look;
+
 use std::path::Path;
 
 use rusqlite::{Connection, OptionalExtension};

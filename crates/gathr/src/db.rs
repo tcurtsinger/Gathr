@@ -56,6 +56,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0046_asks.sql"),
     include_str!("../migrations/0047_plans.sql"),
     include_str!("../migrations/0048_hold.sql"),
+    include_str!("../migrations/0049_held_turns.sql"),
 ];
 
 /// The schema version this build writes.
@@ -558,6 +559,40 @@ mod tests {
         assert_eq!(found, (0, 0, None));
         let held = crate::hold::turn(&conn, "brief").unwrap().unwrap();
         assert!(!held.held(), "a building task's queued brief isn't held");
+    }
+
+    /// 0049 (0063): no held turn has a start record, so one running across the upgrade isn't
+    /// looked at when it ends.
+    #[test]
+    fn held_turns_come_empty() {
+        let path = temp_db("held-turns");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..48] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 48;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1), ('ann', 'Ann', 'ann', 'acc', 1);
+             INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES ('p', 'Notes', 'notes', 'x', 1);
+             INSERT INTO chats (id, title, created_ts, project_id) VALUES ('c', 'C', 1, 'p');
+             INSERT INTO chat_members VALUES ('c', 'mira', 'supervisor', 1), ('c', 'ann', 'member', 1);
+             INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES ('m1', 'c', 1, 'user', 'text', 'Add tags');
+             INSERT INTO asks (id, chat_id) VALUES ('m1', 'c');
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, ask_id)
+                 VALUES ('t', 'c', 'x', 'running', 1, 'mira', 'm1');
+             INSERT INTO agent_folders (path, kind, chat_id, agent_id, made_ts) VALUES ('w', 'worktree', 'c', 'mira', 1);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let rows: i64 = conn
+            .query_row("SELECT count(*) FROM held_turns", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(rows, 0, "held turns came with rows");
+        let ending = crate::hold::look::ending(&conn, "t").unwrap();
+        assert!(ending.is_none(), "a turn from before 0049 was looked at");
     }
 
     #[test]

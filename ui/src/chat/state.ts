@@ -26,6 +26,8 @@ export interface ChatState {
   asks: Ask[];
   /** The lead's plans, oldest first (0062). */
   plans: PlanSummary[];
+  /** Gathr's lines for held turns' caught changes, by message id, oldest first (0063). */
+  caught: string[];
   reactions: Reaction[];
 }
 
@@ -39,13 +41,13 @@ export const empty: ChatState = {
   waits: [],
   asks: [],
   plans: [],
+  caught: [],
   reactions: [],
 };
 
-export function fromHistory(
-  history: History,
-  work?: { tasks: Task[]; waits: Wait[]; asks?: Ask[]; plans?: PlanSummary[] },
-): ChatState {
+type Work = { tasks: Task[]; waits: Wait[]; asks?: Ask[]; plans?: PlanSummary[]; caught?: string[] };
+
+export function fromHistory(history: History, work?: Work): ChatState {
   const turns = Object.fromEntries(history.turns.map((t) => [t.id, t]));
   const approvals = history.approvals.map((a) => ({
     turn: a.turn,
@@ -65,6 +67,7 @@ export function fromHistory(
     waits: work?.waits ?? [],
     asks: work?.asks ?? [],
     plans: work?.plans ?? [],
+    caught: work?.caught ?? [],
     reactions: history.reactions ?? [],
   };
 }
@@ -74,11 +77,7 @@ export function fromHistory(
  * some of them: a message it holds is skipped, a turn's deltas before a block of that turn it holds
  * are dropped, and the rest skip what its unsaved text holds (each delta says where it starts).
  */
-export function fromLoad(
-  history: History,
-  work: { tasks: Task[]; waits: Wait[]; asks?: Ask[]; plans?: PlanSummary[] },
-  held: LiveEvent[],
-): ChatState {
+export function fromLoad(history: History, work: Work, held: LiveEvent[]): ChatState {
   const saved = new Set(history.messages.map((m) => m.id));
   const inHistory = (e: LiveEvent, turn?: string) =>
     e.type === 'message' && saved.has(e.message.id) && (turn === undefined || e.message.turn === turn);
@@ -141,7 +140,14 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
       return { ...state, approvals: [...state.approvals, approval] };
     }
     case 'tasks':
-      return { ...state, tasks: event.tasks, waits: event.waits, asks: event.asks, plans: event.plans ?? [] };
+      return {
+        ...state,
+        tasks: event.tasks,
+        waits: event.waits,
+        asks: event.asks,
+        plans: event.plans ?? [],
+        caught: event.caught ?? [],
+      };
     case 'members':
       return { ...state, members: event.members };
     case 'context':

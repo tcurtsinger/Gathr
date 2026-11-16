@@ -5,6 +5,8 @@
 mod common;
 #[path = "hold/give.rs"]
 mod give;
+#[path = "hold/look.rs"]
+mod look;
 #[path = "words/samples.rs"]
 mod samples;
 #[path = "hold/wait.rs"]

@@ -414,6 +414,25 @@ fn deleting_an_archived_chat_removes_its_reactions() {
     assert_eq!(left, 0, "reactions left");
 }
 
+/// 0063: a held turn's look points at its chat, so deleting the chat removes it first.
+#[test]
+fn deleting_an_archived_chat_removes_its_held_turns() {
+    let data = TempDir::new();
+    let mut conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO held_turns (turn_id, chat_id, agent_id, worktree, status, started_ts)
+             VALUES ('t', 'c', 'ann', 'w', '[]', 1);",
+    )
+    .unwrap();
+    gathr::archive::archive(&mut conn, "c", "test-trace").unwrap();
+    gathr::archive::delete(&mut conn, "c", "test-trace").unwrap();
+    let left: i64 = conn
+        .query_row("SELECT count(*) FROM held_turns", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(left, 0, "held turns left");
+}
+
 /// 0061: turns and tasks point at their ask, so deleting the chat removes its asks after them.
 #[test]
 fn deleting_an_archived_chat_removes_its_asks() {

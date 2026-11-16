@@ -87,6 +87,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   DROP TABLE plan_parts; DROP TABLE plan_versions; DROP TABLE plans;
                   DROP INDEX turns_by_ask; DROP INDEX tasks_by_ask; ALTER TABLE turns DROP COLUMN ask_id;
                   ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks; ALTER TABLE tasks DROP COLUMN look_into;
+                  DROP TABLE held_turns;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);

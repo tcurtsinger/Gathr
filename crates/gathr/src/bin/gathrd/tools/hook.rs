@@ -6,7 +6,6 @@
 //! classifier reads the check as it reads the agent's commands (owner, 2026-11-11).
 //! A held turn's writes into its worktree and its pushes are refused, in every mode (0063).
 
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -137,18 +136,8 @@ async fn held_write(s: &State, caller: &Caller, tool: &str, input: &Value) -> Op
     if !gathr::approvals::writes_in(tool, input, &caller.cwd) {
         return None;
     }
-    let (worktree, folders) = (caller.cwd.clone(), caller.folders.clone());
-    let read = move |c: &mut Connection, turn: &str| {
-        // Its own folder and Shared, each when it was given it (`turns/workspace.rs`).
-        let shared = |f: &&PathBuf| f.file_name().is_some_and(|n| n == gathr::folders::SHARED);
-        let beside = folders.iter().skip(1);
-        let place = hold::Place {
-            worktree: &worktree,
-            own: beside.clone().find(|f| !shared(f)).map(PathBuf::as_path),
-            shared: beside.clone().find(shared).map(PathBuf::as_path),
-        };
-        hold::write_held(c, turn, &place)
-    };
+    let writer = caller.clone();
+    let read = move |c: &mut Connection, turn: &str| hold::write_held(c, turn, &writer.place());
     held(s, caller, Some(tool), read).await
 }
 

@@ -204,6 +204,8 @@ export interface Plan extends Omit<PlanSummary, 'versions'> {
   /** The ask's message. */
   asked: string | null;
   questions: { number: number; what: string; answer: string | null }[];
+  /** What held turns of the ask changed (0063): the agent, its files, and Gathr's line. */
+  changed: { agent: string; files: string[]; message: string }[];
   versions: PlanVersion[];
 }
 
@@ -592,7 +594,7 @@ export const api = {
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   tasks: (chat: string) =>
-    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[] }>(
+    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[]; caught: string[] }>(
       'GET',
       `/api/chats/${chat}/tasks`,
     ),

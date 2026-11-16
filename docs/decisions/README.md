@@ -72,4 +72,4 @@ fails in CI when the two differ.
 | 0060 | [Gathr gives the review task](0060-gathr-gives-the-review-task.md) | accepted | yes |
 | 0061 | [Every ask in a team chat has a size](0061-every-ask-has-a-size.md) | accepted | yes |
 | 0062 | [A plan is a checked record, and Approve hands it out](0062-a-plan-is-checked-and-approve-hands-it-out.md) | accepted | yes |
-| 0063 | [Building waits until a new ask's plan is approved; a repair goes](0063-building-waits-for-a-new-asks-plan.md) | accepted | partly |
+| 0063 | [Building waits until a new ask's plan is approved; a repair goes](0063-building-waits-for-a-new-asks-plan.md) | accepted | yes |
