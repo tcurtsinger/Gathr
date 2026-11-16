@@ -56,9 +56,15 @@ fn the_plan_alternates_arms_and_gives_each_case_its_runs() {
     assert_eq!(first.len(), 1);
     assert_eq!(first[0].arm, Arm::With);
     let seats: Vec<(Case, Engine)> = first[0].seats.iter().map(|s| (s.case, s.engine)).collect();
+    let (claude, codex) = (Engine::Claude, Engine::Codex);
     assert_eq!(
         seats,
-        [(Case::T1, Engine::Claude), (Case::T8, Engine::Claude)]
+        [
+            (Case::T1, claude),
+            (Case::T8, claude),
+            (Case::T1, codex),
+            (Case::T8, codex)
+        ]
     );
 
     let standin = cases::plan(Mode::StandIn);
@@ -70,8 +76,8 @@ fn the_plan_alternates_arms_and_gives_each_case_its_runs() {
 fn no_block_starts_past_the_cap_and_the_most_is_said_from_the_limits() {
     assert!(cases::may_start(89_999_999));
     assert!(!cases::may_start(90_000_000));
-    // T1 4M and T8 1M.
-    assert_eq!(cases::most(&cases::plan(Mode::First)), 5_000_000);
+    // T1 4M and T8 1M, on each engine.
+    assert_eq!(cases::most(&cases::plan(Mode::First)), 10_000_000);
     // Every run to its limit is 24 × 4M + 12 × 1.5M + 16 × 1.5M + 24 × 1M = 162M; the cap and the
     // largest block (two T1, T2, T5, two T8: 13M) are less.
     assert_eq!(cases::most(&cases::plan(Mode::Full)), 103_000_000);

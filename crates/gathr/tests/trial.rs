@@ -4,7 +4,7 @@
 //!
 //! `GATHR_TRIAL_DATA` names its data folder, signed in to both engines; `GATHR_TRIAL_COMMIT` the
 //! commit it runs at. `GATHR_TRIAL_FIRST=1` makes the first small run instead (one T1 and one T8 on
-//! Claude Code, with the lines only), and `GATHR_TRIAL_STANDIN=1` runs the first round on the replay
+//! each engine, with the lines only), and `GATHR_TRIAL_STANDIN=1` runs the first round on the replay
 //! stand-in engines. It writes `trial/results.json` and `trial/log.txt` in its data folder.
 
 #[path = "trial/block.rs"]

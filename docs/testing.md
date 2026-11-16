@@ -100,8 +100,8 @@ A test that runs real Claude Code and Codex, to tell whether a line of Gathr's w
 **Its normal tests do run in CI** (`tests/trial/tests.rs`: the plan, the cap, the diff, T1's extras, each case's scoring, the decision rule and the file's fields, on made-up rows and a real git repo and `node`). Only the two ignored tests start real engines.
 
 **How a builder runs it.** It spends the person's accounts and shares their usage limits: ask first, run it with the room idle, never start it by accident.
-1. Prepare a spare data folder (for example `X:\Gathr\Gathr\<name>\trial\data`, its agents in `data-agents` beside it). Starting it downloads its own Claude Code and Codex: say their names, sources and sizes to the person first. The person signs in to a Claude Code account and a Codex account there.
-2. A first small try (one run of T1 and one of T8, on Claude Code, the lines only) proves the harness and measures what a run costs. From a PowerShell in the worktree:
+1. Prepare a spare data folder (for example `X:\Gathr\Gathr\<name>\trial\data`, its agents in `data-agents` beside it). A debug build downloads no engine by itself: start the folder's service once with `GATHR_CLAUDE_RELEASES=https://downloads.claude.ai/claude-code-releases` and `GATHR_CODEX_RELEASES=https://registry.npmjs.org/@openai/codex` set, after saying their names, sources and sizes to the person (about 350 MB and 490 MB), and run the trial itself with neither set, so no copy changes while it runs. The person signs in to a Claude Code account and a Codex account there.
+2. A first small try (one run of T1 and one of T8 on each engine, the lines only) proves the harness and measures what a run costs. From a PowerShell in the worktree:
 
    ```powershell
    $env:GATHR_TRIAL_DATA='<the data folder>'

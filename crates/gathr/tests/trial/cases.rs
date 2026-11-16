@@ -140,7 +140,7 @@ pub struct Block {
 pub enum Mode {
     /// Every round, both arms.
     Full,
-    /// The first small run: one T1 and one T8 on Claude Code, with the lines only (section 7, step 4).
+    /// The first small run: one T1 and one T8 on each engine, with the lines only (section 7, step 4).
     First,
     /// The first round on the replay stand-in engines, to prove the harness.
     StandIn,
@@ -154,7 +154,7 @@ pub const CAP: u64 = 90_000_000;
 /// hours and engine copies: T5 in every round, the other cases in the first six (R6's runs).
 pub fn plan(mode: Mode) -> Vec<Block> {
     if mode == Mode::First {
-        let first = |s: &&Seat| s.engine == Engine::Claude && matches!(s.case, Case::T1 | Case::T8);
+        let first = |s: &&Seat| matches!(s.case, Case::T1 | Case::T8);
         let seats = SEATS.iter().filter(first).collect();
         return vec![Block {
             n: 1,
