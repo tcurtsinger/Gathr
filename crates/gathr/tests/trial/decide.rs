@@ -8,17 +8,11 @@ use super::results;
 
 /// Runs that end before they say anything of the line: left out of both arms.
 const LEFT_OUT: [&str; 3] = ["spoiled", "usage_limit", "signed_out"];
-/// A T5 run stopped by its limits says nothing of the question either.
-const T5_LEFT_OUT: [&str; 2] = ["timed_out", "over_cap"];
 
 /// Each shipped line's row for the trial's file. Nothing is decided when the model an agent's
 /// setting resolved to changed during the trial.
 pub fn lines(runs: &[Value], blocks: &[Block], models_same: bool) -> Vec<Value> {
-    let case_of = |id: &str| {
-        [Case::T1, Case::T2, Case::T5, Case::T8]
-            .into_iter()
-            .find(|c| c.line() == id)
-    };
+    let case_of = |id: &str| [Case::T1, Case::T8].into_iter().find(|c| c.line() == id);
     let mut rows = Vec::new();
     for (id, text) in gathr::roles::SHIPPED {
         let Some(case) = case_of(id) else { continue };
@@ -36,9 +30,7 @@ pub fn lines(runs: &[Value], blocks: &[Block], models_same: bool) -> Vec<Value> 
 fn counted(runs: &[Value], case: Case, arm: Arm, engine: Option<Engine>) -> Vec<&Value> {
     let on = |r: &&Value| engine.is_none_or(|e| r["engine"] == e.name());
     let of = |r: &&Value| r["case"] == case.name() && r["arm"] == arm.name();
-    let limited = |o: &&str| case == Case::T5 && T5_LEFT_OUT.contains(o);
-    let left_out = |o: &&str| LEFT_OUT.contains(o) || limited(o);
-    let kept = |r: &&Value| !r["outcome"].as_str().is_some_and(|o| left_out(&o));
+    let kept = |r: &&Value| !r["outcome"].as_str().is_some_and(|o| LEFT_OUT.contains(&o));
     runs.iter().filter(of).filter(on).filter(kept).collect()
 }
 
@@ -81,17 +73,9 @@ fn decision(case: Case, runs: &[Value], blocks: &[Block]) -> &'static str {
         r["outcome"] == "compared" && r["hidden_test"] == true && r["over_built"] == false
     };
     let passed = |r: &Value| r["outcome"] == "passed";
-    let asked = |r: &Value| r["named_answered"].as_str().is_some_and(|w| w != "none");
-    let choices = |r: &Value| r["with_choices"] == true;
     let kept = match case {
         Case::T1 => gain(None, &good) >= 4 && each(&good, &|g| g >= 0),
-        Case::T5 => {
-            let any = gain(None, &|r: &Value| r["questions"].as_u64() > Some(0));
-            let (asked, choices) = (gain(None, &asked), gain(None, &choices));
-            (asked <= -3 || choices >= 3) && asked <= 0 && choices >= 0 && any >= -1
-        }
         Case::T8 => gain(None, &passed) >= 4 && each(&passed, &|g| g >= 0),
-        Case::T2 => gain(None, &passed) >= 3,
     };
     if kept { "kept" } else { "dropped" }
 }

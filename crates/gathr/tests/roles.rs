@@ -142,9 +142,9 @@ fn a_one_agent_chats_briefing_has_no_role_lines() {
     assert_eq!(started_roles(&data.0), [(Value::Null, Value::Null)]);
 }
 
-/// A held team (Lead, Ann) with Rev as its Reviewer, on `more`: the service, the chat, and Rev's
-/// review task's number and brief, given by the lead's tool.
-fn review_given(data: &Path, more: &[(&str, &Path)]) -> (TestService, String, i64, String) {
+/// A held team (Lead, Ann) with Rev as its Reviewer, on `more`: the service and Rev's review task's
+/// number, given by the lead's tool.
+fn review_given(data: &Path, more: &[(&str, &Path)]) -> (TestService, i64) {
     let held = held_recording(data, "signed_in");
     let (service, chat, _) = common::team(data, &held, more);
     common::with_reviewer(&service, &chat);
@@ -159,26 +159,18 @@ fn review_given(data: &Path, more: &[(&str, &Path)]) -> (TestService, String, i6
     let review = json!({ "to": "Rev", "what": "Review the notes", "kind": "review" });
     let given = text(&call_tool(port, &lead, "give_task", review));
     assert!(given.starts_with("Task #1 for Rev"), "{given}");
-    let sql = "SELECT body FROM messages WHERE role = 'gathr' AND body LIKE 'Task #1 from Lead%'";
-    let rows = common::rows(data, sql);
-    let brief = rows[0]["body"].as_str().unwrap().to_string();
-    (service, chat, 1, brief)
+    (service, 1)
 }
 
 #[test]
-fn with_the_switch_set_no_briefing_has_role_lines_and_the_review_brief_reads_as_version_1() {
+fn with_the_switch_set_no_briefing_has_role_lines() {
     let data = TempDir::new();
     let args = data.0.join("args.jsonl");
     let more = [
         ("GATHR_TRIAL_WITHOUT", Path::new("1")),
         ("GATHR_REPLAY_ARGS", args.as_path()),
     ];
-    let (_service, _, _, brief) = review_given(&data.0, &more);
-    let version_1 = "Task #1 from Lead: Review the notes\n\
-                     For a review, include the commit you reviewed when you finish the task.\n\
-                     Say what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true.\n\
-                     Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.";
-    assert_eq!(brief, version_1);
+    let (_service, _) = review_given(&data.0, &more);
     common::until(30, "Rev's engine to start", || {
         let starts = std::fs::read_to_string(&args).unwrap_or_default();
         (starts.lines().count() == 2).then_some(())
@@ -199,14 +191,11 @@ fn with_the_switch_set_no_briefing_has_role_lines_and_the_review_brief_reads_as_
 }
 
 /// The PR's forced failure (0019): a code review's wrong note with no file is refused, nothing is
-/// written, and the refusal is found from its reference. The review's brief asks for wrong notes.
+/// written, and the refusal is found from its reference.
 #[test]
 fn a_code_reviews_wrong_note_with_no_file_is_refused_and_found_from_its_reference() {
     let data = TempDir::new();
-    let (service, _, review, brief) = review_given(&data.0, &[]);
-    let asks = "\nSay what is wrong or missing against the ask, as wrong notes. Say what in the change the \
-                ask doesn't need, as unasked notes, or nothing_unasked: true.\n";
-    assert!(brief.contains(asks), "{brief}");
+    let (service, review) = review_given(&data.0, &[]);
     let rev = nth(&data.0.join("env.jsonl"), 1)["GATHR_AGENT_TOKEN"]
         .as_str()
         .unwrap()

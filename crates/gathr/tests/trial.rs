@@ -204,20 +204,3 @@ fn trial() {
         "the file holds something outside R8's list"
     );
 }
-
-/// The trial's block writes, in a process of their own that has the block's arm set (R2). Started
-/// by `trial` alone, with `GATHR_TRIAL_BLOCK`: without it, it does nothing.
-#[test]
-#[ignore = "a block's writes: the trial starts it"]
-fn trial_block() {
-    let (Some(data), Some(file)) = (
-        std::env::var_os("GATHR_TRIAL_DATA"),
-        std::env::var_os("GATHR_TRIAL_BLOCK"),
-    ) else {
-        return;
-    };
-    let file = PathBuf::from(file);
-    let asked: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
-    let written = setup::write(Path::new(&data), &asked);
-    std::fs::write(file.with_file_name("block.out.json"), written.to_string()).unwrap();
-}

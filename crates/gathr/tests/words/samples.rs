@@ -68,8 +68,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          For a review, include the commit you reviewed when you finish the task.\n\
          PR #70, at abc1234 as last seen.\n\
          It answers task #3 from Lead: Fix the label. Why: the label is cut off.\n\
-         Say what is wrong or missing against the ask, as wrong notes. Say what in the change the ask doesn't \
-         need, as unasked notes, or nothing_unasked: true.\n\
+         Say what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true.\n\
          Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
     ),
     (
@@ -77,16 +76,13 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "review_brief: no PR",
         "Task #5 from Lead: Review the notes\n\
          For a review, include the commit you reviewed when you finish the task.\n\
-         Say what is wrong or missing against the ask, as wrong notes. Say what in the change the ask doesn't \
-         need, as unasked notes, or nothing_unasked: true.\n\
+         Say what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true.\n\
          Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
     ),
     (
         "role",
         "role: supervisor",
-        "Before you ask the person, look in the code and docs: ask only what they don't answer, with choices and \
-         your pick first.\n\
-         When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
     ),
     (
         "role",

@@ -8,7 +8,7 @@ mod counted;
 pub use counted::{Counted, counted};
 
 pub const BRIEF: i64 = 3;
-pub const REVIEW_BRIEF: i64 = 2;
+pub const REVIEW_BRIEF: i64 = 1;
 pub const REQUEST_BRIEF: i64 = 2;
 pub const REPORT_ASK: i64 = 1;
 pub const HEAR_BACK: i64 = 2;

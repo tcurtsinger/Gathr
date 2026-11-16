@@ -4,7 +4,6 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use gathr::tasks::{Brief, Give, Kind};
 use gathr::team::Role;
@@ -12,7 +11,7 @@ use gathr::words::Opened;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use super::cases::{Arm, Block, Engine, GIVER, SEATS};
+use super::cases::{Block, Case, Engine, GIVER, SEATS};
 use super::common::{TestService, sign_in_account};
 use super::project;
 
@@ -225,110 +224,38 @@ pub const T1_WHY: &str = "Turn a number of milliseconds into the shortest text p
 pub const T1_DONE: &str = "formatDuration gives those four results and `--format` prints them";
 pub const T1_PROOF: &str = "`node --test` passes, with a test for the four examples";
 pub const T1_WHERE: &str = "src/duration.js and src/cli.js on your branch";
-pub const T2_WHAT: &str = "Review the commit on branch trial/planted";
-pub const T2_WHY: &str =
-    "The ask it answers: Accept upper-case units: `parseDuration(\"1H30M\")` returns NaN.";
-pub const T5_ASK: &str = "Add a --json option to src/cli.js that prints the result as a JSON object instead of plain \
-                          text. Two things are open: whether its keys are in camelCase or snake_case, and whether the \
-                          object also carries the text it read or only the milliseconds.";
 pub const T8_TEXT: &str =
     "Plan for tomorrow: you take the parser, I review after. Nothing to do yet. OK?";
 
-/// What a block needs written: its chats, each run's agent, the project and the giver.
-fn asked(ids: &Ids, block: &Block) -> Value {
-    let runs: Vec<Value> = block
-        .seats
-        .iter()
-        .map(|s| json!({ "case": s.case.name(), "agent": ids.agent(s.agent) }))
-        .collect();
-    json!({ "project": ids.project, "folder": ids.folder, "ana": ids.agent(GIVER), "runs": runs })
-}
-
-/// Writes the block with the service stopped, in a process of the trial's own test binary that has
-/// the block's arm set (R2): with `GATHR_TRIAL_WITHOUT`, a review's brief is given in its words
-/// without the line. Each run's chat, and its task or message.
+/// Writes the block with the service stopped: each run's chat in the project with Ana as its lead
+/// and the run's agent as its member, and T1's work task or T8's message from her. Each run's chat,
+/// and its task or message.
 pub fn write_block(data: &Path, ids: &Ids, block: &Block) -> Vec<Value> {
-    let (asked_file, answered) = (
-        dir(data).join("block.json"),
-        dir(data).join("block.out.json"),
-    );
-    std::fs::write(&asked_file, asked(ids, block).to_string()).unwrap();
-    let _ = std::fs::remove_file(&answered);
-    let mut child = Command::new(std::env::current_exe().unwrap());
-    child.args([
-        "trial_block",
-        "--exact",
-        "--ignored",
-        "--nocapture",
-        "--test-threads",
-        "1",
-    ]);
-    child
-        .env("GATHR_TRIAL_DATA", data)
-        .env("GATHR_TRIAL_BLOCK", &asked_file);
-    match block.arm {
-        Arm::With => child.env_remove("GATHR_TRIAL_WITHOUT"),
-        Arm::Without => child.env("GATHR_TRIAL_WITHOUT", "1"),
-    };
-    let status = child.status().unwrap();
-    assert!(
-        status.success(),
-        "block {} wasn't written: {status}",
-        block.n
-    );
-    let written: Value = serde_json::from_str(&std::fs::read_to_string(answered).unwrap()).unwrap();
-    written["runs"].as_array().cloned().unwrap()
-}
-
-/// The block's writes, in the child process (`trial_block`): each run's chat in the project with its
-/// two agents, T1's work task and T2's review from Ana, and T8's message from her.
-pub fn write(data: &Path, asked: &Value) -> Value {
     let folder = gathr::data::DataDir::new(data);
     let _lock = folder
         .take_lock()
         .expect("the service is stopped while a block is written");
     let mut conn = gathr::db::open(&folder.db()).unwrap();
     let trace = gathr::ids::trace_id();
-    let ana = asked["ana"].as_str().unwrap();
+    let ana = ids.agent(GIVER);
     gathr::pauses::pause(&conn, "agent", ana, false, &trace).unwrap();
-    let at = (asked["project"].as_str(), asked["folder"].as_str());
-    project::forget(Path::new(at.1.unwrap()));
+    project::forget(&ids.folder);
+    let at = (Some(ids.project.as_str()), ids.folder.to_str());
     let mut written = Vec::new();
-    for run in asked["runs"].as_array().unwrap() {
-        let (case, agent) = (
-            run["case"].as_str().unwrap(),
-            run["agent"].as_str().unwrap(),
-        );
+    for seat in &block.seats {
+        let agent = ids.agent(seat.agent);
         // One title for every chat: the briefing names it, and it says nothing of the trial.
         let chat = gathr::store::create_chat(&conn, "Durations", at).unwrap()["id"]
             .as_str()
             .unwrap()
             .to_string();
-        let seats = match case {
-            "T5" => [(agent, Role::Supervisor), (ana, Role::Member)],
-            "T2" => [(ana, Role::Supervisor), (agent, Role::Reviewer)],
-            _ => [(ana, Role::Supervisor), (agent, Role::Member)],
-        };
+        let seats = [(ana, Role::Supervisor), (agent, Role::Member)];
         let seats: Vec<(String, Role)> = seats.iter().map(|(a, r)| (a.to_string(), *r)).collect();
         assert_eq!(gathr::team::refused(&seats), None);
         gathr::team::set_members(&mut conn, &chat, &seats).unwrap();
-        let give = |kind, what, brief| Give {
-            chat: &chat,
-            giver: Some(ana),
-            owner: agent,
-            given_in: None,
-            parent: None,
-            kind,
-            what,
-            brief,
-            after: &[],
-            pr: None,
-            in_passing: false,
-            look_into: false,
-        };
         let (mut task, mut message) = (None, None);
-        match case {
-            "T1" => {
+        match seat.case {
+            Case::T1 => {
                 let brief = Brief {
                     why: Some(T1_WHY),
                     done: Some(T1_DONE),
@@ -336,31 +263,32 @@ pub fn write(data: &Path, asked: &Value) -> Value {
                     place: Some(T1_WHERE),
                     size: None,
                 };
-                task = Some(
-                    gathr::tasks::give(&mut conn, &give(Kind::Work, T1_WHAT, brief), &trace)
-                        .unwrap()
-                        .0
-                        .number,
-                );
-            }
-            "T2" => {
-                let brief = Brief {
-                    why: Some(T2_WHY),
-                    ..Brief::default()
+                let give = Give {
+                    chat: &chat,
+                    giver: Some(ana),
+                    owner: agent,
+                    given_in: None,
+                    parent: None,
+                    kind: Kind::Work,
+                    what: T1_WHAT,
+                    brief,
+                    after: &[],
+                    pr: None,
+                    in_passing: false,
+                    look_into: false,
                 };
                 task = Some(
-                    gathr::tasks::give(&mut conn, &give(Kind::Review, T2_WHAT, brief), &trace)
+                    gathr::tasks::give(&mut conn, &give, &trace)
                         .unwrap()
                         .0
                         .number,
                 );
             }
-            "T8" => message = Some(teammate(&conn, &chat, (ana, agent), T8_TEXT)),
-            _ => {}
+            Case::T8 => message = Some(teammate(&conn, &chat, (ana, agent), T8_TEXT)),
         }
         written.push(json!({ "chat": chat, "task": task, "message": message }));
     }
-    json!({ "runs": written })
+    written
 }
 
 /// Ana's message to the member, queued as the `message` tool queues one: shown as hers, in a turn of

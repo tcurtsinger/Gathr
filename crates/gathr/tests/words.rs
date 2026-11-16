@@ -116,14 +116,9 @@ const KEPT: &[(&str, i64, &str)] = &[
         "c453e3a17f6b08ccb7b60b53a1c9f7c5d9381a0090b2109e98a7a7a8eb6aa9fb",
     ),
     (
-        "review_brief",
-        2,
-        "1ec6b30bbe8a53a01d469e93c8731a6d571aaf4092145f9518f6015035710424",
-    ),
-    (
         "role",
         1,
-        "9b072398058de53028ccb8466169355a1095519461887e9aa841dc841588022d",
+        "0cb35e37d095928928ad396191fdd7c8eff8a4c00e1a333cd1c5b57d3bb95354",
     ),
 ];
 

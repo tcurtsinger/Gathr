@@ -10,7 +10,7 @@ use serde_json::{Map, Value, json};
 
 use super::cases::{Arm, Block, Case, GIVER, Seat};
 use super::common::TestService;
-use super::setup::{self, Ids, say};
+use super::setup::{Ids, say};
 use super::{file, project, score};
 
 /// A case run under way.
@@ -91,15 +91,7 @@ fn ending(
         ["queued", "running", "waiting_sign_in"].contains(&t.1.as_str())
     };
     let settled = !turns.is_empty() && !turns.iter().any(|t| open(&t));
-    let lead_done = || {
-        let asked =
-            "SELECT count(*) FROM tasks WHERE chat_id = ?1 AND kind = 'person' AND giver = ?2";
-        let ended = turns
-            .iter()
-            .filter(|t| t.0 == run.agent && ["done", "stopped", "failed"].contains(&t.1.as_str()));
-        one(conn, asked, [&run.chat, &run.agent]) > 0 || ended.count() >= 3
-    };
-    (settled || (run.seat.case == Case::T5 && lead_done())).then_some(None)
+    settled.then_some(None)
 }
 
 fn post(service: &TestService, path: &str, body: Value) {
@@ -132,13 +124,6 @@ pub fn run(
             seconds: 0,
         })
         .collect();
-    for run in runs.iter().filter(|r| r.seat.case == Case::T5) {
-        post(
-            &service,
-            &format!("/api/chats/{}/messages", run.chat),
-            json!({ "text": setup::T5_ASK }),
-        );
-    }
     let (conn, _) = gathr::db::open_read_only(&gathr::data::DataDir::new(data).db()).unwrap();
     let began = Instant::now();
     while runs.iter().any(|r| r.ended.is_none()) {
@@ -206,17 +191,13 @@ pub fn run(
 }
 
 /// Stops the trial unless the run's records show its arm: on each turn start of its agent, role
-/// lines' version with the lines and none without; for T2, L4 in the review's brief only with them.
+/// lines' version with the lines and none without.
 fn check_arm(conn: &Connection, block: &Block, run: &Run) {
     let with = block.arm == Arm::With;
     let wrong_starts = "SELECT count(*) FROM event_log WHERE conversation_id = ?1
         AND name LIKE 'invoke_agent %' AND phase = 'start' AND json_extract(attrs, '$.\"gen_ai.agent.id\"') = ?2
         AND (json_extract(attrs, '$.\"gathr.role.version\"') IS NULL) = ?3";
-    let mut wrong = one(conn, wrong_starts, params![run.chat, run.agent, with]) > 0;
-    if run.seat.case == Case::T2 {
-        let brief = "SELECT count(*) FROM messages WHERE chat_id = ?1 AND role = 'gathr' AND instr(body, ?2) > 0";
-        wrong |= (one(conn, brief, [&run.chat, gathr::roles::REVIEW]) > 0) != with;
-    }
+    let wrong = one(conn, wrong_starts, params![run.chat, run.agent, with]) > 0;
     assert!(
         !wrong,
         "block {}, {} on {}: the records don't show the {} arm. The trial stops here.",
@@ -236,8 +217,6 @@ fn row(conn: &Connection, block: &Block, run: &Run, ana: &str) -> Value {
     let tools = "SELECT count(*) FROM messages WHERE chat_id = ?1 AND kind = 'tool'";
     let (mut counts, case) = match run.seat.case {
         Case::T1 => t1(conn, run),
-        Case::T2 => score::t2(&notes(conn, run.task.unwrap())),
-        Case::T5 => score::t5(&questions(conn, run)),
         Case::T8 => t8(conn, run),
     };
     let common = json!({ "input_tokens": input, "cache_read": read, "cache_write": write, "output_tokens": output,
@@ -272,27 +251,6 @@ fn t1(conn: &Connection, run: &Run) -> (Map<String, Value>, &'static str) {
     let built = score::built(&diff, [&base[0], &base[1]], [&after[0], &after[1]]);
     let done = "SELECT count(*) FROM tasks WHERE number = ?1 AND state = 'done'";
     score::t1(&built, hidden, one(conn, done, [task]) > 0)
-}
-
-fn notes(conn: &Connection, task: i64) -> Vec<(String, Option<String>, String)> {
-    let mut stmt = conn
-        .prepare("SELECT kind, file, says FROM review_notes WHERE task = ?1")
-        .unwrap();
-    let rows = stmt.query_map([task], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)));
-    rows.unwrap().collect::<Result<_, _>>().unwrap()
-}
-
-/// The lead's questions to the person: each one's words with its choices, and how many choices. Not
-/// its why, where citing the project's rule is no question.
-fn questions(conn: &Connection, run: &Run) -> Vec<(String, usize)> {
-    let sql = "SELECT what || ' ' || COALESCE(choices, ''),
-                      COALESCE(json_array_length(choices), 0)
-               FROM tasks WHERE chat_id = ?1 AND kind = 'person' AND giver = ?2 ORDER BY number";
-    let mut stmt = conn.prepare(sql).unwrap();
-    let rows = stmt.query_map(params![run.chat, run.agent], |r| {
-        Ok((r.get(0)?, r.get::<_, i64>(1)? as usize))
-    });
-    rows.unwrap().collect::<Result<_, _>>().unwrap()
 }
 
 fn t8(conn: &Connection, run: &Run) -> (Map<String, Value>, &'static str) {

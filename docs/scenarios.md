@@ -737,9 +737,10 @@ Parts: 8.7, 11.1
 - **When** each starts its first turn
 - **Then** each is told its team, its own role, and the few things that role must do that Gathr's tools
   don't already make it do, each shipped only after the trial on real engines showed it changed what
-  agents do ([11f](#11f-a-line-ships-only-when-it-did-clearly-better-with-it-than-without)). Sizing,
-  plans, who asks the person, checks and reports come from Gathr's tools and state. Nobody wrote a
-  rulebook for it
+  agents do ([11f](#11f-a-line-ships-only-when-it-did-clearly-better-with-it-than-without)): the
+  builder to make the smallest change that does what was asked, and all three to agree with a
+  thumbs-up. The lead and the reviewer have no line of their own. Sizing, plans, who asks the person,
+  checks and reports come from Gathr's tools and state. Nobody wrote a rulebook for it
 
 ### 8h. A member's second task starts in a new conversation
 
@@ -1016,8 +1017,10 @@ Parts: 11.1, 8.7, 6.6
 - **When** the case runs with the line and without it, alternating block by block, on one build and one
   set of engine copies, and Gathr's records and the diff are counted: no model judges another
 - **Then** the line ships only if the runs with it did clearly better on every engine, and a line that
-  made no clear difference is left out. Each shipped line has its text's hash and a `kept` decision in
-  the trial's committed file, and a test fails for a line that has none
+  made no clear difference is left out, with its case. Each shipped line has its text's hash and a
+  `kept` decision in the trial's committed file, and a test fails for a line that has none. Of the four
+  lines tried, the member's and the thumbs-up shipped; the lead's and the code review's made no
+  difference and were removed
 
 ## 12. Open both ways
 

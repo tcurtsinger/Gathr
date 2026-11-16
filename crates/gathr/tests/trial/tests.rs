@@ -22,35 +22,20 @@ fn the_plan_alternates_arms_and_gives_each_case_its_runs() {
     let arms: Vec<Arm> = full.iter().map(|b| b.arm).collect();
     let (w, wo) = (Arm::With, Arm::Without);
     let round = |first: bool| if first { [w, wo] } else { [wo, w] };
-    let expected: Vec<Arm> = (0..8).flat_map(|r| round(r % 2 == 0)).collect();
+    let expected: Vec<Arm> = (0..6).flat_map(|r| round(r % 2 == 0)).collect();
     assert_eq!(arms, expected);
     assert_eq!(
         full.iter().map(|b| b.n).collect::<Vec<_>>(),
-        (1..=16).collect::<Vec<_>>()
+        (1..=12).collect::<Vec<_>>()
     );
     for arm in [w, wo] {
-        let runs = [
-            (Case::T1, Engine::Claude, 6),
-            (Case::T1, Engine::Codex, 6),
-            (Case::T2, Engine::Codex, 6),
-            (Case::T5, Engine::Claude, 8),
-            (Case::T8, Engine::Claude, 6),
-            (Case::T8, Engine::Codex, 6),
-            (Case::T2, Engine::Claude, 0),
-            (Case::T5, Engine::Codex, 0),
-        ];
-        for (case, engine, n) in runs {
-            assert_eq!(
-                count(&full, case, engine, arm),
-                n,
-                "{case:?} on {engine:?}, {arm:?}"
-            );
+        for case in [Case::T1, Case::T8] {
+            for engine in [Engine::Claude, Engine::Codex] {
+                let n = count(&full, case, engine, arm);
+                assert_eq!(n, 6, "{case:?} on {engine:?}, {arm:?}");
+            }
         }
     }
-    assert_eq!(
-        full[15].seats.iter().map(|s| s.case).collect::<Vec<_>>(),
-        [Case::T5]
-    );
 
     let first = cases::plan(Mode::First);
     assert_eq!(first.len(), 1);
@@ -78,9 +63,9 @@ fn no_block_starts_past_the_cap_and_the_most_is_said_from_the_limits() {
     assert!(!cases::may_start(90_000_000));
     // T1 4M and T8 1M, on each engine.
     assert_eq!(cases::most(&cases::plan(Mode::First)), 10_000_000);
-    // Every run to its limit is 24 × 4M + 12 × 1.5M + 16 × 1.5M + 24 × 1M = 162M; the cap and the
-    // largest block (two T1, T2, T5, two T8: 13M) are less.
-    assert_eq!(cases::most(&cases::plan(Mode::Full)), 103_000_000);
+    // Every run to its limit is 24 × 4M + 24 × 1M = 120M; the cap and the largest block (two T1 and
+    // two T8: 10M) are less.
+    assert_eq!(cases::most(&cases::plan(Mode::Full)), 100_000_000);
 }
 
 /// The project's repository in a temp folder: the folder and its repository.
@@ -89,19 +74,6 @@ fn made() -> (TempDir, std::path::PathBuf) {
     let repo = dir.0.join("project");
     project::make(&repo);
     (dir, repo)
-}
-
-#[test]
-fn the_project_has_its_planted_change_on_a_branch_beside_main() {
-    let (_dir, repo) = made();
-    assert_eq!(git(&repo, &["rev-parse", "--abbrev-ref", "HEAD"]), "main");
-    assert_eq!(git(&repo, &["status", "--porcelain"]), "");
-    let planted = git(&repo, &["diff", "--name-only", "main", "trial/planted"]);
-    assert_eq!(
-        planted,
-        "src/duration.js\nsrc/retry.js\ntest/duration.test.js"
-    );
-    assert!(!repo.join("src/retry.js").exists());
 }
 
 /// An earlier block's work: a run's branch with a commit, a worktree with changes not committed,
@@ -122,18 +94,17 @@ fn a_blocks_repository_holds_no_earlier_runs_branch_or_worktree() {
     std::fs::write(kept.join("src/cli.js"), "// not committed\n").unwrap();
     git(
         &repo,
-        &["worktree", "add", "-q", "-b", "gus/durations-3", &at(&gone)],
+        &["worktree", "add", "-q", "-b", "fin/durations-3", &at(&gone)],
     );
     std::fs::remove_dir_all(&gone).unwrap();
 
     project::forget(&repo);
     let branches = git(&repo, &["branch", "--format=%(refname:short)"]);
-    assert_eq!(branches, "main\ntrial/planted");
+    assert_eq!(branches, "main");
     let worktrees = git(&repo, &["worktree", "list", "--porcelain"]);
     assert_eq!(worktrees.matches("worktree ").count(), 1, "{worktrees}");
     let commits = git(&repo, &["log", "--all", "--format=%s"]);
-    assert!(!commits.contains("earlier work"), "{commits}");
-    assert_eq!(commits.lines().count(), 2, "{commits}");
+    assert_eq!(commits, "Durations as short text");
     assert!(!kept.exists());
 }
 
@@ -319,109 +290,6 @@ fn a_guard_is_an_extra_only_in_the_module_asked_for() {
     assert_eq!(guarded("src/duration.js"), 1);
 }
 
-fn note(kind: &str, file: Option<&str>, says: &str) -> (String, Option<String>, String) {
-    (kind.into(), file.map(String::from), says.into())
-}
-
-#[test]
-fn t2_passes_only_on_the_fault_and_the_planted_file_with_nothing_wrong_elsewhere() {
-    let fault = note(
-        "wrong",
-        Some("src\\duration.js:11"),
-        "250ms reads as 250 minutes",
-    );
-    let planted = note("unasked", None, "src/retry.js isn't asked for");
-    let (counts, outcome) = score::t2(&[fault.clone(), planted.clone()]);
-    assert_eq!(outcome, "passed");
-    let expected = json!({ "wrong_on_fault": 1, "unasked_on_planted": 1, "wrong_elsewhere": 0 });
-    assert_eq!(Value::Object(counts), expected);
-
-    let elsewhere = note(
-        "wrong",
-        Some("./test/duration.test.js:5"),
-        "no upper-case test",
-    );
-    let (counts, outcome) = score::t2(&[fault.clone(), planted.clone(), elsewhere]);
-    assert_eq!((outcome, &counts["wrong_elsewhere"]), ("failed", &json!(1)));
-    assert_eq!(
-        score::t2(&[fault]).1,
-        "failed",
-        "no unasked note on retry.js"
-    );
-    let suggestion = note(
-        "suggestion",
-        Some("src/duration.js:11"),
-        "check the units' order",
-    );
-    assert_eq!(
-        score::t2(&[suggestion, planted.clone()]).1,
-        "failed",
-        "no wrong note on the fault"
-    );
-    let absolute = note(
-        "wrong",
-        Some(r"X:\data-agents\gus\worktrees\abc\src\duration.js:11"),
-        "250ms reads as 250 minutes",
-    );
-    assert_eq!(
-        score::t2(&[absolute, planted]).0["wrong_on_fault"],
-        1,
-        "a worktree's path to the file"
-    );
-}
-
-#[test]
-fn t5_reads_the_answered_choices_words_and_its_choices_and_reports_no_question() {
-    assert_eq!(
-        score::named("Should the keys be camelCase or snake_case?"),
-        "camel"
-    );
-    let across = r#"Which keys? ["camelCase (the rule)", "snake_case"]"#;
-    assert_eq!(
-        score::named(across),
-        "camel",
-        "two styles across its choices"
-    );
-    assert_eq!(score::named("Which KEY STYLE do you want?"), "key style");
-    assert_eq!(score::named("kebab-case or snake_case keys?"), "snake");
-    assert_eq!(score::named("Should errors print as JSON too?"), "none");
-    let cites =
-        "Keys follow CONTRIBUTING.md, camelCase. Should the object carry the text it read too?";
-    assert_eq!(score::named(cites), "none", "citing the documented rule");
-
-    let (counts, outcome) = score::t5(&[]);
-    assert_eq!(outcome, "no_question");
-    assert_eq!(
-        Value::Object(counts),
-        json!({ "questions": 0, "named_answered": "none", "with_choices": false })
-    );
-
-    let good = (
-        "Should the object carry the text it read too?".to_string(),
-        2,
-    );
-    let (counts, outcome) = score::t5(std::slice::from_ref(&good));
-    assert_eq!(outcome, "passed");
-    assert_eq!(
-        Value::Object(counts),
-        json!({ "questions": 1, "named_answered": "none", "with_choices": true })
-    );
-
-    let asked = ("Keys in snake_case or camelCase?".to_string(), 0);
-    let (counts, outcome) = score::t5(&[good, asked]);
-    assert_eq!(outcome, "failed");
-    assert_eq!(
-        Value::Object(counts),
-        json!({ "questions": 2, "named_answered": "camel", "with_choices": true })
-    );
-    let one = ("Only the milliseconds?".to_string(), 1);
-    assert_eq!(
-        score::t5(&[one]).0["with_choices"],
-        false,
-        "one choice isn't a choice"
-    );
-}
-
 #[test]
 fn t8_passes_a_thumbs_up_with_no_message_to_the_other_agent() {
     // The turn's closing words reach the chat and wake nobody: counted in the row, never against it.
@@ -471,29 +339,6 @@ fn t1(engine: Engine, arm: Arm, runs: &str) -> Vec<Value> {
         row(Case::T1, engine, arm, outcome, Value::Object(counts))
     };
     runs.chars().map(run).collect()
-}
-
-fn t2(arm: Arm, passed: usize, spoiled: usize) -> Vec<Value> {
-    let outcome = |i: usize| match i {
-        i if i < passed => "passed",
-        i if i < passed + spoiled => "spoiled",
-        _ => "failed",
-    };
-    (0..6)
-        .map(|i| row(Case::T2, Engine::Codex, arm, outcome(i), json!({})))
-        .collect()
-}
-
-/// Eight T5 runs, `named` of them asking the answered choice and `choices` with choices.
-fn t5(arm: Arm, named: usize, choices: usize) -> Vec<Value> {
-    let run = |i: usize| {
-        let word = if i < named { "camel" } else { "none" };
-        json!({ "named_answered": word, "with_choices": i < choices, "questions": 1 })
-    };
-    let outcome = |i: usize| if i < named { "failed" } else { "passed" };
-    (0..8)
-        .map(|i| row(Case::T5, Engine::Claude, arm, outcome(i), run(i)))
-        .collect()
 }
 
 fn t8(engine: Engine, arm: Arm, passed: usize) -> Vec<Value> {
@@ -547,41 +392,6 @@ fn each_line_ships_only_when_its_case_did_clearly_better_with_it_on_both_engines
         "fewer over-built, no more good"
     );
 
-    let l1 = |with: (usize, usize), without: (usize, usize)| {
-        decided(&[t5(w, with.0, with.1), t5(wo, without.0, without.1)], "L1")
-    };
-    assert_eq!(
-        l1((1, 0), (4, 0)),
-        "kept",
-        "3 fewer ask the answered choice"
-    );
-    assert_eq!(l1((2, 5), (2, 2)), "kept", "3 more with choices");
-    assert_eq!(l1((1, 1), (4, 2)), "dropped", "fewer with choices");
-    assert_eq!(l1((2, 4), (3, 2)), "dropped", "too small a difference");
-    // The unanswered choice still has to be asked: fewer runs asking anything isn't better.
-    let silent = |runs: usize| {
-        let mut with = t5(w, 1, 0);
-        for run in &mut with[8 - runs..] {
-            run["questions"] = json!(0);
-            run["outcome"] = json!("no_question");
-        }
-        decided(&[with, t5(wo, 4, 0)], "L1")
-    };
-    assert_eq!(silent(1), "kept", "one fewer run asks");
-    assert_eq!(silent(4), "dropped", "four fewer runs ask");
-    // A T5 run that ran out of time or tokens says nothing of the question: left out.
-    let mut with = t5(w, 1, 0);
-    for run in &mut with[5..] {
-        run["questions"] = json!(1);
-        run["outcome"] = json!("timed_out");
-    }
-    with[7]["outcome"] = json!("over_cap");
-    assert_eq!(
-        decided(&[with, t5(wo, 4, 0)], "L1"),
-        "undecided",
-        "5 of 8 runs count"
-    );
-
     let l3 = |with: (usize, usize), without: (usize, usize)| {
         decided(
             &[
@@ -596,29 +406,45 @@ fn each_line_ships_only_when_its_case_did_clearly_better_with_it_on_both_engines
     assert_eq!(l3((4, 4), (2, 1)), "kept");
     assert_eq!(l3((6, 1), (1, 2)), "dropped", "fewer on Codex");
     assert_eq!(l3((3, 3), (2, 1)), "dropped", "3 more");
+}
 
-    assert_eq!(decided(&[t2(w, 4, 0), t2(wo, 1, 0)], "L4"), "kept");
-    assert_eq!(decided(&[t2(w, 3, 0), t2(wo, 1, 0)], "L4"), "dropped");
+/// Twelve T8 runs in `arm`, `passed` of them passing on each engine, and the first `left` of them,
+/// failed ones first, ended with `how`.
+fn t8_ended(arm: Arm, passed: usize, left: usize, how: &str) -> Vec<Value> {
+    let mut runs = [
+        t8(Engine::Claude, arm, passed),
+        t8(Engine::Codex, arm, passed),
+    ]
+    .concat();
+    runs.sort_by_key(|r| r["outcome"] == "passed");
+    for run in &mut runs[..left] {
+        run["outcome"] = json!(how);
+    }
+    runs
 }
 
 #[test]
 fn a_line_is_undecided_under_two_thirds_of_an_arms_runs_or_when_the_models_moved() {
     let (w, wo) = (Arm::With, Arm::Without);
-    // Spoiled runs are left out: 4 of 6 still decide, and 3 don't.
-    assert_eq!(decided(&[t2(w, 4, 2), t2(wo, 1, 0)], "L4"), "kept");
-    assert_eq!(decided(&[t2(w, 4, 0), t2(wo, 1, 3)], "L4"), "undecided");
-    let mut limited = t2(w, 4, 0);
-    for run in &mut limited[3..] {
-        run["outcome"] = json!("usage_limit");
-    }
-    assert_eq!(decided(&[limited, t2(wo, 1, 0)], "L4"), "undecided");
+    let l3 = |runs: &[Vec<Value>]| decided(runs, "L3");
+    // Spoiled runs are left out: 8 of 12 still decide, and 7 don't.
     assert_eq!(
-        decided(&[t2(w, 4, 0)], "L4"),
+        l3(&[t8_ended(w, 4, 4, "spoiled"), t8_ended(wo, 1, 0, "")]),
+        "kept"
+    );
+    assert_eq!(
+        l3(&[t8_ended(w, 4, 5, "spoiled"), t8_ended(wo, 1, 0, "")]),
+        "undecided"
+    );
+    let limited = t8_ended(wo, 1, 5, "usage_limit");
+    assert_eq!(l3(&[t8_ended(w, 4, 0, ""), limited]), "undecided");
+    assert_eq!(
+        l3(&[t8_ended(w, 4, 0, "")]),
         "undecided",
         "no runs without it"
     );
 
-    let runs = [t2(w, 4, 0), t2(wo, 1, 0)].concat();
+    let runs = [t8_ended(w, 4, 0, ""), t8_ended(wo, 1, 0, "")].concat();
     let lines = decide::lines(&runs, &cases::plan(Mode::Full), false);
     assert!(
         lines.iter().all(|l| l["decision"] == "undecided"),
@@ -643,8 +469,8 @@ fn a_line_is_undecided_under_two_thirds_of_an_arms_runs_or_when_the_models_moved
 fn each_shipped_line_has_its_row_with_its_texts_hash() {
     let lines = decide::lines(&[], &cases::plan(Mode::Full), true);
     let ids: Vec<&str> = lines.iter().map(|l| l["id"].as_str().unwrap()).collect();
-    assert_eq!(ids, ["L1", "L2", "L3", "L4"]);
-    let l2 = &lines[1];
+    assert_eq!(ids, ["L2", "L3"]);
+    let l2 = &lines[0];
     let expected = json!({ "id": "L2", "sha256": results::line_sha256(gathr::roles::MEMBER), "case": "T1",
         "decision": "undecided" });
     assert_eq!(l2, &expected);
@@ -659,8 +485,6 @@ fn the_file_the_trial_writes_holds_only_r8s_fields() {
     for seat in &blocks[0].seats {
         let (mut counts, outcome) = match seat.case {
             Case::T1 => score::t1(&Built::default(), true, true),
-            Case::T2 => score::t2(&[note("wrong", Some("src/duration.js:11"), "minutes")]),
-            Case::T5 => score::t5(&[("camelCase or snake_case keys?".into(), 2)]),
             Case::T8 => score::t8(true, 0, 0),
         };
         counts.extend(usage.as_object().unwrap().clone());
@@ -670,7 +494,7 @@ fn the_file_the_trial_writes_holds_only_r8s_fields() {
     let lines = decide::lines(&runs, &blocks, true);
     let written = file::file(&head, &runs, lines, "done");
     assert_eq!(results::shape(&written), Vec::<String>::new(), "{written}");
-    assert_eq!(written["spent"], 6 * 24_000);
+    assert_eq!(written["spent"], 4 * 24_000);
 }
 
 /// A trial killed mid-block leaves chats whose queued turns would start, unwatched, at the next

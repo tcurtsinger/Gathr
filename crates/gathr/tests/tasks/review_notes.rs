@@ -131,8 +131,7 @@ fn a_reviews_brief_names_its_pr_head_and_the_task_it_answers() {
     let expected = format!(
         "PR #7, at abc1234 as last seen.\n\
          It answers task #{work} from Lead: Build the page. Why: Pages load slowly.\n\
-         Say what is wrong or missing against the ask, as wrong notes. Say what in the change the ask doesn't \
-         need, as unasked notes, or nothing_unasked: true."
+         Say what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true."
     );
     let next: Vec<&str> = lines[at + 1..].iter().take(3).copied().collect();
     assert_eq!(next.join("\n"), expected, "{brief}");
@@ -153,10 +152,7 @@ fn a_reviews_brief_names_its_pr_head_and_the_task_it_answers() {
         "{brief}"
     );
     assert!(
-        brief.contains(
-            "\nSay what is wrong or missing against the ask, as wrong notes. Say what in the change the ask \
-             doesn't need, as unasked notes, or nothing_unasked: true.\n"
-        ),
+        brief.contains("\nSay what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true.\n"),
         "{brief}"
     );
 }

@@ -4,8 +4,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Case {
     T1,
-    T2,
-    T5,
     T8,
 }
 
@@ -13,8 +11,6 @@ impl Case {
     pub fn name(self) -> &'static str {
         match self {
             Case::T1 => "T1",
-            Case::T2 => "T2",
-            Case::T5 => "T5",
             Case::T8 => "T8",
         }
     }
@@ -22,10 +18,8 @@ impl Case {
     /// The line it measures, by its id in `gathr::roles::SHIPPED`.
     pub fn line(self) -> &'static str {
         match self {
-            Case::T5 => "L1",
             Case::T1 => "L2",
             Case::T8 => "L3",
-            Case::T2 => "L4",
         }
     }
 
@@ -33,7 +27,6 @@ impl Case {
     pub fn limits(self) -> (u64, u64) {
         match self {
             Case::T1 => (4_000_000, 30 * 60),
-            Case::T2 | Case::T5 => (1_500_000, 10 * 60),
             Case::T8 => (1_000_000, 5 * 60),
         }
     }
@@ -80,10 +73,10 @@ pub struct Seat {
     pub effort: &'static str,
 }
 
-/// The paused lead who gives the tasks and sends T8's message, and T5's member: no turn of hers runs.
+/// The paused lead who gives the tasks and sends T8's message: no turn of hers runs.
 pub const GIVER: &str = "Ana";
 
-pub const SEATS: [Seat; 6] = [
+pub const SEATS: [Seat; 4] = [
     Seat {
         case: Case::T1,
         engine: Engine::Claude,
@@ -95,13 +88,6 @@ pub const SEATS: [Seat; 6] = [
         case: Case::T8,
         engine: Engine::Claude,
         agent: "Dot",
-        model: "opus",
-        effort: "high",
-    },
-    Seat {
-        case: Case::T5,
-        engine: Engine::Claude,
-        agent: "Bo",
         model: "opus",
         effort: "high",
     },
@@ -118,13 +104,6 @@ pub const SEATS: [Seat; 6] = [
         agent: "Fin",
         model: "gpt-6.1-sol",
         effort: "medium",
-    },
-    Seat {
-        case: Case::T2,
-        engine: Engine::Codex,
-        agent: "Gus",
-        model: "latest:sol",
-        effort: "high",
     },
 ];
 
@@ -149,20 +128,17 @@ pub enum Mode {
 /// No block starts once the trial has spent this many input tokens.
 pub const CAP: u64 = 90_000_000;
 
-/// The blocks, in order.
-/// Eight rounds of both arms, the arm that goes first alternating by round, so both see the same
-/// hours and engine copies: T5 in every round, the other cases in the first six (R6's runs).
+/// The blocks, in order: six rounds of both arms, the arm that goes first alternating by round, so
+/// both see the same hours and engine copies (R6's runs).
 pub fn plan(mode: Mode) -> Vec<Block> {
     if mode == Mode::First {
-        let first = |s: &&Seat| matches!(s.case, Case::T1 | Case::T8);
-        let seats = SEATS.iter().filter(first).collect();
         return vec![Block {
             n: 1,
             arm: Arm::With,
-            seats,
+            seats: SEATS.iter().collect(),
         }];
     }
-    let rounds = if mode == Mode::StandIn { 1 } else { 8 };
+    let rounds = if mode == Mode::StandIn { 1 } else { 6 };
     let mut blocks = Vec::new();
     for round in 1..=rounds {
         let arms = match round % 2 {
@@ -170,12 +146,10 @@ pub fn plan(mode: Mode) -> Vec<Block> {
             _ => [Arm::Without, Arm::With],
         };
         for arm in arms {
-            let due = |s: &&Seat| s.case == Case::T5 || round <= 6;
-            let seats = SEATS.iter().filter(due).collect();
             blocks.push(Block {
                 n: blocks.len() as u64 + 1,
                 arm,
-                seats,
+                seats: SEATS.iter().collect(),
             });
         }
     }

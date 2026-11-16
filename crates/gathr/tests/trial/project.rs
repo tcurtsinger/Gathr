@@ -23,22 +23,16 @@ pub fn copy(from: &Path, to: &Path) {
     }
 }
 
-/// The project's repository in `dir`: the project on `main`, and the planted change on
-/// `trial/planted`, a branch beside it. No remote: nothing can be pushed.
+/// The project's repository in `dir`, on `main`. No remote: nothing can be pushed.
 pub fn make(dir: &Path) {
     copy(&fixture().join("project"), dir);
     git(dir, &["init", "-q", "-b", "main"]);
     git(dir, &["add", "."]);
     git(dir, &["commit", "-q", "-m", "Durations as short text"]);
-    git(dir, &["checkout", "-q", "-b", "trial/planted"]);
-    copy(&fixture().join("planted"), dir);
-    git(dir, &["add", "."]);
-    git(dir, &["commit", "-q", "-m", "Accept upper-case units"]);
-    git(dir, &["checkout", "-q", "main"]);
 }
 
-/// Leaves the repository in `dir` with only `main` and `trial/planted`, so no agent finds an earlier
-/// run's work with `git log --all`. Archiving a chat removes its worktrees but keeps their branches,
+/// Leaves the repository in `dir` with only `main`, so no agent finds an earlier run's work with
+/// `git log --all`. Archiving a chat removes its worktrees but keeps their branches,
 /// and keeps a worktree with changes not committed (0034): those go here, with the service stopped.
 pub fn forget(dir: &Path) {
     let listed = git(dir, &["worktree", "list", "--porcelain"]);
@@ -50,7 +44,7 @@ pub fn forget(dir: &Path) {
     git(dir, &["worktree", "prune"]);
     let branches = git(dir, &["branch", "--format=%(refname:short)"]);
     for branch in branches.lines() {
-        if !["main", "trial/planted"].contains(&branch) {
+        if branch != "main" {
             git(dir, &["branch", "-D", branch]);
         }
     }
