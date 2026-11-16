@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { api, type Failure, type Task } from '../api';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { asker, edited, idle, noteLines, reported, reviewedAt, sized } from './model';
+import { asker, briefRows, edited, idle, noteLines, reported, reviewedAt } from './model';
 import { TaskChecks } from './TaskChecks';
 
 /** Only a settled task starts again (0010); an open one the person can only cancel. */
@@ -47,11 +47,10 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
   const review = reviewedAt(task);
   const notes = noteLines(task);
   const brief = [
-    ['Done when', task.done],
-    ['Proof', task.proof],
-    ['Where', task.where],
-    ['Size', sized(task)],
-    ['After', task.after.map((n) => `#${n}`).join(', ')],
+    ...briefRows(
+      task,
+      task.after.map((n) => `#${n}`),
+    ),
     ['Edited', edited(task)],
   ];
   // Report and Waiting on already say why a task is held, a report's note is often the reason word

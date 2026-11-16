@@ -348,9 +348,12 @@ export function ChatView(props: Props) {
               <>
                 <ApprovalDock
                   approvals={state.approvals}
+                  plans={state.plans}
                   name={(t) => members.find((m) => m.agent === state.turns[t]?.agent)?.name ?? 'An agent'}
+                  lead={(id) => members.find((m) => m.agent === id)?.name ?? 'An agent'}
                   onShow={(a) => show(a.request)}
                   onAnswer={approve}
+                  onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}
                 />
                 <Composer
                   draft={draft}

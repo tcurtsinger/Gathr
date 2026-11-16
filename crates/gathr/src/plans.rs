@@ -489,7 +489,7 @@ pub(crate) fn held_question(conn: &Connection, task: i64) -> Result<Option<i64>,
 pub fn state(conn: &Connection, plan: i64) -> Result<State, Error> {
     let (decided, sent, left): (Option<String>, Option<i64>, bool) = conn.query_row(
         "SELECT v.decided, v.sent_ts, EXISTS (SELECT 1 FROM tasks t WHERE t.checks = v.id
-             AND t.state = 'blocked' AND t.finish = 'left')
+             AND t.state IN ('blocked', 'cancelled') AND t.finish = 'left')
          FROM plan_versions v WHERE v.plan_id = ?1 ORDER BY v.n DESC LIMIT 1",
         [plan],
         |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),

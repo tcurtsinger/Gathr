@@ -97,18 +97,66 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.plan-parts p > span {
-  color: var(--muted-foreground);
-}
+/* A part's line opens it; one is open at a time (0062 H5.4, second PR). */
 .plan-parts .plan-part-what {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
   font-size: 15px;
   font-weight: 500;
   line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.plan-parts .plan-part-what:hover {
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .plan-parts .plan-part-meta {
-  margin-bottom: 4px;
   color: var(--muted-foreground);
   font-size: 13px;
+}
+.plan-parts .task-fields {
+  margin-top: 10px;
+  font-size: 13.5px;
+}
+/* Changed, New and Removed against the version before (H2.6), and what a changed field was. */
+.plan-mark {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--attention) 14%, transparent);
+  color: var(--attention);
+  font-size: 11.5px;
+  font-weight: 500;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.plan-mark[data-mark="Removed"] {
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  color: var(--muted-foreground);
+}
+.plan-parts .plan-removed {
+  display: block;
+  padding-left: 32px;
+  color: var(--muted-foreground);
+  font-size: 13.5px;
+}
+.plan-was {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+}
+/* An answer under its finding, an answer under its question. */
+.plan-said {
+  display: block;
+  color: var(--muted-foreground);
 }
 .plan-back {
   margin-top: 28px;

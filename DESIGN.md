@@ -237,10 +237,13 @@ in place: the whole line, the reason or the question, and Open task. Click or En
 closes it. Keyboard focus uses the hover highlight, without an outline or ring.
 
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
-composer: an attention border at 50%, 16px radius, the popover surface; the agent's initial,
+composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's initial,
 "Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in
 a code chip, then Show, Deny and Allow. It shows the oldest. Show scrolls to the card and
-focuses it. An answer being sent leaves the dock; a refused answer brings it back.
+focuses it. An answer being sent leaves the dock; a refused answer brings it back. With no approval
+waiting, the dock shows the oldest plan: the lead's initial, "Needs you · 1 of 1", "Mira's plan:
+Tags on notes · 9 parts" and one button, Open, which opens the plan's tab at its newest version.
+The count is approvals and plans waiting on you; a plan still being checked isn't one.
 
 Working appears after the latest message while any turn runs: an attention spinner, Working,
 overlapping 18px initials for agents with running turns, and the time since the longest-running
@@ -410,9 +413,16 @@ version while the plan is open, "Saving" in the middle while a request runs, and
 the newest version once it has reached you, Send back (outline) and Approve; after Send back,
 Cancel (ghost) and Send back, disabled until the field has words. No sentence explains a button.
 The workspace lies over the chat at 1200px and under, as every tab does, and the foot's three
-buttons fit at 432px. Part H's second PR adds Findings, Answers and Questions to the Check field,
-parts that open one at a time, the marks Changed, New and Removed with "Was", and the plan in the
-needs dock; the dock is not built yet.
+buttons fit at 432px. The Check field also lists the version's Findings (a suggestion is left out) in a task's
+note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
+("Changed: ..." or "Kept: ..."), and the ask's Questions, each with its answer or "Open". Each
+part is a line that opens to its brief, one at a time and none at first: Why, Done when, Proof,
+Where, Size and After, in the classes of a task's fields. Against the version before, a part
+carries a mark in the attention colour at the end of its line, Changed or New, matched by what it
+says, so a part moved in order is not changed; a Changed part's open brief shows Was under each
+field that differs, in muted struck-through type; a part that went is a muted line after the parts,
+Removed, its words struck through. Version 1 has no marks. The tab carries the attention mark
+while the plan waits on you, as Tasks does.
 
 ### Human tasks
 

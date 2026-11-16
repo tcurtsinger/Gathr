@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useState } from 'react';
 import { ElicitationForm } from '@/components/assistant-ui/elements/elicitation-form';
 import { Button } from '@/components/ui/button';
-import { api, type Failure, type Plan, type PlanPart, type PlanVersion } from '../api';
+import { api, type Failure, type Plan, type PlanPart, type PlanVersion, type TaskField } from '../api';
 import { began } from '../chat/team';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { counted } from './plans';
+import { briefRows, noteLine } from '../tasks/model';
+import { counted, marks, type PartField, type PartMark } from './plans';
 import '../tasks/tasks.css';
 import './plans.css';
 
@@ -17,6 +18,8 @@ interface Props {
   name: (agent: string | null) => string;
   onVersion: (version: number) => void;
   onReference: (ref: string) => void;
+  /** Whether the plan waits on the person: the tab's dot. */
+  onWaits?: (waits: boolean) => void;
 }
 
 /** The newest version's state word; waiting on the person has none. */
@@ -29,10 +32,11 @@ const word: Record<Plan['state'], string | undefined> = {
 };
 
 /**
- * The lead's plan in its own tab (0062 H5.4, the plan-card mock-up v2): a version whole, its check and every
- * part, with Approve, Send back and Drop at its foot. Read again whenever the chat's plans change.
+ * The lead's plan in its own tab (0062 H5.4, the plan-card mock-up v2): a version, its check with the findings
+ * and answers, the ask's questions, and its parts, one open at a time, marked against the version before; with
+ * Approve, Send back and Drop at its foot. Read again whenever the chat's plans change.
  */
-export function PlanTab({ chat, plan: id, version, name, onVersion, onReference }: Props) {
+export function PlanTab({ chat, plan: id, version, name, onVersion, onReference, onWaits }: Props) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
@@ -40,6 +44,13 @@ export function PlanTab({ chat, plan: id, version, name, onVersion, onReference 
   // Send back's words, while its field is open.
   const [words, setWords] = useState<string | null>(null);
   const [asked, setAsked] = useState(0);
+  // The one part open to its brief, by its version and number: another version opens with none open.
+  const [opened, setOpened] = useState<string | null>(null);
+  const waiting = plan?.state === 'waiting';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the app's handler is new with each draw; only the plan moves the dot
+  useEffect(() => {
+    onWaits?.(waiting);
+  }, [waiting]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: `asked` reads the plan again after the person's word
   useEffect(() => {
     let current = true;
@@ -85,6 +96,8 @@ export function PlanTab({ chat, plan: id, version, name, onVersion, onReference 
   };
   const meta = [name(plan.lead), began(Date.parse(v.created) * 1000), newest ? word[plan.state] : 'Replaced'];
   const check = checked(v, name);
+  const before = plan.versions[plan.versions.indexOf(v) - 1];
+  const marked = before && marks(v.parts, before.parts);
   return (
     <section className="tasks" aria-label="Plan">
       <div className="tasks-scroll">
@@ -127,16 +140,26 @@ export function PlanTab({ chat, plan: id, version, name, onVersion, onReference 
             </blockquote>
           )}
           <p className="plan-text">{v.text}</p>
-          {check && (
-            <dl className="task-fields">
-              <dt>Check</dt>
-              <dd>{check}</dd>
-            </dl>
-          )}
+          <Checked plan={plan} version={v} before={before} check={check} />
           <h3>{counted(v.parts.length, 'part')}</h3>
           <ol className="plan-parts">
-            {v.parts.map((p) => (
-              <Part key={p.n} part={p} name={name} />
+            {v.parts.map((p, i) => {
+              const at = `${v.n}.${p.n}`;
+              return (
+                <Part
+                  key={p.n}
+                  part={p}
+                  mark={marked?.parts[i]}
+                  open={opened === at}
+                  onToggle={() => setOpened(opened === at ? null : at)}
+                  name={name}
+                />
+              );
+            })}
+            {marked?.removed.map((p) => (
+              <li key={`removed ${p.n}`} className="plan-removed">
+                <Mark word="Removed" /> <s>{p.what}</s>
+              </li>
             ))}
           </ol>
           {waits && words !== null && (
@@ -209,36 +232,141 @@ export function PlanTab({ chat, plan: id, version, name, onVersion, onReference 
   );
 }
 
-/** A part shown whole: what its task will carry, word for word. */
-function Part({ part: p, name }: { part: PlanPart; name: (agent: string | null) => string }) {
-  const after = [...p.after.map((n) => `part ${n}`), ...p.after_tasks.map((n) => `#${n}`)].join(', ');
-  const fields = [
-    ['Why', p.why],
-    ['Done when', p.done],
-    ['Proof', p.proof],
-    ['Where', p.where],
-    ['Size', `${p.size}, about ${p.lines} lines`],
-  ];
+type Name = (agent: string | null) => string;
+
+/** The check's outcome, this version's findings, its answers to the version before's, and the ask's questions. */
+function Checked({
+  plan,
+  version: v,
+  before,
+  check,
+}: {
+  plan: Plan;
+  version: PlanVersion;
+  before?: PlanVersion;
+  check?: string;
+}) {
+  const findings = (v.check?.notes ?? []).filter((n) => n.kind !== 'suggestion');
+  const answered = (note: number) => before?.check?.notes.find((n) => n.id === note);
+  if (!check && !findings.length && !v.answers.length && !plan.questions.length) return null;
+  return (
+    <dl className="task-fields">
+      {check && (
+        <>
+          <dt>Check</dt>
+          <dd>{check}</dd>
+        </>
+      )}
+      {findings.length > 0 && (
+        <>
+          <dt>Findings</dt>
+          {findings.map((n) => (
+            <dd key={n.id}>{noteLine(n)}</dd>
+          ))}
+        </>
+      )}
+      {v.answers.length > 0 && (
+        <>
+          <dt>Answers</dt>
+          {v.answers.map((a) => {
+            const note = answered(a.note);
+            return (
+              <dd key={a.note}>
+                <span>{note ? noteLine(note) : `Note ${a.note}`}</span>
+                <span className="plan-said">
+                  {a.changed ? 'Changed' : 'Kept'}: {a.why}
+                </span>
+              </dd>
+            );
+          })}
+        </>
+      )}
+      {plan.questions.length > 0 && (
+        <>
+          <dt>Questions</dt>
+          {plan.questions.map((q) => (
+            <dd key={q.number}>
+              <span>{q.what}</span>
+              <span className="plan-said">{q.answer ?? 'Open'}</span>
+            </dd>
+          ))}
+        </>
+      )}
+    </dl>
+  );
+}
+
+const Mark = ({ word }: { word: string }) => (
+  <span className="plan-mark" data-mark={word}>
+    {word}
+  </span>
+);
+
+/** A part's brief, as its task will carry it word for word, each row with its field. */
+const partRows = (p: PlanPart) => [
+  ['Why', p.why, 'why'] as const,
+  ...briefRows(p, [...p.after.map((n) => `part ${n}`), ...p.after_tasks.map((n) => `#${n}`)]),
+];
+
+interface PartProps {
+  part: PlanPart;
+  mark?: PartMark;
+  open: boolean;
+  onToggle: () => void;
+  name: Name;
+}
+
+/** A part's line, which opens to its brief; a changed part's brief shows what each changed field was. */
+function Part({ part: p, mark, open, onToggle, name }: PartProps) {
+  const was = mark && 'was' in mark ? mark : undefined;
+  const changed = (field: PartField | TaskField) => !!was?.changed.some((f) => f === field);
+  const old = was && partRows(was.was);
   return (
     <li>
       <span className="plan-part-n">{p.n}</span>
       <div>
-        <p className="plan-part-what">{p.what}</p>
-        <p className="plan-part-meta">
-          {[name(p.owner), after && `after ${after}`].filter(Boolean).join(' · ')}
-        </p>
-        {fields.map(([label, value]) => (
-          <p key={label}>
-            <span>{label}:</span> {value}
-          </p>
-        ))}
+        <button type="button" className="plan-part-what" aria-expanded={open} onClick={onToggle}>
+          {p.what}
+          {mark && mark.mark !== 'Unchanged' && (
+            <>
+              {' '}
+              <Mark word={mark.mark} />
+            </>
+          )}
+        </button>
+        <p className="plan-part-meta">{name(p.owner)}</p>
+        {open && (
+          <dl className="task-fields">
+            {was && changed('owner') && (
+              <>
+                <dt>Was</dt>
+                <dd className="plan-was">{name(was.was.owner)}</dd>
+              </>
+            )}
+            {partRows(p).map(
+              ([label, words, field]) =>
+                (words || changed(field)) && (
+                  <Fragment key={label}>
+                    <dt>{label}</dt>
+                    <dd>{words}</dd>
+                    {changed(field) && (
+                      <>
+                        <dt>Was</dt>
+                        <dd className="plan-was">{old?.find((r) => r[2] === field)?.[1]}</dd>
+                      </>
+                    )}
+                  </Fragment>
+                ),
+            )}
+          </dl>
+        )}
       </div>
     </li>
   );
 }
 
 /** How the version's check stands, from the service's outcome. */
-function checked(v: PlanVersion, name: (agent: string | null) => string): string | undefined {
+function checked(v: PlanVersion, name: Name): string | undefined {
   const c = v.check;
   if (!c) return undefined;
   const by = name(c.by);

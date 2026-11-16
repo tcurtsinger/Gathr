@@ -27,7 +27,7 @@ interface Props {
   /** The agent opened from Summary or the timeline: its tab's name and its panel. One at a time. */
   agent?: { name: string; panel: ReactNode };
   /** The plan opened from its chip or a plan line, at a version, and its view. One at a time (0062). */
-  plan?: { version: number; view: ReactNode; onClose: () => void };
+  plan?: { version: number; view: ReactNode; onClose: () => void; waits?: boolean };
   /** 'tasks', 'agent', 'plan', or a file tab's id. */
   selected: string;
   onSelect: (id: string) => void;
@@ -100,7 +100,13 @@ export function Workspace(props: Props) {
         >
           {tab('tasks', 'Tasks', <ListTodo aria-hidden="true" />, waiting && <i className="attention" />)}
           {agent && tab('agent', agent.name, <Initial name={agent.name} size="s" />)}
-          {plan && tab('plan', `Plan v${plan.version}`, <ClipboardList aria-hidden="true" />)}
+          {plan &&
+            tab(
+              'plan',
+              `Plan v${plan.version}`,
+              <ClipboardList aria-hidden="true" />,
+              plan.waits && <i className="attention" />,
+            )}
           {files.map((f) => tab(fileId(f), f.name, <FileText aria-hidden="true" />))}
         </div>
         <TooltipIconButton
