@@ -5,7 +5,9 @@
 //! a Codex thought is timed by (0042).
 //! A `hold` row waits until the file `GATHR_REPLAY_HOLD` names exists, so a test decides when
 //! the engine goes on; without that variable it's skipped. A `hold` row whose `line` is `take`
-//! also uses the file up, so each one the test makes lets exactly one held turn go on.
+//! also uses the file up, so each one the test makes lets exactly one held turn go on; with more
+//! than one held, the file's name with the engine's process id as its extension (`go.<pid>`) lets
+//! only that engine go on. The id is in its line in `GATHR_REPLAY_ENV`.
 //!
 //! `GATHR_REPLAY` names the recording, else a file `replay-recording` beside it; `GATHR_REPLAY_ARGS`, if set, is a file each run appends
 //! its arguments to, as one JSON line; `GATHR_REPLAY_ENV` one it appends the token it was given
@@ -47,17 +49,20 @@ use std::io::{BufRead, Write};
 #[path = "replay_engine/codex.rs"]
 mod codex;
 
-/// The recording named in `replay-recording` beside this program: an installed service passes
-/// engines no `GATHR_*` variable, so a check on one puts the replay engine in as its copy with this.
-/// Past the hold: the file exists, or with `take`, this engine moved it away first.
+/// Past the hold: the file exists, or with `take`, this engine moved it away first, the one named
+/// for it before the one any held engine may take.
 fn let_go(file: &std::path::Path, take: bool) -> bool {
     if !take {
         return file.exists();
     }
-    let taken = file.with_extension(format!("taken-{}", std::process::id()));
-    std::fs::rename(file, taken).is_ok()
+    let me = std::process::id();
+    let taken = file.with_extension(format!("taken-{me}"));
+    let mine = file.with_extension(me.to_string());
+    std::fs::rename(mine, &taken).is_ok() || std::fs::rename(file, &taken).is_ok()
 }
 
+/// The recording named in `replay-recording` beside this program: an installed service passes
+/// engines no `GATHR_*` variable, so a check on one puts the replay engine in as its copy with this.
 fn recording_beside_me() -> std::io::Result<String> {
     let file = std::env::current_exe()?.with_file_name("replay-recording");
     Ok(std::fs::read_to_string(file)?.trim().to_string())
@@ -347,7 +352,7 @@ fn record_start(args: &[String]) {
         let temp = ["TEMP", "TMP", "TMPDIR"].map(|name| std::env::var(name).ok());
         let compact = std::env::var("CLAUDE_CODE_AUTO_COMPACT_WINDOW").ok();
         let start = serde_json::json!({ "GATHR_AGENT_TOKEN": token, "cwd": cwd, "PATH": path,
-            "GATHR_PUSH_URL": push, "TEMP": temp, "CLAUDE_CODE_AUTO_COMPACT_WINDOW": compact });
+            "pid": std::process::id(), "GATHR_PUSH_URL": push, "TEMP": temp, "CLAUDE_CODE_AUTO_COMPACT_WINDOW": compact });
         append_line(&mut out, start.to_string());
     }
 }
