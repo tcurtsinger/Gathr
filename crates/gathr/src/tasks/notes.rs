@@ -289,12 +289,16 @@ pub(super) fn done_reason(
 }
 
 /// What a review's brief says of what it reviews: its PR's head as last seen, the task it answers,
-/// and the unasked question.
+/// and both questions: what is wrong (0066) and what is unasked.
 pub(super) fn brief_lines(conn: &Connection, review: &Task) -> Result<Vec<String>, Error> {
-    let ask =
+    let unasked =
         "Say what in the change the ask doesn't need, as unasked notes, or nothing_unasked: true.";
+    let ask = match crate::roles::without() {
+        true => unasked.to_string(),
+        false => format!("{} {unasked}", crate::roles::REVIEW),
+    };
     let Some(pr) = review.pr else {
-        return Ok(vec![ask.to_string()]);
+        return Ok(vec![ask]);
     };
     let head: Option<String> = conn
         .query_row(
@@ -321,7 +325,7 @@ pub(super) fn brief_lines(conn: &Connection, review: &Task) -> Result<Vec<String
         None => "It answers no task in this chat: this review's own ask, above, is what was asked."
             .to_string(),
     });
-    lines.push(ask.to_string());
+    lines.push(ask);
     Ok(lines)
 }
 

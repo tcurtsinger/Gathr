@@ -39,6 +39,7 @@ pub mod pushes;
 pub mod quiet;
 pub mod reactions;
 pub mod redact;
+pub mod roles;
 pub mod run;
 pub mod search;
 pub mod seed;

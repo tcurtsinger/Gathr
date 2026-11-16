@@ -75,3 +75,4 @@ fails in CI when the two differ.
 | 0063 | [Building waits until a new ask's plan is approved; a repair goes](0063-building-waits-for-a-new-asks-plan.md) | accepted | yes |
 | 0064 | [A change far past its Fix or its part stops and asks](0064-a-change-far-past-its-fix-or-its-part-stops-and-asks.md) | accepted | yes |
 | 0065 | [Questions are in the lead's words, and an answer reaches the member at once](0065-questions-in-the-leads-words.md) | accepted | yes |
+| 0066 | [Role text is a few lines, and each ships only after a trial on real engines](0066-role-text-tried-on-real-engines.md) | accepted | partly |

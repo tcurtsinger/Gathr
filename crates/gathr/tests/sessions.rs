@@ -588,7 +588,7 @@ fn reviewed_with_a_wrong_note(room: &Room, rev: &str, pr: i64) -> i64 {
         json!({ "to": "Rev", "what": format!("Review #{pr}"), "kind": "review", "pr": pr });
     let review = give(room, &room.lead_token(), review);
     settled(room, review, "blocked");
-    let notes = json!([{ "kind": "wrong", "says": "it fails" }]);
+    let notes = json!([{ "kind": "wrong", "file": "src/lib.rs:1", "says": "it fails" }]);
     let left = json!({ "task": review, "how": "left", "note": "one thing fails", "commit": "abc1234",
                        "notes": notes });
     let said = text(&call_tool(

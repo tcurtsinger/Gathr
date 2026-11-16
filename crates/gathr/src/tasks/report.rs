@@ -6,7 +6,8 @@ use serde::Serialize;
 
 use super::records::{read, state_of};
 use super::{
-    Kind, NoteSaid, Start, State, Task, cascade, held, notes, refused, review, turn_running,
+    Kind, NoteKind, NoteSaid, Start, State, Task, cascade, held, notes, refused, review,
+    turn_running,
 };
 use crate::Error;
 use crate::changes::report::{self as count, Counted};
@@ -133,6 +134,14 @@ pub(crate) fn finish_in(
     }
     if said.notes.iter().any(|n| n.says.trim().is_empty()) {
         return Err(refused("Each note says what it is, in `says`"));
+    }
+    // A plan check's wrong fact or owner has no file (0062); a code review's wrong note has (0066).
+    let unnamed =
+        |n: &NoteSaid| n.kind == NoteKind::Wrong && n.file.is_none_or(|f| f.trim().is_empty());
+    if t.checks.is_none() && said.notes.iter().any(unnamed) {
+        return Err(refused(
+            "Name the file of each wrong note, with its line: path:line. Something missing is in the file where it belongs.",
+        ));
     }
     let asks_work = notes::ask_for_work(said.notes);
     // A review that is done is recorded again at another commit while its PR is open (G170): the
