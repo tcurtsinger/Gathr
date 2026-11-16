@@ -231,7 +231,8 @@ pub const T2_WHY: &str =
 pub const T5_ASK: &str = "Add a --json option to src/cli.js that prints the result as a JSON object instead of plain \
                           text. Two things are open: whether its keys are in camelCase or snake_case, and whether the \
                           object also carries the text it read or only the milliseconds.";
-pub const T8_TEXT: &str = "Plan: you take the parser, I review after. OK?";
+pub const T8_TEXT: &str =
+    "Plan for tomorrow: you take the parser, I review after. Nothing to do yet. OK?";
 
 /// What a block needs written: its chats, each run's agent, the project and the giver.
 fn asked(ids: &Ids, block: &Block) -> Value {

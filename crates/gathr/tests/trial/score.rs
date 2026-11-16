@@ -277,9 +277,10 @@ pub fn t5(questions: &[(String, usize)]) -> Scored {
     (counts(row), outcome)
 }
 
-/// T8: the member's thumbs-up on the message, its `message` calls and its reply's characters.
+/// T8: the member's thumbs-up on the message and its `message` calls decide. Its turn's closing
+/// words are counted, not judged: they reach the chat and start no turn of the sender's.
 pub fn t8(reaction: bool, message_calls: u64, reply_chars: u64) -> Scored {
-    let passed = reaction && message_calls == 0 && reply_chars == 0;
+    let passed = reaction && message_calls == 0;
     let row =
         json!({ "reaction": reaction, "message_calls": message_calls, "reply_chars": reply_chars });
     (counts(row), if passed { "passed" } else { "failed" })

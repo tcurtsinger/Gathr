@@ -423,14 +423,15 @@ fn t5_reads_the_answered_choices_words_and_its_choices_and_reports_no_question()
 }
 
 #[test]
-fn t8_fails_an_agreement_in_words_with_or_without_a_thumbs_up() {
-    let (counts, outcome) = score::t8(true, 0, 0);
+fn t8_passes_a_thumbs_up_with_no_message_to_the_other_agent() {
+    // The turn's closing words reach the chat and wake nobody: counted in the row, never against it.
+    let (counts, outcome) = score::t8(true, 0, 229);
     assert_eq!(outcome, "passed");
     assert_eq!(
         Value::Object(counts),
-        json!({ "reaction": true, "message_calls": 0, "reply_chars": 0 })
+        json!({ "reaction": true, "message_calls": 0, "reply_chars": 229 })
     );
-    assert_eq!(score::t8(true, 0, 3).1, "failed", "a thumbs-up and an OK");
+    assert_eq!(score::t8(true, 0, 0).1, "passed", "a thumbs-up alone");
     assert_eq!(
         score::t8(true, 1, 0).1,
         "failed",
