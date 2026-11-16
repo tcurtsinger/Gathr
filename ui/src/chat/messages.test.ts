@@ -262,6 +262,19 @@ test('a finished turn folds what it did into one row, and its last text is the m
   ]);
 });
 
+test('a look-into task the turn gave reads so in its chip', () => {
+  const state = round();
+  state.turns.lead = { ...turn('lead', 'mira'), position: 9 };
+  state.tasks.push(task(12, 'rowan', 'lead', { what: 'Survey tag libraries', look_into: true }));
+  state.messages.push(
+    tool('lead', 't1', 'mcp__gathr__give_task'),
+    said('lead', 'assistant', 'Rowan looks first.'),
+  );
+  expect(custom(byId(view(state).items, 'a-lead')).work?.steps).toMatchObject([
+    { label: 'Gave Rowan a task', detail: '#12 Look into: Survey tag libraries', task: 12 },
+  ]);
+});
+
 test('a step shows what it ran as its chip, under the engine’s own words for it when it gave some (0041)', () => {
   const state = round();
   state.turns.lead = { ...turn('lead', 'mira'), position: 5 };

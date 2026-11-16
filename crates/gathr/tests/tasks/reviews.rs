@@ -16,6 +16,7 @@ fn a_work_tasks_commit_is_what_to_look_at_never_a_review() {
         after: &[],
         pr: Some(5),
         in_passing: false,
+        look_into: false,
     };
     let task = tasks::give(&mut conn, &work, T).unwrap().0.number;
     tasks::started(&mut conn, task, T).unwrap();
@@ -85,7 +86,7 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   DROP INDEX tasks_checking; ALTER TABLE tasks DROP COLUMN checks;
                   DROP TABLE plan_parts; DROP TABLE plan_versions; DROP TABLE plans;
                   DROP INDEX turns_by_ask; DROP INDEX tasks_by_ask; ALTER TABLE turns DROP COLUMN ask_id;
-                  ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks;
+                  ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks; ALTER TABLE tasks DROP COLUMN look_into;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);

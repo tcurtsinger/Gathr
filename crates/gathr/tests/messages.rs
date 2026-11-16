@@ -481,6 +481,7 @@ fn what_a_chat_waits_on_is_one_answer_by_the_route_the_tool_and_the_command_line
     let lead = room.turn_of(&room.lead, 0);
     room.turn_of(&room.ann, 1);
     // Ann's task from Lead waits behind the turn Ann is running.
+    common::fix_it(room.service.info.port, &lead);
     let task = json!({ "to": "Ann", "what": "Fix the build" });
     let given = call_tool(
         room.service.info.port,

@@ -57,6 +57,7 @@ fn give(conn: &mut Connection, owner: &str, after: &[i64], given_in: &str) -> i6
         after,
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     tasks::give(conn, &g, T).unwrap().0.number
 }
@@ -355,6 +356,7 @@ fn a_pr_to_land_says_where_gathrs_last_look_left_it() {
         after: &[],
         pr: Some(157),
         in_passing: false,
+        look_into: false,
     };
     let review = tasks::give(&mut conn, &review, T).unwrap().0.number;
     begin(&mut conn, review);
@@ -546,6 +548,33 @@ fn a_task_whose_owner_is_paused_waits_on_the_person() {
         assert_eq!(stands(&conn, &bos), others, "{scope}");
         gathr::pauses::resume(&conn, scope, target, T).unwrap();
     }
+}
+
+/// A cancelled task's queued turn is marked, and its agent's queue drops it when it comes up: it
+/// never runs, so it isn't listed as queued meanwhile.
+#[test]
+fn a_cancelled_tasks_queued_turn_is_not_listed_as_queued() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "lead", None, "done");
+    turn(&conn, "busy", "ann", None, "running");
+    let task = give(&mut conn, "ann", &[], "giving");
+    let queued: String = conn
+        .query_row("SELECT id FROM turns WHERE task = ?1", [task], |r| r.get(0))
+        .unwrap();
+    let live = Live {
+        queued: HashMap::from([(queued, "behind this agent's turn".to_string())]),
+        ..service()
+    };
+    assert_eq!(
+        line(&answer(&conn, &live), "queued", "Ann").task,
+        Some(task)
+    );
+
+    tasks::cancel(&mut conn, None, task, "the person dropped it", T).unwrap();
+    let said = answer(&conn, &live);
+    let on_it: Vec<&Line> = said.lines.iter().filter(|l| l.task == Some(task)).collect();
+    assert!(on_it.is_empty(), "nothing on #{task}: {on_it:#?}");
 }
 
 /// The answer in words, as the `waiting` tool and `gathr diag waiting --text` give it.

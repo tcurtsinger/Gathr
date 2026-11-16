@@ -268,5 +268,5 @@ pub(super) fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<S
         }
         None => "what this task waited on has ended".to_string(),
     };
-    Ok(vec![ready(tx, task, Some(&carry))?])
+    Ok(ready(tx, task, Some(&carry))?.into_iter().collect())
 }

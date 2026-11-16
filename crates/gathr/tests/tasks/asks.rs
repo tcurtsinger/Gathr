@@ -89,6 +89,7 @@ fn gives(
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: true,
     };
     tasks::give(conn, &g, T).unwrap().0.number
 }
@@ -232,11 +233,7 @@ fn every_turn_and_task_carries_the_ask_it_serves() {
         ("the report ask on #2", report_ask, &m1),
         ("Ann's hear-back", ann_back, &m1),
         ("the turn the person's answer queued", answered, &m1),
-        (
-            "a teammate's turn answering Ann's",
-            teammate.unwrap().turn,
-            &m1,
-        ),
+        ("a teammate answering Ann", teammate.unwrap().turn, &m1),
         ("a carry-on", carried.unwrap().0, &m1),
         ("the brief of a fix given in no turn", fix_brief, &m1),
         ("a wake", wake.unwrap().turn, &None),
@@ -488,8 +485,8 @@ fn the_lead_sizes_the_ask_its_turn_serves_and_splits_off_a_message() {
     let mut conn = team(&dir);
     let m1 = sent(&mut conn, ("c", "lead"), "lead-t", EXPORT);
     status(&conn, "lead-t", "running");
-    let said = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "repair", None)).unwrap();
-    assert_eq!(said, format!("Sized \"{EXPORT}\" as repair."));
+    let said = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "repair", None));
+    assert_eq!(said.unwrap().0, format!("Sized \"{EXPORT}\" as repair."));
     let row = ask_row(&conn, &m1);
     assert_eq!(
         row,
@@ -499,8 +496,8 @@ fn the_lead_sizes_the_ask_its_turn_serves_and_splits_off_a_message() {
             Some("lead-t".into())
         )
     );
-    let again = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "repair", None)).unwrap();
-    assert_eq!(again, format!("\"{EXPORT}\" is already repair."));
+    let again = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "repair", None));
+    assert_eq!(again.unwrap().0, format!("\"{EXPORT}\" is already repair."));
     let resized = ask_events(&conn, "resized");
     assert_eq!(resized.len(), 1, "{resized:?}");
     let first = &resized[0];
@@ -527,9 +524,9 @@ fn the_lead_sizes_the_ask_its_turn_serves_and_splits_off_a_message() {
     let m2 = steered(&mut conn, "lead-t", "Add tags to notes");
     let two = gives(&mut conn, ("lead", "bo"), Some("lead-t"), None);
     let (one_brief, two_brief) = (queued_on(&conn, one), queued_on(&conn, two));
-    let split = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "new", Some(&m2))).unwrap();
+    let split = asks::size(&mut conn, &sizing("lead", Some("lead-t"), "new", Some(&m2)));
     assert_eq!(
-        split,
+        split.unwrap().0,
         format!("Made message {m2} an ask of its own and sized \"Add tags to notes\" as new.")
     );
     assert_eq!(ask_row(&conn, &m2).0.as_deref(), Some("new"));
@@ -758,7 +755,7 @@ fn the_person_resizes_and_only_repair_to_new_is_a_correction() {
     let m1 = sent(&mut conn, ("c", "lead"), "p1", EXPORT);
     status(&conn, "p1", "done");
     for size in ["new", "repair", "new", "new"] {
-        let ask = asks::resize(&mut conn, &m1, size, T).unwrap();
+        let ask = asks::resize(&mut conn, &m1, size, T).unwrap().0;
         assert_eq!(
             (ask.size.as_deref(), ask.by.as_deref()),
             (Some(size), Some("person"))
@@ -776,7 +773,7 @@ fn the_person_resizes_and_only_repair_to_new_is_a_correction() {
         (person, json(true)),
     ];
     assert_eq!(corrections, want, "the same size again records nothing");
-    let refusal = |r: Result<asks::Ask, Error>| match r {
+    let refusal = |r: Result<(asks::Ask, Vec<Start>), Error>| match r {
         Err(Error::Refused(why)) => why,
         other => panic!("expected a refusal, got {other:?}"),
     };
@@ -791,7 +788,7 @@ fn the_person_resizes_and_only_repair_to_new_is_a_correction() {
 
     let m2 = sent(&mut conn, ("c", "lead"), "p2", "Add tags");
     asks::size(&mut conn, &sizing("lead", Some("p2"), "repair", None)).unwrap();
-    let ask = asks::resize(&mut conn, &m2, "new", T).unwrap();
+    let ask = asks::resize(&mut conn, &m2, "new", T).unwrap().0;
     assert_eq!(
         ask.sized_in.as_deref(),
         Some("p2"),

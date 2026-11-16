@@ -173,6 +173,11 @@ pub(crate) fn finish_in(
             "task #{task} is about PR #{its}, not #{said}"
         )));
     }
+    if t.look_into && said.pr.is_some() {
+        return Err(refused(format!(
+            "Task #{task} is a look-into task: it names no PR. Put what you found in note, or the file you wrote in file."
+        )));
+    }
     if said.on_task.is_some() && how != Finish::Blocked {
         return Err(refused("`on_task` goes with blocked"));
     }

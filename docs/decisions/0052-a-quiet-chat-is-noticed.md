@@ -4,6 +4,8 @@ Status: accepted (owner, 2026-11-13, with Stage 2's spec; the 5 minutes and "onl
 
 Built: yes. Proof: `crates/gathr/tests/quiet.rs`, `crates/gathr/tests/quiet_room.rs`, `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/codex_recovery.rs`, `ui/src/chat/Waiting.test.tsx`.
 
+Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): a task waiting for its plan is a `plan_wait` line that follows its plan: it wakes nobody, and isn't stale-cancelled while its ask has an open plan.
+
 Builds on the answer of [0050](0050-what-a-chat-waits-on.md). Serves promise 6 of [the charter](../charter.md#the-promises), the room explains itself (part 6.3 of [the truth map](../truth-map.md)), and promise 10's "nobody waits on nothing" (part 10.4).
 
 ## The choice

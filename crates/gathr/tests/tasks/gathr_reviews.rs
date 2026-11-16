@@ -121,6 +121,7 @@ fn review_from(
         after,
         pr,
         in_passing: false,
+        look_into: false,
     };
     tasks::give(conn, &g, T).map(|(t, _)| t.number)
 }
@@ -289,6 +290,7 @@ fn which_reports_give_a_review_and_which_dont() {
         after: &[],
         pr: Some(11),
         in_passing: false,
+        look_into: false,
     };
     let with_pr = tasks::give(&mut conn, &with_pr, T).unwrap().0.number;
     let (given, _) = report(&mut conn, with_pr, Finish::Done, Some(11));
@@ -319,6 +321,7 @@ fn which_reports_give_a_review_and_which_dont() {
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let part = tasks::give(&mut conn, &part, T).unwrap().0.number;
     let (given, _) = said_in(&mut conn, built, Finish::Done, Some(13), &turn);

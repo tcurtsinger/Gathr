@@ -7,7 +7,7 @@ mod counted;
 
 pub use counted::{Counted, counted};
 
-pub const BRIEF: i64 = 2;
+pub const BRIEF: i64 = 3;
 pub const REVIEW_BRIEF: i64 = 1;
 pub const REQUEST_BRIEF: i64 = 1;
 pub const REPORT_ASK: i64 = 1;
@@ -21,6 +21,7 @@ pub const LANDING: i64 = 1;
 pub const CARRY_ON: i64 = 1;
 pub const PLAN_CHECK: i64 = 1;
 pub const SENT_BACK: i64 = 1;
+pub const RESIZED: i64 = 1;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +52,8 @@ pub enum Opened {
     PlanCheck,
     /// The person sent a plan back to its lead.
     SentBack,
+    /// The person changed an ask's size (0063).
+    Resized,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -60,7 +63,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 18] = [
+    pub const ALL: [Opened; 19] = [
         Opened::Brief,
         Opened::ReviewBrief,
         Opened::RequestBrief,
@@ -75,6 +78,7 @@ impl Opened {
         Opened::CarryOn,
         Opened::PlanCheck,
         Opened::SentBack,
+        Opened::Resized,
         Opened::Person,
         Opened::Teammate,
         Opened::Compaction,
@@ -97,6 +101,7 @@ impl Opened {
             Opened::CarryOn => "carry_on",
             Opened::PlanCheck => "plan_check",
             Opened::SentBack => "sent_back",
+            Opened::Resized => "resized",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -121,6 +126,7 @@ impl Opened {
             Opened::CarryOn => Some(CARRY_ON),
             Opened::PlanCheck => Some(PLAN_CHECK),
             Opened::SentBack => Some(SENT_BACK),
+            Opened::Resized => Some(RESIZED),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }

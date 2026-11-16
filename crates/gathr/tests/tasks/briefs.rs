@@ -28,6 +28,7 @@ fn ask(kind: Kind, brief: Brief<'_>) -> Give<'_> {
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     }
 }
 
@@ -244,7 +245,7 @@ fn an_edit_of_a_ready_task_rewrites_its_queued_brief_keeps_its_carry_and_one_tha
     assert_eq!(message.map(|m| m["body"].clone()), Some(json!(brief)));
     assert_eq!(
         samples::opened(&conn, &turn),
-        (Some("brief".into()), Some(2))
+        (Some("brief".into()), Some(3))
     );
 
     let (other, _) = give(&mut conn, "bo", &[], None);

@@ -236,6 +236,7 @@ impl Room {
     /// done and holds: its id. A task nobody reports is never done (0047).
     pub fn ann_works(&self) -> String {
         say(&self.service, &self.chat, "Plan it");
+        super::fix_it(self.service.info.port, &self.token(0));
         let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
         let given = text(&call_tool(
             self.service.info.port,

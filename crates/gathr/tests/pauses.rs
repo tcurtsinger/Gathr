@@ -88,6 +88,7 @@ fn a_pause_holds_gathrs_turns_not_the_persons_and_outlasts_a_restart() {
         "the person's own message"
     );
     let lead = token(&data.0);
+    common::fix_it(service.info.port, &lead);
     let ask = json!({ "to": "Ann", "what": "Write the notes" });
     let given = text(&call_tool(
         service.info.port,
@@ -418,6 +419,7 @@ fn a_held_task_settles_when_its_command_ends_inside_another_turn() {
     service.wait_for(&chat, 10, "the lead's first turn", |h| {
         h["turns"][0]["status"] == "done"
     });
+    common::fix_it(service.info.port, &token(&data.0));
     let given = call_tool(
         service.info.port,
         &token(&data.0),
@@ -498,6 +500,7 @@ fn a_usage_limit_after_a_tool_leaves_the_task_as_it_was() {
     service.wait_for(&chat, 10, "the lead's first turn", |h| {
         h["turns"][0]["status"] == "done"
     });
+    common::fix_it(service.info.port, &token(&data.0));
     let ask = json!({ "to": "Lead", "what": "Run the steps" });
     let given = call_tool(
         service.info.port,
@@ -554,6 +557,7 @@ fn an_engine_that_exits_after_stop_now_leaves_the_task_to_its_carry_on() {
     service.wait_for(&chat, 10, "the lead's first turn", |h| {
         h["turns"][0]["status"] == "done"
     });
+    common::fix_it(service.info.port, &token(&data.0));
     let ask = json!({ "to": "Lead", "what": "Run the steps" });
     let given = call_tool(
         service.info.port,

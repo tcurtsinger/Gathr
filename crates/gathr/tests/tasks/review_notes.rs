@@ -30,6 +30,7 @@ fn work_and_review(conn: &mut Connection) -> (i64, i64, String) {
         after: &[],
         pr: Some(7),
         in_passing: false,
+        look_into: false,
     };
     let work = tasks::give(conn, &work, T).unwrap().0.number;
     tasks::pr_looked(conn, work, "OPEN", Some(HEAD), None, T).unwrap();
@@ -53,6 +54,7 @@ fn review_of(conn: &mut Connection, pr: Option<i64>) -> (i64, String) {
         after: &[],
         pr,
         in_passing: false,
+        look_into: false,
     };
     let (task, starts) = tasks::give(conn, &review, T).unwrap();
     (task.number, starts[0].text.clone())
@@ -491,6 +493,7 @@ fn no_fix_when_the_reviewer_gave_one_or_no_task_names_the_pr() {
         after: &[],
         pr: Some(7),
         in_passing: true,
+        look_into: false,
     };
     tasks::give(&mut conn, &own, T).unwrap();
     let notes = [note(NoteKind::Unasked, Some("src/cache.rs"), UNASKED)];

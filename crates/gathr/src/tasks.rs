@@ -16,6 +16,7 @@ mod hear;
 pub(crate) mod held;
 pub(crate) mod notes;
 pub mod person;
+pub(crate) mod plan_wait;
 mod prs;
 pub(crate) mod records;
 mod report;
@@ -212,6 +213,8 @@ pub struct Task {
     /// The plan whose part made it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub plan: Option<i64>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub look_into: bool,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
@@ -287,6 +290,7 @@ fn refused(why: impl Into<String>) -> Error {
 
 /// Gives a task: `waiting` while its `after` tasks aren't all done, else `ready` with its turn.
 pub fn give(conn: &mut Connection, g: &Give, trace: &str) -> Result<(Task, Vec<Start>), Error> {
+    crate::hold::may_give(conn, g, trace)?;
     brief::checked(g.kind, g.what, &g.brief)?;
     let tx = conn.transaction()?;
     review::refuse_second(&tx, g)?;
@@ -308,8 +312,8 @@ pub(crate) fn give_in(
     let now = now_us();
     tx.execute(
         "INSERT INTO tasks (chat_id, giver, owner, given_in, parent, kind, what, why, state, pr,
-                            created_ts, updated_ts, in_passing, done, proof, place, size, size_lines)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                            created_ts, updated_ts, in_passing, done, proof, place, size, size_lines, look_into)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'waiting', ?9, ?10, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         params![
             g.chat,
             g.giver,
@@ -326,7 +330,8 @@ pub(crate) fn give_in(
             brief::given(g.brief.proof),
             brief::given(g.brief.place),
             g.brief.size.map(|(size, _)| size.trim()),
-            g.brief.size.map(|(_, lines)| lines)
+            g.brief.size.map(|(_, lines)| lines),
+            g.look_into
         ],
     )?;
     let number = tx.last_insert_rowid();
@@ -339,7 +344,7 @@ pub(crate) fn give_in(
     }
     let mut starts = Vec::new();
     if waiting_on(tx, number)?.is_empty() {
-        starts.push(ready(tx, number, None)?);
+        starts.extend(ready(tx, number, None)?);
     }
     let task = read(tx, number)?;
     let event = Event::point("gathr.task.give").trace(trace).chat(g.chat);
@@ -575,7 +580,7 @@ pub fn restart(
         _ => None,
     };
     let starts = match waiting_on(&tx, task)?.is_empty() {
-        true => vec![ready(&tx, task, carry.as_deref())?],
+        true => ready(&tx, task, carry.as_deref())?.into_iter().collect(),
         false => {
             set(&tx, task, State::Waiting, None, trace)?;
             Vec::new()
@@ -658,7 +663,7 @@ pub fn engine_gone(
     for task in held_on {
         if state_of(&tx, task)? == Some(State::Held) && held::open_on(&tx, task)?.is_empty() {
             let carry = "your engine closed and ended your background command";
-            starts.push(ready(&tx, task, Some(carry))?);
+            starts.extend(ready(&tx, task, Some(carry))?);
         }
     }
     tx.commit()?;
@@ -744,8 +749,14 @@ fn waiting_on(conn: &Connection, task: i64) -> Result<Vec<i64>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-/// Makes the task `ready`, with the turn that starts it.
-fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Error> {
+/// Makes the task `ready`, with the turn that starts it; or, when it is building work not started
+/// on an ask that waits for its plan, `waiting` for that plan with no turn (0063).
+fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Option<Start>, Error> {
+    if plan_wait::waits(tx, task)? {
+        let why = Some(plan_wait::PLAN_WAIT);
+        set(tx, task, State::Waiting, why, &crate::ids::trace_id())?;
+        return Ok(None);
+    }
     set(tx, task, State::Ready, None, &crate::ids::trace_id())?;
     tx.execute(
         "UPDATE tasks SET carry = ?2 WHERE number = ?1",
@@ -763,7 +774,7 @@ fn ready(tx: &Transaction, task: i64, carry: Option<&str>) -> Result<Start, Erro
     };
     let text = words::brief(tx, &t, &giver, carry)?;
     let on = (Some(task), t.given_in.as_deref());
-    Start::queue(tx, (&t.chat, owner), on, brief::opened(&t), text)
+    Start::queue(tx, (&t.chat, owner), on, brief::opened(&t), text).map(Some)
 }
 
 /// What follows a task's change: dependants ready or blocked, tasks blocked on it carry on, and
@@ -793,7 +804,7 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
         }
         match state {
             State::Done | State::Held if waiting_on(tx, dependant)?.is_empty() => {
-                starts.push(ready(tx, dependant, None)?)
+                starts.extend(ready(tx, dependant, None)?)
             }
             State::Done | State::Held => {}
             // It can never go on (F11): cancelled at once, not left blocked.
@@ -833,7 +844,7 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                     [blocked],
                 )?;
                 let carry = format!("the task blocking this one, #{task}, is done");
-                starts.push(ready(tx, blocked, Some(&carry))?);
+                starts.extend(ready(tx, blocked, Some(&carry))?);
             }
             State::Cancelled => {
                 let why = format!("The task blocking this one, #{task}, was cancelled");
@@ -880,7 +891,7 @@ fn back_in_line(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, 
     )?;
     let waiting = waiting_on(tx, task)?;
     if waiting.is_empty() {
-        return Ok(vec![ready(tx, task, None)?]);
+        return Ok(ready(tx, task, None)?.into_iter().collect());
     }
     for after in waiting {
         if let Some(state) = state_of(tx, after)?.filter(|s| s.settled()) {

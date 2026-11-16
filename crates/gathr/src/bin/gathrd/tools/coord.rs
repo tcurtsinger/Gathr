@@ -56,6 +56,10 @@ pub struct GiveTask {
     /// True for a task that isn't part of your own: your task doesn't wait on it, and you hear back
     /// on it by itself. Leave it out for work your own task needs.
     in_passing: Option<bool>,
+    /// True for a task that only looks into something: research, a feasibility check, options or
+    /// mock-ups. It never changes the project's files or pushes, and it can be given before the plan
+    /// is approved.
+    look_into: Option<bool>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -175,6 +179,7 @@ impl Tools {
         description = "Give a chat member a task. It starts when its `after` tasks finish. You hear back once all you gave from \
             this task (or, with no task, since the person last wrote) has ended, and at once when one is blocked, \
             failed or stopped. Your own task waits on them. Set `in_passing` for a task that isn't part of your own work. \
+            Set look_into for a task that only looks into something before the plan. \
             A work task needs why, done, proof and where; a review takes none of them. \
             Check the returned tasks and PRs for duplicates."
     )]
@@ -219,6 +224,7 @@ impl Tools {
                     after: ask.after.as_deref().unwrap_or_default(),
                     pr: ask.pr,
                     in_passing: ask.in_passing.unwrap_or(false),
+                    look_into: ask.look_into.unwrap_or(false),
                 };
                 let trace = on
                     .as_ref()
@@ -230,6 +236,10 @@ impl Tools {
                     .map(|t| line(c, &t))
                     .collect::<Result<Vec<_>, _>>()?;
                 let state = match task.state {
+                    // A task waiting for its plan (0063) waits on no task.
+                    tasks::State::Waiting if task.after.is_empty() => {
+                        task.reason.clone().unwrap_or_else(|| "waiting".into())
+                    }
                     tasks::State::Waiting => format!("waiting on {}", numbers(&task.after)),
                     state => state.as_str().to_string(),
                 };

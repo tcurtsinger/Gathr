@@ -258,7 +258,8 @@ fn asks_follow_ups_and_fixed_through_the_runner(engine: &str) {
         .cloned();
     assert_eq!(one.unwrap_or_default()["ask"], m1, "{listed}");
     let shown = &listed["asks"][0];
-    let want = json!({ "id": m1, "title": EXPORT, "size": "repair", "by": shown["by"], "sized_in": lead_turn });
+    let want = json!({ "id": m1, "title": EXPORT, "size": "repair", "by": shown["by"], "sized_in": lead_turn,
+        "held": false });
     assert_eq!(shown, &want, "{listed}");
     assert!(
         shown["by"].is_string() && shown["by"] != "person",

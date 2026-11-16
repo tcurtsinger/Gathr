@@ -50,6 +50,17 @@ pub fn ask(
     }
 }
 
+/// Whether a file tool writes inside `folder`, the engine's own (a relative path is in it), as the
+/// disk resolves it: a held turn's writes there are refused (0063).
+pub fn writes_in(tool: &str, input: &Value, folder: &Path) -> bool {
+    let text = |key: &str| input.get(key).and_then(Value::as_str);
+    let path = match tool {
+        "Write" | "Edit" | "NotebookEdit" => text("file_path").or_else(|| text("notebook_path")),
+        _ => None,
+    };
+    path.is_some_and(|path| inside(&folder.join(path), folder))
+}
+
 /// The rule that lets a wait's check run without asking (owner, task 1450): one of a few commands
 /// that only read, by its plain name, made only of letters, digits, spaces and `-_./:=%,@+^~` (it
 /// runs as these words, without a shell), with none of their options that write a file, open a browser,
@@ -356,6 +367,29 @@ mod tests {
             None,
             "reads never ask"
         );
+    }
+
+    #[test]
+    fn only_a_file_tools_write_into_the_folder_is_in_it() {
+        let tree = at(&["work", "ann", "notes"]);
+        let file =
+            |tool: &str, key: &str, path: PathBuf| writes_in(tool, &json!({ key: path }), &tree);
+        assert!(file("Write", "file_path", tree.join("src").join("a.rs")));
+        assert!(
+            file("Edit", "file_path", PathBuf::from("b.rs")),
+            "relative to it"
+        );
+        assert!(file("NotebookEdit", "notebook_path", tree.join("n.ipynb")));
+        let own = at(&["work", "ann", "plan-notes.md"]);
+        assert!(
+            !file("Write", "file_path", own),
+            "the agent's own folder, outside it"
+        );
+        let climbs = at(&["work", "ann", "notes", "..", "x.md"]);
+        assert!(!file("Write", "file_path", climbs), "climbs out");
+        assert!(!file("Read", "file_path", tree.join("a.rs")), "a read");
+        let shell = json!({ "command": "echo x > a.rs" });
+        assert!(!writes_in("Bash", &shell, &tree), "a shell command");
     }
 
     /// A data folder none of the other paths are in.

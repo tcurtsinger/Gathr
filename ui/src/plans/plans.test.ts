@@ -143,7 +143,7 @@ function planned(): ChatState {
         report: { how: 'done', note: null, see: null, at_us: (t0 + 150_000) * 1000 },
       }),
     ],
-    asks: [{ id: 'm1', title: 'Add tags to notes', size: 'new', by: 'mira', sized_in: 'ask' }],
+    asks: [{ id: 'm1', title: 'Add tags to notes', size: 'new', by: 'mira', sized_in: 'ask', held: false }],
     plans: [plan],
     reactions: [{ message: 'v2', agent: 'bo', time: iso(220) }],
   };

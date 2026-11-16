@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-14, with Stage 3's spec, part G; its departures and two answers, 2026-11-15). Date: 2026-11-15.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/asks.rs`, `crates/gathr/tests/sizes.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/asks.test.ts`, `ui/src/chat/Size.test.tsx`. Nothing holds new work yet: the size is recorded and shown, and the process doesn't differ by it until parts H to J.
+Built: yes. Proof: `crates/gathr/tests/tasks/asks.rs`, `crates/gathr/tests/sizes.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/asks.test.ts`, `ui/src/chat/Size.test.tsx`. When it was built nothing held new work: part I ([0063](0063-building-waits-for-a-new-asks-plan.md)) now holds building on an ask with no approved plan, and shows an unsized ask's line once something of it was held.
 
 Builds on [0010](0010-coordination-as-state.md), [0051](0051-the-giver-hears-when-all-is-in.md) and [0059](0059-a-work-task-carries-a-complete-brief.md). Serves promise 2 of [the charter](../charter.md#the-promises), parts 2.4 and 2.6 of [the truth map](../truth-map.md), and part 10.3: a repair and a new ask are told apart, and the person can correct the lead. Stage 3's part G.
 
@@ -100,6 +100,7 @@ Where the code differs from the detail the owner approved, the code stands.
 
 ## Amended by
 
+- [0063](0063-building-waits-for-a-new-asks-plan.md): `size`, a split and the person's resize hold or release the ask's tasks that have not started, and an unsized ask's line shows once Gathr held something of it.
 - [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): an open plan (being checked, waiting on the person or being revised) is open work of its ask, so G1a's follow-up joins it; and a split never moves a plan, its check or the tasks Approve made, and is refused when the message's turn wrote a plan version.
 
 ## Amends

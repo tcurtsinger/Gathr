@@ -93,6 +93,7 @@ impl Room {
     /// Lead's turn, Ann's work on #5 given in it, and Vale's review of #5: their tokens.
     fn built_and_reviewed(&mut self) -> (String, String, String) {
         let lead = self.lead_turn();
+        crate::common::fix_it(self.service.info.port, &lead);
         let work = json!({ "to": "Ann", "what": "Add the feature", "pr": 5 });
         let given = text(&self.call(&lead, "give_task", crate::common::briefed(work)));
         assert!(given.starts_with("Task #1 for Ann"), "{given}");

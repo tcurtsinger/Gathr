@@ -299,7 +299,8 @@ pub struct Size {
     size: String,
 }
 
-/// The person changes an ask's size (0061): the ask as the chat's tasks list has it.
+/// The person changes an ask's size (0061): the ask as the chat's tasks list has it. The turns the
+/// change queues start: the agent told of it, and tasks back in line from waiting for a plan (0063).
 async fn resize(
     Extract(s): Extract<Arc<State>>,
     Extension(t): Extension<Trace>,
@@ -307,10 +308,17 @@ async fn resize(
     Json(body): Json<Size>,
 ) -> Answer {
     let trace = t.0.clone();
-    db(&s, &t, "Size failed", move |c| {
-        Ok(json!(gathr::asks::resize(c, &ask, &body.size, &trace)?))
+    let starts = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let kept = starts.clone();
+    let answer = db(&s, &t, "Size failed", move |c| {
+        let (ask, started) = gathr::asks::resize(c, &ask, &body.size, &trace)?;
+        *kept.lock().expect("never poisoned") = started;
+        Ok(json!(ask))
     })
-    .await
+    .await;
+    s.chats
+        .start(std::mem::take(&mut *starts.lock().expect("never poisoned")));
+    answer
 }
 
 /// Makes the change, answers with the task as it is now, and queues the turns it starts. Turns

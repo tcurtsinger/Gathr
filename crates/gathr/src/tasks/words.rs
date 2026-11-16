@@ -32,6 +32,10 @@ pub fn sentence(text: &str) -> String {
     }
 }
 
+/// A look-into task's line in its brief (0063).
+const LOOK_INTO: &str = "This is a look-into task: don't change the project's files or push. Write what you make in \
+                         your own folder or Shared, and name it or say what you found when you finish.";
+
 /// The ask of a task's turn: what, why, a carry-on when it ran before, and how to finish it.
 pub fn brief(
     conn: &Connection,
@@ -47,6 +51,9 @@ pub fn brief(
         lines.push(format!("Why: {why}"));
     }
     lines.extend(super::brief::lines(t));
+    if t.look_into {
+        lines.push(LOOK_INTO.to_string());
+    }
     if t.kind == Kind::PersonRequest {
         lines.extend(super::person::request_lines(t, giver));
     }

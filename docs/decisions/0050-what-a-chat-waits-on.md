@@ -12,7 +12,8 @@ Serves promise 6 of [the charter](../charter.md#the-promises): the room explains
   line says what it is, who or what can end it (it moves by itself, it waits on you, nobody is on it, or it
   follows other lines), since when, and where Gathr knows it from. Where Gathr can't tell, the line says
   unknown, and why.
-- **What it lists:** each running turn; each queued turn with why it hasn't started; each open wait with what its
+- **What it lists:** each running turn; each queued turn with why it hasn't started, but not one marked to be
+  dropped (its task cancelled, or made to wait), which never runs; each open wait with what its
   last look saw and its error when looks fail; each question, approval and sign-in that waits on you; each
   background command; each PR Gathr may land, as its last look left it ([0049](0049-gathr-lands-pull-requests.md));
   each task no turn is on, with what it waits for or that nothing is on it; and Gathr's own update.

@@ -73,7 +73,7 @@ pub fn pr_looked(
                             _ => "this task has no report that it's done".to_string(),
                         };
                         let carry = format!("#{pr} merged, and {stands}");
-                        starts.push(ready(&tx, task, Some(&carry))?);
+                        starts.extend(ready(&tx, task, Some(&carry))?);
                     }
                 } else {
                     let why = format!("#{pr} merged");

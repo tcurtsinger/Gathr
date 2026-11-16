@@ -65,7 +65,10 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
       <div className="tasks-scroll">
         <div className="tasks-page">
           {failure && <FailureNotice failure={failure} onReference={onReference} />}
-          <p className="task-number">Task #{task.number}</p>
+          <p className="task-number">
+            Task #{task.number}
+            {task.look_into && ' · Look into'}
+          </p>
           <h2>{task.what}</h2>
           <p className="tasks-meta">{meta.join(' · ')}</p>
           <dl className="task-fields">

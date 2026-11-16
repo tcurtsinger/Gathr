@@ -79,6 +79,7 @@ fn give(conn: &mut Connection, owner: &str) -> i64 {
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     tasks::give(conn, &g, T).unwrap().0.number
 }
@@ -798,6 +799,7 @@ fn reviewed_pr(conn: &mut Connection) -> landings::Review {
         after: &[],
         pr: Some(157),
         in_passing: false,
+        look_into: false,
     };
     let review = tasks::give(conn, &review, T).unwrap().0.number;
     let ran = begin(conn, review);

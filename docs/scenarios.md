@@ -114,17 +114,21 @@ Parts: 2.4, 10.3
 - **When** the person reports something broken, and then asks for a new feature
 - **Then** each ask has a size on record: repair or new, and the window shows it as a line, "Fix" or
   "Plan", after the lead's turn that sized it. The repair gets a short brief. The feature starts a
-  plan. An ask the lead leaves unsized is treated as new: its line reads "Plan" once it has a task,
-  and it has no line before then
+  plan. An ask the lead leaves unsized is treated as new: its line reads "Plan" once it has a task
+  or Gathr has held something of it (2b), and it has no line before then
 
 ### 2b. Nothing new is handed out before its plan is approved
 
 Parts: 2.2
 
-- **Given** an ask sized as new, and its plan not yet approved
-- **When** any agent, the lead included, gives a task for it
-- **Then** Gathr refuses and says the plan isn't approved. The same task is accepted once the person
-  has approved the plan
+- **Given** an ask sized as new, or not sized, in a team chat, and its plan not yet approved
+- **When** the lead, or any member, gives a work task for it, and then gives a look-into task and a
+  review
+- **Then** Gathr refuses the work task and says what to do instead, by the state of the ask's plan: size
+  it a repair, write the plan, wait for its check or for the person's Approve, or write the next version.
+  The look-into task and the review are taken. The ask's line, "Plan", shows after the lead's first
+  reply below the person's message, and opens to "Just fix it." and "Plan it with me first.". The same
+  work task is accepted once the person has approved the plan, or the ask is a repair
 
 ### 2c. No plan reaches the person unchecked
 
@@ -168,7 +172,25 @@ Parts: 2.6
 - **When** the lead gives its short brief
 - **Then** the task is handed out with no plan and no approval, and is built and reviewed. When it
   lands, the person is shown "Fixed: <the ask>", which opens to its PRs and proof, and can change it
-  to Plan, which Gathr counts
+  to Plan, which Gathr counts. Nothing of the repair is held: its turns, gives, writes and pushes go
+  ahead
+
+### 2g. A held turn can't change the project's files or push
+
+Parts: 2.2
+
+- **Given** a project chat with a lead and a member, an ask sized as new with no approved plan, and the
+  lead's turn running on Claude Code
+- **When** the lead writes a file in its worktree, then a note in its own folder and another in Shared,
+  and then pushes
+- **Then** the write into the worktree is denied, in every approvals mode, Full included and with no
+  question to the person, with a reason that names the worktree, the agent's own folder and Shared; for
+  the lead the reason ends by what its plan needs (size a repair, wait for the check, wait for the
+  Approve). The notes are written. The push is refused with "held: <the ask> has no approved plan, so
+  nothing is pushed for it", on either engine. When the person chooses "Just fix it.", the same write
+  goes on. A write the hold can't be read for goes on, and says why in Diagnostics. (When the second PR
+  of part I lands: a shell command's or Codex's change to the worktree is found at the turn's end and
+  shown.)
 
 ### 2j. The person changes a running repair to new
 
@@ -177,8 +199,10 @@ Parts: 2.4
 - **Given** an ask sized as a repair, with work running
 - **When** the person opens its size line and chooses "Plan it with me first."
 - **Then** Gathr records the new size and that the person set it, and the line reads "You: Plan". The
-  lead can't change it back. Changing a repair to new is counted as a correction. (When part I lands:
-  its tasks not started wait for a plan, and the lead is told.)
+  lead can't change it back. Changing a repair to new is counted as a correction. Its tasks that
+  haven't started wait for the plan ("#5 (Ann) waits for its plan"), the lead is told, and the lead
+  isn't woken for the tasks that wait. A task already working goes on, and its turns aren't held. When
+  the person changes it back to a repair, those tasks go back in line
 
 ### 2k. A follow-up joins the ask it follows
 
@@ -186,9 +210,23 @@ Parts: 2.4
 
 - **Given** an ask sized as a repair, with work open
 - **When** the person sends "also check X"
-- **Then** it joins the repair: no new ask is made, and the chat shows no second size line. (When part I
-  lands: the lead's next gives and writes are not held.) When the lead calls `size` with that
-  message, it becomes an ask of its own, with its own size and its own line
+- **Then** it joins the repair: no new ask is made, and the chat shows no second size line. The lead's next
+  gives and writes are not held. When the lead calls `size` with that message, it becomes an ask of its
+  own, with its own size and its own line
+
+### 2l. A look-into task is held for its whole life
+
+Parts: 2.2
+
+- **Given** an ask sized as new with no approved plan
+- **When** the lead gives a member a look-into task (`look_into`), and the member works on it, writes a
+  note in its own folder, tries to give a work task and then reports done with what it found
+- **Then** the task is taken, with a brief that says it only looks into something, and "Task #12 · Look
+  into" heads its view. The member's write into its worktree is denied and its notes are written. Its
+  work task is refused, and a look-into task it gives is taken. Its done report, with a note or a file,
+  reaches the lead as any task's does, and names no PR. After the plan is approved, the task's write
+  into the worktree is still denied. (When the second PR of part I lands: a shell command's change is
+  found at the turn's end and shown.)
 
 ## 3. Every task stands on its own
 

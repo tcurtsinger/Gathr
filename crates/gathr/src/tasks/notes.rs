@@ -241,6 +241,7 @@ pub(super) fn fix(tx: &Transaction, review: &Task, trace: &str) -> Result<Fixed,
         after: &[],
         pr: Some(pr),
         in_passing: true,
+        look_into: false,
     };
     let (given, starts) = match give_in(tx, &g, trace) {
         Ok(given) => given,

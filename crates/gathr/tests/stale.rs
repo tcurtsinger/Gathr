@@ -43,6 +43,7 @@ fn idle_task(conn: &mut Connection, after: &[i64], moved: i64) -> i64 {
         after,
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let (task, _) = tasks::give(conn, &g, T).unwrap();
     let n = task.number;
@@ -370,6 +371,7 @@ fn archiving_a_chat_cancels_a_task_in_another_chat_blocked_on_one_of_its_tasks()
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let there = tasks::give(&mut conn, &g, T).unwrap().0.number;
     conn.execute(

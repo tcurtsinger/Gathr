@@ -54,6 +54,7 @@ const asked = {
   size: 'new',
   by: 'person',
   sized_in: null,
+  held: false,
 };
 
 test('the line opens on click and on Enter to the two sizes, the current one pressed', async () => {

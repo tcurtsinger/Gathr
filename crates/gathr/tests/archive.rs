@@ -26,6 +26,7 @@ fn archiving_ends_the_chats_work_in_one_step_and_unarchive_brings_it_back() {
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     let (port, lead) = (service.info.port, first_token(&data.0));
+    common::fix_it(port, &lead);
     let first = text(&call_tool(
         port,
         &lead,

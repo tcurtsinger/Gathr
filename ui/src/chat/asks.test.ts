@@ -59,6 +59,7 @@ const ask = (id: string, more: Partial<Ask> = {}): Ask => ({
   size: null,
   by: null,
   sized_in: null,
+  held: false,
   ...more,
 });
 
@@ -149,11 +150,62 @@ test('a split ask whose message moved into a later turn has its line below it', 
   expect(line(items, 'size-m2')).toEqual([{ kind: 'plan', who: 'Mira:', text: 'Plan', ask: 'm2' }]);
 });
 
-test('an unsized ask with no task draws no line', () => {
+test('an unsized ask not held, with no task, still draws none', () => {
   // Another ask's task, whose message isn't loaded, draws none either.
-  const items = view(chat({ tasks: [task(1, { ask: 'm9' })], asks: [ask('m9'), ask('m1')] }));
+  const items = view(
+    chat({ tasks: [task(1, { ask: 'm9' })], asks: [ask('m9'), ask('m1', { held: false })] }),
+  );
   expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb']);
   expect(sizes(items)).toEqual([]);
+});
+
+test("an unsized ask Gathr held shows Plan after its message's turn", () => {
+  const items = view(chat({ asks: [ask('m1', { held: true })] }));
+  expect(ids(items)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
+  expect(line(items, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
+
+  // Live: the tasks event that says Gathr held it brings the line, with no task.
+  const before = chat({ asks: [ask('m1')] });
+  expect(sizes(view(before))).toEqual([]);
+  const after = apply(before, {
+    type: 'tasks',
+    chat: 'c',
+    tasks: [],
+    waits: [],
+    asks: [ask('m1', { held: true })],
+  });
+  expect(ids(view(after))).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
+});
+
+test("an unsized held ask whose message moved to a later turn shows Plan after that turn's reply, never above the message", () => {
+  clock = 0;
+  const items = view({
+    ...empty,
+    members,
+    turns: { lead: { ...turn('lead'), position: 0 }, later: { ...turn('later'), position: 1 } },
+    messages: [
+      msg('m1', 'lead', 'user', 'Rename the export menu'),
+      msg('r1', 'lead', 'assistant', 'On it'),
+      msg('m2', 'later', 'user', 'Add tags to notes'),
+      msg('r2', 'later', 'assistant', 'Looking at tag libraries'),
+    ],
+    asks: [ask('m1'), ask('m2', { held: true })],
+  });
+  expect(ids(items)).toEqual(['m1', 'a-lead', 'm2', 'a-later', 'size-m2']);
+  expect(line(items, 'size-m2')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm2' }]);
+});
+
+test("an unsized held ask whose message's turn has no reply below it yet draws none", () => {
+  // `m2` was sent into `lead` after its reply `r0`, and a later turn replied: neither is below it in its own turn.
+  const state = steered({ asks: [ask('m0'), ask('m2', { held: true })] });
+  const reply = state.messages.splice(3, 1)[0];
+  state.turns.hb = { ...turn('hb', 'rowan'), position: 1 };
+  state.messages.push(msg('r4', 'hb', 'assistant', 'Tags need a plan'));
+  expect(ids(view(state))).toEqual(['m0', 'a-lead', 'm2', 'a-hb']);
+
+  // Once its own turn replies below it, the line follows that reply.
+  state.messages.splice(3, 0, reply);
+  expect(ids(view(state))).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1', 'size-m2', 'a-hb']);
 });
 
 test("an unsized ask with a task reads Plan after its message's turn", () => {

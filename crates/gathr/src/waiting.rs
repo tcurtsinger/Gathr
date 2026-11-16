@@ -10,6 +10,7 @@ use serde::Serialize;
 
 use crate::pauses::{self, Pause};
 use crate::tasks::{self, Hold};
+use crate::team::Role;
 use crate::waits;
 use crate::{Error, changes};
 
@@ -250,10 +251,13 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
     Ok(Answer { lines, agents })
 }
 
+/// The chat's turns under way or to come. One to come that a cancel or its task's wait marked is
+/// dropped when its agent's queue reaches it, never run: what waits is its task's line.
 fn turns(conn: &Connection, chat: &str) -> Result<Vec<Turn>, Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT id, agent_id, task, status, held, why, created_ts FROM turns
-         WHERE chat_id = ?1 AND status IN ('queued', 'waiting_sign_in', 'running')
+         WHERE chat_id = ?1 AND (status = 'running'
+             OR (status IN ('queued', 'waiting_sign_in') AND stop_why IS NULL))
          ORDER BY created_ts, rowid",
     )?;
     let rows = stmt.query_map([chat], |r| {
@@ -562,7 +566,22 @@ fn task_lines(
                     let what = format!("{this} waits for #{} ({by})", b.number);
                     push(Line::new("after", what, Moves::Others).on(&by), o.created);
                 }
-                if before.is_empty() {
+                // It follows its plan, which its lead writes and the person decides (0063).
+                if before.is_empty() && o.reason.as_deref() == Some(tasks::plan_wait::PLAN_WAIT) {
+                    let line = Line::new(
+                        "plan_wait",
+                        format!("{this} waits for its plan"),
+                        Moves::Others,
+                    );
+                    let lead = crate::team::members(conn, chat)?
+                        .into_iter()
+                        .find(|m| m.role == Role::Supervisor);
+                    let line = match lead {
+                        Some(lead) => line.on(&lead.name),
+                        None => line,
+                    };
+                    push(line, o.updated);
+                } else if before.is_empty() {
                     let what = format!("{this} is waiting, and nothing it comes after is open");
                     push(Line::new("idle", what, Moves::Nobody), o.updated);
                 }
