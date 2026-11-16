@@ -18,6 +18,8 @@ mod held_commands;
 mod kept_words;
 #[path = "tasks/landings.rs"]
 mod landing_records;
+#[path = "tasks/lines.rs"]
+mod lines;
 #[path = "tasks/reports.rs"]
 mod reports;
 #[path = "tasks/reviews.rs"]

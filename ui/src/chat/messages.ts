@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
 import { planLine, versionOf } from '../plans/plans';
+import { asker } from '../tasks/model';
 import { changed, fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
 import { ended, hearBack, outcome } from './hearback';
@@ -515,7 +516,7 @@ function questions(state: ChatState, turn: string, crew: Team): EventLine[] {
     .map(
       (t): EventLine => ({
         kind: 'question',
-        who: `${crew.name(t.giver) ?? 'An agent'} asked you:`,
+        who: `${asker(t, (a) => crew.name(a) ?? 'An agent')} asked you:`,
         text: t.what,
         more: [`Question #${t.number}`, t.why].filter(Boolean).join('. '),
         task: t.number,

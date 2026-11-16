@@ -73,3 +73,4 @@ fails in CI when the two differ.
 | 0061 | [Every ask in a team chat has a size](0061-every-ask-has-a-size.md) | accepted | yes |
 | 0062 | [A plan is a checked record, and Approve hands it out](0062-a-plan-is-checked-and-approve-hands-it-out.md) | accepted | yes |
 | 0063 | [Building waits until a new ask's plan is approved; a repair goes](0063-building-waits-for-a-new-asks-plan.md) | accepted | yes |
+| 0064 | [A change far past its Fix or its part stops and asks](0064-a-change-far-past-its-fix-or-its-part-stops-and-asks.md) | accepted | yes |

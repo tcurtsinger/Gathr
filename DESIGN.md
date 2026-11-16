@@ -219,7 +219,7 @@ reports, in the state that hear-back gave, not the task's state now: "Vale compl
 PR #138", "Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix
 up to date", also failed, stopped and cancelled. A task that ends done is such a line when it
 ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (0051). The person's answer reads "You answered
-Orin: Hold the button", a question "Orin asked you: Ship it?". The size of an ask is one too,
+Orin: Hold the button", a question "Orin asked you: Ship it?", or "Gathr asked you: …" for Gathr's own. The size of an ask is one too,
 after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix"
 or "You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn
 only once the ask has a task or Gathr held something of it (a refused give, write or push, or a caught change: 0063), with a wrench for Fix and a clipboard for Plan. Opened, it shows

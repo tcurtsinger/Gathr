@@ -606,6 +606,15 @@ fn task_lines(
                                 };
                             let (moves, note) = match reviewed(conn, chat, *pr)? {
                                 true => (Moves::Others, ""),
+                                // Its review waits on Gathr's question, whose line says so (0064).
+                                false
+                                    if matches!(
+                                        changes::standing(conn, chat, *pr)?,
+                                        Some(changes::Standing::Asked(_))
+                                    ) =>
+                                {
+                                    continue;
+                                }
                                 false => (Moves::Nobody, ", which has no review"),
                             };
                             let what = format!("{this} {said} for #{pr} to merge{note}");

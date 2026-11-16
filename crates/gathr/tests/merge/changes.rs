@@ -7,7 +7,7 @@ const GO_ON: &str = "Let it go on";
 const SEND_BACK: &str = "Send it back";
 
 /// `n` lines of made-up code.
-fn lines(n: usize) -> Vec<u8> {
+pub(super) fn lines(n: usize) -> Vec<u8> {
     (0..n)
         .map(|i| format!("let x{i} = {i};\n"))
         .collect::<String>()
@@ -17,7 +17,7 @@ fn lines(n: usize) -> Vec<u8> {
 impl Room {
     /// PR `n`'s branch (0 is #5, 1 is #6) moved to one commit on `from` that adds `files`, as its
     /// author force-pushes it: GitHub shows the new head, and the project's checks passed there.
-    fn push_head(&self, n: usize, from: &str, files: &[(&str, Vec<u8>)]) -> String {
+    pub(super) fn push_head(&self, n: usize, from: &str, files: &[(&str, Vec<u8>)]) -> String {
         let branch = ["room/five", "room/six"][n];
         git(&self.other, &["checkout", "-q", "-B", branch, from]);
         let head = self.commit(files, branch);
@@ -51,7 +51,7 @@ impl Room {
     }
 
     /// Gathr's newest open question to the person, once it's there.
-    fn question(&self, after: i64) -> Value {
+    pub(super) fn question(&self, after: i64) -> Value {
         common::until(60, "Gathr's question to the person", || {
             let open = self.service.call("GET", "/api/person-tasks").json();
             let open = open["tasks"].as_array()?.iter();
@@ -62,7 +62,7 @@ impl Room {
     }
 
     /// The person's answer, as the window sends it.
-    fn person_answers(&self, answer: Value) -> Value {
+    pub(super) fn person_answers(&self, answer: Value) -> Value {
         let body = json!({ "answers": [answer] });
         let sent = self.service.send("POST", "/api/person-tasks/answer", body);
         assert_eq!(sent.status, 200, "{}", sent.body);
@@ -70,18 +70,18 @@ impl Room {
     }
 
     /// PR #5's row of what Gathr measured and recorded, or null.
-    fn change(&self) -> Value {
+    pub(super) fn change(&self) -> Value {
         let rows = common::rows(&self.data, "SELECT * FROM changes WHERE pr = 5");
         rows.into_iter().next().unwrap_or(Value::Null)
     }
 
-    fn events(&self, name: &str) -> i64 {
+    pub(super) fn events(&self, name: &str) -> i64 {
         let sql = format!("SELECT count(*) AS n FROM event_log WHERE name = '{name}'");
         common::rows(&self.data, &sql)[0]["n"].as_i64().unwrap()
     }
 
     /// The reviewer reports its review `task` done on `commit`: what Gathr answered.
-    fn report(&self, vale: &str, task: i64, commit: &str) -> String {
+    pub(super) fn report(&self, vale: &str, task: i64, commit: &str) -> String {
         let done =
             json!({ "how": "done", "task": task, "commit": commit, "nothing_unasked": true });
         let finished = self.call(vale, "finish_task", done);

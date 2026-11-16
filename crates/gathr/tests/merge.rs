@@ -7,6 +7,8 @@ mod changes;
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;
+#[path = "merge/report_count.rs"]
+mod report_count;
 #[path = "merge/review_questions.rs"]
 mod review_questions;
 #[path = "merge/review_updates.rs"]
@@ -178,27 +180,37 @@ fn put_answers(data: &Path, answers: &Value) {
 /// The service on `data`, with the held recording and GitHub's stand-in the room wrote there: at a
 /// room's start, and again after a stop.
 fn service(data: &Path, waking: bool) -> TestService {
+    service_with(data, waking, &[])
+}
+
+/// `service`, with `more` of the environment.
+fn service_with(data: &Path, waking: bool, more: &[(&str, &Path)]) -> TestService {
     let gate = if waking {
         PathBuf::from("go")
     } else {
         data.join("go")
     };
-    TestService::with_engine(
-        data,
-        &[
-            ("GATHR_REPLAY", &data.join("held.jsonl")),
-            ("GATHR_REPLAY_HOLD", &gate),
-            ("GATHR_REPLAY_ENV", &data.join("env.jsonl")),
-            ("GATHR_GH_PATH", &fake_gh()),
-            ("GATHR_FAKE_GH", &data.join("gh.json")),
-            // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
-            ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
-            (
-                "GATHR_WAIT_EVERY_MS",
-                Path::new(if waking { "100" } else { "120000" }),
-            ),
-        ],
-    )
+    let (replay, env, gh, fake) = (
+        data.join("held.jsonl"),
+        data.join("env.jsonl"),
+        fake_gh(),
+        data.join("gh.json"),
+    );
+    let mut all: Vec<(&str, &Path)> = vec![
+        ("GATHR_REPLAY", &replay),
+        ("GATHR_REPLAY_HOLD", &gate),
+        ("GATHR_REPLAY_ENV", &env),
+        ("GATHR_GH_PATH", &gh),
+        ("GATHR_FAKE_GH", &fake),
+        // GitHub marks a pushed merge in a few seconds; the stand-in does at once.
+        ("GATHR_MERGE_CONFIRM_MS", Path::new("1500")),
+        (
+            "GATHR_WAIT_EVERY_MS",
+            Path::new(if waking { "100" } else { "120000" }),
+        ),
+    ];
+    all.extend_from_slice(more);
+    TestService::with_engine(data, &all)
 }
 
 impl Room {
