@@ -226,6 +226,16 @@ impl Room {
         std::fs::write(self.dir.0.join("go"), "").unwrap();
     }
 
+    /// Lets the `n`th engine started go on, and no other: with more than one engine held, the
+    /// first to look at `go` would take it, whichever it was meant for.
+    pub fn go_to(&self, n: usize) {
+        let line = super::nth(&self.dir.0.join("env.jsonl"), n);
+        let pid = line["pid"]
+            .as_u64()
+            .expect("the engine's line names its process");
+        std::fs::write(self.dir.0.join("go").with_extension(pid.to_string()), "").unwrap();
+    }
+
     /// The token of the `n`th engine started.
     pub fn token(&self, n: usize) -> String {
         let line = super::nth(&self.dir.0.join("env.jsonl"), n);
@@ -245,7 +255,8 @@ impl Room {
             super::briefed(ask),
         ));
         assert!(given.starts_with("Task #1 for ann: ready."), "{given}");
-        self.go();
+        // Ann's engine started with the task and may already hold too: the release is the lead's.
+        self.go_to(0);
         let history = self
             .service
             .wait_for(&self.chat, 20, "Ann's turn on the task", |h| {
