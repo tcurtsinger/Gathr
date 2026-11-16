@@ -67,6 +67,7 @@ pub(super) fn give(
         after: &[t.number],
         pr: Some(pr),
         in_passing: true,
+        look_into: false,
     };
     match give_in(tx, &g, trace) {
         Ok((review, starts)) => {

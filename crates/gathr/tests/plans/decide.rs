@@ -90,7 +90,7 @@ fn split(conn: &mut Connection, turn: &str, message: &str) -> Result<String, Err
         message: Some(message),
         trace: T,
     };
-    asks::size(conn, &s)
+    asks::size(conn, &s).map(|(said, _)| said)
 }
 
 /// H6.1 to H6.3.
@@ -490,6 +490,7 @@ fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: true,
     };
     let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
     let search = write(

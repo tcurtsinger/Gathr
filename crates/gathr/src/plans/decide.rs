@@ -151,6 +151,10 @@ pub fn approve(conn: &mut Connection, plan: i64, n: i64, trace: &str) -> Result<
     decide(&tx, d.version, "approved", None)?;
     let why = format!("version {n} was approved");
     let mut starts = check::cancel_open(&tx, d.version, &why, trace)?;
+    let ask: String = tx.query_row("SELECT ask_id FROM plans WHERE id = ?1", [plan], |r| {
+        r.get(0)
+    })?;
+    starts.extend(tasks::plan_wait::resized(&tx, &ask, trace)?.1);
     let (mut made, mut started) = (Vec::new(), 0);
     for (i, p) in parts.iter().enumerate() {
         let mut after: Vec<i64> = p
@@ -177,6 +181,7 @@ pub fn approve(conn: &mut Connection, plan: i64, n: i64, trace: &str) -> Result<
             after: &after,
             pr: None,
             in_passing: false,
+            look_into: false,
         };
         let (task, given) = tasks::give_in(&tx, &g, trace)?;
         tx.execute(

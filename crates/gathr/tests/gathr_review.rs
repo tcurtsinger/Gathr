@@ -16,6 +16,7 @@ fn a_pr_a_builder_reports_gets_its_review_from_gathr(engine: &str) {
     let sent = service.send("POST", &path, json!({ "text": "Plan it" }));
     assert_eq!(sent.status, 200, "{}", sent.body);
     let lead = common::first_token(&data.0);
+    common::fix_it(port, &lead);
     let work = common::briefed(json!({ "to": "Ann", "what": "Write the notes" }));
     let given = text(&call_tool(port, &lead, "give_task", work));
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");

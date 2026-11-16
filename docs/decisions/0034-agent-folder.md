@@ -3,6 +3,8 @@
 Status: accepted (owner, 2026-11-09: "One shared project folder, then the agent folders all in the
 same place is very ideal"). Date: 2026-11-09. Amends 0028's worktree place and 0029's folder guard.
 
+Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): a held turn's worktree is refused to it; its own folder and Shared stay writable.
+
 Built: yes. Proof: `crates/gathr/tests/agent_folder.rs`, `crates/gathr/tests/pr_cleanup.rs`, `crates/gathr/tests/archive.rs`.
 
 ## Choice

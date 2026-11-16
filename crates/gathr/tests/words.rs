@@ -95,6 +95,16 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "074479489631eb5291d177966d7c325a7af4b1e9ba82d751008e9ed3e6b47dba",
     ),
+    (
+        "brief",
+        3,
+        "3f28e84f1f4269ac6794ee6b5b6bc07916d977a673327545609bd3b8064df2f9",
+    ),
+    (
+        "resized",
+        1,
+        "c453e3a17f6b08ccb7b60b53a1c9f7c5d9381a0090b2109e98a7a7a8eb6aa9fb",
+    ),
 ];
 
 /// Every file that asserts samples.
@@ -108,6 +118,8 @@ const SOURCES: &[&str] = &[
     include_str!("plans/write.rs"),
     include_str!("plans/check.rs"),
     include_str!("plans/decide.rs"),
+    include_str!("hold/give.rs"),
+    include_str!("hold/wait.rs"),
 ];
 
 /// The lowercase hex SHA-256 of a kind's sample texts, in order, each followed by a NUL byte.
@@ -293,6 +305,7 @@ fn turns_record_the_words_that_opened_them_and_diag_counts_each_kind() {
         .unwrap()
         .to_string();
     let port = service.info.port;
+    common::fix_it(port, &lead);
     let ask = common::briefed(json!({ "to": "ann", "what": "Add a retry" }));
     let given = text(&call_tool(port, &lead, "give_task", ask));
     assert!(given.starts_with("Task #1 for ann: ready."), "{given}");

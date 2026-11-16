@@ -4,6 +4,8 @@ Status: accepted (slice 2, the owner's pick of "Auto, with guards"). Date: 2026-
 
 Built: yes. Proof: `crates/gathr/tests/approvals.rs`, `crates/gathr/tests/codex_recovery.rs`.
 
+Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): in Full, Claude Code asks Gathr's hook too, for file writes only, and it answers only the hold (never an ask); in every mode the hook also refuses a held turn's write into its worktree, and the `pre-push` hook a held turn's push.
+
 Out of date below: in Auto a Codex wait check doesn't ask; an agent may write in its three folders, temp among them ([0034](0034-agent-folder.md)).
 
 Amended 2026-11-11: the owner picked "Ask only for risky pushes" (task 1421). An agent's push to a branch of its own goes through; one to the remote's default branch, one that rewrites or deletes a branch, or one to anywhere but its worktree's origin asks. The two push points below say how.

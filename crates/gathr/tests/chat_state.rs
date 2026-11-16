@@ -539,6 +539,8 @@ fn a_push_gathr_asks_about_needs_the_person_until_it_is_answered() {
         service.info.port,
         format!("Bearer {}", first_token(&data.0)),
     );
+    // A held turn's push is refused before anyone is asked (0063).
+    common::fix_it(port, &first_token(&data.0));
     let asked = std::thread::spawn(move || {
         let headers = [("Authorization", auth.as_str()), PUSH[0], PUSH[1]];
         gathr::http::post(port, "/hook/push", &headers, "")

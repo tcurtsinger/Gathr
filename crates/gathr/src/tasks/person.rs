@@ -190,7 +190,7 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
             set(&tx, number, State::Ready, None, trace)?;
             Vec::new()
         }
-        false => vec![ready(&tx, number, None)?],
+        false => ready(&tx, number, None)?.into_iter().collect(),
     };
     let task = read(&tx, number)?;
     Event::point("gathr.task.give")

@@ -179,7 +179,8 @@ Running, its label is what the agent is doing now (Running a command, Reading a 
 the registry's shimmer and no spinner, then the steps and the elapsed time, muted. Click or
 Enter opens it: each tool call as a step in plain words from the tool's name, its duration at
 the right, Failed in the danger colour on a failed one; a task it gave reads "Gave Cass a
-task" with a "#119 Open the settings tools PR" chip that opens the task; what it wrote between
+task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip reads
+"#119 Look into: Survey tag libraries", 0063); what it wrote between
 steps shows as muted lines. A step that kept what it ran
 ([0041](docs/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
 status icon, a short label, the chip, the duration ("Ran" then "git merge origin/main"; also
@@ -221,7 +222,7 @@ ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (
 Orin: Hold the button", a question "Orin asked you: Ship it?". The size of an ask is one too,
 after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix"
 or "You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn
-only once the ask has a task, with a wrench for Fix and a clipboard for Plan. Opened, it shows
+only once the ask has a task or Gathr held something of it (a refused give, write or push: 0063), with a wrench for Fix and a clipboard for Plan. Opened, it shows
 the two sizes, "Just fix it." and "Plan it with me first.", the current one marked, and nothing
 that explains them (0061). When a repair's work is in, Gathr says "Fixed: <the ask>", a check
 icon, which opens to each finished task with its PR and its proof. The plan's lines are one
@@ -522,8 +523,9 @@ opens Projects at that project. Checks & merge ends with the checks cache: its s
 "Unused caches are removed after 14 days" and Clear, which acts at once, apart from Save.
 
 An agent's task opens in the workspace's Tasks tab from its title in the agent
-panel's task list, the panel's Open task, or Open task in its hand-off line: who has it, its state and reason, and, with a
-PR, Gathr's checks run at the PR's head (passed, failed with its reference, or
+panel's task list, the panel's Open task, or Open task in its hand-off line: who has it, its state and reason (a task
+that waits for its plan reads "waits for its plan"), a number line that reads "Task #12 · Look into" for a look-into
+task (0063), and, with a PR, Gathr's checks run at the PR's head (passed, failed with its reference, or
 running), each command with its exit, time and log, the failing one's open. Back
 returns to the person's questions.
 

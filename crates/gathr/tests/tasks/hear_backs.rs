@@ -104,6 +104,7 @@ fn a_task_given_in_passing_holds_nothing_and_is_heard_back_on_by_itself() {
         after: &[],
         pr: None,
         in_passing: true,
+        look_into: false,
     };
     let aside = tasks::give(&mut conn, &aside, T).unwrap().0.number;
     gathr::store::set_turn(&conn, &giving, "done", None).unwrap();

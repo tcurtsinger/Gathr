@@ -55,6 +55,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0045_task_briefs.sql"),
     include_str!("../migrations/0046_asks.sql"),
     include_str!("../migrations/0047_plans.sql"),
+    include_str!("../migrations/0048_hold.sql"),
 ];
 
 /// The schema version this build writes.
@@ -502,6 +503,61 @@ mod tests {
             ),
             other => panic!("expected the second question refused, got {other:?}"),
         }
+    }
+
+    /// 0048 (0063): no task is a look-into task, no ask was held, and nothing is moved: a ready
+    /// building task's queued brief on an unsized ask stays, and its turn isn't held.
+    #[test]
+    fn the_hold_comes_with_0048_and_moves_nothing_from_before() {
+        let path = temp_db("hold");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..47] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 47;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1), ('ann', 'Ann', 'ann', 'acc', 1);
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO chat_members VALUES ('c', 'mira', 'supervisor', 1), ('c', 'ann', 'member', 1);
+             INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES ('m1', 'c', 1, 'user', 'text', 'Add tags'),
+                 ('m2', 'c', 2, 'user', 'text', 'Fix it'), ('m3', 'c', 3, 'user', 'text', 'Rename it');
+             INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', NULL), ('m2', 'c', 'repair'), ('m3', 'c', 'new');
+             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reason, created_ts, updated_ts, ask_id)
+                 VALUES (1, 'c', 'mira', 'ann', 'work', 'a', 'waiting', NULL, 1, 1, 'm1'),
+                        (2, 'c', 'mira', 'ann', 'work', 'b', 'ready', NULL, 1, 1, 'm1'),
+                        (3, 'c', 'mira', 'ann', 'work', 'c', 'working', NULL, 1, 1, 'm3'),
+                        (4, 'c', 'mira', 'ann', 'work', 'd', 'held', 'its merge', 1, 1, 'm3'),
+                        (5, 'c', 'mira', 'ann', 'review', 'e', 'done', NULL, 1, 1, 'm2'),
+                        (6, 'c', 'mira', 'ann', 'work', 'f', 'blocked', 'stuck', 1, 1, 'm1'),
+                        (7, 'c', 'mira', 'ann', 'work', 'g', 'failed', 'boom', 1, 1, 'm3'),
+                        (8, 'c', 'mira', 'ann', 'work', 'h', 'stopped', 'stop', 1, 1, 'm1'),
+                        (9, 'c', 'mira', 'ann', 'work', 'i', 'cancelled', 'no', 1, 1, 'm2');
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, ask_id)
+                 VALUES ('brief', 'c', 'x', 'queued', 1, 'ann', 2, 'm1');",
+        )
+        .unwrap();
+        let rows = |conn: &Connection| -> String {
+            let sql = "SELECT json_group_array(json_array(number, state, reason, ask_id)) FROM (SELECT * FROM tasks ORDER BY number)";
+            conn.query_row(sql, [], |r| r.get(0)).unwrap()
+        };
+        let before = rows(&conn);
+        drop(conn);
+        let conn = open(&path).unwrap();
+        assert_eq!(rows(&conn), before, "no task moved");
+        let found: (i64, i64, Option<String>) = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM tasks WHERE look_into != 0),
+                        (SELECT count(*) FROM asks WHERE held_ts IS NOT NULL),
+                        (SELECT stop_why FROM turns WHERE id = 'brief')",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(found, (0, 0, None));
+        let held = crate::hold::turn(&conn, "brief").unwrap().unwrap();
+        assert!(!held.held(), "a building task's queued brief isn't held");
     }
 
     #[test]

@@ -15,6 +15,7 @@ fn brief_edited_while_its_turn_waits_is_the_one_the_engine_gets(engine: &str) {
     let sent = service.send("POST", &path, json!({ "text": "Plan it" }));
     assert_eq!(sent.status, 200, "{}", sent.body);
     let lead = common::first_token(&data.0);
+    common::fix_it(port, &lead);
     let first = common::briefed(json!({ "to": "Ann", "what": "Write the notes" }));
     let given = text(&call_tool(port, &lead, "give_task", first));
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");

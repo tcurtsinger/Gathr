@@ -92,6 +92,7 @@ pub(super) fn give(
         after: &[],
         pr: None,
         in_passing: true,
+        look_into: false,
     };
     let (task, mut starts) = tasks::give_in(tx, &g, trace)?;
     tx.execute(

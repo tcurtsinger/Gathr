@@ -278,6 +278,7 @@ fn a_silent_turn_shows_and_its_lead_is_told_once() {
     write(&service, &chat, "Plan it");
     let ask = json!({ "to": "Ann", "what": "Write the notes" });
     let token = first_token(&data.0);
+    common::fix_it(service.info.port, &token);
     let given = text(&call_tool(
         service.info.port,
         &token,

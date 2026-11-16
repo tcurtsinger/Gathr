@@ -172,7 +172,9 @@ export function fold(
       id: m.id,
       label: made?.owner ? `Gave ${made.owner} a task` : (ran?.title ?? didIt),
       doing: ran?.title ?? doingIt,
-      detail: made ? `#${made.task.number} ${made.task.what}` : ran?.text,
+      detail: made
+        ? `#${made.task.number} ${made.task.look_into ? 'Look into: ' : ''}${made.task.what}`
+        : ran?.text,
       task: made?.task.number,
       state: body.status,
       request: ran?.request ?? ran?.text,

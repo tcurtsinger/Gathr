@@ -95,3 +95,7 @@ Where the code differs from the detail the owner approved, the code stands.
 
 - [0010](0010-coordination-as-state.md)'s Plans and plan checks: a plan is a record with versions and no file; its states are read; the check is a review task with `tasks.checks`, not a `plan_check` kind; the checker is the one who objected, else the Reviewer, else the free member that checked least; the lead answers every finding in its next version.
 - [0061](0061-every-ask-has-a-size.md): an open plan is open work of its ask, and a split never moves a plan, its check or the tasks Approve made.
+
+## Amended by
+
+- [0063](0063-building-waits-for-a-new-asks-plan.md): Approve releases the ask's tasks that wait for its plan.

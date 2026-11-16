@@ -92,6 +92,7 @@ fn give(
         after,
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let (task, starts) = tasks::give(conn, &g, T).unwrap();
     (task.number, starts)
@@ -519,6 +520,7 @@ fn a_tasks_pr_settles_it_and_a_review_follows_its_commit() {
         after: &[],
         pr: Some(54),
         in_passing: false,
+        look_into: false,
     };
     let (task, _) = tasks::give(&mut conn, &review, T).unwrap();
     tasks::started(&mut conn, task.number, T).unwrap();
@@ -610,6 +612,7 @@ fn fix_with_pr(conn: &mut Connection) -> i64 {
         after: &[],
         pr: Some(69),
         in_passing: false,
+        look_into: false,
     };
     tasks::give(conn, &fix, T).unwrap().0.number
 }
@@ -688,6 +691,7 @@ fn a_task_is_refused_with_why() {
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let outsider = refusal(tasks::give(&mut conn, &g, T));
     assert_eq!(
@@ -756,6 +760,7 @@ fn work_on_pr(conn: &mut Connection, pr: i64) -> i64 {
         after: &[],
         pr: Some(pr),
         in_passing: false,
+        look_into: false,
     };
     let fix = tasks::give(conn, &fix, T).unwrap().0.number;
     conn.execute("UPDATE turns SET status = 'done' WHERE id = ?1", [&giving])
@@ -778,6 +783,7 @@ fn review_by_bo(conn: &mut Connection, pr: i64, given_in: &str) -> i64 {
         after: &[],
         pr: Some(pr),
         in_passing: false,
+        look_into: false,
     };
     tasks::give(conn, &review, T).unwrap().0.number
 }
@@ -858,6 +864,7 @@ fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
         after: &[],
         pr: Some(90),
         in_passing: false,
+        look_into: false,
     };
     let review = tasks::give(&mut conn, &review, T).unwrap().0.number;
     tasks::started(&mut conn, review, T).unwrap();
@@ -874,6 +881,7 @@ fn a_fix_given_by_the_review_of_its_pr_wakes_that_reviewer() {
         after: &[],
         pr: Some(90),
         in_passing: false,
+        look_into: false,
     };
     let fix = tasks::give(&mut conn, &fix, T).unwrap().0.number;
     tasks::ended(&mut conn, review, Outcome::Ok, T).unwrap();

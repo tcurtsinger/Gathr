@@ -22,12 +22,13 @@ export function fixed(text: string): EventLine | undefined {
  * Each ask's size line, by the block it follows (0061 G5.2): the first block below the message of the
  * lead's turn that sized it, else of the message's own turn, so a line never sits above the message it
  * sizes. The message can land in a later turn than the one that sized it, when the engine reads it only
- * after that turn ends. An unsized ask with no task has none. `groups` is in the thread's order.
+ * after that turn ends. An unsized ask with no task, that Gathr never held, has none. `groups` is in the
+ * thread's order.
  */
 export function sizeLines(state: ChatState, groups: Group[], crew: Team): Map<Group, EventLine[]> {
   const lines = new Map<Group, EventLine[]>();
   for (const ask of state.asks) {
-    if (!ask.size && !state.tasks.some((t) => t.ask === ask.id)) continue;
+    if (!ask.size && !ask.held && !state.tasks.some((t) => t.ask === ask.id)) continue;
     const from = groups.findIndex((g) => g.msgs.some((m) => m.id === ask.id));
     const own = groups[from]?.turn;
     if (!own) continue;

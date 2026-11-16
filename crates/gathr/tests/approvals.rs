@@ -1,6 +1,6 @@
 //! Approvals (0029): each agent's mode picks Claude Code's permission mode, and in every mode but
 //! Full, Gathr's hook asks before a push or a write outside the engine's folder, admitting only
-//! the engine's own token.
+//! the engine's own token. Full's hook answers only the hold (0063).
 
 mod common;
 
@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use common::{
-    TempDir, TestService, gathr, git, hook, hook_at, nth, project, recording, sign_in_account,
+    TempDir, TestService, gathr, git, hook, hook_at, nth, project, push_as_engine, recording,
+    sign_in_account,
 };
 use serde_json::{Value, json};
 
@@ -39,7 +40,7 @@ fn mode(args: &[Value]) -> &str {
 const WAIT_TOOL: &str = "mcp__gathr__wait";
 
 #[test]
-fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
+fn gathr_asks_before_a_push_or_a_write_outside_and_full_is_asked_nothing() {
     let data = TempDir::new();
     let (go, args, env) = (
         data.0.join("go"),
@@ -203,38 +204,28 @@ fn gathr_asks_before_a_push_or_a_write_outside_and_full_turns_its_hook_off() {
     let next: Vec<Value> = serde_json::from_value(nth(&args, 1)).unwrap();
     assert_eq!(mode(&next), "bypassPermissions");
     let settings: Value = serde_json::from_str(after(&next, "--settings")).unwrap();
-    assert!(
-        settings.get("hooks").is_none(),
-        "Full still asks: {settings}"
+    // Full's one hook answers only the hold, for file writes, and lets them go on when Gathr
+    // can't answer (0063).
+    let entries = settings["hooks"]["PreToolUse"].as_array().cloned();
+    let entries = entries.unwrap_or_else(|| panic!("Full has no hook: {settings}"));
+    let given = &entries[0]["hooks"][0];
+    assert_eq!(
+        (
+            entries.len(),
+            &entries[0]["matcher"],
+            given.get("onFailure")
+        ),
+        (1, &json!("Write|Edit|NotebookEdit"), None),
+        "{settings}"
     );
+    let url = given["url"].as_str().unwrap_or_default();
+    assert!(url.ends_with("/hook?full"), "{settings}");
     let unknown = service.send(
         "PATCH",
         &format!("/api/agents/{orin}"),
         json!({ "approvals": "never" }),
     );
     assert_ne!(unknown.status, 200, "an unknown mode was saved");
-}
-
-/// A `git push` run in the worktree as the agent's engine would: with its environment, through
-/// `args` (an alias, say), on a thread: whether git said it pushed, and what it said.
-fn push_as_engine(started: &Value, args: &[&str]) -> std::thread::JoinHandle<(bool, String)> {
-    let mut command = common::git_command();
-    command
-        .args(args)
-        .current_dir(started["cwd"].as_str().unwrap());
-    for var in ["GATHR_AGENT_TOKEN", "GATHR_PUSH_URL"] {
-        match started[var].as_str() {
-            Some(value) => command.env(var, value),
-            None => command.env_remove(var),
-        };
-    }
-    std::thread::spawn(move || {
-        let out = command.output().unwrap();
-        (
-            out.status.success(),
-            String::from_utf8_lossy(&out.stderr).into(),
-        )
-    })
 }
 
 fn started_dir(started: &Value) -> PathBuf {

@@ -130,6 +130,7 @@ fn a_command_ending_refreshes_a_hold_that_still_waits_on_its_merge() {
             after,
             pr: Some(5),
             in_passing: false,
+            look_into: false,
         };
         tasks::give(conn, &g, T).unwrap().0.number
     };

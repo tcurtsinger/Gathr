@@ -86,7 +86,8 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 stale_ts, heard_in, pr_head, finish, finish_note, finish_see, finish_ts, asks,
                 in_passing, judged, signed_off, done, proof, place, size, size_lines, started_ts, carry,
                 edited_ts, edited, ask_id, checks,
-                (SELECT v.plan_id FROM plan_parts p JOIN plan_versions v ON v.id = p.version_id WHERE p.task = tasks.number)
+                (SELECT v.plan_id FROM plan_parts p JOIN plan_versions v ON v.id = p.version_id WHERE p.task = tasks.number),
+                look_into
          FROM tasks WHERE number = ?1",
         [task],
         |r| {
@@ -153,6 +154,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 ask: r.get(41)?,
                 checks: r.get(42)?,
                 plan: r.get(43)?,
+                look_into: r.get(44)?,
             })
         },
     )?;

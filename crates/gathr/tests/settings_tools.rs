@@ -152,6 +152,8 @@ fn an_agent_never_answers_its_own_approval_nor_its_own_question_nor_changes_whic
     let full = json!({ "agent": "Ann", "approvals": "full" });
     refused(&tool(&t, lead_token, "set_agent", full), "which pushes ask");
 
+    // A held turn's push is refused before anyone is asked (0063).
+    common::fix_it(t.service.info.port, lead_token);
     // Ann's own push waits on an approval: Ann can't answer it; Lead can.
     let (port, token) = (t.service.info.port, ann_token.clone());
     let pushing = std::thread::spawn(move || {

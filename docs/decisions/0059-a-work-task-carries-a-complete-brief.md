@@ -4,6 +4,8 @@ Status: accepted (owner, 2026-11-15). Date: 2026-11-15.
 
 Built: yes. Proof: `crates/gathr/tests/tasks/briefs.rs`, `crates/gathr/tests/edit_task.rs`, `crates/gathr/tests/tasks/words.rs`, `crates/gathr/tests/words.rs`, `crates/gathr/tests/tools.rs`, `crates/gathr/tests/tasks/review_notes.rs`, `ui/src/tasks/TaskReport.test.tsx`.
 
+Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): a task readied on a held ask waits for its plan, and `give_task` takes `look_into`.
+
 Builds on [0010](0010-coordination-as-state.md), [0055](0055-a-members-task-starts-in-a-new-session.md) and [0056](0056-gathr-records-which-words-opened-each-turn.md). Serves promise 3 of [the charter](../charter.md#the-promises), parts 3.2 to 3.4 and 3.8 of [the truth map](../truth-map.md): a task stands on its own, and is corrected before it starts, not after. Stage 3's part D.
 
 ## The choice

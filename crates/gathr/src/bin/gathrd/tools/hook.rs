@@ -4,15 +4,20 @@
 //! A `wait` isn't on Claude Code's allow list, so the hook answers each one: "allow" with no check
 //! or a read-only one, "ask" for any other check, and nothing in auto mode, where Claude Code's own
 //! classifier reads the check as it reads the agent's commands (owner, 2026-11-11).
+//! A held turn's writes into its worktree and its pushes are refused, in every mode (0063).
 
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::extract::{Extension, RawQuery, State as Extract};
 use axum::http::HeaderMap;
 use axum::routing::post;
 use axum::{Json, Router};
-use gathr::claude::command::{AUTO_QUERY, WAIT_TOOL};
+use gathr::claude::command::{AUTO_QUERY, FULL_QUERY, WAIT_TOOL};
 use gathr::event::Event;
+use gathr::hold;
+use rusqlite::Connection;
 use serde_json::{Value, json};
 
 use super::Caller;
@@ -22,6 +27,8 @@ use crate::api::State;
 pub const HOOK_PATH: &str = "/hook";
 /// Where an agent's worktree's `pre-push` hook asks, with its engine's token too.
 pub const PUSH_PATH: &str = "/hook/push";
+/// How long the hooks wait for the hold: Claude Code's hook blocks the call when it gets no answer.
+const HOLD_READ: Duration = Duration::from_secs(5);
 
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
@@ -29,16 +36,19 @@ pub fn routes() -> Router<Arc<State>> {
         .route(PUSH_PATH, post(pre_push))
 }
 
-/// A `git push` from the engine's worktree, however it was run: `allow` at once when it isn't
-/// risky (`gathr::pushes`), else once the person allows it (or the agent's mode is Full, or they
-/// just allowed the command that runs it); `deny` otherwise.
-/// It waits as long as the person takes; a push whose hook gives up is ended by git.
+/// A `git push` from the engine's worktree, however it was run: refused while its turn is held
+/// (0063); else `allow` at once when it isn't risky (`gathr::pushes`), else once the person allows
+/// it (or the agent's mode is Full, or they just allowed the command that runs it); `deny`
+/// otherwise. It waits as long as the person takes; a push whose hook gives up is ended by git.
 async fn pre_push(
     Extract(s): Extract<Arc<State>>,
     Extension(caller): Extension<Caller>,
     headers: HeaderMap,
     refs: String,
-) -> &'static str {
+) -> String {
+    if let Some(why) = held(&s, &caller, None, |c, turn| hold::push_held(c, turn)).await {
+        return why;
+    }
     let header = |name: &str| {
         let value = headers.get(name).and_then(|v| v.to_str().ok());
         value.unwrap_or_default().to_string()
@@ -63,6 +73,7 @@ async fn pre_push(
         true => "allow",
         false => "deny",
     }
+    .to_string()
 }
 
 async fn pre_tool_use(
@@ -78,6 +89,13 @@ async fn pre_tool_use(
         "permissionDecision": decision, "permissionDecisionReason": reason } }),
         )
     };
+    if query.as_deref() == Some(FULL_QUERY) {
+        // Full never asks: its hook answers only the hold.
+        return match held_write(&s, &caller, tool, &input["tool_input"]).await {
+            Some(why) => decide("deny", why),
+            None => Json(json!({})),
+        };
+    }
     let Some(why) = gathr::approvals::ask(
         tool,
         &input["tool_input"],
@@ -85,6 +103,9 @@ async fn pre_tool_use(
         s.chats.data.path(),
         caller.from_before,
     ) else {
+        if let Some(why) = held_write(&s, &caller, tool, &input["tool_input"]).await {
+            return decide("deny", why);
+        }
         return match tool == WAIT_TOOL {
             true => decide(
                 "allow",
@@ -109,4 +130,118 @@ async fn pre_tool_use(
         .attr("why", why);
     s.writer.record(event);
     decide("ask", format!("{} {why}", gathr::approvals::GATHR_ASKS))
+}
+
+/// A held turn's file write into its worktree: the deny reason. Only a write there reads the hold.
+async fn held_write(s: &State, caller: &Caller, tool: &str, input: &Value) -> Option<String> {
+    if !gathr::approvals::writes_in(tool, input, &caller.cwd) {
+        return None;
+    }
+    let (worktree, folders) = (caller.cwd.clone(), caller.folders.clone());
+    let read = move |c: &mut Connection, turn: &str| {
+        // Its own folder and Shared, each when it was given it (`turns/workspace.rs`).
+        let shared = |f: &&PathBuf| f.file_name().is_some_and(|n| n == gathr::folders::SHARED);
+        let beside = folders.iter().skip(1);
+        let place = hold::Place {
+            worktree: &worktree,
+            own: beside.clone().find(|f| !shared(f)).map(PathBuf::as_path),
+            shared: beside.clone().find(shared).map(PathBuf::as_path),
+        };
+        hold::write_held(c, turn, &place)
+    };
+    held(s, caller, Some(tool), read).await
+}
+
+/// The hold for the caller's turn, read in one writer job of at most `HOLD_READ`: the answer when
+/// held, with its refusal recorded in a second job, not waited on. Not held when it can't be read.
+async fn held(
+    s: &State,
+    caller: &Caller,
+    tool: Option<&str>,
+    read: impl FnOnce(&mut Connection, &str) -> Result<Found, gathr::Error> + Send + 'static,
+) -> Option<String> {
+    let on = caller.on()?;
+    let turn = on.turn.clone();
+    let job = s.writer.call(move |c| read(c, &turn));
+    let read = match tokio::time::timeout(HOLD_READ, job).await {
+        Err(_) => Read::Late,
+        Ok(None) => Read::Stopped,
+        Ok(Some(found)) => Read::Done(Box::new(found)),
+    };
+    let (found, failed) = answer(read, &on.trace, &caller.chat);
+    if let Some(failed) = failed {
+        s.writer
+            .record(failed.attr("gen_ai.agent.id", caller.agent.clone()));
+    }
+    let (why, mut refusal) = found?;
+    refusal.tool = tool.map(String::from);
+    let writer = s.writer.clone();
+    tokio::spawn(async move { writer.call(move |c| hold::refused(c, &refusal)).await });
+    Some(why)
+}
+
+/// What a hold read found: the deny or push answer, and the refusal to record.
+type Found = Option<(String, hold::Refusal)>;
+
+/// How a bounded hold read ended.
+enum Read {
+    Late,
+    Stopped,
+    Done(Box<Result<Found, gathr::Error>>),
+}
+
+/// A hold read's outcome as the hooks take it: what it found, or not held, with
+/// `gathr.hold.read` saying why, so a hold Gathr can't read never blocks the write or push.
+fn answer(read: Read, trace: &str, chat: &str) -> (Found, Option<Event>) {
+    let (error, why) = match read {
+        Read::Done(done) => match *done {
+            Ok(found) => return (found, None),
+            Err(e) => ("sqlite", e.to_string()),
+        },
+        Read::Late => (
+            "timeout",
+            format!("the hold wasn't read in {} s", HOLD_READ.as_secs()),
+        ),
+        Read::Stopped => ("writer", "the writer has stopped".to_string()),
+    };
+    let event = Event::point("gathr.hold.read")
+        .trace(trace)
+        .chat(chat)
+        .error(error)
+        .attr("why", why);
+    (None, Some(event))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The hook in Ask, Edits and Auto blocks the call when it fails, so a hold read that fails or
+    /// comes late reads as not held, and says why (0063 I2.2).
+    #[test]
+    fn a_failed_hold_read_lets_the_write_go_on() {
+        let failed = [
+            (Read::Late, "timeout"),
+            (Read::Stopped, "writer"),
+            (
+                Read::Done(Box::new(Err(gathr::Error::Other("disk I/O error".into())))),
+                "sqlite",
+            ),
+        ];
+        for (read, error) in failed {
+            let (held, event) = answer(read, "abcdef0123456789", "c");
+            assert!(held.is_none(), "{error}: held");
+            let event = event.unwrap_or_else(|| panic!("{error}: nothing recorded"));
+            assert_eq!(
+                (event.name.as_str(), event.error_type.as_deref()),
+                ("gathr.hold.read", Some(error))
+            );
+            assert!(event.attrs["why"].is_string(), "{error}: {:?}", event.attrs);
+        }
+        let (held, event) = answer(Read::Done(Box::new(Ok(None))), "abcdef0123456789", "c");
+        assert!(
+            held.is_none() && event.is_none(),
+            "a read that worked recorded a failure"
+        );
+    }
 }

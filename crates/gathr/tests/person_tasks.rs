@@ -95,6 +95,7 @@ fn a_members_ask_goes_through_the_supervisor_to_the_person_and_the_answer_comes_
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
     running(&conn, "c", "ann-1", "ann", Some(work.number));
@@ -334,6 +335,7 @@ fn cancelling_a_request_the_person_already_answered_settles_it_with_the_answer()
         after: &[],
         pr: None,
         in_passing: false,
+        look_into: false,
     };
     let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
     running(&conn, "c", "ann-1", "ann", Some(work.number));

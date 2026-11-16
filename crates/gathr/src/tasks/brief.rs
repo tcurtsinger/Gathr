@@ -24,6 +24,8 @@ pub struct Give<'a> {
     pub pr: Option<i64>,
     /// Given in passing: the giver's own task doesn't wait on it, and it's heard back on by itself.
     pub in_passing: bool,
+    /// It only looks into something: held for its whole life, never changing the project (0063).
+    pub look_into: bool,
 }
 
 /// What a task's giver says of it beyond its title.

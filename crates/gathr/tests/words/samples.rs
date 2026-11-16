@@ -50,6 +50,18 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
     ),
     (
+        "brief",
+        "brief: look into",
+        "Task #1 from Mira: Survey tag libraries\n\
+         Why: Notes need tags\n\
+         Done when: Three libraries compared\n\
+         Proof: a table in notes/tags.md\n\
+         Where: no code\n\
+         This is a look-into task: don't change the project's files or push. Write what you make in your own \
+         folder or Shared, and name it or say what you found when you finish.\n\
+         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.",
+    ),
+    (
         "review_brief",
         "review_brief: head seen, a task",
         "Task #4 from Lead: Review #70\n\
@@ -280,6 +292,28 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "The person sent back version 1 of your plan \"Tags on notes\" (plan #1):\n\
          Split part 2\n\
          Write the next version with plan.",
+    ),
+    (
+        "resized",
+        "resized: new with tasks",
+        "The person made \"Add tags to notes\" new, so it waits for a plan. Its tasks that hadn't started wait \
+         for the plan to be approved: #1 (Ann). Write the plan with plan, and cancel a task the plan replaces.",
+    ),
+    (
+        "resized",
+        "resized: new",
+        "The person made \"Fix the export\" new, so it waits for a plan. Write the plan with plan.",
+    ),
+    (
+        "resized",
+        "resized: repair with tasks",
+        "The person made \"Add tags to notes\" a repair, so it goes ahead without a plan. Its tasks that waited \
+         for the plan are back in line: #1 (Ann).",
+    ),
+    (
+        "resized",
+        "resized: repair",
+        "The person made \"Fix the typo\" a repair, so it goes ahead without a plan.",
     ),
     (
         "carry_on",

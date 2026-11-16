@@ -113,24 +113,35 @@ pub fn mode(approvals: Approvals) -> &'static str {
 
 /// What the hook's address ends in for an engine in auto mode.
 pub const AUTO_QUERY: &str = "auto";
+/// What it ends in for an engine in Full, whose hook answers only the hold (0063).
+pub const FULL_QUERY: &str = "full";
 
-/// `SETTINGS`, plus, in every mode but Full, Gathr's hook at `hook`, if there is one, before
-/// each file write and command, and each `wait` (its check is a command Gathr runs) (0029). It
-/// asks with the engine's own token, and a hook that fails blocks the call, so a Gathr that can't
-/// answer never lets a push through.
+/// `SETTINGS`, plus Gathr's hook at `hook`, if there is one, before each file write and command,
+/// and each `wait` (its check is a command Gathr runs) (0029). It asks with the engine's own token,
+/// and a hook that fails blocks the call, so a Gathr that can't answer never lets a push through.
+/// In Full, the hook is only before file writes, for the hold (0063), and a Gathr that can't
+/// answer lets the write go on, as Full does without it.
 fn settings(approvals: Approvals, hook: Option<&str>) -> String {
     let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
-    if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
+    if let Some(hook) = hook {
         let auth = format!("Bearer ${TOKEN_VAR}");
         // The hook leaves a wait's check to auto mode's classifier, so it's told the mode.
-        let hook = match approvals {
-            Approvals::Auto => format!("{hook}?{AUTO_QUERY}"),
-            _ => hook.to_string(),
+        let (hook, matcher) = match approvals {
+            Approvals::Auto => (format!("{hook}?{AUTO_QUERY}"), None),
+            Approvals::Full => (
+                format!("{hook}?{FULL_QUERY}"),
+                Some("Write|Edit|NotebookEdit"),
+            ),
+            _ => (hook.to_string(), None),
         };
+        let mut entry = serde_json::json!({ "type": "http", "url": hook, "timeout": 30,
+            "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] });
+        if matcher.is_none() {
+            entry["onFailure"] = "block".into();
+        }
+        let all = format!("Write|Edit|NotebookEdit|Bash|PowerShell|{WAIT_TOOL}");
         settings["hooks"] = serde_json::json!({ "PreToolUse": [{
-            "matcher": format!("Write|Edit|NotebookEdit|Bash|PowerShell|{WAIT_TOOL}"),
-            "hooks": [{ "type": "http", "url": hook, "timeout": 30, "onFailure": "block",
-                "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] }] }] });
+            "matcher": matcher.map_or(all, String::from), "hooks": [entry] }] });
     }
     settings.to_string()
 }
@@ -369,22 +380,30 @@ fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
 mod tests {
     use super::*;
 
-    /// The hook leaves a wait's check to the classifier only when told the engine is in auto mode.
+    /// The hook leaves a wait's check to the classifier only when told the engine is in auto mode;
+    /// Full's hook answers only the hold, for file writes, and a Gathr that can't answer lets them
+    /// go on (0063).
     #[test]
     fn only_an_auto_engines_hook_address_says_auto() {
-        let url = |approvals| {
+        let entry = |approvals| {
             let settings: serde_json::Value =
                 serde_json::from_str(&settings(approvals, Some("http://x/hook"))).unwrap();
-            settings["hooks"]["PreToolUse"][0]["hooks"][0]["url"].clone()
+            settings["hooks"]["PreToolUse"][0].clone()
         };
+        let url = |approvals| entry(approvals)["hooks"][0]["url"].clone();
         assert_eq!(url(Approvals::Auto), "http://x/hook?auto");
         assert_eq!(url(Approvals::Edits), "http://x/hook");
         assert_eq!(url(Approvals::Ask), "http://x/hook");
+        let full = entry(Approvals::Full);
         assert_eq!(
-            url(Approvals::Full),
-            serde_json::Value::Null,
-            "Full has no hook"
+            (&full["hooks"][0]["url"], &full["matcher"]),
+            (
+                &serde_json::json!("http://x/hook?full"),
+                &serde_json::json!("Write|Edit|NotebookEdit")
+            ),
+            "{full}"
         );
+        assert_eq!(full["hooks"][0].get("onFailure"), None, "{full}");
     }
 
     #[test]

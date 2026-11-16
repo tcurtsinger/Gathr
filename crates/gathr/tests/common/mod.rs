@@ -783,6 +783,35 @@ pub fn nth(file: &Path, n: usize) -> Value {
     })
 }
 
+/// The lead sizes the person's ask its turn serves as a repair (0061), so its building gives go
+/// ahead without a plan (0063).
+pub fn fix_it(port: u16, token: &str) {
+    let sized = text(&call_tool(port, token, "size", json!({ "size": "repair" })));
+    assert!(sized.ends_with("as repair."), "{sized}");
+}
+
+/// A `git push` run in the worktree as the agent's engine would: with its environment, through
+/// `args` (an alias, say), on a thread: whether git said it pushed, and what it said.
+pub fn push_as_engine(started: &Value, args: &[&str]) -> std::thread::JoinHandle<(bool, String)> {
+    let mut command = git_command();
+    command
+        .args(args)
+        .current_dir(started["cwd"].as_str().unwrap());
+    for var in ["GATHR_AGENT_TOKEN", "GATHR_PUSH_URL"] {
+        match started[var].as_str() {
+            Some(value) => command.env(var, value),
+            None => command.env_remove(var),
+        };
+    }
+    std::thread::spawn(move || {
+        let out = command.output().unwrap();
+        (
+            out.status.success(),
+            String::from_utf8_lossy(&out.stderr).into(),
+        )
+    })
+}
+
 /// Gathr's hook (0029), asked as Claude Code asks it before `tool`, with the engine's `token`.
 pub fn hook(port: u16, token: &str, tool: &str, input: Value) -> Response {
     hook_at(port, "/hook", token, tool, input)

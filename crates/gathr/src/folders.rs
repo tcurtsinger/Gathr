@@ -16,7 +16,7 @@ pub mod prs;
 pub const SETTING: &str = "agent_folder";
 /// Where a chat with no project keeps its work, as a project would.
 const NO_PROJECT: &str = "Chats";
-const SHARED: &str = "Shared";
+pub const SHARED: &str = "Shared";
 /// Longer names make deep worktree paths, which Windows tools still trip on past 260 characters.
 const LONGEST: usize = 40;
 

@@ -42,6 +42,14 @@ test('a task with no giver names Gathr only when it is a question for the person
   expect(meta()).toBe('Gathr');
 });
 
+test('a look-into task says so beside its number', async () => {
+  const number = () => [...document.querySelectorAll('.task-number')].at(-1)?.textContent;
+  await fields(task({ look_into: true, what: 'Survey tag libraries' }));
+  expect(number()).toBe('Task #12 · Look into');
+  await fields(task({ number: 13 }));
+  expect(number()).toBe('Task #13');
+});
+
 test('a held task shows its report and what it waits on, each once', async () => {
   const held = task({
     state: 'held',

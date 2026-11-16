@@ -117,6 +117,7 @@ fn a_task_given_by_tool_runs_under_the_turn_that_gave_it_and_its_giver_hears_bac
     let lead_token = lead_turn(&team, &data.0, 0);
     let port = team.service.info.port;
     let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
+    common::fix_it(port, &lead_token);
     let given = text(&call_tool(
         port,
         &lead_token,
@@ -214,6 +215,7 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
     let team = team(&data.0, &twice(&data.0));
     let lead_token = lead_turn(&team, &data.0, 0);
     let port = team.service.info.port;
+    common::fix_it(port, &lead_token);
     let ask = json!({ "to": "ann", "what": "Write the notes" });
     text(&call_tool(
         port,
@@ -276,6 +278,7 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
         .send("POST", &path, json!({ "text": "Plan it" }));
     assert_eq!(sent.status, 200, "{}", sent.body);
     let lead_there = token(&data.0, 2);
+    common::fix_it(port, &lead_there);
     let ask = json!({ "to": "ann", "what": "Read the notes" });
     let given = text(&call_tool(
         port,
@@ -301,6 +304,7 @@ fn a_reason_ending_a_sentence_is_answered_with_one_full_stop() {
     let team = team(&data.0, &twice(&data.0));
     let lead_token = lead_turn(&team, &data.0, 0);
     let port = team.service.info.port;
+    common::fix_it(port, &lead_token);
     let ask = json!({ "to": "ann", "what": "Write the notes" });
     text(&call_tool(
         port,
@@ -357,6 +361,7 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
     assert!(refused.contains("isn't a file in your folder"), "{refused}");
 
     // Ann's ask reaches the lead first, never the person's list.
+    common::fix_it(port, &lead_token);
     let gave = json!({ "to": "Ann", "what": "Word the banner" });
     text(&call_tool(
         port,
@@ -627,6 +632,7 @@ fn a_turn_whose_task_is_cancelled_then_restarted_still_stops() {
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     let lead = common::first_token(&data.0);
+    common::fix_it(service.info.port, &lead);
     let ask = json!({ "to": "Ann", "what": "Notes" });
     text(&call_tool(
         service.info.port,
@@ -702,6 +708,7 @@ fn a_clean_review_wakes_nobody_and_its_end_is_a_line_in_the_chat() {
     let port = team.service.info.port;
     let lead = lead_turn(&team, &data.0, 0);
     let fix = json!({ "to": "Ann", "what": "Fix the summary", "pr": 85 });
+    common::fix_it(port, &lead);
     let given = text(&call_tool(port, &lead, "give_task", common::briefed(fix)));
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
     // A task given mid-turn starts its owner's turn at once, so several turns hold together and
@@ -845,6 +852,7 @@ fn give_task_outside_a_repository_never_asks_github_for_its_prs() {
     let sent = service.send("POST", &path, json!({ "text": "Plan it", "agent": lead }));
     assert_eq!(sent.status, 200, "{}", sent.body);
     let token = common::first_token(&data.0);
+    common::fix_it(service.info.port, &token);
     let given = call_tool(
         service.info.port,
         &token,
@@ -874,6 +882,7 @@ fn friction_an_agent_reports_is_kept_by_gathr_and_listed() {
     let team = team(&data.0, &twice(&data.0));
     let lead = lead_turn(&team, &data.0, 0);
     let port = team.service.info.port;
+    common::fix_it(port, &lead);
     let ask = json!({ "to": "ann", "what": "Write the notes" });
     text(&call_tool(port, &lead, "give_task", common::briefed(ask)));
     let ann = token(&data.0, 1);

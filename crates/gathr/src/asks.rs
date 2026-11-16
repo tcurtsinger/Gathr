@@ -8,6 +8,7 @@ use serde::Serialize;
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
+use crate::tasks::{Start, plan_wait};
 use crate::team::Role;
 
 /// How Gathr's line for a repair whose work is in begins.
@@ -24,12 +25,15 @@ pub struct Ask {
     pub by: Option<String>,
     /// The lead's turn that sized it last.
     pub sized_in: Option<String>,
+    /// Gathr refused or caught something of it (0063): an unsized ask's line shows from then.
+    pub held: bool,
 }
 
 /// An ask has open work while an agent's task of it isn't done or cancelled, a turn of it is
 /// queued or running, or its plan is open: checked, waiting on the person or sent back (0062). The
 /// person's own questions don't count: Gathr never stale-cancels them.
-const OPEN: &str = "(EXISTS (SELECT 1 FROM tasks t WHERE t.ask_id = a.id AND t.owner IS NOT NULL
+pub(crate) const OPEN: &str =
+    "(EXISTS (SELECT 1 FROM tasks t WHERE t.ask_id = a.id AND t.owner IS NOT NULL
          AND t.state NOT IN ('done', 'cancelled'))
      OR EXISTS (SELECT 1 FROM turns u WHERE u.ask_id = a.id
          AND u.status IN ('queued', 'waiting_sign_in', 'running'))
@@ -37,7 +41,8 @@ const OPEN: &str = "(EXISTS (SELECT 1 FROM tasks t WHERE t.ask_id = a.id AND t.o
          AND (v.decided IS NULL OR v.decided = 'sent_back')
          AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
-const ASK: &str = "SELECT a.id, m.body, a.size, a.sized_by, a.sized_in FROM asks a LEFT JOIN messages m ON m.id = a.id";
+const ASK: &str = "SELECT a.id, m.body, a.size, a.sized_by, a.sized_in, a.held_ts IS NOT NULL
+                   FROM asks a LEFT JOIN messages m ON m.id = a.id";
 
 fn refused(why: impl Into<String>) -> Error {
     Error::Refused(why.into())
@@ -130,15 +135,15 @@ struct Joined {
 }
 
 /// The chat's Supervisor sizes an ask, or makes a message that joined another an ask of its own:
-/// what to tell it.
-pub fn size(conn: &mut Connection, s: &Sizing) -> Result<String, Error> {
+/// what to tell it, and the turns of the tasks its change puts back in line (0063).
+pub fn size(conn: &mut Connection, s: &Sizing) -> Result<(String, Vec<Start>), Error> {
     let tx = conn.transaction()?;
     let said = size_in(&tx, s)?;
     tx.commit()?;
     Ok(said)
 }
 
-fn size_in(tx: &Transaction, s: &Sizing) -> Result<String, Error> {
+fn size_in(tx: &Transaction, s: &Sizing) -> Result<(String, Vec<Start>), Error> {
     if !matches!(s.size, "repair" | "new") {
         return Err(refused(format!(
             "`{}` isn't a size: give repair or new.",
@@ -211,7 +216,12 @@ fn size_in(tx: &Transaction, s: &Sizing) -> Result<String, Error> {
 }
 
 /// The lead sizes an ask: the person's size stands.
-fn sized(tx: &Transaction, s: &Sizing, ask: &str, turn: &str) -> Result<String, Error> {
+fn sized(
+    tx: &Transaction,
+    s: &Sizing,
+    ask: &str,
+    turn: &str,
+) -> Result<(String, Vec<Start>), Error> {
     let (was, by): (Option<String>, Option<String>) = tx.query_row(
         "SELECT size, sized_by FROM asks WHERE id = ?1",
         [ask],
@@ -219,7 +229,7 @@ fn sized(tx: &Transaction, s: &Sizing, ask: &str, turn: &str) -> Result<String, 
     )?;
     let title = title(tx, ask)?;
     if was.as_deref() == Some(s.size) {
-        return Ok(format!("\"{title}\" is already {}.", s.size));
+        return Ok((format!("\"{title}\" is already {}.", s.size), Vec::new()));
     }
     if let (Some("person"), Some(was)) = (by.as_deref(), was.as_deref()) {
         return Err(refused(format!(
@@ -233,7 +243,8 @@ fn sized(tx: &Transaction, s: &Sizing, ask: &str, turn: &str) -> Result<String, 
     resized(s.chat, (ask, s.size, was.as_deref()), s.agent, s.trace)
         .attr("gathr.turn.id", turn)
         .insert(tx)?;
-    Ok(format!("Sized \"{title}\" as {}.", s.size))
+    let (_, starts) = plan_wait::resized(tx, ask, s.trace)?;
+    Ok((format!("Sized \"{title}\" as {}.", s.size), starts))
 }
 
 /// A message that joined another ask becomes one of its own. The turn it opened moves with it,
@@ -245,7 +256,7 @@ fn split(
     message: &str,
     turn: &str,
     j: Joined,
-) -> Result<String, Error> {
+) -> Result<(String, Vec<Start>), Error> {
     let was: Option<String> =
         tx.query_row("SELECT size FROM asks WHERE id = ?1", [&j.from], |r| {
             r.get(0)
@@ -308,11 +319,13 @@ fn split(
         .attr("gathr.task.count", tasks)
         .attr("gathr.turn.id", turn)
         .insert(tx)?;
+    let (_, starts) = plan_wait::resized(tx, message, s.trace)?;
     let title = title(tx, message)?;
-    Ok(format!(
+    let said = format!(
         "Made message {message} an ask of its own and sized \"{title}\" as {}.",
         s.size
-    ))
+    );
+    Ok((said, starts))
 }
 
 /// `gathr.ask.resized`. Only the person's change from repair to new is a correction.
@@ -334,8 +347,14 @@ fn resized(
         .attr("gathr.ask.correction", correction)
 }
 
-/// The person changes an ask's size: the ask as the chat's tasks list has it.
-pub fn resize(conn: &mut Connection, ask: &str, size: &str, trace: &str) -> Result<Ask, Error> {
+/// The person changes an ask's size: the ask as the chat's tasks list has it, and the turns that
+/// follow: its tasks back in line, and its agent told (0063).
+pub fn resize(
+    conn: &mut Connection,
+    ask: &str,
+    size: &str,
+    trace: &str,
+) -> Result<(Ask, Vec<Start>), Error> {
     let tx = conn.transaction()?;
     let found: Option<(String, Option<String>)> = tx
         .query_row("SELECT chat_id, size FROM asks WHERE id = ?1", [ask], |r| {
@@ -347,16 +366,20 @@ pub fn resize(conn: &mut Connection, ask: &str, size: &str, trace: &str) -> Resu
         return Err(refused(format!("`{size}` isn't a size: repair or new")));
     }
     crate::archive::refuse_archived(&tx, &chat)?;
+    let mut starts = Vec::new();
     if was.as_deref() != Some(size) {
         tx.execute(
             "UPDATE asks SET size = ?2, sized_by = 'person', sized_ts = ?3 WHERE id = ?1",
             params![ask, size, now_us()],
         )?;
         resized(&chat, (ask, size, was.as_deref()), "person", trace).insert(&tx)?;
+        let (moved, released) = plan_wait::resized(&tx, ask, trace)?;
+        starts.extend(released);
+        starts.extend(plan_wait::told(&tx, ask, (size, was.as_deref()), &moved)?);
     }
     let ask = read(&tx, ask)?;
     tx.commit()?;
-    Ok(ask)
+    Ok((ask, starts))
 }
 
 /// Says "Fixed" once for each repair of the chat whose work is in: a work task of it done, every
@@ -421,7 +444,7 @@ fn line(t: &crate::tasks::Task) -> String {
 }
 
 /// The ask's title: the first line of the message that started it, as a chat's title is made.
-fn title(conn: &Connection, ask: &str) -> Result<String, Error> {
+pub(crate) fn title(conn: &Connection, ask: &str) -> Result<String, Error> {
     let body: Option<String> = conn
         .query_row("SELECT body FROM messages WHERE id = ?1", [ask], |r| {
             r.get(0)
@@ -442,6 +465,7 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Ask> {
         size: r.get(2)?,
         by: r.get(3)?,
         sized_in: r.get(4)?,
+        held: r.get(5)?,
     })
 }
 

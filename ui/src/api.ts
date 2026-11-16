@@ -126,6 +126,8 @@ export interface Task {
   round?: string | null;
   /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
   kind: 'work' | 'review' | 'person' | 'person_request';
+  /** A work task that looks into something and changes no project file. */
+  look_into?: boolean;
   what: string;
   /** Why it was given, and its details. */
   why?: string | null;
@@ -251,6 +253,8 @@ export interface Ask {
   by: string | null;
   /** The lead's turn that sized it last. */
   sized_in: string | null;
+  /** Gathr held something of it: a building give, a write or a push refused. */
+  held: boolean;
 }
 
 export type TaskField = 'what' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';

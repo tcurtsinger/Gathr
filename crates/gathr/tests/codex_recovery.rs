@@ -479,6 +479,7 @@ fn lead_gives_ann_a_task(
     );
     assert_eq!(sent.status, 200, "{}", sent.body);
     let ask = json!({"to":"Ann","what":"Write the notes"});
+    common::fix_it(service.info.port, &first_token(data));
     let given = call_tool(
         service.info.port,
         &first_token(data),

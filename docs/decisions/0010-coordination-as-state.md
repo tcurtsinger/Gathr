@@ -168,7 +168,7 @@ States per scope: `running`, `pausing` (paused, but turns or commands still run)
 
 ## Plans and plan checks
 
-Amended by [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): where this section differs from it, 0062 stands.
+Amended by [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): where this section differs from it, 0062 stands. Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): a building give is refused, and the project's files are held, until the plan is approved.
 
 A plan is a record with versions and no file. Its state is read from its rows and its check, never stored apart: `checking`, `revising`, `waiting` on the person, then `approved` or `dropped`; an older version is replaced.
 
@@ -176,9 +176,9 @@ A plan is a record with versions and no file. Its state is read from its rows an
 - The Supervisor answers every finding in its next version, with a reason where it stands (`answers`). Only the one who objected re-checks it, and only those points.
 - If the check stalls (a checker's turn fails, or 10 minutes pass), the plan reaches the person anyway, saying who didn't finish.
 - On the person's card: who checked it and what changed because of it.
-- A plan is written with the `plan` tool, and on the person's Approve each part becomes a task, word for word. Giving two or more tasks no longer makes a plan: the size of the ask does ([0061](0061-every-ask-has-a-size.md)). Nothing yet holds a building give while a plan is open (part I).
+- A plan is written with the `plan` tool, and on the person's Approve each part becomes a task, word for word. Giving two or more tasks no longer makes a plan: the size of the ask does ([0061](0061-every-ask-has-a-size.md)). A building give is refused while its ask has no approved plan ([0063](0063-building-waits-for-a-new-asks-plan.md)).
 - Each plan keeps its own record until it's approved or dropped. A second plan never replaces the first.
-- In plan mode the Supervisor may start read-only side jobs and write its own notes; changes to the project wait for Build.
+- While an ask has no approved plan, its held turns may write their own notes, in their own folder and Shared, but not change the project: there is no plan mode, a hold on the turn does it ([0063](0063-building-waits-for-a-new-asks-plan.md)).
 - A member who finds the plan wrong for its part says so (`blocked`, with evidence) before building on it.
 
 ## Hand-offs

@@ -1,0 +1,112 @@
+# 0063: Building waits until a new ask's plan is approved; a repair goes
+
+Status: accepted (owner, 2026-11-14, with Stage 3's spec, part I; its detail and its departures, 2026-11-15, "Approve I"; the answer on what the person sees of held work, "Plan line only"). Date: 2026-11-15.
+
+Built: partly. The first of part I's two PRs is built: the one rule, the refusal of a held turn's building gives, Claude Code's worktree writes refused in every mode (Full included) and every engine's pushes refused, tasks that wait for their plan, look-into tasks, and the "Plan" line for an ask Gathr held something of. Not built until the second: the catch at a held turn's end (a shell command's or Codex's change to the worktree, found from what git tracks), Gathr's line for it and the same on the plan's tab, and the agent told in its next turn. A held Codex turn's file writes and a held shell command's writes go on until then. Proof: `crates/gathr/tests/hold.rs`, `crates/gathr/tests/hold_flow.rs`, `crates/gathr/tests/words.rs`, `crates/gathr/src/db.rs`, `ui/src/chat/asks.test.ts`.
+
+Builds on [0010](0010-coordination-as-state.md), [0029](0029-approvals.md), [0034](0034-agent-folder.md), [0052](0052-a-quiet-chat-is-noticed.md), [0056](0056-gathr-records-which-words-opened-each-turn.md), [0059](0059-a-work-task-carries-a-complete-brief.md), [0061](0061-every-ask-has-a-size.md) and [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md). Amends each, below. Serves promise 2 of [the charter](../charter.md#the-promises), parts 2.2 and 2.6 of [the truth map](../truth-map.md), and part 10.3. Stage 3's part I.
+
+"Held" already names a task state (`State::Held`, `tasks/held.rs`: a task waiting on what it gave, a wait, a command or its merge). The hold of this part is never a task state. The new names are the module `gathr::hold`, the task module `tasks/plan_wait.rs`, the columns `tasks.look_into` and `asks.held_ts`, and the events `gathr.hold.*`. In the window and in what Gathr says to the person the sizes stay "Fix" and "Plan"; to agents they are `repair` and `new`. A **building task** is a task of kind `work` that isn't a look-into task.
+
+## The choice
+
+- **I0: one rule, read and never stored.** `gathr::hold::turn(conn, turn)` says whether a turn is held. In a chat with two or more agents, a turn is held when its task is a look-into task, or when its task isn't a building task and the ask it serves isn't a repair and has no approved plan ([0062](0062-a-plan-is-checked-and-approve-hands-it-out.md)'s Approve). An ask with no size counts as new. Each caller reads the rule when it acts, so Approve, a resize or a split changes the answer for a turn already running, at its next call. `gathr::hold::ask_held` is the ask's half, for tasks.
+- **I0.1: a building task's turn is never held.** Running work isn't stopped: the person has Pause and Stop for that. A building task's first turn is queued only by `ready`, which holds an unstarted task on a held ask (I1), and every other path queues a turn on a task that already ran. So a building task's turn exists only when the task was let through while its ask wasn't held, or started before the hold. What is held is the turns with no building task (the lead's, a member's direct ask, a check, a review) and every look-into task's.
+- **I0.2: what serves no ask isn't held.** A wake, a silent-turn or stale-tasks turn told to the lead, a PR handed to its reviewer, a compaction, a turn from before migration 0046 and the turn queued when the person answers Gathr's own question about a PR serve no ask. A chat with fewer than two agents holds nothing, a team chat that lost its members included: `size` refuses there, so the lead could never size its way out.
+- **I0.3: a member's turn on an unsized ask the person addressed to it is held** (0061's "@Ann fix the typo"). Only the Supervisor sizes; the person's "Just fix it." gets it going.
+- **I1: the give.** `tasks::give`, the agent's path (`give_task`), calls `hold::may_give` first. It refuses, in order and with a reference: `look_into` on a review; `look_into` with a `pr`; and a building give from a held turn. A look-into task and a review are taken. The words of a building refusal follow who gives and the ask's open plan (`plans::open_state`): the lead is told to size a repair, write the plan, wait for the check or the person's Approve, or write the next version; a member is told to give a look-into task or tell the lead what it found; a look-into task's turn is told it gives no building work. The repair clause shows only with no open plan and an ask the person hasn't sized. A refusal is recorded in a transaction of its own: `asks.held_ts` is set once, and `gathr.hold.refused` goes on the turn's trace with `gathr.hold.what` (`give`), `gathr.hold.why` (`look_into` or `unplanned`), `gathr.hold.plan` and `gen_ai.tool.name`. The two `look_into` refusals record nothing of the hold.
+- **I1.1: one gate for every building give.** `tasks::ready` makes a building task that hasn't started on a held ask `waiting`, with the reason `waits for its plan` (`plan_wait::PLAN_WAIT`) and no turn. Gathr's own gives (0053's fix, E's review, H's check task and Approve's tasks) share `give_in`, never pass `may_give`, and meet only this gate: a review and a check are never held, and Approve sets its plan approved before it gives. A started building task's own gives, a restart of an unstarted task, a dependant readied by `cascade` or `back_in_line` and a work task whose PR merged with no done report all wait for the plan on a held ask. A task that has started and is readied again runs, not held.
+- **I2: what a held turn can't write or push.** Claude Code's hook (`/hook`) reads the hold for a `Write`, `Edit` or `NotebookEdit` whose path is inside the turn's worktree (`approvals::writes_in`) and answers `deny` with a reason: the worktree is held, and notes and mock-ups go in the agent's own folder or Shared, which stay writable. The lead's reason ends with a clause by the ask's open plan, as the refusal in I1 does. A write outside the agent's folders still asks the person first, as before. A held turn's push is refused by the worktree's `pre-push` hook (`/hook/push`) before anyone is asked, for both engines: the script prints `Gathr: the push wasn't allowed (held: "<ask>" has no approved plan, so nothing is pushed for it)`. A look-into task's words say it changes nothing and pushes nothing.
+- **I2.1: Full gets the hook for the hold only.** In Full, `claude::command::settings` installs one `PreToolUse` entry with the matcher `Write|Edit|NotebookEdit`, the address `/hook?full` (`FULL_QUERY`), the same token header, a 30 s timeout and no `onFailure`. In `?full` the handler answers only the hold: a held write into the worktree gets the deny, and everything else gets `{}`, never `ask` and never `allow`. So Full never asks the person, a Gathr that can't answer lets Full's write go on, as Full does without the hook, and a held write is refused in every mode.
+- **I2.2: a hold that can't be read never blocks a write.** In Ask, Edits and Auto the hook is `onFailure: "block"`, so a failing read would block every write. The hook reads the hold as one writer job, bounded by `HOLD_READ` (5 s). A timeout, a writer that has stopped or a SQLite error reads as not held, the call goes on as before, and `gathr.hold.read` is recorded with `error("timeout")`, `error("writer")` or `error("sqlite")` and why. The refusal's record is a second writer job, not waited on.
+- **I2.3: Codex isn't refused.** Codex asks Gathr only where its sandbox makes it, and a file-change request carries only a grant root, so Gathr can't tell a worktree write from a note in the agent's own folder. A held Codex turn's pushes are refused (I2); its file writes go on until the second PR's catch. A shell command's writes, on either engine, go on the same way.
+- **I3: what stays writable.** The agent's own folder and Shared, reads, commands, the web and the engine's helpers are never held. `edit_task`, `cancel_task`, `ask_person`, `finish_task`, `plan`, `size`, `react`, `send_message`, `read_chat`, `wait` and `merge` aren't held either: they change Gathr's records, not the worktree.
+- **I4: a change of size.** `plan_wait::waits(conn, task)` is true for a work task, not a look-into task, with `started_ts` null, on a held ask. `plan_wait::resized(tx, ask, trace)` is called in each change's transaction, by `asks::sized` (the lead's `size`), `asks::split` (the new ask), `asks::resize` (the person) and Approve. Held now: each task of the ask that is `ready` has its queued turns marked `stop_why` and is set `waiting` with the reason; a `waiting` task is left to the `ready` gate; a started task and its turns aren't touched. Not held now: each task `waiting` with that reason goes `back_in_line`. `gathr.hold.wait` (`gathr.ask.id`, `gathr.hold.how`: `held` or `released`, `gathr.task.count`) is recorded when at least one task moved. `asks::size` and `asks::resize` return the turns of the tasks they put back in line, and the `size` tool and the resize route start them. When the runner takes a marked turn, whichever comes first stands: a resize first and the turn is dropped (`stopped`, its why) and its task stays `waiting`; a claim first and the task has started, so it runs.
+- **I4.1: a task waiting for its plan follows its plan, and wakes nobody.** In what a chat waits on it is a line of kind `plan_wait`, "#5 (Ann) waits for its plan", `Moves::Others`, on the Supervisor, in place of the `idle` line, from the moment it waits: its marked queued turn isn't listed while its agent's queue has yet to drop it. An `Others` line is neither moving nor news, so the quiet look never wakes the lead for it; with nothing else moving, the person is told after five minutes, by the line. The stale sweep marks such a task stale as any, but never cancels it while its ask has an open plan (`tasks/stale.rs` `movable`); with no plan written it is cancelled after the usual stale and cancel days, and its lead is told.
+- **I4.2: the agent is told of the person's change only,** by a turn of a new kind of Gathr's words, `Opened::Resized`, `"resized"`, `RESIZED = 1` ([0056](0056-gathr-records-which-words-opened-each-turn.md)), with the turn's `ask_id` set to the ask. To new, from a repair: to the Supervisor, when the ask has open work, with the tasks that wait for the plan named. To repair: to the agent the ask's message went to (the lead, or the member an "@" named), when Gathr held something of the ask or tasks went back in line, with those tasks named. The lead's own `size`, a split and Approve tell nobody.
+- **I5: a look-into task is a work task with a flag.** `give_task` takes `look_into: true` for a task that only looks into something: research, a feasibility check, options or mock-ups. The column `tasks.look_into` (migration 0048), serialized as `look_into` and left out when false. Its brief gains the line "This is a look-into task: don't change the project's files or push. Write what you make in your own folder or Shared, and name it or say what you found when you finish." (`BRIEF` goes from 2 to 3.) Its turns are held for its whole life, after Approve too. Its done report needs a note or a file as any work task's does, and names no PR: a `pr` is refused ("it names no PR"), so no review follows it.
+- **I6: what the person sees.** An unsized ask shows its size line, "Plan", once Gathr held something of it (`asks.held_ts`, set by the first refused building give, write or push), as it shows once the ask has a task: after the first reply of the ask's message's own turn below the message. Opened, it offers "Just fix it." and "Plan it with me first." ([0061](0061-every-ask-has-a-size.md)). The tasks answer's `asks[]` carries `held`. Gathr says nothing else in the chat for a refusal; the refused `give_task` shows as a failed step in the turn's work row. A task waiting for its plan reads "waits for its plan" in the task view; a look-into task reads "Task #12 · Look into" there, and its chip in the giver's work row "#12 Look into: <what>".
+
+## Why
+
+- A plan that the person approves is worth nothing if the same lead can hand the work out before it. The refusal says what to do instead, by the plan's state, so the lead isn't told to write a plan it has already written.
+- Running work isn't stopped by a hold. Holding a started task's turns would deny each write of every building task in flight on the day of the upgrade, and stop it worse than Stop. A building task's first turn is queued only through `ready`, so one gate keeps unstarted work from starting.
+- The hold is read where it is acted on, not stored, so a resize, a split or Approve changes it for a turn that is already running, and nothing can drift from the rows it reads.
+- Look-into tasks let a lead ask a member for what the plan needs, in the member's own session, with the same hold on its writes as the lead's. Held for its whole life, a look-into task still open after Approve can't build with no part and no size behind it.
+- Claude Code's hook and git's `pre-push` hook are the two places an engine lets Gathr refuse at the moment of the act. The rest is for the second PR to catch.
+
+## Different from the spec
+
+The owner approved each with the detail on 2026-11-15.
+
+- **A building task's turn is never held** (I0.1). The spec's rule holds by the ask a turn serves, which would hold a started task's turns once its ask became held, though its own I4 says running work isn't stopped.
+- **The refusal sits in `tasks::give`, not `give_in`** (I1). The spec's place would refuse E's review, 0053's fix, H's check task and Approve.
+- **Reviews pass the hold.** A review builds nothing, and a builder whose ask was made new mid-work still gets its PR reviewed.
+- **Gathr's own building gives, and a started building task's gives, wait for the plan; a held turn's are refused** (I1.1).
+- **The refusal's words follow the plan's state.**
+- **Full mode gets Gathr's hook, for held writes only** (I2.1). The spec leaves Full to the catch.
+- **The lead's own change to new, and a split, hold too, and tell nobody** (I4).
+- **To repair tells the agent the ask's message went to,** not always the lead, so a member's direct ask gets going.
+- **A task waiting for its plan never wakes the lead, and isn't stale-cancelled while its ask has an open plan** (I4.1).
+- **A chat with fewer than two agents holds nothing, and turns that serve no ask aren't held** (I0.2).
+- **An approved plan frees the ask's turns,** a second plan's included: a lead can give building work beyond the first plan while a second one is drafted. Holding until the newest plan is approved is turned down.
+- **A look-into task's report names no PR** (I5).
+- **A hold read that fails lets the write or push go on** (I2.2).
+- **No line for a refusal.** The owner's answer, "Plan line only".
+- **The first PR leaves out the catch** (see Built). The spec's I2a and I2b, with the held-turn table and its migration, are the second PR's.
+
+## As built
+
+Where the code differs from the detail the owner approved, the code stands.
+
+- **`back_in_line` stays private** to `tasks`; `tasks/plan_wait.rs` reaches it as `super::back_in_line`.
+- **`Held.look_into` already includes the chat having two or more agents,** so `Held::held()` alone answers the rule for a one-agent chat.
+- **`write_held` returns the deny reason and a `Refusal`,** with no tool name; the hook fills `gen_ai.tool.name` for a write. A push refusal has no `gen_ai.tool.name`.
+- **The hook tells Shared from the agent's own folder by name** (`folders::SHARED` is public), since either of the agent's other two folders can be missing. A missing one reads "your own folder" or "Shared" in the deny.
+- **`gathr.hold.wait` is recorded only when a task moved,** not at every call: Approve calls `resized` every time.
+- **A change to new tells the lead only when the size was repair.** An unsized ask the person makes new tells nobody.
+- **The turns Approve and `asks::size` release are the ones `resized` returns.** `asks::size` drops the list of tasks moved and returns the turns.
+- **The hook's refusal record is a second writer job** that is spawned and not awaited; a failure to record it is dropped. `gathr.hold.read` carries `gen_ai.agent.id`.
+- **`give_task`'s answer for a task waiting with no `after`** reads its reason: "Task #3 for Ann: waits for its plan.", not "waiting on ".
+- **The look-into refusal for a PR** sits after the rule that a task about PR #n names that PR.
+- **`ready` has seven callers in `tasks.rs`** (`give_in`, `restart`, `recover`, `engine_gone`, `cascade` twice and `back_in_line`), and one each in `held.rs`, `person.rs` and `prs.rs`.
+- **The tests this PR changes beyond the detail:** a lead's give in a team chat after the person writes is now refused, so tests that need a building give call `common::fix_it` (the lead sizes the ask a repair) once before the first give; `tests/approvals.rs` asserts Full's one hook entry (its test is renamed `..._full_is_asked_nothing`, in the truth map's row 9.3 too); `tests/sizes.rs` expects `"held": false` on an ask; `push_as_engine` moved from `tests/approvals.rs` to `tests/common/mod.rs`.
+
+## Said plainly
+
+- **From the first day every unsized ask holds building.** Until part K the lead isn't told to size by its role text: the refusal and the lead's deny say "If it is a repair, size it repair with size", and the person's line says "Plan" with "Just fix it." one click away.
+- **A building give from a turn that serves no ask** (a wake, a silent-turn or stale-tasks turn) isn't held, and its task serves no ask. `gathr diag query "SELECT count(*) FROM tasks t JOIN turns u ON u.id = t.given_in JOIN chats c ON c.id = t.chat_id WHERE t.kind = 'work' AND t.look_into = 0 AND t.ask_id IS NULL AND u.opened_by IN ('wake', 'silent', 'stale') AND EXISTS (SELECT 1 FROM asks a WHERE a.chat_id = c.id)" --data <folder>` counts them. A task waiting for its plan never sets off such a wake.
+- **A building task readied before the upgrade** on an unsized or new ask isn't moved: its queued brief runs as before, and its writes and pushes go on. No backfill.
+- **A building task that has started runs, not held, on a held ask:** when its ask is made new while it works, and when it is readied again (a restart, a held task released, a carry-on). Only its unstarted tasks and sub-tasks wait for the plan.
+- **A hold read that fails or takes over 5 s** lets that write or push go on, recorded as `gathr.hold.read`.
+- **Codex's file writes and any shell command's writes are not refused** (I2.3), and nothing catches them until the second PR, so the rule in AGENTS.md stays as a process rule until then.
+- **Not verified:** that Claude Code honours a `PreToolUse` deny in every mode, Full included, and gives the model its reason (documented in Claude Code's hooks reference; the replay stand-in never calls the hook, and the tests call `/hook` directly); that a Full hook with no `onFailure` lets a write go on when Gathr doesn't answer; that an agent then writes where it is told (part K measures it); that Codex asks nothing for a write inside its worktree in Edits and Auto; the 5 s bound against a real slow writer (the outcome mapping is tested, not an actual timeout through the service). The window was not looked at rendered, and `gathr-app` was not run: the screenshots and timings the detail asks for are not in this PR.
+- **The refusals by kind:** `gathr diag query "SELECT attrs ->> '$.\"gathr.hold.what\"' AS what, count(*) AS n FROM event_log WHERE name = 'gathr.hold.refused' GROUP BY 1" --data <folder>`.
+
+## Turned down
+
+- **Plan mode, a button or a setting.**
+- **The engines' own plan modes.**
+- **A held thread run read-only** (the owner's answer).
+- **A new task kind for look-into tasks,** or **a new task state for a plan wait.**
+- **The refusal in `give_in`.**
+- **Holding reviews.**
+- **Holding a started building task's turns.**
+- **Storing whether a turn is held,** or **caching it in the engine's pass.**
+- **Refusing Codex's writes blind in Ask mode.**
+- **Leaving Full without Gathr's hook.**
+- **A line per refusal.**
+- **Waking the lead for tasks that wait for a plan.**
+- **Holding until the newest plan is approved.**
+- **Holding turns that serve no ask.**
+- **A backfill of task states.**
+
+## Amends
+
+- [0010](0010-coordination-as-state.md)'s Plans and plan checks: a building give is refused while an ask has no approved plan (the sentence "Nothing yet holds a building give while a plan is open" goes), and the project's changes wait for the plan by a hold on the turn, not by a plan mode.
+- [0029](0029-approvals.md): in Full, Claude Code asks Gathr's hook too, for file writes only and with no `onFailure`; it answers only the hold, never an ask. In the other modes the hook also reads the hold before a write inside the worktree and before a push.
+- [0034](0034-agent-folder.md): a held turn's worktree is refused to it; its own folder and Shared aren't.
+- [0052](0052-a-quiet-chat-is-noticed.md): a task waiting for its plan follows its plan, wakes nobody, and isn't stale-cancelled while its ask has an open plan.
+- [0059](0059-a-work-task-carries-a-complete-brief.md): a task readied on a held ask waits for its plan, and `give_task` takes `look_into`.
+- [0061](0061-every-ask-has-a-size.md): an unsized ask's line shows once Gathr held something of it, and `size` and a resize hold or release its tasks.
+- [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md): Approve releases the ask's tasks that wait for its plan.

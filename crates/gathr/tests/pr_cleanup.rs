@@ -82,6 +82,7 @@ fn room() -> Room {
     assert_eq!(sent.status, 200, "{}", sent.body);
     let lead_start = nth(&data.0.join("env.jsonl"), 0);
     let token = lead_start["GATHR_AGENT_TOKEN"].as_str().unwrap();
+    common::fix_it(service.info.port, token);
     let given = call_tool(
         service.info.port,
         token,

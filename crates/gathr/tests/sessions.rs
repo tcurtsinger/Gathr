@@ -90,6 +90,7 @@ fn room(data: &Path, recording: &Path, engine: &str, more: &[(&str, &Path)]) -> 
         ann,
     };
     say(&room, &room.lead, "Plan it");
+    common::fix_it(room.service.info.port, &room.lead_token());
     room
 }
 

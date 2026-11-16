@@ -347,6 +347,7 @@ fn a_plan_is_refused_saying_what_to_do() {
             after: &[],
             pr: None,
             in_passing: false,
+            look_into: false,
         };
         let n = tasks::give(&mut conn, &g, T).unwrap().0.number;
         tasks::cancel(&mut conn, Some("mira"), n, "not needed", T).unwrap();

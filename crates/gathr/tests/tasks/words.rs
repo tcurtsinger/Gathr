@@ -40,6 +40,7 @@ fn work_for(owner: &'static str, kind: Kind, what: &'static str, pr: Option<i64>
         after: &[],
         pr,
         in_passing: false,
+        look_into: false,
     }
 }
 

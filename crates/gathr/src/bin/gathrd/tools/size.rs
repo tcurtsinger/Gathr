@@ -52,6 +52,11 @@ impl Tools {
                 gathr::asks::size(c, &sizing)
             })
             .await;
+        // The tasks a repair releases from waiting for their plan start (0063).
+        let sized = sized.map(|(said, starts)| {
+            self.chats.start(starts);
+            said
+        });
         Ok(self.respond(&caller, "size", started, sized).await)
     }
 }

@@ -93,6 +93,7 @@ fn a_secret_in_a_tasks_reason_comes_back_hidden() {
     let (service, chat, _) = team(&data.0, &twice(&data.0), &[]);
     let lead = lead_turn(&service, &data.0, &chat, 0);
     let port = service.info.port;
+    common::fix_it(port, &lead);
     give(port, &lead, "ann", "Write the notes");
     let ann = token(&data.0, 1);
     let blocked = json!({ "how": "blocked", "note": "on ghp_madeup0123456789abcdef0123456789" });
@@ -149,6 +150,8 @@ fn another_chats_events_dont_come_back() {
 
     let lead_a = lead_turn(&service, &data.0, &chat_a, 0);
     let lead_b = lead_turn(&service, &data.0, &chat_b, 1);
+    common::fix_it(port, &lead_a);
+    common::fix_it(port, &lead_b);
     give(port, &lead_b, "cy", "B's own work");
     give(port, &lead_a, "ann", "A's own work");
     let ref_b = forced_failure(port, &lead_b);

@@ -86,6 +86,10 @@ const OPEN: &str = "
         OR EXISTS (SELECT 1 FROM background b JOIN turns u ON u.id = b.turn_id WHERE u.task = t.number)
         OR EXISTS (SELECT 1 FROM tasks c WHERE (c.parent = t.number OR c.request = t.number)
                    AND c.state IN ('waiting', 'ready', 'working', 'held'))
+        OR (t.state = 'waiting' AND t.reason = 'waits for its plan' AND EXISTS (
+            SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.ask_id = t.ask_id
+            AND (v.decided IS NULL OR v.decided = 'sent_back')
+            AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))
     FROM tasks t JOIN chats ch ON ch.id = t.chat_id
     WHERE t.state NOT IN ('done', 'cancelled') AND ch.archived_ts IS NULL
       AND NOT (t.state = 'waiting' AND EXISTS (
