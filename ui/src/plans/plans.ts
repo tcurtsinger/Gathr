@@ -1,4 +1,4 @@
-import type { Message, PlanSummary, PlanVersionSummary } from '../api';
+import type { Message, PlanPart, PlanSummary, PlanVersionSummary } from '../api';
 import type { EventLine } from '../chat/messages';
 import type { ChatState } from '../chat/state';
 import type { Team } from '../chat/team';
@@ -10,6 +10,38 @@ export function versionOf(plans: PlanSummary[], message: string) {
     if (version) return { plan, version };
   }
   return undefined;
+}
+
+/** A part's fields the person reads, each compared on its own; `after` names parts and tasks both. */
+export type PartField = 'owner' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';
+
+export type PartMark =
+  | { mark: 'New' }
+  | { mark: 'Changed' | 'Unchanged'; was: PlanPart; changed: PartField[] };
+
+/**
+ * A version's parts against the version before's (0062 H2.6), matched by trimmed `what`, which the `plan`
+ * tool keeps unique: one mark per part, in order, and the parts of the version before that went.
+ */
+export function marks(parts: PlanPart[], before: PlanPart[]) {
+  const what = (list: PlanPart[]) => new Map(list.map((p) => [p.n, p.what.trim()]));
+  const [now, then] = [what(parts), what(before)];
+  // The parts it comes after by their what, so a move in order isn't a change, then its tasks.
+  const after = (p: PlanPart, names: Map<number, string>) => {
+    const named = p.after.map((n) => names.get(n)).sort();
+    return JSON.stringify([named, [...p.after_tasks].sort()]);
+  };
+  const marked = parts.map((p): PartMark => {
+    const was = before.find((b) => b.what.trim() === p.what.trim());
+    if (!was) return { mark: 'New' };
+    const fields: PartField[] = ['owner', 'why', 'done', 'proof', 'where'];
+    const changed = fields.filter((f) => p[f] !== was[f]);
+    if (p.size !== was.size || p.lines !== was.lines) changed.push('size');
+    if (after(p, now) !== after(was, then)) changed.push('after');
+    return { mark: changed.length ? 'Changed' : 'Unchanged', was, changed };
+  });
+  const removed = before.filter((b) => !parts.some((p) => p.what.trim() === b.what.trim()));
+  return { parts: marked, removed };
 }
 
 /** "1 part", "9 parts". */

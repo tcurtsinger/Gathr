@@ -1,8 +1,8 @@
-// The plan's tab (0062 H5.3, H5.4), first PR: the plain tab, read from GET /api/plans/{plan}, with Approve,
-// Send back and Drop at its foot.
+// The plan's tab (0062 H5.3, H5.4), read from GET /api/plans/{plan}: the check with its Findings, Answers and
+// Questions, parts that open one at a time with their marks, and Approve, Send back and Drop at its foot.
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { Plan, PlanPart, PlanVersion } from '../api';
+import type { Plan, PlanPart, PlanSummary, PlanVersion } from '../api';
 import type { LiveEvent } from '../live';
 import { PlanTab } from './PlanTab';
 
@@ -92,7 +92,10 @@ const tab = (shownVersion = 2) => (
   <PlanTab chat="c" plan={3} version={shownVersion} name={name} onVersion={() => {}} onReference={() => {}} />
 );
 
-test('a waiting plan shows its version, title, the ask, its check and every part whole, in order', async () => {
+/** A part's brief as the open part shows it: each label and its words, in order. */
+const rows = (dl: Element | null) => [...(dl?.children ?? [])].map((e) => e.textContent).join(' | ');
+
+test('a waiting plan shows its version, title, the ask, its check and every part, in order', async () => {
   serve(plan());
   const screen = await render(tab());
   const page = screen.getByRole('region', { name: 'Plan' });
@@ -110,18 +113,132 @@ test('a waiting plan shows its version, title, the ask, its check and every part
   const at = order.map((w) => words.indexOf(w));
   expect(at.every((x) => x >= 0)).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
-  const second = page.getByRole('listitem').nth(1);
-  for (const line of [
-    'Made-up part 2',
-    'Bo · after part 1, #41',
-    'Why: Why 2',
-    'Done when: Done 2',
-    'Proof: Proof 2',
-    'Where: room/tags-2',
-    'Size: src/tags2.rs, about 20 lines',
-  ])
-    await expect.element(second.getByText(line, { exact: true })).toBeVisible();
   expect(page.getByRole('listitem').elements()).toHaveLength(9);
+  const second = page.getByRole('listitem').nth(1);
+  await second.getByRole('button', { name: 'Made-up part 2' }).click();
+  await expect.element(second.getByText('Bo', { exact: true })).toBeVisible();
+  expect(rows(second.element().querySelector('dl'))).toBe(
+    'Why | Why 2 | Done when | Done 2 | Proof | Proof 2 | Where | room/tags-2 | Size | src/tags2.rs, about 20 lines' +
+      ' | After | part 1, #41',
+  );
+});
+
+test('a click opens one part to its fields and closes the one open', async () => {
+  serve(plan());
+  const screen = await render(tab());
+  const [second, third] = [1, 2].map((i) => screen.getByRole('listitem').nth(i));
+  await expect.element(second.getByText('Why 2')).not.toBeInTheDocument();
+  await second.getByRole('button', { name: 'Made-up part 2' }).click();
+  await expect.element(second.getByText('Why 2')).toBeVisible();
+  await expect
+    .element(second.getByRole('button', { name: 'Made-up part 2' }))
+    .toHaveAttribute('aria-expanded', 'true');
+  await third.getByRole('button', { name: 'Made-up part 3' }).click();
+  await expect.element(third.getByText('Why 3')).toBeVisible();
+  await expect.element(second.getByText('Why 2')).not.toBeInTheDocument();
+});
+
+test('choosing another version closes the open part', async () => {
+  serve(plan());
+  const screen = await render(tab(2));
+  await screen.getByRole('button', { name: 'Made-up part 2' }).click();
+  await expect.element(screen.getByText('Why 2')).toBeVisible();
+  await screen.rerender(tab(1));
+  await expect.element(screen.getByText('Plan · version 1')).toBeVisible();
+  expect(screen.getByRole('button', { expanded: true }).elements()).toHaveLength(0);
+});
+
+test("Check gains the version's Findings, the Answers to the version before's, and the ask's Questions", async () => {
+  const before = version(1, { decided: 'sent_back' });
+  const now = version(2, {
+    answers: [
+      { note: 1, changed: true, why: 'Moved the table' },
+      { note: 3, changed: false, why: 'The ask needs it' },
+    ],
+    check: {
+      task: 22,
+      by: 'bo',
+      state: 'blocked',
+      outcome: 'findings',
+      notes: [
+        { id: 5, kind: 'unasked', file: 'src/tags.rs', says: 'Made-up new extra' },
+        { id: 6, kind: 'suggestion', file: null, says: 'Made-up second idea' },
+      ],
+    },
+  });
+  const questions = [
+    { number: 7, what: 'Which notes get tags?', answer: 'All of them' },
+    { number: 8, what: 'Any colours?', answer: null },
+  ];
+  serve(plan({ versions: [before, now], questions }));
+  const screen = await render(tab());
+  await expect.element(screen.getByText('1 finding from Bo')).toBeVisible();
+  const fields = screen.getByRole('region', { name: 'Plan' }).element().querySelector('dl.task-fields');
+  expect(rows(fields)).toBe(
+    [
+      'Check',
+      '1 finding from Bo',
+      'Findings',
+      'Unasked · src/tags.rs: Made-up new extra',
+      'Answers',
+      'Wrong · src/notes.rs: Made-up wrong factChanged: Moved the table',
+      'Unasked · Made-up extraKept: The ask needs it',
+      'Questions',
+      'Which notes get tags?All of them',
+      'Any colours?Open',
+    ].join(' | '),
+  );
+});
+
+test('the parts carry Changed, New and Removed against the version before, and an open part its Was', async () => {
+  const older = Array.from({ length: 3 }, (_, i) => part(i + 1));
+  const newer = [
+    part(1),
+    { ...part(2), done: 'Done 2, with tests' },
+    { ...part(3), what: 'Made-up part 3, split' },
+  ];
+  serve(
+    plan({
+      versions: [version(1, { decided: 'sent_back', parts: older }), version(2, { parts: newer })],
+    }),
+  );
+  const screen = await render(tab());
+  const items = screen.getByRole('listitem');
+  await expect
+    .element(items.nth(0).getByRole('button', { name: 'Made-up part 1', exact: true }))
+    .toBeVisible();
+  await expect.element(items.nth(1).getByRole('button', { name: 'Made-up part 2 Changed' })).toBeVisible();
+  await expect.element(items.nth(2).getByRole('button', { name: 'Made-up part 3, split New' })).toBeVisible();
+  await expect.element(items.nth(3)).toHaveTextContent('Removed Made-up part 3');
+  await items.nth(1).getByRole('button', { name: 'Made-up part 2 Changed' }).click();
+  expect(rows(items.nth(1).element().querySelector('dl'))).toContain(
+    'Done when | Done 2, with tests | Was | Done 2 | Proof',
+  );
+  // The first version has none before it, so no marks.
+  await screen.rerender(tab(1));
+  await expect.element(screen.getByRole('button', { name: 'Made-up part 2', exact: true })).toBeVisible();
+  expect(screen.getByText('Removed').elements()).toHaveLength(0);
+});
+
+test("the tab's dot follows whether the plan waits on the person", async () => {
+  const waits = vi.fn();
+  serve(plan());
+  await render(
+    <PlanTab
+      chat="c"
+      plan={3}
+      version={2}
+      name={name}
+      onVersion={() => {}}
+      onReference={() => {}}
+      onWaits={waits}
+    />,
+  );
+  await expect.poll(() => waits.mock.lastCall).toEqual([true]);
+  serve(plan({ state: 'approved' }));
+  const approved = { id: 3, state: 'approved' } as PlanSummary;
+  for (const on of live) on({ type: 'tasks', chat: 'c', tasks: [], waits: [], asks: [], plans: [approved] });
+  await expect.poll(() => waits.mock.lastCall).toEqual([false]);
 });
 
 test('Approve sends the version shown', async () => {

@@ -480,9 +480,12 @@ pub(super) fn version_detail(conn: &Connection, version: i64) -> Result<Value, E
                 |r| r.get(0),
             )?;
             let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
+            // Findings stand once said, though a newer version or the person cancels the check
+            // after. A left still waiting on its turn when cancelled was never said: it was sent on.
             let outcome = match t.state {
                 State::Done => Some("agrees"),
                 State::Blocked if left => Some("findings"),
+                State::Cancelled if left && !sent => Some("findings"),
                 s if s.settled() => Some("unfinished"),
                 _ if sent => Some("late"),
                 _ => None,

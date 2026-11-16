@@ -2,10 +2,11 @@
 // lines as kind `version`, and Summary's round without the plan's check.
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { expect, test } from 'vitest';
-import type { Agent, Message, PlanSummary, Task, Turn } from '../api';
+import type { Agent, Message, PlanPart, PlanSummary, Task, Turn } from '../api';
 import { type Custom, toThread } from '../chat/messages';
 import { currentRound } from '../chat/plan';
 import { type ChatState, empty } from '../chat/state';
+import { marks } from './plans';
 
 const agents: Agent[] = ['Mira', 'Ann', 'Bo'].map((name) => ({
   id: name.toLowerCase(),
@@ -291,4 +292,65 @@ test("Summary's round leaves out the plan's check; a round of a done check alone
   expect(currentRound(state)?.steps.map((s) => s.task)).toEqual([1]);
   const checkOnly = { ...state, tasks: [state.tasks[1]] };
   expect(currentRound(checkOnly)).toBeUndefined();
+});
+
+const part = (n: number, what: string, more: Partial<PlanPart> = {}): PlanPart => ({
+  n,
+  owner: 'ann',
+  what,
+  why: `Why ${what.trim()}`,
+  done: `Done ${what.trim()}`,
+  proof: `Proof ${what.trim()}`,
+  where: 'room/tags',
+  size: 'src/tags.rs',
+  lines: 40,
+  after: [],
+  after_tasks: [],
+  task: null,
+  ...more,
+});
+
+// H2.6: a version's parts against the version before's, matched by trimmed `what`.
+test.each([
+  {
+    case: 'a renamed part reads Removed and New',
+    before: [part(1, 'Add the table'), part(2, 'Show tags')],
+    now: [part(1, 'Add the table'), part(2, 'Show the tags')],
+    marked: ['Unchanged', 'New'],
+    removed: ['Show tags'],
+  },
+  {
+    case: 'a part moved in order whose after names the same parts by what reads Unchanged',
+    before: [part(1, 'Add the table'), part(2, 'Show tags'), part(3, 'Test it', { after: [1, 2] })],
+    now: [part(1, 'Show tags'), part(2, 'Add the table '), part(3, 'Test it', { after: [2, 1] })],
+    marked: ['Unchanged', 'Unchanged', 'Unchanged'],
+    removed: [],
+  },
+  {
+    case: 'a changed done reads Changed',
+    before: [part(1, 'Add the table')],
+    now: [part(1, 'Add the table', { done: 'Tags are kept per note' })],
+    marked: ['Changed'],
+    removed: [],
+  },
+  {
+    case: 'a part with a new after_tasks reads Changed',
+    before: [part(1, 'Add the table')],
+    now: [part(1, 'Add the table', { after_tasks: [41] })],
+    marked: ['Changed'],
+    removed: [],
+  },
+])('marks: $case', ({ before, now, marked, removed }) => {
+  const m = marks(now, before);
+  expect(m.parts.map((p) => p.mark)).toEqual(marked);
+  expect(m.removed.map((p) => p.what)).toEqual(removed);
+});
+
+test("marks: Was is the version before's words for each field that differs, and only those", () => {
+  const m = marks([part(1, 'Add the table', { done: 'Tags are kept per note' })], [part(1, 'Add the table')]);
+  expect(m.parts[0]).toMatchObject({
+    mark: 'Changed',
+    changed: ['done'],
+    was: { done: 'Done Add the table' },
+  });
 });

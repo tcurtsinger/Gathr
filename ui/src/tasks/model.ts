@@ -1,4 +1,4 @@
-import type { PersonAnswer, PersonTask, Task, TaskField } from '../api';
+import type { PersonAnswer, PersonTask, ReviewNote, Task, TaskField } from '../api';
 import { began, list } from '../chat/team';
 
 /** Who asks a question no agent gave: Gathr itself, as the far end's stop does (0054). */
@@ -85,14 +85,34 @@ export function reviewedAt(task: Task): string | null {
 
 const kinds = { wrong: 'Wrong', unasked: 'Unasked', suggestion: 'Suggestion' };
 
-/** A review's notes, one line each: "Unasked · src/cache.rs: what it is" (0053). */
+/** A review's note in a line: "Unasked · src/cache.rs: what it is" (0053). */
+export const noteLine = (n: ReviewNote) => `${kinds[n.kind]} · ${n.file ? `${n.file}: ` : ''}${n.says}`;
+
+/** A review's notes, one line each. */
 export function noteLines(task: Task): string[] {
-  return (task.notes ?? []).map((n) => `${kinds[n.kind]} · ${n.file ? `${n.file}: ` : ''}${n.says}`);
+  return (task.notes ?? []).map(noteLine);
 }
 
 /** A task's size: "src/export.ts, about 120 lines". */
-export function sized(task: Task): string | null {
+export function sized(task: Pick<Task, 'size' | 'lines'>): string | null {
   return task.size ? `${task.size}, about ${task.lines} lines` : null;
+}
+
+/**
+ * A work task's brief as its view shows it, label and words, each with its field; `after` already named
+ * ("#41", "part 1"). A plan's part shows the same rows, as its task will carry them (0062 H5.4).
+ */
+export function briefRows(
+  task: Pick<Task, 'done' | 'proof' | 'where' | 'size' | 'lines'>,
+  after: string[],
+): [label: string, words: string | null | undefined, field: TaskField][] {
+  return [
+    ['Done when', task.done, 'done'],
+    ['Proof', task.proof, 'proof'],
+    ['Where', task.where, 'where'],
+    ['Size', sized(task), 'size'],
+    ['After', after.join(', '), 'after'],
+  ];
 }
 
 const fieldWords: Record<TaskField, string> = {

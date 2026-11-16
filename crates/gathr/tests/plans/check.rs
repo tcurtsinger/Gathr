@@ -392,6 +392,54 @@ fn a_check_left_with_findings_wakes_the_lead_and_the_next_version_answers_each()
     let (_, brief) = queued_on(&conn, next.check);
     samples::same("plan_check: again", &sampled(&conn, &brief));
     assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Cancelled);
+    let checks = checks_of(&conn, wrote.plan);
+    assert_eq!(
+        checks,
+        [
+            (
+                "findings".into(),
+                "The list query misses tags | Export isn't asked.".into()
+            ),
+            ("null".into(), String::new())
+        ],
+        "version 1's check objected, and being replaced doesn't undo that; version 2's is being checked"
+    );
+}
+
+/// Each version's check outcome as `GET /api/plans/<plan>` gives it, with what its notes say.
+fn checks_of(conn: &Connection, plan: i64) -> Vec<(String, String)> {
+    let plan = plans::get(conn, plan).unwrap().unwrap();
+    let versions = plan["versions"].as_array().unwrap();
+    let check = |v: &serde_json::Value| {
+        let notes = v["check"]["notes"].as_array().unwrap();
+        let says: Vec<&str> = notes.iter().map(|n| n["says"].as_str().unwrap()).collect();
+        (
+            v["check"]["outcome"].to_string().replace('"', ""),
+            says.join(" | "),
+        )
+    };
+    versions.iter().map(check).collect()
+}
+
+/// The person's cancel after findings: the check still objected and the lead still revises.
+#[test]
+fn a_check_cancelled_after_its_findings_still_has_them() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    let wrote = write_to(&mut conn, "c", "T", &one(), None);
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let turn = begin(&mut conn, wrote.check);
+    findings(&mut conn, wrote.check);
+    moved(&mut conn, (&turn, "bo"), Some(wrote.check), "done");
+    tasks::cancel(&mut conn, None, wrote.check, "Not needed", T).unwrap();
+    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Cancelled);
+    assert_eq!(
+        (
+            plan_state(&conn, "c", wrote.plan),
+            checks_of(&conn, wrote.plan)[0].0.as_str()
+        ),
+        (plans::State::Revising, "findings")
+    );
 }
 
 /// H4.11, H4.12.
@@ -499,6 +547,11 @@ fn a_check_is_ended_only_by_gathr_or_the_person() {
     );
     let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
     assert!(sent.is_some());
+    assert_eq!(
+        checks_of(&conn, wrote.plan),
+        [("unfinished".to_string(), String::new())],
+        "cancelled by the person with no report"
+    );
     let restart = format!("Task #{check} is a plan check: a new version gets a new check.");
     assert_eq!(
         refusal(tasks::restart(&mut conn, Some("mira"), check, T)),

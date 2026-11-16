@@ -214,6 +214,7 @@ export function App() {
   const planTab = (of: string, plan: Tabs['plan']) =>
     plan && {
       version: plan.version,
+      waits: plan.waits,
       view: (
         <PlanTab
           key={plan.id}
@@ -222,6 +223,7 @@ export function App() {
           version={plan.version}
           name={name}
           onVersion={(version) => setTab(of, () => ({ plan: { ...plan, version } }))}
+          onWaits={(waits) => setTab(of, (t) => ({ plan: t.plan && { ...t.plan, waits } }))}
           onReference={openReference}
         />
       ),
@@ -356,7 +358,10 @@ export function App() {
             document.getElementById('workspace-tab-agent')?.focus();
           }}
           onOpenPlan={(id, version) => {
-            setTab(chat.id, () => ({ plan: { id, version }, selected: 'plan' }));
+            setTab(chat.id, (t) => ({
+              plan: { id, version, waits: t.plan?.id === id && t.plan.waits },
+              selected: 'plan',
+            }));
             person.setOpen(chat.id, true);
           }}
           onCloseWorkspace={() => person.setOpen(chat.id, false)}
@@ -477,7 +482,8 @@ const agentOpen = (tabs?: Tabs) =>
 interface Tabs {
   files: FileTab[];
   agent?: string;
-  plan?: { id: number; version: number };
+  /** `waits`: the plan waits on the person, which puts a dot on its tab. */
+  plan?: { id: number; version: number; waits?: boolean };
   selected: string;
 }
 
