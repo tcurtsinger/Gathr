@@ -20,7 +20,7 @@ pub(crate) mod plan_wait;
 mod prs;
 pub(crate) mod records;
 mod report;
-mod review;
+pub(crate) mod review;
 pub mod stale;
 pub mod touched;
 pub(crate) mod words;
@@ -928,7 +928,8 @@ pub(crate) fn cancel_in(
 ) -> Result<Vec<Start>, Error> {
     set(tx, task, State::Cancelled, Some(why), trace)?;
     end_waits(tx, task, "its task was cancelled")?;
-    cascade(tx, task, trace)
+    let starts = crate::changes::report::cancelled(tx, task, trace)?;
+    Ok([starts, cascade(tx, task, trace)?].concat())
 }
 
 fn end_waits(tx: &Transaction, task: i64, why: &str) -> Result<(), Error> {

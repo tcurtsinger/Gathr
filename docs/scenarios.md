@@ -197,6 +197,36 @@ Parts: 2.2
   A turn released by "Just fix it." before its end reports nothing, and a look that fails says why in
   Diagnostics and finds nothing.
 
+### 2h. A repair far past its Fix's line stops and asks, before its review
+
+Parts: 2.4, 10.3, 10.7
+
+- **Given** a project chat with a lead, a builder and a reviewer, and a work task #1 on a repair ask, with the
+  builder's turn running
+- **When** the builder reports #1 done naming PR #5, whose head adds 1,240 lines
+- **Then** Gathr asks the person once, in the builder's turn: "Gathr asked you: #5 adds 1,240 lines, over a Fix's line
+  of 1,000: let it go on?", with the numbers and the largest files, and the builder is told its review waits for the
+  answer. No review task exists, and #1 is held as `done, waiting on #<question> (the person), #5 to merge`. Reporting
+  done again asks nothing more
+- **When** the person picks "Send it back"
+- **Then** #1 is blocked and the lead hears. Reported done again at the same head, it is blocked again with no review.
+  Reported done at a new head that adds 300 lines, it has no question and its review is given
+- **When** instead the count fails because GitHub doesn't answer, or takes over 20 seconds
+- **Then** the report goes on as it always did: the review is given, the failure is in Diagnostics under the report's
+  reference, and landing counts the PR against the same line
+
+### 2i. A plan part far past its size stops and asks once
+
+Parts: 2.4, 10.3, 10.7
+
+- **Given** a work task #1 from an approved plan whose part said 100 lines, its PR #5 reported done
+- **When** the head adds 500 lines
+- **Then** Gathr asks once: "#5 adds 500 lines, over its part's line of 400: let it go on?", saying the part said 100
+  lines. The review isn't given
+- **When** the person picks "Let it go on"
+- **Then** #1 waits on its merge alone and the reviewer's review starts. When the reviewer reports done, the PR lands
+  and Gathr doesn't ask again for those 500 lines
+
 ### 2j. The person changes a running repair to new
 
 Parts: 2.4
@@ -901,6 +931,10 @@ Parts: 10.7
 - **When** instead the question is open and the builder pushes a head that adds 500 lines, and its review is
   reported done
 - **Then** landing cancels the question as no longer needed and lands the PR
+- **When** instead the PR's work task has a lower line than the project's (a Fix's 1,000, or its part's), and the
+  head grew past it after the task reported done
+- **Then** landing measures against that lower line, and asks with it ("over a Fix's line of 1,000"). A count the
+  person let through when the task reported done isn't asked about again
 - **When** instead the question is open and the PR is merged outside Gathr
 - **Then** the question is cancelled, not answered. The row is the record, landed by hand, with its reviewer
 - **When** a push Gathr made and GitHub didn't confirm is seen merged later

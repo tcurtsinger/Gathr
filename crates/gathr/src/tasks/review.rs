@@ -2,7 +2,7 @@
 //! chat's Reviewer that PR's review, once per PR, as the builder would give it. A second review of
 //! a PR with an open one is refused.
 
-use rusqlite::{OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::{Brief, Finish, Give, Kind, Start, Task, give_in, refused, words};
 use crate::Error;
@@ -15,7 +15,7 @@ pub type Given = Option<(i64, String)>;
 /// Work `t`, as read before its report, now first names `pr`: the chat's Reviewer gets its review
 /// when the report is done, no review covers the PR, and the Reviewer isn't the builder. Each
 /// outcome is an event; a refused give fails nothing, as Gathr's fix (0053).
-pub(super) fn give(
+pub(crate) fn give(
     tx: &Transaction,
     t: &Task,
     (how, pr): (Finish, i64),
@@ -84,7 +84,11 @@ pub(super) fn give(
 
 /// The turn the review is given in: the report's when it is on the work, else the work's newest,
 /// else the report's. Given in a turn on another task, its end would wake the builder there.
-fn given_in(tx: &Transaction, work: i64, turn: Option<&str>) -> Result<Option<String>, Error> {
+pub(crate) fn given_in(
+    tx: &Transaction,
+    work: i64,
+    turn: Option<&str>,
+) -> Result<Option<String>, Error> {
     if let Some(turn) = turn {
         let on: Option<Option<i64>> = tx
             .query_row("SELECT task FROM turns WHERE id = ?1", [turn], |r| r.get(0))
@@ -105,8 +109,13 @@ fn given_in(tx: &Transaction, work: i64, turn: Option<&str>) -> Result<Option<St
 
 /// The newest review in the chat, not cancelled, that covers the PR: one that names it, or one
 /// with no PR tied to the work. A second look happens on that review (0053).
-fn covered(tx: &Transaction, chat: &str, pr: i64, work: i64) -> Result<Option<i64>, Error> {
-    Ok(tx
+pub(crate) fn covered(
+    conn: &Connection,
+    chat: &str,
+    pr: i64,
+    work: i64,
+) -> Result<Option<i64>, Error> {
+    Ok(conn
         .query_row(
             "SELECT r.number FROM tasks r
              WHERE r.chat_id = ?1 AND r.kind = 'review' AND r.state != 'cancelled'

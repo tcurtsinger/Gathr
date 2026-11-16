@@ -114,12 +114,13 @@ fn measure(pr: i64, head: &str, added: i64, line: i64) -> Measure {
             top,
         },
         line,
+        line_of: "project",
         by: "landing",
     }
 }
 
 fn measured(conn: &mut Connection, m: &Measure) -> Option<String> {
-    changes::measured(conn, m, T).unwrap()
+    changes::measured(conn, m, T).unwrap().0
 }
 
 /// Gathr's open questions to the person.

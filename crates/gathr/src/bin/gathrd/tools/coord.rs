@@ -5,6 +5,8 @@ use std::time::Instant;
 
 use axum::http::request::Parts;
 use gathr::Error;
+use gathr::changes::Standing;
+use gathr::changes::report::Counted;
 use gathr::tasks::{
     self, DONE_MOST, Edit, Finish, Give, Kind, NoteKind, NoteSaid, PROOF_MOST, SIZE_MOST, Said,
     Start, State, TITLE_MOST, Took, WHERE_MOST,
@@ -337,15 +339,31 @@ impl Tools {
         let current = on.as_ref().and_then(|o| o.task);
         let turn = on.map(|o| o.turn);
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
+        // A building task's PR is counted before the report is written, and outside it (0064).
+        let find = {
+            let (chat, agent, named, how, pr) = (
+                chat.clone(),
+                agent.clone(),
+                ask.task,
+                ask.how.clone(),
+                ask.pr,
+            );
+            move |c: &mut Connection| {
+                let Some(how) = Finish::named(&how) else {
+                    return Ok(None);
+                };
+                let task = reported(c, named, current, &chat, &agent)?;
+                gathr::changes::report::to_count(c, &agent, task, how, pr)
+            }
+        };
+        let count = crate::changes::report(&self.chats, &caller.chat, find, &trace).await;
+        let measured = matches!(count, Counted::Measured(..));
         let finished = self
             .db(move |c| {
                 let how = Finish::named(&ask.how).ok_or_else(|| {
                     Error::Refused(format!("{} isn't one of done, left or blocked", ask.how))
                 })?;
-                let task = match ask.task.or(current) {
-                    Some(task) => task,
-                    None => only_open(c, &chat, &agent)?,
-                };
+                let task = reported(c, ask.task, current, &chat, &agent)?;
                 // A tool acts in its caller's chat: an agent's task in another chat isn't reported here.
                 if !tasks::get(c, task)?.is_some_and(|t| t.chat == chat) {
                     return Err(Error::Refused(format!(
@@ -376,6 +394,7 @@ impl Tools {
                     notes: &notes,
                     nothing_unasked: ask.nothing_unasked == Some(true),
                     turn: turn.as_deref(),
+                    count,
                 };
                 let (t, took, starts, given) = tasks::finish(c, &agent, task, how, &said, &trace)?;
                 // Not a cancelled review's: nothing changed, and an older one may still stand.
@@ -386,6 +405,8 @@ impl Tools {
                 let mut answer = taken(&t, took, &ask.how);
                 if let (Some((n, reviewer)), Some(pr)) = (given, t.pr) {
                     answer.push_str(&format!("\nGathr gave #{n} to {reviewer} to review #{pr}."));
+                } else if measured && let Some(stopped) = stopped(c, &t)? {
+                    answer.push_str(&format!("\n{stopped}"));
                 }
                 Ok((answer, starts, review.then_some(t.number)))
             })
@@ -669,6 +690,38 @@ fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
         "#{} {owner} {state}{reason}{review}: {}",
         t.number, t.what
     ))
+}
+
+/// The task a report is on: the one named, else the turn's, else the caller's one open task.
+fn reported(
+    conn: &Connection,
+    named: Option<i64>,
+    current: Option<i64>,
+    chat: &str,
+    agent: &str,
+) -> Result<i64, Error> {
+    match named.or(current) {
+        Some(task) => Ok(task),
+        None => only_open(conn, chat, agent),
+    }
+}
+
+/// What a counted done report stopped (0064), when the answer doesn't say it already: Gathr's
+/// question to the person, or the block its head rests on.
+fn stopped(conn: &Connection, t: &tasks::Task) -> Result<Option<String>, Error> {
+    let blocked = t.report.as_ref().filter(|r| r.how == Finish::Blocked);
+    if let Some(note) = blocked.and_then(|r| r.note.clone()) {
+        return Ok((t.state != State::Blocked).then_some(note));
+    }
+    let Some(pr) = t.pr else {
+        return Ok(None);
+    };
+    Ok(match gathr::changes::standing(conn, &t.chat, pr)? {
+        Some(Standing::Asked(q)) => Some(format!(
+            "Gathr asked the person about #{pr}'s size (#{q}). Its review waits for the answer."
+        )),
+        _ => None,
+    })
 }
 
 /// The caller's one open task in the chat, for a report from a turn on no task that names none.

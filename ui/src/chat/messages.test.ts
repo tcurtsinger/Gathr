@@ -459,6 +459,22 @@ test('Gathr’s notes are one-line events: a task heard back, the person’s ans
   expect(items.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
 });
 
+test('a question no agent gave reads as Gathr’s in the turn it was given in; an agent’s keeps its name', () => {
+  const state = round();
+  const gathrs = 'Task #1 adds 1,240 lines, over a Fix’s line of 1,000: let it go on?';
+  state.tasks.push(
+    task(7, 'rowan', 'rowan', { kind: 'person', giver: null, owner: null, what: gathrs, state: 'ready' }),
+    task(8, 'mira', 'ask', { kind: 'person', owner: null, what: 'Which notice?', state: 'ready' }),
+  );
+  const { items } = view(state);
+  expect(custom(byId(items, 'asked-rowan')).events).toEqual([
+    { kind: 'question', who: 'Gathr asked you:', text: gathrs, more: 'Question #7', task: 7 },
+  ]);
+  expect(custom(byId(items, 'asked-ask')).events).toEqual([
+    { kind: 'question', who: 'Mira asked you:', text: 'Which notice?', more: 'Question #8', task: 8 },
+  ]);
+});
+
 test('a speaker is named when it changes, not on each of its blocks in a row', () => {
   const state = round();
   state.turns.again = { ...turn('again', 'kit', { task: 2 }), position: 5 };

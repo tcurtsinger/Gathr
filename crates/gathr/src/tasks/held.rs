@@ -248,7 +248,7 @@ pub fn background_changed(
 /// for a review of it). With nothing left open it's done if its owner reported so. Else its owner
 /// is woken on it and told what ended: a missing report is never read as done (0047), and the wake
 /// is the one ask for it.
-pub(super) fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
+pub(crate) fn released(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error> {
     let Some(t) = read(tx, task).optional_task()? else {
         return Ok(Vec::new());
     };

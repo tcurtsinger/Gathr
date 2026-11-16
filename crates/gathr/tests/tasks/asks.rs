@@ -127,6 +127,7 @@ fn gathrs_question(conn: &mut Connection, pr: i64) -> i64 {
         head: "aaaa111122223333".into(),
         count,
         line: 3000,
+        line_of: "project",
         by: "landing",
     };
     changes::measured(conn, &m, T).unwrap();

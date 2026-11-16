@@ -208,18 +208,18 @@ pub fn ask(conn: &mut Connection, a: Ask, trace: &str) -> Result<(Task, Vec<Star
 }
 
 /// Files Gathr's own question for the person (0054): no giver, a choice, about `pr`, under the work
-/// it answers. Its number.
+/// it answers, given in a turn of that work when a report asks it (0064). Its number.
 pub(crate) fn ask_as_gathr(
     tx: &Transaction,
-    (chat, pr, parent): (&str, i64, Option<i64>),
+    (chat, pr, parent, given_in): (&str, i64, Option<i64>, Option<&str>),
     (what, why): (&str, &str),
     choices: &[Choice],
     trace: &str,
 ) -> Result<i64, Error> {
     tx.execute(
-        "INSERT INTO tasks (chat_id, parent, kind, what, why, state, form, choices, pr, created_ts, updated_ts)
-         VALUES (?1, ?2, 'person', ?3, ?4, 'waiting', 'choice', ?5, ?6, ?7, ?7)",
-        params![chat, parent, what, why, json!(choices).to_string(), pr, now_us()],
+        "INSERT INTO tasks (chat_id, parent, kind, what, why, state, form, choices, pr, created_ts, updated_ts, given_in)
+         VALUES (?1, ?2, 'person', ?3, ?4, 'waiting', 'choice', ?5, ?6, ?7, ?7, ?8)",
+        params![chat, parent, what, why, json!(choices).to_string(), pr, now_us(), given_in],
     )?;
     let number = tx.last_insert_rowid();
     crate::asks::inherit(tx, number)?;

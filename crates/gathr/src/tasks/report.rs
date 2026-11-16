@@ -9,6 +9,7 @@ use super::{
     Kind, NoteSaid, Start, State, Task, cascade, held, notes, refused, review, turn_running,
 };
 use crate::Error;
+use crate::changes::report::{self as count, Counted};
 use crate::ids::now_us;
 
 /// What an owner says of its task.
@@ -58,6 +59,8 @@ pub struct Said<'a> {
     /// The turn the report is made in: a review Gathr gives for the PR it first names is given there
     /// when it is on the task (0060).
     pub turn: Option<&'a str>,
+    /// For a building task's done report: its PR's count, made before this report (0064).
+    pub count: Counted,
 }
 
 /// How Gathr took a report.
@@ -257,6 +260,11 @@ pub(crate) fn finish_in(
         let nothing_unasked = said.nothing_unasked;
         notes::record(tx, &t, at, said.notes, now, nothing_unasked, trace)?;
     }
+    // Past its line the question is written here, before the task settles on what it waits on.
+    let (stop, counted) = match &said.count {
+        Counted::Measured(m, ms) => count::reported(tx, m, &t, said.turn, *ms, trace)?,
+        _ => (None, Vec::new()),
+    };
     let running = turn_running(tx, task)?;
     // Left on a task whose turn is still to come: the note is kept, and it keeps its place.
     let in_line = matches!(t.state, State::Waiting | State::Ready) && how == Finish::Left;
@@ -271,8 +279,12 @@ pub(crate) fn finish_in(
         starts.extend(cascade(tx, task, trace)?);
         (Took::Applied, starts)
     };
+    starts.extend(counted);
     let mut review = None;
-    if let (Kind::Work, None, Some(pr)) = (t.kind, t.pr, said.pr) {
+    let first = t.pr.is_none() && said.pr.is_some();
+    if let (Kind::Work, Some(pr), None) = (t.kind, said.pr.or(t.pr), &stop)
+        && (first || count::sent_back_to(tx, &t.chat, pr, t.number)?)
+    {
         let (given, more) = review::give(tx, &t, (how, pr), said.turn, trace)?;
         review = given;
         starts.extend(more);
