@@ -12,6 +12,9 @@ const agents: Agent[] = ['Mira', 'Ann'].map((name) => ({
   model: null,
   effort: null,
   approvals: 'auto',
+  face_seed: 'Made-up',
+  gender: null,
+  skin: null,
 }));
 const members = [
   { agent: 'mira', name: 'Mira', role: 'supervisor' as const },

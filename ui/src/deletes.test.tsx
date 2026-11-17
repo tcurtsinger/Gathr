@@ -100,7 +100,7 @@ test('a removed agent’s old words still say who wrote them', async () => {
   service({
     projects: [],
     chats: [chat('c')],
-    removed: [{ id: 'bo', name: 'Bo' }],
+    removed: [{ id: 'bo', name: 'Bo', face_seed: 'Bo', gender: null, skin: null }],
     history: {
       chat: 'c',
       members: [],
@@ -115,6 +115,7 @@ test('a removed agent’s old words still say who wrote them', async () => {
   const said = page.getByText(words);
   await expect.element(said).toBeVisible();
   const block = said.element().closest('.reply, .exchange');
-  // Its initial, then its name.
-  expect(block?.querySelector('[data-slot="speaker-identity"]')?.textContent).toBe('BBo');
+  // Its face, then its name.
+  expect(block?.querySelector('.speaker-who > .face')).not.toBeNull();
+  expect(block?.querySelector('.speaker-name')?.textContent).toBe('Bo');
 });

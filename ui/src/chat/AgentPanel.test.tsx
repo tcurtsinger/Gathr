@@ -38,6 +38,9 @@ const agents: Agent[] = members.map((m) => ({
   model: null,
   effort: null,
   approvals: 'auto',
+  face_seed: 'Made-up',
+  gender: null,
+  skin: null,
 }));
 const today = (h: number, m: number) => {
   const d = new Date();
@@ -206,7 +209,7 @@ test('a working agent: when it began, its task, its running row opened, its earl
   await openFromSummary(/^Made-up Member/);
   await expect.element(panel.getByRole('heading', { name: 'Made-up Member', exact: true })).toBeVisible();
   expect(who().textContent).toContain(`Member · Working since ${clock(began)}`);
-  expect(who().querySelector('.initial[data-busy]')).not.toBeNull();
+  expect(who().querySelector('.face[data-busy]')).not.toBeNull();
 
   const current = panel.getByRole('region', { name: 'Task', exact: true });
   await expect.element(current).toHaveTextContent('TaskMade-up task 7From Made-up Lead · Open task');
@@ -224,12 +227,12 @@ test('a working agent: when it began, its task, its running row opened, its earl
   // Newest first: what it wrote to the lead, then its earlier turn. Nobody else's blocks, nor the running one.
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
   const blocks = [...earlier.element().querySelectorAll('.reply')].map((b) => [
-    b.querySelector('[data-slot="speaker-identity"]')?.textContent,
+    b.querySelector('.speaker-who')?.textContent,
     b.querySelector('.reply-body')?.textContent,
   ]);
   expect(blocks).toEqual([
-    ['MMMade-up Memberto Made-up Lead', 'Made-up question for the lead'],
-    ['MMMade-up Memberon Made-up task 7', 'Made-up earlier finding'],
+    ['Made-up Memberto Made-up Lead', 'Made-up question for the lead'],
+    ['Made-up Memberon Made-up task 7', 'Made-up earlier finding'],
   ]);
   await expect.element(earlier.getByRole('button', { name: 'Worked · 1 step' })).toBeVisible();
 
@@ -267,7 +270,7 @@ test('a waiting agent says who it waits for and since when; with no task of its 
   await expect
     .poll(() => who().textContent)
     .toContain(`Supervisor · Waiting for Made-up Member since 09:42 and Made-up Third since ${day}`);
-  expect(who().querySelector('.initial[data-busy]')).toBeNull();
+  expect(who().querySelector('.face[data-busy]')).toBeNull();
   expect(texts('heading')).toEqual(['Made-up Lead', 'Earlier in this chat']);
   await expect.element(panel.getByText('Made-up plan from the lead')).toBeVisible();
 });

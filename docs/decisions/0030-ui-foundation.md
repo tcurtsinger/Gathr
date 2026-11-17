@@ -8,6 +8,8 @@ Built: yes. Proof: `ui/src/chat/Thread.test.tsx`, `scripts/registry.check.mjs`, 
 
 Out of date below: `ui/registry.json` is the list of registry files and of those adapted, and both have grown past the counts below; a turn's reply can be several messages; `@base-ui/react` came with [0039](0039-conversation-map.md).
 
+Amended by [0074](0074-an-agents-face.md): an agent's face and name are Gathr's own markup, not the registry's SpeakerIdentity.
+
 ## Why
 
 The owner chose assistant-ui and its prototype as the chat reference. Keeping its registry controls as published avoids maintaining parallel custom controls, while Streamdown supplies streaming Markdown.

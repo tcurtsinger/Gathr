@@ -42,7 +42,7 @@ test('the Working line names every agent with a turn running, since the longest-
   expect(time.textContent).toBe('· 12m');
   expect(time.getAttribute('aria-hidden')).toBe('true');
   const read = [...screen.getByRole('status').element().childNodes].filter((n) => n !== time);
-  expect(read.map((n) => n.textContent).join('')).toBe('WorkingKLO');
+  expect(read.map((n) => n.textContent).join('')).toBe('Working');
 
   // Nobody running: no line.
   const idle = { ...state, turns: { ask: state.turns.ask } };

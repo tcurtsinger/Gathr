@@ -15,6 +15,9 @@ const agent = (id: string, name: string): Agent => ({
   model: null,
   effort: null,
   approvals: 'auto',
+  face_seed: 'Made-up',
+  gender: null,
+  skin: null,
 });
 const set = '2026-11-08T12:00:00.000Z';
 const project: Project = {

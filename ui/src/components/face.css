@@ -1,0 +1,106 @@
+/* An agent's face (0074): its drawing on a pale tint of its colour, at 36, 28, 24, 20 or 16, and 56 in its form.
+   The five colours are the faces mock-up's, each deeper in light; the tint is 30% of the colour in white. */
+:root {
+  --face-hue-1: oklch(0.72 0.13 15);
+  --face-hue-2: oklch(0.74 0.12 155);
+  --face-hue-3: oklch(0.79 0.12 75);
+  --face-hue-4: oklch(0.72 0.12 305);
+  --face-hue-5: oklch(0.72 0.12 250);
+}
+html.light {
+  --face-hue-1: oklch(0.56 0.16 15);
+  --face-hue-2: oklch(0.53 0.12 155);
+  --face-hue-3: oklch(0.56 0.12 65);
+  --face-hue-4: oklch(0.53 0.15 305);
+  --face-hue-5: oklch(0.52 0.15 255);
+}
+.face {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--face-hue) 30%, #fff);
+}
+.face[data-hue="1"] {
+  --face-hue: var(--face-hue-1);
+}
+.face[data-hue="2"] {
+  --face-hue: var(--face-hue-2);
+}
+.face[data-hue="3"] {
+  --face-hue: var(--face-hue-3);
+}
+.face[data-hue="4"] {
+  --face-hue: var(--face-hue-4);
+}
+.face[data-hue="5"] {
+  --face-hue: var(--face-hue-5);
+}
+.face > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  clip-path: circle(50%);
+}
+.face[data-size="56"] {
+  width: 56px;
+  height: 56px;
+}
+.face[data-size="36"] {
+  width: 36px;
+  height: 36px;
+}
+.face[data-size="28"] {
+  width: 28px;
+  height: 28px;
+}
+.face[data-size="20"] {
+  width: 20px;
+  height: 20px;
+}
+.face[data-size="16"] {
+  width: 16px;
+  height: 16px;
+}
+/* At work: a ring turns around it. Reduced motion keeps the ring and stops it. */
+.face[data-busy]::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid transparent;
+  border-top-color: var(--attention);
+  border-radius: 50%;
+  animation: face-ring 0.9s linear infinite;
+}
+@keyframes face-ring {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .face[data-busy]::after {
+    border-color: var(--attention);
+    animation: none;
+  }
+}
+/* Overlapped, each cut out of the surface behind it (--behind, the chat's own by default). */
+.face-stack {
+  position: relative;
+  display: flex;
+}
+.face-stack > .face {
+  box-shadow: 0 0 0 2px var(--behind, var(--background));
+}
+.face-stack > .face + .face {
+  margin-left: -4px;
+}
+/* Someone needs the person: the shared attention dot (base.css) on the stack's corner, the one the
+   sidebar's row carries. */
+.face-stack > .attention {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  box-shadow: 0 0 0 2px var(--behind, var(--background));
+}

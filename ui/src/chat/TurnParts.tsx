@@ -17,9 +17,9 @@ import {
   CollapsibleTrigger,
 } from '@/components/assistant-ui/elements/collapsible-root';
 import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/elements/run-activity';
-import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Face } from '../components/Face';
 import { counted } from '../plans/plans';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
@@ -34,28 +34,35 @@ export const FoundContext = createContext<string | undefined>(undefined);
 
 /** Who a block is from, and when: "Cass · on Open the settings tools PR", "Juno · to Orin". */
 export function Speaker({
+  agent,
   name,
   detail,
   time,
   onOpen,
 }: {
+  /** The agent's id, for its face. */
+  agent?: string;
   name: string;
   detail?: string;
   time?: string;
-  /** In a team chat: its initial opens the agent's panel. */
+  /** In a team chat: its face opens the agent's panel. */
   onOpen?: () => void;
 }) {
+  const face = <Face agent={{ id: agent ?? '', name }} size={24} />;
   return (
     <header className="speaker">
       <span className="speaker-who">
-        <SpeakerIdentity
-          className="w-auto min-w-0"
-          turns={[{ id: 'author', kind: 'agent', name, detail, text: '' }]}
-        />
-        {/* Over the registry's avatar, which takes no handler of its own. */}
-        {onOpen && (
-          <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen} />
+        {onOpen ? (
+          <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen}>
+            {face}
+          </button>
+        ) : (
+          face
         )}
+        <span className="speaker-line">
+          <span className="speaker-name">{name}</span>
+          {detail && <span className="speaker-detail">{detail}</span>}
+        </span>
       </span>
       {time && <time dateTime={time}>{clock(time)}</time>}
     </header>
@@ -182,6 +189,7 @@ export function Exchange({
       {said.map(({ by, ...m }, index) => (
         <div className="reply" data-speaker="" key={m.id}>
           <Speaker
+            agent={m.agent}
             name={m.from ?? 'An agent'}
             detail={m.to && `to ${m.to}`}
             time={m.time}

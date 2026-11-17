@@ -73,7 +73,7 @@ interface Props {
   onOpenTask?: (task: number) => void;
   /** The agent whose tab the workspace has, by id, and whether that tab is the one shown. */
   agentOpen?: { agent: string; shown: boolean };
-  /** Opens an agent's panel in the workspace, from Summary or its initial in the timeline. */
+  /** Opens an agent's panel in the workspace, from Summary or its face in the timeline. */
   onOpenAgent?: (agent: string) => void;
   /** Opens a plan's tab in the workspace at a version, from its chip or a plan line (0062). */
   onOpenPlan?: (plan: number, version: number) => void;
@@ -84,7 +84,7 @@ interface Props {
    * only the chat can draw. The chat asks again only when this function or the open agent changes, never
    * for a streamed token, so the workspace's own tabs aren't drawn again with each one.
    */
-  workspace?: (agent?: { name: string; panel: ReactNode }) => ReactNode;
+  workspace?: (agent?: { id: string; name: string; panel: ReactNode }) => ReactNode;
   /** A search hit's message to open at (none: a title, the latest), and when it was picked; done once shown. */
   found?: { message?: string; at: number };
   onFound?: () => void;
@@ -134,6 +134,7 @@ export function ChatView(props: Props) {
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   // An approval shown from the dock, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
+  const member = (id: string) => ({ id, name: members.find((m) => m.agent === id)?.name ?? 'An agent' });
   const show = (request: string) => {
     const asks = (m: (typeof timeline.items)[number]) =>
       (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);
@@ -193,10 +194,14 @@ export function ChatView(props: Props) {
   // for again. The panel is drawn into it from here and stays there while another tab shows, keeping its
   // scroll and its opened rows; hidden, it is handed what it was last drawn from, so nothing redraws it.
   const [slot, setSlot] = useState<HTMLElement | null>(null);
+  const id = opened?.member.agent;
   const name = opened?.member.name;
   const tab = useMemo(
-    () => (name === undefined ? undefined : { name, panel: <div className="agent-slot" ref={setSlot} /> }),
-    [name],
+    () =>
+      id === undefined || name === undefined
+        ? undefined
+        : { id, name, panel: <div className="agent-slot" ref={setSlot} /> },
+    [id, name],
   );
   const beside = useMemo(() => workspace?.(tab), [workspace, tab]);
   // Each agent's compaction asked for here: its turn, and its status until the live turn says more.
@@ -356,8 +361,8 @@ export function ChatView(props: Props) {
                 <ApprovalDock
                   approvals={state.approvals}
                   plans={state.plans}
-                  name={(t) => members.find((m) => m.agent === state.turns[t]?.agent)?.name ?? 'An agent'}
-                  lead={(id) => members.find((m) => m.agent === id)?.name ?? 'An agent'}
+                  asker={(t) => member(state.turns[t]?.agent ?? '')}
+                  lead={member}
                   onShow={(a) => show(a.request)}
                   onAnswer={approve}
                   onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}

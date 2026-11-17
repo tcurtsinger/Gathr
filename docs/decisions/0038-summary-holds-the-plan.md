@@ -7,6 +7,8 @@ Built: yes. Proof: `ui/src/chat/Summary.test.tsx`, `ui/src/chat/plan.test.ts`, `
 
 Out of date below: the "later slices" are built. "The plan" here is the Supervisor's newest round of tasks; [0010](0010-coordination-as-state.md) uses the word for a record with versions and [0001](0001-engine-interface.md) for an engine's own to-do list. One meaning is still to be chosen.
 
+Amended by [0074](0074-an-agents-face.md): every initial here is now the agent's face, and the button's stack is 20px faces.
+
 ## Choice
 
 - **No plan bar and no status bar.** Summary says what both would. A chat with more than one agent has it.

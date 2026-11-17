@@ -4,7 +4,7 @@ import { Workspace } from './Workspace';
 
 test('when the open agent has left the chat its tab goes, and Tasks shows in its place', async () => {
   const none = () => {};
-  const shown = (agent?: { name: string; panel: string }) => (
+  const shown = (agent?: { id: string; name: string; panel: string }) => (
     <Workspace
       waiting={false}
       files={[]}
@@ -17,7 +17,7 @@ test('when the open agent has left the chat its tab goes, and Tasks shows in its
       tasks="Made-up tasks"
     />
   );
-  const screen = await render(shown({ name: 'Made-up Member', panel: 'Made-up panel' }));
+  const screen = await render(shown({ id: 'b', name: 'Made-up Member', panel: 'Made-up panel' }));
   await expect
     .element(screen.getByRole('tab', { name: 'Made-up Member' }))
     .toHaveAttribute('aria-selected', 'true');

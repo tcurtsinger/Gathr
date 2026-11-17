@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Chat, type Failure, type Named, type Project } from './api';
@@ -6,6 +6,7 @@ import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
 import { Confirm } from './components/Confirm';
+import { KnownFaces } from './components/Face';
 import { FailureNotice } from './components/Notice';
 import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
@@ -37,6 +38,8 @@ export function App() {
   const [deleting, setDeleting] = useState<{ project: Project; opener: HTMLElement | null } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [removed, setRemoved] = useState<Named[]>([]);
+  // Every agent's face by id, removed ones too, so a place that knows only an agent's id draws its face.
+  const faces = useMemo(() => new Map([...agents, ...removed].map((a) => [a.id, a])), [agents, removed]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
   const [fresh, setFresh] = useState<{ project?: string } | null>(null);
@@ -293,7 +296,7 @@ export function App() {
     </div>
   );
 
-  return (
+  const app = (
     <div className="app">
       <Sidebar
         chats={chats}
@@ -514,6 +517,7 @@ export function App() {
       />
     </div>
   );
+  return <KnownFaces.Provider value={faces}>{app}</KnownFaces.Provider>;
 }
 
 /** The agent whose tab a chat's workspace has, and whether it is the tab shown. */
