@@ -1,9 +1,9 @@
 import { X } from 'lucide-react';
 import { useId } from 'react';
 import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import type { Agent, Role } from '../api';
 import { roleName } from '../chat/team';
+import { IconButton } from '../components/IconButton';
 import type { Seat } from './Projects';
 
 const MOST = 5;
@@ -64,15 +64,14 @@ export function Team({ seats, agents, onChange }: Props) {
               </option>
             ))}
           </select>
-          <TooltipIconButton
+          <IconButton
             type="button"
-            tooltip={`Remove ${name(agent)}`}
-            side="left"
+            aria-label={`Remove ${name(agent)}`}
             disabled={seats.length === 1}
             onClick={() => remove(agent)}
           >
             <X />
-          </TooltipIconButton>
+          </IconButton>
         </div>
       ))}
       <select

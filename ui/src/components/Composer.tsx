@@ -6,7 +6,6 @@ import {
   ComposerToolbar,
   Composer as Frame,
 } from '@/components/assistant-ui/elements/composer';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import './composer.css';
 
 interface Props {
@@ -48,20 +47,13 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, tools }: Pr
           <ComposerActions />
           <ComposerActions>
             {tools}
-            <TooltipProvider delayDuration={0}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ComposerSend
-                    aria-label={label}
-                    streaming={stopping}
-                    idle={!canSend}
-                    disabled={!canSend && !stopping}
-                    onClick={stopping ? onStop : onSend}
-                  />
-                </TooltipTrigger>
-                <TooltipContent>{label}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <ComposerSend
+              aria-label={label}
+              streaming={stopping}
+              idle={!canSend}
+              disabled={!canSend && !stopping}
+              onClick={stopping ? onStop : onSend}
+            />
           </ComposerActions>
         </ComposerToolbar>
       </ComposerBar>

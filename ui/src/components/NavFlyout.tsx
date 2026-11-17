@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import type { ReactNode } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
+import { IconButton } from './IconButton';
 import './flyout.css';
 
 interface Props {
@@ -19,7 +19,7 @@ interface Props {
 
 /**
  * The flyout beside navigation that Search and Tasks share (DESIGN.md "Navigation and workspace"):
- * the prototype's Radix popover, so its own tooltips draw above it. Escape, an outside click, Close
+ * the prototype's Radix popover. Escape, an outside click, Close
  * or its trigger closes it.
  */
 export function NavFlyout({ title, trigger, open, onOpenChange, focus, onCloseAutoFocus, children }: Props) {
@@ -51,9 +51,9 @@ export function NavFlyout({ title, trigger, open, onOpenChange, focus, onCloseAu
         >
           <header>
             <h2>{title}</h2>
-            <TooltipIconButton tooltip={`Close ${title}`} onClick={() => onOpenChange(false)}>
+            <IconButton aria-label={`Close ${title}`} onClick={() => onOpenChange(false)}>
               <X />
-            </TooltipIconButton>
+            </IconButton>
           </header>
           {children}
         </Popover.Content>

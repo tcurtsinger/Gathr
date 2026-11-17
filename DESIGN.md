@@ -289,7 +289,7 @@ turning around it once in 0.9s; reduced motion keeps the ring and stops it. An a
 person (a waiting approval, or an open question it asked the person) sits last in the stack with no
 ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
 Five agents are one 90px button. With nobody working or needed, the button shows Summary's plain icon.
-Its accessible name and tooltip say the same in words: "Summary: Vale needs you, Juno and Pia working",
+Its accessible name says the same in words: "Summary: Vale needs you, Juno and Pia working",
 or "Summary".
 
 The button, and the Working line after the latest message, open a 348px popover under the header.
@@ -495,7 +495,7 @@ The service owns that timing and every archive effect; see 0010.
 Keep Gathr's accepted centred Settings layout (0023), not the prototype's example:
 at most 1024 by 760px, 32px horizontal and 48px vertical clearance, a fixed header,
 a 200px category rail and an X at top right (the shared icon button, 16px from the top
-and right, with a Close Settings tooltip; 0023). Below 768px categories move above
+and right, named Close Settings; 0023). Below 768px categories move above
 content. Escape/the X return focus and preserve the chat's draft and position.
 Apply the new shared tokens, type and controls within that layout.
 
@@ -575,6 +575,7 @@ References: [JetBrains: Writing Short and Clear](https://plugins.jetbrains.com/d
 ## Do's and Don'ts
 
 - Capitalize Gathr. Keep one component for each repeated pattern.
+- No hover help line on a control, anywhere: an icon button carries its name for screen readers only. Hover may show data, such as who reacted.
 - Use the prototype's real components with Gathr adapters and real state.
 - Preserve identifiers, references, recovery steps and the tool arguments an agent needs.
 - Stale notices use "No progress in 3 days: #72 Approve the wording? (waiting for your answer). Finish, restart or cancel it."

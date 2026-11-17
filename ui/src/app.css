@@ -21,7 +21,7 @@
 .topbar + .app-failure .notice {
   margin: 0;
 }
-/* The header's icon buttons (chat header, workspace Close), on TooltipIconButton: DESIGN.md "Header". */
+/* The header's icon buttons (chat header, workspace Close), on IconButton: DESIGN.md "Header". */
 .head-button {
   position: relative;
   flex: none;

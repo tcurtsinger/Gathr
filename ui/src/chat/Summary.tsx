@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { Popover } from 'radix-ui';
 import { useMemo, useRef } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { PauseScope, Pauses } from '../api';
+import { IconButton } from '../components/IconButton';
 import { counts, type Glance, headline } from './glance';
 import { Initial, InitialStack } from './Initial';
 import { agentPause, type PauseAction } from './pauses';
@@ -71,8 +71,7 @@ export function Summary(props: Props) {
     .sort((a, b) => Number(a.standing === 'needs') - Number(b.standing === 'needs'))
     .map((g) => ({ agent: g.member.agent, name: g.member.name, busy: g.standing === 'working' }));
   const needs = new Set(team.filter((g) => g.standing === 'needs').map((g) => g.member.agent));
-  // Opening an agent moves the keyboard to its panel: closing must not bring it back to the button, whose
-  // tooltip would open over the panel.
+  // Opening an agent moves the keyboard to its panel: closing must not bring it back to the button.
   const went = useRef(false);
   const go = (agent: string) => {
     went.current = true;
@@ -82,9 +81,9 @@ export function Summary(props: Props) {
   return (
     <Popover.Root open={open} onOpenChange={onOpen}>
       <Popover.Trigger asChild>
-        <TooltipIconButton tooltip={label} className="head-button summary-button" onClick={onOwnButton}>
+        <IconButton aria-label={label} className="head-button summary-button" onClick={onOwnButton}>
           {stack.length ? <InitialStack agents={stack} needs={needs.size > 0} /> : <SummaryIcon />}
-        </TooltipIconButton>
+        </IconButton>
       </Popover.Trigger>
       <Popover.Anchor asChild>
         <span className="summary-anchor" aria-hidden="true" />

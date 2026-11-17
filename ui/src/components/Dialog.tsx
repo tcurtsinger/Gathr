@@ -1,8 +1,8 @@
 import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { IconButton } from './IconButton';
 import './dialog.css';
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
   className?: string;
   /** No Close in the header: a confirm, answered by its own buttons or Escape. */
   bare?: boolean;
-  /** An X at the top right, named "Close <title>" in its tooltip, instead of the text Close (Settings, 0023). */
+  /** An X at the top right, named "Close <title>", instead of the text Close (Settings, 0023). */
   closeIcon?: boolean;
   children: ReactNode;
 }
@@ -61,16 +61,11 @@ export function Dialog({ open, title, onClose, opener, className, bare, closeIco
             )}
           </header>
           {children}
-          {/* Last, as the prototype's: opening focuses the content, not the X and its tooltip. */}
+          {/* Last, as the prototype's: opening focuses the content, not the X. */}
           {!bare && closeIcon && (
-            <TooltipIconButton
-              type="button"
-              tooltip={`Close ${title}`}
-              className="dialog-x"
-              onClick={onClose}
-            >
+            <IconButton type="button" aria-label={`Close ${title}`} className="dialog-x" onClick={onClose}>
               <X />
-            </TooltipIconButton>
+            </IconButton>
           )}
         </>
       )}

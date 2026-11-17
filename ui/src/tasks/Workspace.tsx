@@ -1,7 +1,7 @@
 import { ClipboardList, FileText, ListTodo, PanelRight, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Initial } from '../chat/Initial';
+import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import './workspace.css';
 
@@ -109,14 +109,14 @@ export function Workspace(props: Props) {
             )}
           {files.map((f) => tab(fileId(f), f.name, <FileText aria-hidden="true" />))}
         </div>
-        <TooltipIconButton
-          tooltip="Close sidebar"
+        <IconButton
+          aria-label="Close sidebar"
           aria-expanded={true}
           className="head-button workspace-toggle"
           onClick={onClose}
         >
           <PanelRight />
-        </TooltipIconButton>
+        </IconButton>
       </div>
       <section
         id="workspace-view-tasks"
@@ -169,14 +169,14 @@ export function Workspace(props: Props) {
 /** The chat header's opener; its dot says a question waits on the person in this chat. */
 export function WorkspaceOpener({ waiting, onOpen }: { waiting: boolean; onOpen: () => void }) {
   return (
-    <TooltipIconButton
-      tooltip="Open sidebar"
+    <IconButton
+      aria-label="Open sidebar"
       aria-expanded={false}
       className="head-button workspace-toggle"
       onClick={onOpen}
     >
       <PanelRight />
       {waiting && <i className="attention" />}
-    </TooltipIconButton>
+    </IconButton>
   );
 }
