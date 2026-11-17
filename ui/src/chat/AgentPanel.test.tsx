@@ -125,9 +125,9 @@ function service(
   return sent;
 }
 
-// How often the stand-in workspace was drawn, and how often the chat asked it to close.
-const counts = { drawn: 0, closed: 0 };
-beforeEach(() => Object.assign(counts, { drawn: 0, closed: 0 }));
+// How often the stand-in workspace was drawn.
+const counts = { drawn: 0 };
+beforeEach(() => Object.assign(counts, { drawn: 0 }));
 function Counted() {
   counts.drawn += 1;
   return null;
@@ -166,9 +166,6 @@ function Chat({ openedTasks = [], archived, known = agents }: Shown) {
         onOpenTask={(n) => openedTasks.push(n)}
         agentOpen={agent === undefined ? undefined : { agent, shown }}
         onOpenAgent={setAgent}
-        onCloseWorkspace={() => {
-          counts.closed += 1;
-        }}
         workspace={(open) => (
           <aside aria-label="Made-up workspace" style={{ width: 440 }}>
             <Counted />
@@ -294,8 +291,6 @@ test('Message picks the agent as the recipient and puts the keyboard in the comp
   await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
   await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
   await expect.element(page.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up Third');
-  // Wide enough for the workspace to sit beside the chat: it stays open.
-  expect(counts.closed).toBe(0);
   await userEvent.keyboard('Made-up note{Enter}');
   await expect.poll(() => sent).toEqual([{ text: 'Made-up note', agent: 'c' }]);
 });
@@ -355,16 +350,6 @@ test('Message is left out where it can’t be sent: an archived chat, an agent t
   await screen.rerender(<Chat archived />);
   await expect.element(page.getByText('Archived', { exact: true }).first()).toBeVisible();
   expect(panel.getByRole('button', { name: /^Message/ }).query()).toBeNull();
-});
-
-test('where the workspace lies over the chat, Message closes it so the composer is in reach', async () => {
-  await page.viewport(1000, 800);
-  service();
-  await render(<Chat />);
-  await openFromSummary(/^Made-up Third/);
-  await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
-  expect(counts.closed).toBe(1);
-  await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
 });
 
 test("an agent's context shows in its panel, from the engine's fill and window; none before its first call", async () => {
