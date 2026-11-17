@@ -3,8 +3,8 @@ name: Gathr
 description: A desktop conversation workspace for a team of agents.
 tokens: designs/tokens.css
 colors:
-  frame: "#1b1b1b"
-  background: "#232323"
+  frame: "#232323"
+  background: "#1b1b1b"
   foreground: "oklch(.95 .002 106)"
   card: "#2c2c2c"
   popover: "#2f2f2f"
@@ -42,9 +42,10 @@ tokens and static component anatomy, not replacement runtime components.
 
 ## Colors
 
-Surfaces take three steps, back to front. `frame` is navigation, the top bar and
-the workspace. `background` is the chat. `card` is what stands on the chat: an
-approval, a notice. Dark is #1b1b1b, #232323 and #2c2c2c, with floating surfaces
+Surfaces take three steps. `frame` is navigation, the top bar and the workspace.
+`background` is the chat. `card` is what stands on the chat: an approval, a
+notice. In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
+chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
 `accent-surface`, a menu's highlight, is lighter than the popover. Light is a white chat with a

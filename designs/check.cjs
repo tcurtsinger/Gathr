@@ -80,8 +80,8 @@ new vm.Script(fs.readFileSync(path.join(__dirname, "team-reference.js"), "utf8")
 assert(tokens.includes("--muted: var(--muted-foreground)"), "legacy muted is readable text");
 assert(tokens.includes("--accent: var(--attention)"), "legacy accent remains text");
 assert(
-	tokens.includes("--frame: #1b1b1b") && tokens.includes("--background: #232323") && tokens.includes("--card: #2c2c2c"),
-	"dark surfaces in three steps",
+	tokens.includes("--frame: #232323") && tokens.includes("--background: #1b1b1b") && tokens.includes("--card: #2c2c2c"),
+	"dark surfaces: the chat darkest, the frame next, then cards (0068)",
 );
 assert(design.includes("Team messages: one timeline"), "selected team arrangement");
 assert(design.includes("There is no Everyone option"), "one named recipient, no fan-out");
