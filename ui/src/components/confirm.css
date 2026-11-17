@@ -19,6 +19,12 @@
 .confirm-dialog .dialog-header h2 {
   overflow-wrap: anywhere;
 }
+.confirm-dialog .confirm-body {
+  margin: 0;
+  padding: 0 24px 4px;
+  font-size: 14px;
+  line-height: 1.5;
+}
 .confirm-dialog .notice {
   margin: 0 24px;
 }

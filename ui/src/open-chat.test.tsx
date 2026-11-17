@@ -22,7 +22,7 @@ test("a notification's click opens its chat, and one for a chat that's gone is r
         { id: 'd', title: 'Fix the login test' },
       ]);
     if (path === '/api/chats?archived=true') return json([]);
-    if (path === '/api/agents') return json({ agents: [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });

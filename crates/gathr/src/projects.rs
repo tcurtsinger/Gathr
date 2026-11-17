@@ -252,15 +252,3 @@ pub fn get(conn: &Connection, id: &str) -> Result<Option<Project>, Error> {
         created: crate::ids::utc(created),
     }))
 }
-
-/// The title of a project the agent is in, if any: an agent isn't deleted while a project has it.
-pub fn a_project_of(conn: &Connection, agent: &str) -> Result<Option<String>, Error> {
-    Ok(conn
-        .query_row(
-            "SELECT p.name FROM project_members m JOIN projects p ON p.id = m.project_id
-             WHERE m.agent_id = ?1 ORDER BY p.created_ts LIMIT 1",
-            [agent],
-            |r| r.get(0),
-        )
-        .optional()?)
-}

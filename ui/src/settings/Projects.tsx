@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
+import {
+  type Agent,
+  api,
+  type Failure,
+  type Named,
+  type Project,
+  type ProjectChange,
+  type Role,
+} from '../api';
 import { began } from '../chat/team';
+import { danger } from '../components/Confirm';
 import { FailureNotice } from '../components/Notice';
+import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
 import { ChecksCache } from './ChecksCache';
 import { Team } from './ProjectTeam';
@@ -21,6 +31,7 @@ export type Seat = { agent: string; role: Role };
 export function Projects({ start, onReference }: { start?: string; onReference: Open }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [removed, setRemoved] = useState<Named[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [selected, setSelected] = useState<string | null>(start ?? null);
   /** The project last saved, so its form says so until it changes again. */
@@ -28,7 +39,10 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
 
   const load = useCallback(() => {
     api.projects().then(setProjects, setFailure);
-    api.agents().then(setAgents, setFailure);
+    api.agents().then((a) => {
+      setAgents(a.agents);
+      setRemoved(a.removed);
+    }, setFailure);
   }, []);
   useEffect(() => {
     load();
@@ -65,10 +79,16 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
             key={project.id}
             project={project}
             agents={agents}
+            removed={removed}
             saved={saved === project.id}
             onSaved={(done) => {
               setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
               setSaved(done.id);
+            }}
+            onDeleted={(left) => {
+              setProjects((list) => list?.filter((p) => p.id !== project.id) ?? null);
+              setSelected(null);
+              setFailure(left);
             }}
             onReference={onReference}
           />
@@ -95,13 +115,19 @@ const methods: [Project['merge'], string, string][] = [
 interface FormProps {
   project: Project;
   agents: Agent[];
+  /** Removed agents, by name: a check one of them set still says who. */
+  removed: Named[];
   saved: boolean;
   onSaved: (project: Project) => void;
+  /** What the delete couldn't remove yet, if anything. */
+  onDeleted: (left: Failure | null) => void;
   onReference: Open;
 }
 
-function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps) {
+function ProjectForm({ project, agents, removed, saved, onSaved, onDeleted, onReference }: FormProps) {
   const [section, setSection] = useState<'general' | 'checks'>('general');
+  /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
+  const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   // Only the fields edited here, over the project as saved, so Save never writes an untouched one back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const [busy, setBusy] = useState(false);
@@ -166,10 +192,36 @@ function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps
           <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
         </>
       ) : (
-        <Checks project={project} agents={agents} fields={fields} edit={edit} onReference={onReference} />
+        <Checks
+          project={project}
+          agents={[...agents, ...removed]}
+          fields={fields}
+          edit={edit}
+          onReference={onReference}
+        />
       )}
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
+        <Button
+          type="button"
+          variant="outline"
+          className={danger}
+          disabled={busy}
+          onClick={(e) => setDeleting(e.currentTarget)}
+        >
+          Delete
+        </Button>
+        {deleting && (
+          <DeleteConfirm
+            kind="project"
+            id={project.id}
+            name={project.name}
+            opener={deleting}
+            onCancel={() => setDeleting(null)}
+            onDeleted={onDeleted}
+            onReference={onReference}
+          />
+        )}
         <span className="muted" role="status">
           {saved && !changed ? 'Saved' : ''}
         </span>
@@ -186,7 +238,8 @@ function ProjectForm({ project, agents, saved, onSaved, onReference }: FormProps
 
 interface ChecksProps {
   project: Project;
-  agents: Agent[];
+  /** Every agent that can have set a check, removed ones too. */
+  agents: Named[];
   fields: Fields;
   edit: (more: Partial<Fields>) => void;
   onReference: Open;

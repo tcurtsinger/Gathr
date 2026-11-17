@@ -362,7 +362,8 @@ pub fn kept(conn: &Connection, chat: &str) -> Result<(), Error> {
 pub struct Clean {
     pub path: PathBuf,
     pub kind: String,
-    pub chat: String,
+    /// None for a deleted project's own folders (0069).
+    pub chat: Option<String>,
     pub agent: Option<String>,
     pub project: Option<String>,
     pub trace: String,

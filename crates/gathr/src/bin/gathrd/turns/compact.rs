@@ -139,9 +139,9 @@ impl Task {
         let found = self
             .chats
             .writer
-            .call(move |c| gathr::agents::get(c, &agent));
+            .call(move |c| gathr::agents::name(c, &agent));
         let name = match found.await {
-            Some(Ok(Some(agent))) => agent.name,
+            Some(Ok(Some(name))) => name,
             _ => "the agent".into(),
         };
         format!("Couldn't compact {name}'s conversation: {said}")

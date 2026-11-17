@@ -43,6 +43,7 @@ function service(patch: (body: Record<string, unknown>) => Response) {
     if (method === 'GET' && path === '/api/agents')
       return answer({
         agents: [agent('a', 'Made-up Lead'), agent('b', 'Made-up Member'), agent('c', 'Made-up Third')],
+        removed: [],
       });
     if (method === 'PATCH' && path === '/api/projects/p') {
       const body = JSON.parse(String(init?.body));
@@ -145,7 +146,7 @@ test("a check's setter keeps its name after leaving the team", async () => {
   vi.stubGlobal('fetch', async (path: string) => {
     if (path === '/api/projects') return new Response(JSON.stringify({ projects: [left] }));
     if (path === '/api/agents')
-      return new Response(JSON.stringify({ agents: [agent('c', 'Made-up Third')] }));
+      return new Response(JSON.stringify({ agents: [agent('c', 'Made-up Third')], removed: [] }));
     return new Response('{}');
   });
   const screen = await render(<Projects start="p" onReference={() => {}} />);
@@ -163,7 +164,7 @@ test('the checks cache shows its size; Clear empties it at once, and a refused C
   const cleared: string[] = [];
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     if (path === '/api/projects') return new Response(JSON.stringify({ projects: [project] }));
-    if (path === '/api/agents') return new Response(JSON.stringify({ agents: [] }));
+    if (path === '/api/agents') return new Response(JSON.stringify({ agents: [], removed: [] }));
     if (path === '/api/projects/p/caches' && init?.method === 'DELETE') {
       cleared.push(path);
       if (refuse) {
@@ -190,4 +191,30 @@ test('the checks cache shows its size; Clear empties it at once, and a refused C
   await expect.element(screen.getByText('0 B')).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
   expect(cleared).toHaveLength(2);
+});
+
+test('Delete asks with what the service counts, then deletes the project and shows the next', async () => {
+  let projects = [project, { ...project, id: 'q', name: 'Made-up other' }];
+  const deleted: string[] = [];
+  const answer = (body: unknown) => new Response(JSON.stringify(body));
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/projects') return answer({ projects });
+    if (path === '/api/agents') return answer({ agents: [], removed: [] });
+    if (path === '/api/projects/p/delete') return answer({ chats: 4, tasks: 0, projects: 1, leads: [] });
+    if (path === '/api/projects/p' && init?.method === 'DELETE') {
+      deleted.push(path);
+      projects = projects.slice(1);
+      return answer({ chats: 4, tasks: 0, projects: 1, leads: [], deleted: true, left: [] });
+    }
+    return answer({});
+  });
+  const screen = await render(<Projects start="p" onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Delete' }).click();
+  const confirm = screen.getByRole('dialog', { name: 'Delete Made-up project?' });
+  await expect.element(confirm.getByText('4 chats will be deleted. Files are kept.')).toBeVisible();
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+
+  await expect.element(confirm).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('heading', { name: 'Made-up other' })).toBeVisible();
+  expect(deleted).toEqual(['/api/projects/p']);
 });
