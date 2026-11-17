@@ -223,7 +223,7 @@ fn window(
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
         .title(title)
         .inner_size(1440.0, 900.0)
-        .min_inner_size(480.0, 480.0)
+        .min_inner_size(960.0, 600.0)
         // The caller shows it once built: a close while WebView2 was still being set up skipped the
         // close handler and quit Gathr.
         .visible(false)

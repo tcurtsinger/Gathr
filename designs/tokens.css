@@ -1,5 +1,6 @@
 /* Semantic values. Dark is the desktop default; .light selects light.
-   Three steps, back to front: frame (navigation, top bar, workspace), background (the chat), card. */
+   Three surfaces: frame (navigation, top bar, workspace), background (the chat), card. In dark the chat
+   is darkest and the frame lighter (0068); in light the chat is white. */
 @font-face {
 	font-family: "Hanken Grotesk Variable";
 	src: url("./fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2");
@@ -10,8 +11,8 @@
 :root {
 	color-scheme: dark;
 	--font-sans: "Hanken Grotesk Variable", "Hanken Grotesk", ui-sans-serif, sans-serif;
-	--frame: #1b1b1b;
-	--background: #232323;
+	--frame: #232323;
+	--background: #1b1b1b;
 	--foreground: oklch(0.95 0.002 106);
 	--card: #2c2c2c;
 	--card-foreground: var(--foreground);

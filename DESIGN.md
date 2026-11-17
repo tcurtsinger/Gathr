@@ -3,8 +3,8 @@ name: Gathr
 description: A desktop conversation workspace for a team of agents.
 tokens: designs/tokens.css
 colors:
-  frame: "#1b1b1b"
-  background: "#232323"
+  frame: "#232323"
+  background: "#1b1b1b"
   foreground: "oklch(.95 .002 106)"
   card: "#2c2c2c"
   popover: "#2f2f2f"
@@ -42,9 +42,10 @@ tokens and static component anatomy, not replacement runtime components.
 
 ## Colors
 
-Surfaces take three steps, back to front. `frame` is navigation, the top bar and
-the workspace. `background` is the chat. `card` is what stands on the chat: an
-approval, a notice. Dark is #1b1b1b, #232323 and #2c2c2c, with floating surfaces
+Surfaces take three steps. `frame` is navigation, the top bar and the workspace.
+`background` is the chat. `card` is what stands on the chat: an approval, a
+notice. In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
+chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
 `accent-surface`, a menu's highlight, is lighter than the popover. Light is a white chat with a
@@ -87,7 +88,10 @@ Summary are history.
 
 ## Layout
 
-- Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px.
+- The window is at least 960 x 600; nothing is designed below that.
+- Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px (a browser
+  only). With the workspace open in a narrow window it gives way to leave the chat and the
+  workspace 360px each, never under 190px: 240px at 960.
 - Chat header and workspace tabstrip align at 46px. The prototype's 40px preview
   strip is fixture chrome, not a Gathr requirement.
 - Header: the title, then More 4px after it in the same group; the title truncates
@@ -101,9 +105,11 @@ Summary are history.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
   the normal 16px root size (0037). Composer shares that content width. New chat centres
   its heading, optional project notch and composer.
-- Workspace starts at 40% of available width, initially clamped to 480 to 760px.
-  Resize minimum is 360px; desktop sizing preserves at least 360px for chat.
-  At 1200px and below it overlays chat. Close stays at its far right.
+- Workspace starts at 40% of available width, initially clamped to 360 to 760px.
+  Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
+  chat at least 360px: when the window narrows, the workspace gives way first, down to
+  360px, then navigation. Only the drawn widths give way; widths the person dragged come
+  back when the window widens. Close stays at its far right.
 - A document's adjacent file tree starts at 240px, resizes from 160 to 480px and
   leaves at least 200px for the reader. Reader padding is 24px, 20px narrow, or
   16px around highlighted source.
@@ -331,8 +337,7 @@ inferred state. Reduced motion stops spinners and rings.
 An agent opens beside the chat as a workspace tab, after Tasks: its 16px face and name, with a
 close button. One agent at a time: opening another replaces it. While another tab shows, the panel
 keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
-Summary, and from an agent's face in the timeline. Where the workspace lies over the chat (1200px
-and below), so does the panel. 20px 24px 32px padding, 24px between sections, each under a 13px muted
+Summary, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
 this chat yet".
 
@@ -343,8 +348,7 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
   and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
   · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Ready". Start times
   live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
-  picks that agent as the composer's recipient and focuses the composer (closing the workspace first
-  where it lies over the chat). An archived chat, or an agent that can't be sent to, has no Message.
+  picks that agent as the composer's recipient and focuses the composer. An archived chat, or an agent that can't be sent to, has no Message.
 - **Task:** the task its running turn works on, else its first open one: the title, "From Orin" and
   Open task, which opens it in the Tasks tab.
 - **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done
@@ -416,8 +420,7 @@ multiline field, "What to change". The foot has three cells: Drop (ghost) at the
 version while the plan is open, "Saving" in the middle while a request runs, and at the right, on
 the newest version once it has reached you, Send back (outline) and Approve; after Send back,
 Cancel (ghost) and Send back, disabled until the field has words. No sentence explains a button.
-The workspace lies over the chat at 1200px and under, as every tab does, and the foot's three
-buttons fit at 432px. The Check field also lists the version's Findings (a suggestion is left out) in a task's
+The foot's buttons fit at the workspace's narrowest, 360px, in both states. The Check field also lists the version's Findings (a suggestion is left out) in a task's
 note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
 ("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", and Changed, one row for each turn of the ask in which Gathr caught a change, "Ann: src/notes.rs, src/tags.rs", shown only when there is one. Each
 part is a line that opens to its brief, one at a time and none at first: Why, Done when, Proof,

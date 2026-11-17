@@ -14,10 +14,10 @@ export interface FileTab {
 
 export const fileId = (f: FileTab) => `${f.task}/${f.index}`;
 
-/** DESIGN.md Layout: beside the chat it leaves the chat 360px; over it (1200px and below), as workspace.css. */
+/** DESIGN.md Layout: beside the chat it leaves the chat 360px, as workspace.css. */
 function widest() {
   const nav = document.querySelector('.sidebar')?.getBoundingClientRect().width ?? 0;
-  return innerWidth > 1200 ? Math.max(360, innerWidth - nav - 360) : innerWidth - 48;
+  return Math.max(360, innerWidth - nav - 360);
 }
 
 interface Props {

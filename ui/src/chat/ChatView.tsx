@@ -77,8 +77,6 @@ interface Props {
   onOpenAgent?: (agent: string) => void;
   /** Opens a plan's tab in the workspace at a version, from its chip or a plan line (0062). */
   onOpenPlan?: (plan: number, version: number) => void;
-  /** Closes the workspace: it lies over the composer when Message is pressed in a narrow window. */
-  onCloseWorkspace?: () => void;
   /**
    * The workspace, beside the chat. It is given the open agent's name and the place for its panel, which
    * only the chat can draw. The chat asks again only when this function or the open agent changes, never
@@ -180,16 +178,12 @@ export function ChatView(props: Props) {
     },
   };
   const stable = useStable(actions);
-  const { agentOpen, workspace, onCloseWorkspace } = props;
+  const { agentOpen, workspace } = props;
   const opened = crew.find((g) => g.member.agent === agentOpen?.agent);
-  const message = useCallback(
-    (id: string) => {
-      setPicked(id);
-      if (matchMedia('(max-width: 1200px)').matches) onCloseWorkspace?.();
-      input.current?.focus();
-    },
-    [onCloseWorkspace],
-  );
+  const message = useCallback((id: string) => {
+    setPicked(id);
+    input.current?.focus();
+  }, []);
   // The panel's place in the workspace: the same element whatever streams, so the workspace isn't asked
   // for again. The panel is drawn into it from here and stays there while another tab shows, keeping its
   // scroll and its opened rows; hidden, it is handed what it was last drawn from, so nothing redraws it.

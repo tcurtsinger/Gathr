@@ -400,7 +400,6 @@ export function App() {
             }));
             person.setOpen(chat.id, true);
           }}
-          onCloseWorkspace={() => person.setOpen(chat.id, false)}
           found={found?.chat === chat.id ? found : undefined}
           onFound={() => setFound(null)}
           notice={notice}

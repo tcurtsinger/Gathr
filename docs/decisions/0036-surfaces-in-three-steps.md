@@ -10,7 +10,8 @@ Built: yes. Proof: `designs/tokens.css`, `designs/check.cjs`. No test: the token
   chat), `--card` (what stands on the chat: an approval, a notice). Floating surfaces (the composer,
   popovers, the one dialog, Help) use `--popover`. `--secondary` and `--muted-surface` (the person's message)
   follow the card.
-- **Dark:** frame `#1b1b1b`, background `#232323`, card, secondary and muted surface `#2c2c2c`, popover
+- **Dark:** frame `#1b1b1b`, background `#232323` (swapped by [0068](0068-the-windows-colours.md): the chat is now
+  the darker), card, secondary and muted surface `#2c2c2c`, popover
   `#2f2f2f`, a menu's highlight (`--accent-surface`) `#383838`. Text is `oklch(0.95 0.002 106)`, a little
   under white; muted text is `oklch(0.74 0.004 106)`. Borders are `oklch(0.985 0.002 106 / 12%)`.
 - **Light:** background and popover are white; frame, card and secondary are `oklch(0.965 0.003 106)`; the
