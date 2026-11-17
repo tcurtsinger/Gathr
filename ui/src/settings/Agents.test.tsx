@@ -58,8 +58,12 @@ function service(agents: Agent[], models: (account: string) => Response | Promis
   vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
     const method = init?.method ?? 'GET';
     if (method !== 'GET' && path !== '/api/ui/events')
-      sent.push({ method, path, body: JSON.parse(String(init?.body)) });
-    if (path === '/api/agents' && method === 'GET') return answer({ agents });
+      sent.push({ method, path, body: init?.body === undefined ? undefined : JSON.parse(String(init.body)) });
+    if (path === '/api/agents' && method === 'GET') return answer({ agents, removed: [] });
+    // Mira leads where Ann sits, with a task open.
+    const counts = { chats: 0, tasks: 1, projects: 0, leads: ['Ann'] };
+    if (path.endsWith('/delete')) return answer(counts);
+    if (method === 'DELETE') return answer({ ...counts, deleted: true, left: [] });
     if (path === '/api/agents') return answer({ id: 'new', ...JSON.parse(String(init?.body)) });
     if (path === '/api/accounts')
       return answer({ accounts: [account('a', 'Made-up one'), account('b', 'Made-up two')] });
@@ -251,4 +255,17 @@ test('Codex lists its exact models without Gathr’s Latest rows, and a new agen
     .toHaveAttribute('aria-pressed', 'true');
   const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
   expect(list.elements().map((b) => b.textContent)).toEqual(['GPT-6-Astra', 'GPT-6.1-Sol']);
+});
+
+test('Delete asks with what the service counts, then deletes the agent', async () => {
+  service([agent({ name: 'Mira' }), agent({ id: 'y', name: 'Ann' })], listed);
+  const screen = await render(<Agents onReference={() => {}} />);
+  await screen.getByRole('button', { name: 'Delete' }).click();
+  const confirm = screen.getByRole('dialog', { name: 'Delete Mira?' });
+  await expect.element(confirm.getByText('1 task will be cancelled. Ann becomes lead.')).toBeVisible();
+  await confirm.getByRole('button', { name: 'Delete' }).click();
+
+  await expect.element(confirm).not.toBeInTheDocument();
+  await expect.element(screen.getByRole('button', { name: 'Mira' })).not.toBeInTheDocument();
+  expect(sent).toEqual([{ method: 'DELETE', path: '/api/agents/x', body: undefined }]);
 });

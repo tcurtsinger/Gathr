@@ -48,7 +48,7 @@ interface Props {
 /**
  * A More menu (the prototype's ChatActions): the pause item, then Archive or Restore, then Delete,
  * each after a separator. The chat's header has them all, a sidebar row Archive and Delete, a
- * project's row Project settings, and an agent's panel Compact.
+ * project's row Project settings and Delete, and an agent's panel Compact.
  */
 export function ChatMenu({
   label = 'More',

@@ -47,6 +47,8 @@ export function Dialog({ open, title, onClose, opener, className, bare, closeIco
       aria-labelledby={titled}
       onCancel={(e) => {
         e.preventDefault();
+        // React passes it on to a dialog this one sits in: Escape closes only the top one.
+        e.stopPropagation();
         onClose();
       }}
     >

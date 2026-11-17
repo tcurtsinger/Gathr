@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-17: the `remove` mock-up, cases 1 to 9, option A in each of its three choices, and the confirm's wording). Date: 2026-11-17.
 
-Built: partly. Proof: `crates/gathr/tests/delete.rs`. Not built: the window's half (a project's Delete, the confirm's words from the counts, a removed agent's face and card).
+Built: partly. Proof: `crates/gathr/tests/delete.rs`, `ui/src/deleting.test.ts`, `ui/src/deletes.test.tsx`, `ui/src/settings/Agents.test.tsx`, `ui/src/settings/Projects.test.tsx`. Not built: a removed agent's face with no mark and its card saying Removed (a later window change).
 
 Amends [0034](0034-agent-folder.md) (what Gathr removes) and [0028](0028-team-chats.md) (an agent in a chat is no longer refused). Serves promise 7 of [the charter](../charter.md#the-promises), part 7 of [the truth map](../truth-map.md): nothing Gathr made is left behind that nobody can find, and nothing the person keeps is lost.
 
@@ -29,7 +29,7 @@ A project's **only agent** is the one agent of its team. A chat's only agent is 
 - One step that says what it ends is one confirm; archiving every chat first is four confirms for the same result.
 - Shared holds the team's plans, reviews and evidence: nobody can make it again. Each agent's folder holds worktrees (their branches stay) and temporary files; the checks checkout and caches are git's and a cache's.
 - A team and a chat always have 1 to 5 agents (0013). Taking out the only agent would make a state with none that every screen would have to handle, so what it was alone in goes with it.
-- Keeping the row is one column and a filter on each list; copying the name into every message touches every message and every reader of them.
+- Keeping the row keeps the name for its old messages at the cost of one migration, which rebuilds `agents` so a removed agent lets go of its account and its name, and a filter on each list; copying the name into every message touches every message and every reader of them.
 - Recording the project's folders as due reuses the sweep's guards (in use, leads into the data folder) and its retries across restarts, instead of a second remover.
 
 ## Turned down

@@ -3,7 +3,6 @@
 //! folders by the sweep. An agent's work stops the gentle way, it is removed in one transaction,
 //! then what it was the only agent of goes. Sent again after a failure, either carries on.
 
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, State as Extract};
@@ -15,7 +14,7 @@ use gathr::event::Event;
 use serde_json::{Value, json};
 
 use crate::api::{State, Trace};
-use crate::routes::{Answer, Fail, db, fail};
+use crate::routes::{Answer, Fail, fail};
 use crate::team::written;
 
 const ERROR: &str = "Delete failed";
@@ -67,11 +66,10 @@ pub async fn project(
 /// The project's rows, once its chats are gone, then its own folders: what couldn't be removed.
 async fn finish_project(s: &Arc<State>, t: &Trace, id: &str) -> Result<Vec<String>, Fail> {
     let (key, data, trace) = (id.to_string(), s.data.path().to_path_buf(), t.0.clone());
-    let Json(parts) = db(s, t, ERROR, move |c| {
-        Ok(json!(deleting::delete_project(c, &key, &data, &trace)?))
-    })
-    .await?;
-    let parts: Vec<PathBuf> = serde_json::from_value(parts).unwrap_or_default();
+    let deleted = s
+        .writer
+        .call(move |c| deleting::delete_project(c, &key, &data, &trace));
+    let parts = written(t, deleted.await, ERROR)?;
     let left = crate::cleanup::sweep_paths(&s.chats, parts).await;
     let event = Event::point("gathr.project.files")
         .trace(&t.0)
