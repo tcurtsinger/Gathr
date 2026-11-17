@@ -19,8 +19,9 @@ interface Props {
 }
 
 /**
- * Settings > Agents' Face, Gender and Skin tone (0074), saved with the form. Shuffle picks a new seed. A gender or
- * tone never set shows what the seed picked, and choosing one keeps it from then on.
+ * Settings > Agents' Face, Gender and Skin tone (0074), saved with the form. A gender or tone never set shows what
+ * the seed picked, and choosing one keeps it from then on. Shuffle picks a new seed and keeps the gender and tone
+ * shown, which sets them, so a face never changes gender or tone that way.
  */
 export function FaceFields({ id, name, seed, gender, skin, onChange }: Props) {
   const picked = faceOptions(seed, { gender, skin });
@@ -33,7 +34,13 @@ export function FaceFields({ id, name, seed, gender, skin, onChange }: Props) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => onChange({ face_seed: Math.random().toString(36).slice(2, 10) })}
+            onClick={() =>
+              onChange({
+                face_seed: Math.random().toString(36).slice(2, 10),
+                gender: picked.gender,
+                skin: picked.skin,
+              })
+            }
           >
             Shuffle
           </Button>

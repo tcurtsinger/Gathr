@@ -312,16 +312,19 @@ test('a face never set shows what its seed picked; a gender or a tone chosen red
     });
 });
 
-test('Shuffle draws a new face from a new seed, and only the seed is saved', async () => {
-  service([agent({ name: 'Ann', face_seed: 'Ann', skin: 3 })], listed);
+test('Shuffle draws a new face from a new seed and keeps the gender and tone shown, saving them', async () => {
+  // Nothing set: Ann's seed picks a woman of tone 5, and the form shows them.
+  service([agent({ name: 'Ann', face_seed: 'Ann' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const face = screen.getByRole('img', { name: 'Ann' });
-  await expect.element(face).toBeVisible();
+  const gender = screen.getByRole('combobox', { name: 'Gender' });
+  await expect.element(gender).toHaveValue('woman');
   const before = face.element().innerHTML;
   await screen.getByRole('button', { name: 'Shuffle' }).click();
   expect(face.element().innerHTML).not.toBe(before);
+  await expect.element(gender).toHaveValue('woman');
   await expect
-    .element(screen.getByRole('button', { name: 'Skin tone 3' }))
+    .element(screen.getByRole('button', { name: 'Skin tone 5' }))
     .toHaveAttribute('aria-pressed', 'true');
 
   await screen.getByRole('button', { name: 'Save' }).click();
@@ -330,6 +333,6 @@ test('Shuffle draws a new face from a new seed, and only the seed is saved', asy
   expect([typeof face_seed, face_seed === 'Ann', rest]).toEqual([
     'string',
     false,
-    { name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto' },
+    { name: 'Ann', account: 'a', model: null, effort: null, approvals: 'auto', gender: 'woman', skin: 5 },
   ]);
 });

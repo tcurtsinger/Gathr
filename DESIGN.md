@@ -142,7 +142,7 @@ Use actual assistant-ui primitives and the recorded official registry components
 after the integration decision is approved. Do not build lookalikes in `ui/`.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
 `ui/registry.json` records each adaptation with its original and adapted hash and why:
-ElicitationForm, OptionList, SpeakerIdentity, Button, Tooltip and TodoList today. Retain source
+ElicitationForm, OptionList, Button, Tooltip and TodoList today. Retain source
 notices and both hashes.
 Dependency approval, pinned versions and file splitting belong to the integration
 decision; this design update adds no JavaScript dependency.
@@ -532,7 +532,7 @@ stays where it is.
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
 one shared editor: Face, Gender, Skin tone, Account, Model, Effort, Approvals. Face is the agent's
-56px face and Shuffle, which draws it from a new seed; Gender is Man or Woman; Skin tone is six swatches,
+56px face and Shuffle, which draws it from a new seed and keeps the gender and tone shown; Gender is Man or Woman; Skin tone is six swatches,
 light to deep, named Skin tone 1 to 6. Each redraws the face at once and is saved with Save. A gender or tone
 never set shows what the face's seed picked (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
