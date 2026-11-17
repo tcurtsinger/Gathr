@@ -771,12 +771,20 @@ impl Task {
         }
     }
 
-    /// The agent was deleted: its waiting turns fail, and its engine closes once it's free.
+    /// The agent was deleted (0069): its waiting turns stop, its running turn stops as Stop stops
+    /// it, and its engine closes the gentle way, never killed: it may be renewing its login.
     async fn retire(&mut self) {
+        const WHY: &str = gathr::deleting::WHY;
         self.retired = true;
         for queued in std::mem::take(&mut self.queue) {
-            self.set_turn(&queued.ids, "failed", Some("its agent was deleted"))
-                .await;
+            self.set_turn(&queued.ids, "stopped", Some(WHY)).await;
+        }
+        if let Some(chat) = self.turn.as_ref().map(|t| t.ids.chat.clone()) {
+            self.interrupt(&chat).await;
+        }
+        self.close(WHY).await;
+        if let Some(running) = self.turn.take() {
+            self.set_turn(&running.ids, "stopped", Some(WHY)).await;
         }
     }
 

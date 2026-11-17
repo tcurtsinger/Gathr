@@ -672,6 +672,18 @@ Parts: 7.8
 - **Then** its title names its folder, so it can't be read as the person's own, and it doesn't install
   the update by itself
 
+### 7i. A deleted project or agent leaves nothing of Gathr's behind but Shared
+
+Parts: 7.10
+
+- **Given** a project with chats, one of them running a turn, and an agent in two projects with open
+  tasks, the lead of one and the only agent of another
+- **When** the person deletes the project, then the agent
+- **Then** the project goes with its chats and every folder Gathr made for it but Shared, and the
+  person's checkout stays as it was; the agent's tasks are cancelled, the next agent leads where it
+  led, what it was alone in goes, and its old messages still name it
+- **And** a folder that can't go yet is named with its reference, and goes at a later sweep
+
 ## 8. Context lives in the record
 
 ### 8a. A task has a record

@@ -19,7 +19,7 @@ use rusqlite::OptionalExtension;
 use serde_json::{Value, json};
 
 use crate::api::{State, Trace};
-use crate::routes::{Answer, db, known};
+use crate::routes::{Answer, Fail, db, known};
 
 /// How long a delete waits for the chat's engines and wait checks to end before removing what it can.
 const EXIT_WAIT: Duration = Duration::from_secs(35);
@@ -89,16 +89,24 @@ async fn delete_chat(
     Path(chat): Path<String>,
 ) -> Answer {
     known(&s, &t, &chat).await?;
+    let left = delete(&s, &t, &chat).await?;
+    Ok(Json(json!({ "deleted": true, "left": left })))
+}
+
+/// Deletes the chat (a project's or an agent's delete deletes its chats this way too, 0069): what
+/// couldn't be removed, with why.
+pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>, Fail> {
+    let (s, chat) = (s.clone(), chat.to_string());
     let id = chat.clone();
-    let Json(archived) = db(&s, &t, "Delete failed", move |c| {
+    let Json(archived) = db(&s, t, "Delete failed", move |c| {
         Ok(json!(archive::archived(c, &id)?.is_some()))
     })
     .await?;
     if archived != json!(true) {
-        let _ = archive_now(&s, &t, &chat, "Delete failed").await?;
+        let _ = archive_now(&s, t, &chat, "Delete failed").await?;
     }
     let id = chat.clone();
-    let Json(project) = db(&s, &t, "Delete failed", move |c| {
+    let Json(project) = db(&s, t, "Delete failed", move |c| {
         let project: Option<String> = c
             .query_row("SELECT project FROM chats WHERE id = ?1", [&id], |r| {
                 r.get(0)
@@ -116,7 +124,7 @@ async fn delete_chat(
     let exited = tokio::time::timeout(EXIT_WAIT, ended).await;
     s.chats.pauses_changed().await;
     let (id, trace) = (chat.clone(), t.0.clone());
-    let Json(files) = db(&s, &t, "Delete failed", move |c| {
+    let Json(files) = db(&s, t, "Delete failed", move |c| {
         Ok(json!(archive::delete(c, &id, &trace)?))
     })
     .await?;
@@ -136,7 +144,7 @@ async fn delete_chat(
     };
     s.writer.record(event);
     announce(&s, &chat, "deleted");
-    Ok(Json(json!({ "deleted": true, "left": left })))
+    Ok(left)
 }
 
 /// The chat's worktrees from before the agent folder, its hooks, folder and its tasks' files: what

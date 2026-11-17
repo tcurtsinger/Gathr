@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
-import { ConfirmRemove } from '../components/ConfirmRemove';
+import { danger } from '../components/Confirm';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
+import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
@@ -24,7 +25,7 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
   const addButton = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(() => {
-    api.agents().then(setAgents, setFailure);
+    api.agents().then((a) => setAgents(a.agents), setFailure);
     api.accounts().then(setAccounts, setFailure);
   }, []);
   useEffect(() => {
@@ -94,8 +95,9 @@ export function Agents({ start, onReference }: { start?: string; onReference: Op
               setSaved(done.id);
             }}
             onCancelNew={toAdd}
-            onRemoved={() => {
+            onDeleted={(left) => {
               setAgents((list) => list?.filter((a) => a.id !== shown) ?? null);
+              setFailure(left);
               toAdd();
             }}
             onReference={onReference}
@@ -112,7 +114,8 @@ interface FormProps {
   saved: boolean;
   onSaved: (agent: Agent) => void;
   onCancelNew: () => void;
-  onRemoved: () => void;
+  /** What the delete couldn't remove yet, if anything. */
+  onDeleted: (left: Failure | null) => void;
   onReference: Open;
 }
 
@@ -138,7 +141,7 @@ const modes: [Approvals, string, string][] = [
 
 /** One Account picker (it implies the engine), then the account's models and their efforts. */
 function AgentForm(props: FormProps) {
-  const { agent, accounts, saved, onSaved, onCancelNew, onRemoved, onReference } = props;
+  const { agent, accounts, saved, onSaved, onCancelNew, onDeleted, onReference } = props;
   // Only the fields edited here, over the agent as saved, so a save from elsewhere shows in
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
@@ -149,9 +152,8 @@ function AgentForm(props: FormProps) {
   };
   const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  /** Focus goes back to Remove when its question is cancelled. */
-  const cancelled = useRef(false);
+  /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
+  const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const models = useModels(account);
   const title = useId();
@@ -183,15 +185,6 @@ function AgentForm(props: FormProps) {
     if (!agent) return onCancelNew();
     setEdits({});
     setFind('');
-  };
-  const remove = () => {
-    if (!agent) return;
-    setConfirming(false);
-    setBusy(true);
-    api.removeAgent(agent.id).then(onRemoved, (f: Failure) => {
-      setBusy(false);
-      setFailure(f);
-    });
   };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,30 +313,28 @@ function AgentForm(props: FormProps) {
       </div>
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
-        {agent &&
-          (confirming ? (
-            <ConfirmRemove
-              name={agent.name}
-              onCancel={() => {
-                setConfirming(false);
-                cancelled.current = true;
-              }}
-              onRemove={remove}
-            />
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              ref={(b) => {
-                if (b && cancelled.current) b.focus();
-                cancelled.current = false;
-              }}
-              onClick={() => setConfirming(true)}
-            >
-              Remove
-            </Button>
-          ))}
+        {agent && (
+          <Button
+            type="button"
+            variant="outline"
+            className={danger}
+            disabled={busy}
+            onClick={(e) => setDeleting(e.currentTarget)}
+          >
+            Delete
+          </Button>
+        )}
+        {agent && deleting && (
+          <DeleteConfirm
+            kind="agent"
+            id={agent.id}
+            name={agent.name}
+            opener={deleting}
+            onCancel={() => setDeleting(null)}
+            onDeleted={onDeleted}
+            onReference={onReference}
+          />
+        )}
         <span className="muted" role="status">
           {saved && !changed ? 'Saved' : ''}
         </span>

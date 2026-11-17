@@ -8,6 +8,7 @@ import {
   type Chat,
   type Failure,
   type Member,
+  type Named,
   type PauseScope,
   type Pauses,
   type Project,
@@ -36,6 +37,8 @@ import './chat.css';
 interface Props {
   chat: Chat;
   agents: Agent[];
+  /** Removed agents, by name: their old messages still say who wrote them (0069). */
+  removed?: Named[];
   /** Opens Settings > Agents at this agent. */
   onEditAgent: (agent: string) => void;
   draft: string;
@@ -85,6 +88,8 @@ interface Props {
   onFound?: () => void;
 }
 
+const NONE: Named[] = [];
+
 export function ChatView(props: Props) {
   const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
@@ -112,7 +117,9 @@ export function ChatView(props: Props) {
   const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   const cache = useRef(new Map());
-  const timeline = useMemo(() => toThread(state, agents, failed, cache.current), [state, agents, failed]);
+  const { removed = NONE } = props;
+  const named = useMemo(() => [...agents, ...removed], [agents, removed]);
+  const timeline = useMemo(() => toThread(state, named, failed, cache.current), [state, named, failed]);
   const team = !fresh && state.members.length > 1;
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.

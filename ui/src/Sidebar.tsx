@@ -20,6 +20,7 @@ interface Props {
   update?: { ready: string | null; updating: boolean; asking: boolean; onUpdate: () => void };
   /** Settings > Projects, at this project. */
   onProjectSettings: (project: string, opener: HTMLElement | null) => void;
+  onDeleteProject: (project: Project, opener: HTMLElement | null) => void;
   /** Under New: the Tasks flyout. */
   actions?: ReactNode;
   onArchive: (chat: Chat, opener: HTMLElement | null) => void;
@@ -112,6 +113,7 @@ export function Sidebar(props: Props) {
                       label={`More for ${p.name}`}
                       className="row-more"
                       onProjectSettings={(opener) => props.onProjectSettings(p.id, opener)}
+                      onDelete={(opener) => props.onDeleteProject(p, opener)}
                     />
                   </div>
                   {open && (

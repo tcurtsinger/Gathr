@@ -78,7 +78,7 @@ fn worked_here(
     let mut others = conn.prepare(
         "SELECT a.name FROM agents a WHERE a.id IN \
          (SELECT agent_id FROM turns WHERE chat_id = ?1 AND agent_id IS NOT NULL) \
-         AND a.id IS NOT ?2 ORDER BY a.name",
+         AND a.id IS NOT ?2 AND a.removed_ts IS NULL ORDER BY a.name",
     )?;
     let names = others.query_map(rusqlite::params![chat, agent], |r| r.get(0))?;
     names.collect()

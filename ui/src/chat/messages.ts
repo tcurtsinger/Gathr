@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Agent, Failure, Message, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Failure, Message, Named, Role, ThinkingBody, ToolBody, Turn } from '../api';
 import { planLine, versionOf } from '../plans/plans';
 import { asker } from '../tasks/model';
 import { changed, fixed, sizeLines } from './asks';
@@ -119,7 +119,7 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  * stream ends. One that didn't change is the same object as on the draw before (`cache`), so the thread
  * can tell which blocks to convert and draw again.
  */
-export function toThread(state: ChatState, agents: Agent[], unsent: SendFailure[], cache: Cache): Timeline {
+export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[], cache: Cache): Timeline {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
   const groups = place(grouped(state), state);
   const gave = givenBy(state, crew);

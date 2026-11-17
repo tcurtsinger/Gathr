@@ -156,15 +156,6 @@ fn role_rules_are_refused_through_the_api() {
     let changes = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.members' AND error_type IS NULL";
     let (_, rows) = gathr(&data.0, &["diag", "query", changes]);
     assert_eq!(rows["rows"][0]["n"], 2, "each change is recorded: {rows}");
-
-    let answer = service.call("DELETE", &format!("/api/agents/{b}"));
-    assert_eq!(
-        answer.status, 409,
-        "a chat's agent was deleted: {}",
-        answer.body
-    );
-    let answer = service.call("DELETE", &format!("/api/agents/{a}"));
-    assert_eq!(answer.status, 200, "an agent no chat has: {}", answer.body);
 }
 
 #[test]

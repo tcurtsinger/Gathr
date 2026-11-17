@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { type Agent, api, type Chat, type Failure, type Project } from './api';
+import { type Agent, api, type Chat, type Failure, type Named, type Project } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
 import { Confirm } from './components/Confirm';
 import { FailureNotice } from './components/Notice';
+import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { PlanTab } from './plans/PlanTab';
@@ -32,7 +33,10 @@ export function App() {
   } | null>(null);
   // Restore asks nothing: a failure shows on the archived chat, opened if it wasn't.
   const [restoreFailure, setRestoreFailure] = useState<{ chat: string; failure: Failure } | null>(null);
+  // A project's Delete, from its More (0069).
+  const [deleting, setDeleting] = useState<{ project: Project; opener: HTMLElement | null } | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [removed, setRemoved] = useState<Named[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [newProject, setNewProject] = useState(false);
   const [fresh, setFresh] = useState<{ project?: string } | null>(null);
@@ -87,7 +91,11 @@ export function App() {
   }, [loadChats]);
 
   useEffect(() => {
-    const load = () => api.agents().then(setAgents, setFailure);
+    const load = () =>
+      api.agents().then((a) => {
+        setAgents(a.agents);
+        setRemoved(a.removed);
+      }, setFailure);
     load();
     return listen((event) => {
       if (event.type === 'agents' || event.type === 'lagged') load();
@@ -112,11 +120,16 @@ export function App() {
   // The open chat, deleted here or in another window, gives way to its neighbour in the sidebar, else New.
   const lists = useRef({ chats, archived, selected });
   lists.current = { chats, archived, selected };
+  // Chats deleted, or going with a project deleted here: a project's or an agent's delete deletes several
+  // one after another, and the open one never gives way to one of them.
+  const going = useRef(new Set<string>());
   const leave = useCallback((id: string) => {
+    going.current.add(id);
     const { chats, archived, selected } = lists.current;
     if (id !== selected) return;
     const gone = [...chats, ...archived].find((c) => c.id === id);
-    const next = gone && neighbour(gone, gone.archived ? archived : chats);
+    const staying = (list: Chat[]) => list.filter((c) => c.id === id || !going.current.has(c.id));
+    const next = gone && neighbour(gone, staying(gone.archived ? archived : chats));
     setSelected(next?.id ?? null);
     if (!next) setFresh({});
   }, []);
@@ -204,12 +217,30 @@ export function App() {
     leave(c.id);
     await reloadLists().catch(setFailure);
   };
+  // Its chats went one by one, each told on the live socket as a chat's Delete is.
+  const deleted = (project: string, left: Failure | null) => {
+    setDeleting(null);
+    setProjects((list) => list.filter((p) => p.id !== project));
+    if (left) setFailure(left);
+    reloadLists().catch(setFailure);
+  };
+  // While its confirm is open, a project's chats are going: none of them is a neighbour to move to.
+  const projectChats = (project: string) => [...chats, ...archived].filter((c) => c.project === project);
+  const askDelete = (project: Project, opener: HTMLElement | null) => {
+    for (const c of projectChats(project.id)) going.current.add(c.id);
+    setDeleting({ project, opener });
+  };
+  const cancelDelete = (project: string) => {
+    for (const c of projectChats(project)) going.current.delete(c.id);
+    setDeleting(null);
+  };
   const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
   const paneOpen = !!chat?.id && !!person.open[chat.id];
   const tabsOf = (c: string): Tabs => tabs[c] ?? { files: [], selected: 'tasks' };
   const setTab = (c: string, change: (t: Tabs) => Partial<Tabs>) =>
     setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
-  const name = (agent: string | null) => agents.find((a) => a.id === agent)?.name ?? 'An agent';
+  const name = (agent: string | null) =>
+    [...agents, ...removed].find((a) => a.id === agent)?.name ?? 'An agent';
   // The plan's tab at the version shown; the newest when the plan has no such version yet.
   const planTab = (of: string, plan: Tabs['plan']) =>
     plan && {
@@ -281,6 +312,7 @@ export function App() {
           asking: appUpdate.asking,
           onUpdate: appUpdate.update,
         }}
+        onDeleteProject={askDelete}
         onProjectSettings={(project, opener) =>
           setSettings({
             page: 'projects',
@@ -320,6 +352,7 @@ export function App() {
           key={chat.id || 'new'}
           chat={chat}
           agents={agents}
+          removed={removed}
           onEditAgent={(agent) =>
             setSettings({ page: 'agents', agent, opener: document.activeElement as HTMLElement })
           }
@@ -457,6 +490,18 @@ export function App() {
           onConfirm={() =>
             (asking.verb === 'Archive' ? archive : remove)(asking.chat).then(() => setAsking(null))
           }
+          onReference={openReference}
+        />
+      )}
+      {deleting && (
+        <DeleteConfirm
+          key={`delete-${deleting.project.id}`}
+          kind="project"
+          id={deleting.project.id}
+          name={deleting.project.name}
+          opener={deleting.opener}
+          onCancel={() => cancelDelete(deleting.project.id)}
+          onDeleted={(left) => deleted(deleting.project.id, left)}
           onReference={openReference}
         />
       )}

@@ -125,19 +125,6 @@ pub fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, 
     }
 }
 
-/// The title of a chat the agent is in, if any: an agent isn't deleted while a chat has it.
-pub fn a_chat_of(conn: &Connection, agent: &str) -> Result<Option<String>, Error> {
-    use rusqlite::OptionalExtension;
-    Ok(conn
-        .query_row(
-            "SELECT c.title FROM chat_members m JOIN chats c ON c.id = m.chat_id
-             WHERE m.agent_id = ?1 ORDER BY c.created_ts LIMIT 1",
-            [agent],
-            |r| r.get(0),
-        )
-        .optional()?)
-}
-
 /// Where a message goes: its agent, and the chat's agents when sending it added one.
 pub struct Routed {
     pub agent: Option<String>,
@@ -174,7 +161,7 @@ pub fn route(
         let first: Option<String> = conn
             .query_row(
                 "SELECT t.agent_id FROM turns t JOIN agents a ON a.id = t.agent_id
-                 WHERE t.chat_id = ?1 ORDER BY t.created_ts DESC LIMIT 1",
+                 WHERE t.chat_id = ?1 AND a.removed_ts IS NULL ORDER BY t.created_ts DESC LIMIT 1",
                 [chat],
                 |r| r.get(0),
             )

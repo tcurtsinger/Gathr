@@ -570,6 +570,14 @@ pub fn restart(
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
     may_change(&tx, &t, by, "restart")?;
     crate::archive::refuse_archived(&tx, &t.chat)?;
+    if let Some(owner) = t.owner.as_deref()
+        && crate::agents::is_removed(&tx, owner)?
+    {
+        let name = name_of(&tx, owner)?;
+        return Err(refused(format!(
+            "Task #{task} can't restart: {name} was deleted."
+        )));
+    }
     if !t.state.settled() || t.state == State::Done {
         let state = t.state.as_str();
         return Err(refused(format!(
@@ -921,6 +929,30 @@ pub(crate) fn cancelled_with(
     trace: &str,
 ) -> Result<(), Error> {
     set(conn, task, State::Cancelled, Some(why), trace)
+}
+
+/// Cancels every one of `tasks` with why, then for each ends its waits and moves what follows: all
+/// are cancelled first, so nothing that follows one of them starts another (0069). The person's
+/// questions among them are cancelled alone: their giver is gone, nobody hears of them.
+pub(crate) fn cancel_all(
+    tx: &Transaction,
+    tasks: &[i64],
+    why: &str,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
+    for &task in tasks {
+        set(tx, task, State::Cancelled, Some(why), trace)?;
+    }
+    let mut starts = Vec::new();
+    for &task in tasks {
+        end_waits(tx, task, "its task was cancelled")?;
+        if read(tx, task)?.kind == Kind::Person {
+            continue;
+        }
+        starts.extend(crate::changes::report::cancelled(tx, task, trace)?);
+        starts.extend(cascade(tx, task, trace)?);
+    }
+    Ok(starts)
 }
 
 /// Cancels the task with why: its open waits end, and what follows it moves.

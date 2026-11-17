@@ -97,7 +97,7 @@ impl Seeder<'_> {
                 params![ulid(self.ts), name, key(name), account, self.ts],
             )?;
             ids.push(self.conn.query_row(
-                "SELECT id FROM agents WHERE name_key = ?1",
+                "SELECT id FROM agents WHERE name_key = ?1 AND removed_ts IS NULL",
                 [key(name)],
                 |r| r.get(0),
             )?);

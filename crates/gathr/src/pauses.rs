@@ -64,15 +64,15 @@ pub fn list(conn: &Connection) -> Result<Vec<Pause>, Error> {
 
 /// Checks the scope names something that exists: the app takes no target.
 fn checked(conn: &Connection, scope: &str, target: &str) -> Result<(), Error> {
-    let table = match scope {
+    let sql = match scope {
         "app" if target.is_empty() => return Ok(()),
         "app" => return Err(refused("the app's pause takes no target")),
-        "chat" => "chats",
-        "agent" => "agents",
+        "chat" => "SELECT 1 FROM chats WHERE id = ?1",
+        // A removed agent (0069) is no agent to pause.
+        "agent" => "SELECT 1 FROM agents WHERE id = ?1 AND removed_ts IS NULL",
         _ => return Err(refused("scope is app, chat or agent")),
     };
-    let sql = format!("SELECT 1 FROM {table} WHERE id = ?1");
-    let found: Option<i64> = conn.query_row(&sql, [target], |r| r.get(0)).optional()?;
+    let found: Option<i64> = conn.query_row(sql, [target], |r| r.get(0)).optional()?;
     match found {
         Some(_) => Ok(()),
         None => Err(refused(format!("there's no {scope} {target}"))),

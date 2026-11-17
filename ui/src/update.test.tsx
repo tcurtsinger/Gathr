@@ -43,7 +43,7 @@ function service(app: AppState) {
       made.app = standing('updating', '9.9.9');
       return json({ installing: '9.9.9' });
     }
-    if (path === '/api/agents') return json({ agents: [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
