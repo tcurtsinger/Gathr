@@ -272,7 +272,7 @@ Only its ticks take the pointer.
   into one tick.
 - Card, to the right, on hover or keyboard focus: "You · 16:04" or the lead's name and time, 13px medium,
   two lines; then the message's first lines as plain text, muted, three lines. A day: "Monday · 14 messages
-  from you" (the date once a week old), "Jumps to the start of that day". The tick's accessible name is
+  from you" (the date once a week old), alone. The tick's accessible name is
   the card's title and its description the preview. Escape closes the card.
 - A tick opens its message at the top of the view, 32px under the edge, and focus stays on the tick.
   Up, Down, Home and End move along the rail. At the end of the chat the latest message on screen is the

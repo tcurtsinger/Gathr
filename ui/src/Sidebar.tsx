@@ -39,7 +39,6 @@ export function Sidebar(props: Props) {
         type="button"
         className="chat-link"
         aria-current={c.id === selected ? 'page' : undefined}
-        title={c.title}
         onClick={() => onSelect(c.id)}
       >
         <span>{c.title}</span>
@@ -91,7 +90,6 @@ export function Sidebar(props: Props) {
                       type="button"
                       className="navbutton"
                       aria-expanded={open}
-                      title={p.folder}
                       onClick={() => {
                         const next = new Set(folded);
                         if (open) next.add(p.id);

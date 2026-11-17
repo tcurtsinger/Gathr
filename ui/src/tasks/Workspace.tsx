@@ -68,7 +68,6 @@ export function Workspace(props: Props) {
         aria-selected={id === selected}
         aria-controls={`workspace-view-${id}`}
         tabIndex={id === selected ? 0 : -1}
-        title={label}
         onClick={() => onSelect(id)}
       >
         {icon}
