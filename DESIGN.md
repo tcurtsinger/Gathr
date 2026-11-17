@@ -469,6 +469,12 @@ Cancel and the verb. The title wraps, Cancel has initial focus, Escape cancels
 and focus returns to the trigger. Archive uses the neutral primary Button;
 Delete uses the outlined danger Button. A refused action keeps the confirm
 open with "Archive failed" or "Delete failed" and its Diagnostics reference.
+A confirm that needs it has a short body under the question, in muted 14px: a
+count and what happens to it, then what is kept ("1 project and 2 chats will be
+deleted. Files are kept."). Every thing named carries its count, never its name;
+no line per fact, no paths. A project's or an agent's Delete (0069) takes its
+body from the service's counts when it opens; the verb waits for them, and
+counts that fail show the shared failure notice with the verb off. No Undo.
 Restore asks nothing; its failure uses the shared referenced Notice.
 
 The Tasks flyout has Questions, then an expanded Stale group. Each task appears
@@ -537,7 +543,9 @@ agent's name, or Found in the project) and when: the Supervisor sets them, the
 person never types one. Required checks (CI, Gathr's checks, Both) and Merge method
 (Fast-forward, Merge commit, Squash via GitHub API) are editable, each with one line
 saying what it means. A project's More in the sidebar has Project settings, which
-opens Projects at that project. Checks & merge ends with the checks cache: its size,
+opens Projects at that project, then Delete after a separator. Projects and Agents
+have Delete, the outlined danger Button, at the left of the form's foot; Agents'
+Delete replaced Remove and its inline question. Checks & merge ends with the checks cache: its size,
 "Unused caches are removed after 14 days" and Clear, which acts at once, apart from Save.
 
 An agent's task opens in the workspace's Tasks tab from its title in the agent

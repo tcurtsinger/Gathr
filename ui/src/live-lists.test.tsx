@@ -39,7 +39,7 @@ function service() {
     if (path === '/api/chats?archived=true') return json(made.archived);
     if (path === '/api/agents' && made.refuseAgents)
       return json({ error: 'Agents failed', why: 'made-up agents refusal', ref: 'made-up-agents' }, 500);
-    if (path === '/api/agents') return json({ agents: [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
     if (path === '/api/person-tasks') return json({ tasks: made.tasks, stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });

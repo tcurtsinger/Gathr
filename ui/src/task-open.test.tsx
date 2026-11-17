@@ -85,7 +85,7 @@ function service() {
   vi.stubGlobal('fetch', async (path: string) => {
     if (path === '/api/chats') return json([{ id: 'c', title: 'Made-up round', project: 'p' }]);
     if (path === '/api/chats?archived=true') return json([]);
-    if (path === '/api/agents') return json({ agents: [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [project] });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });

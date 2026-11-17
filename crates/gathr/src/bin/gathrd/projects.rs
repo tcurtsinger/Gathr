@@ -22,7 +22,10 @@ use crate::team::{Seat, bad, checked, written};
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/projects", get(list).post(create))
-        .route("/api/projects/{project}", patch(change))
+        .route(
+            "/api/projects/{project}",
+            patch(change).delete(crate::deletes::project),
+        )
 }
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {

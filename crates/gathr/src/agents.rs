@@ -119,7 +119,9 @@ impl Refused {
 
 pub type Saved = Result<Result<Agent, Refused>, Error>;
 
-const COLUMNS: &str = "SELECT id, name, account_id, model, effort, approvals FROM agents";
+/// The agents that aren't removed (0069): a removed one is in no list and refused everywhere.
+const COLUMNS: &str =
+    "SELECT id, name, account_id, model, effort, approvals FROM agents WHERE removed_ts IS NULL";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -141,15 +143,16 @@ pub fn list(conn: &Connection) -> Result<Vec<Agent>, Error> {
 
 pub fn get(conn: &Connection, id: &str) -> Result<Option<Agent>, Error> {
     let found = conn
-        .query_row(&format!("{COLUMNS} WHERE id = ?1"), [id], row)
+        .query_row(&format!("{COLUMNS} AND id = ?1"), [id], row)
         .optional()?;
     Ok(found)
 }
 
 /// The names of the agents on an account, oldest first.
 pub fn on_account(conn: &Connection, account: &str) -> Result<Vec<String>, Error> {
-    let mut statement =
-        conn.prepare("SELECT name FROM agents WHERE account_id = ?1 ORDER BY created_ts, id")?;
+    let mut statement = conn.prepare(
+        "SELECT name FROM agents WHERE account_id = ?1 AND removed_ts IS NULL ORDER BY created_ts, id",
+    )?;
     let names = statement
         .query_map([account], |r| r.get(0))?
         .collect::<Result<_, _>>()?;
@@ -218,7 +221,7 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     };
     let updated = conn.execute(
         "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
-         approvals = ?7 WHERE id = ?1",
+         approvals = ?7 WHERE id = ?1 AND removed_ts IS NULL",
         params![
             agent.id,
             name,
@@ -236,9 +239,48 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     }
 }
 
-/// Whether there was such an agent.
-pub fn remove(conn: &Connection, id: &str) -> Result<bool, Error> {
-    Ok(conn.execute("DELETE FROM agents WHERE id = ?1", [id])? > 0)
+/// An agent's name, removed or not: what its old messages and records still say. None when
+/// there was never such an agent.
+pub fn name(conn: &Connection, id: &str) -> Result<Option<String>, Error> {
+    let sql = "SELECT name FROM agents WHERE id = ?1";
+    Ok(conn.query_row(sql, [id], |r| r.get(0)).optional()?)
+}
+
+/// Whether the agent was removed (0069).
+pub fn is_removed(conn: &Connection, id: &str) -> Result<bool, Error> {
+    let sql = "SELECT removed_ts IS NOT NULL FROM agents WHERE id = ?1";
+    let found = conn.query_row(sql, [id], |r| r.get(0)).optional()?;
+    Ok(found.unwrap_or(false))
+}
+
+/// A removed agent, as the window names its old messages.
+#[derive(Debug, Clone, Serialize)]
+pub struct Removed {
+    pub id: String,
+    pub name: String,
+}
+
+/// The removed agents, oldest first.
+pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
+    let mut statement = conn.prepare(
+        "SELECT id, name FROM agents WHERE removed_ts IS NOT NULL ORDER BY created_ts, id",
+    )?;
+    let rows = statement.query_map([], |r| {
+        Ok(Removed {
+            id: r.get(0)?,
+            name: r.get(1)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Marks the agent removed and lets go of its account, once: a second call keeps the first time.
+pub fn mark_removed(conn: &Connection, id: &str) -> Result<(), Error> {
+    conn.execute(
+        "UPDATE agents SET removed_ts = ?2, account_id = NULL WHERE id = ?1 AND removed_ts IS NULL",
+        params![id, ids::now_us()],
+    )?;
+    Ok(())
 }
 
 /// The trimmed name, once the name and account pass.

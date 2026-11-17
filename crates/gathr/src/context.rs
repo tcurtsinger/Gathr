@@ -246,7 +246,7 @@ pub fn compacted_line(
     before: Option<i64>,
     after: Option<i64>,
 ) -> Result<String, Error> {
-    let name = crate::agents::get(conn, agent)?.map_or_else(|| "an agent".to_string(), |a| a.name);
+    let name = crate::agents::name(conn, agent)?.unwrap_or_else(|| "an agent".to_string());
     Ok(match (before, after) {
         (Some(before), Some(after)) => {
             format!(

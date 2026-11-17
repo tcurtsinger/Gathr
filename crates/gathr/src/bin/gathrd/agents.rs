@@ -20,7 +20,10 @@ use crate::routes::{Answer, Fail, fail};
 pub fn routes() -> Router<Arc<State>> {
     Router::new()
         .route("/api/agents", get(list).post(add))
-        .route("/api/agents/{agent}", get(one).patch(change).delete(remove))
+        .route(
+            "/api/agents/{agent}",
+            get(one).patch(change).delete(crate::deletes::agent),
+        )
 }
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
@@ -75,10 +78,14 @@ pub async fn find(s: &State, t: &Trace, id: &str, error: &'static str) -> Result
 }
 
 async fn list(Extract(s): Extract<Arc<State>>, Extension(t): Extension<Trace>) -> Answer {
-    match s.writer.call(|conn| agents::list(conn)).await {
-        Some(Ok(listed)) => {
+    let listed = s
+        .writer
+        .call(|conn| Ok::<_, gathr::Error>((agents::list(conn)?, agents::removed(conn)?)));
+    match listed.await {
+        // The removed ones apart, for the names on their old messages (0069).
+        Some(Ok((listed, removed))) => {
             let shown: Vec<Value> = listed.iter().map(|a| shown(&s, a)).collect();
-            Ok(Json(json!({ "agents": shown })))
+            Ok(Json(json!({ "agents": shown, "removed": removed })))
         }
         Some(Err(e)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -148,52 +155,6 @@ pub async fn change_as(
     const ERROR: &str = "Save failed";
     let agent = find(s, t, id, ERROR).await?.changed(change.clone());
     save(s, t, ("change", ERROR), agent, Some((change, by))).await
-}
-
-async fn remove(
-    Extract(s): Extract<Arc<State>>,
-    Extension(t): Extension<Trace>,
-    Path(id): Path<String>,
-) -> Answer {
-    const ERROR: &str = "Delete failed";
-    let agent = find(&s, &t, &id, ERROR).await?;
-    let gone = agent.id.clone();
-    let removed = s
-        .writer
-        .call(move |conn| {
-            if let Some(chat) = gathr::team::a_chat_of(conn, &gone)? {
-                return Ok(Err(format!("the agent is in the chat \"{chat}\"")));
-            }
-            match gathr::projects::a_project_of(conn, &gone)? {
-                Some(project) => Ok(Err(format!("the agent is in the project \"{project}\""))),
-                None => agents::remove(conn, &gone).map(Ok),
-            }
-        })
-        .await;
-    match removed {
-        Some(Ok(Ok(_))) => s.chats.retire(&agent.id),
-        Some(Ok(Err(why))) => {
-            return Err(fail(StatusCode::CONFLICT, ERROR, &why, &t.0));
-        }
-        Some(Err(e)) => {
-            return Err(fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ERROR,
-                &e.to_string(),
-                &t.0,
-            ));
-        }
-        None => {
-            return Err(fail(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                ERROR,
-                "the database didn't answer",
-                &t.0,
-            ));
-        }
-    }
-    record(&s, &t, "remove", &agent, None);
-    Ok(Json(json!({ "removed": true })))
 }
 
 /// Checks the model and effort against the account's engine, then writes the agent: a new one, or

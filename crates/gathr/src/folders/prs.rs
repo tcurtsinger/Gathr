@@ -59,7 +59,8 @@ pub fn pending(conn: &Connection, chat: Option<&str>) -> Result<Vec<Job>, Error>
 pub fn worktrees(conn: &Connection, job: &Job) -> Result<Vec<Clean>, Error> {
     let mut stmt=conn.prepare("SELECT f.path,f.chat_id,f.agent_id,
         EXISTS(SELECT 1 FROM chats c WHERE c.id=f.chat_id) FROM agent_folders f
-        WHERE kind='worktree' AND project=?1 AND removed_ts IS NULL AND made_ts<=?2 ORDER BY made_ts")?;
+        WHERE kind='worktree' AND project=?1 AND chat_id IS NOT NULL AND removed_ts IS NULL AND made_ts<=?2
+        ORDER BY made_ts")?;
     Ok(stmt
         .query_map(params![job.project, job.queued], |r| {
             Ok(Clean {

@@ -35,7 +35,7 @@ function service(active: Chat[], archived: Chat[], answer?: (path: string) => Re
     }
     if (path === '/api/chats') return json(active);
     if (path === '/api/chats?archived=true') return json(archived);
-    if (path === '/api/agents') return json({ agents: [] });
+    if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });

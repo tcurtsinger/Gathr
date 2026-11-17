@@ -244,6 +244,8 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
             .as_ref()
             .is_some_and(|t| t.state == State::Held && reported_done(t));
     let answers = group.iter().find(|g| g.0 == newest).map(|g| g.2.as_str());
+    // A deleted giver hears nothing: the tasks count as heard, and no turn starts for it (0069).
+    let gone = crate::agents::is_removed(tx, &giver)?;
     Event::point("gathr.task.hear_back")
         .trace(trace)
         .chat(&chat)
@@ -251,8 +253,12 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
         .attr("gathr.turn.id", answers)
         .attr("gen_ai.agent.id", giver.as_str())
         .attr("gathr.task.count", due.len())
-        .attr("gathr.hear_back.turn", !nothing_to_do)
+        .attr("gathr.hear_back.turn", !nothing_to_do && !gone)
+        .attr("why", gone.then_some("its giver was deleted"))
         .insert(tx)?;
+    if gone {
+        return Ok(Vec::new());
+    }
     let own = own.map(|t| t.number);
     if let (true, Some(own)) = (nothing_to_do, own) {
         return released(tx, own, trace);

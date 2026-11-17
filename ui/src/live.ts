@@ -59,7 +59,7 @@ export type LiveEvent =
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
   // A chat started or stopped working, or needing the person (0040): only when either changed.
   | { type: 'chat_state'; chat: string; working: boolean; needs: boolean }
-  | { type: 'project'; project: string; change: 'created' | 'changed' }
+  | { type: 'project'; project: string; change: 'created' | 'changed' | 'deleted' }
   // A checks run of the project started or ended (0043 C3).
   | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
@@ -72,7 +72,7 @@ export type LiveEvent =
   | ({ type: 'app' } & AppState)
   // An account was added, renamed, or signed in or out: reload accounts.
   | { type: 'accounts' }
-  // An agent was added or changed: reload agents.
+  // An agent was added, changed or deleted: reload agents.
   | { type: 'agents' }
   // The client missed events (it fell behind, or the socket dropped): reload what it shows.
   | { type: 'lagged' };

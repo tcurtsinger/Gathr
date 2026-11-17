@@ -1,5 +1,6 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
+import type { Deletable, DeleteCounts } from './deleting';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -472,6 +473,9 @@ export interface Agent {
   approvals: Approvals;
 }
 
+/** An agent by name only: a removed one, whose old messages still say who wrote them (0069). */
+export type Named = Pick<Agent, 'id' | 'name'>;
+
 export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
 /** A model as the account's engine lists it (0025), in the engine's order. */
@@ -668,10 +672,15 @@ export const api = {
   checkApp: () => call<unknown>('POST', '/api/app/update'),
   startup: () => call<{ on: boolean }>('GET', '/api/startup').then((s) => s.on),
   setStartup: (on: boolean) => call<{ on: boolean }>('PUT', '/api/startup', { on }).then((s) => s.on),
-  agents: () => call<{ agents: Agent[] }>('GET', '/api/agents').then((a) => a.agents),
+  /** The agents, and the removed ones apart, by name only, for their old messages (0069). */
+  agents: () => call<{ agents: Agent[]; removed: Named[] }>('GET', '/api/agents'),
   addAgent: (agent: Omit<Agent, 'id'>) => call<Agent>('POST', '/api/agents', agent),
   saveAgent: ({ id, ...agent }: Agent) => call<Agent>('PATCH', `/api/agents/${id}`, agent),
-  removeAgent: (agent: string) => call<unknown>('DELETE', `/api/agents/${agent}`),
+  /** What deleting the project or agent would do, for the confirm's words. */
+  deleteCounts: (kind: Deletable, id: string) => call<DeleteCounts>('GET', `/api/${kind}s/${id}/delete`),
+  /** What it did, and the folders it couldn't remove yet (`left`). */
+  delete: (kind: Deletable, id: string) =>
+    call<DeleteCounts & { left: string[] }>('DELETE', `/api/${kind}s/${id}`),
   /** A reference's events, as `gathr diag trace` shows them, in a turn's timeline shape. */
   trace: (ref: string) =>
     call<{ events: TraceRow[] }>('GET', `/api/trace/${ref}`).then(({ events }) =>
