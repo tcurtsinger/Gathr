@@ -27,7 +27,7 @@ pub fn routes() -> Router<Arc<State>> {
 }
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
-/// falls back to the engine's own default.
+/// falls back to the engine's own default, or a face's gender or skin tone, which the seed then picks.
 #[derive(Deserialize)]
 struct Body {
     name: Option<String>,
@@ -37,11 +37,18 @@ struct Body {
     #[serde(default, deserialize_with = "present")]
     effort: Option<Option<String>>,
     approvals: Option<Approvals>,
+    face_seed: Option<String>,
+    #[serde(default, deserialize_with = "present")]
+    gender: Option<Option<String>>,
+    #[serde(default, deserialize_with = "present")]
+    skin: Option<Option<i64>>,
 }
 
 /// Tells `"model": null` (clear it) from no `model` at all (keep it).
-fn present<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Option<String>>, D::Error> {
-    Option::<String>::deserialize(d).map(Some)
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Option<Option<T>>, D::Error> {
+    Option::<T>::deserialize(d).map(Some)
 }
 
 impl Body {
@@ -52,6 +59,9 @@ impl Body {
             model: self.model,
             effort: self.effort,
             approvals: self.approvals,
+            face_seed: self.face_seed,
+            gender: self.gender,
+            skin: self.skin,
         }
     }
 }
@@ -130,6 +140,10 @@ async fn add(
         model: None,
         effort: None,
         approvals: Approvals::default(),
+        // Empty: the name gives the seed (agents::add).
+        face_seed: String::new(),
+        gender: None,
+        skin: None,
     };
     let agent = blank.changed(body.change());
     save(&s, &t, ("add", ERROR), agent, None).await
