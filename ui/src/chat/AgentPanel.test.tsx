@@ -138,10 +138,12 @@ interface Shown {
   archived?: boolean;
   /** The agents the app knows: one not among them can't be sent to. */
   known?: Agent[];
+  /** The stand-in workspace's width. */
+  width?: number;
 }
 
 /** The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. */
-function Chat({ openedTasks = [], archived, known = agents }: Shown) {
+function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown) {
   const [agent, setAgent] = useState<string>();
   const [shown, setShown] = useState(true);
   const [draft, setDraft] = useState('');
@@ -167,7 +169,7 @@ function Chat({ openedTasks = [], archived, known = agents }: Shown) {
         agentOpen={agent === undefined ? undefined : { agent, shown }}
         onOpenAgent={setAgent}
         workspace={(open) => (
-          <aside aria-label="Made-up workspace" style={{ width: 440 }}>
+          <aside aria-label="Made-up workspace" style={{ width }}>
             <Counted />
             <button type="button" onClick={() => setShown((s) => !s)}>
               Made-up other tab
@@ -357,9 +359,25 @@ test("an agent's context shows in its panel, from the engine's fill and window; 
     m.agent === 'b' ? { ...m, context: { used: 250_000, window: 1_000_000 } } : m,
   );
   service({ history: { ...history, members: filled } });
-  await render(<Chat />);
+  // At the workspace's narrowest, 360px (DESIGN.md Layout).
+  await render(<Chat width={360} />);
   await openFromSummary(/^Made-up Member/);
   await expect.element(panel.getByRole('button', { name: 'Context usage' })).toHaveTextContent('250k (25%)');
+  // A working agent's header, with its context, Message and More, stays inside the panel's padding.
+  const header = who().getBoundingClientRect();
+  const parts = [...who().querySelectorAll('h2, p, button')].map((e) => {
+    const b = e.getBoundingClientRect();
+    return {
+      what: e.getAttribute('aria-label') ?? e.textContent,
+      left: Math.round(b.left),
+      right: Math.round(b.right),
+    };
+  });
+  const measured = JSON.stringify({ header: [Math.round(header.left), Math.round(header.right)], parts });
+  expect(
+    parts.filter((p) => p.left < header.left - 0.5 || p.right > header.right + 0.5).map((p) => p.what),
+    measured,
+  ).toEqual([]);
   await openFromSummary(/^Made-up Third/);
   await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
   expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();
