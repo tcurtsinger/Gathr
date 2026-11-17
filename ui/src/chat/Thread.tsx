@@ -9,8 +9,8 @@ import {
 import { ArrowDown } from 'lucide-react';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import { Button } from '@/components/ui/button';
+import { IconButton } from '../components/IconButton';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { asked } from './ApprovalDock';
@@ -126,13 +126,13 @@ export function Thread(props: Props) {
                 {after}
                 <ThreadPrimitive.ViewportFooter className="thread-footer">
                   <ThreadPrimitive.ScrollToBottom asChild>
-                    <TooltipIconButton
-                      tooltip="Scroll to bottom"
+                    <IconButton
+                      aria-label="Scroll to bottom"
                       variant="outline"
                       className="thread-bottom bg-background"
                     >
                       <ArrowDown />
-                    </TooltipIconButton>
+                    </IconButton>
                   </ThreadPrimitive.ScrollToBottom>
                   {children}
                 </ThreadPrimitive.ViewportFooter>

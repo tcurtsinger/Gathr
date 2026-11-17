@@ -99,11 +99,11 @@ export function mapEntries(ticks: Tick[], most: number, now: Date): MapEntry[] {
     const at = new Date(t.time);
     return Number.isNaN(at.getTime()) ? today : dayStart(at);
   });
-  const folded = (from: number, end: number, name: string, preview: string): MapEntry => {
+  const folded = (from: number, end: number, name: string): MapEntry => {
     const of = ticks.slice(from, end);
     const yours = of.filter((t) => t.kind === 'you').length;
     const what = yours ? `${count(yours, 'message')} from you` : count(of.length, 'reply', 'replies');
-    return { id: of[0].id, kind: 'day', from, title: `${name} · ${what}`, preview };
+    return { id: of[0].id, kind: 'day', from, title: `${name} · ${what}` };
   };
   const nextDay = (from: number) => {
     const next = days.findIndex((d, i) => i > from && d !== days[from]);
@@ -115,7 +115,7 @@ export function mapEntries(ticks: Tick[], most: number, now: Date): MapEntry[] {
   let open = 0;
   while (fits > most && days[open] < (days.at(-1) ?? 0)) {
     const end = nextDay(open);
-    entries.push(folded(open, end, dayName(days[open], today), 'Jumps to the start of that day'));
+    entries.push(folded(open, end, dayName(days[open], today)));
     fits -= end - open - 1;
     open = end;
   }
@@ -127,7 +127,7 @@ export function mapEntries(ticks: Tick[], most: number, now: Date): MapEntry[] {
   if (kept.length <= most) return kept;
   if (most < 2) return [];
   const rest = kept.slice(kept.length - most + 1);
-  return [folded(0, rest[0].from, 'Earlier', 'Jumps to the first of them'), ...rest];
+  return [folded(0, rest[0].from, 'Earlier'), ...rest];
 }
 
 /** A weekday within the week, then the date: the same weekday a week on would read as today's. */

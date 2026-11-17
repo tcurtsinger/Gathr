@@ -1,8 +1,8 @@
 import { CircleArrowUp, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
+import { IconButton } from './components/IconButton';
 import { ResizeHandle } from './components/ResizeHandle';
 import './sidebar.css';
 
@@ -39,7 +39,6 @@ export function Sidebar(props: Props) {
         type="button"
         className="chat-link"
         aria-current={c.id === selected ? 'page' : undefined}
-        title={c.title}
         onClick={() => onSelect(c.id)}
       >
         <span>{c.title}</span>
@@ -49,7 +48,6 @@ export function Sidebar(props: Props) {
             role="img"
             data-needs={c.needs || undefined}
             aria-label={c.needs ? 'Needs you' : 'Agents working'}
-            title={c.needs ? 'Needs you' : 'Agents working'}
           />
         )}
       </button>
@@ -92,7 +90,6 @@ export function Sidebar(props: Props) {
                       type="button"
                       className="navbutton"
                       aria-expanded={open}
-                      title={p.folder}
                       onClick={() => {
                         const next = new Set(folded);
                         if (open) next.add(p.id);
@@ -107,7 +104,6 @@ export function Sidebar(props: Props) {
                       type="button"
                       className="navbutton project-new"
                       aria-label={`New chat in ${p.name}`}
-                      title={`New chat in ${p.name}`}
                       onClick={() => onNew(p.id)}
                     >
                       <Plus aria-hidden="true" />
@@ -158,15 +154,14 @@ export function Sidebar(props: Props) {
           Settings
         </button>
         {update?.ready && (
-          <TooltipIconButton
-            tooltip={`Update to ${update.ready}`}
-            side="top"
+          <IconButton
+            aria-label={`Update to ${update.ready}`}
             className="sidebar-update"
             disabled={update.asking}
             onClick={update.onUpdate}
           >
             <CircleArrowUp aria-hidden="true" />
-          </TooltipIconButton>
+          </IconButton>
         )}
         {update?.updating && (
           <span className="sidebar-updating" role="status">

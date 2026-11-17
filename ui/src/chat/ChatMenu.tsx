@@ -9,7 +9,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Fragment, type ReactElement, useRef } from 'react';
-import { TooltipIconButton } from '@/components/assistant-ui/elements/tooltip-icon-button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { IconButton } from '../components/IconButton';
 import type { Run } from './pauses';
 
 interface Props {
@@ -117,9 +117,9 @@ export function ChatMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <TooltipIconButton ref={trigger} tooltip={label} className={className}>
+        <IconButton ref={trigger} aria-label={label} className={className}>
           <MoreHorizontal />
-        </TooltipIconButton>
+        </IconButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} sideOffset={8}>
         {items.map(([key, item], i) => (

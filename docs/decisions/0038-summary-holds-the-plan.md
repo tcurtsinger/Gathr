@@ -14,7 +14,7 @@ Out of date below: the "later slices" are built. "The plan" here is the Supervis
   running turn, each with a turning attention ring (a still ring under reduced motion). Whoever needs the
   person, through a waiting approval or a question it asked them, sits last in the stack with no ring, and
   one attention dot sits on the stack's corner. With nobody working or needed it is a plain icon. Its
-  accessible name and tooltip say it in words: "Summary: Vale needs you, Juno and Pia working".
+  accessible name says it in words: "Summary: Vale needs you, Juno and Pia working".
 - **The plan is in Summary.** The Supervisor's current round (its newest hand-off's tasks, as before) heads
   the popover: its segments and "1 of 3 done", then one row for each step with its state, its title and who
   has it, marked "needs you" while that agent waits on the person.
@@ -47,7 +47,7 @@ Out of date below: the "later slices" are built. "The plan" here is the Supervis
 
 - **Keeping the plan bar.** It repeats Summary.
 - **Words on the button** ("2 working · 1 needs you"). The rings and the dot already say it; the words stay
-  as the button's accessible name and tooltip, and beside the Team heading.
+  as the button's accessible name, and beside the Team heading.
 - **A mark on one agent's initial for "needs you",** instead of one dot on the stack. The owner chose one dot
   for the stack, the same dot the sidebar's row is to carry.
 
