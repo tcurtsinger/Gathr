@@ -33,7 +33,7 @@ Built: yes. Proof: `ui/src/chat/map.test.ts`, `ui/src/chat/ChatMap.test.tsx`.
 - **The card** says who and when ("You · 16:04", "Orin · 16:05", the time as the chat shows times) over
   the message's first lines as plain text: Markdown's marks dropped, anything in angle brackets kept, as
   the chat shows an agent's HTML as text. A day's card has its
-  title and "Jumps to the start of that day". The title is the tick's accessible name and the preview
+  title alone. The title is the tick's accessible name and the preview
   its description.
 - **Where the chat is.** The current tick is the latest ticked message at or above the middle of what
   shows above the composer; at the end of the chat, the latest one on screen. Ticks whose messages are on

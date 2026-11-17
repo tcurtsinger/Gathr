@@ -226,7 +226,8 @@ test('short of room, the oldest days fold first, each to one tick that opens its
   // One too many: only the oldest day folds. It is over a week old, so it goes by its date.
   const one = mapEntries(chat, 45, now);
   expect(one).toHaveLength(43);
-  expect(one[0]).toMatchObject({ kind: 'day', id: 'u2-0', preview: 'Jumps to the start of that day' });
+  expect(one[0]).toMatchObject({ kind: 'day', id: 'u2-0' });
+  expect(one[0]).not.toHaveProperty('preview');
   const date = new Date(2026, 10, 2).toLocaleDateString([], { day: 'numeric', month: 'short' });
   expect(one[0].title).toBe(`${date} · 2 messages from you`);
   expect(one[1]).toMatchObject({ kind: 'you', id: 'u9-0' });
@@ -293,5 +294,6 @@ test("a chat last used on an earlier day keeps that day's ticks, and what still 
     `you You · ${hhmm(9, 4)}`,
     `you You · ${hhmm(9, 5)}`,
   ]);
-  expect(tight[0]).toMatchObject({ id: 'u9-0', from: 0, preview: 'Jumps to the first of them' });
+  expect(tight[0]).toMatchObject({ id: 'u9-0', from: 0 });
+  expect(tight[0]).not.toHaveProperty('preview');
 });
