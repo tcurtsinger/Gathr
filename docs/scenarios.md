@@ -958,6 +958,18 @@ Parts: 10.7
 - **Left out, on the owner's word** ([0054](decisions/0054-a-change-past-the-far-end-waits-for-the-person.md)):
   a question is asked at landing, not when the PR appears, and no turn on its tasks is held while it is open
 
+### 10i. A merge brings the project folder along
+
+Parts: 10.9
+
+- **Given** a project whose folder is on its default branch, with a change to a file the PR doesn't touch
+- **When** Gathr merges a PR into the default branch, by fast-forward, merge commit or squash
+- **Then** the folder is fast-forwarded to the merged commit, and the change is still there
+- **When** instead the folder is on another branch, has commits `origin` doesn't, is mid-rebase or mid-cherry-pick (even with its first conflict committed), or has a change to a
+  file the merge touches (even with `merge.autostash` on), or the PR went into another branch
+- **Then** the folder is left as it was, and the chat has one line from Gathr saying why, with a reference that
+  traces to the merge
+
 ## 11. No rulebook needed, and Gathr measures it
 
 ### 11a. A new project works on defaults

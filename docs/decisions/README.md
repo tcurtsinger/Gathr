@@ -76,3 +76,4 @@ fails in CI when the two differ.
 | 0064 | [A change far past its Fix or its part stops and asks](0064-a-change-far-past-its-fix-or-its-part-stops-and-asks.md) | accepted | yes |
 | 0065 | [Questions are in the lead's words, and an answer reaches the member at once](0065-questions-in-the-leads-words.md) | accepted | yes |
 | 0066 | [Role text is two lines, each shipped only after a trial on real engines](0066-role-text-tried-on-real-engines.md) | accepted | yes |
+| 0067 | [A merge brings the project folder along, or says why not](0067-a-merge-brings-the-project-folder-along.md) | accepted | yes |
