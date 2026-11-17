@@ -335,8 +335,9 @@ fn a_folder_that_cant_be_removed_is_named_with_its_reference_and_goes_at_a_later
 /// Ann's world, on `common::team` (Lead leads the plain team chat, Ann is its member): Larder (Lead
 /// leads, Ann a member), Menus (Ann leads, Lead a member) and Pantry (Ann alone, two chats), each
 /// with a chat; two tasks for Ann in the team chat; and Ann's reply in Larder's chat.
+/// Fields drop in order: the service, which keeps a failed test's events and data folder, goes
+/// before the folder does.
 struct Room {
-    _data: TempDir,
     service: TestService,
     ann: String,
     team: String,
@@ -346,6 +347,7 @@ struct Room {
     menus_chat: String,
     pantry: String,
     pantry_chats: [String; 2],
+    _data: TempDir,
 }
 
 fn room() -> Room {
@@ -387,7 +389,6 @@ fn room() -> Room {
         turns.any(|t| t["agent"] == ann.as_str() && t["status"] == "done")
     });
     Room {
-        _data: data,
         service,
         ann,
         team,
@@ -397,6 +398,7 @@ fn room() -> Room {
         menus_chat,
         pantry,
         pantry_chats,
+        _data: data,
     }
 }
 
@@ -450,10 +452,14 @@ fn a_task_a_deleted_agent_gave_settles_with_no_turn_for_it() {
     let cancelled = r.service.send("POST", "/api/tasks/1/cancel", json!({}));
     assert_eq!(cancelled.status, 200, "{}", cancelled.body);
 
-    let sql = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.task.hear_back'
-               AND json_extract(attrs, '$.why') = 'its giver was deleted'";
+    // Ann's turn on #1 may end after the delete and block it: that hear-back goes nowhere too, so
+    // the cancel's is the newest, not the only one.
+    let sql = "SELECT (SELECT json_extract(attrs, '$.why') FROM event_log WHERE name = 'gathr.task.hear_back'
+                 ORDER BY ts DESC, id DESC LIMIT 1) AS why,
+               (SELECT count(*) FROM tasks WHERE number IN (1, 2) AND heard = 1 AND heard_as LIKE 'cancelled%') AS heard";
     until(10, "the hear-back with nobody to hear it", || {
-        (common::rows(&r._data.0, sql)[0]["n"] == 1).then_some(())
+        let found = &common::rows(&r._data.0, sql)[0];
+        (found["why"] == "its giver was deleted" && found["heard"] == 2).then_some(())
     });
     let history = r
         .service
