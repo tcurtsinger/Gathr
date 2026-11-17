@@ -5,6 +5,10 @@
   grid-template-columns: var(--nav) minmax(0, 1fr) auto;
   height: 100dvh;
 }
+/* With the workspace open, navigation gives way to leave the chat and the workspace 360px each (DESIGN.md Layout). */
+.app:has(> .workspace) {
+  --nav: clamp(190px, min(var(--sidebar-width, 246px), 100vw - 720px), 400px);
+}
 .app > .chat .empty {
   margin: auto;
 }

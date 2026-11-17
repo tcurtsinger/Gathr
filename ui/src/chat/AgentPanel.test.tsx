@@ -125,9 +125,9 @@ function service(
   return sent;
 }
 
-// How often the stand-in workspace was drawn, and how often the chat asked it to close.
-const counts = { drawn: 0, closed: 0 };
-beforeEach(() => Object.assign(counts, { drawn: 0, closed: 0 }));
+// How often the stand-in workspace was drawn.
+const counts = { drawn: 0 };
+beforeEach(() => Object.assign(counts, { drawn: 0 }));
 function Counted() {
   counts.drawn += 1;
   return null;
@@ -138,10 +138,12 @@ interface Shown {
   archived?: boolean;
   /** The agents the app knows: one not among them can't be sent to. */
   known?: Agent[];
+  /** The stand-in workspace's width. */
+  width?: number;
 }
 
 /** The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. */
-function Chat({ openedTasks = [], archived, known = agents }: Shown) {
+function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown) {
   const [agent, setAgent] = useState<string>();
   const [shown, setShown] = useState(true);
   const [draft, setDraft] = useState('');
@@ -166,11 +168,8 @@ function Chat({ openedTasks = [], archived, known = agents }: Shown) {
         onOpenTask={(n) => openedTasks.push(n)}
         agentOpen={agent === undefined ? undefined : { agent, shown }}
         onOpenAgent={setAgent}
-        onCloseWorkspace={() => {
-          counts.closed += 1;
-        }}
         workspace={(open) => (
-          <aside aria-label="Made-up workspace" style={{ width: 440 }}>
+          <aside aria-label="Made-up workspace" style={{ width }}>
             <Counted />
             <button type="button" onClick={() => setShown((s) => !s)}>
               Made-up other tab
@@ -294,8 +293,6 @@ test('Message picks the agent as the recipient and puts the keyboard in the comp
   await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
   await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
   await expect.element(page.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up Third');
-  // Wide enough for the workspace to sit beside the chat: it stays open.
-  expect(counts.closed).toBe(0);
   await userEvent.keyboard('Made-up note{Enter}');
   await expect.poll(() => sent).toEqual([{ text: 'Made-up note', agent: 'c' }]);
 });
@@ -357,24 +354,30 @@ test('Message is left out where it can’t be sent: an archived chat, an agent t
   expect(panel.getByRole('button', { name: /^Message/ }).query()).toBeNull();
 });
 
-test('where the workspace lies over the chat, Message closes it so the composer is in reach', async () => {
-  await page.viewport(1000, 800);
-  service();
-  await render(<Chat />);
-  await openFromSummary(/^Made-up Third/);
-  await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
-  expect(counts.closed).toBe(1);
-  await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
-});
-
 test("an agent's context shows in its panel, from the engine's fill and window; none before its first call", async () => {
   const filled = members.map((m) =>
     m.agent === 'b' ? { ...m, context: { used: 250_000, window: 1_000_000 } } : m,
   );
   service({ history: { ...history, members: filled } });
-  await render(<Chat />);
+  // At the workspace's narrowest, 360px (DESIGN.md Layout).
+  await render(<Chat width={360} />);
   await openFromSummary(/^Made-up Member/);
   await expect.element(panel.getByRole('button', { name: 'Context usage' })).toHaveTextContent('250k (25%)');
+  // A working agent's header, with its context, Message and More, stays inside the panel's padding.
+  const header = who().getBoundingClientRect();
+  const parts = [...who().querySelectorAll('h2, p, button')].map((e) => {
+    const b = e.getBoundingClientRect();
+    return {
+      what: e.getAttribute('aria-label') ?? e.textContent,
+      left: Math.round(b.left),
+      right: Math.round(b.right),
+    };
+  });
+  const measured = JSON.stringify({ header: [Math.round(header.left), Math.round(header.right)], parts });
+  expect(
+    parts.filter((p) => p.left < header.left - 0.5 || p.right > header.right + 0.5).map((p) => p.what),
+    measured,
+  ).toEqual([]);
   await openFromSummary(/^Made-up Third/);
   await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
   expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();

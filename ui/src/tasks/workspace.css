@@ -1,29 +1,18 @@
 /*
- * The chat's workspace pane (the prototype's WorkspacePane): 40% of the room beside navigation until
- * it's resized (--workspace-width), never under 360px, and leaving the chat 360px.
+ * The chat's workspace pane (the prototype's WorkspacePane), always beside the chat, never over it: 40% of
+ * the room beside navigation until it's resized (--workspace-width), never under 360px, and leaving the
+ * chat 360px. Only the drawn width gives way; the width the person set comes back when there's room.
  */
 .workspace {
-  --workspace-size: max(360px, var(--workspace-width, clamp(480px, calc((100vw - var(--nav)) * 0.4), 760px)));
+  --workspace-size: max(360px, var(--workspace-width, clamp(360px, calc((100vw - var(--nav)) * 0.4), 760px)));
   container: workspace / inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
   width: min(var(--workspace-size), max(360px, calc(100vw - var(--nav) - 360px)));
-  max-width: calc(100vw - 48px);
   min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--frame);
-}
-/* Too narrow to share: the pane lies over the chat, which keeps its width. */
-@media (max-width: 1200px) {
-  .workspace {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 20;
-    width: var(--workspace-size);
-  }
 }
 .workspace-tabs {
   display: flex;
