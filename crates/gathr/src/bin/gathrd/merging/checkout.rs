@@ -118,13 +118,15 @@ async fn refused(repo: &Path, origin: &str, why: String, vars: &Vars) -> String 
     }
 }
 
-/// What git is in the middle of in the folder, if anything: a merge, rebase or cherry-pick.
+/// What git is in the middle of in the folder, if anything: a merge, rebase, cherry-pick or revert.
 async fn under_way(repo: &Path, vars: &Vars) -> Option<&'static str> {
     for (path, doing) in [
         ("MERGE_HEAD", "merge"),
         ("rebase-merge", "rebase"),
         ("rebase-apply", "rebase"),
         ("CHERRY_PICK_HEAD", "cherry-pick"),
+        // A pick of several commits, or a revert, keeps only this once a conflict is committed (Vale).
+        ("sequencer", "cherry-pick or revert"),
     ] {
         let at = git(repo, &["rev-parse", "--git-path", path], vars).await;
         if at.is_ok_and(|at| repo.join(at.trim()).exists()) {

@@ -221,3 +221,66 @@ fn a_rebase_under_way_keeps_the_folder() {
     });
     kept(&room, before.unwrap(), "a rebase is under way");
 }
+
+/// Vale, #216: a cherry-pick of several commits whose first conflict was resolved and committed
+/// has no `CHERRY_PICK_HEAD`, only its sequencer, and that commit can be on origin already.
+#[test]
+fn a_cherry_pick_with_commits_still_to_pick_keeps_the_folder() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room(&data.0, &repos.0, false);
+    let mut before = None;
+    merge_five(&mut room, "fast-forward", |room| {
+        let folder = folder(room);
+        git(&folder, &["fetch", "-q", "origin"]);
+        git(&folder, &["merge", "-q", "--ff-only", "origin/main"]);
+        git(&folder, &["checkout", "-q", "-b", "picks"]);
+        std::fs::write(folder.join("README.md"), "picked\n").unwrap();
+        git(&folder, &["commit", "-q", "-am", "a"]);
+        std::fs::write(folder.join("b.txt"), "b\n").unwrap();
+        git(&folder, &["add", "."]);
+        git(&folder, &["commit", "-q", "-m", "b"]);
+        git(&folder, &["checkout", "-q", "main"]);
+        std::fs::write(folder.join("README.md"), "mine\n").unwrap();
+        git(&folder, &["commit", "-q", "-am", "mine"]);
+        let pick = common::git_command()
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+            ])
+            .args(["cherry-pick", "picks~1", "picks"])
+            .current_dir(&folder)
+            .output()
+            .unwrap();
+        assert!(
+            !pick.status.success(),
+            "the cherry-pick didn't stop on its conflict"
+        );
+        std::fs::write(folder.join("README.md"), "both\n").unwrap();
+        git(&folder, &["add", "README.md"]);
+        git(&folder, &["commit", "-q", "--no-edit"]);
+        git(&folder, &["push", "-q", "origin", "main"]);
+        let other = room.other.clone();
+        git(&other, &["fetch", "-q", "origin"]);
+        git(&other, &["checkout", "-q", "room/five"]);
+        git(&other, &["merge", "-q", "--no-edit", "origin/main"]);
+        git(&other, &["push", "-q", "origin", "room/five"]);
+        let head = git(&other, &["rev-parse", "HEAD"]).trim().to_string();
+        git(&other, &["checkout", "-q", "main"]);
+        five_at(room, &head, "main");
+        let git_dir = folder.join(".git");
+        assert!(!git_dir.join("CHERRY_PICK_HEAD").exists() && git_dir.join("sequencer").is_dir());
+        before = Some(state(room));
+    });
+    assert_eq!(room.main(), room.heads[0], "#5 wasn't merged");
+    assert!(
+        folder(&room).join(".git/sequencer").is_dir(),
+        "the cherry-pick was ended"
+    );
+    kept(
+        &room,
+        before.unwrap(),
+        "a cherry-pick or revert is under way",
+    );
+}
