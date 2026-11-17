@@ -48,6 +48,9 @@ The Agent folder contains each project's Shared folder and per-agent working fol
 The service owns worktrees, engine-lifetime temp folders and cleanup, preserving work still in use.
 It supplies allowed folders to the engines and file-write guard; the limits in 0029 still apply.
 [0034](decisions/0034-agent-folder.md).
+Deleting a project removes its chats and every folder Gathr made for it but Shared; deleting an agent
+cancels its tasks, passes its lead on and keeps its row as removed, so its old messages keep its name
+([0069](decisions/0069-deleting-a-project-or-an-agent.md)).
 
 ## Events and diagnostics
 

@@ -18,6 +18,7 @@ pub mod context;
 pub mod crash_log;
 pub mod data;
 pub mod db;
+pub mod deleting;
 pub mod diag;
 pub mod error;
 pub mod event;

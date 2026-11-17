@@ -58,6 +58,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0048_hold.sql"),
     include_str!("../migrations/0049_held_turns.sql"),
     include_str!("../migrations/0050_change_lines.sql"),
+    include_str!("../migrations/0051_removed_agents.sql"),
 ];
 
 /// The schema version this build writes.
@@ -594,6 +595,83 @@ mod tests {
         assert_eq!(rows, 0, "held turns came with rows");
         let ending = crate::hold::look::ending(&conn, "t").unwrap();
         assert!(ending.is_none(), "a turn from before 0049 was looked at");
+    }
+
+    /// 0051 rebuilds `agents`, which teams point at, and `agent_folders`: every row stays with its
+    /// columns, the name stays unique among agents not removed, and a folder may have no chat.
+    #[test]
+    fn agents_and_their_folders_outlast_the_removed_agents_rebuild() {
+        let path = temp_db("removed-agents");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..50] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 50;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, model, effort, created_ts, approvals, folder_name)
+                 VALUES ('mira', 'Mira', 'mira', 'acc', 'opus', 'high', 1, 'full', 'Mira'),
+                        ('ann', 'Ann', 'ann', 'acc', NULL, NULL, 2, 'auto', NULL);
+             INSERT INTO projects (id, name, name_key, folder, created_ts) VALUES ('p', 'Notes', 'notes', 'x', 1);
+             INSERT INTO project_members VALUES ('p', 'mira', 'supervisor', 0), ('p', 'ann', 'member', 1);
+             INSERT INTO chats (id, title, created_ts, project_id) VALUES ('c', 'C', 1, 'p');
+             INSERT INTO chat_members VALUES ('c', 'mira', 'supervisor', 1), ('c', 'ann', 'member', 2);
+             INSERT INTO agent_folders (path, kind, chat_id, agent_id, project, made_ts, due_ts, trace, skipped, removed_ts)
+                 VALUES ('w', 'worktree', 'c', 'mira', 'x', 1, 2, 'tr', 'in_use', NULL);",
+        )
+        .unwrap();
+        let agents = |conn: &Connection| -> Vec<String> {
+            let sql = "SELECT id || name || name_key || account_id || coalesce(model, '-') || coalesce(effort, '-')
+                       || created_ts || approvals || coalesce(folder_name, '-') FROM agents ORDER BY id";
+            let mut stmt = conn.prepare(sql).unwrap();
+            let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+            rows.map(Result::unwrap).collect()
+        };
+        let before = agents(&conn);
+        drop(conn);
+
+        let conn = open(&path).unwrap();
+        assert_eq!(agents(&conn), before);
+        let kept: (i64, i64, String) = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM chat_members), (SELECT count(*) FROM project_members),
+                        (SELECT path || kind || chat_id || agent_id || project || made_ts || due_ts || trace || skipped
+                         FROM agent_folders)",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(kept, (2, 2, "wworktreecmirax12trin_use".to_string()));
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(broken, 0);
+        // A removed agent lets go of its account and its name; a live one needs both.
+        crate::agents::mark_removed(&conn, "ann").unwrap();
+        conn.execute_batch(
+            "INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('ann2', 'Ann', 'ann', 'acc', 3);
+             INSERT INTO agent_folders (path, kind, made_ts) VALUES ('Notes/Mira', 'folder', 3);",
+        )
+        .unwrap();
+        let taken = "INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('x', 'ANN', 'ann', 'acc', 4)";
+        assert!(conn.execute(taken, []).is_err(), "a live name taken twice");
+        let no_account =
+            "INSERT INTO agents (id, name, name_key, created_ts) VALUES ('y', 'Bo', 'bo', 4)";
+        assert!(
+            conn.execute(no_account, []).is_err(),
+            "a live agent with no account"
+        );
+        conn.execute("DELETE FROM chat_members WHERE agent_id = 'ann'", [])
+            .unwrap();
+        conn.execute("DELETE FROM project_members WHERE agent_id = 'ann'", [])
+            .unwrap();
+        crate::agents::mark_removed(&conn, "mira").unwrap();
+        conn.execute("DELETE FROM agents WHERE id = 'ann2'", [])
+            .unwrap();
+        conn.execute("DELETE FROM accounts WHERE id = 'acc'", [])
+            .unwrap();
     }
 
     #[test]

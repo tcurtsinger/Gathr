@@ -4,7 +4,7 @@ Status: accepted (slice 2, F4). Date: 2026-11-08. Builds on [0013](0013-one-chat
 
 Built: yes. Proof: `crates/gathr/tests/team.rs`, `crates/gathr/tests/projects.rs`.
 
-Out of date below: a worktree now lives in the agent folder ([0034](0034-agent-folder.md)); the screens exist; the two columns its order was drawn in are one timeline ([0037](0037-one-timeline.md)).
+Out of date below: a worktree now lives in the agent folder ([0034](0034-agent-folder.md)); the screens exist; the two columns its order was drawn in are one timeline ([0037](0037-one-timeline.md)); an agent in a chat is deleted, not refused ([0069](0069-deleting-a-project-or-an-agent.md)).
 
 ## Choice
 

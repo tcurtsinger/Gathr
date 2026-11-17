@@ -456,7 +456,8 @@ pub(super) fn heard(
         let Some(giver) = t.giver.clone() else {
             continue;
         };
-        if by == Some(giver.as_str()) {
+        // A giver that cancelled its own isn't told, nor one that was deleted (0069).
+        if by == Some(giver.as_str()) || crate::agents::is_removed(tx, &giver)? {
             continue;
         }
         match groups

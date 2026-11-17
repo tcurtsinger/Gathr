@@ -335,8 +335,16 @@ fn a_turn_sent_during_an_idle_hold_traces_the_hold() {
 fn a_deleted_agents_engine_closes_at_once() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
-    let orin = agent(&service, &data.0, "Orin");
-    let chat = service.new_chat();
+    let (orin, bo) = (
+        agent(&service, &data.0, "Orin"),
+        agent(&service, &data.0, "Bo"),
+    );
+    // With Bo in it the chat stays (0069): a chat Orin was alone in would go, with its events.
+    let members =
+        json!([{ "agent": orin, "role": "supervisor" }, { "agent": bo, "role": "member" }]);
+    let made = service.send("POST", "/api/chats", json!({ "members": members }));
+    assert_eq!(made.status, 200, "{}", made.body);
+    let chat = made.json()["id"].as_str().unwrap().to_string();
     send(&service, &chat, &orin);
     service.wait_for(&chat, 10, "the turn", |h| statuses(h) == ["done"]);
 

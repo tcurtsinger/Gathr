@@ -6,7 +6,7 @@
 //! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
 //! again at the next sweep, which runs with the service's looks (0010).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use gathr::event::Event;
@@ -53,12 +53,28 @@ pub async fn engine_closed(chats: &Arc<Chats>, chat: &str, agent: &str) {
 
 /// Removes what goes now, of `chat` or of every chat: what's left, each with why and its reference.
 pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {
+    run(chats, chat, None).await
+}
+
+/// Removes a deleted project's own folders, recorded as due (0069): what's left, as `sweep` says.
+pub async fn sweep_paths(chats: &Arc<Chats>, paths: Vec<PathBuf>) -> Vec<String> {
+    run(chats, None, Some(paths)).await
+}
+
+async fn run(chats: &Arc<Chats>, chat: Option<&str>, paths: Option<Vec<PathBuf>>) -> Vec<String> {
     let _one = SWEEPING.lock().await;
     let only = chat.map(String::from);
     let found = chats
         .writer
         .call(move |conn| folders::to_clean(conn, only.as_deref()))
         .await;
+    let found = match (found, &paths) {
+        (Some(Ok(found)), Some(paths)) => Some(Ok(found
+            .into_iter()
+            .filter(|c| paths.contains(&c.path))
+            .collect())),
+        (found, _) => found,
+    };
     let found = match found {
         Some(Ok(found)) => found,
         Some(Err(e)) => {
@@ -69,7 +85,10 @@ pub async fn sweep(chats: &Arc<Chats>, chat: Option<&str>) -> Vec<String> {
         None => return Vec::new(),
     };
     let env = crate::coord::fresh().await;
-    let mut left = prs::sweep(chats, &env, chat).await;
+    let mut left = match paths {
+        Some(_) => Vec::new(),
+        None => prs::sweep(chats, &env, chat).await,
+    };
     if found.is_empty() {
         return left;
     }
@@ -137,8 +156,9 @@ async fn still_due(chats: &Chats, path: &Path) -> Result<bool, String> {
 async fn blocked(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'static str, String)> {
     let path = &clean.path;
     let checked = clean.kind != "scratch"
-        && (chats.checking().into_iter())
-            .any(|(chat, agent)| chat == clean.chat && clean.agent.as_ref() == Some(&agent));
+        && (chats.checking().into_iter()).any(|(chat, agent)| {
+            clean.chat.as_ref() == Some(&chat) && clean.agent.as_ref() == Some(&agent)
+        });
     if checked || chats.passes.using(path) {
         let why = format!(
             "{} is in use by a running engine or wait check",
@@ -150,7 +170,8 @@ async fn blocked(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'stat
     // removed: it would remove what's there.
     let data = chats.data.path();
     let agent = clean.agent.as_deref();
-    let from_before = folders::from_before(data, &clean.chat, agent, path);
+    let from_before =
+        (clean.chat.as_deref()).is_some_and(|chat| folders::from_before(data, chat, agent, path));
     if gathr::approvals::shut(path, data, from_before) {
         let why = format!("{} leads into Gathr's data folder", path.display());
         return Err(("in_data", why));
