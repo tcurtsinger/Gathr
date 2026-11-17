@@ -3,7 +3,8 @@
 //! answer whose `args` begin the call's. An answer with `outs` instead gives its next one on each
 //! call that matches it, then its last again, for a PR that changes between two looks. One with
 //! `merged_if` (`{"repo", "base", "head"}`) gives `out_merged` once that head is in that base, as
-//! GitHub marks a pushed PR merged. Each call
+//! GitHub marks a pushed PR merged. One with `squash` (`{"repo", "base"}`) squashes the call's
+//! `sha=` head onto that base, a real new commit, and answers as GitHub's merge API does. Each call
 //! is appended to `<file>.calls`, one JSON array of its arguments a line, so a test sees what
 //! Gathr asked.
 
@@ -37,6 +38,7 @@ fn main() {
                     .cloned()
                     .unwrap_or_default()
             }
+            None if answer["squash"].is_object() => squash(&answer["squash"], &args).into(),
             None if merged(&answer["merged_if"]) => answer["out_merged"].clone(),
             None => answer["out"].clone(),
         };
@@ -67,6 +69,39 @@ fn merged(when: &serde_json::Value) -> bool {
         ])
         .status();
     is.is_ok_and(|s| s.success())
+}
+
+/// A squash of the `sha=` head onto `{"repo", "base"}`, as GitHub makes one: a new commit with
+/// the head's tree on the base, which moves to it. GitHub's answer, or nothing if git failed.
+fn squash(on: &serde_json::Value, args: &[String]) -> String {
+    let text = |k: &str| on[k].as_str().unwrap_or_default().to_string();
+    let (repo, base) = (text("repo"), format!("refs/heads/{}", text("base")));
+    let head = args
+        .iter()
+        .find_map(|a| a.strip_prefix("sha="))
+        .unwrap_or_default();
+    let git = |args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .args([
+                "-C",
+                &repo,
+                "-c",
+                "user.name=GitHub",
+                "-c",
+                "user.email=gh@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let tree = format!("{head}^{{tree}}");
+    let made = git(&["commit-tree", &tree, "-p", &base, "-m", "Squashed"])
+        .filter(|sha| git(&["update-ref", &base, sha]).is_some());
+    made.map(|sha| serde_json::json!({ "merged": true, "sha": sha }).to_string())
+        .unwrap_or_default()
 }
 
 /// How many times answer `i` was given before, counted in `<file>.seen`.

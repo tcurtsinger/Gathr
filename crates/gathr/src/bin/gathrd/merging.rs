@@ -19,6 +19,7 @@ use rusqlite::OptionalExtension;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
+mod checkout;
 mod review;
 
 use crate::chats::Chats;
@@ -245,7 +246,9 @@ pub async fn push_merge(
             confirmed: false,
         });
     }
-    let said = match settle(chats, by, pr, head, view).await {
+    let settled = settle(chats, by, pr, head, view).await;
+    checkout::update(chats, by, project, pr, base, vars).await;
+    let said = match settled {
         Ok(()) => {
             chats.writer.record(event.ok());
             format!("{merged_line}: its tasks are settled.")
@@ -697,6 +700,16 @@ pub async fn git(dir: &Path, args: &[&str], vars: &Vars) -> Result<String, Strin
         Some(0) => Ok(ran.out),
         _ => Err(format!("git {} failed: {}", args[0], ran.reason())),
     }
+}
+
+/// The branch origin's HEAD names, asked of the remote itself: a clone's own idea of it can be old.
+pub async fn default_branch(repo: &Path, vars: &Vars) -> Result<String, String> {
+    let said = git(repo, &["ls-remote", "--symref", "origin", "HEAD"], vars).await?;
+    let named = said.lines().find_map(|line| {
+        let branch = line.strip_prefix("ref: refs/heads/")?;
+        branch.split_whitespace().next().map(String::from)
+    });
+    named.ok_or_else(|| "origin didn't say which branch is its default".to_string())
 }
 
 pub async fn known(repo: &Path, commit: &str, vars: &Vars) -> bool {

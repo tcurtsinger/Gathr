@@ -4,6 +4,8 @@
 
 #[path = "merge/changes.rs"]
 mod changes;
+#[path = "merge/checkout.rs"]
+mod checkout;
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;

@@ -367,7 +367,7 @@ async fn stand(
     if let Err(why) = merging::reviewed_is_head(repo, reviewed, head, b, pr, vars).await {
         return Ok(Stand::Rests(why));
     }
-    let default = default_branch(repo, vars).await?;
+    let default = merging::default_branch(repo, vars).await?;
     if base != default {
         return Ok(Stand::Stops(format!(
             "it's into {base}, and Gathr lands only into the default branch, {default}"
@@ -464,16 +464,6 @@ async fn stand(
         }
     }
     Ok(Stand::Ready)
-}
-
-/// The branch origin's HEAD names, asked of the remote itself: a clone's own idea of it can be old.
-async fn default_branch(repo: &std::path::Path, vars: &Vars) -> Result<String, String> {
-    let said = merging::git(repo, &["ls-remote", "--symref", "origin", "HEAD"], vars).await?;
-    let named = said.lines().find_map(|line| {
-        let branch = line.strip_prefix("ref: refs/heads/")?;
-        branch.split_whitespace().next().map(String::from)
-    });
-    named.ok_or_else(|| "origin didn't say which branch is its default".to_string())
 }
 
 pub async fn db<T: Send + 'static>(
