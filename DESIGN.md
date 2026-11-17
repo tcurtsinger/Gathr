@@ -415,7 +415,7 @@ multiline field, "What to change". The foot has three cells: Drop (ghost) at the
 version while the plan is open, "Saving" in the middle while a request runs, and at the right, on
 the newest version once it has reached you, Send back (outline) and Approve; after Send back,
 Cancel (ghost) and Send back, disabled until the field has words. No sentence explains a button.
-The foot's three buttons fit at 432px. The Check field also lists the version's Findings (a suggestion is left out) in a task's
+The foot's buttons fit at the workspace's narrowest, 360px, in both states. The Check field also lists the version's Findings (a suggestion is left out) in a task's
 note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
 ("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", and Changed, one row for each turn of the ask in which Gathr caught a change, "Ann: src/notes.rs, src/tags.rs", shown only when there is one. Each
 part is a line that opens to its brief, one at a time and none at first: Why, Done when, Proof,

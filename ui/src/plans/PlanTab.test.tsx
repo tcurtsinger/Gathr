@@ -93,6 +93,47 @@ const tab = (shownVersion = 2) => (
   <PlanTab chat="c" plan={3} version={shownVersion} name={name} onVersion={() => {}} onReference={() => {}} />
 );
 
+/** In the workspace at its narrowest, 360px (DESIGN.md Layout), as a container like the workspace's own. */
+const narrow = (shown: React.ReactNode) => (
+  <div
+    style={{
+      width: 360,
+      height: 700,
+      display: 'flex',
+      containerType: 'inline-size',
+      containerName: 'workspace',
+    }}
+  >
+    {shown}
+  </div>
+);
+
+/** What doesn't fit in the foot: a part past its edge, two parts over each other, a clipped label, a scroll. */
+function footMisfits() {
+  const pager = document.querySelector('.tasks-pager') as HTMLElement;
+  const box = pager.getBoundingClientRect();
+  const parts = [...pager.querySelectorAll('button, [role="status"]')] as HTMLElement[];
+  const at = parts.map((p) => {
+    const b = p.getBoundingClientRect();
+    return {
+      what: p.textContent || p.getAttribute('role'),
+      left: Math.round(b.left),
+      right: Math.round(b.right),
+    };
+  });
+  const wrong = at
+    .filter((p) => p.left < box.left - 0.5 || p.right > box.right + 0.5)
+    .map((p) => `${p.what} past the edge`);
+  for (let i = 1; i < at.length; i++)
+    if (at[i].left < at[i - 1].right) wrong.push(`${at[i].what} over ${at[i - 1].what}`);
+  for (const p of parts) if (p.scrollWidth > p.clientWidth + 1) wrong.push(`${p.textContent} clipped`);
+  if (pager.scrollWidth > pager.clientWidth + 1) wrong.push('the foot scrolls sideways');
+  return {
+    wrong,
+    measured: JSON.stringify({ pager: [Math.round(box.left), Math.round(box.right)], parts: at }),
+  };
+}
+
 /** A part's brief as the open part shows it: each label and its words, in order. */
 const rows = (dl: Element | null) => [...(dl?.children ?? [])].map((e) => e.textContent).join(' | ');
 
@@ -286,11 +327,16 @@ test('Approve sends the version shown', async () => {
 
 test("Send back asks what to change, stays off while it's empty, sends the words; Cancel puts the buttons back", async () => {
   const posted = serve(plan());
-  const screen = await render(tab());
+  const screen = await render(narrow(tab()));
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
+  // Both feet fit the workspace at its narrowest, 360px.
+  const fits = () => expect(footMisfits().wrong, footMisfits().measured).toEqual([]);
+  fits();
   await screen.getByRole('button', { name: 'Send back' }).click();
   const field = screen.getByRole('textbox', { name: /What to change/ });
   await expect.element(field).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+  fits();
   const send = screen.getByRole('button', { name: 'Send back' });
   await expect.element(send).toBeDisabled();
   await screen.getByRole('button', { name: 'Cancel' }).click();
