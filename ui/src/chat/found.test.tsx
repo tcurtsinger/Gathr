@@ -203,7 +203,7 @@ test('a reply that says the same thing twice opens at the passage the hit is', a
   expect(passages.indexOf(hit)).toBe(1);
 });
 
-test("a hit opened after the dock's Show stays where it is once it is done", async () => {
+test('a hit opened after the line showed an approval stays where it is once it is done', async () => {
   // The long chat, its latest turn waiting on an approval.
   const asking = {
     ...long,
@@ -216,7 +216,7 @@ test("a hit opened after the dock's Show stays where it is once it is done", asy
   );
   const onFound = vi.fn();
   const shown = await render(<Chat onFound={onFound} />);
-  await shown.getByRole('button', { name: 'Show', exact: true }).click();
+  await shown.getByRole('button', { name: /needs you$/ }).click();
   await expect
     .poll(() => document.querySelector('[data-search-hit]')?.getAttribute('data-approval'))
     .toBe('q1');
