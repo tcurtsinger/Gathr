@@ -1,48 +1,70 @@
-import { Fragment, useEffect, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api, type Failure, type Task } from '../api';
+import type { Failure, Task } from '../api';
+import { began } from '../chat/team';
+import { Face, GathrFace, YouFace } from '../components/Face';
 import { FailureNotice } from '../components/Notice';
-import { listen } from '../live';
-import { asker, briefRows, edited, idle, noteLines, reported, reviewedAt } from './model';
+import { asker, briefRows, edited, gathrs, idle, noteLines, reported, reviewedAt } from './model';
 import { TaskChecks } from './TaskChecks';
+import { Line, TaskState } from './TaskList';
 
-/** Only a settled task starts again (0010); an open one the person can only cancel. */
-const restartable = new Set(['failed', 'stopped', 'blocked', 'cancelled']);
+type Act = 'cancel' | 'restart';
+
+/** What acts on a task in each state (0010): a done task has nothing, an open one only Cancel, an ended one Restart. */
+export const OFFERS: Record<Task['state'], Act[]> = {
+  done: [],
+  waiting: ['cancel'],
+  ready: ['cancel'],
+  working: ['cancel'],
+  held: ['cancel'],
+  blocked: ['cancel', 'restart'],
+  failed: ['cancel', 'restart'],
+  stopped: ['cancel', 'restart'],
+  cancelled: ['restart'],
+};
+
+/** Back to the list, and the task's number. */
+export function Top({ number, onBack }: { number: number; onBack: () => void }) {
+  return (
+    <div className="tasks-top">
+      <button type="button" className="tasks-back" onClick={onBack}>
+        <ChevronLeft aria-hidden="true" />
+        Tasks
+      </button>
+      <span>#{number}</span>
+    </div>
+  );
+}
 
 interface Props {
   task: Task;
-  chatTitle?: string;
+  /** The chat's tasks: a waiting task names those it comes after. */
+  tasks: Task[];
   /** The chat's project: Gathr's checks run there, so a task with a PR shows its run (0043 C6). */
   project?: string | null;
   name: (agent: string | null) => string;
   /** Settles once the service has done it; a refusal stays on this view with its reference. */
-  onSettle: (task: Task, action: 'cancel' | 'restart') => Promise<unknown>;
+  onSettle: (task: Task, action: Act) => Promise<unknown>;
   onReference: (ref: string) => void;
-  /** Back to the chat's questions, for a task opened from Summary or a hand-off line. */
-  onBack?: () => void;
+  onBack: () => void;
 }
 
 /**
- * An agent's task (archive-stale/v1, the task-pass and task-fail mock-ups): who has it, its state, what
- * its owner reported and what it waits on (0047), how long it's been idle once stale, its PR's checks
- * run, and Cancel and Restart.
+ * An agent's task (the tasks mock-up): its owner and state on the line under its what, who gave it and why, its
+ * brief, what its owner reported and what it waits on (0047), its PR's checks run, and a foot only for what acts.
  */
-export function TaskView({ task, chatTitle, project, name, onSettle, onReference, onBack }: Props) {
+export function TaskView({ task, tasks, project, name, onSettle, onReference, onBack }: Props) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const settle = (action: 'cancel' | 'restart') => {
+  const settle = (action: Act) => {
     setBusy(true);
     setFailure(null);
     onSettle(task, action)
       .catch(setFailure)
       .finally(() => setBusy(false));
   };
-  const meta = [
-    asker(task, name),
-    chatTitle,
-    task.pr ? `PR #${task.pr}` : undefined,
-    task.stale_us ? idle(task.stale_us) : undefined,
-  ].filter(Boolean);
+  const offers = OFFERS[task.state];
   const report = reported(task);
   const review = reviewedAt(task);
   const notes = noteLines(task);
@@ -59,22 +81,48 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
   const stopped = task.report ? task.report.how === 'left' : !!task.asked;
   const told =
     task.state === 'held' || (task.state === 'blocked' && stopped) || task.reason === task.report?.note;
+  const owner = task.owner && (
+    <span className="task-owner">
+      <Face agent={{ id: task.owner, name: name(task.owner) }} size={16} />
+      {name(task.owner)}
+    </span>
+  );
   return (
     <section className="tasks" aria-label={`Task #${task.number}`}>
       <div className="tasks-scroll">
         <div className="tasks-page">
           {failure && <FailureNotice failure={failure} onReference={onReference} />}
-          <p className="task-number">
-            Task #{task.number}
-            {task.look_into && ' · Look into'}
-          </p>
+          <Top number={task.number} onBack={onBack} />
           <h2>{task.what}</h2>
-          <p className="tasks-meta">{meta.join(' · ')}</p>
+          <Line
+            className="task-view-line"
+            pieces={[
+              owner,
+              task.look_into && 'Look into',
+              task.pr && `PR #${task.pr}`,
+              task.state !== 'done' && <TaskState key="state" task={task} tasks={tasks} />,
+              task.stale_us && idle(task.stale_us),
+            ]}
+          />
           <dl className="task-fields">
-            <dt>Assigned to</dt>
-            <dd>{name(task.owner)}</dd>
-            <dt>State</dt>
-            <dd>{task.state}</dd>
+            <dt>From</dt>
+            <dd className="task-from">
+              {gathrs(task) ? (
+                <GathrFace size={20} />
+              ) : task.giver ? (
+                <Face agent={{ id: task.giver, name: name(task.giver) }} size={20} />
+              ) : (
+                <YouFace size={20} />
+              )}
+              <span>{asker(task, name)}</span>
+              <small>{began(task.created_us)}</small>
+            </dd>
+            {task.why && (
+              <>
+                <dt>Why</dt>
+                <dd className="task-why">{task.why}</dd>
+              </>
+            )}
             {task.reason && !told && (
               <>
                 <dt>Reason</dt>
@@ -123,63 +171,25 @@ export function TaskView({ task, chatTitle, project, name, onSettle, onReference
           )}
         </div>
       </div>
-      <footer className="tasks-footer">
-        <div className="tasks-pager">
-          {onBack ? (
-            <Button size="sm" variant="ghost" onClick={onBack}>
-              Back
-            </Button>
-          ) : (
-            <span />
-          )}
-          <span role="status">{busy ? 'Saving' : ''}</span>
-          <div>
-            <Button size="sm" variant="ghost" disabled={busy} onClick={() => settle('cancel')}>
+      {offers.length > 0 && (
+        <footer className="tasks-footer task-foot">
+          {offers.includes('cancel') && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => settle('cancel')}>
               Cancel
             </Button>
+          )}
+          {offers.includes('restart') && (
             <Button
               size="sm"
-              disabled={busy || !restartable.has(task.state)}
+              variant={offers.length > 1 ? 'default' : 'outline'}
+              disabled={busy}
               onClick={() => settle('restart')}
             >
               Restart
             </Button>
-          </div>
-        </div>
-      </footer>
+          )}
+        </footer>
+      )}
     </section>
   );
-}
-
-/** The chat's task by number, live: it moves with each change to the chat's tasks. A load that works,
- * or a live list, clears an earlier failure; another task starts afresh. */
-export function useTask(chat: string, number: number) {
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const [failure, setFailure] = useState<Failure | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: another task starts afresh, without the last one's failure
-  useEffect(() => {
-    let current = true;
-    setTasks(null);
-    setFailure(null);
-    const got = (list: Task[]) => {
-      if (!current) return;
-      setTasks(list);
-      setFailure(null);
-    };
-    const load = () =>
-      api.tasks(chat).then(
-        (t) => got(t.tasks),
-        (f: Failure) => current && setFailure(f),
-      );
-    load();
-    const off = listen((e) => {
-      if (e.type === 'tasks' && e.chat === chat) got(e.tasks);
-      if (e.type === 'lagged') load();
-    });
-    return () => {
-      current = false;
-      off();
-    };
-  }, [chat, number]);
-  return { tasks, task: tasks?.find((t) => t.number === number) ?? null, failure };
 }

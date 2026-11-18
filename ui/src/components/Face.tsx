@@ -118,6 +118,28 @@ const Drawn = memo(function Drawn({
   return <Drawing options={options} />;
 });
 
+/** Gathr's own face: three dots come together, never an initial, so it never reads as an agent's. */
+export function GathrFace({ size }: { size: FaceSize }) {
+  return (
+    <span className="face face-gathr" data-size={size} aria-hidden="true">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="7.2" cy="9" r="3" />
+        <circle cx="16.8" cy="9" r="3" />
+        <circle cx="12" cy="17" r="3" />
+      </svg>
+    </span>
+  );
+}
+
+/** The person's own face, where their words stand beside an agent's. */
+export function YouFace({ size }: { size: FaceSize }) {
+  return (
+    <span className="face face-you" data-size={size} aria-hidden="true">
+      Y
+    </span>
+  );
+}
+
 /** Faces overlapped into one compact element, in the order given, each cut out of the surface behind it. */
 export function FaceStack({ agents }: { agents: { agent: string; name: string }[] }) {
   return (

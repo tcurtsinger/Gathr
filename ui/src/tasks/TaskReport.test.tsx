@@ -1,4 +1,5 @@
-// A task's page says what its owner reported and what it still waits on, apart from its state (0047).
+// A task's page says who gave it and why, what its owner reported and what it still waits on, apart from its
+// state (0047), which is on its line.
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
 import type { Task } from '../api';
@@ -22,32 +23,45 @@ const task = (more: Partial<Task>): Task => ({
   ...more,
 });
 
-/** The page's fields as "label: value" lines, in order. */
+/** The page's fields as "label: value" lines, in order, after From. */
 async function fields(shown: Task) {
   const screen = await render(
-    <TaskView task={shown} name={(a) => a ?? 'you'} onSettle={async () => {}} onReference={() => {}} />,
+    <TaskView
+      task={shown}
+      tasks={[]}
+      name={(a) => a ?? 'you'}
+      onSettle={async () => {}}
+      onReference={() => {}}
+      onBack={() => {}}
+    />,
   );
   await expect.element(screen.getByRole('heading', { name: shown.what })).toBeVisible();
   const list = screen.container.querySelector('.task-fields');
-  const terms = [...(list?.querySelectorAll('dt') ?? [])];
+  const terms = [...(list?.querySelectorAll('dt') ?? [])].slice(1);
   return terms.map((dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`);
 }
 
-// No giver means Gathr asked only on a question for the person; any other task was the person's own.
-test('a task with no giver names Gathr only when it is a question for the person', async () => {
-  const meta = () => [...document.querySelectorAll('.tasks-meta')].at(-1)?.textContent;
+const from = () => [...document.querySelectorAll('.task-from > span')].at(-1)?.textContent;
+
+// No giver means Gathr asked only on a question for the person; any other task was the person's own. A fix Gathr
+// gave after a review reads as Gathr's, though its reviewer is its giver (0053).
+test('From names Gathr for its own question and its fix, the giver otherwise', async () => {
   await fields(task({ giver: null }));
-  expect(meta()).toBe('you');
+  expect(from()).toBe('you');
   await fields(task({ number: 13, what: 'Let #5 go on?', kind: 'person', owner: null, giver: null }));
-  expect(meta()).toBe('Gathr');
+  expect(from()).toBe('Gathr');
+  await fields(task({ number: 14, what: 'Fix the review of #7', giver: 'bo', by_gathr: true }));
+  expect(from()).toBe('Gathr');
+  await fields(task({ number: 15, what: 'Take the cache out', giver: 'bo' }));
+  expect(from()).toBe('bo');
 });
 
-test('a look-into task says so beside its number', async () => {
-  const number = () => [...document.querySelectorAll('.task-number')].at(-1)?.textContent;
+test('a look-into task says so on its line', async () => {
+  const line = () => [...document.querySelectorAll('.task-view-line')].at(-1)?.textContent;
   await fields(task({ look_into: true, what: 'Survey tag libraries' }));
-  expect(number()).toBe('Task #12 · Look into');
+  expect(line()).toBe('sol·Look into·Working');
   await fields(task({ number: 13 }));
-  expect(number()).toBe('Task #13');
+  expect(line()).toBe('sol·Working');
 });
 
 test('a held task shows its report and what it waits on, each once', async () => {
@@ -59,8 +73,6 @@ test('a held task shows its report and what it waits on, each once', async () =>
     waiting_on: ['#18 to merge'],
   });
   expect(await fields(held)).toEqual([
-    'Assigned to: sol',
-    'State: held',
     'Report: Done: ready for review · src/export.ts',
     'Waiting on: #18 to merge',
   ]);
@@ -69,18 +81,13 @@ test('a held task shows its report and what it waits on, each once', async () =>
 test('a done task shows its note once, and a merge as its reason', async () => {
   const report = { how: 'done' as const, note: 'Updated the guide', see: null, at_us: 1 };
   const noted = task({ state: 'done', reason: 'Updated the guide', report });
-  expect(await fields(noted)).toEqual(['Assigned to: sol', 'State: done', 'Report: Done: Updated the guide']);
+  expect(await fields(noted)).toEqual(['Report: Done: Updated the guide']);
 });
 
 test('a task done by its merge shows the merge beside the report', async () => {
   const report = { how: 'done' as const, note: 'Updated the guide', see: null, at_us: 1 };
   const merged = task({ state: 'done', reason: '#18 merged', report });
-  expect(await fields(merged)).toEqual([
-    'Assigned to: sol',
-    'State: done',
-    'Reason: #18 merged',
-    'Report: Done: Updated the guide',
-  ]);
+  expect(await fields(merged)).toEqual(['Reason: #18 merged', 'Report: Done: Updated the guide']);
 });
 
 test('a task stopped as left says what is left', async () => {
@@ -89,28 +96,20 @@ test('a task stopped as left says what is left', async () => {
     reason: 'left: the dark theme and the PR remain',
     report: { how: 'left', note: 'the dark theme and the PR remain', see: null, at_us: 1 },
   });
-  expect(await fields(left)).toEqual([
-    'Assigned to: sol',
-    'State: blocked',
-    'Report: Left: the dark theme and the PR remain',
-  ]);
+  expect(await fields(left)).toEqual(['Report: Left: the dark theme and the PR remain']);
 });
 
 test('a task under way with no report says so', async () => {
-  expect(await fields(task({}))).toEqual(['Assigned to: sol', 'State: working', 'Report: No report yet']);
+  expect(await fields(task({}))).toEqual(['Report: None yet']);
 });
 
 test('a task asked for its report says it was asked', async () => {
-  expect(await fields(task({ state: 'ready', asked: true }))).toEqual([
-    'Assigned to: sol',
-    'State: ready',
-    'Report: No report yet. Asked once',
-  ]);
+  expect(await fields(task({ state: 'ready', asked: true }))).toEqual(['Report: None yet. Asked once']);
 });
 
 test('a task blocked for the one it comes after keeps its reason', async () => {
   const waiting = task({ state: 'blocked', reason: '#3 is blocked' });
-  expect(await fields(waiting)).toEqual(['Assigned to: sol', 'State: blocked', 'Reason: #3 is blocked']);
+  expect(await fields(waiting)).toEqual(['Reason: #3 is blocked']);
 });
 
 test('a task reported blocked on another, with no note, still names that task', async () => {
@@ -119,12 +118,7 @@ test('a task reported blocked on another, with no note, still names that task', 
     reason: 'blocked on #3',
     report: { how: 'blocked', note: null, see: null, at_us: 1 },
   });
-  expect(await fields(on)).toEqual([
-    'Assigned to: sol',
-    'State: blocked',
-    'Reason: blocked on #3',
-    'Report: Blocked',
-  ]);
+  expect(await fields(on)).toEqual(['Reason: blocked on #3', 'Report: Blocked']);
 });
 
 test("a review shows the commit it is of, and the PR's head once it is out of date", async () => {
@@ -136,25 +130,19 @@ test("a review shows the commit it is of, and the PR's head once it is out of da
     pr_head: 'abc1234def5678',
     report: { how: 'done', note: null, see: null, at_us: 1 },
   });
-  expect(await fields(review)).toEqual([
-    'Assigned to: sol',
-    'State: done',
-    'Report: Done',
-    'Reviewed at: abc1234',
-  ]);
+  expect(await fields(review)).toEqual(['Report: Done', 'Reviewed at: abc1234']);
   const stale = { ...review, number: 13, what: 'Review the export', pr_head: 'def5678aaaa', outdated: true };
   expect(await fields(stale)).toEqual([
-    'Assigned to: sol',
-    'State: done',
     'Report: Done',
     'Reviewed at: abc1234. Out of date: #18 is at def5678',
   ]);
 });
 
-test('a task shows its brief, its order and its last edit', async () => {
+test('a task shows its why, its brief, its order and its last edit', async () => {
   const edited_us = Date.now() * 1000;
   const briefed = task({
     state: 'waiting',
+    why: 'Review #2 by Bo left these notes on PR #7:\n- Unasked: src/cache.rs: a cache',
     after: [3, 5],
     done: 'A CSV opens in a spreadsheet',
     proof: 'the CI run on the PR',
@@ -165,8 +153,7 @@ test('a task shows its brief, its order and its last edit', async () => {
     edited: ['what', 'after'],
   });
   expect(await fields(briefed)).toEqual([
-    'Assigned to: sol',
-    'State: waiting',
+    'Why: Review #2 by Bo left these notes on PR #7:\n- Unasked: src/cache.rs: a cache',
     'Done when: A CSV opens in a spreadsheet',
     'Proof: the CI run on the PR',
     "Where: the project's worktree, on a new branch",

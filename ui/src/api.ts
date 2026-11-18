@@ -174,6 +174,13 @@ export interface Task {
   checks?: number;
   /** The plan whose part made it. */
   plan?: number;
+  /** The fix Gathr gave after a review: its reviewer is its giver and hears back on it, but Gathr gave it. */
+  by_gathr?: boolean;
+  /** A question for the person: how it's answered, its choices and files, and the member's request it was asked for. */
+  form?: PersonTask['form'] | null;
+  choices?: PersonTask['choices'];
+  files?: PersonTask['files'];
+  request?: number | null;
 }
 
 /** The lead's plan for an ask (0062): its state is read from its newest version and that version's check. */

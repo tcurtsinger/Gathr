@@ -1,0 +1,230 @@
+/* The one question block (0065, the tasks mock-up): inside the asker's bubble, answered in place. */
+.question {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 7px 12px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+  border-radius: 12px;
+  background: var(--background);
+  font-size: 14px;
+}
+.question[data-open] {
+  border-color: color-mix(in oklab, var(--attention) 50%, transparent);
+}
+.question-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  line-height: 21px;
+}
+.question-head > svg {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+}
+.question[data-open] .question-head > svg {
+  color: var(--attention);
+}
+.question-waiting,
+.question-word {
+  flex: none;
+  margin-left: 2px;
+  font-size: 12.5px;
+}
+.question-waiting {
+  color: var(--attention);
+  font-weight: 550;
+}
+/* Right under the question, so nothing above it moves when it swaps what is below. */
+.question-discuss {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 8px;
+  margin-left: 23px;
+  padding: 2px 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.question-discuss:has([aria-checked="true"]) {
+  color: var(--foreground);
+}
+.question-discuss .switch {
+  width: 28px;
+  height: 16px;
+  border: 0;
+  background: color-mix(in oklab, var(--foreground) 35%, var(--background));
+}
+.question-discuss .switch span {
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background: var(--background);
+}
+.question-discuss .switch[aria-checked="true"] {
+  background: var(--attention);
+}
+.question-discuss .switch[aria-checked="true"] span {
+  left: 14px;
+}
+.question-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  border: 0;
+}
+.question-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.question-choice:hover,
+.question-choice[aria-pressed="true"] {
+  background: var(--raised);
+}
+.question-choice:hover {
+  border-color: color-mix(in oklab, var(--foreground) 28%, transparent);
+}
+.question-choice[aria-pressed="true"] {
+  border-color: color-mix(in oklab, var(--attention) 60%, transparent);
+}
+.question-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid color-mix(in oklab, var(--foreground) 40%, transparent);
+  border-radius: 50%;
+}
+.question-mark::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.question-mark[data-many] {
+  border-radius: 5px;
+}
+.question-mark[data-many]::after {
+  border-radius: 2px;
+}
+.question-choice[aria-pressed="true"] .question-mark {
+  border-color: var(--attention);
+}
+.question-choice[aria-pressed="true"] .question-mark::after {
+  background: var(--attention);
+}
+.question-choice-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.question-choice-label {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.question-choice-text > small {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.question-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 4px 0 0;
+}
+.question-field textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--input);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  resize: none;
+  overflow: hidden;
+}
+.question-field textarea::placeholder {
+  color: var(--muted-foreground);
+}
+.question-field textarea:focus {
+  border-color: var(--attention);
+  outline: none;
+}
+.question-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+}
+.question-send-icon {
+  width: 15px;
+  height: 15px;
+}
+.question-send:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.question-refused {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 20px;
+}
+.question-refused > .bad {
+  color: var(--destructive);
+}
+.question-refused > span[aria-hidden="true"] {
+  padding: 0 6px;
+}
+.question-ref {
+  min-height: 0;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

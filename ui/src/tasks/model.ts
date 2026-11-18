@@ -4,20 +4,36 @@ import { began, list } from '../chat/team';
 /** Who asks a question no agent gave: Gathr itself, as the far end's stop does (0054). */
 const GATHR = 'Gathr';
 
+/** Whether Gathr gave it: its own question for the person (0054), or the fix it gave after a review (0053). */
+export const gathrs = (task: Pick<Task, 'kind' | 'giver' | 'by_gathr'>) =>
+  (task.kind === 'person' && task.giver === null) || !!task.by_gathr;
+
 /**
- * Who gave a task, by name. A question for the person that no agent gave is Gathr's own; any other
- * task with no giver is the person's.
+ * Who gave a task, by name. A question for the person that no agent gave, and a fix after a review, are
+ * Gathr's own; any other task with no giver is the person's.
  */
-export function asker(task: Pick<Task, 'kind' | 'giver'>, name: (agent: string | null) => string): string {
-  return task.kind === 'person' && task.giver === null ? GATHR : name(task.giver);
+export function asker(
+  task: Pick<Task, 'kind' | 'giver' | 'by_gathr'>,
+  name: (agent: string | null) => string,
+): string {
+  return gathrs(task) ? GATHR : name(task.giver);
 }
 
-/** What the person has staged for a question: kept through Back, Next, tabs and chats until Send. */
+/** What the person has staged for a question: kept through tabs and chats until it is sent. */
 export interface Draft {
   values: string[];
+  /** The answer's notes, kept apart from the Discuss message. */
   notes: string;
-  /** Discuss is on: the notes go to the asker alone, and the picks wait, kept, until it's off. */
+  /** Discuss is on: the message goes to the asker alone; the picks and notes wait, kept, until it's off. */
   discuss?: boolean;
+  message?: string;
+}
+
+/** A question Send didn't settle: it stays open, with why and its reference. */
+export interface Refusal {
+  task: number;
+  why: string;
+  ref: string | null;
 }
 
 /** The rows to pick from. Labels are unique within a question, so a label is its id. */
@@ -37,7 +53,7 @@ export function options(
     // The asker's pick comes first (DESIGN.md); Gathr's own question has no pick to recommend.
     description:
       task.form === 'choice' && task.giver !== null && i === 0
-        ? [`${asker(task, name)}'s pick`, c.detail].filter(Boolean).join(' · ')
+        ? [`${asker(task, name)}’s pick`, c.detail].filter(Boolean).join(' · ')
         : c.detail,
   }));
 }
@@ -48,7 +64,7 @@ export function options(
  */
 export function ready(task: PersonTask, draft: Draft | undefined): boolean {
   if (!draft) return false;
-  if (draft.discuss) return !!draft.notes.trim();
+  if (draft.discuss) return !!draft.message?.trim();
   if (task.form === 'text') return !!draft.values[0]?.trim();
   if (task.giver === null) return draft.values.length === 1;
   return draft.values.length > 0 || !!draft.notes.trim();
@@ -57,7 +73,7 @@ export function ready(task: PersonTask, draft: Draft | undefined): boolean {
 /** The staged draft as the service takes it; notes go with a pick as its text. */
 export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   const notes = draft.notes.trim() ? { text: draft.notes.trim() } : {};
-  if (draft.discuss) return { task: task.number, discuss: true, text: draft.notes.trim() };
+  if (draft.discuss) return { task: task.number, discuss: true, text: draft.message?.trim() ?? '' };
   if (task.form === 'text') return { task: task.number, text: draft.values[0].trim() };
   if (draft.values.length === 0) return { task: task.number, text: draft.notes.trim() };
   if (task.form === 'yesno') return { task: task.number, yes: draft.values[0] === 'Yes', ...notes };
@@ -76,8 +92,8 @@ export function reported(task: Task): string | null {
     const words = [said[report.how], report.note].filter(Boolean).join(': ');
     return report.see ? `${words} · ${report.see}` : words;
   }
-  if (task.asked) return task.state === 'blocked' ? 'No report. Asked once' : 'No report yet. Asked once';
-  return task.state === 'working' || task.state === 'held' ? 'No report yet' : null;
+  if (task.asked) return task.state === 'blocked' ? 'No report. Asked once' : 'None yet. Asked once';
+  return task.state === 'working' || task.state === 'held' ? 'None yet' : null;
 }
 
 const short = (commit: string) => commit.slice(0, 7);

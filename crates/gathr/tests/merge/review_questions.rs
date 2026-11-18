@@ -92,6 +92,9 @@ fn a_review_left_with_an_unasked_note_holds_its_pr_and_a_clean_one_lands_it() {
         (fix["what"] == "Fix the review of #5").then_some(fix)
     });
     assert_eq!(fix["in_passing"], true, "{fix}");
+    // Gathr gave it, though its reviewer hears back on it: the window names Gathr (0053).
+    assert_eq!(fix["by_gathr"], true, "{fix}");
+    assert_eq!(room.task(1).get("by_gathr"), None, "the lead's task");
     let review = room.task(2);
     assert_eq!(review["state"], "blocked", "{review}");
     assert_eq!(

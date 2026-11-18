@@ -1,194 +1,67 @@
+// The chat's Tasks tab: the list, and a task opened from it or from the chat's Open task (the tasks mock-up, New).
 import { useState } from 'react';
 import { expect, test } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { PersonTask } from '../api';
-import { type Draft, toAnswer } from './model';
-import { type Refusal, TasksTab } from './TasksTab';
+import type { Task } from '../api';
+import type { Draft } from './model';
+import { TasksTab } from './TasksTab';
 
-const ask = (number: number, what: string, form: PersonTask['form'], labels: string[] = []): PersonTask => ({
-  number,
+const question: Task = {
+  number: 3,
   chat: 'c1',
-  chat_title: 'Reconnect',
   giver: 'mira',
   owner: null,
   given_in: 't1',
   kind: 'person',
-  what,
+  what: 'Turn import on for everyone now, or behind a setting first?',
+  why: 'PR #18 is ready to land. One thing is yours to decide first.',
   state: 'ready',
   reason: null,
   after: [],
-  for_agent: null,
-  why: null,
-  form,
-  choices: labels.map((label) => ({ label })),
+  form: 'choice',
+  choices: [{ label: 'On for everyone' }, { label: 'Behind a setting' }],
   files: [],
   created_us: 0,
-});
+};
+const work: Task = {
+  ...question,
+  number: 82,
+  kind: 'work',
+  owner: 'ann',
+  what: 'Fix it',
+  why: null,
+  state: 'working',
+};
 
-const tasks = [
-  ask(1, 'Keep the partial reply?', 'choice', ['Keep it', 'Start fresh']),
-  ask(2, 'Which cases fail?', 'choices', ['Partial', 'Repeated', 'Expired']),
-  ask(3, 'What should the notice say?', 'text'),
-];
-
-/** The tab as the app holds it: drafts live outside it, and Send settles what the service takes. */
-function Tab({ refuse = [], list = tasks }: { refuse?: Refusal[]; list?: PersonTask[] }) {
-  const [open, setOpen] = useState(list);
-  const [selected, setSelected] = useState<number | null>(null);
+/** The tab as the app holds it: the opened task and the drafts live outside it. */
+function Tab({ first }: { first?: number }) {
+  const [opened, setOpened] = useState(first);
   const [drafts, setDrafts] = useState<Record<number, Draft>>({});
-  const [sent, setSent] = useState('');
   return (
-    <>
-      <TasksTab
-        tasks={open}
-        selected={selected}
-        onSelect={setSelected}
-        drafts={drafts}
-        onDraft={(n, d) => setDrafts((all) => ({ ...all, [n]: d }))}
-        name={(agent) => (agent === 'mira' ? 'Mira' : 'An agent')}
-        onOpenFile={() => {}}
-        onReference={() => {}}
-        onSend={async (ready) => {
-          setSent(JSON.stringify(ready.map((t) => toAnswer(t, drafts[t.number]))));
-          const taken = ready.filter((t) => !refuse.some((r) => r.task === t.number));
-          setOpen((list) => list.filter((t) => !taken.includes(t)));
-          return refuse;
-        }}
-      />
-      <output aria-label="Sent">{sent}</output>
-    </>
+    <TasksTab
+      tasks={[question, work]}
+      members={[{ agent: 'mira', name: 'Mira', role: 'supervisor' }]}
+      opened={opened}
+      onOpen={setOpened}
+      drafts={drafts}
+      onDraft={(n, d) => setDrafts((all) => ({ ...all, [n]: d }))}
+      name={(a) => (a === 'mira' ? 'Mira' : a === 'ann' ? 'Ann' : 'An agent')}
+      onOpenFile={() => {}}
+      onAnswer={async () => null}
+      onSettle={async () => {}}
+      onReference={() => {}}
+    />
   );
 }
 
-test('Back and Next keep drafts, and notes alone answer a question in words', async () => {
-  const screen = await render(<Tab />);
-  await screen.getByRole('button', { name: /Start fresh/ }).click();
-  await screen.getByRole('button', { name: 'Next' }).click();
-  // Both questions have Notes: wait for the second before typing.
-  await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
-  // Notes alone answer it in words: "none of these" is an answer (owner, G152).
-  await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('not sure yet');
-  await screen.getByRole('button', { name: 'Back' }).click();
-  await expect
-    .element(screen.getByRole('button', { name: /Start fresh/ }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await expect.element(screen.getByRole('textbox', { name: 'Notes (optional)' })).toHaveValue('not sure yet');
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
-  await expect.element(screen.getByText('3 ready')).toBeVisible();
-  await screen.getByRole('button', { name: 'Send' }).click();
-  await expect
-    .element(screen.getByLabelText('Sent'))
-    .toHaveTextContent(
-      '[{"task":1,"pick":["Start fresh"]},{"task":2,"text":"not sure yet"},{"task":3,"text":"Reconnecting"}]',
-    );
-});
-
-// Focus that lands a frame later can take it from the field being typed in: WebKit lost the answer
-// that way (CI runs 42741029642, 42749442823, 42882378961). Frames are held to keep that frame late.
-test('Back and Next focus the new heading before the next frame', async () => {
-  const held: FrameRequestCallback[] = [];
-  const frame = window.requestAnimationFrame;
-  window.requestAnimationFrame = (callback) => held.push(callback);
-  try {
-    const screen = await render(<Tab />);
-    await screen.getByRole('button', { name: 'Next' }).click();
-    await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toHaveFocus();
-    await screen.getByRole('button', { name: 'Back' }).click();
-    await expect.element(screen.getByRole('heading', { name: 'Keep the partial reply?' })).toHaveFocus();
-  } finally {
-    window.requestAnimationFrame = frame;
-    for (const callback of held) callback(performance.now());
-  }
-});
-
-// Gathr's own question (giver null) is answered only by one of its choices, and Gathr has no pick to recommend.
-test('gathrs_question_names_gathr_offers_no_recommended_and_needs_a_pick', async () => {
-  const question: PersonTask = {
-    ...ask(9, "#5 adds 3,200 lines, over this project's line of 3,000: let it go on?", 'choice'),
-    giver: null,
-    given_in: null,
-    pr: 5,
-    choices: [
-      { label: 'Let it go on', detail: 'It lands once its review and checks pass.' },
-      { label: 'Send it back', detail: '#1 is blocked, and Lead is told.' },
-    ],
-  };
-  const screen = await render(<Tab list={[question]} />);
-  await expect.element(screen.getByText('Gathr', { exact: true })).toBeVisible();
-  const go = screen.getByRole('button', { name: /Let it go on/ });
-  await expect.element(go).toHaveAccessibleName(/It lands once its review and checks pass\./);
-  await expect.element(go).not.toHaveAccessibleName(/Recommended/);
-  await screen.getByRole('textbox', { name: 'Notes (optional)' }).fill('looks fine');
-  await expect.element(screen.getByText('0 ready')).toBeVisible();
-  await expect.element(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-  await go.click();
-  await screen.getByRole('button', { name: 'Send' }).click();
-  await expect
-    .element(screen.getByLabelText('Sent'))
-    .toHaveTextContent('[{"task":9,"pick":["Let it go on"],"text":"looks fine"}]');
-});
-
-const gathrs: PersonTask = {
-  ...ask(9, 'Let it go on?', 'choice', ['Let it go on', 'Send it back']),
-  giver: null,
-};
-
-test("the lead's pick is first and named", async () => {
-  const notice: PersonTask = {
-    ...ask(1, 'Which notice text should ship?', 'choice'),
-    choices: [{ label: 'Connection lost', detail: 'it comes back by itself' }, { label: 'Offline' }],
-  };
-  // A giver since deleted reads by the window's fallback name.
-  const gone: PersonTask = { ...ask(2, 'Keep the draft?', 'choice', ['Keep it', 'Drop it']), giver: 'gone' };
-  const screen = await render(<Tab list={[notice, gone, gathrs]} />);
-  await expect
-    .element(screen.getByRole('button', { name: /Connection lost/ }))
-    .toHaveAccessibleName(/Mira's pick · it comes back by itself/);
-  await expect.element(screen.getByRole('button', { name: /Offline/ })).not.toHaveAccessibleName(/pick/);
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await expect
-    .element(screen.getByRole('button', { name: /Keep it/ }))
-    .toHaveAccessibleName(/An agent's pick/);
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await expect.element(screen.getByRole('button', { name: /Let it go on/ })).not.toHaveAccessibleName(/pick/);
-});
-
-test('Discuss sends the message alone', async () => {
-  const screen = await render(<Tab list={[tasks[0]]} />);
-  await screen.getByRole('button', { name: /Start fresh/ }).click();
-  await screen.getByRole('switch', { name: 'Discuss' }).click();
-  await expect.element(screen.getByRole('button', { name: /Start fresh/ })).not.toBeInTheDocument();
-  const message = screen.getByRole('textbox', { name: /Your message/ });
-  await expect.element(message).toBeRequired();
-  await expect.element(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
-  // Off again, the pick staged before is still picked.
-  await screen.getByRole('switch', { name: 'Discuss' }).click();
-  await expect
-    .element(screen.getByRole('button', { name: /Start fresh/ }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await screen.getByRole('switch', { name: 'Discuss' }).click();
-  await message.fill('Does it retry by itself?');
-  await screen.getByRole('button', { name: 'Send' }).click();
-  await expect
-    .element(screen.getByLabelText('Sent'))
-    .toHaveTextContent('[{"task":1,"discuss":true,"text":"Does it retry by itself?"}]');
-});
-
-test("Gathr's own question has no Discuss", async () => {
-  const screen = await render(<Tab list={[gathrs]} />);
-  await expect.element(screen.getByRole('button', { name: /Let it go on/ })).toBeVisible();
-  await expect.element(screen.getByRole('switch')).not.toBeInTheDocument();
-});
-
-test('Send shows the first refused question, still open, with why', async () => {
-  const screen = await render(<Tab refuse={[{ task: 2, why: '#2 was cancelled', ref: 'r-1' }]} />);
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await screen.getByRole('checkbox', { name: /Partial/ }).click();
-  await screen.getByRole('button', { name: 'Next' }).click();
-  await screen.getByRole('textbox', { name: /Your answer/ }).fill('Reconnecting');
-  await screen.getByRole('button', { name: 'Send' }).click();
-  await expect.element(screen.getByRole('heading', { name: 'Which cases fail?' })).toBeVisible();
-  await expect.element(screen.getByText('Answer failed: #2 was cancelled')).toBeVisible();
+test('Open task on a question opens the question itself, answered in place; Back leads to the list', async () => {
+  const screen = await render(<Tab first={3} />);
+  await expect.element(screen.getByText(question.why as string)).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: /On for everyone/ })).toBeVisible();
+  await expect.element(screen.getByRole('textbox', { name: 'Notes' })).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+  await screen.getByRole('button', { name: 'Tasks' }).click();
+  await screen.getByRole('button', { name: /Fix it/ }).click();
+  await expect.element(screen.getByRole('heading', { name: 'Fix it' })).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: 'Cancel' })).toBeVisible();
 });

@@ -44,7 +44,7 @@ test('a Send the service takes closes its questions even with no live event', as
   person.draft(1, { values: ['Yes'], notes: '' });
   person.draft(2, { values: ['No'], notes: '' });
   await expect.element(screen.getByText('open 1,2 drafts 1,2')).toBeVisible();
-  await person.send([ask(1)]);
+  await person.send(ask(1), { values: ['Yes'], notes: '' });
   await expect.element(screen.getByText('open 2 drafts 2')).toBeVisible();
 });
 

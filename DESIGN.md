@@ -409,15 +409,15 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
   · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Free". Start times
   live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
   puts "@Juno " first in the composer as a picked name, unless its first picked name is already Juno, and focuses it. An archived chat, or an agent that can't be sent to, has no Message.
-- **Task:** the task its running turn works on, else its first open one: the title, "From Orin" and
+- **Task:** the task its running turn works on, else its first open one: the title, "From Orin" ("From Gathr" for a fix Gathr gave) and
   Open task, which opens it in the Tasks tab.
 - **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done
   nothing yet reads Working; one that only waits on the person has no Now.
 - **Earlier in this chat:** its earlier blocks, newest first, drawn by the timeline's own components
   at 15px, each headed by its name and time: its turns, and what it wrote to other agents. The latest
   10; older ones stay in the chat.
-- **Tasks in this chat:** the official TodoList, open tasks first, five before Show more: checked and
-  struck-through done items, active spinners, pending empty squares. A title opens the task.
+- **Tasks in this chat:** every task of its own, cancelled ones too, open ones first, five before Show more, as
+  the Tasks tab's rows without the face or the name: "#22 · Merging". A row opens the task.
 
 ### Navigation and workspace
 
@@ -496,19 +496,36 @@ while the plan waits on you, as Tasks does.
 
 The navigation count shows pending human tasks across chats, in the attention
 colour. The workspace Tasks
-tab shows the current chat's questions, one at a time, with title and source.
-Only the Supervisor asks the person (the sole agent in a one-agent chat).
-Inline OptionList stages single/multiple choices. ElicitationForm supplies the
-optional Notes field or the open-ended answer. There is no duplicate Confirm or
-automatic Next. Back/Next retain drafts; final Send submits ready answers only.
-Notes alone make any question ready and go as the answer in words, so "none of these" can be said. Unanswered tasks remain open.
-The first choice of an agent's choice question reads "<lead>'s pick", then " · " and its detail
-("Mira's pick · it comes back by itself"); Gathr's own question has no pick.
-Under the answer of a question an agent gave, a row holds the label "Discuss" and the shared
-Switch. On, the choices hide and the one field is "Your message", required, for every form; Send
-sends it with the other answers. Off again, what was picked is still picked. Gathr's own question
-has no switch. After Send the question leaves the list, the count and the chat's dot until the
-lead's turn that got the message ends, or is replaced by a new question (0065).
+tab lists the chat's tasks (the tasks mock-up, New) in three groups, For you, Open and Closed, each under a
+12.5px muted heading with its count: the questions waiting on the person, oldest first; what is under way;
+what is over, newest first. Each task is one row, the one task row an agent's tab uses too: a plain 24px face
+(the asker's for a question, Gathr's three dots for its own, else the owner's; never a state mark), its what at
+14px, and one 12.5px muted line, "#24 · Bo · Blocked", the same pieces in the same order on every row: number,
+who, Look into, state. The state is in the chat's words, in the line's colour: a state the marks draw (Working,
+Blocked, Stopped, Waiting) in the mark's shape, still, at 12px; Merging, Failed (in the danger colour) and
+Cancelled with their icons; "After #27", "Not started", "Discussing" as words; Waiting in the attention colour
+for a question waiting on you; a done task none, with a tick after its what, and an ended task's what muted.
+Rows are 6px 10px with a 10px radius and take the hover tint.
+A row opens its task in the tab, under Back ("< Tasks") and its number. An agent's task: its what at 20px,
+the line "Ann · PR #18 · Working" (its owner's 16px face first), then the fields From (the giver's 20px face,
+name and time; Gathr for its own question and for a fix it gave after a review), Why, the brief, Report ("None
+yet" while it works) and the rest; the foot holds only what acts: none when done, Cancel while open, Cancel and
+Restart (primary) once blocked, failed or stopped, Restart once cancelled.
+A question opens as itself, from its row or its line's Open task: the asker's message (its 36px face, name,
+role, time, "for Ann") with the one question block in its bubble, answered there, each question by itself
+(0065). Only the Supervisor asks the person (the sole agent in a one-agent chat). The block: the question with
+its icon and "Waiting" in the attention colour; for a question an agent gave, the shared Switch, small, labelled
+Discuss, right under it, so nothing above it moves; the choices, each a bordered row with a mark (a ring, or a
+square where several can be picked) that fills in the attention colour once picked; and one growing field with
+a round Send. Gathr's own question has no field and no switch, so a pick answers it at once; an agent's has a
+field (Notes, or Answer when it has no choices), so a pick marks the choice and Send or Enter sends it. Notes
+alone answer any agent's question in words, so "none of these" can be said. Discuss swaps the choices and notes
+for its own field, "Message to Mira"; each is kept while the other shows. The first choice of an agent's choice
+question reads "<lead>’s pick", then " · " and its detail ("Mira’s pick · it comes back by itself"); Gathr's own
+question has no pick. A refused Send stays in the block under its field: "Not sent" in the danger colour, why,
+and its reference, with what was typed kept. Once sent the block closes, reads Discussing while discussed, and
+the person's own message follows the asker's. A discussed question leaves the For you count and the chat's dot
+until the lead's turn that got the message ends, or is replaced by a new question (0065).
 After an accepted answer, show the shared answer line at the asker's wake-up turn
 in that agent's column. It stays after reload. Main-column team completion reports
 stay hidden.
