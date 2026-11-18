@@ -118,9 +118,9 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  * did folds into a row, its last text is the message, and a later reply of the turn lands in that block,
  * so turns streaming at once never interleave. Only a person's message sent into a running turn splits it,
  * one block before and one after; the last holds the streaming text, the notice and the approvals.
- * Messages between agents are a thread under the block they were sent from, a reply joining the thread of the message
- * it answers (threads.ts, 0072); Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an agent is drawn as one-line
- * events, all but the brief of a member's own task.
+ * Messages between agents are a thread under the block they were sent from, a reply joining the thread of the
+ * message it answers (threads.ts, 0072); Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an
+ * agent is drawn as one-line events, all but the brief of a member's own task.
  *
  * A block keeps one id from its first streamed text to its saved messages, so nothing remounts when a
  * stream ends. One that didn't change is the same object as on the draw before (`cache`), so the thread
