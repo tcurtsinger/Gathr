@@ -1,19 +1,15 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { memo, useState } from 'react';
-import { ContextDisplay } from '@/components/assistant-ui/elements/context-display';
-import { Button } from '@/components/ui/button';
 import type { Member, Task } from '../api';
-import { Face } from '../components/Face';
 import { gathrs } from '../tasks/model';
 import { TaskRows } from '../tasks/TaskList';
-import { ChatMenu } from './ChatMenu';
-import { useMarks } from './faceMarks';
+import { AgentHead } from './AgentHead';
 import type { Work } from './fold';
 import type { Glance } from './glance';
 import type { Custom } from './messages';
 import { type Actions, Blocks } from './Thread';
 import { WorkRow } from './TurnParts';
-import { open, roleName } from './team';
+import { open } from './team';
 import './agent.css';
 
 /** The agent's earlier blocks shown; older ones stay in the chat. */
@@ -95,7 +91,6 @@ interface Props {
 export const AgentPanel = memo(function AgentPanel(props: Props) {
   const { glance, tasks, members, now, earlier, actions, onMessage, onCompact, compaction } = props;
   const { member, standing } = glance;
-  const mark = useMarks()?.still.get(member.agent);
   const [more, setMore] = useState(false);
   // Every task of its own, cancelled ones too, so none goes missing from its tab.
   const mine = tasks.filter((t) => t.owner === member.agent).sort((a, b) => a.number - b.number);
@@ -105,52 +100,18 @@ export const AgentPanel = memo(function AgentPanel(props: Props) {
   const giver = (t: Task) => (gathrs(t) ? 'Gathr' : t.giver === null ? 'you' : named(t.giver));
   // Its open work first: an agent's earlier rounds can leave dozens done.
   const listed = [...mine.filter(open), ...mine.filter((t) => !open(t))];
-  const { used, window } = member.context ?? {};
   const nothing = !task && !now && standing !== 'working' && !earlier.length && !mine.length;
   return (
     <div className="agent-panel">
-      <header className="agent-who">
-        <Face agent={{ id: member.agent, name: member.name }} size={36} mark={mark} />
-        <div>
-          <h2>{member.name}</h2>
-          <p>
-            {roleName[member.role]} ·{' '}
-            {standing === 'working' ? (
-              <>
-                <b>Working</b>
-                {glance.began && ` since ${glance.began}`}
-              </>
-            ) : standing === 'needs' ? (
-              <b>{glance.doing}</b>
-            ) : (
-              (glance.detail ?? glance.doing)
-            )}
-          </p>
-        </div>
-        <span className="agent-actions">
-          {/* How full its context is (compaction plan, K2): none until the engine has said. */}
-          {used != null && window ? (
-            <ContextDisplay.Bar modelContextWindow={window} usage={{ totalTokens: used }} side="bottom" />
-          ) : null}
-          {onMessage && (
-            <Button type="button" variant="outline" onClick={() => onMessage(member.agent)}>
-              Message {member.name}
-            </Button>
-          )}
-          {onCompact && (
-            <ChatMenu
-              label={`More for ${member.name}`}
-              compact={{ asked: !!compaction, onCompact: () => onCompact(member.agent) }}
-            />
-          )}
-        </span>
-      </header>
-      {compaction && (
-        <p className="agent-quiet">
-          {compaction === 'running'
-            ? 'Compacting'
-            : 'Compaction queued · waits for its turn and background commands'}
-        </p>
+      <AgentHead
+        glance={glance}
+        task={tasks.find((t) => t.number === glance.task)?.what}
+        onMessage={onMessage}
+        onCompact={onCompact}
+        compaction={compaction}
+      />
+      {compaction === 'queued' && (
+        <p className="agent-quiet">Compaction queued · waits for its turn and background commands</p>
       )}
       {task && (
         <section aria-label="Task">

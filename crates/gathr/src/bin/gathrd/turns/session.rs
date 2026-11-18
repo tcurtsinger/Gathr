@@ -142,15 +142,19 @@ impl Task {
         let from = match choice {
             Conversation::Latest => return,
             Conversation::New(_) => None,
-            Conversation::Resume { task, .. } => Some(*task),
+            Conversation::Resume { task, session, .. } => Some((*task, session.clone())),
         };
         let (Some(agent), Some(chat)) = (self.agent.clone(), self.assigned.as_ref()) else {
             return;
         };
         let chat = chat.chat.clone();
         let (c, a) = (chat.clone(), agent.clone());
-        let switched =
-            move |conn: &mut rusqlite::Connection| gathr::context::switched(conn, &c, &a, from);
+        let switched = move |conn: &mut rusqlite::Connection| {
+            let from = from
+                .as_ref()
+                .map(|(task, session)| (*task, session.as_str()));
+            gathr::context::switched(conn, &c, &a, from)
+        };
         match self.chats.writer.call(switched).await {
             Some(Ok(context)) => self.publish(
                 &chat,

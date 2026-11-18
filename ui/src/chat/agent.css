@@ -16,40 +16,84 @@
 .agent-panel > * {
   flex: none;
 }
+/* The header, two lines that never wrap: the name, role and buttons, then the state line and the context bar, both
+   beside the face. */
 .agent-who {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-areas: "face name actions" "face row row";
+  column-gap: 12px;
   align-items: center;
-  gap: 12px;
+  white-space: nowrap;
 }
-.agent-who > div {
-  flex: 1;
+.agent-who > .face {
+  grid-area: face;
+}
+.agent-who-name {
+  display: flex;
+  grid-area: name;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
-.agent-who h2 {
+.agent-who-name h2 {
   margin: 0;
   overflow: hidden;
   font-size: 20px;
   font-weight: 600;
-  line-height: 1.2;
+  line-height: 26px;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
-.agent-who p {
-  margin: 2px 0 0;
+/* Its line no taller than the name's, so the first line stays 26px. */
+.agent-who-name > span {
+  flex: none;
   color: var(--muted-foreground);
   font-size: 13px;
+  line-height: 16px;
 }
-.agent-who p b {
-  color: var(--attention);
-  font-weight: 500;
-}
-.agent-actions {
+.agent-who-actions {
   display: flex;
-  flex-wrap: wrap;
+  grid-area: actions;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+}
+.agent-who-row {
+  display: flex;
+  grid-area: row;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+/* The chat's name line words; the state's word in its mark's colour: Needs you blue, Can't run red. */
+.agent-state {
+  flex: 1;
+}
+.agent-state > .name-line-end[data-you] {
+  color: var(--attention);
+}
+.agent-fill {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  padding: 0 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.agent-fill-track {
+  width: 48px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.agent-fill-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
 }
 .agent-panel section > h3 {
   margin: 0 0 8px;

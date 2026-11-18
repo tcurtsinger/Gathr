@@ -4,7 +4,7 @@ import { FROM_SERVICE, MARKS, type Mark, pressing, WORD } from '../components/ma
 import type { Custom } from './messages';
 import { type ChatState, unanswered } from './state';
 import { inWords } from './statusWords';
-import { began, clock, list, open } from './team';
+import { clock, list, open } from './team';
 
 /** Where an agent stands: the one state its face shows (0071), most pressing first. */
 export type Standing = Mark;
@@ -19,10 +19,6 @@ export interface Glance {
   standing: Standing;
   /** What it is doing, in one phrase: its row in Summary. */
   doing: string;
-  /** Working: when its longest-running turn began, as a clock time. */
-  began?: string;
-  /** Waiting: the same phrase with when each wait began. Start times show in the agent's panel only. */
-  detail?: string;
   /** The task its running turn works on, or the one its state is about. */
   task?: number;
   /** What its card says after the state's word: "Show cook times · 4 steps". */
@@ -41,19 +37,7 @@ export interface Glance {
 /** What each agent with a running turn is doing now, as that turn's row says it, and how many steps it took. */
 export type Activity = Map<string, { label: string; steps?: string }>;
 
-const FIELDS = [
-  'standing',
-  'doing',
-  'began',
-  'detail',
-  'task',
-  'about',
-  'since',
-  'on',
-  'failing',
-  'done',
-  'total',
-] as const;
+const FIELDS = ['standing', 'doing', 'task', 'about', 'since', 'on', 'failing', 'done', 'total'] as const;
 
 /**
  * Every agent of the chat, the most pressing first, the Supervisor first among equals. `activity` is what each
@@ -82,10 +66,7 @@ export function glances(
   return all.sort((a, b) => rank(a) - rank(b) || lead(a) - lead(b));
 }
 
-type Stands = Pick<
-  Glance,
-  'standing' | 'doing' | 'began' | 'detail' | 'task' | 'about' | 'since' | 'on' | 'failing'
->;
+type Stands = Pick<Glance, 'standing' | 'doing' | 'task' | 'about' | 'since' | 'on' | 'failing'>;
 
 /**
  * The state an agent's face shows: the most pressing of what the chat as it streams says (an approval or a
@@ -144,7 +125,6 @@ function standing(m: Member, state: ChatState, activity: Activity, waiting?: Wai
     return {
       standing: mark,
       doing: now?.label ?? 'Working',
-      began: clock(starts[0]),
       task,
       about: about(what(task), now?.steps),
       since: starts[0] ? Date.parse(starts[0]) : since,
@@ -156,12 +136,10 @@ function standing(m: Member, state: ChatState, activity: Activity, waiting?: Wai
   const shown = { standing: mark, task: stand.task ?? undefined, since };
   if (mark === 'waiting') {
     const until = stand.until_us ? ` until ${clock(new Date(stand.until_us / 1000).toISOString())}` : '';
-    const since = stand.on.map((on) => `${on.what} since ${began(on.since_us)}`);
     const on = stand.on.map((o) => inWords(o.what));
     return {
       ...shown,
       doing: `${stand.words}${until}`,
-      detail: since.length ? `Waiting for ${list(since)}` : undefined,
       about: on.length ? list(on) : (stand.what ?? undefined),
       on: on.length === 1 ? on[0] : undefined,
       failing: stand.failing || undefined,

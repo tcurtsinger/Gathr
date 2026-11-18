@@ -806,7 +806,7 @@ Parts: 8.8
 - **Then** Cass's hear-back resumes #1's conversation, and a teammate's message naming "#1" runs in #2's
 - **Given** Cass's work task #4 on PR 7 and a review with notes
 - **When** Gathr gives the fix #6
-- **Then** #6 resumes #4's conversation; a fix whose work task has none starts new
+- **Then** #6 resumes #4's conversation, showing #4's saved fill before its first call; a fix whose work task has none starts new
 
 ### 8k. A conversation that can't be resumed starts again from the brief
 

@@ -235,7 +235,7 @@ fn a_conversation_brings_back_its_fill_and_whether_it_was_told_and_a_new_one_sta
         .unwrap();
     assert!(!told, "a new conversation hasn't been told");
 
-    let shown = gathr::context::switched(&conn, "c", "ann", Some(1)).unwrap();
+    let shown = gathr::context::switched(&conn, "c", "ann", Some((1, "s-1"))).unwrap();
     assert_eq!(shown["used"], 120_000, "#1's fill: {shown}");
     let told: bool = conn
         .query_row(
@@ -248,7 +248,7 @@ fn a_conversation_brings_back_its_fill_and_whether_it_was_told_and_a_new_one_sta
 
     sessions::told(&conn, 1, "ann", false).unwrap();
     sessions::set(&conn, 1, "ann", "c", "acc", "s-other").unwrap();
-    let shown = gathr::context::switched(&conn, "c", "ann", Some(1)).unwrap();
+    let shown = gathr::context::switched(&conn, "c", "ann", Some((1, "s-other"))).unwrap();
     assert!(
         shown["used"].is_null(),
         "another conversation's fill isn't #1's: {shown}"
