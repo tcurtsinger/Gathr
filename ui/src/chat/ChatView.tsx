@@ -27,13 +27,12 @@ import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { addressed, nameable, unnamed } from './recipient';
+import { StatusLine } from './StatusLine';
 import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread, useStable } from './Thread';
 import { type Unsent, useChat } from './useChat';
 import { useWaiting } from './useWaiting';
-import { WaitingLine } from './Waiting';
-import { Working, working } from './Working';
 import './chat.css';
 
 interface Props {
@@ -121,7 +120,6 @@ export function ChatView(props: Props) {
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
-  const silent = waiting?.lines.some((l) => l.silent_us);
   const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
   const marks = useChatMarks(crew, timeline.items, archived);
@@ -130,8 +128,7 @@ export function ChatView(props: Props) {
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
   const to = addressed(picks, people, fallback, fresh);
-  // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
-  const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
+  const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   // An approval shown from the dock, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
@@ -284,10 +281,8 @@ export function ChatView(props: Props) {
               <Summary
                 state={state}
                 team={crew}
-                open={summary.open}
-                onOpen={(open) => setSummary((s) => ({ ...s, open }))}
-                onOwnButton={() => setSummary((s) => ({ open: s.open }))}
-                from={summary.from}
+                open={summary}
+                onOpen={setSummary}
                 pauses={pauses}
                 onPause={act}
                 onOpenAgent={actions.openAgent}
@@ -306,25 +301,7 @@ export function ChatView(props: Props) {
               target={target}
               onTarget={props.onFound}
               empty={loaded && state.messages.length === 0 && failed.length === 0}
-              after={
-                !archived && (
-                  <>
-                    <RunLine run={run} members={state.members} />
-                    {run.state === 'running' && !silent && (
-                      <Working
-                        state={state}
-                        summary={summary.open}
-                        onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
-                      />
-                    )}
-                    {/* In Working's place while none runs, or one that runs makes no progress: what the
-                      chat waits on. A queued turn that hasn't started is one of the things it says. */}
-                    {run.state === 'running' && (silent || !working(state)) && (
-                      <WaitingLine waiting={waiting} />
-                    )}
-                  </>
-                )
-              }
+              after={!archived && <RunLine run={run} members={state.members} />}
               header={
                 loadFailure && (
                   <FailureNotice
@@ -380,6 +357,7 @@ export function ChatView(props: Props) {
                     onAnswer={approve}
                     onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}
                   />
+                  {!fresh && <StatusLine crew={crew} waiting={waiting} onOpenAgent={actions.openAgent} />}
                   <Composer
                     draft={draft}
                     picks={picks}

@@ -10,7 +10,7 @@ import {
   ThumbsUp,
   Wrench,
 } from 'lucide-react';
-import { createContext, type ReactNode, useContext, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -22,11 +22,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Face } from '../components/Face';
 import { counted } from '../plans/plans';
 import { useMark } from './faceMarks';
-import type { Step, Work } from './fold';
+import { duration, type Step, type Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { SizeChoice } from './Size';
 import { clock, list } from './team';
-import { Elapsed } from './Working';
 import './team.css';
 import '../plans/plans.css';
 
@@ -118,7 +117,7 @@ export function WorkRow({
       durationLabel={
         <span className="work-notes">
           {work.notes.map((note) => `· ${note}`).join(' ')}
-          {work.running && work.since !== undefined && <Elapsed since={work.since} lead=" " />}
+          {work.running && work.since !== undefined && <Elapsed since={work.since} />}
         </span>
       }
       entries={entries}
@@ -126,6 +125,17 @@ export function WorkRow({
       onOpenChange={setOpen}
     />
   );
+}
+
+/** How long a running turn has run, redrawn each second: " · 4m 02s". */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+  const took = duration(now - since, 'second');
+  return took ? ` · ${took}` : null;
 }
 
 /** One step inside the row: a Tool call, or one of Gathr's own lines. */

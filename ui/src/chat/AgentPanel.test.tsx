@@ -1,4 +1,4 @@
-// An agent's panel as the person reaches it (0038): from Summary, the Working line or an initial in the
+// An agent's panel as the person reaches it (0038): from Summary, the status line or an initial in the
 // timeline. The service is the edge: fetch answers as it would.
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -306,39 +306,6 @@ test('Message names the agent first in the message box and puts the keyboard the
   await userEvent.keyboard('Made-up note{Enter}');
   // The name the button puts in counts as picked: its id is sent.
   await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note', agent: 'c' }]);
-});
-
-test('the Working line opens Summary and closes it; Escape gives focus back to the line', async () => {
-  service();
-  await render(<Chat />);
-  const line = page.getByRole('button', { name: 'Working Made-up Member' });
-  const summary = page.getByRole('dialog', { name: 'Summary' });
-  await expect.element(line).toHaveAttribute('aria-haspopup', 'dialog');
-  await expect.element(line).toHaveAttribute('aria-expanded', 'false');
-  // Who is working is announced from beside the button, never by a live region around the control.
-  // The Working line's own status (each turn's row announces its state too, as assistant-ui's Run activity does).
-  const status = page.getByRole('status').filter({ hasText: 'Working: ' });
-  await expect.element(status).toHaveTextContent('Working: Made-up Member');
-  expect(status.element().contains(line.element())).toBe(false);
-  await line.click();
-  await expect.element(summary).toBeVisible();
-  await expect.element(line).toHaveAttribute('aria-expanded', 'true');
-  await userEvent.keyboard('{Escape}');
-  await expect.element(summary).not.toBeInTheDocument();
-  await expect.element(line).toHaveFocus();
-
-  await line.click();
-  await expect.element(summary).toBeVisible();
-  await line.click();
-  await expect.element(summary).not.toBeInTheDocument();
-
-  // Opened from the line and closed with the header's button: focus stays with the button last used.
-  await line.click();
-  await expect.element(summary).toBeVisible();
-  const button = page.getByRole('button', { name: /^Summary/ });
-  await button.click();
-  await expect.element(summary).not.toBeInTheDocument();
-  await expect.element(button).toHaveFocus();
 });
 
 test('an agent’s initial in the timeline opens its panel', async () => {

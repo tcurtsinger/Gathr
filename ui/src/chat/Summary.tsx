@@ -33,10 +33,6 @@ interface Props {
   team: Glance[];
   open: boolean;
   onOpen: (open: boolean) => void;
-  /** What last opened or closed it other than its own button (the Working line): closing gives focus back to it. */
-  from?: HTMLElement | null;
-  /** Its own button was pressed, so focus belongs there again. */
-  onOwnButton?: () => void;
   pauses: Pauses;
   onPause: (action: PauseAction, scope: PauseScope) => void;
   /** Opens an agent's panel in the workspace. */
@@ -50,7 +46,7 @@ interface Props {
  * it.
  */
 export function Summary(props: Props) {
-  const { state, team, open, onOpen, from, onOwnButton, pauses, onPause, onOpenAgent } = props;
+  const { state, team, open, onOpen, pauses, onPause, onOpenAgent } = props;
   const round = useMemo(() => currentRound(state), [state]);
   const said = headline(team);
   const label = said ? `Summary: ${said}` : 'Summary';
@@ -67,7 +63,7 @@ export function Summary(props: Props) {
   return (
     <Popover.Root open={open} onOpenChange={onOpen}>
       <Popover.Trigger asChild>
-        <IconButton aria-label={label} className="head-button summary-button" onClick={onOwnButton}>
+        <IconButton aria-label={label} className="head-button summary-button">
           <span className="roster">
             {state.members.map((m) => (
               <Face key={m.agent} agent={{ id: m.agent, name: m.name }} size={20} mark={shown(m.agent)} />
@@ -87,15 +83,8 @@ export function Summary(props: Props) {
           collisionPadding={16}
           role="dialog"
           aria-label="Summary"
-          onInteractOutside={(e) => {
-            if ((e.target as Element).closest?.('[data-summary-opener]')) e.preventDefault();
-          }}
           onCloseAutoFocus={(e) => {
             if (went.current) e.preventDefault();
-            else if (from?.isConnected) {
-              e.preventDefault();
-              from.focus();
-            }
             went.current = false;
           }}
         >
