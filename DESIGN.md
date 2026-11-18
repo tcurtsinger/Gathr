@@ -547,8 +547,8 @@ opens in place, one at a time and none at first: its row and its brief on one ti
 fields (Why, Done when, Proof, Where, Size, After); a changed field keeps its old words under its new
 ones, muted, "Was: ...", a changed owner has an Owner row, and After's Was names a part that went by its
 what. Once approved, a part that became a task is that task's row, as in Tasks ("#24 · Bo · Blocked"),
-and opens it. The tab opens at its top whenever what it shows changes: another version, or a state that
-changes what it holds. The foot shows only when something in it acts, at a task foot's 64px: Drop
+and opens it. The tab opens at its top on another version and after the person's own
+Send back, Approve or Drop; a state that changes from elsewhere (a check that ends) keeps their place. The foot shows only when something in it acts, at a task foot's 64px: Drop
 (outline) at the left on the newest version while the plan is open, and at the right, on the newest
 version once it has reached you, Send back (outline) and Approve. Send back opens the answer form's field
 over the buttons, "What to change" as its placeholder, with Cancel and Send back, which is off until the

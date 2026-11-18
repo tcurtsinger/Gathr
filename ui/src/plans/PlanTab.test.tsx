@@ -205,26 +205,55 @@ test('choosing another version closes the open part', async () => {
   expect(screen.getByRole('button', { expanded: true }).elements()).toHaveLength(0);
 });
 
-test('the tab opens at its top when what it shows changes: another version, or its state', async () => {
+/** The tab's scroller, scrolled to `top` (measured back, so a page too short to scroll fails here). */
+function scrolledTo(top: number) {
+  const scroller = document.querySelector('.tasks-scroll') as HTMLElement;
+  scroller.scrollTop = top;
+  expect(scroller.scrollTop, 'the page scrolls at 700px').toBe(top);
+  return scroller;
+}
+
+test('another version opens at its top', async () => {
   serve(plan());
   const screen = await render(narrow(tab(2)));
   await expect.element(screen.getByRole('heading', { name: 'Tags on notes' })).toBeVisible();
-  const scroller = document.querySelector('.tasks-scroll') as HTMLElement;
-  const down = () => {
-    scroller.scrollTop = scroller.scrollHeight;
-    expect(scroller.scrollTop, 'the page scrolls at 700px').toBeGreaterThan(200);
-  };
-  down();
+  const scroller = scrolledTo(240);
   await screen.rerender(narrow(tab(1)));
   await expect.element(screen.getByText('Replaced', { exact: true })).toBeVisible();
   await expect.poll(() => scroller.scrollTop).toBe(0);
-  // The version shown was sent back while the person was at its parts.
-  await screen.rerender(narrow(tab(2)));
-  await expect.poll(() => scroller.scrollTop).toBe(0);
-  down();
+});
+
+test('a check that ends while the person reads keeps their place', async () => {
+  const checking = version(2, {
+    sent: null,
+    check: {
+      ...(version(2).check as NonNullable<PlanVersion['check']>),
+      state: 'working',
+      outcome: null,
+      notes: [],
+    },
+  });
+  const first = version(1, { decided: 'sent_back' });
+  serve(plan({ state: 'checking', versions: [first, checking] }));
+  const screen = await render(narrow(tab()));
+  await expect.element(screen.getByText('Checking', { exact: true })).toBeVisible();
+  const scroller = scrolledTo(100);
+  serve(plan({ versions: [first, { ...checking, sent: '2026-11-15T09:10:00.000Z' }] }));
+  const waiting = { id: 3, state: 'waiting' } as PlanSummary;
+  for (const on of live) on({ type: 'tasks', chat: 'c', tasks: [], waits: [], asks: [], plans: [waiting] });
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
+  expect(scroller.scrollTop).toBe(100);
+});
+
+test("the person's own Send back, from a scrolled tab, opens it at its top", async () => {
+  serve(plan());
+  const screen = await render(narrow(tab()));
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await screen.getByRole('button', { name: 'Send back' }).click();
+  await screen.getByRole('textbox', { name: 'What to change' }).fill('Split part 2');
+  const scroller = scrolledTo(240);
   serve(plan({ state: 'revising' }));
-  const revising = { id: 3, state: 'revising' } as PlanSummary;
-  for (const on of live) on({ type: 'tasks', chat: 'c', tasks: [], waits: [], asks: [], plans: [revising] });
+  await screen.getByRole('button', { name: 'Send back' }).click();
   await expect.element(screen.getByText('Revising', { exact: true })).toBeVisible();
   await expect.poll(() => scroller.scrollTop).toBe(0);
 });

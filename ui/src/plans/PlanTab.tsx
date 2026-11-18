@@ -100,18 +100,19 @@ export function PlanTab(props: Props) {
 
   const v = plan && (plan.versions.find((x) => x.n === version) ?? plan.versions.at(-1));
   const newest = !!plan && v === plan.versions.at(-1);
-  const word = plan && (newest ? WORD[plan.state] : 'Replaced');
-  // Another version, or a state that changes what it holds, opens at its top.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: what is shown is the reason, not a value read
-  useLayoutEffect(() => {
+  const toTop = () => {
     if (scroller.current) scroller.current.scrollTop = 0;
-  }, [v?.n, word]);
+  };
+  // Another version opens at its top. A state changed from elsewhere (a check that ends) keeps the place.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the version shown is the reason, not a value read
+  useLayoutEffect(toTop, [v?.n]);
   const asking = words !== null;
   useEffect(() => {
     if (asking) foot.current?.querySelector('textarea')?.focus();
   }, [asking]);
 
   if (!plan || !v) return loadFailure && <FailureNotice failure={loadFailure} onReference={onReference} />;
+  const word = newest ? WORD[plan.state] : 'Replaced';
   const open = ['checking', 'waiting', 'revising'].includes(plan.state);
   const waits = newest && plan.state === 'waiting';
   const drop = newest && open;
@@ -120,7 +121,11 @@ export function PlanTab(props: Props) {
     setRefused(null);
     call()
       .then(
-        () => setWords(null),
+        () => {
+          // The person's own word went through: what the tab holds changes with it.
+          setWords(null);
+          toTop();
+        },
         (failure: Failure) => setRefused({ word: refusedAs, failure }),
       )
       .finally(() => {
