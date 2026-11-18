@@ -8,7 +8,7 @@ import { byId, custom, events, ids, round, said, task, text, turn, view } from '
 const us = (m: Message, ms = 0) => (Date.parse(m.time) + ms) * 1000;
 const choices = [{ label: 'B' }, { label: 'A' }];
 
-test('an agent’s question sits in its bubble; the answer is the person’s message once, when it was sent (C61)', () => {
+test('an agent’s question sits in its bubble; the answer is the person’s message once, when it was sent', () => {
   const state = round();
   const reply = state.messages[1];
   const question = task(5, 'mira', 'ask', {
@@ -76,7 +76,7 @@ test('an answer sits above what it started, though both were saved in the same m
   expect(ids(items).indexOf('said-5')).toBe(ids(items).indexOf('a-ask') + 1);
 });
 
-test('Gathr’s question is Gathr’s own message where it was asked, and the person’s answer sits below it (C50)', () => {
+test('Gathr’s question is Gathr’s own message where it was asked, and the person’s answer sits below it', () => {
   const state = round();
   const kit = state.messages.at(-1) as Message;
   const question = task(7, 'kit', 'kit', {
@@ -138,7 +138,7 @@ test('each Discuss and the answer after it are the person’s own messages, each
   expect(events(items)).toEqual([]);
 });
 
-test('a request the person’s answer settled reads no “completed” line in its member’s hear-back (C62)', () => {
+test('a request the person’s answer settled reads no “completed” line in its member’s hear-back', () => {
   const state = round();
   state.tasks.push(
     task(3, 'mira', 'rowan', { kind: 'person_request', giver: 'rowan', what: 'Which notice?' }),
@@ -153,7 +153,7 @@ test('a request the person’s answer settled reads no “completed” line in i
   expect(ids(items).slice(-1)).toEqual(['a-back']);
 });
 
-test('what the lead is told after the person’s size change isn’t drawn: Gathr’s own line says it (C37)', () => {
+test('what the lead is told after the person’s size change isn’t drawn: Gathr’s own line says it', () => {
   const state = round();
   state.turns.told = { ...turn('told', 'mira'), position: 5 };
   const told = 'The person made "Fix the reconnect" new, so it waits for a plan. Write the plan with plan.';

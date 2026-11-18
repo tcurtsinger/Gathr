@@ -18,7 +18,7 @@ interface Chat {
 }
 
 /**
- * Who a message box's "@" can name (0028, C24): the chat's agents, its Supervisor first; in a chat with no project,
+ * Who a message box's "@" can name (0028): the chat's agents, its Supervisor first; in a chat with no project,
  * then every other agent, which naming brings in, up to five in all. A removed agent is none of them.
  */
 export function nameable({ members, agents, project, fresh, last, marks }: Chat): Person[] {
@@ -55,7 +55,7 @@ export function unnamed(people: Person[], members: Member[], last?: string | nul
 }
 
 /**
- * Who a message goes to (C24): the first agent picked from the "@" list, else the hint's agent. The window always
+ * Who a message goes to: the first agent picked from the "@" list, else the hint's agent. The window always
  * sends its id, so a typed name is only text; one picked from outside a chat with no project joins it.
  */
 export function addressed(

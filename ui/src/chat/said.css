@@ -80,11 +80,20 @@
 .name-line-meta > * {
   flex: none;
 }
-/* "·" between the pieces, 6px each side; its text is no part of what a screen reader says. */
+/*
+ * "·" between the pieces, 6px each side; its text is no part of what a screen reader says. Safari before 17.4 doesn't
+ * know the alternative text and would drop the whole declaration, so it keeps the plain dot.
+ */
 .name-line-meta > * + *::before,
 .steps-piece::before {
-  content: "·" / "";
+  content: "·";
   padding: 0 6px;
+}
+@supports (content: "·" / "") {
+  .name-line-meta > * + *::before,
+  .steps-piece::before {
+    content: "·" / "";
+  }
 }
 /* The steps button holds its own pieces, each with its "·". */
 .name-line-meta > .steps-button::before {

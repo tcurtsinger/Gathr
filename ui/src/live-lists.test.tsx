@@ -210,7 +210,7 @@ test('a chat that is not open shows Working while it works, Needs you once it ne
   expect(document.querySelector('.chat-mark')).toBeNull();
 });
 
-test('the mark sits 8px after the cut title, never on it, and leaves More where it is (C65)', async () => {
+test('the mark sits 8px after the cut title, never on it, and leaves More where it is', async () => {
   made.chats = [
     openChat,
     { ...other, title: 'Made-up other chat with a title too long for its row in the sidebar' },

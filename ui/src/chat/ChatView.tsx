@@ -46,7 +46,7 @@ interface Props {
   /** Removed agents, by name: their old messages still say who wrote them (0069). */
   removed?: Named[];
   draft: string;
-  /** The names picked from the "@" list in the draft: only these count (C24). */
+  /** The names picked from the "@" list in the draft: only these count, never a name typed. */
   picks?: Picked[];
   onDraft: (text: string, picks?: Picked[]) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
@@ -150,7 +150,7 @@ export function ChatView(props: Props) {
   const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
   const marks = useChatMarks(crew, timeline.items, archived);
-  // Who the message box can name, and who gets a message that names nobody (C24: no picker).
+  // Who the message box can name, and who gets a message that names nobody: there is no picker.
   const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
   const people = nameable(room);
   const fallback = unnamed(people, members, last);

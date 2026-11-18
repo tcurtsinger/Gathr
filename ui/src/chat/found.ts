@@ -7,7 +7,7 @@ import type { Target } from './Thread';
 
 const ABOVE = 20;
 // A block taller than the view starts this far below its top edge, clear of the fade.
-const TOP = 32;
+export const TOP = 32;
 
 /**
  * A search hit opened in the chat (plans/search.md), or an approval shown from the dock: draws the pages

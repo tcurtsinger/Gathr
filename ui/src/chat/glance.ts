@@ -29,7 +29,7 @@ export interface Glance {
   on?: string;
   /** Waiting: the looks at what it waits on keep failing. */
   failing?: boolean;
-  /** Its tasks in this chat, cancelled ones left out. */
+  /** Its tasks in this chat, cancelled ones and plan checks left out. */
   done: number;
   total: number;
 }
@@ -51,7 +51,8 @@ export function glances(
   before: Glance[] = [],
 ): Glance[] {
   const all = state.members.map((member): Glance => {
-    const tasks = state.tasks.filter((t) => t.owner === member.agent && t.state !== 'cancelled');
+    // A plan's check is Gathr's step, not work the lead handed out: Round leaves it out too.
+    const tasks = state.tasks.filter((t) => t.owner === member.agent && t.state !== 'cancelled' && !t.checks);
     const now: Glance = {
       member,
       ...standing(member, state, activity, waiting),

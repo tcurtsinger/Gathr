@@ -223,7 +223,7 @@ impl Room {
         db
     }
 
-    /// The project's checks, passed at `head`, as a run of Gathr's (C3) leaves them.
+    /// The project's checks, passed at `head`, as a run of Gathr's (0043 C3) leaves them.
     fn checks_passed(&self, head: &str) {
         let db = self.db();
         db.execute(

@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { useContext, useEffect, useState } from 'react';
 import { duration, type Work } from './fold';
+import { revealOpened } from './reveal';
 import { FoundContext } from './TurnParts';
 
 /**
@@ -53,7 +54,11 @@ export function StepsButton({
       className="steps-button"
       aria-label={label.filter(Boolean).join(' · ')}
       aria-expanded={open}
-      onClick={() => onOpen(!open)}
+      onClick={(e) => {
+        onOpen(!open);
+        const block = e.currentTarget.closest('.said');
+        if (!open && block) revealOpened(e.currentTarget, block);
+      }}
     >
       {pieces.map((piece, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the pieces keep their order
