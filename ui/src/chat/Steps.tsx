@@ -1,7 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { useContext, useEffect, useState } from 'react';
 import { duration, type Work } from './fold';
-import { Dot } from './Said';
 import { FoundContext } from './TurnParts';
 
 /**
@@ -55,7 +54,6 @@ export function StepsButton({
       {pieces.map((piece, i) => (
         // biome-ignore lint/suspicious/noArrayIndexKey: the pieces keep their order
         <span key={i} className="steps-piece">
-          <Dot />
           {piece}
         </span>
       ))}

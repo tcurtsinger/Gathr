@@ -1,6 +1,6 @@
 import { MessagePrimitive } from '@assistant-ui/react';
 import { Check } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Face, type FaceSize, YouFace } from '../components/Face';
 import { useMark } from './faceMarks';
 import { clock, list } from './team';
@@ -17,6 +17,7 @@ export function Said({
   small,
   you,
   keep,
+  bare,
   root,
   children,
 }: {
@@ -29,6 +30,8 @@ export function Said({
   you?: boolean;
   /** Its steps stay on its name line: a failed step, or an agent still working. */
   keep?: boolean;
+  /** It has no words yet: its face sits beside its name line. */
+  bare?: boolean;
   root?: boolean;
   children?: ReactNode;
 }) {
@@ -38,6 +41,7 @@ export function Said({
     'data-small': small || undefined,
     'data-you': you || undefined,
     'data-keep': keep || undefined,
+    'data-bare': bare || undefined,
   };
   const inner = (
     <>
@@ -86,30 +90,17 @@ export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small 
  * task and its tick), and `end` after them: the steps.
  */
 export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNode[]; end?: ReactNode }) {
-  const shown = pieces.filter((p) => p !== undefined && p !== null && p !== false && p !== '');
+  // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
   return (
     <div className="name-line">
       <span className="name-line-name">{name}</span>
       <span className="name-line-meta">
-        {shown.map((piece, i) => (
-          // The pieces are in a fixed order: their place is their key.
-          // biome-ignore lint/suspicious/noArrayIndexKey: see above
-          <Fragment key={i}>
-            {i > 0 && <Dot />}
-            {piece}
-          </Fragment>
-        ))}
+        {pieces.map((p) => (typeof p === 'string' ? <span key={p}>{p}</span> : p))}
         {end}
       </span>
     </div>
   );
 }
-
-export const Dot = () => (
-  <span className="name-line-dot" aria-hidden="true">
-    ·
-  </span>
-);
 
 /** When it was said, as the clock reads. */
 export const When = ({ time }: { time?: string }) =>

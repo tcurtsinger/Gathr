@@ -68,7 +68,9 @@ function TalkMessage({ m, index, small }: { m: Message; index: number; small: bo
         />
       }
     >
-      {work && <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />}
+      {work && (open || work.running) && (
+        <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
+      )}
       <Bubble quote={m.quote} mention={m.to}>
         <MessagePrimitive.PartByIndex index={index} components={parts} />
       </Bubble>

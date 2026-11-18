@@ -59,6 +59,8 @@ export type Custom = {
   done?: boolean;
   /** What the turn did before its message, as one row. */
   work?: Work;
+  /** It has words to show, saved or streaming. */
+  text?: boolean;
   notice?: TurnNotice;
   approvals?: Approval[];
   /** A message that never reached the service. */
@@ -389,6 +391,7 @@ function toReply(
   const began = group.bound ? turn?.created : undefined;
   const { work, text } = fold(group.msgs, partial, status === 'running', gave, began);
   if (work) custom.work = work;
+  if (text) custom.text = true;
   if (turn && hasNotice(turn)) {
     custom.notice = { turn, replied: group.msgs.length > 0 || !!partial, carried };
   }

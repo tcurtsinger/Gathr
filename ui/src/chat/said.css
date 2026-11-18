@@ -9,6 +9,13 @@
 .said-face {
   padding-top: 25px;
 }
+/* A message with no words yet (an agent at work, a turn that only ran steps): its face beside its name line. */
+.said[data-bare] {
+  align-items: center;
+}
+.said[data-bare] > .said-face {
+  padding-top: 0;
+}
 /* A block that follows its speaker's has no face or name line: its bubble lines up with the one above. */
 .said-face:empty {
   padding: 0;
@@ -69,8 +76,15 @@
 .name-line-meta > * {
   flex: none;
 }
-.name-line-dot {
+/* "·" between the pieces, 6px each side; its text is no part of what a screen reader says. */
+.name-line-meta > * + *::before,
+.steps-piece::before {
+  content: "·" / "";
   padding: 0 6px;
+}
+/* The steps button holds its own pieces, each with its "·". */
+.name-line-meta > .steps-button::before {
+  content: none;
 }
 .name-line-meta svg {
   width: 12px;

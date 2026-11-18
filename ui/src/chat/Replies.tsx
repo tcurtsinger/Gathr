@@ -26,6 +26,7 @@ export function UserMessage() {
     <Said
       root
       you
+      bare={unsent?.text === ''}
       face={<YouSaid />}
       line={<NameLine name="You" pieces={[<When key="t" time={own.tick} />]} />}
     >
@@ -60,9 +61,8 @@ export const parts = { Text: TextPart };
 export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
-  const text = useAuiState((s) => s.message.content.length > 0);
   if (own.thread) return <Talk said={own.thread} under={!!own.under} />;
-  return <Reply own={own} id={id} text={text} />;
+  return <Reply own={own} id={id} text={!!own.text} />;
 }
 
 /**
@@ -83,6 +83,7 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
       root
       agent={by}
       keep={!!work && (work.running || !!work.failed)}
+      bare={!text && !plan}
       face={
         named && (
           <AgentFace
@@ -109,7 +110,10 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
         )
       }
     >
-      {work && <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />}
+      {/* Closed, a finished turn's steps aren't drawn at all: a long chat mounts no list it doesn't show. */}
+      {work && (open || work.running) && (
+        <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
+      )}
       {(text || plan) && (
         <Bubble>
           <MessagePrimitive.Parts components={parts} />

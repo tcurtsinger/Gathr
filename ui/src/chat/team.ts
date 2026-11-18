@@ -69,11 +69,14 @@ export function list(names: string[]): string {
   return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }
 
+// One formatter for every message: toLocaleTimeString makes a new one each call, and a chat draws hundreds.
+const hhmm = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit', hour12: false });
+
 /** A message's time as the reader's clock shows it: 09:42. */
 export function clock(time: string | undefined): string {
   const at = time ? new Date(time) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
-  return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return hhmm.format(at);
 }
 
 /** Whether a task is still under way: not done, blocked, failed, stopped or cancelled. */
