@@ -29,7 +29,11 @@ function Reference({ reference }: { reference: string }) {
     setFailure(null);
     api.trace(reference).then(setEvents, setFailure);
   }, [reference]);
-  const why = events?.findLast((e) => e.status === 'error' && typeof e.attrs?.why === 'string')?.attrs?.why;
+  // A refused request's event says why under `reason`, as `gathr diag trace` shows it.
+  const why = events
+    ?.filter((e) => e.status === 'error')
+    .map((e) => e.attrs?.why ?? e.attrs?.reason)
+    .findLast((w) => typeof w === 'string');
 
   return (
     <section className="diagnostics" aria-labelledby="diagnostics-title">
