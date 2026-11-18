@@ -45,8 +45,8 @@ Parts: 1.3
 
 - **Given** a team chat with a lead and a builder, open in the window
 - **When** the person sends one message that @-names the builder, and one that names nobody
-- **Then** the builder gets the first and the lead gets the second, whichever agent the window showed
-  last
+- **Then** the builder gets the first and the lead gets the second, as the box said by Send ("To" and the
+  agent's name)
 
 ### 1d. An agent is created with what it is for
 

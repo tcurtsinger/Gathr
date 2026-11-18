@@ -160,7 +160,6 @@ function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown
       <ChatView
         chat={{ id: 'c', title: 'Made-up chat', archived: archived ? '2026-11-08T09:00:00Z' : null }}
         agents={known}
-        onEditAgent={() => {}}
         draft={draft}
         onDraft={setDraft}
         unsent={[]}
@@ -294,15 +293,17 @@ test('an idle agent is Free, with its earlier blocks and tasks; one with nothing
   await expect.element(panel.getByText('Nothing in this chat yet')).toBeVisible();
 });
 
-test('Message picks the agent as the recipient and puts the keyboard in the composer', async () => {
+test('Message names the agent first in the message box and puts the keyboard there', async () => {
   const sent = service();
   await render(<Chat />);
   await openFromSummary(/^Made-up Third/);
   await panel.getByRole('button', { name: 'Message Made-up Third' }).click();
-  await expect.element(page.getByRole('textbox', { name: 'Message' })).toHaveFocus();
-  await expect.element(page.getByRole('combobox', { name: 'Agent' })).toHaveTextContent('Made-up Third');
+  const input = page.getByRole('textbox', { name: 'Message' });
+  await expect.element(input).toHaveFocus();
+  await expect.element(input).toHaveValue('@Made-up Third ');
   await userEvent.keyboard('Made-up note{Enter}');
-  await expect.poll(() => sent).toEqual([{ text: 'Made-up note', agent: 'c' }]);
+  // A member named: the service gives it to that member.
+  await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note' }]);
 });
 
 test('the Working line opens Summary and closes it; Escape gives focus back to the line', async () => {

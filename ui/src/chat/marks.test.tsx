@@ -121,7 +121,6 @@ function chat(more: Partial<Chat> = {}) {
         removed={[
           { id: 'z', name: 'Made-up Gone', face_seed: 'Made-up', gender: null, skin: null, background: null },
         ]}
-        onEditAgent={() => {}}
         draft=""
         onDraft={() => {}}
         unsent={[]}

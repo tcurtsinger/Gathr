@@ -84,7 +84,7 @@ interface Props {
   now?: Work;
   earlier: ThreadMessageLike[];
   actions: Actions;
-  /** Picks the agent as the composer's recipient and focuses the composer; none when it can't be sent to. */
+  /** Names the agent first in the message box and focuses it; none when it can't be sent to. */
   onMessage?: (agent: string) => void;
   /** Compacts its conversation in this chat; none where it can't (an archived chat). */
   onCompact?: (agent: string) => void;

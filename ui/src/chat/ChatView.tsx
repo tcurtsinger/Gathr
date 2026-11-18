@@ -15,10 +15,10 @@ import {
 } from '../api';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
+import { firstNamed } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
-import { AgentPicker, type Recipient } from './AgentPicker';
 import { ApprovalDock } from './ApprovalDock';
 import { ChatMenu } from './ChatMenu';
 import { MarksContext, useChatMarks } from './faceMarks';
@@ -26,10 +26,10 @@ import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
+import { addressed, nameable, unnamed } from './recipient';
 import { Summary } from './Summary';
 import { running } from './state';
 import { type Actions, Thread, useStable } from './Thread';
-import { roleName } from './team';
 import { type Unsent, useChat } from './useChat';
 import { useWaiting } from './useWaiting';
 import { WaitingLine } from './Waiting';
@@ -41,8 +41,6 @@ interface Props {
   agents: Agent[];
   /** Removed agents, by name: their old messages still say who wrote them (0069). */
   removed?: Named[];
-  /** Opens Settings > Agents at this agent. */
-  onEditAgent: (agent: string) => void;
   draft: string;
   onDraft: (text: string) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
@@ -93,7 +91,7 @@ interface Props {
 const NONE: Named[] = [];
 
 export function ChatView(props: Props) {
-  const { chat, agents, onEditAgent, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
+  const { chat, agents, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
   const archived = !!chat.archived;
   const { onRestore, restoreFailure } = props;
@@ -107,16 +105,10 @@ export function ChatView(props: Props) {
   const act = (action: PauseAction, scope: PauseScope) => attempt(action, () => onPause(action, scope));
   const thisChat: PauseScope = { scope: 'chat', target: chat.id };
   const input = useRef<HTMLTextAreaElement>(null);
-  const [picked, setPicked] = useState<string | null>(null);
   // A new chat isn't made yet: its team is its project's, if it has one.
   const fresh = !chat.id;
   const members = fresh ? (projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
-  const recipients = recipientsOf(members, agents, !!chat.project);
-  // The one picked here, else the chat's Supervisor, else the agent of its last turn, else the first;
-  // a removed one is skipped.
-  const lead = members.find((m) => m.role === 'supervisor')?.agent;
   const last = Object.values(state.turns).findLast((t) => t.agent)?.agent;
-  const agent = [picked, lead, last].find((id) => recipients.some((a) => a.id === id)) ?? recipients[0]?.id;
 
   const cache = useRef(new Map());
   const { removed = NONE } = props;
@@ -130,6 +122,11 @@ export function ChatView(props: Props) {
   const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
   const marks = useChatMarks(crew, timeline.items, archived);
+  // Who the message box can name, and who gets a message that names nobody (C24: no picker).
+  const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
+  const people = nameable(room);
+  const fallback = unnamed(people, members, last);
+  const to = addressed(draft, people, fallback, room);
   // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
   const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
@@ -148,8 +145,8 @@ export function ChatView(props: Props) {
   const sendDraft = () => {
     const first = state.messages.length === 0;
     onDraft('');
-    if (fresh) return onStart(draft, agent);
-    send(draft, agent).then(() => first && onNamed());
+    if (fresh) return onStart(draft, to.agent);
+    send(draft, to.agent).then(() => first && onNamed());
   };
 
   const actions: Actions = {
@@ -183,9 +180,18 @@ export function ChatView(props: Props) {
   const stable = useStable(actions);
   const { agentOpen, workspace } = props;
   const opened = crew.find((g) => g.member.agent === agentOpen?.agent);
+  // Message on a panel: the agent named first in the box, unless the text already gives it the message.
+  const typed = useRef({ draft, people, onDraft });
+  typed.current = { draft, people, onDraft };
   const message = useCallback((id: string) => {
-    setPicked(id);
-    input.current?.focus();
+    const { draft, people, onDraft } = typed.current;
+    const who = people.find((p) => p.id === id);
+    if (who && firstNamed(draft, people)?.id !== id) onDraft(`@${who.name} ${draft}`);
+    requestAnimationFrame(() => {
+      const box = input.current;
+      box?.focus();
+      box?.setSelectionRange(box.value.length, box.value.length);
+    });
   }, []);
   // The panel's place in the workspace: the same element whatever streams, so the workspace isn't asked
   // for again. The panel is drawn into it from here and stays there while another tab shows, keeping its
@@ -232,7 +238,7 @@ export function ChatView(props: Props) {
             members={state.members}
             {...blocksOf(timeline.items, agent, mine)}
             actions={stable}
-            onMessage={!archived && recipients.some((a) => a.id === agent) ? message : undefined}
+            onMessage={!archived && people.some((p) => p.id === agent) ? message : undefined}
             onCompact={archived ? undefined : compact}
             compaction={compaction === 'queued' || compaction === 'running' ? compaction : undefined}
           />
@@ -374,16 +380,9 @@ export function ChatView(props: Props) {
                     onSend={sendDraft}
                     onStop={turn ? () => act('stop', thisChat) : undefined}
                     inputRef={input}
-                    tools={
-                      agent && (
-                        <AgentPicker
-                          agents={recipients}
-                          selected={agent}
-                          onSelect={setPicked}
-                          onEdit={() => onEditAgent(agent)}
-                        />
-                      )
-                    }
+                    hint={fallback ? `Message ${fallback.name}` : 'Message'}
+                    people={people}
+                    to={to.to && { id: to.to.id, name: to.to.name, joins: to.joins }}
                   />
                 </>
               )}
@@ -406,23 +405,6 @@ function RunLine({ run, members }: { run: Run; members: Member[] }) {
       {run.state === 'pausing' ? 'Pausing…' : `${who} ${run.state}`}
     </p>
   );
-}
-
-const MOST = 5;
-
-/**
- * Who a message can go to (0028): the chat's Supervisor by name first, then its other agents. A chat
- * without a project can also take any other agent, up to five: sending to one adds it.
- */
-function recipientsOf(members: Member[], agents: Agent[], project: boolean): Recipient[] {
-  const sorted = [...members].sort(
-    (a, b) => Number(b.role === 'supervisor') - Number(a.role === 'supervisor'),
-  );
-  const inChat = sorted
-    .filter((m) => agents.some((a) => a.id === m.agent))
-    .map((m) => ({ id: m.agent, name: m.name, meta: members.length > 1 ? roleName[m.role] : undefined }));
-  if (project || members.length >= MOST) return inChat;
-  return [...inChat, ...agents.filter((a) => !members.some((m) => m.agent === a.id))];
 }
 
 /** Reports when each turn's first streamed text is drawn, to set against the service's

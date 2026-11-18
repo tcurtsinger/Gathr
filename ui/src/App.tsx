@@ -359,9 +359,6 @@ export function App() {
           chat={chat}
           agents={agents}
           removed={removed}
-          onEditAgent={(agent) =>
-            setSettings({ page: 'agents', agent, opener: document.activeElement as HTMLElement })
-          }
           draft={drafts.current.get(chat.id) ?? ''}
           onDraft={(text) => {
             drafts.current.set(chat.id, text);
