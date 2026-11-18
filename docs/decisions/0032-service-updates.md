@@ -2,10 +2,12 @@
 
 Status: accepted (slice 2's F7, approved by the owner 2026-11-07; the window's updater, its key and its restart approved
 2026-11-09). Amended 2026-11-12 (the owner): the service updates when the person says, by the Update button, no
-longer between turns by itself; the window updates itself as before. Date: 2026-11-09. Follows
+longer between turns by itself; the window updates itself as before. Amended 2026-11-17 (the owner, C66): one Update
+for both parts, and the tray's Restart to update goes. Date: 2026-11-09. Follows
 [0025](0025-engine-copies.md)'s way of keeping engine copies.
 
-Built: yes. Proof: `crates/gathr/tests/app_update.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/update.test.tsx`. No test covers the window's own updater.
+Built: yes. Proof: `crates/gathr/tests/app_update.rs`, `crates/gathr/tests/update_room.rs`, `ui/src/update.test.tsx`; the window's choice of when to install in `crates/gathr-app/src/update.rs`'s tests. Its
+install and restart are checked by hand.
 
 ## Why
 
@@ -90,10 +92,18 @@ ended (G194); the person would rather choose when.
   release); a debug build never checks. The update's minisign signature is checked against the public key in
   `tauri.conf.json` before anything installs. Events: `gathr.ui.update.check` (a refused update names its version and
   carries its reference) and `gathr.ui.update.install`.
-- **When it restarts** (the owner's pick, 2026-11-09): at once if the window is hidden in the tray, else when it's next
-  hidden; meanwhile the tray menu has Restart to update. A window hidden before starts hidden again. Its exit for an
-  update never stops the service. The Update button doesn't reach the window (2026-11-12): everything the person sees
-  and every behaviour comes from the service, and the window's own restart touches nothing that runs.
+- **When it restarts:** one Update for both parts (the owner, 2026-11-17: "There should not be two different update
+  buttons that show at different times"). When the window signs in to a service that started anew (`follow` or
+  `restart`) and `<data>/app/current.json` names a release newer than the window's own, the person took Update: the
+  window installs its own update at once, shown or hidden, and restarts once (`via: "update"`). An update it had
+  downloaded from an older release than the service's is dropped and the newer one fetched first. Without that, it
+  installs at once if the window is hidden in the tray, else when it's next hidden (`via: "hide"`). The tray has no
+  update item. The window comes back as it was, shown or hidden, whatever its arguments say (a start at login carries
+  `--hidden`): it leaves `window-restart-shown` or `window-restart-hidden` in the data folder for its next start. Its
+  exit for an update never stops the service. Nothing goes from the page to the window: the window learns of the
+  Update from the hand-over it already follows.
+- **Only the window has an update** (its download failed when the person updated): not built. The next service update
+  carries it, or it installs when the window is next hidden.
 - **Installing:** Windows runs the new NSIS installer quietly (`/S /UPDATE /R`), which checks only for a running
   `gathr-app` and starts it again with its arguments. macOS replaces `Gathr.app` in place, and the window restarts.
 - **After a hand-over:** when `service.json` names a new process that answers, the window signs in to it with a fresh
@@ -126,10 +136,13 @@ ended (G194); the person would rather choose when.
   behind a background command that never ended (G194).
 - **Letting the person's message start during an Update:** it was the rule while updates waited for quiet; an Update
   takes seconds and its hand-over would cut that turn off, so it waits and runs on the new copy.
-- **One click that updates the window too** (planned 2026-11-12, then dropped the same day): the window said its
-  update ready in a file in the data folder and Update left it a file to install by. Checked against the code three
-  times, the plan kept failing on the hand-off between the two programs: an ask taken while the service was between
-  copies, lost when the window restarted, never cancelled after a rollback. The window updates itself as it did.
+- **One click that updates the window through files** (planned 2026-11-12, then dropped the same day): the window said
+  its update ready in a file in the data folder and Update left it a file to install by. Checked against the code
+  three times, the plan kept failing on the hand-off between the two programs: an ask taken while the service was
+  between copies, lost when the window restarted, never cancelled after a rollback. One Update (2026-11-17) keeps no
+  ask: the window reads the release the service switched to when it signs in to it, and a rollback names an older one.
+- **A command from the page to the window for an update only the window has** (2026-11-17): it would need a second
+  IPC command and its capability for a case not yet seen; the next service update carries it.
 - **Starting the new copy only from the window:** nobody may be at the keyboard, and the window may not be running.
   The stopping service starts it itself, after its lock is free, and the window finds whichever runs.
 - **Signing the service's archive:** its SHA-256 comes over HTTPS from the same release as the archive; a signature
@@ -140,7 +153,8 @@ ended (G194); the person would rather choose when.
   written since is never replaced by the older copy.
 - **Always putting the database copy back on a rollback:** it would drop what the person wrote on the new copy (up to
   10 minutes) even when the copy before can read the database as it is.
-- **Restarting the window at once while it's shown:** a chat in view reloads and a draft may be lost.
+- **Restarting the window at once while it's shown, by itself** (2026-11-09): a chat in view reloads and a draft may be
+  lost. Since 2026-11-17 it does so only after the person's own Update, once.
 - **Paid OS code signing:** SmartScreen and Gatekeeper warn once, at the first install; updates come through the
   updater, so the warning doesn't return.
 - **MSI on Windows:** NSIS installs per user with no administrator prompt.
