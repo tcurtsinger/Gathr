@@ -45,7 +45,7 @@ export interface EventLine {
 /** Gathr's own part of a message, read by the thread's message components. */
 export type Custom = {
   agent?: string;
-  /** The agent's id: its initial opens its panel, and the panel lists its blocks. */
+  /** The agent's id: its face opens its panel, and the panel lists its blocks. */
   by?: string;
   role?: Role;
   /** When the reply began, shown in a team chat. */
@@ -61,7 +61,16 @@ export type Custom = {
   /** A message that never reached the service. */
   unsent?: SendFailure;
   /** Messages between agents, one for each text of the block: "Juno to Orin". */
-  exchange?: { id: string; from?: string; by?: string; to?: string; time: string; agreed: string[] }[];
+  exchange?: {
+    id: string;
+    from?: string;
+    /** The writer's id, for its face, removed or not. */
+    agent?: string;
+    by?: string;
+    to?: string;
+    time: string;
+    agreed: string[];
+  }[];
   /** Who gave its text a thumbs-up, in the order given. */
   agreed?: string[];
   events?: EventLine[];
@@ -443,6 +452,7 @@ function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): 
   const said = groups.map(({ msgs: [m] }) => ({
     id: m.id,
     from: crew.name(state.turns[m.turn ?? '']?.agent),
+    agent: state.turns[m.turn ?? '']?.agent ?? undefined,
     by: member(state, state.turns[m.turn ?? '']?.agent),
     to: crew.name(m.to),
     time: m.time,

@@ -1,63 +1,74 @@
-/* An agent's initials (DESIGN.md "Summary"): one circle for the stack, a row, the dock and the agent's panel. */
-.initial {
+/* An agent's face (0074): its drawing on the background the person picked (Face sets it), at 36, 28, 24, 20 or 16,
+   and 56 in its form. */
+.face {
   position: relative;
-  display: grid;
+  display: block;
   flex: none;
-  place-items: center;
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
-  color: var(--foreground);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
 }
-.initial[data-size="s"] {
-  width: 18px;
-  height: 18px;
-  font-size: 9px;
+.face > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  clip-path: circle(50%);
 }
-.initial[data-size="l"] {
+.face[data-size="56"] {
+  width: 56px;
+  height: 56px;
+}
+.face[data-size="36"] {
   width: 36px;
   height: 36px;
-  font-size: 15px;
+}
+.face[data-size="28"] {
+  width: 28px;
+  height: 28px;
+}
+.face[data-size="20"] {
+  width: 20px;
+  height: 20px;
+}
+.face[data-size="16"] {
+  width: 16px;
+  height: 16px;
 }
 /* At work: a ring turns around it. Reduced motion keeps the ring and stops it. */
-.initial[data-busy]::after {
+.face[data-busy]::after {
   content: "";
   position: absolute;
   inset: -3px;
   border: 1.5px solid transparent;
   border-top-color: var(--attention);
   border-radius: 50%;
-  animation: initial-ring 0.9s linear infinite;
+  animation: face-ring 0.9s linear infinite;
 }
-@keyframes initial-ring {
+@keyframes face-ring {
   to {
     transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .initial[data-busy]::after {
+  .face[data-busy]::after {
     border-color: var(--attention);
     animation: none;
   }
 }
 /* Overlapped, each cut out of the surface behind it (--behind, the chat's own by default). */
-.initial-stack {
+.face-stack {
   position: relative;
   display: flex;
 }
-.initial-stack > .initial {
+.face-stack > .face {
   box-shadow: 0 0 0 2px var(--behind, var(--background));
 }
-.initial-stack > .initial + .initial {
+.face-stack > .face + .face {
   margin-left: -4px;
 }
 /* Someone needs the person: the shared attention dot (base.css) on the stack's corner, the one the
    sidebar's row carries. */
-.initial-stack > .attention {
+.face-stack > .attention {
   position: absolute;
   top: -3px;
   right: -4px;

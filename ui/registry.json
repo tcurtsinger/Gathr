@@ -35,13 +35,6 @@
       "sha256": "0be780a30c042bbb41b6c0621d76ef8506ebe92011ebf36cd5d9e77fb7fd6ec0"
     },
     {
-      "path": "components/assistant-ui/elements/speaker-identity.tsx",
-      "url": "https://r.assistant-ui.com/elements-speaker-identity.json",
-      "sha256": "7d2ce0fd3a5c02ca8f49b970e598dbebeb9a096a478c9285f387c5356f3be91f",
-      "adapted": "c81d2d334ef9c3b7ad1ff5f6bab51cfcfcf1ae5d24605458e03ebf7e100226e4",
-      "why": "The prototype's centring (avatar and name on one row), and Gathr's agent identity: initials on a neutral round avatar instead of the shared robot icon, and the role beside the name in sans-serif on their shared baseline, 8px apart (DESIGN.md Typography)."
-    },
-    {
       "path": "components/assistant-ui/elements/surfaces.tsx",
       "url": "https://r.assistant-ui.com/elements-surfaces.json",
       "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa"

@@ -4,10 +4,10 @@ import { ContextDisplay } from '@/components/assistant-ui/elements/context-displ
 import { type TodoItem, TodoList } from '@/components/assistant-ui/elements/todo-list';
 import { Button } from '@/components/ui/button';
 import type { Member, Task } from '../api';
+import { Face } from '../components/Face';
 import { ChatMenu } from './ChatMenu';
 import type { Work } from './fold';
 import type { Glance } from './glance';
-import { Initial } from './Initial';
 import type { Custom } from './messages';
 import { type Actions, Blocks } from './Thread';
 import { WorkRow } from './TurnParts';
@@ -112,7 +112,7 @@ export const AgentPanel = memo(function AgentPanel(props: Props) {
   return (
     <div className="agent-panel">
       <header className="agent-who">
-        <Initial name={member.name} size="l" busy={standing === 'working'} />
+        <Face agent={{ id: member.agent, name: member.name }} size={36} busy={standing === 'working'} />
         <div>
           <h2>{member.name}</h2>
           <p>

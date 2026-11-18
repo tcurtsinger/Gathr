@@ -1,6 +1,6 @@
 import { ClipboardList, FileText, ListTodo, PanelRight, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { Initial } from '../chat/Initial';
+import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
 import './workspace.css';
@@ -25,7 +25,7 @@ interface Props {
   waiting: boolean;
   files: FileTab[];
   /** The agent opened from Summary or the timeline: its tab's name and its panel. One at a time. */
-  agent?: { name: string; panel: ReactNode };
+  agent?: { id: string; name: string; panel: ReactNode };
   /** The plan opened from its chip or a plan line, at a version, and its view. One at a time (0062). */
   plan?: { version: number; view: ReactNode; onClose: () => void; waits?: boolean };
   /** 'tasks', 'agent', 'plan', or a file tab's id. */
@@ -98,7 +98,7 @@ export function Workspace(props: Props) {
           onKeyDown={keys}
         >
           {tab('tasks', 'Tasks', <ListTodo aria-hidden="true" />, waiting && <i className="attention" />)}
-          {agent && tab('agent', agent.name, <Initial name={agent.name} size="s" />)}
+          {agent && tab('agent', agent.name, <Face agent={agent} size={16} />)}
           {plan &&
             tab(
               'plan',

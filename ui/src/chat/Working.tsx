@@ -1,8 +1,8 @@
 import { LoaderIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { Member } from '../api';
+import { FaceStack } from '../components/Face';
 import { duration } from './fold';
-import { InitialStack } from './Initial';
 import type { ChatState } from './state';
 import { list } from './team';
 import './team.css';
@@ -45,7 +45,7 @@ export function Working({
       Working
       {busy.members.length > 0 && (
         <span role="img" aria-label={who}>
-          <InitialStack agents={busy.members} />
+          <FaceStack agents={busy.members} />
         </span>
       )}
       {busy.since !== undefined && (

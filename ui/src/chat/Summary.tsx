@@ -18,9 +18,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { PauseScope, Pauses } from '../api';
+import { Face, FaceStack } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import { counts, type Glance, headline } from './glance';
-import { Initial, InitialStack } from './Initial';
 import { agentPause, type PauseAction } from './pauses';
 import { currentRound, type Round, type StepState } from './plan';
 import type { ChatState } from './state';
@@ -56,7 +56,7 @@ interface Props {
 
 /**
  * The team at a glance (DESIGN.md "Summary", 0038). Its button in the chat header is the overlapped
- * initials of whoever works, each with a turning ring, then whoever needs the person, with one dot on the
+ * faces of whoever works, each with a turning ring, then whoever needs the person, with one dot on the
  * stack. It opens a popover: the Supervisor's current round as Plan, then every agent on one line. A step
  * or an agent opens that agent's panel. Escape or a press outside closes it.
  */
@@ -82,7 +82,7 @@ export function Summary(props: Props) {
     <Popover.Root open={open} onOpenChange={onOpen}>
       <Popover.Trigger asChild>
         <IconButton aria-label={label} className="head-button summary-button" onClick={onOwnButton}>
-          {stack.length ? <InitialStack agents={stack} needs={needs.size > 0} /> : <SummaryIcon />}
+          {stack.length ? <FaceStack agents={stack} needs={needs.size > 0} /> : <SummaryIcon />}
         </IconButton>
       </Popover.Trigger>
       <Popover.Anchor asChild>
@@ -128,7 +128,11 @@ export function Summary(props: Props) {
                 key={g.member.agent}
                 onClick={() => go(g.member.agent)}
               >
-                <Initial name={g.member.name} busy={g.standing === 'working'} />
+                <Face
+                  agent={{ id: g.member.agent, name: g.member.name }}
+                  size={24}
+                  busy={g.standing === 'working'}
+                />
                 <span className="agent-name">{g.member.name}</span>
                 <span className="agent-doing" data-standing={g.standing}>
                   {g.doing}

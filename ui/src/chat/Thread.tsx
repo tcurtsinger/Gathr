@@ -263,6 +263,7 @@ function AssistantMessage() {
     >
       {agent && own.head && (
         <Speaker
+          agent={by}
           name={agent}
           detail={on ? `on ${on}` : role && roleName[role]}
           time={own.time}

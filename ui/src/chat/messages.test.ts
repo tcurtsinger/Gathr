@@ -23,6 +23,10 @@ const agents: Agent[] = people.map((name) => ({
   model: null,
   effort: null,
   approvals: 'auto',
+  face_seed: 'Made-up',
+  gender: null,
+  skin: null,
+  background: null,
 }));
 const members = people.map((name, i) => ({
   agent: name.toLowerCase(),

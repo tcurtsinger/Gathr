@@ -24,6 +24,10 @@ const agents: Agent[] = members.map((m) => ({
   model: null,
   effort: null,
   approvals: 'auto',
+  face_seed: 'Made-up',
+  gender: null,
+  skin: null,
+  background: null,
 }));
 const turn = (id: string, agent: string, position: number, more: Partial<Turn> = {}): Turn => ({
   id,
@@ -208,8 +212,8 @@ test('agents’ messages to each other read as one block, each headed by who wro
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
   const blocks = document.querySelectorAll('.exchange');
   expect(blocks).toHaveLength(1);
-  const heads = [...blocks[0].querySelectorAll('[data-slot="speaker-identity"]')].map((h) => h.textContent);
-  expect(heads).toEqual(['MLMade-up Leadto Made-up Member', 'MMMade-up Memberto Made-up Lead'].reverse());
+  const heads = [...blocks[0].querySelectorAll('.speaker-who')].map((h) => h.textContent);
+  expect(heads).toEqual(['Made-up Leadto Made-up Member', 'Made-up Memberto Made-up Lead'].reverse());
   // Gathr's copy of the question in the receiver's turn isn't drawn.
   expect(screen.getByText(/wrote to you/).query()).toBeNull();
 });

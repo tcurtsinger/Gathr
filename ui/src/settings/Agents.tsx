@@ -5,9 +5,12 @@ import { danger } from '../components/Confirm';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
+import type { Gender } from '../faces/options';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
+import { isCustom } from './BackgroundField';
+import { FaceFields } from './FaceFields';
 import { choices, chosen, efforts, firstChoice, runs } from './models';
 import './agents.css';
 
@@ -126,6 +129,13 @@ type Fields = {
   model: string | null | undefined;
   effort: string | null;
   approvals: Approvals;
+  /** Undefined for a new agent until Shuffle: its face comes from its name. */
+  face_seed?: string;
+  gender: Gender | null;
+  skin: number | null;
+  background: string | null;
+  /** Background's last colour not among the twelve, while the form is open: never sent. */
+  custom?: string;
 };
 
 const modes: [Approvals, string, string][] = [
@@ -146,10 +156,21 @@ function AgentForm(props: FormProps) {
   // every field not edited here and Save never writes an untouched field back.
   const [edits, setEdits] = useState<Partial<Fields>>({});
   const edit = (fields: Partial<Fields>) => setEdits((e) => ({ ...e, ...fields }));
-  const { name, account, model, effort, approvals }: Fields = {
-    ...(agent ?? { name: '', account: accounts[0].id, model: undefined, effort: null, approvals: 'auto' }),
+  const blank: Fields = {
+    name: '',
+    account: accounts[0].id,
+    model: undefined,
+    effort: null,
+    approvals: 'auto',
+    gender: null,
+    skin: null,
+    background: null,
+  };
+  const { name, account, model, effort, approvals, face_seed, gender, skin, background }: Fields = {
+    ...(agent ?? blank),
     ...edits,
   };
+  const seed = face_seed ?? name.trim();
   const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
@@ -167,9 +188,17 @@ function AgentForm(props: FormProps) {
     if (model === undefined && first) setEdits((e) => ({ ...e, model: first }));
   }, [model, models.list]);
 
-  const draft = { name: name.trim(), account, model: model ?? null, effort, approvals };
+  // A face field goes with the save only when it changed, so Save never writes an untouched one back.
+  const face = {
+    ...(seed !== (agent?.face_seed ?? name.trim()) && { face_seed: seed }),
+    ...(gender !== (agent?.gender ?? null) && { gender }),
+    ...(skin !== (agent?.skin ?? null) && { skin }),
+    ...(background !== (agent?.background ?? null) && { background }),
+  };
+  const draft = { name: name.trim(), account, model: model ?? null, effort, approvals, ...face };
   const changed =
     !agent ||
+    Object.keys(face).length > 0 ||
     draft.name !== agent.name ||
     draft.account !== agent.account ||
     draft.model !== agent.model ||
@@ -221,6 +250,16 @@ function AgentForm(props: FormProps) {
           />
         </label>
       )}
+      <FaceFields
+        id={agent?.id ?? ''}
+        name={name.trim()}
+        seed={seed}
+        gender={gender}
+        skin={skin}
+        background={background}
+        remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}
+        onChange={edit}
+      />
       <label className="agent-field">
         Account
         <select value={account} onChange={(e) => pickAccount(e.target.value)}>

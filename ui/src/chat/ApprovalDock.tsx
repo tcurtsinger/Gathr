@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import type { PlanSummary } from '../api';
+import { Face, type FaceOf } from '../components/Face';
 import { counted } from '../plans/plans';
-import { Initial } from './Initial';
 import { type Approval, unanswered } from './state';
 
 /** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
@@ -19,9 +19,9 @@ interface Props {
   /** The chat's plans: one waiting on the person waits here after the approvals (0062). */
   plans: PlanSummary[];
   /** The agent whose turn asked. */
-  name: (turn: string) => string;
+  asker: (turn: string) => FaceOf;
   /** A plan's lead, by id. */
-  lead: (agent: string) => string;
+  lead: (agent: string) => FaceOf;
   /** Scrolls to the approval where it was asked. */
   onShow: (approval: Approval) => void;
   onAnswer: (request: string, allow: boolean) => void;
@@ -34,7 +34,7 @@ interface Props {
  * else the oldest plan waiting, and how many wait. An approval being sent has left it; a refused answer
  * brings it back.
  */
-export function ApprovalDock({ approvals, plans, name, lead, onShow, onAnswer, onOpenPlan }: Props) {
+export function ApprovalDock({ approvals, plans, asker, lead, onShow, onAnswer, onOpenPlan }: Props) {
   const waiting = approvals.filter(unanswered);
   const planned = plans.filter((p) => p.state === 'waiting');
   const count = waiting.length + planned.length;
@@ -46,11 +46,11 @@ export function ApprovalDock({ approvals, plans, name, lead, onShow, onAnswer, o
     const agent = lead(plan.lead);
     return (
       <section className="needs-dock" aria-label="Needs you">
-        <Initial name={agent} />
+        <Face agent={agent} size={24} />
         <div className="needs-text">
           <small>Needs you · 1 of {count}</small>
           <div>
-            {agent}'s plan: {plan.title} · {counted(newest.parts, 'part')}
+            {agent.name}'s plan: {plan.title} · {counted(newest.parts, 'part')}
           </div>
         </div>
         <Button type="button" onClick={() => onOpenPlan(plan.id, newest.n)}>
@@ -59,15 +59,15 @@ export function ApprovalDock({ approvals, plans, name, lead, onShow, onAnswer, o
       </section>
     );
   }
-  const agent = name(a.turn);
+  const agent = asker(a.turn);
   const { tool, command } = asked(a);
   return (
     <section className="needs-dock" aria-label="Needs you">
-      <Initial name={agent} />
+      <Face agent={agent} size={24} />
       <div className="needs-text">
         <small>Needs you · 1 of {count}</small>
         <div>
-          {agent} wants to run <code>{command ?? tool}</code>
+          {agent.name} wants to run <code>{command ?? tool}</code>
         </div>
       </div>
       <Button type="button" variant="ghost" onClick={() => onShow(a)}>

@@ -1,6 +1,6 @@
 /* Summary (DESIGN.md "Summary", 0038): the stack in the chat header and its popover. */
-/* With initials it widens to hold them, at the header buttons' height. */
-.head-button.summary-button:has(.initial-stack) {
+/* With faces it widens to hold them, at the header buttons' height. */
+.head-button.summary-button:has(.face-stack) {
   width: auto;
   padding: 0 8px;
 }
@@ -9,7 +9,7 @@
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
-.summary-button .initial-stack {
+.summary-button .face-stack {
   --behind: var(--frame);
 }
 .summary-anchor {
@@ -138,7 +138,7 @@ button.plan-step:hover,
   box-shadow: inset 0 0 0 1px var(--destructive);
 }
 /* One grid for every row, so what each agent is doing starts at the same place whatever its name. A row is a
-   subgrid, and its 8px padding comes out of the first track: 24px for the initial, 8px for the padding. */
+   subgrid, and its 8px padding comes out of the first track: 24px for the face, 8px for the padding. */
 .summary-team {
   display: grid;
   grid-template-columns: 32px fit-content(40%) minmax(0, 1fr) auto;

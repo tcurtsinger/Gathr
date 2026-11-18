@@ -99,7 +99,7 @@ Summary are history.
   Summary, then Open sidebar. These and the workspace's Close share one
   icon-button style: 30px, 8px radius, 4px apart, 17px Lucide icons at 1.75 stroke
   (Summary's own icon too; More's dots radius 1.4). Summary's button widens to hold
-  its stack of initials, 8px each side, at the same height. Pressed (Close while
+  its stack of faces, 8px each side, at the same height. Pressed (Close while
   the workspace is open): foreground 9% background, foreground icon,
   12% on hover.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
@@ -142,7 +142,7 @@ Use actual assistant-ui primitives and the recorded official registry components
 after the integration decision is approved. Do not build lookalikes in `ui/`.
 The prototype gallery contains 64 examples, not 64 new Gathr service capabilities.
 `ui/registry.json` records each adaptation with its original and adapted hash and why:
-ElicitationForm, OptionList, SpeakerIdentity, Button, Tooltip and TodoList today. Retain source
+ElicitationForm, OptionList, Button, Tooltip and TodoList today. Retain source
 notices and both hashes.
 Dependency approval, pinned versions and file splitting belong to the integration
 decision; this design update adds no JavaScript dependency.
@@ -243,16 +243,16 @@ in place: the whole line, the reason or the question, and Open task. Click or En
 closes it. Keyboard focus uses the hover highlight, without an outline or ring.
 
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
-composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's initial,
+composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's face,
 "Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in
 a code chip, then Show, Deny and Allow. It shows the oldest. Show scrolls to the card and
 focuses it. An answer being sent leaves the dock; a refused answer brings it back. With no approval
-waiting, the dock shows the oldest plan: the lead's initial, "Needs you · 1 of 1", "Mira's plan:
+waiting, the dock shows the oldest plan: the lead's face, "Needs you · 1 of 1", "Mira's plan:
 Tags on notes · 9 parts" and one button, Open, which opens the plan's tab at its newest version.
 The count is approvals and plans waiting on you; a plan still being checked isn't one.
 
 Working appears after the latest message while any turn runs: an attention spinner, Working,
-overlapping 18px initials for agents with running turns, and the time since the longest-running
+overlapping 20px faces for agents with running turns, and the time since the longest-running
 of those turns began, in whole minutes (12m), redrawn once a minute. The time is hidden
 from screen readers, so the status reads only Working and who. Never show a queued or pending task as a working agent.
 In a chat with more than one agent the line is a button that opens Summary, and closes it when pressed again;
@@ -289,12 +289,12 @@ Only its ticks take the pointer.
 Summary holds what the plan bar and a status bar would say, so neither exists
 ([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
 
-Its button in the chat header carries no words. It is the overlapped 18px initials (4px overlap, each
+Its button in the chat header carries no words. It is the overlapped 20px faces (4px overlap, each
 cut out of the header with a 2px edge) of every agent with a running turn, each with an attention ring
 turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
 person (a waiting approval, or an open question it asked the person) sits last in the stack with no
 ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
-Five agents are one 90px button. With nobody working or needed, the button shows Summary's plain icon.
+Five agents are one 100px button. With nobody working or needed, the button shows Summary's plain icon.
 Its accessible name says the same in words: "Summary: Vale needs you, Juno and Pia working",
 or "Summary".
 
@@ -310,7 +310,7 @@ outside closes it. Top to bottom:
   attention spinner at work, an empty circle for not started, a square-minus for blocked, a danger
   circle-exclamation for failed, a square for stopped. A done row is muted.
 - **Team**, with "2 working · 1 needs you" at the heading's right, a part omitted when it is zero.
-  One line for each agent: its 24px initial (ringed while it works), its name, what it is doing in one
+  One line for each agent: its 24px face (ringed while it works), its name, what it is doing in one
   13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done", "1 of 1 task done"), cancelled ones left out and
   nothing when it has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
   command); "Needs your approval" or "Asked you a question" in the attention colour; "Waiting for
@@ -334,17 +334,17 @@ inferred state. Reduced motion stops spinners and rings.
 
 ### Agent panel
 
-An agent opens beside the chat as a workspace tab, after Tasks: its 18px initial and name, with a
+An agent opens beside the chat as a workspace tab, after Tasks: its 16px face and name, with a
 close button. One agent at a time: opening another replaces it. While another tab shows, the panel
 keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
-Summary, and from an agent's initial in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
+Summary, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
 this chat yet".
 
-Its initial in the timeline is a button the avatar's size, centred on the avatar. An agent that has
+Its face in the timeline is a button the face's size, which takes the hover tint. An agent that has
 left the chat keeps its words, and its steps in Plan, but has nothing to open.
 
-- **Header:** the 36px initial (ringed while it works), the name at 20px/600, and under it the role
+- **Header:** the 36px face (ringed while it works), the name at 20px/600, and under it the role
   and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
   · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Ready". Start times
   live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
@@ -393,7 +393,11 @@ Home/End and Delete operate tabs. Summary and the one timeline (0037) replace
 0015's earlier Team tab, inline thread and split. The agent's panel is a tab after
 Tasks (0038). Other tab workflows remain governed by their decisions.
 
-Agents show their initials beside their name, replacing the shared robot icon.
+Agents show their face beside their name, replacing the shared robot icon (0074): a drawn face on the
+background the person picked, the same everywhere, at 36 heading its panel, 24 on a message, in Summary's
+rows, the dock and a project's team, 20 in a stack and 16 on its tab. The face is hidden from screen readers
+beside the name and carries the name where it stands alone. The background shows as picked, the same in light
+and dark; until one is picked it is a grey, #CECECE. The person and Gathr keep their own marks.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
 Team status appears in Summary, and each agent's detail in its panel. Progress must
@@ -511,7 +515,9 @@ Apply the new shared tokens, type and controls within that layout.
 General starts with Theme for This computer: System (default, follows the system's
 setting), Light or Dark, applied at once without a reload. Then Open at login for
 This computer, applied immediately with Switch. The window keeps the theme and the
-navigation and workspace widths across restarts.
+navigation and workspace widths across restarts. General ends with the version and, under it, the faces'
+credit (0074): "Faces", then "Avatar Illustration System by Micah Lanier, CC BY 4.0, changed", the work
+and the licence linked.
 
 Agent folder follows Open at login: the current path, Change and shared ? Help.
 It belongs to the service host, with no This computer label. In the desktop
@@ -525,7 +531,14 @@ stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Account, Model, Effort, Approvals. Account implies engine;
+one shared editor: Face, Gender, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
+56px face and Shuffle, which draws it from a new seed and keeps the gender and tone shown; Gender is Man or Woman; Skin tone is six swatches,
+light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
+for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
+row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
+not among the twelve shows on the +, pressed, and stays on it, not pressed, while a ready colour is picked. Escape or a click outside closes the picker, not Settings. Each
+redraws the face at once and is saved with Save. A gender or tone never set shows what the face's seed picked;
+a background never set is the grey, with no swatch pressed (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,
 temperature or extra toggles as product settings. Save affects future turns in

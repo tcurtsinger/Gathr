@@ -131,3 +131,9 @@
   flex-basis: 100%;
   margin: 0;
 }
+/* The faces' credit (0074): the work and the licence are links, underlined as the mock-up draws them. */
+.settings-credit a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+  text-underline-offset: 3px;
+}

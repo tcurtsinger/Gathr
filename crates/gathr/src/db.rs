@@ -59,6 +59,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0049_held_turns.sql"),
     include_str!("../migrations/0050_change_lines.sql"),
     include_str!("../migrations/0051_removed_agents.sql"),
+    include_str!("../migrations/0052_agent_faces.sql"),
 ];
 
 /// The schema version this build writes.
@@ -672,6 +673,41 @@ mod tests {
             .unwrap();
         conn.execute("DELETE FROM accounts WHERE id = 'acc'", [])
             .unwrap();
+    }
+
+    /// 0052 (0074): an agent from before has its name as its face's seed, and no gender or skin tone.
+    #[test]
+    fn an_agents_face_starts_from_its_name() {
+        let path = temp_db("faces");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..51] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 51;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('mira', 'Mira', 'mira', 'acc', 1);
+             INSERT INTO agents (id, name, name_key, created_ts, removed_ts) VALUES ('ann', 'Ann', 'ann', 2, 3);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let sql = "SELECT id || ' ' || face_seed || ' ' || coalesce(gender, '-') || ' ' || coalesce(skin, '-')
+                   || ' ' || coalesce(background, '-') FROM agents ORDER BY id";
+        let mut stmt = conn.prepare(sql).unwrap();
+        let rows: Vec<String> = stmt
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(rows, ["ann Ann - - -", "mira Mira - - -"]);
+        // A background is #RRGGBB in upper case or nothing, whatever wrote it.
+        let set = |value: &str| {
+            let sql = "UPDATE agents SET background = ?1 WHERE id = 'mira'";
+            conn.execute(sql, [value]).is_ok()
+        };
+        let tried = ["#7FB5A8", "#7fb5a8", "#7FB5A", "7FB5A8F", "#7FB5AG"].map(set);
+        assert_eq!(tried, [true, false, false, false, false]);
     }
 
     #[test]

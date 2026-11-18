@@ -191,7 +191,18 @@ test("a reply shows its agent's name once the agents arrive, and the new one aft
     messages: [said('u1', 'user', 'Ask'), said('r1', 'assistant', 'Done.')],
     turns: turn('done'),
   };
-  const agent: Agent = { id: 'a1', name: 'Mira', account: 'x', model: null, effort: null, approvals: 'auto' };
+  const agent: Agent = {
+    id: 'a1',
+    name: 'Mira',
+    account: 'x',
+    model: null,
+    effort: null,
+    approvals: 'auto',
+    face_seed: 'Made-up',
+    gender: null,
+    skin: null,
+    background: null,
+  };
   const screen = await render(<View state={state} />);
   await expect.element(screen.getByText('Done.')).toBeVisible();
   await screen.rerender(<View state={state} agents={[agent]} />);

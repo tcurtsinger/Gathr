@@ -206,6 +206,7 @@ impl Tools {
             model: default(ask.model),
             effort: default(ask.effort),
             approvals,
+            ..Change::default()
         };
         let t = trace(caller);
         let set =

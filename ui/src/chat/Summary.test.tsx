@@ -89,12 +89,12 @@ function Shown({
 }
 
 const stack = () =>
-  [...document.querySelectorAll('.summary-button .initial')].map(
-    (i) => `${i.textContent}${i.hasAttribute('data-busy') ? ' ring' : ''}`,
+  [...document.querySelectorAll('.summary-button .face')].map(
+    (i) => `${i.getAttribute('data-agent')}${i.hasAttribute('data-busy') ? ' ring' : ''}`,
   );
 const dots = () => document.querySelectorAll('.summary-button [data-needs]').length;
 
-test('the button names who needs the person and who works, and stacks their initials: workers ringed, the dot once', async () => {
+test('the button names who needs the person and who works, and stacks their faces: workers ringed, the dot once', async () => {
   const idle: ChatState = { ...empty, members: trio };
   const screen = await render(<Shown state={idle} />);
   // Nobody at work: the plain icon, so the button is never empty.
@@ -107,7 +107,7 @@ test('the button names who needs the person and who works, and stacks their init
   await expect
     .element(screen.getByRole('button', { name: 'Summary: Made-up Member working', exact: true }))
     .toBeVisible();
-  expect([stack(), dots()]).toEqual([['MM ring'], 0]);
+  expect([stack(), dots()]).toEqual([['b ring'], 0]);
 
   // An approval is asked inside a running turn: that agent needs the person, and has no ring.
   const needs = { ...idle, turns: turns(turn('t3', 'c')), approvals: [approval('t3')] };
@@ -115,7 +115,7 @@ test('the button names who needs the person and who works, and stacks their init
   await expect
     .element(screen.getByRole('button', { name: 'Summary: Made-up Third needs you', exact: true }))
     .toBeVisible();
-  expect([stack(), dots()]).toEqual([['MT'], 1]);
+  expect([stack(), dots()]).toEqual([['c'], 1]);
 
   // Both: whoever needs the person sits last, and a question to the person counts as an approval does.
   const both: ChatState = {
@@ -126,7 +126,7 @@ test('the button names who needs the person and who works, and stacks their init
   await screen.rerender(<Shown state={both} />);
   const name = 'Summary: Made-up Third needs you, Made-up Lead and Made-up Member working';
   await expect.element(screen.getByRole('button', { name, exact: true })).toBeVisible();
-  expect([stack(), dots()]).toEqual([['ML ring', 'MM ring', 'MT'], 1]);
+  expect([stack(), dots()]).toEqual([['a ring', 'b ring', 'c'], 1]);
 });
 
 test('five agents at work still fit the button as one compact stack', async () => {
@@ -139,9 +139,9 @@ test('five agents at work still fit the button as one compact stack', async () =
   const name = 'Summary: Made-up Lead, Made-up Member, Made-up Third, Kit and Lane working';
   const button = screen.getByRole('button', { name, exact: true });
   await expect.element(button).toBeVisible();
-  expect(stack()).toEqual(['ML ring', 'MM ring', 'MT ring', 'K ring', 'L ring']);
-  // Five 18px initials overlapped by 4px, and the button's 8px each side.
-  expect(button.element().getBoundingClientRect().width).toBe(18 + 4 * 14 + 16);
+  expect(stack()).toEqual(['a ring', 'b ring', 'c ring', 'd ring', 'e ring']);
+  // Five 20px faces overlapped by 4px, and the button's 8px each side.
+  expect(button.element().getBoundingClientRect().width).toBe(20 + 4 * 16 + 16);
 });
 
 test('the plan lists the current round: each step, who has it, who waits on the person, and how many are done', async () => {
@@ -235,11 +235,11 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     );
   // The running turn's activity is what its row in the timeline says; start times are in the panel.
   expect(rows()).toEqual([
-    ['MT', 'Made-up Third', 'Needs your approval'],
-    ['MM', 'Made-up Member', 'Running a command', '1/21 of 2 tasks done'],
-    ['ML', 'Made-up Lead', 'Waiting for Made-up Member'],
-    ['K', 'Kit', 'Ready'],
-    ['L', 'Lane', 'Ready', '1/11 of 1 task done'],
+    ['Made-up Third', 'Needs your approval'],
+    ['Made-up Member', 'Running a command', '1/21 of 2 tasks done'],
+    ['Made-up Lead', 'Waiting for Made-up Member'],
+    ['Kit', 'Ready'],
+    ['Lane', 'Ready', '1/11 of 1 task done'],
   ]);
   // "1/2" is for the eye; a screen reader is told "1 of 2 tasks done", not a half.
   const count = document.querySelectorAll('.agent-count')[1];
@@ -247,7 +247,7 @@ test('the team is one line each: what it is doing and its tasks done, in order o
   await expect
     .element(summary.getByRole('button', { name: 'Made-up Member Running a command 1 of 2 tasks done' }))
     .toBeVisible();
-  expect(document.querySelectorAll('.summary .initial[data-busy]')).toHaveLength(1);
+  expect(document.querySelectorAll('.summary .face[data-busy]')).toHaveLength(1);
 });
 
 test('the button opens and closes it; Escape closes it and gives focus back; so does a press outside', async () => {

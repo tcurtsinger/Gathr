@@ -73,6 +73,15 @@
   align-items: center;
   gap: 12px;
 }
+/* The face and the name, as a message's speaker shows them. */
+.project-seat-who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
 .project-team .project-add {
   justify-self: start;
   width: auto;

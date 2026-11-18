@@ -1,6 +1,7 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
 import type { Deletable, DeleteCounts } from './deleting';
+import type { Gender } from './faces/options';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -471,10 +472,22 @@ export interface Agent {
   effort: string | null;
   /** What it may do without asking (0029). */
   approvals: Approvals;
+  /** What its face is drawn from (0074): its name when made, a new one at each Shuffle. */
+  face_seed: string;
+  /** Null until the person sets it: the seed picks. */
+  gender: Gender | null;
+  /** Skin tone 1 to 6; null until the person sets it. */
+  skin: number | null;
+  /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
+  background: string | null;
 }
 
-/** An agent by name only: a removed one, whose old messages still say who wrote them (0069). */
-export type Named = Pick<Agent, 'id' | 'name'>;
+/** An agent as Settings saves it: a face field is sent only when it changed. */
+export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin' | 'background'> &
+  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin' | 'background'>>;
+
+/** A removed agent: its old messages still say who wrote them, with its face (0069, 0074). */
+export type Named = Pick<Agent, 'id' | 'name' | 'face_seed' | 'gender' | 'skin' | 'background'>;
 
 export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 
@@ -672,10 +685,11 @@ export const api = {
   checkApp: () => call<unknown>('POST', '/api/app/update'),
   startup: () => call<{ on: boolean }>('GET', '/api/startup').then((s) => s.on),
   setStartup: (on: boolean) => call<{ on: boolean }>('PUT', '/api/startup', { on }).then((s) => s.on),
-  /** The agents, and the removed ones apart, by name only, for their old messages (0069). */
+  /** The agents, and the removed ones apart, for their old messages (0069). */
   agents: () => call<{ agents: Agent[]; removed: Named[] }>('GET', '/api/agents'),
-  addAgent: (agent: Omit<Agent, 'id'>) => call<Agent>('POST', '/api/agents', agent),
-  saveAgent: ({ id, ...agent }: Agent) => call<Agent>('PATCH', `/api/agents/${id}`, agent),
+  addAgent: (agent: AgentDraft) => call<Agent>('POST', '/api/agents', agent),
+  saveAgent: ({ id, ...agent }: AgentDraft & { id: string }) =>
+    call<Agent>('PATCH', `/api/agents/${id}`, agent),
   /** What deleting the project or agent would do, for the confirm's words. */
   deleteCounts: (kind: Deletable, id: string) => call<DeleteCounts>('GET', `/api/${kind}s/${id}/delete`),
   /** What it did, and the folders it couldn't remove yet (`left`). */

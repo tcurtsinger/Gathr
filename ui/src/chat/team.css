@@ -5,25 +5,47 @@
   gap: 8px;
   min-width: 0;
 }
-/* The identity and the button over its avatar: the avatar is centred in this box whatever its height. */
+/* The face, then the name whole and what it's on cut with …, on one line (Timeline.test.tsx fails if a long
+   header grows past it): the registry's identity's sizes, 24px face, 10px after it, 13px name, 11px detail. */
 .speaker-who {
-  position: relative;
   display: flex;
   flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.speaker-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
 }
+.speaker-name {
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+.speaker-detail {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+/* In a team chat the face opens the agent's panel; pointed at, it takes the hover tint. */
 .speaker-open {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 24px;
-  height: 24px;
+  position: relative;
+  flex: none;
   min-height: 0;
   padding: 0;
   border-radius: 50%;
-  translate: 0 -50%;
 }
-.speaker-open:hover {
+.speaker-open:hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   background: var(--hover-tint);
 }
 .speaker time {
@@ -252,26 +274,6 @@
 .working-time {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-}
-/*
- * One line: the name whole, what it's on cut with …. The registry's identity wraps by default and takes
- * no class for its parts, so these reach its name and detail by their place (the avatar is left alone);
- * Timeline.test.tsx fails if a long header grows past one line.
- */
-.speaker [data-slot="speaker-identity"] {
-  flex: 1;
-}
-.speaker [data-slot="speaker-identity"] > div > span:last-child {
-  flex-wrap: nowrap;
-  white-space: nowrap;
-}
-.speaker [data-slot="speaker-identity"] > div > span:last-child > span:first-child {
-  flex: none;
-}
-.speaker [data-slot="speaker-identity"] > div > span:last-child > span + span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 @media (max-width: 600px) {
   .speaker {

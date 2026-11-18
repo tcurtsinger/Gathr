@@ -72,6 +72,10 @@ test('the chat reopens on its last turn’s agent, Edit agent keeps it, and the 
     model: null,
     effort: null,
     approvals: 'auto' as const,
+    face_seed: 'Made-up',
+    gender: null,
+    skin: null,
+    background: null,
   });
   const screen = await render(
     <ChatView
@@ -121,6 +125,10 @@ test('Retry sends a failed turn to the agent it was sent to, whoever is picked n
     model: null,
     effort: null,
     approvals: 'auto' as const,
+    face_seed: 'Made-up',
+    gender: null,
+    skin: null,
+    background: null,
   });
   const screen = await render(
     <ChatView
@@ -166,6 +174,10 @@ test('a team chat sends to its Supervisor by name unless another agent is picked
     model: null,
     effort: null,
     approvals: 'auto' as const,
+    face_seed: 'Made-up',
+    gender: null,
+    skin: null,
+    background: null,
   });
   const view = (project?: string) => (
     <ChatView
@@ -217,6 +229,10 @@ test('a new chat is made with its first message, in its project, to its Supervis
     model: null,
     effort: null,
     approvals: 'auto' as const,
+    face_seed: 'Made-up',
+    gender: null,
+    skin: null,
+    background: null,
   });
   const members = [
     { agent: 'b', name: 'Made-up B', role: 'member' as const },

@@ -28,8 +28,8 @@ const dock = (approvals: Approval[], onOpenPlan = () => {}) => (
   <ApprovalDock
     approvals={approvals}
     plans={[planOf(2, 'checking'), planOf(3, 'waiting'), planOf(4, 'approved')]}
-    name={() => 'Ann'}
-    lead={(agent) => (agent === 'mira' ? 'Mira' : 'An agent')}
+    asker={() => ({ id: 'ann', name: 'Ann' })}
+    lead={(agent) => ({ id: agent, name: agent === 'mira' ? 'Mira' : 'An agent' })}
     onShow={() => {}}
     onAnswer={() => {}}
     onOpenPlan={onOpenPlan}

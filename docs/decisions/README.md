@@ -79,3 +79,4 @@ fails in CI when the two differ.
 | 0067 | [A merge brings the project folder along, or says why not](0067-a-merge-brings-the-project-folder-along.md) | accepted | yes |
 | 0068 | [The window's colours](0068-the-windows-colours.md) | accepted | yes |
 | 0069 | [Deleting a project or an agent](0069-deleting-a-project-or-an-agent.md) | accepted | partly |
+| 0074 | [An agent's face](0074-an-agents-face.md) | accepted | yes |

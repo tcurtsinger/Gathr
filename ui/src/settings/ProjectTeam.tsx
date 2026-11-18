@@ -1,8 +1,8 @@
 import { X } from 'lucide-react';
 import { useId } from 'react';
-import { SpeakerIdentity } from '@/components/assistant-ui/elements/speaker-identity';
 import type { Agent, Role } from '../api';
 import { roleName } from '../chat/team';
+import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import type { Seat } from './Projects';
 
@@ -48,10 +48,10 @@ export function Team({ seats, agents, onChange }: Props) {
       <p className="muted">One Supervisor, up to five agents.</p>
       {seats.map(({ agent, role }) => (
         <div key={agent} className="project-seat">
-          <SpeakerIdentity
-            className="w-auto"
-            turns={[{ id: agent, kind: 'agent', name: name(agent), text: '' }]}
-          />
+          <span className="project-seat-who">
+            <Face agent={agents.find((a) => a.id === agent) ?? { id: agent, name: name(agent) }} size={24} />
+            {name(agent)}
+          </span>
           <select
             aria-label={`Role of ${name(agent)}`}
             disabled={role === 'supervisor'}

@@ -119,8 +119,8 @@ test('a chat the whole app paused holds its turn, says so, and Resume all resume
   // The held turn isn't under way, so the composer sends rather than stops.
   await expect.element(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
-  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
+  await expect.element(lead).toHaveTextContent('Made-up LeadHeld');
+  await expect.element(member).toHaveTextContent('Made-up MemberPaused');
   await screen.getByRole('button', { name: 'Summary' }).click();
 
   await screen.getByRole('button', { name: 'More', exact: true }).click();
@@ -152,10 +152,10 @@ test('an agent paused from Summary pauses that agent alone, and can be resumed t
   });
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(member).toHaveTextContent('MMMade-up MemberReady');
+  await expect.element(member).toHaveTextContent('Made-up MemberReady');
   await pause('Made-up Member');
   await expect.poll(() => posted.length).toBe(1);
-  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
+  await expect.element(member).toHaveTextContent('Made-up MemberPaused');
   expect(posted).toEqual([{ path: '/api/pauses', body: { scope: 'agent', target: 'b' } }]);
   // The menu now offers to resume it, and the other agent still to pause.
   await screen.getByRole('button', { name: 'Pause or resume' }).click();
@@ -180,8 +180,8 @@ test('two agents paused at once, with no live updates, both read paused once bot
   listed = both;
   answers[0](json(paused('agent', 'a')));
   answers[1](json(both));
-  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
-  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
+  await expect.element(lead).toHaveTextContent('Made-up LeadHeld');
+  await expect.element(member).toHaveTextContent('Made-up MemberPaused');
 });
 
 test('two agents paused at once, reaching the service in reverse order with no live updates, both read paused', async () => {
@@ -195,15 +195,15 @@ test('two agents paused at once, reaching the service in reverse order with no l
   // The member's pause reached the service first, so its answer lists the member alone.
   listed = paused('agent', 'b');
   answers[1](json(listed));
-  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
+  await expect.element(member).toHaveTextContent('Made-up MemberPaused');
   const both: Pauses = {
     pauses: [...paused('agent', 'a').pauses, ...paused('agent', 'b').pauses],
     usage: [],
   };
   listed = both;
   answers[0](json(both));
-  await expect.element(lead).toHaveTextContent('MLMade-up LeadHeld');
-  await expect.element(member).toHaveTextContent('MMMade-up MemberPaused');
+  await expect.element(lead).toHaveTextContent('Made-up LeadHeld');
+  await expect.element(member).toHaveTextContent('Made-up MemberPaused');
 });
 
 /** The agents the app's list holds paused, and a button that pauses three at once. */
