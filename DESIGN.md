@@ -173,7 +173,10 @@ with its mark, the name, and the role muted in a chat of two or more; in a chat
 with no project, every other agent follows under "Bring in" (12px muted, a rule
 above), up to five in the chat. Up and Down move the lit row, Enter or Tab picks,
 Escape closes it, and a click picks; the lit row has no Enter mark. The name goes
-in as "@Name ". Once something is typed, a quiet sign by Send says who gets it, in
+in as "@Name ", and each @Name of someone who can be named shows in the attention blue
+at the text's own weight: the box's text is drawn again in one piece under the
+see-through textarea and the names coloured by a highlight (a span would move the
+letters after it off the textarea's by up to 1/16px). Once something is typed, a quiet sign by Send says who gets it, in
 12.5px muted with the name in the foreground at 550 and a bare 20px face: "To Ann",
 or "Bo joins" for an agent naming brings in. There is no Everyone option.
 

@@ -31,3 +31,21 @@ export function firstNamed<T extends { name: string }>(text: string, people: rea
   }
   return best?.who;
 }
+
+/** The text cut where each `@Name` of someone named stands, as the service reads a name (see `firstNamed`). */
+export function marks(text: string, names: readonly string[]): { at: number; text: string; name: boolean }[] {
+  const lower = text.toLowerCase();
+  const wanted = names.map((n) => `@${n.toLowerCase()}`).sort((a, b) => b.length - a.length);
+  const parts: { at: number; text: string; name: boolean }[] = [];
+  let from = 0;
+  for (let at = lower.indexOf('@'); at >= 0; at = lower.indexOf('@', at + 1)) {
+    if (at < from) continue;
+    const hit = wanted.find((m) => lower.startsWith(m, at) && !wordy.test(lower.charAt(at + m.length)));
+    if (!hit) continue;
+    if (at > from) parts.push({ at: from, text: text.slice(from, at), name: false });
+    parts.push({ at, text: text.slice(at, at + hit.length), name: true });
+    from = at + hit.length;
+  }
+  if (from < text.length) parts.push({ at: from, text: text.slice(from), name: false });
+  return parts;
+}

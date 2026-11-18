@@ -4,6 +4,7 @@ import {
   type SyntheticEvent,
   useCallback,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,6 +18,7 @@ import {
 import { Face } from './Face';
 import { MentionList, type Person } from './MentionList';
 import { insert, typing } from './mention';
+import { NameLayer } from './NameLayer';
 import './composer.css';
 
 export type { Person } from './MentionList';
@@ -74,6 +76,7 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, peopl
   const open = focused && !!mention && mention.at !== shut && matches.length > 0;
   const key = mention ? `${mention.at}:${mention.query}` : '';
   const at = lit.key === key ? lit.at : 0;
+  const names = useMemo(() => people.map((p) => p.name), [people]);
 
   const choose = (k: number) => {
     if (!mention) return;
@@ -111,25 +114,28 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, peopl
     <Frame className="composer">
       {open && <MentionList people={matches} lit={at} onPick={choose} />}
       <ComposerBar>
-        <textarea
-          ref={ref}
-          className="composer-input"
-          aria-label="Message"
-          aria-activedescendant={open ? `mention-${matches[at].id}` : undefined}
-          placeholder={hint}
-          rows={1}
-          value={draft}
-          onChange={(e) => {
-            const now = { text: e.target.value, caret: e.target.selectionStart };
-            if (!typing(now.text, now.caret)) setShut(null);
-            setRead(now);
-            onDraft(now.text);
-          }}
-          onSelect={moved}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={keyDown}
-        />
+        <div className="composer-field">
+          {people.length > 0 && <NameLayer text={draft} names={names} box={box} />}
+          <textarea
+            ref={ref}
+            className={people.length > 0 ? 'composer-input named' : 'composer-input'}
+            aria-label="Message"
+            aria-activedescendant={open ? `mention-${matches[at].id}` : undefined}
+            placeholder={hint}
+            rows={1}
+            value={draft}
+            onChange={(e) => {
+              const now = { text: e.target.value, caret: e.target.selectionStart };
+              if (!typing(now.text, now.caret)) setShut(null);
+              setRead(now);
+              onDraft(now.text);
+            }}
+            onSelect={moved}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onKeyDown={keyDown}
+          />
+        </div>
         <ComposerToolbar>
           <ComposerActions />
           <ComposerActions>

@@ -61,3 +61,29 @@
   color: var(--foreground);
   font-weight: 550;
 }
+/* The blue @Names (composer B): the text drawn again under the see-through textarea, in its font and wrap. */
+.composer-field {
+  position: relative;
+}
+.composer-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 6px 12px;
+  overflow: hidden;
+  font-size: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+::highlight(composer-mention) {
+  color: var(--attention);
+}
+.composer-input.named {
+  position: relative;
+  color: transparent;
+}
+.composer-input.named::selection {
+  color: transparent;
+  background: color-mix(in oklab, var(--attention) 30%, transparent);
+}

@@ -143,3 +143,14 @@ test('a pointer click on a name picks it, in place of the part typed, and the ke
   await expect.element(input).toHaveFocus();
   expect(list().query()).toBeNull();
 });
+
+test('each @Name of someone who can be named is drawn blue under the text, letter for letter', async () => {
+  const screen = await render(<Chat />);
+  await screen.getByRole('textbox', { name: 'Message' }).click();
+  await userEvent.keyboard('@ann and @Abel, ask @bo.');
+  const layer = document.querySelector('.composer-mirror') as HTMLElement;
+  // The box's text in one piece (a span would move the letters after it), and only whole names are blue.
+  expect([...layer.childNodes].map((n) => n.textContent)).toEqual(['@ann and @Abel, ask @bo. ']);
+  const blue = [...(CSS.highlights.get('composer-mention') ?? [])] as Range[];
+  expect(blue.map((r) => r.toString())).toEqual(['@ann', '@bo']);
+});
