@@ -98,7 +98,6 @@ function Chat() {
     <ChatView
       chat={{ id: 'c', title: 'Made-up chat' }}
       agents={[]}
-      onEditAgent={() => {}}
       draft=""
       onDraft={() => {}}
       unsent={[]}

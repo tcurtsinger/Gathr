@@ -393,7 +393,6 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
       <ChatView
         chat={{ id: 'c', title: 'Made-up chat' }}
         agents={agents}
-        onEditAgent={() => {}}
         draft=""
         onDraft={() => {}}
         unsent={[]}

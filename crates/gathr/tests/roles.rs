@@ -97,7 +97,11 @@ fn each_roles_briefing_carries_its_lines_and_its_start_records_their_version() {
         ("Cy", "role: reviewer", Role::Reviewer),
     ];
     for (n, (name, sample, role)) in each.into_iter().enumerate() {
-        send(&service, &chat, json!({ "text": format!("@{name} hi") }));
+        send(
+            &service,
+            &chat,
+            json!({ "text": format!("@{name} hi"), "agent": ids[n] }),
+        );
         service.wait_for(&chat, 20, &format!("{name}'s turn"), |h| ended(h, n + 1));
         let briefing = last_briefing(&args);
         let (first, rest) = briefing.split_once('\n').unwrap();

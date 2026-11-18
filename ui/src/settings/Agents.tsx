@@ -18,11 +18,11 @@ type Open = (ref: string) => void;
 const NEW = 'new';
 
 /** Settings > Agents (agents/v1, 0026): each agent's account, model and effort, edited in one place. */
-export function Agents({ start, onReference }: { start?: string; onReference: Open }) {
+export function Agents({ onReference }: { onReference: Open }) {
   const [agents, setAgents] = useState<Agent[] | null>(null);
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
-  const [selected, setSelected] = useState<string | null>(start ?? null);
+  const [selected, setSelected] = useState<string | null>(null);
   /** The agent last saved, so its form says so until it changes again. */
   const [saved, setSaved] = useState<string | null>(null);
   const addButton = useRef<HTMLButtonElement>(null);

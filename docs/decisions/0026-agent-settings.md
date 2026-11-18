@@ -5,9 +5,9 @@ Status: accepted and built (Settings > Engines and Agents).
 Built: yes. Proof: `ui/src/settings/Agents.test.tsx`, `ui/src/settings/Engines.test.tsx`, `crates/gathr/tests/agents.rs`.
 
 Agents are created and edited in Settings > Agents, inside the centred Settings
-panel. Edit agent in a chat's agent picker opens that same panel at that agent.
-The composer selects the recipient; engine, account, model and effort belong to
-the reusable agent.
+panel. An @Name in the message box picks the recipient ([0028](0028-team-chats.md):
+the chat's agent picker, and its Edit agent, are gone); engine, account, model and
+effort belong to the reusable agent.
 
 Save changes that agent in every chat where it is used. There is no per-save
 Scope control. New turns use the saved assignment; a running turn keeps the one

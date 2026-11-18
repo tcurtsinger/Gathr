@@ -165,12 +165,25 @@ decision; this design update adds no JavaScript dependency.
 Compose ThreadPrimitive, MessagePrimitive and the shared ChatComposer. The full
 upstream Thread has no Composer override. ChatComposer uses the modular Composer,
 attachments, mentions, slash actions, selection quoting and Send/Stop through the
-runtime adapter. The recipient picker selects an agent, never its model or effort.
-The recipient picker is decided: default to the Supervisor, shown by name first,
-then the other members. Choosing another agent addresses it just like @Name.
-There is no Everyone option. A chat without a project starts with one agent, its
-lead. Choosing another agent adds it to that chat, up to five. This rule is to be
-recorded in 0028 with F8; it does not introduce a fan-out callback.
+runtime adapter. There is no recipient picker (C24, 0028): the box's hint names who
+gets a message that names nobody, "Message Mira" (the Supervisor, else the chat's
+agent, else a new chat's first agent). Typing @ at a word's start, anywhere in the
+message, opens the composer's one menu above the box's left edge: a 24px face with
+its mark, the name, and the role muted in a chat of two or more; in a chat with no
+project, every other agent follows under "Bring in" (12px muted, a rule above), up
+to five in the chat. Up and Down move the lit row, Enter or Tab picks, Escape
+closes it, and a click picks; the lit row has no Enter mark. The name goes in as
+"@Name ". Only a name picked from the list counts, as @ and / work in other apps'
+boxes: a typed @Ann with nothing picked is plain text. The box keeps each picked
+name as a range of its text with its agent, through typing before and after it,
+pasting and a draft kept while another chat is open; an edit inside it makes it
+plain. Picked names show in the attention blue at the text's own weight: the box's
+text is drawn again in one piece under the see-through textarea and the names
+coloured by a highlight (a span would move the letters after it off the
+textarea's by up to 1/16px). Once something is typed, a quiet sign by Send says
+who gets it, the first picked name else the hint's agent, in 12.5px muted with the
+name in the foreground at 550 and a bare 20px face: "To Ann", or "Bo joins" for an
+agent picked from outside the chat. There is no Everyone option.
 
 Streamdown is the rendering reference, pending integration approval. Keep user
 messages plain text; render agent Markdown, lists, headings, quotes, code, tables,
@@ -378,7 +391,7 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
   and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
   · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Free". Start times
   live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
-  picks that agent as the composer's recipient and focuses the composer. An archived chat, or an agent that can't be sent to, has no Message.
+  puts "@Juno " first in the composer as a picked name, unless its first picked name is already Juno, and focuses it. An archived chat, or an agent that can't be sent to, has no Message.
 - **Task:** the task its running turn works on, else its first open one: the title, "From Orin" and
   Open task, which opens it in the Tasks tab.
 - **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done

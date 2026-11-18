@@ -84,7 +84,6 @@ function Chat({ found, onFound }: { found?: Found; onFound: () => void }) {
       <ChatView
         chat={{ id: 'c', title: 'Made-up chat' }}
         agents={[]}
-        onEditAgent={() => {}}
         draft=""
         onDraft={() => {}}
         unsent={[]}

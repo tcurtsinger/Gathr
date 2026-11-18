@@ -20,3 +20,70 @@
 .composer-input::placeholder {
   color: var(--muted-foreground);
 }
+/* The "@" list (composer B): the composer's one menu, as tall as five rows before it scrolls. */
+.mention-list {
+  max-height: min(19rem, 45dvh);
+  overflow-y: auto;
+  box-shadow: 0 8px 24px #00000033;
+}
+:root.light .mention-list {
+  box-shadow: 0 8px 24px #0000001a;
+}
+.mention-list [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mention-meta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mention-label {
+  margin: 4px 10px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+/* Who gets the message, by Send once something is typed: quiet, not a button. */
+.composer-to {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  white-space: nowrap;
+  user-select: none;
+}
+.composer-to b {
+  color: var(--foreground);
+  font-weight: 550;
+}
+/* The blue @Names (composer B): the text drawn again under the see-through textarea, in its font and wrap. */
+.composer-field {
+  position: relative;
+}
+.composer-mirror {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 6px 12px;
+  overflow: hidden;
+  font-size: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+::highlight(composer-mention) {
+  color: var(--attention);
+}
+.composer-input.named {
+  position: relative;
+  color: transparent;
+}
+.composer-input.named::selection {
+  color: transparent;
+  background: color-mix(in oklab, var(--attention) 30%, transparent);
+}

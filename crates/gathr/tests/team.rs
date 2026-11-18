@@ -159,7 +159,7 @@ fn role_rules_are_refused_through_the_api() {
 }
 
 #[test]
-fn a_message_goes_to_the_supervisor_unless_it_names_a_member() {
+fn a_persons_message_goes_to_the_agent_sent_else_the_supervisor_whatever_its_text_names() {
     let data = TempDir::new();
     let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("signed_in"))]);
     let ids = agents(&service, &data.0, &["Orin", "Pia", "Rook"]);
@@ -170,24 +170,17 @@ fn a_message_goes_to_the_supervisor_unless_it_names_a_member() {
         None,
     );
 
-    let unnamed = send(&service, &chat, json!({ "text": "Who's free?" }));
-    service.wait_for(&chat, 10, "the first turn", |h| ended(h, 1));
-    let named = send(
+    // A name in the person's text is only text: the window sends the agent picked from its list (C24).
+    let named = send(&service, &chat, json!({ "text": "@pia, look at this" }));
+    service.wait_for(&chat, 10, "the named turn", |h| ended(h, 1));
+    let sent = send(
         &service,
         &chat,
-        json!({ "text": "@pia, look at this with @Orin" }),
+        json!({ "text": "Look at this", "agent": pia }),
     );
-    let history = service.wait_for(&chat, 10, "the named turn", |h| ended(h, 2));
-    assert_eq!(
-        turn(&history, &unnamed["turn"])["agent"],
-        orin.as_str(),
-        "{history}"
-    );
-    assert_eq!(
-        turn(&history, &named["turn"])["agent"],
-        pia.as_str(),
-        "{history}"
-    );
+    let history = service.wait_for(&chat, 10, "the sent turn", |h| ended(h, 2));
+    let agents = [&named, &sent].map(|t| turn(&history, &t["turn"])["agent"].clone());
+    assert_eq!(agents, [json!(orin), json!(pia)], "{history}");
     let authors: Vec<(&str, &str)> = history["messages"]
         .as_array()
         .unwrap()
@@ -261,7 +254,11 @@ fn replies_keep_their_place_by_when_their_turn_started() {
     let mut live = service.live();
     send(&service, &chat, json!({ "text": "Orin first" }));
     service.wait_for(&chat, 10, "Orin's first block", first_blocks(1));
-    send(&service, &chat, json!({ "text": "@Pia second" }));
+    send(
+        &service,
+        &chat,
+        json!({ "text": "@Pia second", "agent": ids[1] }),
+    );
     service.wait_for(&chat, 10, "Pia's first block", first_blocks(2));
     std::fs::write(&go, "").unwrap();
     let history = service.wait_for(&chat, 10, "both turns", |h| ended(h, 2));
@@ -331,7 +328,11 @@ fn a_new_supervisor_reaches_the_next_turns_briefing() {
     let swapped = json!({ "members": [member(&ids[0], "member"), member(&ids[1], "supervisor")] });
     let answer = service.send("PATCH", &format!("/api/chats/{chat}"), swapped);
     assert_eq!(answer.status, 200, "{}", answer.body);
-    send(&service, &chat, json!({ "text": "@Orin again" }));
+    send(
+        &service,
+        &chat,
+        json!({ "text": "@Orin again", "agent": ids[0] }),
+    );
     service.wait_for(&chat, 10, "Orin's turn after the swap", |h| ended(h, 2));
     let after = last_briefing(&args);
     assert!(
@@ -374,7 +375,11 @@ fn each_agent_works_in_its_own_worktree_from_the_fetched_default_branch() {
 
     send(&service, &chat, json!({ "text": "Start" }));
     service.wait_for(&chat, 20, "Build A's turn", |h| ended(h, 1));
-    send(&service, &chat, json!({ "text": "@Build-A go" }));
+    send(
+        &service,
+        &chat,
+        json!({ "text": "@Build-A go", "agent": ids[1] }),
+    );
     let history = service.wait_for(&chat, 20, "Build-A's turn", |h| ended(h, 2));
     let failed: Vec<&Value> = history["turns"]
         .as_array()
