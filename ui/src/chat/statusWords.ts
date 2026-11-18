@@ -1,4 +1,5 @@
-import type { Mark } from '../components/marks';
+import type { Own } from '../api';
+import { type Mark, pressing } from '../components/marks';
 import { list } from './team';
 
 /** An agent as the status line speaks of it: its state and, waiting, the one thing it waits on. */
@@ -53,17 +54,29 @@ export function parts(team: Said[]): Part[] {
   return out;
 }
 
-/** The dots move only while an agent works. */
+/** The dots move only while an agent, or Gathr, works. */
 export const moving = (team: Said[]) => team.some((a) => a.state === 'working');
 
 /**
- * A pull request's wait in the approved pages' words: "PR #18 checks", "PR #18 to merge". The service names them
- * "CI on #18" and "#18 to merge or close" (`tasks::wait_name`), which agents read through the `waiting` tool;
- * anything else is said as the service says it.
+ * Gathr as the line speaks of it, when it has anything of its own going: said like an agent, in the most pressing
+ * of its states, and waiting on the one thing it waits on, when it is one.
+ */
+export function gathrSaid(own: Own[]): Said | undefined {
+  const state = pressing(own.map((o) => o.state));
+  if (!state) return undefined;
+  const waits = [...new Set(own.filter((o) => o.state === 'waiting').map((o) => inWords(o.what)))];
+  return { name: 'Gathr', state, on: waits.length === 1 ? waits[0] : undefined };
+}
+
+/**
+ * A pull request's wait in the approved pages' words: "PR #18 checks", "PR #18 to merge", "PR #18 to land". The
+ * service names them "CI on #18", "#18 to merge or close" (`tasks::wait_name`) and "#18 to land", as agents read
+ * them through the `waiting` tool; anything else is said as the service says it.
  */
 export function inWords(what: string): string {
   return what
     .replace(/^CI on #(\d+)$/, 'PR #$1 checks')
     .replace(/^#(\d+) to merge or close$/, 'PR #$1 to merge')
+    .replace(/^#(\d+) to land$/, 'PR #$1 to land')
     .replace(/^#(\d+) to be up to date$/, 'PR #$1 to be up to date');
 }

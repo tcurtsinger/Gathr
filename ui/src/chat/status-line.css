@@ -125,7 +125,7 @@
   line-height: 20px;
   font-variant-numeric: tabular-nums;
 }
-.status-row-state > span {
+.status-row-state > [data-state] {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -140,4 +140,8 @@
 }
 .status-row-state [data-state="cant"] {
   color: var(--destructive);
+}
+/* A check that keeps failing (the status-line design, its row A): a shade brighter than the rest, no colour. */
+.status-cant {
+  color: var(--foreground);
 }

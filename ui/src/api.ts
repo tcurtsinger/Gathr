@@ -373,12 +373,28 @@ export interface Standing {
   on: { what: string; since_us: number }[];
   /** Out of usage: when it resets (µs). */
   until_us: number | null;
+  /** Waiting: the looks at one of its waits keep failing, so nothing moves it. */
+  failing: boolean;
 }
 
-/** What a chat waits on: every line, the most pressing first, and each agent's standing. */
+/** What Gathr itself has going in the chat, that no agent is on: said as an agent's state is. */
+export interface Own {
+  kind: 'update' | 'pr' | 'command';
+  state: 'working' | 'waiting';
+  /** In a few words: "Update to 0.1.240", "#18 to land", what the command runs. */
+  what: string;
+  /** A command's: the agent whose turn left it running. */
+  name: string | null;
+  since_us: number | null;
+  /** The looks at a pull request it lands keep failing. */
+  failing: boolean;
+}
+
+/** What a chat waits on: every line, the most pressing first, each agent's standing, and Gathr's own. */
 export interface Waiting {
   lines: WaitingLine[];
   agents: Standing[];
+  gathr: Own[];
 }
 
 export interface Project {

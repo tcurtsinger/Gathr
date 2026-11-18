@@ -92,19 +92,13 @@ const stands = (id: string, state: Standing['state'], more: Partial<Standing> = 
   since_us: null,
   on: [],
   until_us: null,
+  failing: false,
   ...more,
 });
 const twoMinutes = () => (Date.now() - 125_000) * 1000;
 
-function service() {
-  const waiting = {
-    lines: [],
-    agents: [
-      stands('a', 'free'),
-      stands('b', 'working'),
-      stands('c', 'cant_run', { what: 'Failed', task: 8, since_us: twoMinutes() }),
-    ],
-  };
+function service(third = stands('c', 'cant_run', { what: 'Failed', task: 8, since_us: twoMinutes() })) {
+  const waiting = { lines: [], agents: [stands('a', 'free'), stands('b', 'working'), third], gathr: [] };
   vi.stubGlobal('fetch', async (path: string) => {
     if (path.endsWith('/waiting')) return new Response(JSON.stringify(waiting));
     if (path.endsWith('/tasks')) return new Response(JSON.stringify({ tasks: [task(8, 'c')], waits: [] }));
@@ -175,6 +169,17 @@ test('a face’s card names the state, what and since when, by pointer and by ke
   await expect.element(card).not.toBeInTheDocument();
 });
 
+test('a face’s card says Can’t read, as the status list’s row does, while the looks at its wait keep failing', async () => {
+  const hour = (Date.now() - 64 * 60_000) * 1000;
+  service(
+    stands('c', 'waiting', { on: [{ what: 'CI on #18', since_us: hour }], since_us: hour, failing: true }),
+  );
+  const screen = await chat();
+  await expect.poll(() => faces('.topline .roster')).toContain('c:waiting');
+  // Focus set by hand: WebKit's Tab passes over buttons.
+  (screen.getByRole('button', { name: 'Open Made-up Third' }).element() as HTMLElement).focus();
+  await expect.element(page.getByText('Waiting · PR #18 checks · Can’t read · 1h 4m')).toBeVisible();
+});
 test('an agent that left the chat has no mark and is off the top line; its card says Removed', async () => {
   service();
   await chat();

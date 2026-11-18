@@ -31,6 +31,8 @@ export interface Glance {
   since?: number;
   /** Waiting: the one thing it waits on, when it is one ("PR #18 checks"). */
   on?: string;
+  /** Waiting: the looks at what it waits on keep failing. */
+  failing?: boolean;
   /** Its tasks in this chat, cancelled ones left out. */
   done: number;
   total: number;
@@ -48,6 +50,7 @@ const FIELDS = [
   'about',
   'since',
   'on',
+  'failing',
   'done',
   'total',
 ] as const;
@@ -79,7 +82,10 @@ export function glances(
   return all.sort((a, b) => rank(a) - rank(b) || lead(a) - lead(b));
 }
 
-type Stands = Pick<Glance, 'standing' | 'doing' | 'began' | 'detail' | 'task' | 'about' | 'since' | 'on'>;
+type Stands = Pick<
+  Glance,
+  'standing' | 'doing' | 'began' | 'detail' | 'task' | 'about' | 'since' | 'on' | 'failing'
+>;
 
 /**
  * The state an agent's face shows: the most pressing of what the chat as it streams says (an approval or a
@@ -158,6 +164,7 @@ function standing(m: Member, state: ChatState, activity: Activity, waiting?: Wai
       detail: since.length ? `Waiting for ${list(since)}` : undefined,
       about: on.length ? list(on) : (stand.what ?? undefined),
       on: on.length === 1 ? on[0] : undefined,
+      failing: stand.failing || undefined,
     };
   }
   return { ...shown, doing: stand.words, about: about(stand.what, what(stand.task)) };

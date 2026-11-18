@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { cdp, page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import type { Agent, Member, Message, Standing, Task, Turn, Waiting, WaitingLine } from '../api';
+import type { Agent, Member, Message, Own, Standing, Task, Turn, Waiting, WaitingLine } from '../api';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
 import '../app.css';
@@ -86,14 +86,17 @@ const stands = (agent: string, state: Standing['state'], more: Partial<Standing>
   since_us: null,
   on: [],
   until_us: null,
+  failing: false,
   ...more,
 });
 const free = (agent: string) => stands(agent, 'free', { words: 'Free' });
 
-// What the service answers now; a test changes it as the service would, then says so live.
-let answer: Waiting = { lines: [], agents: [] };
-function service(waiting: Waiting, more: { turns?: Turn[]; tasks?: Task[]; messages?: Message[] } = {}) {
-  answer = waiting;
+// What the service answers now; a test changes it as the service would, then says so live. Gathr has nothing of
+// its own unless a test says so.
+type Said = Omit<Waiting, 'gathr'> & Partial<Waiting>;
+let answer: Waiting = { lines: [], agents: [], gathr: [] };
+function service(waiting: Said, more: { turns?: Turn[]; tasks?: Task[]; messages?: Message[] } = {}) {
+  answer = { gathr: [], ...waiting };
   const history = {
     chat: 'c',
     members,
@@ -107,8 +110,8 @@ function service(waiting: Waiting, more: { turns?: Turn[]; tasks?: Task[]; messa
     return new Response(JSON.stringify(path === '/api/pauses' ? {} : history));
   });
 }
-const changed = (waiting: Waiting) => {
-  answer = waiting;
+const changed = (waiting: Said) => {
+  answer = { gathr: [], ...waiting };
   for (const listener of live) listener({ type: 'waiting', chat: 'c' });
 };
 
@@ -305,4 +308,101 @@ test('a quiet chat still tells the person: a silent turn says who and for how lo
     ['Made-up Member', 'Working · Made-up task 7 · silent 12m'],
     ['Made-up Third', 'Blocked · Made-up task 4'],
   ]);
+});
+
+test('a wait whose looks keep failing says Can’t read on its row, until a look works', async () => {
+  // The reviewer waits on PR #18's checks and every look at them fails; the member waits on PR #19's, looks fine.
+  const hour = ago(64 * 60_000) * 1000;
+  const five = ago(5 * 60_000) * 1000;
+  const third = (failing: boolean) =>
+    stands('c', 'waiting', { on: [{ what: 'CI on #18', since_us: hour }], since_us: hour, failing });
+  const member = stands('b', 'waiting', { on: [{ what: 'CI on #19', since_us: five }], since_us: five });
+  service({ lines: [], agents: [free('a'), member, third(true)] });
+  await render(<Chat />);
+  // The line is as it was: the reviewer is still waiting.
+  await expect.poll(words).toBe('Made-up Member and Made-up Third are waiting');
+  await page.getByRole('button', { name: 'Made-up Member and Made-up Third are waiting' }).click();
+  await expect.element(list).toBeVisible();
+  expect(rows()).toEqual([
+    ['Made-up Member', 'Waiting · PR #19 checks · 5m'],
+    ['Made-up Third', 'Waiting · PR #18 checks · Can’t read · 1h 4m'],
+  ]);
+  expect(
+    [...document.querySelectorAll('.status-cant')].map((c) => c.closest('.status-row')?.textContent),
+  ).toEqual(['Made-up ThirdWaiting · PR #18 checks · Can’t read · 1h 4m']);
+
+  changed({ lines: [], agents: [free('a'), member, third(false)] });
+  await expect.element(page.getByText('Waiting · PR #18 checks · 1h 4m')).toBeVisible();
+  expect(document.querySelector('.status-cant')).toBeNull();
+});
+
+/** One of Gathr's own, as the service answers it. */
+const own = (kind: Own['kind'], state: Own['state'], what: string, more: Partial<Own> = {}): Own => ({
+  kind,
+  state,
+  what,
+  name: null,
+  since_us: null,
+  failing: false,
+  ...more,
+});
+
+test('Gathr is said like an agent, last on the line, and the slot is empty only when nobody has anything', async () => {
+  // Every agent is free while Gathr waits to land a pull request.
+  const land = own('pr', 'waiting', '#18 to land', { since_us: ago(4 * 60_000) * 1000 });
+  service({ lines: [], agents: [free('a'), free('b'), free('c')], gathr: [land] });
+  const screen = await render(<Chat />);
+  await expect.poll(words).toBe('Gathr is waiting on PR #18 to land');
+  expect(document.querySelector('.status-dots')).toBeNull();
+
+  // The member works, and Gathr updates itself, lands the pull request and runs a command the lead left going.
+  const update = own('update', 'working', 'Update to 0.1.240');
+  const command = own('command', 'working', 'Run the test suite', { name: 'Made-up Lead' });
+  service(
+    { lines: [], agents: [free('a'), stands('b', 'working'), free('c')], gathr: [update, land, command] },
+    { turns: [turn('now', 'b', { status: 'running', created: new Date().toISOString() })] },
+  );
+  await screen.rerender(<Chat key="busy" />);
+  await expect.poll(words).toBe('Made-up Member and Gathr are working');
+
+  // The member's turn ended; Gathr's last hold ends with every agent free: nothing to say.
+  service({ lines: [], agents: [free('a'), free('b'), free('c')], gathr: [land] });
+  await screen.rerender(<Chat key="quiet" />);
+  await expect.poll(words).toBe('Gathr is waiting on PR #18 to land');
+  changed({ lines: [], agents: [free('a'), free('b'), free('c')] });
+  await expect.poll(words).toBe('');
+});
+
+test('the list has a row for each of Gathr’s own after the agents’, with Gathr’s mark, opening nothing', async () => {
+  const hour = ago(64 * 60_000) * 1000;
+  service({
+    lines: [],
+    agents: [
+      free('a'),
+      free('b'),
+      stands('c', 'waiting', { on: [{ what: 'CI on #18', since_us: hour }], since_us: hour }),
+    ],
+    gathr: [
+      own('update', 'working', 'Update to 0.1.240'),
+      own('pr', 'waiting', '#18 to land', { since_us: ago(4 * 60_000) * 1000, failing: true }),
+      own('command', 'working', 'Run the test suite', {
+        name: 'Made-up Member',
+        since_us: ago(12 * 60_000) * 1000,
+      }),
+    ],
+  });
+  await render(<Chat />);
+  // Gathr works on its update: by the agents' own rule, its part comes before those who wait.
+  await expect.poll(words).toBe('Gathr is working, Made-up Third is waiting');
+  await page.getByRole('button', { name: 'Gathr is working, Made-up Third is waiting' }).click();
+  await expect.element(list).toBeVisible();
+  expect(rows()).toEqual([
+    ['Made-up Third', 'Waiting · PR #18 checks · 1h 4m'],
+    ['Gathr', 'Working · Update to 0.1.240'],
+    ['Gathr', 'Waiting · PR #18 to land · Can’t read · 4m'],
+    ['Gathr', expect.stringMatching(/^Working · Made-up Member: Run the test suite · 12m( \ds)?$/)],
+  ]);
+  // Gathr's mark is the one Gathr has elsewhere, and only the agent's row is a button.
+  expect(document.querySelectorAll('.status-row > .face-gathr')).toHaveLength(3);
+  expect(list.getByRole('button').all()).toHaveLength(1);
 });

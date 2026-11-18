@@ -1,6 +1,6 @@
 import { PreviewCard } from '@base-ui/react/preview-card';
 import { createContext, type ReactNode, useContext, useMemo, useRef, useState } from 'react';
-import { type Card, cardLine } from './marks';
+import { CANT_READ, type Card, cardLine } from './marks';
 import { StateMark } from './StateMark';
 
 interface Cards {
@@ -56,7 +56,9 @@ export function FaceCards({ children }: { children: ReactNode }) {
                   </span>
                   <span className="face-card-state">
                     {card.state && <StateMark state={card.state} size={10} />}
-                    {card.state ? cardLine(card.state, [card.about], card.since) : 'Removed'}
+                    {card.state
+                      ? cardLine(card.state, [card.about, card.failing ? CANT_READ : undefined], card.since)
+                      : 'Removed'}
                   </span>
                 </>
               )}
@@ -69,4 +71,9 @@ export function FaceCards({ children }: { children: ReactNode }) {
 }
 
 const same = (a: Card, b: Card) =>
-  a.name === b.name && a.role === b.role && a.state === b.state && a.about === b.about && a.since === b.since;
+  a.name === b.name &&
+  a.role === b.role &&
+  a.state === b.state &&
+  a.about === b.about &&
+  a.since === b.since &&
+  a.failing === b.failing;
