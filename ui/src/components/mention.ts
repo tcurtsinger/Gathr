@@ -1,3 +1,5 @@
+import type { PickedName } from '../api';
+
 /** A name picked from the "@" list: where its `@Name` starts in the text, and whose it is. Only these count, never a name typed. */
 export interface Picked {
   at: number;
@@ -60,3 +62,7 @@ export function follow(old: string, next: string, caret: number, picks: readonly
 
 /** The pick that gets the message: the first in the text. */
 export const first = (picks: readonly Picked[]) => [...picks].sort((a, b) => a.at - b.at)[0];
+
+/** The picks as the message keeps them: each `@Name`'s place and length, and whose it is. */
+export const kept = (picks: readonly Picked[]): PickedName[] =>
+  picks.map((p) => ({ at: p.at, len: p.name.length + 1, agent: p.id }));

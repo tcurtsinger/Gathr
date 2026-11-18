@@ -12,12 +12,13 @@ import {
   type PauseScope,
   type Pauses,
   type PersonTask,
+  type PickedName,
   type Project,
   type Task,
 } from '../api';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
-import { first as firstPick, type Picked } from '../components/mention';
+import { first as firstPick, kept as keptPicks, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { TopLine } from '../TopLine';
@@ -62,7 +63,7 @@ interface Props {
   onProject: (project: string) => void;
   onNewProject: () => void;
   /** Sends a new chat's first message: the service makes the chat then. */
-  onStart: (text: string, agent?: string) => void;
+  onStart: (text: string, agent?: string, picks?: PickedName[]) => void;
   /** At the top line's end: the panel's button. */
   headerEnd?: ReactNode;
   /** At the chat's top, whatever is scrolled to: the app's latest failure. */
@@ -176,9 +177,10 @@ export function ChatView(props: Props) {
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
     const first = state.messages.length === 0;
+    const sent = keptPicks(picks);
     onDraft('', []);
-    if (fresh) return onStart(draft, to.to?.id);
-    send(draft, to.to?.id).then(() => first && onNamed());
+    if (fresh) return onStart(draft, to.to?.id, sent);
+    send(draft, to.to?.id, sent).then(() => first && onNamed());
   };
 
   const actions: Actions = {
@@ -190,12 +192,12 @@ export function ChatView(props: Props) {
     retry: (t) => {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       const turn = state.turns[t];
-      if (asked && turn) send(asked.body as string, turn.agent ?? undefined);
+      if (asked && turn) send(asked.body as string, turn.agent ?? undefined, asked.picks ?? undefined);
     },
     resend: (f) => {
-      if (!fresh) return send(f.text, f.agent, f);
+      if (!fresh) return send(f.text, f.agent, f.picks, f);
       onUnsent((list) => list.filter((x) => x.id !== f.id));
-      onStart(f.text, f.agent);
+      onStart(f.text, f.agent, f.picks);
     },
     // To the agent whose turn stopped: a member by its @Name, the lead as a message with no name goes.
     carryOn: (agent) => {

@@ -1,0 +1,11 @@
+/* A name picked from the "@" list: the person's blue, in the message box and in their sent message alike. */
+::highlight(composer-mention) {
+  color: var(--attention);
+}
+/* Spaces fold as the message part's own paragraph folds them. */
+.picked-text {
+  white-space: pre-line;
+}
+.picked-name {
+  color: var(--attention);
+}

@@ -25,6 +25,8 @@ pub enum Cmd {
         text: String,
         /// The agent it's sent to; none runs on the chats' account with the engine's defaults.
         agent: Option<String>,
+        /// The names picked from the window's `@` list, as kept (`picks::kept`).
+        picks: Option<String>,
         /// The request's trace: the turn's too, so one reference finds both.
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,

@@ -57,7 +57,8 @@ from the next in both themes. `tokens.css` records both themes. Foreground carri
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
 `border` separates regions; `input` bounds inputs; `ring` is transparent.
 Blue is attention, links and active work, not an agent palette; on the owner's word it also tints
-the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with (0072). `free` (dark `oklch(0.74 0.17 148)`,
+the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with and
+the names the person picked in their own message (0072). `free` (dark `oklch(0.74 0.17 148)`,
 light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
 ([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)).
 `os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
@@ -197,7 +198,10 @@ coloured by a highlight (a span would move the letters after it off the
 textarea's by up to 1/16px). Once something is typed, a quiet sign by Send says
 who gets it, the first picked name else the hint's agent, in 12.5px muted with the
 name in the foreground at 550 and a bare 20px face: "To Ann", or "Bo joins" for an
-agent picked from outside the chat. There is no Everyone option.
+agent picked from outside the chat. There is no Everyone option. Sent, the message
+keeps its picked names, and its bubble draws each in the same attention blue at the
+text's own weight (one rule, `picked.css`, for the box and the bubble); a typed
+@Ann stays plain, as does every name in a message from before picks were kept.
 
 Streamdown is the rendering reference, pending integration approval. Keep user
 messages plain text; render agent Markdown, lists, headings, quotes, code, tables,

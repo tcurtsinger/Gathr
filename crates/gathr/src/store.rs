@@ -227,7 +227,7 @@ fn history_order() -> String {
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
 const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
-     m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+     m.copy_of, m.picks FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
 /// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
@@ -256,6 +256,8 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "to": r.get::<_, Option<String>>(7)?,
         // Gathr's copy of such a message, told to the member in its own turn: the message it carries.
         "copy_of": r.get::<_, Option<String>>(8)?,
+        // The person's message: the names they picked from the `@` list, to draw blue.
+        "picks": r.get::<_, Option<String>>(9)?.and_then(|p| serde_json::from_str::<Value>(&p).ok()),
     }))
 }
 
@@ -317,11 +319,35 @@ pub fn add_message_at(
     body: &str,
     ts: i64,
 ) -> Result<Value, Error> {
+    insert_message(conn, chat, turn, (role, kind), body, ts, None)
+}
+
+/// The person's message, with the names they picked from the window's `@` list (`picks::kept`).
+pub fn add_person_message(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    body: &str,
+    picks: Option<&str>,
+) -> Result<Value, Error> {
+    insert_message(conn, chat, turn, ("user", "text"), body, now_us(), picks)
+}
+
+fn insert_message(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    (role, kind): (&str, &str),
+    body: &str,
+    ts: i64,
+    picks: Option<&str>,
+) -> Result<Value, Error> {
     let id = ulid(ts);
     conn.prepare_cached(
-        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
     )?
-    .execute(params![id, chat, turn, ts, role, kind, body])?;
+    .execute(params![id, chat, turn, ts, role, kind, body, picks])?;
     if let Some(title) = title_from(body).filter(|_| role == "user") {
         conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
             .execute(params![chat, title, UNTITLED])?;
