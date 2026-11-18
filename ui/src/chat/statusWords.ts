@@ -7,6 +7,8 @@ export interface Said {
   name: string;
   state: Mark;
   on?: string;
+  /** It is Gathr, said like an agent but never counted as one. */
+  gathr?: boolean;
 }
 
 /** One part of the line, coloured by its state. */
@@ -37,15 +39,20 @@ export function parts(team: Said[]): Part[] {
   }
   const moving = MOVES.map((state) => [state, of(state)] as const).filter(([, l]) => l.length);
   const n = moving.reduce((sum, [, l]) => sum + l.length, 0);
-  moving.forEach(([state, l], i) => {
-    const text =
-      n <= 2
-        ? `${names(l)} ${l.length === 1 ? 'is' : 'are'} ${state}`
-        : i === 0
-          ? `${l.length} ${l.length === 1 ? 'agent is' : 'agents are'} ${state}`
-          : `${l.length} ${state}`;
+  // Counted, Gathr is never one of the agents: it is said beside their count, last.
+  let counted = false;
+  for (const [state, l] of moving) {
+    const agents = l.filter((a) => !a.gathr).length;
+    const and = l.some((a) => a.gathr) ? ' and Gathr' : '';
+    const noun = agents === 1 ? 'agent' : 'agents';
+    let text: string;
+    if (n <= 2) text = `${names(l)} ${l.length === 1 ? 'is' : 'are'} ${state}`;
+    else if (!agents) text = `Gathr is ${state}`;
+    else if (!counted) text = `${agents} ${noun}${and} ${agents === 1 && !and ? 'is' : 'are'} ${state}`;
+    else text = and ? `${agents} ${noun}${and} ${state}` : `${agents} ${state}`;
+    counted ||= n > 2 && agents > 0;
     out.push({ text, tone: state });
-  });
+  }
   const waits = of('waiting');
   const on = waits[0]?.on;
   if (out.length === 1 && out[0].tone === 'waiting' && on && waits.every((a) => a.on === on)) {
@@ -65,7 +72,7 @@ export function gathrSaid(own: Own[]): Said | undefined {
   const state = pressing(own.map((o) => o.state));
   if (!state) return undefined;
   const waits = [...new Set(own.filter((o) => o.state === 'waiting').map((o) => inWords(o.what)))];
-  return { name: 'Gathr', state, on: waits.length === 1 ? waits[0] : undefined };
+  return { name: 'Gathr', state, on: waits.length === 1 ? waits[0] : undefined, gathr: true };
 }
 
 /**

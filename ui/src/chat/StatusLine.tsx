@@ -145,32 +145,46 @@ function Rows({
         name={name}
         state={g.standing}
         said={said}
+        cut={!!g.about}
         onClick={() => onOpen(agent)}
       />
     );
   });
-  const gathrs = own.map((o, i) => {
+  const gathrs = own.map((o) => {
     const what = o.name ? `${o.name}: ${o.what}` : inWords(o.what);
     const began = o.since_us === null ? undefined : o.since_us / 1000;
     const said = cardParts(o.state, [what, o.failing ? CANT_READ : undefined], began, now);
-    // biome-ignore lint/suspicious/noArrayIndexKey: Gathr's rows have no id, and keep the service's order.
-    return <Row key={`gathr-${i}`} face={<GathrFace size={24} />} name="Gathr" state={o.state} said={said} />;
+    return (
+      <Row
+        key={`${o.kind}:${o.name}:${o.what}`}
+        face={<GathrFace size={24} />}
+        name="Gathr"
+        state={o.state}
+        said={said}
+        cut
+      />
+    );
   });
   return [...agents, ...gathrs];
 }
 
-/** One row: a face, a name, and what its card says, the state's word in its mark's shape and Can't read set apart. */
+/**
+ * One row: a face, a name, and what its card says, the state's word in its mark's shape and Can't read set apart. When
+ * `cut`, the piece after the word is the what: the part cut short when the row is too narrow, so the time stays.
+ */
 function Row({
   face,
   name,
   state,
   said,
+  cut,
   onClick,
 }: {
   face: ReactNode;
   name: string;
   state: Mark;
   said: string[];
+  cut?: boolean;
   onClick?: () => void;
 }) {
   const [word, ...rest] = said;
@@ -183,8 +197,8 @@ function Row({
           <StateMark state={state} size={12} />
           {word}
         </span>
-        {rest.map((piece) => (
-          <span key={piece}>
+        {rest.map((piece, i) => (
+          <span key={piece} className={cut && i === 0 ? 'status-what' : undefined}>
             {' · '}
             {piece === CANT_READ ? <span className="status-cant">{piece}</span> : piece}
           </span>

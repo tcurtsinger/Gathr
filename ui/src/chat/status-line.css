@@ -120,10 +120,23 @@
   line-height: 20px;
 }
 .status-row-state {
+  display: flex;
+  min-width: 0;
   color: var(--muted-foreground);
   font-size: 12.5px;
   line-height: 20px;
   font-variant-numeric: tabular-nums;
+}
+/* Each piece whole, its leading " · " kept; only the what is cut, so the time stays at the row's end. */
+.status-row-state > span {
+  flex: none;
+  white-space: pre;
+}
+.status-row-state > .status-what {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .status-row-state > [data-state] {
   display: inline-flex;

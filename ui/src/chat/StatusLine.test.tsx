@@ -406,3 +406,25 @@ test('the list has a row for each of Gathr’s own after the agents’, with Gat
   expect(document.querySelectorAll('.status-row > .face-gathr')).toHaveLength(3);
   expect(list.getByRole('button').all()).toHaveLength(1);
 });
+
+test('a row’s time is never cut away: a long what is the part cut, and the time stays whole at the row’s end', async () => {
+  const long = 'Run the whole test suite with every slow check and the release build after it';
+  service({
+    lines: [],
+    agents: [free('a'), free('b'), free('c')],
+    gathr: [own('command', 'working', long, { name: 'Made-up Member', since_us: ago(12 * 60_000) * 1000 })],
+  });
+  await render(<Chat />);
+  await page.getByRole('button', { name: 'Gathr is working' }).click();
+  await expect.element(list).toBeVisible();
+  const row = document.querySelector('.status-row-state') as HTMLElement;
+  const time = row.lastElementChild as HTMLElement;
+  expect(time.textContent).toMatch(/^ · 12m( \ds)?$/);
+  // How far past the row's right edge the time ends: nothing.
+  const past = time.getBoundingClientRect().right - row.getBoundingClientRect().right;
+  expect(Math.max(0, Math.round(past))).toBe(0);
+  // The what is the part cut: its text is wider than the room it has.
+  const what = [...row.children].find((c) => c.textContent?.includes(long)) as HTMLElement;
+  expect(what.scrollWidth - what.clientWidth).toBeGreaterThan(0);
+  expect(time.scrollWidth - time.clientWidth).toBe(0);
+});

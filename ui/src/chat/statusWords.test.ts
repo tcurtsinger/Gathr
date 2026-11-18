@@ -2,13 +2,21 @@ import { expect, test } from 'vitest';
 import type { Mark } from '../components/marks';
 import { inWords, moving, parts, type Said } from './statusWords';
 
-/** "ann:working,rev:waiting@PR #18 checks" to a team: each agent's name, state and the one thing it waits on. */
+/**
+ * "ann:working,rev:waiting@PR #18 checks" to a team: each agent's name, state and the one thing it waits on; "gathr" is
+ * Gathr, said like an agent, last.
+ */
 function team(spec: string): Said[] {
   if (!spec) return [];
   return spec.split(',').map((p) => {
     const [who, rest] = p.split(':');
     const [state, on] = rest.split('@');
-    return { name: who[0].toUpperCase() + who.slice(1), state: state as Mark, on };
+    return {
+      name: who[0].toUpperCase() + who.slice(1),
+      state: state as Mark,
+      on,
+      gathr: who === 'gathr' || undefined,
+    };
   });
 }
 
@@ -56,6 +64,22 @@ test('the line’s words come from the team’s states: the status line page’s
     ['rev:waiting', 'Rev is waiting'],
     ['ann:free,bo:free', ''],
     ['ann:free,rev:waiting@PR #18 checks', 'Rev is waiting on PR #18 checks'],
+    // Gathr, said like an agent, last (the owner's pick, 2026-11-18): named beside names, never counted as an agent.
+    ['gathr:waiting@PR #18 to land', 'Gathr is waiting on PR #18 to land'],
+    ['hal:working,gathr:working', 'Hal and Gathr are working ···'],
+    ['gathr:working,rue:waiting@PR #18 checks', 'Gathr is working, Rue is waiting ···'],
+    ['ann:working,bo:working,gathr:working', '2 agents and Gathr are working ···'],
+    ['a:working,b:working,c:working,d:working,e:working,gathr:working', '5 agents and Gathr are working ···'],
+    [
+      'mina:needs,ann:working,rev:waiting@PR #18 checks,bo:waiting@PR #19 checks,gathr:working',
+      'Mina needs you, 1 agent and Gathr are working, 2 waiting ···',
+    ],
+    [
+      'ann:working,bo:working,rev:waiting@PR #18 checks,gathr:waiting',
+      '2 agents are working, 1 agent and Gathr waiting ···',
+    ],
+    ['ann:working,bo:working,rev:working,gathr:waiting', '3 agents are working, Gathr is waiting ···'],
+    ['gathr:working,ann:waiting,bo:waiting', 'Gathr is working, 2 agents are waiting ···'],
   ];
   expect(table.map(([spec]) => line(spec))).toEqual(table.map(([, said]) => said));
 });

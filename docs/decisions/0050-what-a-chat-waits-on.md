@@ -88,5 +88,6 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   each command an ended turn left running (Working, with the agent's name). A landing's failing looks are kept in
   the running service only, as the rest it alone knows: no migration. On the line Gathr is said like an agent,
   last, by the same word rule: "Gathr is waiting on PR #18 to land" when every agent is free, "Ann and Gathr are
-  working". The list has a row for each after the agents', in the same row with Gathr's mark, opening nothing:
+  working"; it is never counted as an agent ("2 agents and Gathr are working"). A row's time is never cut away: a
+  long what is cut instead. The list has a row for each after the agents', in the same row with Gathr's mark, opening nothing:
   no screen shows an update, a landing or a command's output. The lines and the words agents read don't change.
