@@ -32,8 +32,7 @@ fn main() {
     // Its `--data` is the dev service's folder, which keeps the webview's data as a test folder's does.
     if let Some(ui) = arg("--ui") {
         let title = arg("--title").unwrap_or_else(|| "Gathr".into());
-        let webview_data = arg("--data").map(|data| webview_folder(Path::new(&data)));
-        return dev(context, parse(&ui), title, webview_data);
+        return dev(context, parse(&ui), title, arg("--data").map(PathBuf::from));
     }
     // `GATHR_DATA` for a Mac app bundle on a test folder: a bundle can't pass arguments, only its
     // `LSEnvironment`, and macOS ignores `HOME` there. Debug builds only, so a stray variable
@@ -46,11 +45,11 @@ fn main() {
     installed(context, data, opened);
 }
 
-fn dev(context: Context<Wry>, url: tauri::Url, title: String, webview_data: Option<PathBuf>) {
+fn dev(context: Context<Wry>, url: tauri::Url, title: String, data: Option<PathBuf>) {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            window(app.handle(), url, &title, webview_data)?.show()?;
+            window(app.handle(), url, &title, data.as_deref())?.show()?;
             Ok(())
         })
         .run(context)
@@ -73,8 +72,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
     if let Some(key) = &key {
         context.config_mut().identifier.push_str(key);
     }
-    // A test folder keeps its webview's data with it, so deleting the folder leaves nothing behind.
-    let webview_data = key.map(|_| webview_folder(data.path()));
+    let test_folder = key.map(|_| data.path().to_path_buf());
     let app = tauri::Builder::default()
         // A second launch on this folder hands over to this one and exits before its own setup runs.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -106,7 +104,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
         })
         .setup(move |app| {
             let (url, started) = connect(app.handle());
-            let window = window(app.handle(), url, "Gathr", webview_data)?;
+            let window = window(app.handle(), url, "Gathr", test_folder.as_deref())?;
             tray(app.handle())?;
             // Started at login (`gathr::platform::login`), or after an update made while hidden:
             // in the tray, its window ready to show. After an update, as it was before.
@@ -218,17 +216,14 @@ fn still_running(app: &AppHandle) -> bool {
         && http::call(known.port, &known.token, "GET", "/health").is_ok_and(|r| r.status == 200)
 }
 
-/// Where a window on this data folder keeps its webview's data. Windows only: WKWebView takes no
-/// folder, so on the Mac the webview keeps the app's default store.
-fn webview_folder(data: &Path) -> PathBuf {
-    data.join("webview")
-}
-
+/// A window on a test folder, or a dev window, keeps its webview's data apart from the installed
+/// Gathr's: on Windows in `<data>/webview`, so deleting the folder leaves nothing behind; on the Mac
+/// (14 and later) in a WebKit store of the folder's own, outside it, as WKWebView takes no folder.
 fn window(
     app: &AppHandle,
     url: tauri::Url,
     title: &str,
-    webview_data: Option<PathBuf>,
+    test_folder: Option<&Path>,
 ) -> tauri::Result<WebviewWindow> {
     let page = url.clone();
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
@@ -243,8 +238,10 @@ fn window(
             open_in_browser(&url);
             NewWindowResponse::Deny
         });
-    if let Some(folder) = webview_data {
-        builder = builder.data_directory(folder);
+    if let Some(data) = test_folder {
+        builder = builder
+            .data_directory(data.join("webview"))
+            .data_store_identifier(launch::webview_store(data));
     }
     // No system title bar: the page's top line moves the window and, on Windows, holds its three buttons (0070).
     // Windows keeps the system's border, shadow and resizing edges; the Mac keeps its own three buttons.
