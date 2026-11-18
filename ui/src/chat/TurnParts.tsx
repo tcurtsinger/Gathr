@@ -1,16 +1,6 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import {
-  Bell,
-  CircleCheck,
-  CircleHelp,
-  ClipboardList,
-  FilePen,
-  PenLine,
-  Send,
-  ThumbsUp,
-  Wrench,
-} from 'lucide-react';
-import { createContext, type ReactNode, useContext, useEffect, useState } from 'react';
+import { Bell, CircleCheck, CircleHelp, ClipboardList, FilePen, PenLine, Send, Wrench } from 'lucide-react';
+import { createContext, useContext, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -18,59 +8,16 @@ import {
 } from '@/components/assistant-ui/elements/collapsible-root';
 import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/elements/run-activity';
 import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Face } from '../components/Face';
 import { counted } from '../plans/plans';
-import { useMark } from './faceMarks';
-import { duration, type Step, type Work } from './fold';
-import type { Custom, EventLine } from './messages';
+import type { Step, Work } from './fold';
+import type { EventLine } from './messages';
 import { SizeChoice } from './Size';
-import { clock, list } from './team';
+import { LiveTime, useStepsOpen } from './Steps';
 import './team.css';
 import '../plans/plans.css';
 
 /** The text a search hit opened at. */
 export const FoundContext = createContext<string | undefined>(undefined);
-
-/** Who a block is from, and when: "Cass · on Open the settings tools PR", "Juno · to Orin". */
-export function Speaker({
-  agent,
-  name,
-  detail,
-  time,
-  message,
-  onOpen,
-}: {
-  /** The agent's id, for its face. */
-  agent?: string;
-  name: string;
-  detail?: string;
-  time?: string;
-  /** The message it heads: on the agent's latest, its Working mark turns (0071). */
-  message?: string;
-  /** In a team chat: its face opens the agent's panel. */
-  onOpen?: () => void;
-}) {
-  const face = <Face agent={{ id: agent ?? '', name }} size={24} mark={useMark(agent, name, message)} />;
-  return (
-    <header className="speaker">
-      <span className="speaker-who">
-        {onOpen ? (
-          <button type="button" className="speaker-open" aria-label={`Open ${name}`} onClick={onOpen}>
-            {face}
-          </button>
-        ) : (
-          face
-        )}
-        <span className="speaker-line">
-          <span className="speaker-name">{name}</span>
-          {detail && <span className="speaker-detail">{detail}</span>}
-        </span>
-      </span>
-      {time && <time dateTime={time}>{clock(time)}</time>}
-    </header>
-  );
-}
 
 /**
  * What a turn did before its message (0037), as assistant-ui's Run activity (the owner's call, 2026-11-12):
@@ -82,21 +29,24 @@ export function WorkRow({
   work,
   onOpenTask,
   startOpen = false,
+  open: given,
+  onOpenChange,
 }: {
   work: Work;
   onOpenTask: (task: number) => void;
   /** Its steps show from the start, as in the agent's panel. */
   startOpen?: boolean;
+  /**
+   * Opened from elsewhere: a message's name line holds the button (0072), and the row is only its steps, with no
+   * button of its own.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const found = useContext(FoundContext);
-  // A search hit on something it wrote mid-work opens the row at it.
-  const holds = !!found && work.steps.some((s) => 'say' in s && s.say === found);
-  const [open, setOpen] = useState(holds || startOpen);
-  const [held, setHeld] = useState(holds);
-  if (holds !== held) {
-    setHeld(holds);
-    if (holds) setOpen(true);
-  }
+  const [own, setOwn] = useStepsOpen(work, startOpen);
+  const open = given ?? own;
+  const setOpen = onOpenChange ?? setOwn;
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
     id: step.id,
     kind: 'say' in step ? 'commentary' : 'tool',
@@ -111,13 +61,13 @@ export function WorkRow({
   }));
   return (
     <RunActivity
-      className="work"
+      className={given === undefined ? 'work' : 'work steps-only'}
       status={work.running ? 'running' : 'complete'}
       statusLabel={work.running ? 'Working' : work.label}
       durationLabel={
         <span className="work-notes">
           {work.notes.map((note) => `· ${note}`).join(' ')}
-          {work.running && work.since !== undefined && <Elapsed since={work.since} />}
+          {work.running && work.since !== undefined && <LiveTime since={work.since} before=" · " />}
         </span>
       }
       entries={entries}
@@ -125,17 +75,6 @@ export function WorkRow({
       onOpenChange={setOpen}
     />
   );
-}
-
-/** How long a running turn has run, redrawn each second: " · 4m 02s". */
-function Elapsed({ since }: { since: number }) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(tick);
-  }, []);
-  const took = duration(now - since, 'second');
-  return took ? ` · ${took}` : null;
 }
 
 /** One step inside the row: a Tool call, or one of Gathr's own lines. */
@@ -185,56 +124,6 @@ function StepEntry({
       open={open}
       onOpenChange={setOpen}
     />
-  );
-}
-
-/** Messages between agents, on one surface, so talk reads as talk; `text` draws the nth one's words. */
-export function Exchange({
-  said,
-  text,
-  onOpenAgent,
-}: {
-  said: NonNullable<Custom['exchange']>;
-  text: (index: number) => ReactNode;
-  onOpenAgent: (agent: string) => void;
-}) {
-  return (
-    <MessagePrimitive.Root className="exchange">
-      {said.map(({ by, ...m }, index) => (
-        <div className="reply" data-speaker="" key={m.id}>
-          <Speaker
-            agent={m.agent}
-            name={m.from ?? 'An agent'}
-            detail={m.to && `to ${m.to}`}
-            time={m.time}
-            message={m.id}
-            onOpen={by ? () => onOpenAgent(by) : undefined}
-          />
-          <div className="reply-body">{text(index)}</div>
-          {m.agreed.length > 0 && <Agreed names={m.agreed} />}
-        </div>
-      ))}
-    </MessagePrimitive.Root>
-  );
-}
-
-/** Agents' thumbs-ups on the words above: how many, and who in the tooltip, on hover or focus. */
-export function Agreed({ names }: { names: string[] }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button type="button" className="agreed" aria-label={`Thumbs-up from ${list(names)}`}>
-            <ThumbsUp aria-hidden="true" />
-            {names.length}
-          </button>
-        </TooltipTrigger>
-        {/* Under the mark, so it never covers the words it is about. */}
-        <TooltipContent side="bottom" align="start" collisionPadding={8}>
-          {list(names)}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
   );
 }
 

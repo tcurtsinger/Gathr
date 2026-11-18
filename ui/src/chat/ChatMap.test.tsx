@@ -398,7 +398,7 @@ test('a target whose message is not in the chat is let go, with a report, and ho
       .poll(() => reports.some((r) => r.includes('gathr.ui.search.error') && r.includes('not_drawn')))
       .toBe(true);
     await expect.poll(() => document.querySelectorAll('.found-part').length).toBe(0);
-    expect(document.querySelectorAll('.reply')).toHaveLength(3);
+    expect(document.querySelectorAll('.said:not([data-you])')).toHaveLength(3);
   } finally {
     vi.unstubAllGlobals();
   }

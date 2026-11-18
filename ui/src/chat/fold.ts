@@ -29,6 +29,10 @@ export interface Work {
   notes: string[];
   /** When it began (ms), for a running row's elapsed time. */
   since?: number;
+  /** Finished: how long it took, "1m 49s". */
+  took?: string;
+  /** How many of its steps failed. */
+  failed?: number;
 }
 
 // What each tool did, and is doing while it runs. One not listed shows its own name.
@@ -182,6 +186,7 @@ export function fold(
     };
   });
   if (steps.length === 0) return { text };
+  const failed = steps.filter((s) => 'state' in s && s.state === 'error').length;
   const notes = [tools && plural(tools, 'step'), given && `gave ${plural(given, 'task')}`].filter(
     (n): n is string => !!n,
   );
@@ -189,10 +194,11 @@ export function fold(
     .map((t) => Date.parse(t ?? ''))
     .filter((t) => !Number.isNaN(t));
   const since = times.length ? Math.min(...times) : undefined;
-  if (running) return { text, work: { steps, running, label: doing ?? 'Working', notes, since } };
+  if (running) return { text, work: { steps, running, label: doing ?? 'Working', notes, since, failed } };
   const ends = msgs
     .map((m) => Date.parse(m.time) + ((m.kind !== 'text' && (m.body as ToolBody).duration_ms) || 0))
     .filter((t) => !Number.isNaN(t));
   const took = since === undefined ? '' : duration(Math.max(...ends) - since);
-  return { text, work: { steps, running, label: took ? `Worked for ${took}` : 'Worked', notes } };
+  const label = took ? `Worked for ${took}` : 'Worked';
+  return { text, work: { steps, running, label, notes, ...(took && { took }), failed } };
 }

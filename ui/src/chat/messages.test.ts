@@ -198,7 +198,8 @@ test('a turn waiting to start stays where its message was sent, and what comes a
   state.turns.late = { ...turn('late', 'lane'), position: 5 };
   const note: Message = { ...said('kit', 'assistant', 'Kit to Rowan'), id: 'note-1', to: 'rowan' };
   state.messages.push(said('held', 'user', 'One more thing'), note, said('late', 'assistant', 'Lane, later'));
-  expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'held-user', 'note-1', 'a-late']);
+  // Kit's message to Rowan sits under what Kit was writing when it sent it (0072).
+  expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'note-1', 'held-user', 'a-late']);
 });
 
 test("a person's message sent into a running turn splits that turn's block where it was sent", () => {
@@ -369,7 +370,7 @@ test('a row’s times read as a person says them, and nothing under a second sho
   ]);
 });
 
-test('messages between agents are their own block, shared while they follow each other; Gathr’s copy stays hidden', () => {
+test('messages between agents are a thread under the block they were sent from, a reply with what it answers; Gathr’s copy stays hidden', () => {
   const state = round();
   // Kit asks Mira mid-turn, Mira answers from her own turn; later Mira writes to Rowan.
   const ask: Message = { ...said('kit', 'assistant', 'Is 30 seconds fine?'), id: 'ask-1', to: 'mira' };
@@ -390,15 +391,16 @@ test('messages between agents are their own block, shared while they follow each
   state.messages.push(later);
   const { items, find } = view(state);
 
-  // Mira's block follows the answer she sent before writing anything else, so the two read as one talk.
+  // Kit's question and Mira's answer under Kit's block; Mira's later message under her own.
   expect(ids(items).slice(-4)).toEqual(['a-kit', 'ask-1', 'a-told', 'later-1']);
   const talk = byId(items, 'ask-1');
-  expect(custom(talk).exchange).toMatchObject([
+  expect(custom(talk)).toMatchObject({ under: true });
+  expect(custom(talk).thread).toMatchObject([
     { from: 'Kit', to: 'Mira' },
     { from: 'Mira', to: 'Kit' },
   ]);
   expect(text(talk)).toBe('Is 30 seconds fine? | Yes, 30 seconds.');
-  expect(custom(byId(items, 'later-1')).exchange).toMatchObject([{ from: 'Mira', to: 'Rowan' }]);
+  expect(custom(byId(items, 'later-1')).thread).toMatchObject([{ from: 'Mira', to: 'Rowan' }]);
   expect(text(byId(items, 'a-told'))).toBe('Kit has its answer');
   expect(custom(byId(items, 'a-told')).work?.steps).toMatchObject([{ label: 'Sent a message' }]);
   // A search hit on Gathr's copy opens at the message it carries.
@@ -665,14 +667,20 @@ test('a hit on a task brief whose member has not started opens at the turn that 
   expect(view(state).find(brief.id)).toEqual({ id: 'a-ask' });
 });
 
-test('only an answer to a message addressed to it moves a block below what it sent', () => {
+test('a turn that wrote no words and only sent a message has no block: its steps are on the message, where it began', () => {
   const state = round();
-  // Kit writes to Rowan; Lane, who was not written to, works and then writes to Sol.
+  // Kit writes to Rowan; Lane works and then writes to Sol, with nothing else to say.
   const first: Message = { ...said('kit', 'assistant', 'Kit to Rowan'), id: 'first-1', to: 'rowan' };
   state.turns.other = { ...turn('other', 'lane'), position: 5 };
   const second: Message = { ...said('other', 'assistant', 'Lane to Sol'), id: 'second-1', to: 'sol' };
   state.messages.push(first, tool('other', 'o1', 'mcp__gathr__message'), second);
-  expect(ids(view(state).items).slice(-3)).toEqual(['first-1', 'a-other', 'second-1']);
+  const { items } = view(state);
+  expect(ids(items).slice(-3)).toEqual(['a-kit', 'first-1', 'second-1']);
+  expect(custom(byId(items, 'first-1'))).toMatchObject({ under: true });
+  expect(custom(byId(items, 'second-1'))).toMatchObject({ under: false });
+  expect(custom(byId(items, 'second-1')).thread?.[0].work?.steps).toMatchObject([
+    { label: 'Sent a message' },
+  ]);
 });
 
 test('a block that did not change is the same object on the next draw; a changed one is new', () => {

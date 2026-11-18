@@ -1,6 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Failure, Message, Named, Role, ThinkingBody, ToolBody, Turn } from '../api';
-import { planLine, versionOf } from '../plans/plans';
+import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { asker } from '../tasks/model';
 import { changed, fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
@@ -8,6 +8,7 @@ import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
 import type { Approval, ChatState } from './state';
 import { type Team, team } from './team';
+import { type Said, talks, threadItem } from './threads';
 
 /** A request that failed: what was sent (none for Stop or Pause), for Retry, and why. */
 export interface SendFailure {
@@ -54,23 +55,18 @@ export type Custom = {
   head?: boolean;
   /** The task a member's turn works on, after its name: "on Review PR #138". */
   on?: string;
+  /** That task is done: a tick after it. */
+  done?: boolean;
   /** What the turn did before its message, as one row. */
   work?: Work;
   notice?: TurnNotice;
   approvals?: Approval[];
   /** A message that never reached the service. */
   unsent?: SendFailure;
-  /** Messages between agents, one for each text of the block: "Juno to Orin". */
-  exchange?: {
-    id: string;
-    from?: string;
-    /** The writer's id, for its face, removed or not. */
-    agent?: string;
-    by?: string;
-    to?: string;
-    time: string;
-    agreed: string[];
-  }[];
+  /** Messages between agents, one for each text of the block, as a thread (0072). */
+  thread?: Said[];
+  /** The thread sits under the block before it, which it belongs to; else it stands where it began. */
+  under?: boolean;
   /** Who gave its text a thumbs-up, in the order given. */
   agreed?: string[];
   events?: EventLine[];
@@ -97,7 +93,7 @@ export interface Spot {
   nth?: number;
 }
 
-type Cache = Map<string, { sig: string; value: ThreadMessageLike }>;
+export type Cache = Map<string, { sig: string; value: ThreadMessageLike }>;
 export interface Group {
   key: string;
   turn: string | null;
@@ -109,6 +105,8 @@ export interface Group {
   bound: boolean;
   /** The turn's last reply: the one its streaming text, notice and approvals go on. */
   last?: boolean;
+  /** A message to an agent: the block its turn was writing when it was sent. */
+  root?: Group;
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
@@ -120,8 +118,8 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  * did folds into a row, its last text is the message, and a later reply of the turn lands in that block,
  * so turns streaming at once never interleave. Only a person's message sent into a running turn splits it,
  * one block before and one after; the last holds the streaming text, the notice and the approvals.
- * Messages between agents are their own block where they were sent, shared while they follow each other;
- * Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an agent is drawn as one-line
+ * Messages between agents are a thread under the block they were sent from, a reply joining the thread of the message
+ * it answers (threads.ts, 0072); Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an agent is drawn as one-line
  * events, all but the brief of a member's own task.
  *
  * A block keeps one id from its first streamed text to its saved messages, so nothing remounts when a
@@ -148,26 +146,31 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     items.push(value);
   };
   let speaker: string | undefined;
-  let talk: Group[] = [];
-  const endTalk = () => {
-    if (talk.length) add(exchange(cache, talk, state, crew), talk);
-    talk = [];
+  const { of, quiet, spoken } = talks(groups, state, crew, hasNotice);
+  const agreed = (message: string) => agreedBy(state, crew, message);
+  const thread = (talk: NonNullable<ReturnType<typeof of.get>>) => {
+    const item = threadItem(cache, talk, state, crew, { quiet, spoken, gave, agreedBy: agreed });
+    add(item, [
+      ...talk.groups,
+      ...[...quiet].flatMap(([work, to]) => (talk.groups.includes(to) ? work : [])),
+    ]);
+    speaker = undefined;
   };
+  const under = new Map([...new Set(of.values())].flatMap((t) => (t.root ? [[t.root, t] as const] : [])));
   for (const g of groups) {
     if (g.kind === 'to') {
-      talk.push(g);
-      speaker = undefined;
+      const talk = of.get(g);
+      if (talk && !talk.root && talk.groups[0] === g) thread(talk);
       continue;
     }
+    if (quiet.has(g)) continue;
     if (g.kind === 'gathr') {
       const lines = heard(g, state, crew, said);
       if (!lines.length) continue;
-      endTalk();
       add(eventsOf(cache, g.key, lines), [g]);
       speaker = undefined;
       continue;
     }
-    endTalk();
     if (g.kind === 'version') {
       // Named as the lead's reply blocks are: the lead's turn works on no task.
       const who = `${state.turns[g.turn ?? '']?.agent}|${undefined}`;
@@ -190,6 +193,8 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     const who = `${turn?.agent}|${on}`;
     add(block(cache, g, state, crew, gave, { on, head: who !== speaker }), [g]);
     speaker = who;
+    const talk = under.get(g);
+    if (talk) thread(talk);
     for (const size of sizes.get(g) ?? []) {
       items.push(eventsOf(cache, `size-${size.ask}`, [size]));
       speaker = undefined;
@@ -200,7 +205,6 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
       speaker = undefined;
     }
   }
-  endTalk();
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
   for (const f of unsent) {
@@ -220,9 +224,10 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     const own = groups.find((g) => g.msgs.includes(m));
     const at = own && shown.get(own);
     if (at && m.kind === 'text' && own.kind !== 'gathr') {
+      const words = (x: Message) => spoken.get(x.id)?.text ?? x.body;
       const before = at.msgs.slice(0, at.msgs.indexOf(m));
-      const nth = before.filter((x) => x.kind === 'text' && x.body === m.body).length;
-      return { id: at.id, text: m.body as string, nth };
+      const nth = before.filter((x) => x.kind === 'text' && words(x) === words(m)).length;
+      return { id: at.id, text: words(m) as string, nth };
     }
     if (at) return { id: at.id };
     // A task's brief isn't drawn: its turn's block stands for it, or the giver's until that turn starts.
@@ -263,16 +268,7 @@ function grouped(state: ChatState): Group[] {
       groups.push({ ...one, key: m.id, kind: 'version', bound });
       if (m.turn) open.delete(m.turn);
     } else if (m.to) {
-      // An answer follows the message it answers: a turn that has only worked since that message
-      // shows after what it sent, so the talk reads as one block.
-      const sender = open.get(m.turn ?? '');
-      const asked = groups.at(-2);
-      const answering =
-        groups.at(-1) === sender &&
-        asked?.kind === 'to' &&
-        asked.msgs[0].to === state.turns[m.turn ?? '']?.agent;
-      if (answering && sender?.msgs.every((x) => x.kind !== 'text')) sender.at = at + 0.5;
-      groups.push({ ...one, key: m.id, kind: 'to', bound: false });
+      groups.push({ ...one, key: m.id, kind: 'to', bound: false, root: open.get(m.turn ?? '') });
     } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
     else if (m.turn) {
       const g = { ...reply(m.turn, at), msgs: [m] };
@@ -357,18 +353,20 @@ function block(
   // the giver didn't agree with.
   const last = group.msgs.at(-1);
   const agreed = !partial && last?.kind === 'text' ? agreedBy(state, crew, last.id) : [];
-  const who = `${agent}|${role}|${on}|${head}|${tick}|${agreed}`;
+  const done = !!on && state.tasks.find((t) => t.number === turn?.task)?.state === 'done';
+  const who = `${agent}|${role}|${on}|${done}|${head}|${tick}|${agreed}`;
   const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
-  const time = role ? (group.msgs[0]?.time ?? turn?.created) : undefined;
+  const time = group.msgs[0]?.time ?? turn?.created;
   const custom: Custom = {
     agent,
     by: turn?.agent ?? undefined,
     role,
     time,
     on,
+    done,
     head,
     approvals,
     tick,
@@ -414,10 +412,6 @@ function toReply(
 const agreedBy = (state: ChatState, crew: Team, message: string) =>
   state.reactions.flatMap((r) => (r.message === message && crew.name(r.agent)) || []);
 
-/** The agent's id while it is in the chat: one that left it has no panel to open. */
-const member = (state: ChatState, agent?: string | null) =>
-  state.members.some((m) => m.agent === agent) ? (agent ?? undefined) : undefined;
-
 /** A version of the lead's plan: the speaker, its chip and who gave it a thumbs-up; its words are the tab's. */
 function versionBlock(
   cache: Cache,
@@ -435,7 +429,9 @@ function versionBlock(
     role: crew.role(agent),
     time: m.time,
     head,
-    agreed: agreedBy(state, crew, m.id),
+    agreed: [
+      ...new Set([...agreedBy(state, crew, m.id), ...(found ? agreedCheck(found.version, state, crew) : [])]),
+    ],
     plan: found && { plan: found.plan.id, version: found.version.n, parts: found.version.parts },
   };
   return kept(cache, group.key, JSON.stringify(custom), () => ({
@@ -444,32 +440,6 @@ function versionBlock(
     content: [],
     metadata: { custom },
   }));
-}
-
-/** Messages between agents that follow each other, as one block: a text and its header for each. */
-function exchange(cache: Cache, groups: Group[], state: ChatState, crew: Team): ThreadMessageLike {
-  const key = groups[0].key;
-  const said = groups.map(({ msgs: [m] }) => ({
-    id: m.id,
-    from: crew.name(state.turns[m.turn ?? '']?.agent),
-    agent: state.turns[m.turn ?? '']?.agent ?? undefined,
-    by: member(state, state.turns[m.turn ?? '']?.agent),
-    to: crew.name(m.to),
-    time: m.time,
-    agreed: agreedBy(state, crew, m.id),
-  }));
-  const sig = JSON.stringify(said);
-  const hit = cache.get(key);
-  if (hit?.sig === sig) return hit.value;
-  const custom: Custom = { exchange: said };
-  const value: ThreadMessageLike = {
-    id: key,
-    role: 'assistant',
-    content: groups.map(({ msgs: [m] }) => ({ type: 'text', text: m.body as string })),
-    metadata: { custom },
-  };
-  cache.set(key, { sig, value });
-  return value;
 }
 
 /**
@@ -482,7 +452,7 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   const m = group.msgs[0];
   if (state.caught.includes(m.id)) return [changed(m.body as string)];
   const plan = planLine(m, state, crew);
-  if (plan) return [plan];
+  if (plan !== undefined) return plan ? [plan] : [];
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
   const answers = state.tasks

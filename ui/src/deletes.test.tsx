@@ -115,8 +115,8 @@ test('a removed agent’s old words still say who wrote them', async () => {
   await render(<App />);
   const said = page.getByText(words);
   await expect.element(said).toBeVisible();
-  const block = said.element().closest('.reply, .exchange');
+  const block = said.element().closest('.said');
   // Its face, then its name.
-  expect(block?.querySelector('.speaker-who > .face')).not.toBeNull();
-  expect(block?.querySelector('.speaker-name')?.textContent).toBe('Bo');
+  expect(block?.querySelector('.said-face .face')).not.toBeNull();
+  expect(block?.querySelector('.name-line-name')?.textContent).toBe('Bo');
 });

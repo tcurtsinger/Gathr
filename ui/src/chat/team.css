@@ -1,61 +1,4 @@
-/* The timeline's parts (DESIGN.md "One timeline", 0037): who speaks, a turn's row, talk between agents, events. */
-.speaker {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-/* The face, then the name whole and what it's on cut with …, on one line (Timeline.test.tsx fails if a long
-   header grows past it): the registry's identity's sizes, 24px face, 10px after it, 13px name, 11px detail. */
-.speaker-who {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  white-space: nowrap;
-}
-.speaker-line {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.speaker-name {
-  flex: none;
-  font-size: 13px;
-  font-weight: 500;
-}
-.speaker-detail {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  text-overflow: ellipsis;
-}
-/* In a team chat the face opens the agent's panel; pointed at, it takes the hover tint. */
-.speaker-open {
-  position: relative;
-  flex: none;
-  min-height: 0;
-  padding: 0;
-  border-radius: 50%;
-}
-.speaker-open:hover::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: var(--hover-tint);
-}
-.speaker time {
-  margin-left: auto;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
+/* The timeline's parts (DESIGN.md "One timeline", 0037): a turn's row and Gathr's events. */
 /* A turn's work row (0037) is assistant-ui's Run activity, each tool step its Tool call (the owner's call,
    2026-11-12): published colours and spacing, with the owner's sizes: the row 14px, a step 12.5px, the
    latest step and mid-work words 13px, steps 4px apart. Set from here, so the registry files stay as published. */
@@ -126,19 +69,9 @@
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 
-/* Messages between agents: one surface, so talk reads as talk. */
-.exchange {
-  display: grid;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
-  border-radius: 16px;
-  background: var(--card);
-}
-
 /* Gathr's notes that belong to no turn's row: one quiet line, cut with …; open, it reads whole (ux-issues 26, 27). */
 .events {
-  margin: -8px 0 -8px 26px;
+  margin: -8px 0 -4px 40px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
@@ -231,10 +164,4 @@
   background: color-mix(in oklab, var(--foreground) 7.5%, transparent);
   font-size: 13px;
   font-weight: 500;
-}
-
-@media (max-width: 600px) {
-  .speaker {
-    flex-wrap: wrap;
-  }
 }

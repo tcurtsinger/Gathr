@@ -59,7 +59,7 @@ test('a reply shows while it streams, and once when it is saved', async () => {
   await screen.rerender(<View state={replay(events)} />);
   await expect.element(screen.getByText(reply, { exact: true })).toBeVisible();
   expect(screen.getByText(reply, { exact: true }).elements()).toHaveLength(1);
-  await expect.element(screen.getByRole('button', { name: /1 step$/ })).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: /^1 step/ })).toBeInTheDocument();
 });
 
 test('a reply is formatted, and the HTML or script links in it do nothing', async () => {
@@ -76,11 +76,11 @@ test('a reply is formatted, and the HTML or script links in it do nothing', asyn
   await expect.element(screen.getByRole('table')).toBeVisible();
   await expect.element(screen.getByRole('link', { name: 'the notes' })).toHaveAttribute('target', '_blank');
   await expect.element(screen.getByText(/^<img src=x onerror="window.ran=1">/)).toBeVisible();
-  expect(document.querySelector('.reply img')).toBeNull();
+  expect(document.querySelector('.said img')).toBeNull();
   await expect.element(screen.getByText(/run \[blocked\]$/)).toBeVisible();
-  expect(document.querySelector('.reply a[href*="javascript"]')).toBeNull();
+  expect(document.querySelector('.said a[href*="javascript"]')).toBeNull();
   // A footnote's link moves within the reply, so it never leaves for the browser.
-  for (const link of document.querySelectorAll<HTMLAnchorElement>('.reply a[href^="#"]')) {
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('.said a[href^="#"]')) {
     expect(link.target).toBe('');
   }
   expect((window as { ran?: number }).ran).toBeUndefined();
@@ -102,7 +102,7 @@ function brokenWords(element: Element) {
   return broken;
 }
 
-test('a table shows whole at 640px: words unbroken, header in view, sideways scroll only when too wide', async () => {
+test('a table shows whole in the chat at its widest: words unbroken, header in view, sideways scroll only when too wide', async () => {
   // The owner's table (ux-issues 24), headers as long as the ones that squeezed its first column.
   const owners = [
     '| | Case 1: the PR head pushed to main as a fast-forward | Case 2: a merge commit of the head pushed onto main |',
@@ -118,13 +118,14 @@ test('a table shows whole at 640px: words unbroken, header in view, sideways scr
   const link = ' `https://github.com/tcurtsinger/Gathr/actions/runs/123456789` |';
   const body = `${owners}\n\n${wide}${link}`;
   const message: Message = { id: 'm', turn: 't', time: '', role: 'assistant', kind: 'text', body };
+  // The column at its widest, 42rem (DESIGN.md); the bubble beside its face takes 74px of it (0072).
   const screen = await render(
-    <div style={{ width: 640 }}>
+    <div style={{ width: 672 }}>
       <View state={{ ...empty, messages: [message] }} />
     </div>,
   );
   await expect.element(screen.getByRole('cell', { name: 'Merged by' })).toBeVisible();
-  const [table, tooWide] = document.querySelectorAll('.reply table');
+  const [table, tooWide] = document.querySelectorAll('.said table');
   const box = (t: Element) => t.parentElement as HTMLElement;
   for (const t of [table, tooWide]) {
     expect(brokenWords(t)).toEqual([]);
@@ -132,8 +133,8 @@ test('a table shows whole at 640px: words unbroken, header in view, sideways scr
   }
   expect(box(table).scrollWidth).toBe(box(table).clientWidth);
   expect(box(tooWide).scrollWidth).toBeGreaterThan(box(tooWide).clientWidth);
-  // The wide one scrolls in its frame, not by pushing the chat wider than its 640px.
-  expect(box(tooWide).getBoundingClientRect().right).toBeLessThanOrEqual(640);
+  // The wide one scrolls in its frame, not by pushing the chat wider than its 672px.
+  expect(box(tooWide).getBoundingClientRect().right).toBeLessThanOrEqual(672);
 });
 
 test('an engine that exits mid-reply keeps the text shown and fails with its reference', async () => {
@@ -162,7 +163,7 @@ const said = (id: string, role: 'user' | 'assistant', body: string): Message => 
 const turn = (status: Turn['status']): Record<string, Turn> => ({
   t: { id: 't', status, why: null, ref: 'r1', agent: 'a1' },
 });
-const order = () => [...document.querySelectorAll('.user-bubble, .reply-body')].map((e) => e.textContent);
+const order = () => [...document.querySelectorAll('.bubble')].map((e) => e.textContent);
 
 test('a message sent into a running turn keeps the reply before it, and the next reply comes after it', async () => {
   const before = [
@@ -218,7 +219,7 @@ test('a Stop that fails shows its notice alone, with nothing to resend', async (
   );
   await expect.element(screen.getByText('Connection failed')).toBeVisible();
   expect(screen.getByRole('button', { name: 'Retry' }).query()).toBeNull();
-  expect(document.querySelectorAll('.user-bubble')).toHaveLength(1);
+  expect(document.querySelectorAll('.bubble')).toHaveLength(1);
 });
 
 const made = (n: number): Message[] =>

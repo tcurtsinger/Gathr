@@ -1,13 +1,13 @@
-// The one timeline as the person uses it (0037): a turn's row, talk between agents, Gathr's event lines
-// and the approvals docked above the composer.
+// The one timeline as the person uses it (0037): a turn's steps, Gathr's event lines, a long name line and the
+// approvals docked above the composer. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { page, server, userEvent } from 'vitest/browser';
+import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
 import { toThread } from './messages';
-import { apply, type ChatState, empty } from './state';
+import { type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
 
 vi.mock('../live', () => ({ listen: () => () => {} }));
@@ -91,7 +91,7 @@ function View({ state, actions }: { state: ChatState; actions?: Partial<Actions>
   );
 }
 
-test('a turn’s row opens to its steps and what it wrote between them, and a task it gave opens from there', async () => {
+test('a turn’s steps open from its name line, with what it wrote between them, and a task it gave opens from there', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -111,7 +111,7 @@ test('a turn’s row opens to its steps and what it wrote between them, and a ta
   // Folded: the remark and the steps aren't drawn.
   expect(screen.getByText('Made-up remark mid-work').query()).toBeNull();
 
-  await screen.getByRole('button', { name: 'Worked for 27s · 3 steps · gave 1 task' }).click();
+  await screen.getByRole('button', { name: '3 steps · gave 1 task · 27s · 1 failed' }).click();
   // Each tool step is assistant-ui's Tool call; what it wrote between them and the task it gave are Gathr's lines.
   await expect.element(screen.getByText('Made-up remark mid-work')).toBeVisible();
   expect(screen.getByRole('listitem').elements()).toHaveLength(4);
@@ -139,7 +139,7 @@ test('a step’s chip says what it ran, cut to the column; the step opens to it 
       <View state={state} />
     </div>,
   );
-  await screen.getByRole('button', { name: 'Worked for 48s · 3 steps' }).click();
+  await screen.getByRole('button', { name: '3 steps · 48s' }).click();
   await expect.element(screen.getByRole('listitem').nth(2)).toBeVisible();
   const list = document.querySelector('.work ol') as HTMLElement;
   const chip = screen.getByText(long).element() as HTMLElement;
@@ -170,7 +170,7 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
       <View state={state} />
     </div>,
   );
-  const row = screen.getByRole('button', { name: 'Worked · 1 step' });
+  const row = screen.getByRole('button', { name: '1 step' });
   await row.click();
   const step = screen.getByRole('button', { name: new RegExp(`^Ran.*${long.slice(0, 20)}`) });
   await expect.element(step).toBeVisible();
@@ -184,7 +184,7 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
     .toBe(true);
 });
 
-test('a running turn’s row says Working, with what the agent is doing now under it, and no message yet', async () => {
+test('a running turn shows its steps on its name line and what the agent is doing now under it, with no bubble yet', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -192,84 +192,9 @@ test('a running turn’s row says Working, with what the agent is doing now unde
     messages: [tool('t1', 'lead', 'Read'), tool('t2', 'lead', 'Shell', { status: 'running' })],
   };
   const screen = await render(<View state={state} />);
-  await expect.element(screen.getByRole('button', { name: /^Working · 2 steps/ })).toBeVisible();
+  await expect.element(screen.getByRole('button', { name: '2 steps' })).toBeVisible();
   await expect.element(screen.getByText('Running a command', { exact: true })).toBeVisible();
-  expect(document.querySelector('.reply-body')?.textContent).toBe('');
-});
-
-test('agents’ messages to each other read as one block, each headed by who wrote to whom', async () => {
-  const state: ChatState = {
-    ...empty,
-    members,
-    turns: { ask: turn('ask', 'b', 0), told: turn('told', 'a', 1, { answers: 'ask' }) },
-    messages: [
-      said('q', 'ask', 'Made-up question', { to: 'a' }),
-      said('copy', 'told', 'Made-up Member wrote to you: Made-up question', { role: 'gathr', copy_of: 'q' }),
-      said('r', 'told', 'Made-up answer', { to: 'b' }),
-    ],
-  };
-  const screen = await render(<View state={state} />);
-  await expect.element(screen.getByText('Made-up answer')).toBeVisible();
-  const blocks = document.querySelectorAll('.exchange');
-  expect(blocks).toHaveLength(1);
-  const heads = [...blocks[0].querySelectorAll('.speaker-who')].map((h) => h.textContent);
-  expect(heads).toEqual(['Made-up Leadto Made-up Member', 'Made-up Memberto Made-up Lead'].reverse());
-  // Gathr's copy of the question in the receiver's turn isn't drawn.
-  expect(screen.getByText(/wrote to you/).query()).toBeNull();
-});
-
-test('a thumbs-up shows under the words it was given to, with who gave it, and one given live adds its name', async () => {
-  const given = (message: string, agent: string, minute: number) => ({
-    message,
-    agent,
-    time: `2026-11-08T09:0${minute}:00Z`,
-  });
-  const before: ChatState = {
-    ...empty,
-    members: [...members, { agent: 'c', name: 'Made-up Reviewer', role: 'reviewer' }],
-    turns: { lead: turn('lead', 'a', 0), ask: turn('ask', 'b', 1) },
-    messages: [
-      said('u', 'lead', 'Made-up ask', { role: 'user' }),
-      said('early', 'lead', 'Made-up first thought'),
-      tool('t1', 'lead', 'Read'),
-      said('final', 'lead', 'Made-up final answer'),
-      said('q', 'ask', 'Made-up question', { to: 'a' }),
-    ],
-    // An agent Gathr no longer knows isn't named, nor counted.
-    reactions: [
-      given('final', 'gone', 0),
-      given('final', 'c', 1),
-      given('early', 'b', 2),
-      given('q', 'c', 3),
-      given('u', 'c', 4),
-    ],
-  };
-  const screen = await render(<View state={before} />);
-  await expect.element(screen.getByText('Made-up final answer')).toBeVisible();
-  const reply = screen.getByText('Made-up final answer').element().closest('.reply') as HTMLElement;
-  const talk = document.querySelector('.exchange') as HTMLElement;
-  // Under the shown text and the exchange message; none under the folded text or the person's message.
-  expect([...document.querySelectorAll('.agreed')].map((a) => a.closest('.reply'))).toEqual([
-    reply,
-    talk.querySelector('.reply'),
-  ]);
-  expect(document.querySelector('.user-message .agreed')).toBeNull();
-  const mark = page.elementLocator(reply).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' });
-  await expect.element(mark).toHaveTextContent('1');
-  await expect
-    .element(page.elementLocator(talk).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' }))
-    .toHaveTextContent('1');
-
-  // Given live by a second agent: the count goes up and the names follow the order given.
-  const live = { type: 'reaction' as const, chat: 'c', reaction: given('final', 'b', 5) };
-  await screen.rerender(<View state={apply(before, live)} />);
-  const again = screen.getByText('Made-up final answer').element().closest('.reply') as HTMLElement;
-  const both = page
-    .elementLocator(again)
-    .getByRole('button', { name: 'Thumbs-up from Made-up Reviewer and Made-up Member' });
-  await expect.element(both).toHaveTextContent('2');
-  (both.element() as HTMLElement).focus();
-  await expect.element(page.getByRole('tooltip')).toHaveTextContent('Made-up Reviewer and Made-up Member');
+  expect(document.querySelector('.bubble')).toBeNull();
 });
 
 test('an event line opens in place to what more there is, and its task opens from there', async () => {
@@ -338,7 +263,7 @@ test('two event lines that read the same open one at a time, each to its own que
   errors.mockRestore();
 });
 
-test('a member’s header stays one line however long its task is, with the time in view', async () => {
+test('a member’s name line stays one line however long its task is, cut with its time in view', async () => {
   const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
   const state: ChatState = {
     ...empty,
@@ -349,15 +274,18 @@ test('a member’s header stays one line however long its task is, with the time
   };
   const screen = await render(<View state={state} />);
   await expect.element(screen.getByText('Made-up finding')).toBeVisible();
-  const header = document.querySelector('.speaker') as HTMLElement;
-  expect(header.textContent).toContain(`on ${what}`);
-  // One line: the 24px avatar is its tallest part.
-  expect(header.getBoundingClientRect().height).toBeLessThanOrEqual(28);
+  const line = document.querySelector('.name-line') as HTMLElement;
+  expect(line.textContent).toContain(`on ${what}`);
+  // One line (20px, and the name's baseline), the task cut with … and the name whole.
+  expect(line.getBoundingClientRect().height).toBeLessThan(24);
+  const cut = line.querySelector('.name-line-what') as HTMLElement;
+  expect(cut.scrollWidth).toBeGreaterThan(cut.clientWidth);
   const name = screen.getByText('Made-up Member', { exact: true }).element();
   expect(name.scrollWidth).toBeLessThanOrEqual(name.clientWidth);
-  const column = (header.closest('.reply') as HTMLElement).getBoundingClientRect();
-  expect((header.querySelector('time') as HTMLElement).getBoundingClientRect().right).toBeLessThanOrEqual(
-    column.right,
+  const column = (line.closest('.said') as HTMLElement).getBoundingClientRect();
+  expect(cut.getBoundingClientRect().right).toBeLessThanOrEqual(column.right);
+  expect((line.querySelector('time') as HTMLElement).getBoundingClientRect().left).toBeGreaterThan(
+    name.getBoundingClientRect().right,
   );
 });
 

@@ -140,7 +140,7 @@ test('a task opens in the Tasks tab from the row of the turn that gave it', asyn
   service();
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
-  await page.getByRole('button', { name: /1 step · gave 1 task$/ }).click();
+  await page.getByRole('button', { name: /^1 step · gave 1 task/ }).click();
   await expect.element(page.getByText('Gave Made-up Sol a task')).toBeVisible();
   await page.getByRole('button', { name: '#82 Verify the reconnect repair' }).click();
   await expect.element(page.getByRole('region', { name: 'Task #82' })).toBeVisible();

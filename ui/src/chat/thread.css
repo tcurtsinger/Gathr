@@ -39,7 +39,7 @@
 .thread-messages {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   /* The status line's slot under it (DESIGN.md "Status line"). */
   margin-bottom: 6px;
 }
@@ -49,6 +49,8 @@
 .thread-footer {
   position: sticky;
   bottom: 0;
+  /* Over the faces' marks of the messages scrolling under it. */
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -104,74 +106,6 @@
 }
 .thread-bottom:disabled {
   visibility: hidden;
-}
-.user-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 8px;
-}
-.user-bubble {
-  max-width: calc(100% - 72px);
-  padding: 8px 16px;
-  border-radius: 16px;
-  background: var(--muted-surface);
-  font-size: 16px;
-  font-weight: 400;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.reply {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-/* The lead's words to the person read at 16px; a member's work one step quieter (0037). */
-.reply-body {
-  font-size: 16px;
-  font-weight: 400;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-.exchange .reply-body,
-.reply[data-team] .reply-body {
-  font-size: 15px;
-}
-.reply-body:empty {
-  display: none;
-}
-/* A named agent's block lines up with its name, with or without the name above it: a 24px avatar and 10px gap. */
-.reply[data-speaker] > :not(.speaker) {
-  margin-left: 34px;
-}
-/* Agents' thumbs-ups under the words: the icon lines up with them, its padding outside the indent. */
-.agreed {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 6px;
-  /* Not a touch target: narrow windows give buttons 44px, which would lift it off its words. */
-  min-height: 0;
-  padding: 2px 8px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted-foreground);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: default;
-}
-.reply[data-speaker] > .agreed {
-  margin-left: 26px;
-}
-.agreed:hover {
-  background: var(--hover-tint);
-  color: var(--foreground);
-}
-.agreed svg {
-  width: 14px;
-  height: 14px;
 }
 /* A search hit opened here: a short attention tint (DESIGN.md "Navigation and workspace"). */
 [data-search-hit] {
