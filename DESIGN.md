@@ -299,15 +299,23 @@ What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a
 the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
 bubble: the plan's lines, with a clipboard: the lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up
 instead) (opening to the plan's title), "Sent back" (opening to the person's words), and "Plan v2:" "Approved"
-or "Dropped"; each opens to the whole line and Open plan (0062). The size of an ask is one too, outside any
-bubble, after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix" or
-"You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn only once the ask
-has a task or Gathr held something of it (a refused give, write or push, or a caught change: 0063), with a
-wrench for Fix and a clipboard for Plan. Opened, it shows the two sizes, "Just fix it." and "Plan it with me
-first.", the current one marked, and nothing that explains them (0061). A line is 13px, muted, the lead-in in
+or "Dropped"; each opens to the whole line and Open plan (0062). A line is 13px, muted, the lead-in in
 the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for overflow.
 Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
 Keyboard focus uses the hover highlight, without an outline or ring.
+
+The size of an ask is the last piece of the person's own message's name line, in the line's style: the lead's
+16px face when the lead sized it (none when the person did), "Fix" or "Plan", and a chevron (0061). It shows once
+the ask is sized, has a task, or Gathr held something of it (0063), whoever has spoken. A click or Enter opens it
+in place to the two sizes, "Just fix it." and "Plan it with me first.", in an outlined pair; the pressed one is
+tinted and carries a blue tick, and the arrow keys move between them. Choosing one closes them, Escape too, and
+nothing explains them. A refused change shows under the bubble with its reference. An archived chat shows the
+face and the word alone.
+
+Work on a pull request reads under the PR's message: a review's turns and later work on the same PR (its fix)
+are a thread under the last message of the PR's own task, each whole, with its name line, its task and its tick.
+The thread is open while anything in it is open, and folds to its faces and how many replies once every task in
+it is done or cancelled (0072).
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
 composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's face,
 "Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in

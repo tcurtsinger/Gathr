@@ -69,12 +69,7 @@
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 
-/* Gathr's notes that belong to no turn's row: one quiet line, cut with …; open, it reads whole (ux-issues 26, 27). */
-.events {
-  margin: -8px 0 -4px 40px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
+/* A line of Gathr's in its bubble: one quiet line, cut with …; open, it reads whole (ux-issues 26, 27). */
 .event-line {
   display: flex;
   align-items: center;

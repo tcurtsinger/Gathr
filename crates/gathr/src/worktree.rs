@@ -192,14 +192,15 @@ pub async fn changed(folder: &Path, env: &Vars) -> Result<bool, String> {
 }
 
 /// The worktree at `folder` as git tracks it (0063 I2a.3): its head, and `git status`'s entries
-/// ("XY path") with each listed file's content id, read only when there are at most `most`.
+/// ("XY path") with each listed file's content id, read only when there are at most `most`. Each
+/// untracked file is its own entry: a new folder is named by the files in it, never by itself.
 pub async fn snapshot(
     folder: &Path,
     env: &Vars,
     most: usize,
 ) -> Result<(String, Vec<(String, Option<String>)>), String> {
     let head = git(env, folder, &["rev-parse", "HEAD"], LOCAL_LIMIT).await?;
-    let status = ["status", "--porcelain", "-z", "--untracked-files=normal"];
+    let status = ["status", "--porcelain", "-z", "--untracked-files=all"];
     let listed = git(env, folder, &status, LOCAL_LIMIT).await?;
     let mut entries: Vec<(String, Option<String>)> = status_entries(&listed)
         .into_iter()

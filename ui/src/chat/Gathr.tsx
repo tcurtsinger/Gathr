@@ -75,5 +75,5 @@ function Says({ event }: { event: EventLine }) {
         </ul>
       </>
     );
-  return <Event event={event} onOpenPlan={actions.openPlan} onReference={actions.reference} />;
+  return <Event event={event} onOpenPlan={actions.openPlan} />;
 }

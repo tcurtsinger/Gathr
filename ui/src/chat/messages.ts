@@ -1,12 +1,13 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Message, Named, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Failure, Message, Named, Role, Task, ThinkingBody, ToolBody, Turn } from '../api';
 import type { Out } from '../components/Outcome';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
-import { changed, fixed, sizeLines } from './asks';
+import { type AskSize, askSizes, changed, fixed } from './asks';
 import { type Ending, ending } from './ends';
 import { fold, type Given, type Work } from './fold';
 import { place } from './order';
 import { heardTurns, questions } from './questions';
+import { prThread, underPrs } from './reviews';
 import type { Approval, ChatState } from './state';
 import { type Team, team } from './team';
 import { type Said, talks, threadItem } from './threads';
@@ -22,14 +23,12 @@ export interface SendFailure {
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
-  kind: 'task' | 'note' | 'fix' | 'plan' | 'version' | 'changed';
+  kind: 'task' | 'note' | 'version' | 'changed';
   /** Who did what, ahead of the text: "Vale completed:". */
   who?: string;
   text: string;
   /** What a click on the line adds: the reason, the question. */
   more?: string;
-  /** A size line's ask: it opens to the ask's two sizes (0061). */
-  ask?: string;
   /** A plan line's version: it opens the plan's tab there (0062). */
   plan?: { id: number; version: number };
 }
@@ -63,6 +62,10 @@ export type Custom = {
   thread?: Said[];
   /** The thread sits under the block before it, which it belongs to; else it stands where it began. */
   under?: boolean;
+  /** Everything in the thread is settled: it starts folded, and folds when it becomes so. */
+  settled?: boolean;
+  /** The ask's size, on the person's message that started it (0061). */
+  size?: AskSize;
   /** Who gave its text a thumbs-up, in the order given. */
   agreed?: string[];
   events?: EventLine[];
@@ -138,7 +141,7 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
   const groups = place(extra.length ? [...saved, ...extra] : saved, state);
   const heardIn = heardTurns(state.tasks);
   const gave = givenBy(state, crew);
-  const sizes = sizeLines(state, groups, crew);
+  const sizes = askSizes(state, crew);
   const lastOf = lastBlocks(groups, state);
   const items: ThreadMessageLike[] = [];
   /** Each group's block; one not drawn has none. */
@@ -160,7 +163,23 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     speaker = undefined;
   };
   const under = new Map([...new Set(of.values())].flatMap((t) => (t.root ? [[t.root, t] as const] : [])));
+  const onPr = underPrs(groups, state, (g) => !quiet.has(g));
+  const numbered = new Map(state.tasks.map((t) => [t.number, t]));
+  const prWork = new Map<Group, Group[]>();
+  for (const [g, root] of onPr) prWork.set(root, [...(prWork.get(root) ?? []), g]);
+  /** Who a reply block is by and the task it is on: a block that follows its speaker's isn't named again. */
+  const heading = (g: Group) => {
+    const turn = g.turn ? state.turns[g.turn] : undefined;
+    // Only a member or the reviewer is headed by its task; the lead always by its role.
+    const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
+    const on = led || turn?.task == null ? undefined : numbered.get(turn.task)?.what;
+    const last = turn?.task != null && lastOf.get(turn.task) === g;
+    return { on, last, who: `${turn?.agent}|${on}` };
+  };
+  const reply = (g: Group, head: boolean) =>
+    block(cache, g, state, crew, gave, { ...heading(g), head, asked: hosts.get(g) });
   for (const g of groups) {
+    if (onPr.has(g)) continue;
     if (g.kind === 'to') {
       const talk = of.get(g);
       if (talk && !talk.root && talk.groups[0] === g) thread(talk);
@@ -187,25 +206,42 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
       continue;
     }
     if (g.kind === 'person') {
+      const size = sizes.get(g.msgs[0].id);
       add(
-        kept(cache, g.key, g.msgs[0].body as string, () => toUser(g.msgs[0])),
+        kept(cache, g.key, `${g.msgs[0].body}|${JSON.stringify(size)}`, () => toUser(g.msgs[0], size)),
         [g],
       );
       speaker = undefined;
       continue;
     }
-    const turn = g.turn ? state.turns[g.turn] : undefined;
-    // Only a member or the reviewer is headed by its task; the lead always by its role.
-    const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
-    const on = led || turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task)?.what;
-    const who = `${turn?.agent}|${on}`;
-    const last = turn?.task != null && lastOf.get(turn.task) === g;
-    add(block(cache, g, state, crew, gave, { on, last, head: who !== speaker, asked: hosts.get(g) }), [g]);
+    const { who } = heading(g);
+    add(reply(g, who !== speaker), [g]);
     speaker = who;
     const talk = under.get(g);
     if (talk) thread(talk);
-    for (const size of sizes.get(g) ?? []) {
-      items.push(eventsOf(cache, `size-${size.ask}`, [size]));
+    const work = prWork.get(g);
+    if (work) {
+      // Each block of the PR's work, then the talk it began, as one thread.
+      const parts = work.flatMap((w) => {
+        const t = under.get(w);
+        const talked = t
+          ? [threadItem(cache, t, state, crew, { quiet, spoken, gave, agreedBy: agreed })]
+          : [];
+        const from = t
+          ? [...t.groups, ...[...quiet].flatMap(([q, to]) => (t.groups.includes(to) ? q : []))]
+          : [];
+        return [{ item: reply(w, true), from: [w] }, ...talked.map((item) => ({ item, from }))];
+      });
+      const settled = work.every((w) => settledTask(state, numbered, w));
+      add(
+        prThread(
+          cache,
+          g,
+          parts.map((p) => p.item),
+          settled,
+        ),
+        parts.flatMap((p) => p.from),
+      );
       speaker = undefined;
     }
   }
@@ -535,13 +571,13 @@ function kept(cache: Cache, key: string, sig: string, make: () => ThreadMessageL
   return value;
 }
 
-/** Gathr's lines: said by Gathr when they have its message's `time`, else a size's lines, as they were (0061). */
-function eventsOf(cache: Cache, key: string, events: EventLine[], time?: string): ThreadMessageLike {
+/** Gathr's lines, said by Gathr at its message's `time`. */
+function eventsOf(cache: Cache, key: string, events: EventLine[], time: string): ThreadMessageLike {
   const sig = `${time}|${JSON.stringify(events)}`;
   const hit = cache.get(key);
   if (hit?.sig === sig) return hit.value;
   const text = events.map((e) => [e.who, e.text].filter(Boolean).join(' ')).join('\n');
-  const custom: Custom = time ? { events, gathr: true, time } : { events };
+  const custom: Custom = { events, gathr: true, time };
   const value: ThreadMessageLike = {
     id: key,
     role: 'system',
@@ -552,13 +588,21 @@ function eventsOf(cache: Cache, key: string, events: EventLine[], time?: string)
   return value;
 }
 
-function toUser(m: Message): ThreadMessageLike {
+function toUser(m: Message, size?: AskSize): ThreadMessageLike {
   return {
     id: m.id,
     role: 'user',
     content: [{ type: 'text', text: m.body as string }],
-    metadata: { custom: { tick: m.time } satisfies Custom },
+    metadata: { custom: { tick: m.time, size } satisfies Custom },
   };
+}
+
+/** A block's task is done or cancelled, and its turn has ended. */
+function settledTask(state: ChatState, numbered: Map<number, Task>, g: Group): boolean {
+  const turn = state.turns[g.turn ?? ''];
+  const task = numbered.get(turn?.task ?? -1);
+  const over = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
+  return over && (task?.state === 'done' || task?.state === 'cancelled');
 }
 
 function failed(f: SendFailure): ThreadMessageLike {

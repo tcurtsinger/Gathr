@@ -233,8 +233,8 @@ Parts: 2.4, 10.3, 10.7
 Parts: 2.4
 
 - **Given** an ask sized as a repair, with work running
-- **When** the person opens its size line and chooses "Plan it with me first."
-- **Then** Gathr records the new size and that the person set it, and the line reads "You: Plan". The
+- **When** the person opens the size on their message and chooses "Plan it with me first."
+- **Then** Gathr records the new size and that the person set it, and the size reads "Plan", with no face. The
   lead can't change it back. Changing a repair to new is counted as a correction. Its tasks that
   haven't started wait for the plan ("#5 (Ann) waits for its plan"), the lead is told, and the lead
   isn't woken for the tasks that wait. A task already working goes on, and its turns aren't held. When
@@ -246,9 +246,9 @@ Parts: 2.4
 
 - **Given** an ask sized as a repair, with work open
 - **When** the person sends "also check X"
-- **Then** it joins the repair: no new ask is made, and the chat shows no second size line. The lead's next
+- **Then** it joins the repair: no new ask is made, and the message shows no size of its own. The lead's next
   gives and writes are not held. When the lead calls `size` with that message, it becomes an ask of its
-  own, with its own size and its own line
+  own, and the message shows its own size
 
 ### 2l. A look-into task is held for its whole life
 

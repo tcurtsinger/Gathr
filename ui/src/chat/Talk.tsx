@@ -2,7 +2,7 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { FaceStack } from '../components/Face';
-import { parts } from './Replies';
+import { parts, Reply } from './Replies';
 import { AgentFace, Bubble, NameLine, Reactions, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import { useActions } from './Thread';
@@ -10,13 +10,33 @@ import { WorkRow } from './TurnParts';
 import type { Said as Message } from './threads';
 
 /**
- * Talk between agents (0072). Under the message it belongs to, it is a thread: a thin line, smaller faces, and a
- * toggle that folds it to its faces and how many replies. With no message to sit under, its messages stand as any
- * other, where the talk began.
+ * Talk between agents (0072), or the work on a PR under its message. Under the message it belongs to, it is a thread:
+ * a thin line, smaller faces, and a toggle that folds it to its faces and how many replies. Open while anything in it
+ * is open, it folds once everything is settled. With no message to sit under, its messages stand as any other, where
+ * the talk began.
  */
-export function Talk({ said, under }: { said: Message[]; under: boolean }) {
-  const [open, setOpen] = useState(true);
-  const messages = said.map((m, index) => <TalkMessage key={m.id} m={m} index={index} small={under} />);
+export function Talk({
+  said,
+  under,
+  settled = false,
+}: {
+  said: Message[];
+  under: boolean;
+  settled?: boolean;
+}) {
+  const [open, setOpen] = useState(!settled);
+  const [was, setWas] = useState(settled);
+  if (settled !== was) {
+    setWas(settled);
+    setOpen(!settled);
+  }
+  const messages = said.map((m, index) =>
+    m.block ? (
+      <Reply key={m.id} own={m.block} id={m.id} index={index} small={under} />
+    ) : (
+      <TalkMessage key={m.id} m={m} index={index} small={under} />
+    ),
+  );
   if (!under) return <MessagePrimitive.Root className="talk">{messages}</MessagePrimitive.Root>;
   const who = [...new Map(said.flatMap((m) => (m.agent ? [[m.agent, m.from ?? '']] : []))).entries()];
   return (

@@ -15,8 +15,8 @@ import { useFound, useLatest } from './found';
 import { GathrMessage } from './Gathr';
 import type { SendFailure } from './messages';
 import { useOlder } from './older';
-import { AssistantMessage, custom, UserMessage } from './Replies';
-import { Events, FoundContext } from './TurnParts';
+import { AssistantMessage, UserMessage } from './Replies';
+import { FoundContext } from './TurnParts';
 import './thread.css';
 
 /** What a reply's notices and approvals can do. Stable for a chat, so replies don't redraw for it. */
@@ -189,15 +189,8 @@ export function Blocks({ messages, actions }: { messages: ThreadMessageLike[]; a
   );
 }
 
+/** The person's words, what Gathr says (0073), or an agent's. */
 function ThreadMessage() {
   const role = useAuiState((s) => s.message.role);
-  return role === 'user' ? <UserMessage /> : role === 'system' ? <SystemItem /> : <AssistantMessage />;
-}
-
-/** What Gathr says, as Gathr's message; a size's lines, as they were (0061). */
-function SystemItem() {
-  const actions = useActions();
-  const own = useAuiState(custom);
-  if (own.gathr) return <GathrMessage />;
-  return <Events events={own.events ?? []} onOpenPlan={actions.openPlan} onReference={actions.reference} />;
+  return role === 'user' ? <UserMessage /> : role === 'system' ? <GathrMessage /> : <AssistantMessage />;
 }

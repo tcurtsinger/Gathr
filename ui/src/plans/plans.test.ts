@@ -182,18 +182,18 @@ test("the lead's text after the plan call reads in a block after the chip, not b
   const order = ids(view(planned()));
   expect(order.slice(order.indexOf('a-ask'), order.indexOf('a-ask-1') + 1)).toEqual([
     'a-ask',
-    'size-m1',
     'v1',
     'a-ask-1',
   ]);
+  // The chip follows the lead's own block with nothing between: it doesn't name the lead again.
+  expect(custom(view(planned()).find((m) => m.id === 'v1')).head).toBe(false);
   expect(text(view(planned()).find((m) => m.id === 'a-ask-1'))).toBe('Bo checks it next.');
 });
 
-test("Gathr's plan lines are kind version, each with its plan; the size line keeps kind plan", () => {
+test("Gathr's plan lines are kind version, each with its plan", () => {
   const items = view(planned());
   const lines = items.flatMap((m) => custom(m).events ?? []);
   expect(lines).toEqual([
-    { kind: 'plan', who: 'Mira:', text: 'Plan', ask: 'm1' },
     {
       kind: 'version',
       who: 'Plan v1:',

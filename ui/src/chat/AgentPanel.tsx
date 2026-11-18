@@ -46,13 +46,17 @@ export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) 
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
     if (custom.thread) {
-      const own = custom.thread.flatMap((m, at) => (m.by === agent ? at : []));
+      const { thread } = custom;
+      const mine = thread.flatMap((m, at) => (m.by === agent ? at : []));
+      // A block of its own still running, in a thread under a PR, is its running row.
+      for (const at of mine) if (thread[at].running) now = thread[at].block?.work ?? now;
+      const own = mine.filter((at) => !thread[at].running);
       if (!own.length || typeof item.content === 'string') continue;
       const { content } = item;
       keep(item, () => ({
         ...item,
         content: own.map((at) => content[at]),
-        metadata: { custom: { thread: own.map((at) => custom.thread?.[at]) } },
+        metadata: { custom: { thread: own.map((at) => thread[at]) } },
       }));
     } else if (custom.by === agent && item.role === 'assistant') {
       if (item.status?.type === 'running') now = custom.work ?? now;
