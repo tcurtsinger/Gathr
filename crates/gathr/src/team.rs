@@ -193,7 +193,7 @@ pub fn route(
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one
 /// of them; else the Supervisor, or the only agent. A chat with no agents keeps what it was sent
 /// to. The text is never read for names: a name counts only when picked from the window's list,
-/// which sends its agent (C24), so `bob@ann.com` names nobody.
+/// which sends its agent, so `bob@ann.com` names nobody.
 pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String>, &'static str> {
     if team.is_empty() {
         return Ok(sent_to.map(String::from));

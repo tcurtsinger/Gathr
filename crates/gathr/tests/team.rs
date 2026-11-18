@@ -170,7 +170,7 @@ fn a_persons_message_goes_to_the_agent_sent_else_the_supervisor_whatever_its_tex
         None,
     );
 
-    // A name in the person's text is only text: the window sends the agent picked from its list (C24).
+    // A name in the person's text is only text: the window sends the agent picked from its list.
     let named = send(&service, &chat, json!({ "text": "@pia, look at this" }));
     service.wait_for(&chat, 10, "the named turn", |h| ended(h, 1));
     let sent = send(

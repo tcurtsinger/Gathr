@@ -409,7 +409,7 @@ async fn moved_past(
 /// finish is a failed look.
 async fn check(command: &str, dir: &Path, vars: &Vars) -> Result<Look, String> {
     let ran = match gathr::approvals::read_only_check(command) {
-        // Let through unasked (C11): run as the very words that were checked, with no shell to
+        // Let through unasked (0043 C11): run as the very words that were checked, with no shell to
         // expand them, and with what the repository names switched off.
         Some(_) => {
             let words: Vec<&str> = command.split_whitespace().collect();

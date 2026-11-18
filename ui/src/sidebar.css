@@ -63,7 +63,7 @@
   flex: 1;
   min-width: 0;
 }
-/* A chat's row: its link, then its More only on hover, keyboard focus or while its menu is open (C70). */
+/* A chat's row: its link, then its More only on hover, keyboard focus or while its menu is open. */
 .sidebar .chatrow {
   display: flex;
   align-items: center;
@@ -80,7 +80,7 @@
   padding-left: 34px;
 }
 /* A chat's most pressing mark (0071), only for Needs you, Can't run and Working: the faces' own mark at 9px,
-   still, 8px after the title, which is cut before it (C65). */
+   still, 8px after the title, which is cut before it. */
 .chat-mark {
   display: inline-grid;
   flex: none;
@@ -96,7 +96,7 @@
 .sidebar :is(.chat-link, .project-row .navbutton):hover {
   background: transparent;
 }
-/* A row's + and More: icons inside the row with no box of their own (C71), taking no room until shown. */
+/* A row's + and More: icons inside the row with no box of their own, taking no room until shown. */
 .sidebar .row-icon {
   display: grid;
   flex: none;

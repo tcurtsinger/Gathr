@@ -393,7 +393,7 @@ fn size(dir: &Path) -> u64 {
         .sum()
 }
 
-/// What the PR looks see of a review task's PR: a run at its head, once per commit (C3).
+/// What the PR looks see of a review task's PR: a run at its head, once per commit (0043 C3).
 pub async fn for_review(chats: &Arc<Chats>, chat: &str, task: i64, head: &str) {
     let (c, h) = (chat.to_string(), head.to_string());
     let wanted = chats

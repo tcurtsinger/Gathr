@@ -479,7 +479,7 @@ pub async fn project(chats: &Arc<Chats>, id: &str) -> Option<Project> {
     found?.ok()?.map(Project::of)
 }
 
-/// The checks the project asks for, passed on `head`: GitHub's CI, Gathr's (C3), both, or none (a
+/// The checks the project asks for, passed on `head`: GitHub's CI, Gathr's (0043 C3), both, or none (a
 /// clean review alone, 0045).
 async fn checks_passed(
     chats: &Arc<Chats>,

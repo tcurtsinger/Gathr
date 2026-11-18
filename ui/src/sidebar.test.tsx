@@ -1,5 +1,5 @@
 // A chat's More shows only while the pointer is on its row or the keyboard is in it, the open chat's row
-// too (C70). Measured as drawn, with the app's styles.
+// too. Measured as drawn, with the app's styles.
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
