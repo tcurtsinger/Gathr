@@ -38,6 +38,8 @@
 	--attention: #60a5fa;
 	/* Free's mark (0071): green means Free only. */
 	--free: oklch(0.74 0.17 148);
+	/* Windows' own Close red, under the pointer on the window's Close, in both themes. */
+	--os-close: lab(48.4493% 77.4328 61.5452);
 	--backdrop: #00000088;
 	--radius-control: 8px;
 	--radius-floating: 16px;

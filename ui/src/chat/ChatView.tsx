@@ -20,6 +20,7 @@ import { FaceCards } from '../components/FaceCard';
 import { first as firstPick, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
+import { TopLine } from '../TopLine';
 import type { Draft, Refusal } from '../tasks/model';
 import { asQuestion } from '../tasks/rows';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
@@ -292,8 +293,7 @@ export function ChatView(props: Props) {
   return (
     <MarksContext value={marks}>
       <FaceCards>
-        {/* The window's top line (0070), on the shell above the frame: the app's grid puts it there. */}
-        <header className="topline">
+        <TopLine>
           <div className="topline-title">
             <h1>{chat.title}</h1>
             {!fresh && (
@@ -328,7 +328,7 @@ export function ChatView(props: Props) {
             )}
             {headerEnd}
           </div>
-        </header>
+        </TopLine>
         <main className="chat" aria-label={chat.title}>
           {props.notice}
           <div className="chat-body">

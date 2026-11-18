@@ -60,6 +60,8 @@ Blue is attention, links and active work, not an agent palette; on the owner's w
 the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with (0072). `free` (dark `oklch(0.74 0.17 148)`,
 light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
 ([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)).
+`os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
+alone.
 Errors combine destructive text, a tinted surface, an icon and a reference.
 
 The prototype calls its neutral surface tokens `muted` and `accent`. Existing
@@ -97,9 +99,17 @@ Summary are history.
 - The window is at least 960 x 600; nothing is designed below that.
 - The window's shell (0070): a 44px rail at the left and a 40px top line above, both on `shell`,
   around one frame that holds navigation, the chat and the workspace. The frame is rounded 12px at
-  every corner, ringed 1px in `shell-edge`, with 6px of shell on its right and below. The system's
-  own title bar still sits above the top line; nothing in the page draws window buttons or leaves room
-  for them.
+  every corner, ringed 1px in `shell-edge`, with 6px of shell on its right and below. The desktop
+  window has no system title bar: the top line is the whole band of shell above the frame, and a press
+  on any part of it that isn't a control moves the window, a double click maximizes or restores it.
+  On Windows its right end holds the window's three buttons, Minimize, Maximize (Restore while
+  maximized) and Close, drawn as Windows draws them: each 46px wide and the band's 40px high, 10px
+  glyphs at 1px stroke in the foreground colour, a foreground 7% tint under the pointer or keyboard
+  focus, Close in `os-close` with a white glyph; they reach the window's top right corner, past the
+  shell's margin, and the line's content ends 8px before them. On the Mac the system draws its own
+  three buttons at the band's left, over the rail and the sidebar, where the line holds nothing. In a
+  browser the line moves nothing and draws no buttons. Gathr's "Start failed" page keeps the system's
+  title bar.
 - The rail: Home at the top, a mark of where you are (the window has one place, so it is not a button),
   drawn as current (32px, 8px radius, foreground 9%), its centre on the word mark's line. At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
@@ -112,7 +122,7 @@ Summary are history.
 - The top line, from the sidebar's edge: a short divider on that edge (12px in from top and bottom),
   20px, the title, then More 4px after it in the same group; the title truncates with an ellipsis and
   More stays visible. The right holds view controls only: Summary, then the workspace's button, open or
-  closed, 8px from the frame's end. These share one icon-button style: 28px, 8px radius, 4px apart,
+  closed, 8px from the frame's end (from the window's buttons on Windows). These share one icon-button style: 28px, 8px radius, 4px apart,
   17px Lucide icons at 1.75 stroke (Summary's own icon too; More's dots radius 1.4). Summary's button
   widens to hold its stack of faces, 8px each side, at the same height. Pressed (the workspace's button
   while it is open): foreground 9% background, foreground icon, 12% on hover. The chat has no header of

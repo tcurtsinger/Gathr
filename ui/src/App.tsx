@@ -18,6 +18,7 @@ import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
+import { TopLine } from './TopLine';
 import { asQuestion } from './tasks/rows';
 import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
@@ -472,7 +473,10 @@ export function App() {
           }
         />
       ) : (
-        <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
+        <>
+          <TopLine />
+          <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
+        </>
       )}
       <NewProject
         open={newProject}

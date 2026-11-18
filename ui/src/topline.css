@@ -1,0 +1,55 @@
+/* The top line (0070): the whole band of shell above the frame, so all of it moves the desktop window. Its
+   content starts where the sidebar ends: the chat's title and More, then the faces and the panel's button. Over
+   the rail and the sidebar it holds nothing: the Mac's own three buttons sit there. */
+.topline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 8px 0 calc(var(--rail) + var(--nav) + 20px);
+}
+/* A short divider where the sidebar ends: 1px back puts it on the sidebar's border, its last pixel. */
+.topline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: calc(var(--rail) + var(--nav) - 1px);
+  width: 1px;
+  background: var(--border);
+}
+/* Windows' three buttons, 46 wide and the line's height, at the window's own right edge, past the shell's
+   margin. The line's content ends 8px before them, so Summary still opens under its end. */
+.topline.with-buttons {
+  margin-right: calc(138px - var(--inset));
+}
+.window-buttons {
+  position: absolute;
+  top: 0;
+  right: -138px;
+  display: flex;
+}
+.window-button {
+  width: 46px;
+  height: 40px;
+  padding: 0;
+  border-radius: 0;
+  color: var(--foreground);
+  scale: none;
+}
+.window-button:is(:hover, :focus-visible) {
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  color: var(--foreground);
+}
+.window-button.close:is(:hover, :focus-visible) {
+  background: var(--os-close);
+  color: #fff;
+}
+.window-button svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+}
