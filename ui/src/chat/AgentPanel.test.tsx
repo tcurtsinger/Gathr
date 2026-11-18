@@ -243,17 +243,21 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
   // Its tasks, open ones first; one opens in the Tasks tab.
   const list = panel.getByRole('region', { name: 'Tasks in this chat' });
-  expect(
-    list
-      .getByRole('listitem')
-      .elements()
-      .map((li) => [li.dataset.status, li.textContent]),
-  ).toEqual([
-    ['active', 'activeMade-up task 7'],
-    ['done', 'doneMade-up task 9'],
-  ]);
-  await list.getByRole('button', { name: 'Made-up task 9' }).click();
+  expect(texts('listitem', list)).toEqual(['Made-up task 7#7·Working', 'Made-up task 9#9']);
+  await list.getByRole('button', { name: /Made-up task 9/ }).click();
   expect(openedTasks).toEqual([7, 9]);
+});
+
+test("a cancelled task is listed in its owner's tab, and a fix Gathr gave reads as Gathr's", async () => {
+  service({
+    tasks: [task(7, 'b', { state: 'working', by_gathr: true }), task(12, 'b', { state: 'cancelled' })],
+  });
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Member/);
+  const current = panel.getByRole('region', { name: 'Task', exact: true });
+  await expect.element(current).toHaveTextContent('TaskMade-up task 7From Gathr · Open task');
+  const list = panel.getByRole('region', { name: 'Tasks in this chat' });
+  expect(texts('listitem', list)).toEqual(['Made-up task 7#7·Working', 'Made-up task 12#12·Cancelled']);
 });
 
 test('a waiting agent says who it waits for and since when; with no task of its own it has no Task or Now', async () => {
@@ -286,7 +290,7 @@ test('an idle agent is Free, with its earlier blocks and tasks; one with nothing
   await openFromSummary(/^Made-up Third/);
   await expect.poll(() => who().textContent).toContain('Reviewer · Free');
   expect(texts('heading')).toEqual(['Made-up Third', 'Earlier in this chat', 'Tasks in this chat']);
-  expect(texts('listitem')).toEqual(['doneMade-up task 8']);
+  expect(texts('listitem')).toEqual(['Made-up task 8#8']);
 
   // Another agent takes the panel's place.
   await openFromSummary(/^Kit/);

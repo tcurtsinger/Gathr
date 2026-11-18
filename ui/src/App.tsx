@@ -18,6 +18,7 @@ import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
 import { type Page, SettingsPanel, type SettingsTarget } from './settings/SettingsPanel';
+import { asQuestion } from './tasks/rows';
 import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
 import { usePersonTasks } from './tasks/usePersonTasks';
@@ -58,7 +59,8 @@ export function App() {
   // Each chat's workspace: the files opened from its questions, the agent opened from Summary, the plan opened
   // from the timeline, and the tab shown.
   const [tabs, setTabs] = useState<Record<string, Tabs>>({});
-  // An agent's task opened in a chat's Tasks tab, from Summary or a hand-off line (room task 70).
+  // The task each chat's Tasks tab shows, opened from its list, the chat's Open task or the Tasks flyout; none
+  // shows the list.
   const [opened, setOpened] = useState<Record<string, number | undefined>>({});
   // A search hit's message (none for a title: the latest), until its chat shows it.
   const [found, setFound] = useState<{ chat: string; message?: string; at: number } | null>(null);
@@ -345,8 +347,7 @@ export function App() {
               name={name}
               onOpen={(t) =>
                 openChat(t.chat, () => {
-                  setOpened((all) => ({ ...all, [t.chat]: undefined }));
-                  person.select(t.chat, t.number);
+                  setOpened((all) => ({ ...all, [t.chat]: t.number }));
                   person.setOpen(t.chat, true);
                   setTab(t.chat, () => ({ selected: 'tasks' }));
                 })
@@ -406,7 +407,7 @@ export function App() {
           found={found?.chat === chat.id ? found : undefined}
           onFound={() => setFound(null)}
           notice={notice}
-          workspace={(agent) =>
+          workspace={(agent, work) =>
             paneOpen && (
               <Workspace
                 agent={agent}
@@ -430,33 +431,24 @@ export function App() {
                 tasks={
                   <TasksTab
                     key={chat.id}
-                    tasks={chatTasks}
-                    selected={person.selected[chat.id] ?? null}
-                    onSelect={(n) => person.select(chat.id, n)}
+                    tasks={work.tasks}
+                    members={work.members}
+                    opened={opened[chat.id]}
+                    onOpen={(n) => setOpened((all) => ({ ...all, [chat.id]: n }))}
                     drafts={person.drafts}
                     onDraft={person.draft}
                     name={name}
                     onOpenFile={(task, index) => {
-                      const file = { task: task.number, index, name: task.files[index].name };
+                      const file = { task: task.number, index, name: task.files?.[index]?.name ?? '' };
                       setTab(chat.id, (t) => ({
                         files: t.files.some((f) => fileId(f) === fileId(file)) ? t.files : [...t.files, file],
                         selected: fileId(file),
                       }));
                     }}
-                    onSend={person.send}
+                    onAnswer={(task, draft) => person.send(asQuestion(task, work.tasks), draft)}
                     onReference={openReference}
-                    stale={person.stale.filter((t) => t.chat === chat.id)}
                     onSettle={(t, action) => person.settle(t.number, action)}
-                    opened={
-                      opened[chat.id] === undefined
-                        ? undefined
-                        : {
-                            chat: chat.id,
-                            task: opened[chat.id] as number,
-                            project: chat.project,
-                            onBack: () => setOpened((all) => ({ ...all, [chat.id]: undefined })),
-                          }
-                    }
+                    project={chat.project}
                   />
                 }
               />

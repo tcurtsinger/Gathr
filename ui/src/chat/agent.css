@@ -80,22 +80,12 @@
 .agent-panel .reply-body {
   font-size: 15px;
 }
-/* Its tasks: no header of their own, the heading above says what they are. */
-.agent-todos {
-  max-width: none;
-  gap: 0;
+/* Its tasks: the Tasks tab's rows, without the face, their text in line with the headings. */
+.agent-panel .task-rows {
+  margin: 0 -10px;
 }
-.agent-todos > div:first-child {
-  display: none;
-}
-.agent-todos ul {
-  gap: 2px;
-}
-.agent-todos li {
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 14px;
-}
-.agent-todos [data-status="active"] svg {
-  color: var(--attention);
+.agent-more {
+  align-self: flex-start;
+  margin-top: 4px;
+  font-size: 13px;
 }

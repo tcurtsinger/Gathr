@@ -12,6 +12,7 @@ import {
   type PauseScope,
   type Pauses,
   type Project,
+  type Task,
 } from '../api';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
@@ -80,10 +81,13 @@ interface Props {
   onOpenPlan?: (plan: number, version: number) => void;
   /**
    * The workspace, beside the chat. It is given the open agent's name and the place for its panel, which
-   * only the chat can draw. The chat asks again only when this function or the open agent changes, never
-   * for a streamed token, so the workspace's own tabs aren't drawn again with each one.
+   * only the chat can draw, and the chat's tasks and members for its Tasks tab. The chat asks again only when
+   * one of these changes, never for a streamed token, so the workspace's own tabs aren't drawn again with each one.
    */
-  workspace?: (agent?: { id: string; name: string; panel: ReactNode }) => ReactNode;
+  workspace?: (
+    agent: { id: string; name: string; panel: ReactNode } | undefined,
+    work: { tasks: Task[]; members: Member[] },
+  ) => ReactNode;
   /** A search hit's message to open at (none: a title, the latest), and when it was picked; done once shown. */
   found?: { message?: string; at: number };
   onFound?: () => void;
@@ -209,7 +213,11 @@ export function ChatView(props: Props) {
         : { id, name, panel: <div className="agent-slot" ref={setSlot} /> },
     [id, name],
   );
-  const beside = useMemo(() => workspace?.(tab), [workspace, tab]);
+  const { tasks: chatTasks, members: chatMembers } = state;
+  const beside = useMemo(
+    () => workspace?.(tab, { tasks: chatTasks, members: chatMembers }),
+    [workspace, tab, chatTasks, chatMembers],
+  );
   // Each agent's compaction asked for here: its turn, and its status until the live turn says more.
   const [compacts, setCompacts] = useState<Record<string, { turn: string; status: string }>>({});
   const compact = useCallback(

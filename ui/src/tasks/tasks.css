@@ -1,4 +1,4 @@
-/* The chat's Tasks tab: the prototype's TasksContent (DESIGN.md "Human tasks"). */
+/* The chat's Tasks tab (the tasks mock-up, New): the list, a task's view, and a question opened as itself. */
 .tasks {
   display: flex;
   flex-direction: column;
@@ -12,73 +12,69 @@
   overflow: auto;
   padding: 32px 24px;
 }
-.tasks-page,
-.tasks-pager {
+.tasks-scroll.tasks-listed {
+  padding: 20px 14px 32px;
+}
+.tasks-page {
   width: 100%;
   max-width: 600px;
   margin-inline: auto;
 }
 .tasks-page h2 {
-  margin: 0 0 10px;
+  margin: 0 0 6px;
   font-size: 20px;
   font-weight: 500;
   line-height: 1.35;
   letter-spacing: -0.02em;
-  outline: none;
 }
-.tasks-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  align-items: center;
-  margin: 0 0 28px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-.tasks-why {
-  margin: -12px 0 28px;
-  font-size: 15px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-.tasks-meta a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.tasks-answer {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.tasks-discuss {
+.tasks-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  font-size: 14px;
+  margin: -14px 0 14px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.tasks-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 0;
+  margin-left: -6px;
+  padding: 3px 8px 3px 2px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tasks-back:hover {
+  background: var(--raised);
+  color: var(--foreground);
+}
+.tasks-back > svg {
+  width: 15px;
+  height: 15px;
+}
+.task-view-line {
+  margin-bottom: 22px;
+}
+.task-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .tasks-footer {
-  flex: none;
-  padding: 0 24px;
-  border-top: 1px solid var(--border);
-}
-.tasks-pager {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  align-items: center;
-  height: 64px;
-  font-size: 12px;
-}
-.tasks-pager > span:nth-child(2) {
-  text-align: center;
-  color: var(--muted-foreground);
-}
-.tasks-pager > div {
   display: flex;
+  flex: none;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+  height: 64px;
+  padding: 0 24px;
+  border-top: 1px solid var(--border);
 }
 @container workspace (max-width: 440px) {
   .tasks-scroll {
@@ -86,10 +82,6 @@
   }
   .tasks-footer {
     padding: 0 20px;
-  }
-  .tasks-pager {
-    grid-template-columns: auto 1fr auto;
-    gap: 6px;
   }
 }
 .tasks-empty {
@@ -99,13 +91,14 @@
   margin: 0;
   color: var(--muted-foreground);
 }
-/* A stale agent task's facts (archive-stale/v1). */
+/* A task's facts: the label, then its words. */
 .task-fields {
   display: grid;
-  grid-template-columns: 96px 1fr;
-  gap: 12px;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 12px 14px;
   margin: 0;
   font-size: 14px;
+  line-height: 1.5;
 }
 .task-fields dt {
   color: var(--muted-foreground);
@@ -118,6 +111,21 @@
 .task-fields dd + dd {
   grid-column: 2;
 }
+.task-fields .task-why {
+  white-space: pre-wrap;
+}
+.task-from {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 500;
+}
+.task-from small {
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
 /* Gathr's checks run on a task (0036 C6, the task-pass and task-fail mock-ups). */
 .task-checks {
   display: grid;
@@ -179,10 +187,75 @@
   font-size: 12px;
   white-space: pre-wrap;
 }
-.task-number {
-  margin: 0 0 6px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+
+/* A question opened as itself: the asker's message with the block in its bubble, then the person's words. */
+.said-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.said-list > .tasks-top {
+  margin-bottom: -6px;
+}
+.said {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+}
+.said > .face {
+  margin-top: 25px;
+}
+.said-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+.said-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.said-line > b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.said-bubble {
+  max-width: 100%;
+  padding: 8px 13px;
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.said-bubble[data-open] {
+  align-self: stretch;
+}
+.said-bubble > p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.said-bubble > p + p {
+  margin-top: 10px;
+}
+.said.you .said-bubble {
+  background: color-mix(in oklab, var(--attention) 22%, var(--background));
+}
+.said-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.said-files a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
