@@ -8,7 +8,6 @@ import { MessageActions } from '../components/MessageActions';
 import { FailureNotice } from '../components/Notice';
 import { Outcome } from '../components/Outcome';
 import { PickedText } from '../components/PickedText';
-import { asked } from './ApprovalDock';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
 import type { Like } from './likes';
@@ -273,6 +272,16 @@ function AskApproval({
       {failure && <FailureNotice failure={failure} onReference={actions.reference} />}
     </>
   );
+}
+
+/** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
+function asked(a: Approval): { tool: string; command?: string } {
+  const input = a.input as { command?: unknown; check?: unknown } | null | undefined;
+  // Claude's hook asks for a wait check under the tool's name, with the command as `check`.
+  const claudeCheck = a.tool === 'mcp__gathr__wait' ? input?.check : undefined;
+  const tool = typeof claudeCheck === 'string' ? 'wait check' : a.tool;
+  const command = tool === a.tool ? input?.command : claudeCheck;
+  return { tool, command: typeof command === 'string' ? command : undefined };
 }
 
 /** Under the bubble, what the person can do about how the turn ended: Continue, Retry with its reference, or Sign in. */

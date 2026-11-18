@@ -324,8 +324,8 @@ until the chat closes. Each reply is an item of the chat's own, 13px in from the
 border line at the edge joins the thread's items, 14px apart, faces at 28px, names at 14px, words at 14.5px, and its
 words still end at the box's right edge. Threads never nest. An open thread of more than three replies shows its
 newest three under "Show 4 earlier replies" (13px muted); a reply that holds an approval waiting, a failed step or a
-running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit or the
-approval dock opens the thread, and its earlier replies, to show what it leads to.
+running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit, or the
+status line's "needs you", opens the thread, and its earlier replies, to show what it leads to.
 
 Messages agents write to each other sit in the thread of what the writer's work is about; a reply sits where the
 message it answers sits (the one Gathr carried into its turn from the agent it writes to). A message to an agent
@@ -384,14 +384,12 @@ face and the word alone.
 
 Work on a pull request reads in the thread of the task whose PR it is: a review's turns and the fix Gathr gave after it,
 each whole, with its name line, its task and its tick (0075).
-An approval keeps its card where the agent asked. Waiting approvals also dock above the
-composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's face,
-"Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in
-a code chip, then Show, Deny and Allow. It shows the oldest. Show scrolls to the card and
-focuses it. An answer being sent leaves the dock; a refused answer brings it back. With no approval
-waiting, the dock shows the oldest plan: the lead's face, "Needs you · 1 of 1", "Mira's plan:
-Tags on notes · 9 parts" and one button, Open, which opens the plan's tab at its newest version.
-The count is approvals and plans waiting on you; a plan still being checked isn't one.
+An approval keeps its card where the agent asked, with Deny and Allow. What waits on you is said once,
+on the status line ("Mira needs you"), and nowhere else above the composer (the owner, shown the panel that
+said it a second time: "Keep the line"). "needs you" is a button of its own on the line: a press goes to
+what is needed, the oldest first: an approval's card where it was asked, scrolled to and focused; else
+the plan waiting, opened in its tab at its newest version; else the question's message. The rest of the
+line opens its list as before. With nothing of the three in the chat, the line is one button.
 
 ### Status line
 
@@ -437,7 +435,7 @@ The registry's ConversationMap as published ([0039](docs/decisions/0039-conversa
 14px inside the chat pane's left edge. Its length is at most half the pane's height below the header and
 never more than 616px (44 ticks at 14px); it is centred in that height, with the same space above it as
 below it down to the pane's bottom edge. It shows from three ticks up and only with 44px left of the
-faces that hang left of the column's words (0075), so it never lies over a face, the text, the composer, the approval dock or the scroll-to-bottom button.
+faces that hang left of the column's words (0075), so it never lies over a face, the text, the composer or the scroll-to-bottom button.
 Only its ticks take the pointer.
 
 - Ticks: 12px long and 2px thick for a message from the person (foreground 22%), 6px for an ask's result in a
@@ -592,7 +590,7 @@ Tasks (0038). Other tab workflows remain governed by their decisions.
 
 Agents show their face beside their name, replacing the shared robot icon (0074): a drawn face on the
 background the person picked, the same everywhere, at 36 heading its panel, 24 on a message, in Summary's
-rows, the dock and a project's team, 20 in a stack and 16 on its tab. The face is hidden from screen readers
+rows and a project's team, 20 in a stack and 16 on its tab. The face is hidden from screen readers
 beside the name and carries the name where it stands alone. The background shows as picked, the same in light
 and dark; until one is picked it is a grey, #CECECE. The person and Gathr keep their own marks.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.

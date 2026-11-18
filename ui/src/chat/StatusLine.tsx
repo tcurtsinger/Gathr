@@ -15,14 +15,17 @@ interface Props {
   waiting?: Waiting;
   /** Opens an agent's tab in the panel. */
   onOpenAgent: (agent: string) => void;
+  /** Goes to what the person is needed for, when the chat holds it: "needs you" is then a button of its own. */
+  onNeeds?: () => void;
 }
 
 /**
  * How the team stands, in one quiet line above the message box (the status-line design, A): who needs you or can't
  * run, then who works, is stopped, blocked or waits, with three dots while an agent works. Always the same slot, so
- * nothing moves when the line comes or goes. It opens a row for each agent that isn't free.
+ * nothing moves when the line comes or goes. It opens a row for each agent that isn't free. What waits on the person
+ * is said here and nowhere else above the box (the owner: "Keep the line"): a press on "needs you" goes to it.
  */
-export function StatusLine({ crew, waiting, onOpenAgent }: Props) {
+export function StatusLine({ crew, waiting, onOpenAgent, onNeeds }: Props) {
   const busy = crew.filter((g) => g.standing !== 'free');
   const own = waiting?.gathr ?? [];
   // Gathr's own is said like an agent's, last (the status-line design, its row A).
@@ -48,14 +51,23 @@ export function StatusLine({ crew, waiting, onOpenAgent }: Props) {
   const silent = new Map(
     (waiting?.lines ?? []).flatMap((l) => (l.agent && l.silent_us ? [[l.agent, l.silent_us / 1000]] : [])),
   );
+  const needs = onNeeds && said[0]?.tone === 'needs' ? said[0] : undefined;
+  const listed = needs ? said.slice(1) : said;
   return (
     <div className="status-slot">
-      {said.length > 0 && (
+      {needs && (
+        <button type="button" className="status-line" onClick={onNeeds}>
+          <span className="status-words">
+            <span data-tone="needs">{needs.text}</span>
+          </span>
+        </button>
+      )}
+      {listed.length > 0 && (
         <Popover.Root open={open} onOpenChange={setOpen}>
           <Popover.Trigger asChild>
             <button type="button" className="status-line" aria-haspopup="dialog">
               <span className="status-words">
-                {said.map((p, i) => (
+                {listed.map((p, i) => (
                   <span key={p.tone} data-tone={p.tone}>
                     {i > 0 && ', '}
                     {p.text}

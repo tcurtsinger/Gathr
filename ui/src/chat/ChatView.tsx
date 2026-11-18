@@ -25,7 +25,6 @@ import { TopLine } from '../TopLine';
 import type { Draft, Refusal } from '../tasks/model';
 import { asQuestion } from '../tasks/rows';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
-import { ApprovalDock } from './ApprovalDock';
 import type { Questions } from './Asked';
 import { ChatMenu } from './ChatMenu';
 import { MarksContext, useChatMarks } from './faceMarks';
@@ -37,7 +36,7 @@ import { type PauseAction, type Run, runOf } from './pauses';
 import { addressed, nameable, unnamed } from './recipient';
 import { StatusLine } from './StatusLine';
 import { Summary } from './Summary';
-import { running } from './state';
+import { running, unanswered } from './state';
 import { type Actions, Thread, useStable } from './Thread';
 import { type Unsent, useChat } from './useChat';
 import { useWaiting } from './useWaiting';
@@ -167,18 +166,29 @@ export function ChatView(props: Props) {
   const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   threads.open(hit);
-  // An approval shown from the dock, until a search hit is opened after it.
+  // What the status line went to, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
-  const member = (id: string) => ({ id, name: members.find((m) => m.agent === id)?.name ?? 'An agent' });
-  const show = (request: string) => {
-    const asks = (m: (typeof timeline.all)[number]) =>
-      (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);
-    const item = timeline.all.find(asks);
+  /** Shows the block that holds what is needed, opening the thread it waits in, as a search hit does. */
+  const show = (holds: (own: Custom) => boolean, card?: string) => {
+    const item = timeline.all.find((m) => holds((m.metadata?.custom ?? {}) as Custom));
     if (!item) return;
     const topic = (item.metadata?.custom as Custom | undefined)?.topic;
-    // The dock opens the thread it waits in, as a search hit does.
     if (topic && !timeline.items.includes(item)) threads.reveal(topic);
-    setShown({ id: item.id as string, card: request, at: performance.now() });
+    setShown({ id: item.id as string, card, at: performance.now() });
+  };
+  // What the person is needed for, the oldest first: an approval where it was asked, else the plan waiting, else
+  // the question. "needs you" on the status line goes there; with none of them here, the line only opens its list.
+  const approval = state.approvals.find(unanswered);
+  const plan = state.plans.find((p) => p.state === 'waiting');
+  const question = state.tasks
+    .filter((t) => t.kind === 'person' && t.state === 'ready')
+    .sort((a, b) => a.created_us - b.created_us)[0];
+  const toNeed = () => {
+    const newest = plan?.versions.at(-1);
+    if (approval)
+      show((own) => !!own.approvals?.some((a) => a.request === approval.request), approval.request);
+    else if (plan && newest) props.onOpenPlan?.(plan.id, newest.n);
+    else if (question) show((own) => !!own.asked?.includes(question.number));
   };
 
   useFirstTokenReport(state.partial);
@@ -402,16 +412,14 @@ export function ChatView(props: Props) {
                 </>
               ) : (
                 <>
-                  <ApprovalDock
-                    approvals={state.approvals}
-                    plans={state.plans}
-                    asker={(t) => member(state.turns[t]?.agent ?? '')}
-                    lead={member}
-                    onShow={(a) => show(a.request)}
-                    onAnswer={approve}
-                    onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}
-                  />
-                  {!fresh && <StatusLine crew={crew} waiting={waiting} onOpenAgent={actions.openAgent} />}
+                  {!fresh && (
+                    <StatusLine
+                      crew={crew}
+                      waiting={waiting}
+                      onOpenAgent={actions.openAgent}
+                      onNeeds={approval || plan || question ? toNeed : undefined}
+                    />
+                  )}
                   <Composer
                     draft={draft}
                     picks={picks}
