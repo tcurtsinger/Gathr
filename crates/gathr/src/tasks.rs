@@ -215,6 +215,10 @@ pub struct Task {
     pub plan: Option<i64>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub look_into: bool,
+    /// The fix Gathr gave after a review (0053): its giver is the reviewer, who hears back on it,
+    /// but Gathr gave it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub by_gathr: bool,
 }
 
 /// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it

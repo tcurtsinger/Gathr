@@ -39,6 +39,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         waiting_on: Vec::new(),
         in_passing: false,
         look_into: false,
+        by_gathr: false,
         round: None,
         judged: None,
         notes: Vec::new(),
