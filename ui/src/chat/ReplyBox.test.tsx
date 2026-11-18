@@ -1,4 +1,4 @@
-// Replying in a thread (0076): Reply on a message, a task's message or a thread's line opens the one message box at
+// Replying in a thread (0076): Reply, in the row under a message's or a task's bubble, opens the one message box at
 // the thread's foot with focus in it; Escape and the cross close it and focus goes back; one box at a time; each thread
 // keeps its own draft; Enter sends the reply with what it answers and to whom; in a waiting question's thread the box
 // talks it over and the question stays open; the main box still sends a new main message; in a chat of one agent a
@@ -209,7 +209,7 @@ test('Reply opens the box at the thread’s foot with focus in it; Escape and th
   await expect.element(page.getByText('Made-up work words')).toBeVisible();
   const reply = await replyOn('Made-up work words');
   await expect.element(box()).toHaveFocus();
-  // The task's thread: its main message, its fold line, Ann's words, then the box, in reading order.
+  // The task's thread: its main message (its fold line in the row under it), Ann's words, then the box.
   const items = order();
   const words = items.findIndex((e) => e.textContent?.includes('Made-up work words'));
   const foot = items.findIndex((e) => e.classList.contains('thread-box'));
@@ -265,12 +265,12 @@ test('Enter sends the reply with the message it answers, to its author; a task�
     ]);
 });
 
-test('Reply on a thread’s line answers its main message: the person’s ask goes to the lead', async () => {
+test('Reply on a main message with replies answers it as its thread: the person’s ask goes to the lead', async () => {
   const sent = service();
   await render(<Open />);
   await expect.element(page.getByText('Plan the made-up walk')).toBeVisible();
-  const line = page.getByRole('button', { name: 'Reply', exact: true }).first();
-  await line.click();
+  // The person's own words offer Reply once they have a thread: the row under them holds it.
+  await replyOn('Plan the made-up walk');
   await expect.element(box()).toHaveFocus();
   await userEvent.keyboard('Made-up words to the lead{Enter}');
   await expect
@@ -337,17 +337,17 @@ test('in a chat of one agent a reply to an older message makes a thread under it
   const view = { open: new Map(), start: new Set<string>(), earlier: new Set<string>() };
   const timeline = toThread(solo(), [made('b', 'Ann')], [], new Map(), view);
   const read = timeline.items.map((m) => {
-    const own = m.metadata?.custom as { fold?: { count: number }; reply?: boolean } | undefined;
-    if (own?.fold) return `fold ${own.fold.count}`;
+    const own = m.metadata?.custom as { thread?: { count: number }; reply?: boolean } | undefined;
     const parts = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content;
     const text = parts.find((c) => c.type === 'text');
     const words = text && 'text' in text ? text.text : '';
-    return own?.reply ? `  ${words}` : words;
+    // A main message with replies has its thread's fold line in the row under its bubble.
+    const fold = own?.thread ? ` (${own.thread.count} replies)` : '';
+    return own?.reply ? `  ${words}` : `${words}${fold}`;
   });
   expect(read).toEqual([
     'Made-up first ask',
-    'Made-up first answer',
-    'fold 2',
+    'Made-up first answer (2 replies)',
     '  Made-up reply to the first answer',
     '  Made-up answer in the thread',
     'Made-up second ask',

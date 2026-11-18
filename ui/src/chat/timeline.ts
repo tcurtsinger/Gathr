@@ -16,9 +16,8 @@ import {
 } from './blocks';
 import { fold } from './fold';
 import { type Group, givenBy, grouped, hasEnding, lastBlocks } from './groups';
-import { askOf, foldOf, newest, stateOf, type Thread, threadsOf, timeOf } from './mains';
+import { askOf, newest, stateOf, type Thread, threadsOf, timeOf } from './mains';
 import {
-  type Answer,
   briefOf,
   type Cache,
   type Custom,
@@ -54,6 +53,9 @@ export function drawn(
   const numbered = new Map(state.tasks.map((t) => [t.number, t]));
   const { quiet, spoken } = talks(groups, state, crew, hasEnding);
   const worked = new Map([...quiet].map(([work, to]) => [to, work]));
+  /** A block `draw` draws nothing for: its words shown with the message they led to, or Gathr's with no line. */
+  const drawsNothing = (g: Group) =>
+    quiet.has(g) || (g.kind === 'gathr' && (heardIn.has(g.turn ?? '') || !heard(g, state, crew).length));
 
   /** Who a reply block is by and the task it is on: a block that follows its speaker's isn't named again. */
   const heading = (g: Group, topic?: string) => {
@@ -190,30 +192,11 @@ export function drawn(
       ...(!flat && { state: word }),
       ...(ask && quote && { result: { ask, quote } }),
     };
-    const runs: { speaker?: string } = {};
-    let main: ThreadMessageLike | null = null;
-    let mainGroup = t.main;
-    let mainAnswer: Answer | undefined;
     const replies = [...t.replies];
-    const drawMain = (g: Group | undefined) => {
-      mainAnswer = g && answerOf(g, t.topic, state);
-      return g ? draw(g, { ...mainPlace, answer: mainAnswer }, runs, !!ask) : null;
-    };
-    if (t.task) {
-      main = taskBlock(t, { ...mainPlace, answer: threadAnswer(t, undefined, state) });
-      taskMains.set(t.task.number, main.id as string);
-    } else {
-      main = drawMain(mainGroup);
-      // Its first block drew nothing (Gathr's words that opened a hear-back): the first that does is the message.
-      while (!main && replies.length) {
-        mainGroup = replies.shift();
-        main = drawMain(mainGroup);
-      }
-    }
-    if (!main) return;
-    items.push(main);
-    all.push(main);
-    if (mainGroup) spots.set(mainGroup, { id: main.id as string });
+    // Its first block draws nothing (Gathr's words that opened a hear-back): the first that does is the message.
+    let mainGroup = t.task ? undefined : t.main;
+    while (!t.task && mainGroup && drawsNothing(mainGroup)) mainGroup = replies.shift();
+    if (!t.task && !mainGroup) return;
     const reply: Place = { topic: t.topic, reply: true };
     const drawnReplies: { g: Group; item: ThreadMessageLike }[] = [];
     const run: { speaker?: string } = {};
@@ -222,22 +205,38 @@ export function drawn(
       if (item) drawnReplies.push({ g, item });
     }
     const replyItems = drawnReplies.map((r) => r.item);
+    const count = replyItems.length;
+    // The main message's own row holds its thread's fold line (0076): it is drawn knowing how its thread stands.
+    const drawMain = (done: boolean) => {
+      // Folded when the chat opened with it handled, or the person's own fold; open otherwise.
+      const open = view?.open.get(t.topic) ?? (view?.start ? !view.start.has(t.topic) : !done);
+      const thread = count ? { topic: t.topic, open, count } : undefined;
+      if (t.task) {
+        const answer = threadAnswer(t, undefined, state);
+        return { open, item: taskBlock(t, { ...mainPlace, thread, answer }) };
+      }
+      const g = mainGroup as Group;
+      const own = answerOf(g, t.topic, state);
+      // Reply on a main message answers it as its thread's: the person's own ask only once it has a thread.
+      const answer = g.kind === 'person' && !count ? undefined : threadAnswer({ ...t, main: g }, own, state);
+      return { open, item: draw(g, { ...mainPlace, thread, answer }, {}, !!ask) };
+    };
     // A turn that ended needing the person (Retry, Continue, Sign in) keeps its thread from being handled.
-    const done = settled && ![main, ...replyItems].some(needsYou);
+    let done = settled && !replyItems.some(needsYou);
+    let { open, item: main } = drawMain(done);
+    if (!main) return;
+    if (done && needsYou(main)) {
+      done = false;
+      ({ open, item: main } = drawMain(false));
+    }
+    if (!main) return;
     if (done) handled.add(t.topic);
-    const open = view ? (view.open.get(t.topic) ?? !(view.start ?? handled).has(t.topic)) : !done;
-    const answer = threadAnswer({ ...t, main: mainGroup }, mainAnswer, state);
-    const line = foldOf(t.topic, main, replyItems.length, replyItems.length > 0 && open, answer);
-    if (!line) return boxFor(t.topic);
+    if (t.task) taskMains.set(t.task.number, main.id as string);
+    items.push(main);
+    all.push(main);
+    if (mainGroup) spots.set(mainGroup, { id: main.id as string });
+    if (!count) return boxFor(t.topic);
     all.push(...replyItems);
-    items.push(
-      kept(cache, `fold-${t.topic}`, JSON.stringify(line), () => ({
-        id: `fold-${t.topic}`,
-        role: 'assistant',
-        content: [],
-        metadata: { custom: { fold: line } satisfies Custom },
-      })),
-    );
     const { shown, hid } = open ? newest(replyItems, !!view?.earlier.has(t.topic)) : { shown: [], hid: 0 };
     if (hid) {
       const earlier = { topic: t.topic, n: hid };

@@ -189,9 +189,9 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
     reactions: [given('found', 'gone', 0), given('found', 'c', 1), given('q', 'a', 2), given('u', 'c', 3)],
   };
   const screen = await render(<View state={before} />);
-  // The member's finding is a main message: its thumbs-up is on the row under it, with its fold line (0075).
+  // The member's finding is a main message: its thumbs-up is in the row under its bubble, with its fold line (0076).
   const said = screen.getByText('Made-up finding').element().closest('.said') as HTMLElement;
-  const finding = said.nextElementSibling as HTMLElement;
+  const finding = said.querySelector('.said-foot') as HTMLElement;
   const mark = page.elementLocator(finding).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' });
   await expect.element(mark).toBeVisible();
   // The emoji and the count; the names are hidden until asked for.

@@ -2,7 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Task } from '../api';
 import { mainSaid, openSaid, type Said as State, versionSaid } from '../tasks/rows';
 import type { Group } from './groups';
-import type { Answer, Custom, Fold, MainState } from './messages';
+import type { Custom, MainState } from './messages';
 import type { ChatState } from './state';
 
 /** A thread opened long shows this many of its newest replies under "Show N earlier replies". */
@@ -134,29 +134,6 @@ export function askOf(
   const about = state.turns[answers]?.topic ?? groups.find((g) => g.turn === answers && topics.has(g))?.key;
   if (about?.startsWith('m:') && asks.has(about.slice(2))) return about.slice(2);
   return state.tasks.find((t) => t.given_in === answers && t.ask)?.ask;
-}
-
-/**
- * The row under a main message: how many replies its thread has and whether it is open, with the main message's
- * thumbs-up; none when it has neither.
- */
-export function foldOf(
-  topic: string,
-  main: ThreadMessageLike,
-  count: number,
-  open: boolean,
-  answer?: Answer,
-): Fold | undefined {
-  const own = (main.metadata?.custom ?? {}) as Custom;
-  const agreed = own.agreed ?? own.said?.agreed;
-  if (!count && !agreed?.length) return undefined;
-  return {
-    topic,
-    open,
-    count,
-    ...(agreed?.length && { agreed, like: own.like ?? own.said?.like }),
-    ...(answer && { answer }),
-  };
 }
 
 /**

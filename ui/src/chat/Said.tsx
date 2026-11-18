@@ -168,24 +168,25 @@ export function EndRow({
 }
 
 /**
- * The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. ctions is the row on
- * its corner (MessageActions).
+ * The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. `foot` is the row under
+ * it (`Foot`): bubble and row share one box as wide as the wider of them, so the row's buttons end at the bubble's
+ * right edge, or after the row's own content when the bubble is narrower (said.css).
  */
 export function Bubble({
   quote,
   onQuote,
   mention,
-  actions,
+  foot,
   children,
 }: {
   quote?: string;
   /** The quote leads to what it quotes: an ask's result to its ask. */
   onQuote?: () => void;
   mention?: string;
-  actions?: ReactNode;
+  foot?: ReactNode;
   children?: ReactNode;
 }) {
-  return (
+  const bubble = (
     <div className="bubble">
       {quote &&
         (onQuote ? (
@@ -197,7 +198,13 @@ export function Bubble({
         ))}
       {mention && <span className="mention">@{mention}</span>}
       {children}
-      {actions}
+    </div>
+  );
+  if (!foot) return bubble;
+  return (
+    <div className="said-words">
+      {bubble}
+      {foot}
     </div>
   );
 }

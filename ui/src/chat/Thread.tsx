@@ -113,7 +113,7 @@ export function Thread(props: Props) {
     (to: string) => {
       const main = (m: ThreadMessageLike) => {
         const own = m.metadata?.custom as Custom | undefined;
-        return own?.topic === to && !own.reply && !own.fold && !own.earlier;
+        return own?.topic === to && !own.reply && !own.earlier && !own.box;
       };
       const id = all.current.find((m) => m.id === to || main(m))?.id;
       if (id) pick({ id, at: performance.now() });

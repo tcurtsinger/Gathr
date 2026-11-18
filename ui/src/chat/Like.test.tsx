@@ -1,6 +1,6 @@
-// The person's like (0057) and the row on a bubble's corner that holds it: shown on hover or keyboard focus, the
+// The person's like (0057) in the row under a bubble that holds it (0076): shown on hover or keyboard focus, the
 // button and the count give and take it back, "You" first in the names, which messages offer it, no hover text, and a
-// row that never covers a word of the bubble's first line.
+// row that is under the bubble, never over its words.
 import { useRef } from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
@@ -150,7 +150,7 @@ function View(props: {
   );
 }
 
-// The window's own size: the row's corner is measured as the person sees it.
+// The window's own size: the row is measured as the person sees it.
 beforeEach(async () => {
   await page.viewport(1440, 900);
 });
@@ -158,14 +158,15 @@ beforeEach(async () => {
 /** The message whose words hold `words`, its row and its Like button, if it has them. */
 function message(words: string) {
   const said = page.getByText(words, { exact: true }).element().closest('.said') as HTMLElement;
-  const row = said.querySelector(':scope > .said-main > .bubble > .message-actions') as HTMLElement | null;
-  const button = row?.querySelector('button') as HTMLButtonElement | undefined;
+  const row = said.querySelector(
+    ':scope > .said-main > .said-words > .said-foot > .message-actions',
+  ) as HTMLElement | null;
+  const button = row?.querySelector('[aria-label="Like"]') as HTMLButtonElement | undefined;
   return { said, row, button };
 }
 
-/** A message's thumbs-up: under a reply's words; a main message's, on the row under it (0075). */
-const thumbs = (said: Element) =>
-  (said.querySelector('.reacts') ?? said.nextElementSibling?.querySelector('.reacts')) as HTMLElement;
+/** A message's thumbs-up: in the row under its bubble (0076). */
+const thumbs = (said: Element) => said.querySelector('.said-foot .reacts') as HTMLElement;
 
 test('the row shows while its message is pointed at or holds focus, and not otherwise', async () => {
   const screen = await render(
@@ -275,7 +276,7 @@ test('an agent’s words, a pick, a waiting plan and talk offer the like; nothin
 });
 
 for (const width of [1440, 360]) {
-  test(`the row never covers a word of the bubble’s first line, at ${width} wide`, async () => {
+  test(`the row is under the bubble, never over its words, at ${width} wide`, async () => {
     // The 360 column is the chat beside an open panel at 1000 wide.
     await page.viewport(width === 360 ? 1000 : 1440, 900);
     const screen = await render(<View state={room()} width={width} />);
@@ -284,14 +285,11 @@ for (const width of [1440, 360]) {
       const { said, row } = message(words);
       await userEvent.hover(screen.getByText(words, { exact: true }).element());
       await expect.poll(() => getComputedStyle(row as HTMLElement).opacity).toBe('1');
-      const bubble = (row as HTMLElement).parentElement as HTMLElement;
-      const first =
-        bubble.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(bubble).paddingTop);
-      const below = (row as HTMLElement).getBoundingClientRect().bottom;
-      expect(below, `${words}: the row reaches ${below - first}px into the first line`).toBeLessThanOrEqual(
-        first,
-      );
-      // On its own bubble's corner, never past the column.
+      const bubble = said.querySelector('.bubble') as HTMLElement;
+      const top = (row as HTMLElement).getBoundingClientRect().top;
+      const under = bubble.getBoundingClientRect().bottom;
+      expect(top, `${words}: the row reaches ${under - top}px into the bubble`).toBeGreaterThanOrEqual(under);
+      // Never past the column.
       const column = said.getBoundingClientRect();
       expect((row as HTMLElement).getBoundingClientRect().right).toBeLessThanOrEqual(column.right + 6);
     }

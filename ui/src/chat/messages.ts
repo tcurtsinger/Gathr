@@ -64,20 +64,15 @@ export type Place = {
   result?: { ask: string; quote: string };
   /** What Reply on it answers; none where it offers no Reply. */
   answer?: Answer;
+  /** A main message with replies: its thread's fold line, in the row under its bubble (0076). */
+  thread?: Fold;
 };
 
-/**
- * The row under a main message: its thread's fold line (how many replies, and whether it is open), and the main
- * message's thumbs-up on the same row. With no replies it holds the thumbs-up alone.
- */
+/** A thread's fold line: how many replies, and whether it is open. */
 export interface Fold {
   topic: string;
   open: boolean;
   count: number;
-  agreed?: string[];
-  like?: Like;
-  /** Reply on the line: a reply in its thread, answering its main message. */
-  answer?: Answer;
 }
 
 /** A task the lead hands out, as its main message: from the task's record, as the Tasks view reads it. */
@@ -137,8 +132,6 @@ export type Custom = Place & {
   gathr?: boolean;
   /** A task handed out, as its main message. */
   brief?: Brief;
-  /** A thread's fold line. */
-  fold?: Fold;
   /** "Show N earlier replies" in a long thread. */
   earlier?: { topic: string; n: number };
   /** The message box at a thread's foot, open for a reply in it (0076). */

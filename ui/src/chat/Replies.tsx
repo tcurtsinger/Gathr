@@ -4,35 +4,23 @@ import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
 import { MarkdownText } from '../components/Markdown';
-import { MessageActions } from '../components/MessageActions';
 import { FailureNotice } from '../components/Notice';
 import { Outcome } from '../components/Outcome';
 import { PickedText } from '../components/PickedText';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
+import { Foot } from './Foot';
 import type { Like } from './likes';
 import { MainWord } from './MainWord';
 import type { Custom } from './messages';
-import {
-  AgentFace,
-  Bubble,
-  EndRow,
-  EndWord,
-  NameLine,
-  OnTask,
-  Reactions,
-  RoleWord,
-  Said,
-  When,
-  YouSaid,
-} from './Said';
+import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, RoleWord, Said, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
 import { StepsButton, useStepsOpen } from './Steps';
 import type { Approval } from './state';
-import { Earlier, FoldLine, TalkMessage } from './Talk';
+import { Earlier, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
 import { type Actions, useActions, useJump } from './Thread';
-import { ThreadBox, useReply } from './ThreadBox';
+import { ThreadBox } from './ThreadBox';
 import { FoundContext, PlanChip, WorkRow } from './TurnParts';
 
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
@@ -71,7 +59,7 @@ export function UserMessage() {
       }
     >
       {!stop && (
-        <Bubble>
+        <Bubble foot={<Foot fold={own.thread} answer={own.answer} />}>
           <div className="bubble-plain">
             <MessagePrimitive.Parts components={personParts} />
           </div>
@@ -108,7 +96,6 @@ export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
   if (own.box) return <ThreadBox topic={own.box.topic} />;
-  if (own.fold) return <FoldLine fold={own.fold} />;
   if (own.earlier) return <Earlier earlier={own.earlier} />;
   if (own.brief) return <TaskMain own={own} />;
   if (own.said) return <TalkMessage own={own} said={own.said} />;
@@ -126,8 +113,6 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
   const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked, result } = own;
   const actions = useActions();
   const jump = useJump();
-  const like = liking(own.like, actions);
-  const reply = useReply(own.answer);
   const [open, setOpen] = useStepsOpen(work);
   const small = own.reply;
   const words = !!own.text || !!plan || !!asked?.length;
@@ -188,7 +173,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
         <Bubble
           quote={result?.quote}
           onQuote={result && (() => jump(result.ask))}
-          actions={<MessageActions like={like} reply={reply} />}
+          foot={<Foot fold={own.thread} agreed={agreed} like={own.like} answer={own.answer} />}
         >
           <MessagePrimitive.Parts components={parts} />
           {plan && (
@@ -202,10 +187,6 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
             <Asked key={n} task={n} />
           ))}
         </Bubble>
-      )}
-      {/* A main message's thumbs-up is on the row under it, with its fold line (Talk.tsx). */}
-      {!!agreed?.length && !(own.topic && !small) && (
-        <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />
       )}
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />

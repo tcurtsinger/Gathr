@@ -15,7 +15,8 @@ const mains = () =>
     el.querySelector('.main-state-word')?.textContent ?? '',
   ]);
 const replies = () => [...document.querySelectorAll('.thread-messages > .said[data-reply]')];
-const foldOf = (main: Element) => main.nextElementSibling?.querySelector<HTMLButtonElement>('.fold-line');
+/** A main message's fold line: in the row under its bubble (0076). */
+const foldOf = (main: Element) => main.querySelector<HTMLButtonElement>('.said-foot .fold-line');
 const mainWith = (words: string) =>
   [...document.querySelectorAll('.thread-messages > .said:not([data-reply])')].find((el) =>
     el.textContent?.includes(words),
@@ -80,9 +81,9 @@ test("a review and the fix after it read in the work task's thread, never on the
   expect(mains().map(([who]) => who)).toEqual(['You', 'Lead']);
   const vale = replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Vale');
   expect(vale).toBeDefined();
-  // After the task's own fold line: in its thread.
-  const fold = mainWith('Add the feature').nextElementSibling as Element;
-  expect(fold.compareDocumentPosition(vale as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // After the task's own message: in its thread.
+  const task = mainWith('Add the feature');
+  expect(task.compareDocumentPosition(vale as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test("a reply on another task than its thread's says which", async () => {
@@ -201,13 +202,13 @@ const liked = (state: ChatState, message: string): ChatState => ({
   reactions: [{ message, agent: state.members[1].agent, time: '2026-11-18T21:00:00Z' }],
 });
 
-test("a main message's thumbs-up sits on its fold line's row, after the replies button", async () => {
+test("a main message's thumbs-up sits in the row under its bubble, after the replies button", async () => {
   const state = chat('askAtWork');
   await render(<View state={liked(state, state.plans[0].versions[0].message as string)} />);
-  await expect.poll(() => document.querySelector('.fold .react')).not.toBeNull();
+  await expect.poll(() => document.querySelector('.said-foot .react')).not.toBeNull();
   const main = mainWith('version 1');
-  const row = main.nextElementSibling as HTMLElement;
-  expect(main.querySelector('.reacts')).toBeNull();
+  const row = main.querySelector('.said-foot') as HTMLElement;
+  expect(main.querySelectorAll('.reacts')).toHaveLength(1);
   const line = (row.querySelector('.fold-line') as HTMLElement).getBoundingClientRect();
   const react = (row.querySelector('.react') as HTMLElement).getBoundingClientRect();
   expect(react.left).toBeGreaterThan(line.right);
@@ -244,11 +245,11 @@ test('a main message with a thumbs-up and no replies shows it with no replies bu
   await render(<View state={liked(more, 'lone-words')} />);
   await expect.element(page.getByText('Made-up lone words')).toBeVisible();
   const main = mainWith('Made-up lone words');
-  const row = main.nextElementSibling as HTMLElement;
-  expect(row.matches('.fold')).toBe(true);
+  const row = main.querySelector('.said-foot') as HTMLElement;
   expect(row.querySelector('.react')).not.toBeNull();
   expect(row.querySelector('.fold-line')).toBeNull();
-  expect(main.querySelector('.reacts')).toBeNull();
+  // No thread item follows it.
+  expect(!!main.nextElementSibling?.matches('[data-reply], [data-thread-item]')).toBe(false);
 });
 
 test('a thread whose turn failed is not handled: it opens with Retry and its reference in view', async () => {
@@ -274,7 +275,7 @@ test('a chat of one agent is one timeline: no state word and no fold line', asyn
   const state = chat('askDone');
   await render(<View state={{ ...state, members: state.members.slice(0, 1) }} />);
   await expect.element(page.getByText('Add tags to notes', { exact: true })).toBeVisible();
-  expect(document.querySelectorAll('.main-state, .fold, [data-reply]')).toHaveLength(0);
+  expect(document.querySelectorAll('.main-state, .fold-line, [data-reply]')).toHaveLength(0);
 });
 
 test('what came before the chat became a team stays one timeline; threads begin after', async () => {
@@ -286,7 +287,7 @@ test('what came before the chat became a team stays one timeline; threads begin 
   await expect.element(page.getByText('Add the tags table')).toBeVisible();
   const ask = mainWith('Add tags to notes');
   expect(ask.querySelector('.main-state')).toBeNull();
-  expect(ask.nextElementSibling?.classList.contains('fold')).toBe(false);
+  expect(foldOf(ask)).toBeNull();
   expect(mains().map(([, s]) => s)).toContain('Done');
 });
 
@@ -304,8 +305,8 @@ test('an old chat, tied by task and answers alone, reads as main messages with t
   await (foldOf(mainWith('@Rowan')) as HTMLButtonElement).click();
   await expect.element(page.getByText('Sorted, herons first')).toBeVisible();
   const rowan = replies().find((r) => r.textContent?.includes('Sorted, herons first'));
-  const fold = mainWith('@Rowan').nextElementSibling as Element;
-  expect(fold.compareDocumentPosition(rowan as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const task = mainWith('@Rowan');
+  expect(task.compareDocumentPosition(rowan as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
 test('a search hit in a folded thread opens the thread at the hit', async () => {

@@ -23,7 +23,7 @@ Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.m
   - It sits under the words it was given to: a reply block's shown text, and each message of an exchange between agents. A reply block shows its turn's last text. A thumbs-up on an earlier text of the turn, which folds into the turn's steps, is kept and the API carries it, but the window draws none under the block: it would sit under words the giver didn't agree with.
 - **C3: no role text.** The briefing names the tool and says what it does, as it does for every tool. It doesn't tell agents to agree this way, and nothing refuses a message for its wording. That agents agree with a thumbs-up and not a message is measured later, in Stage 3's trial, so 6.6 stays Partly.
 - **C4: the person's like** (owner, 2026-11-18: "Liking something means Approved or Agree with"). The same thumbs-up,
-  given by the person from the row on a message's bubble or by pressing its count; it means "approved" or "I agree".
+  given by the person from the row under a message's bubble (0076) or by pressing its count; it means "approved" or "I agree".
   - **Kept** in `reactions` with `agent_id` `person` (never an agent's id: those are 16 hex characters), no migration.
     `PUT /api/chats/<id>/messages/<message>/like` gives it, `DELETE` the same takes it back. History and the live
     `reaction` event carry it as `{"message", "agent": "person", "time"}`; a take-back sends the same with

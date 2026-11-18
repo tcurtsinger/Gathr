@@ -3,7 +3,7 @@
 Status: accepted (owner, 2026-11-18: the threads mock-up's `#replybox` A and `#solo`, and the reply-react
 mock-up's `#actions` B; the threads build plan's PR 4). Date: 2026-11-18.
 
-Built: yes (the reply's target kept and checked, its turn placed and told, the box at a thread's foot). Proof: `crates/gathr/tests/replies.rs`, `crates/gathr/tests/words.rs`, `ui/src/chat/ReplyBox.test.tsx`.
+Built: yes (the reply's target kept and checked, its turn placed and told, the box at a thread's foot). Proof: `crates/gathr/tests/replies.rs`, `crates/gathr/tests/words.rs`, `ui/src/chat/ReplyBox.test.tsx`, `ui/src/chat/under.test.tsx`.
 
 Amends [0065](0065-questions-in-the-leads-words.md) (in the chat a question is talked over with Reply; the Discuss
 switch stays in the Tasks view) and [0028](0028-team-chats.md) (the send takes what a reply answers). Builds on
@@ -13,15 +13,14 @@ talked over where it was asked).
 
 ## The choice
 
-- **Reply opens the one message box at the foot of a thread.** Reply sits on a message's corner row, before the
-  like (`#actions` B), and as a plain word on its thread's line after the thumbs-up, shown while the row is pointed
-  at or holds keyboard focus. It opens the thread if it was folded and places the one `Composer` after the thread's
+- **Reply opens the one message box at the foot of a thread.** Reply sits in the row under a message's bubble,
+  before the like, shown while the message is pointed at or holds keyboard focus (amended below). It opens the thread if it was folded and places the one `Composer` after the thread's
   last reply shown: one row, the words, who gets it by Send ("To Ann"), a cross, and Send. Focus goes into it;
   Escape (once no `@` list is open) or the cross closes it, and focus goes back to the Reply that opened it. One box
   at a time: Reply elsewhere moves it. Each thread keeps its own draft beside the chat's (by chat and thread, while
   the app runs, as the chat's draft is). The box at the chat's foot still sends new main messages, and keeps Stop.
 - **Who gets it:** a message's author; a line of Gathr's, the lead (in a chat of one agent, that agent); a task's
-  message or its thread's line, the task's owner; the person's own ask, by its thread's line, the lead; an agent's
+  message, the task's owner; the person's own ask, once it has replies, the lead; an agent's
   question, its asker. `@` picks another, as in the main box. The person's own messages and Gathr's own question
   offer no Reply; a removed agent's message offers none, as no reply can reach it.
 - **The target is kept on the reply:** `messages.reply_to` (the message it answers) or `messages.reply_task` (a
@@ -85,3 +84,25 @@ talked over where it was asked).
 - **The reply's own state** is its thread's: it has no state word of its own, as no reply has.
 - **A failed reply** shows with Retry at the chat's foot, as a failed message does, not in its thread.
 - **Not verified:** a real engine reading the `reply` line, macOS and WebKit, and the box with a screen reader.
+
+## Amended: the buttons under the bubble (owner, 2026-11-18)
+
+The owner's words: "Hovering over a message shows them. They live in a dedicated spot under the bottom right of the
+bubble. On the same row as the replies and reactions." This replaces the corner row (`#actions` B) and the plain word
+Reply on a thread's line:
+
+- **One row under a message's bubble** (`ui/src/chat/Foot.tsx`), the same on every message that can have one: a main
+  message's fold line when it has replies, the thumbs-up count, then Reply and Like at the right, icons only. The fold
+  line is no item of its own any more: it is the main message's, drawn with it.
+- **The buttons show while the message is pointed at or holds keyboard focus,** by opacity, in a spot the row always
+  keeps, so nothing moves when they show. The bubble and the row share one box as wide as the wider of the two, so the
+  buttons end at the bubble's bottom right edge, or follow the fold line and the count under a narrower bubble. CSS
+  alone: no layout measured in script, nothing only Chromium has.
+- **Reply on a main message answers it as its thread's,** folded or open, as the word did: a task's message, about the
+  task to its owner; an agent's question, to its asker; the person's own ask, once it has replies, to the lead.
+- **What it costs:** the row is 24px, 2px under the bubble, and gives back 14px of the gap after it. From a bubble's
+  bottom to the next name line: 32px after a main message with nothing under it (20px before), 26px after a reply in a
+  thread (14px before); 26px from a main message with replies to its first reply (48px when its fold line was a row of
+  its own), and 32px after a message with a count (51px). Measured in the browser at 900 wide.
+- **It closes the corner row's faults:** over the name line and its steps button on a short bubble, and over a main
+  message's state word.

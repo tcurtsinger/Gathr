@@ -3,9 +3,9 @@ import { IconButton } from './IconButton';
 import './message-actions.css';
 
 /**
- * The small row on a message's bubble, at its top right corner (DESIGN.md: MessageActions): shown while the message
- * is pointed at or holds keyboard focus. Reply first (0076), then the person's like (0057); a message offers what its
- * kind allows (`chat/answer.ts`, `chat/likes.ts`), and a row with neither isn't drawn.
+ * A message's buttons, at the right of the row under its bubble (DESIGN.md: MessageActions, `chat/Foot.tsx`): shown
+ * while the message is pointed at or holds keyboard focus. Reply first (0076), then the person's like (0057); a message
+ * offers what its kind allows (`chat/answer.ts`, `chat/likes.ts`), and with neither there are none.
  */
 export function MessageActions({
   like,
