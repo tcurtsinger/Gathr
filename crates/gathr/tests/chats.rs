@@ -155,6 +155,147 @@ fn a_claude_code_that_never_answers_its_version_fails_the_send_in_seconds() {
     assert!(failed, "no engine_version failure in the trace: {trace}");
 }
 
+/// How many times the stand-in answered `--version`.
+fn version_runs(file: &Path) -> usize {
+    std::fs::read_to_string(file)
+        .unwrap_or_default()
+        .lines()
+        .count()
+}
+
+/// Says "Say hi" in `chat` and waits for its `n`th turn to fail: `engine_exits` ends each engine
+/// with its turn, so every send starts a new one.
+fn started(service: &TestService, chat: &str, n: usize) {
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    service.wait_for(chat, 10, &format!("turn {n} to fail"), |h| {
+        let turns = h["turns"].as_array().map_or(0, Vec::len);
+        turns == n && turn_status(h) == Some("failed")
+    });
+}
+
+/// Claude Code's version is read once per engine file (0024): a second start on the same file,
+/// unchanged, runs no `--version`.
+#[test]
+fn a_second_start_on_the_same_engine_file_reads_its_version_once() {
+    let data = TempDir::new();
+    let versions = data.0.join("versions.txt");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_VERSIONS", &versions),
+        ],
+    );
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    started(&service, &chat, 1);
+    started(&service, &chat, 2);
+    assert_eq!(version_runs(&versions), 1);
+}
+
+/// A file that changed where it is (a new size or modified time) is asked again.
+#[test]
+fn an_engine_file_that_changed_is_asked_its_version_again() {
+    let data = TempDir::new();
+    let versions = data.0.join("versions.txt");
+    let engine = data
+        .0
+        .join("engine")
+        .join(common::replay_engine().file_name().unwrap());
+    std::fs::create_dir_all(engine.parent().unwrap()).unwrap();
+    std::fs::copy(common::replay_engine(), &engine).unwrap();
+    let service = TestService::start_with(
+        &data.0,
+        &[
+            ("GATHR_CLAUDE_PATH", &engine),
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_VERSIONS", &versions),
+        ],
+    );
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    started(&service, &chat, 1);
+    let file = std::fs::File::options().write(true).open(&engine).unwrap();
+    let later = std::time::SystemTime::now() + Duration::from_secs(3600);
+    file.set_modified(later).unwrap();
+    drop(file);
+    started(&service, &chat, 2);
+    assert_eq!(version_runs(&versions), 2);
+}
+
+/// A `--version` that didn't answer in time isn't remembered: the next start asks again, and can
+/// run.
+#[test]
+fn a_version_that_wasnt_read_is_asked_again_at_the_next_start() {
+    let data = TempDir::new();
+    let (versions, hold) = (data.0.join("versions.txt"), data.0.join("hold"));
+    std::fs::write(&hold, "").unwrap();
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_VERSIONS", &versions),
+            ("GATHR_REPLAY_VERSION_HOLD", &hold),
+        ],
+    );
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_eq!(sent.status, 500, "{}", sent.body);
+    let why = sent.json()["why"].as_str().unwrap_or_default().to_string();
+    assert!(why.ends_with("it didn't answer in 5 s"), "{why}");
+    std::fs::remove_file(&hold).unwrap();
+    started(&service, &chat, 2);
+    assert_eq!(version_runs(&versions), 2);
+}
+
+/// A version read as too old stays refused on the next start, in the same words and with the same
+/// event, without asking the file again.
+#[test]
+fn a_claude_code_read_as_too_old_is_refused_again_without_asking_again() {
+    let data = TempDir::new();
+    let versions = data.0.join("versions.txt");
+    let service = TestService::with_engine(
+        &data.0,
+        &[
+            ("GATHR_REPLAY", &recording("engine_exits")),
+            ("GATHR_REPLAY_VERSIONS", &versions),
+            ("GATHR_REPLAY_VERSION", Path::new("2.1.183 (Claude Code)")),
+        ],
+    );
+    let chat = service.new_chat();
+    service.signed_in(&data.0);
+    let path = format!("/api/chats/{chat}/messages");
+    let why = "Claude Code 2.1.183 is too old: Gathr needs 2.1.318 or later";
+    for _ in 0..2 {
+        let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+        assert_eq!(
+            (sent.status, &sent.json()["why"]),
+            (500, &json!(why)),
+            "{}",
+            sent.body
+        );
+        let (ok, trace) = gathr(
+            &data.0,
+            &["diag", "trace", sent.json()["ref"].as_str().unwrap()],
+        );
+        assert!(ok, "{trace}");
+        let events = trace["events"].as_array().unwrap();
+        let start = events.iter().find(|e| e["name"] == "gathr.engine.start");
+        let start = start.unwrap_or_else(|| panic!("no engine start in the trace: {trace}"));
+        let found = (&start["error_type"], &start["attrs"]["version"]);
+        assert_eq!(
+            found,
+            (&json!("engine_version"), &json!("2.1.183")),
+            "{start}"
+        );
+    }
+    assert_eq!(version_runs(&versions), 1);
+}
+
 /// 0019: why the engine stopped is on the failed turn itself, and its reference finds it.
 #[test]
 fn an_engine_that_exits_mid_turn_fails_it_with_its_last_error_line() {

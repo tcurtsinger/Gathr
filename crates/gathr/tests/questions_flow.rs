@@ -95,28 +95,35 @@ impl Room {
             .to_string()
     }
 
-    /// Lets each of `held` go on, one `go` at a time, until each has ended.
+    /// Lets each of `held` go on, one `go` at a time, until each has ended. The next `go` waits
+    /// until the last one is taken and its turn has ended: a held turn takes its `go` before it
+    /// ends, and one written in between was left for the next held turn, which then ran through.
     fn release(&self, held: &[&str]) {
         let go = self.data.join("go");
-        until(30, &format!("{held:?} to end"), || {
+        let ended = || {
             let history = self.history();
             let turns = history["turns"].as_array().cloned().unwrap_or_default();
-            let ended = |id: &&str| {
-                let turn = turns.iter().find(|t| t["id"] == *id);
+            let over = |id: &&&str| {
+                let turn = turns.iter().find(|t| t["id"] == **id);
                 turn.is_some_and(|t| {
                     ["done", "failed", "stopped"]
                         .iter()
                         .any(|s| t["status"] == *s)
                 })
             };
-            if held.iter().all(ended) {
-                return Some(());
+            held.iter().filter(over).count()
+        };
+        loop {
+            let before = ended();
+            if before == held.len() {
+                return;
             }
-            if !go.exists() {
-                std::fs::write(&go, "").unwrap();
-            }
-            None
-        });
+            std::fs::write(&go, "").unwrap();
+            let what = format!("one of {held:?} to take its go and end");
+            until(30, &what, || {
+                (!go.exists() && ended() > before).then_some(())
+            });
+        }
     }
 
     fn answer(&self, answers: Value) -> Value {

@@ -94,7 +94,7 @@ impl Task {
         // An engine too old for the switches it's given fails here by its version, not later
         // with whatever it prints about an unknown switch.
         let path = program.clone();
-        let (version, usable) = tokio::task::spawn_blocking(move || command::version(&path))
+        let (version, usable) = tokio::task::spawn_blocking(move || command::known_version(&path))
             .await
             .unwrap_or_else(|e| {
                 (
