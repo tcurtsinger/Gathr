@@ -405,3 +405,31 @@ test('a saved colour that is not one of the twelve shows pressed on the +', asyn
   expect(pressed.elements().map((b) => b.getAttribute('aria-label'))).toEqual(['Custom']);
   await expect.poll(() => drawnOn(screen.getByRole('img', { name: 'Ann' }))).toBe('rgb(127, 181, 168)');
 });
+
+test('the + keeps a custom colour after a ready one is pressed, and pressing it picks that colour again', async () => {
+  service([agent({ name: 'Ann', face_seed: 'Ann', background: '#7FB5A8' })], listed);
+  const screen = await render(<Agents onReference={() => {}} />);
+  const face = screen.getByRole('img', { name: 'Ann' });
+  const custom = screen.getByRole('button', { name: 'Custom' });
+  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
+
+  await screen.getByRole('button', { name: 'Sky' }).click();
+  await expect.element(custom).toHaveAttribute('aria-pressed', 'false');
+  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(127, 181, 168)');
+  expect(drawnOn(face)).toBe('rgb(107, 203, 247)');
+
+  await custom.click();
+  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
+  await expect.element(custom).toHaveAttribute('aria-expanded', 'true');
+  await expect.element(screen.getByRole('textbox', { name: 'Hex' })).toHaveValue('7FB5A8');
+  expect(drawnOn(face)).toBe('rgb(127, 181, 168)');
+
+  // Dialled in here, then a ready colour: Cancel forgets the dialled one with the rest of the edits.
+  await screen.getByRole('textbox', { name: 'Hex' }).fill('e6a4e1');
+  await userEvent.keyboard('{Escape}');
+  await screen.getByRole('button', { name: 'Rose' }).click();
+  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(230, 164, 225)');
+  await screen.getByRole('button', { name: 'Cancel' }).click();
+  await expect.element(custom).toHaveAttribute('aria-pressed', 'true');
+  expect(getComputedStyle(custom.element()).backgroundColor).toBe('rgb(127, 181, 168)');
+});

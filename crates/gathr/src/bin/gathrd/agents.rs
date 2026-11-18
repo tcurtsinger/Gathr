@@ -27,7 +27,8 @@ pub fn routes() -> Router<Arc<State>> {
 }
 
 /// What the API takes: each field left out stays, and `null` clears a model or effort, which then
-/// falls back to the engine's own default, or a face's gender or skin tone, which the seed then picks, or its background, which is then a grey.
+/// falls back to the engine's own default, or a face's gender or skin tone, which the seed then
+/// picks, or its background, which is then a grey.
 #[derive(Deserialize)]
 struct Body {
     name: Option<String>,

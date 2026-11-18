@@ -6,19 +6,28 @@ import { BACKGROUNDS, drawnOn } from '../faces/backgrounds';
 interface Props {
   /** #RRGGBB, or null until the person picks: a grey. */
   background: string | null;
-  onChange: (background: string) => void;
+  /** The last colour not among the twelve, while the form is open: + keeps it after a ready colour is pressed. */
+  remembered: string | null;
+  /** A colour picked; custom when it came from the picker and isn't one of the twelve. */
+  onChange: (change: { background: string; custom?: string }) => void;
 }
+
+/** A colour that isn't one of the twelve: it shows on the +. */
+export const isCustom = (hex: string | null | undefined): hex is string =>
+  !!hex && !BACKGROUNDS.some(([, ready]) => ready === hex);
 
 /**
  * Settings > Agents' Background (0074): twelve ready colours, then + for any colour, which opens the picker under
- * the row. A colour not among the twelve shows on the +, pressed.
+ * the row. A colour not among the twelve shows on the +, pressed. After a ready colour is pressed, the + still shows
+ * the last such colour, not pressed, until the form's edits are dropped (Cancel, Save, another agent); pressing it
+ * picks that colour again and opens the picker at it. With none, + only opens the picker.
  */
-export function BackgroundField({ background, onChange }: Props) {
+export function BackgroundField({ background, remembered, onChange }: Props) {
   const picker = useId();
   const row = useRef<HTMLSpanElement>(null);
   const [open, setOpen] = useState(false);
-  const custom =
-    background !== null && !BACKGROUNDS.some(([, hex]) => hex === background) ? background : null;
+  const picked = isCustom(background);
+  const custom = picked ? background : remembered;
   return (
     <fieldset className="agent-field">
       <legend>Background</legend>
@@ -31,7 +40,7 @@ export function BackgroundField({ background, onChange }: Props) {
             style={{ background: hex }}
             aria-label={name}
             aria-pressed={background === hex}
-            onClick={() => onChange(hex)}
+            onClick={() => onChange({ background: hex })}
           />
         ))}
         <button
@@ -39,9 +48,10 @@ export function BackgroundField({ background, onChange }: Props) {
           className="swatch swatch-custom"
           style={custom ? { background: custom } : undefined}
           aria-label="Custom"
-          aria-pressed={custom !== null}
+          aria-pressed={picked}
           aria-expanded={open}
           popoverTarget={picker}
+          onClick={() => !picked && custom && onChange({ background: custom })}
         >
           {!custom && <Plus aria-hidden="true" />}
         </button>
@@ -51,7 +61,7 @@ export function BackgroundField({ background, onChange }: Props) {
         label="Custom"
         anchor={row}
         value={drawnOn(background)}
-        onChange={onChange}
+        onChange={(hex) => onChange({ background: hex, ...(isCustom(hex) && { custom: hex }) })}
         onToggle={setOpen}
       />
     </fieldset>

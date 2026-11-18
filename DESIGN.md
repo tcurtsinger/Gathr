@@ -536,7 +536,7 @@ one shared editor: Face, Gender, Skin tone, Background, Account, Model, Effort, 
 light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
 for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
 row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
-not among the twelve shows on the +, pressed. Escape or a click outside closes the picker, not Settings. Each
+not among the twelve shows on the +, pressed, and stays on it, not pressed, while a ready colour is picked. Escape or a click outside closes the picker, not Settings. Each
 redraws the face at once and is saved with Save. A gender or tone never set shows what the face's seed picked;
 a background never set is the grey, with no swatch pressed (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new

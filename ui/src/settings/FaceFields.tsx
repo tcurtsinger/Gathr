@@ -8,6 +8,8 @@ export interface FaceChange {
   gender?: Gender;
   skin?: number;
   background?: string;
+  /** Background's last colour not among the twelve, kept with the form's edits only. */
+  custom?: string;
 }
 
 interface Props {
@@ -18,6 +20,7 @@ interface Props {
   gender: Gender | null;
   skin: number | null;
   background: string | null;
+  remembered: string | null;
   onChange: (change: FaceChange) => void;
 }
 
@@ -26,7 +29,7 @@ interface Props {
  * the seed picked, and choosing one keeps it from then on. Shuffle picks a new seed and keeps the gender and tone
  * shown, which sets them, so a face never changes gender or tone that way.
  */
-export function FaceFields({ id, name, seed, gender, skin, background, onChange }: Props) {
+export function FaceFields({ id, name, seed, gender, skin, background, remembered, onChange }: Props) {
   const picked = faceOptions(seed, { gender, skin });
   return (
     <>
@@ -76,7 +79,7 @@ export function FaceFields({ id, name, seed, gender, skin, background, onChange 
           ))}
         </span>
       </fieldset>
-      <BackgroundField background={background} onChange={(picked) => onChange({ background: picked })} />
+      <BackgroundField background={background} remembered={remembered} onChange={onChange} />
     </>
   );
 }

@@ -9,6 +9,7 @@ import type { Gender } from '../faces/options';
 import { listen } from '../live';
 import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
+import { isCustom } from './BackgroundField';
 import { FaceFields } from './FaceFields';
 import { choices, chosen, efforts, firstChoice, runs } from './models';
 import './agents.css';
@@ -133,6 +134,8 @@ type Fields = {
   gender: Gender | null;
   skin: number | null;
   background: string | null;
+  /** Background's last colour not among the twelve, while the form is open: never sent. */
+  custom?: string;
 };
 
 const modes: [Approvals, string, string][] = [
@@ -254,6 +257,7 @@ function AgentForm(props: FormProps) {
         gender={gender}
         skin={skin}
         background={background}
+        remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}
         onChange={edit}
       />
       <label className="agent-field">
