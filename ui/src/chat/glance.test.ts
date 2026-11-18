@@ -2,6 +2,7 @@ import { expect, test } from 'vitest';
 import type { Member, Standing, Task, Turn, Waiting } from '../api';
 import type { Mark } from '../components/marks';
 import { glances, markOf } from './glance';
+import { currentRound } from './plan';
 import { type ChatState, empty } from './state';
 import { clock } from './team';
 
@@ -119,6 +120,24 @@ test('a lead whose question is being discussed reads as working, not as asking t
   expect([lead(state)?.standing, lead(state)?.doing]).toEqual(['working', 'Working']);
   const back = { ...state, tasks: [{ ...question, state: 'ready' as const }] };
   expect([lead(back)?.standing, lead(back)?.doing]).toEqual(['needs', 'Asked you a question']);
+});
+
+test("Team counts an agent's tasks as Round does, leaving its plan checks out", () => {
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { r: { ...turn('r', 'a', 'done'), position: 1 } },
+    tasks: [
+      task(1, 'b', { giver: 'a', given_in: 'r', state: 'done' }),
+      task(2, 'b', { giver: 'a', given_in: 'r' }),
+      task(3, 'b', { kind: 'review', given_in: 'r', checks: 1 }),
+      task(4, 'b', { kind: 'review', given_in: 'r', checks: 1, state: 'done' }),
+    ],
+  };
+  const member = glances(state, new Map()).find((g) => g.member.agent === 'b');
+  const round = currentRound(state)?.steps.filter((s) => s.agent === 'b') ?? [];
+  expect([member?.done, member?.total]).toEqual([1, 2]);
+  expect([round.filter((s) => s.state === 'done').length, round.length]).toEqual([1, 2]);
 });
 
 test('an agent whose glance reads as before keeps its object, so its panel is not drawn again', () => {
