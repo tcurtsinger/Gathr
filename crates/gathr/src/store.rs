@@ -178,7 +178,7 @@ pub fn chat_exists(conn: &Connection, chat: &str) -> Result<bool, Error> {
 /// working at once never interleave, and a turn not started yet shows last.
 pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
-        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.turn_id IS NULL, m.ts, m.id"
+        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.ts, m.id"
     ))?;
     let messages = stmt
         .query_map([chat], message_row)?
@@ -230,12 +230,11 @@ const MESSAGE: &str =
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
-/// said in no turn (0051) reads after the block of whoever spoke last before it, and first when
-/// nobody had.
+/// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
+/// that had a message by then, by time among that turn's, and first when no turn had.
 const PLACE: &str = "CASE WHEN m.turn_id IS NOT NULL THEN t.position ELSE COALESCE(
-     (SELECT u.position FROM messages x JOIN turns u ON u.id = x.turn_id
-      WHERE x.chat_id = m.chat_id AND x.ts <= m.ts AND x.role = 'assistant' AND u.position IS NOT NULL
-      ORDER BY x.ts DESC, x.id DESC LIMIT 1), 0) END";
+     (SELECT max(u.position) FROM messages x JOIN turns u ON u.id = x.turn_id
+      WHERE x.chat_id = m.chat_id AND x.ts <= m.ts), 0) END";
 
 /// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {

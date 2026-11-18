@@ -393,8 +393,9 @@ fn answer_one(
             words::name_of(tx, agent)?
         );
     }
-    let mut sent =
-        json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text, "by": by });
+    // When it was sent: the chat shows it as the person's own message there (0073).
+    let mut sent = json!({ "pick": a.pick, "yes": a.yes, "done": a.done, "text": a.text, "by": by,
+        "at": now_us() });
     if let Some(talk) = t.answer.as_ref().and_then(|was| was.get("discussed")) {
         sent["discussed"] = talk.clone();
     }
