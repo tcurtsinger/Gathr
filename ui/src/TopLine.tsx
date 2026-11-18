@@ -12,8 +12,7 @@ import './topline.css';
  */
 export function TopLine({ children }: { children?: ReactNode }) {
   const ipc = desktop();
-  // The webview's user agent names its system: WebView2's says Windows, WKWebView's the Mac.
-  const buttons = ipc && navigator.userAgent.includes('Windows');
+  const buttons = ipc && onWindows();
   return (
     <header
       className={buttons ? 'topline with-buttons' : 'topline'}
@@ -25,12 +24,34 @@ export function TopLine({ children }: { children?: ReactNode }) {
   );
 }
 
-function WindowButtons({ ipc }: { ipc: Ipc }) {
+/**
+ * The top line's band again, for a modal dialog to hold: the dialog makes everything outside it inert, the top
+ * line too, and the window must still move, minimize, maximize and close. Out of the dialog's keyboard order.
+ */
+export function WindowBand() {
+  const ipc = desktop();
+  if (!ipc) return null;
+  return (
+    <div className="window-band" data-tauri-drag-region="deep">
+      {onWindows() && <WindowButtons ipc={ipc} tabIndex={-1} />}
+    </div>
+  );
+}
+
+/** The webview's user agent names its system: WebView2's says Windows, WKWebView's the Mac. */
+const onWindows = () => navigator.userAgent.includes('Windows');
+
+function WindowButtons({ ipc, tabIndex }: { ipc: Ipc; tabIndex?: number }) {
   const maximized = useMaximized(ipc);
   const run = (command: string) => () => send(ipc, command);
   return (
     <div className="window-buttons">
-      <IconButton aria-label="Minimize" className="window-button" onClick={run('minimize')}>
+      <IconButton
+        aria-label="Minimize"
+        className="window-button"
+        tabIndex={tabIndex}
+        onClick={run('minimize')}
+      >
         <svg viewBox="0 0 10 10" aria-hidden="true">
           <path d="M0 5.5h10" />
         </svg>
@@ -38,6 +59,7 @@ function WindowButtons({ ipc }: { ipc: Ipc }) {
       <IconButton
         aria-label={maximized ? 'Restore' : 'Maximize'}
         className="window-button"
+        tabIndex={tabIndex}
         onClick={run('toggle_maximize')}
       >
         <svg viewBox="0 0 10 10" aria-hidden="true">
@@ -51,7 +73,12 @@ function WindowButtons({ ipc }: { ipc: Ipc }) {
           )}
         </svg>
       </IconButton>
-      <IconButton aria-label="Close" className="window-button close" onClick={run('close')}>
+      <IconButton
+        aria-label="Close"
+        className="window-button close"
+        tabIndex={tabIndex}
+        onClick={run('close')}
+      >
         <svg viewBox="0 0 10 10" aria-hidden="true">
           <path d="m.5.5 9 9M9.5.5l-9 9" />
         </svg>

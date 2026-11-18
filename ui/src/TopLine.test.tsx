@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { App } from './App';
+import { Dialog } from './components/Dialog';
 import type { LiveEvent } from './live';
 import { TopLine } from './TopLine';
 
@@ -114,6 +115,61 @@ test('with no chat open the window still has its top line, to move it and close 
   expect(pressed([[700, 20]]), 'a press on the top line, over the chat').toEqual(['topline with-buttons']);
   await screen.getByRole('button', { name: 'Close' }).click();
   expect(sent).toContain('plugin:window|close');
+});
+
+/** A dialog open over the window, as Settings is, with its own first control. */
+const dialog = () => (
+  <Dialog open title="Made-up settings" onClose={() => {}} closeIcon>
+    <button type="button">Made-up first</button>
+  </Dialog>
+);
+
+test('with a dialog open on Windows the window still moves, and its three buttons work where they were', async () => {
+  const sent = on(WINDOWS, () => false);
+  await page.viewport(1440, 900);
+  const screen = await render(dialog());
+  await expect.element(screen.getByRole('button', { name: 'Made-up first' })).toHaveFocus();
+  expect(pressed([[720, 20]]), 'a press on the top band, over the dialog').toEqual(['window-band']);
+  const at = (name: string) => {
+    const r = screen.getByRole('button', { name, exact: true }).element().getBoundingClientRect();
+    return [r.left, r.top, r.right, r.bottom];
+  };
+  // Where the top line draws them (the pictures' measures): 46 wide each, at the window's top right.
+  expect([at('Minimize'), at('Maximize'), at('Close')]).toEqual([
+    [1302, 0, 1348, 40],
+    [1348, 0, 1394, 40],
+    [1394, 0, 1440, 40],
+  ]);
+  await screen.getByRole('button', { name: 'Minimize' }).click();
+  await screen.getByRole('button', { name: 'Maximize' }).click();
+  await screen.getByRole('button', { name: 'Close', exact: true }).click();
+  expect(sent.filter((c) => c !== 'plugin:window|is_maximized')).toEqual([
+    'plugin:window|minimize',
+    'plugin:window|toggle_maximize',
+    'plugin:window|close',
+  ]);
+});
+
+test('with a dialog open on the Mac the top band still moves the window, with no buttons of ours', async () => {
+  on(MAC, () => false);
+  await page.viewport(1440, 900);
+  const screen = await render(dialog());
+  await expect.element(screen.getByRole('button', { name: 'Made-up first' })).toHaveFocus();
+  expect(
+    pressed([
+      [20, 20],
+      [720, 20],
+    ]),
+  ).toEqual(['window-band', 'window-band']);
+  expect(screen.getByRole('button', { name: 'Close', exact: true }).elements()).toEqual([]);
+});
+
+test('with a dialog open in a browser the dialog holds no band', async () => {
+  on(WINDOWS);
+  await page.viewport(1440, 900);
+  const screen = await render(dialog());
+  await expect.element(screen.getByRole('button', { name: 'Made-up first' })).toHaveFocus();
+  expect(document.querySelector('dialog [data-tauri-drag-region], dialog .window-buttons')).toBeNull();
 });
 
 test('a window command the window refuses goes to the event record, named for the command', async () => {

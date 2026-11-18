@@ -108,8 +108,10 @@ Summary are history.
   focus, Close in `os-close` with a white glyph; they reach the window's top right corner, past the
   shell's margin, and the line's content ends 8px before them. On the Mac the system draws its own
   three buttons at the band's left, over the rail and the sidebar, where the line holds nothing. In a
-  browser the line moves nothing and draws no buttons. Gathr's "Start failed" page keeps the system's
-  title bar.
+  browser the line moves nothing and draws no buttons. The top line stays live over a dialog: the
+  shared Dialog holds the same band, fixed over the window's top 40px, drawing nothing over the
+  backdrop but Windows' three buttons at the same pixels, out of the dialog's keyboard order. Gathr's
+  "Start failed" page keeps the system's title bar.
 - The rail: Home at the top, a mark of where you are (the window has one place, so it is not a button),
   drawn as current (32px, 8px radius, foreground 9%), its centre on the word mark's line. At the foot,
   6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,

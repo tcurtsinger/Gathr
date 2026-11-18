@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { WindowBand } from '../TopLine';
 import { IconButton } from './IconButton';
 import './dialog.css';
 
@@ -69,6 +70,7 @@ export function Dialog({ open, title, onClose, opener, className, bare, closeIco
               <X />
             </IconButton>
           )}
+          <WindowBand />
         </>
       )}
     </dialog>

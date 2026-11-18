@@ -27,8 +27,19 @@
 .window-buttons {
   position: absolute;
   top: 0;
-  right: -138px;
+  right: 0;
   display: flex;
+}
+.topline .window-buttons {
+  right: -138px;
+}
+/* Over a modal dialog, which makes the top line under it inert: the window's band again, fixed to the window's
+   top, drawing nothing of its own over the backdrop but the buttons. No transform, filter or containment on a
+   dialog makes it the containing block, so the band is against the window. */
+.window-band {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 40px;
 }
 .window-button {
   width: 46px;
