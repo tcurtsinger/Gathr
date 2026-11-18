@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use gathr::Error;
 use gathr::event::Event;
 use gathr::ids::now_us;
-use gathr::store;
+use gathr::store::{self, ChatState};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
@@ -35,8 +35,8 @@ struct Known {
     /// Turns with an approval waiting, each with its chat and when its approvals began waiting:
     /// approvals are in no table.
     asking: HashMap<String, (String, i64)>,
-    /// What the windows were last told of each chat that works or needs the person.
-    sent: HashMap<String, (bool, bool)>,
+    /// What the windows were last told of each chat that works, needs the person or has a mark.
+    sent: HashMap<String, ChatState>,
 }
 
 impl States {
@@ -81,8 +81,11 @@ impl States {
     pub fn on_list(&self, chats: &mut Value) {
         let known = self.known.lock().expect("never poisoned");
         for chat in chats.as_array_mut().into_iter().flatten() {
-            if chat["needs"] == false && Self::asked(&known, chat["id"].as_str().unwrap_or("")) {
+            // An archived chat's row carries no state at all.
+            let listed = chat.get("needs").is_some();
+            if listed && Self::asked(&known, chat["id"].as_str().unwrap_or("")) {
                 chat["needs"] = true.into();
+                chat["mark"] = "needs_you".into();
             }
         }
     }
@@ -90,19 +93,25 @@ impl States {
     /// Works the chat's state out again and tells every window when it changed.
     pub fn changed(&self, conn: &Connection, chat: &str) -> Result<(), Error> {
         let mut known = self.known.lock().expect("never poisoned");
-        let (working, needs) = match store::chat_state(conn, chat)? {
-            Some((working, needs)) => (working, needs || Self::asked(&known, chat)),
-            None => (false, false),
+        let state = match store::chat_state(conn, chat)? {
+            Some(state) if Self::asked(&known, chat) => state.asked(),
+            Some(state) => state,
+            None => ChatState::default(),
         };
-        if known.sent.get(chat).copied().unwrap_or_default() == (working, needs) {
+        if known.sent.get(chat).copied().unwrap_or_default() == state {
             return Ok(());
         }
-        match working || needs {
-            true => known.sent.insert(chat.to_string(), (working, needs)),
-            false => known.sent.remove(chat),
+        match state == ChatState::default() {
+            false => known.sent.insert(chat.to_string(), state),
+            true => known.sent.remove(chat),
         };
-        let update =
-            json!({ "type": "chat_state", "chat": chat, "working": working, "needs": needs });
+        let ChatState {
+            working,
+            needs,
+            mark,
+        } = state;
+        let update = json!({ "type": "chat_state", "chat": chat, "working": working, "needs": needs,
+            "mark": mark });
         let _ = self.live.send(update);
         Ok(())
     }
@@ -113,8 +122,15 @@ impl States {
         let chats = store::chats(conn, false)?;
         let mut known = self.known.lock().expect("never poisoned");
         for chat in chats.as_array().into_iter().flatten() {
-            let state = (chat["working"] == true, chat["needs"] == true);
-            if let (Some(id), true) = (chat["id"].as_str(), state.0 || state.1) {
+            let mark = ["needs_you", "cant_run", "working"]
+                .into_iter()
+                .find(|m| chat["mark"] == *m);
+            let state = ChatState {
+                working: chat["working"] == true,
+                needs: chat["needs"] == true,
+                mark,
+            };
+            if let (Some(id), false) = (chat["id"].as_str(), state == ChatState::default()) {
                 known.sent.insert(id.to_string(), state);
             }
         }

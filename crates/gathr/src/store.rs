@@ -61,15 +61,73 @@ const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
         AND v.sent_ts IS NOT NULL AND v.decided IS NULL
         AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
-/// The chats in the list, newest first, each with whether it's `working` and `needs` the person;
-/// with `archived`, the archived ones, last archived first, which carry neither.
+/// Whether chat `c` waits on the person for an answer of theirs: `NEEDS` but a sign-in.
+const ASKS: &str = "(EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
+    OR EXISTS (SELECT 1 FROM quiet q WHERE q.chat_id = c.id AND q.told_ts IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.chat_id = c.id
+        AND v.sent_ts IS NOT NULL AND v.decided IS NULL
+        AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
+
+/// Whether an agent of chat `c` can't run (0071): it waits for a sign-in, or its last turn there
+/// failed and wasn't retried (one a restart cut was stopped, not failed).
+fn trouble() -> String {
+    format!(
+        "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
+            AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
+        OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = c.id
+            AND (SELECT l.status = 'failed' AND l.why IS NOT '{CUT_BY_RESTART}' FROM turns l
+                 WHERE l.chat_id = c.id AND l.agent_id = cm.agent_id
+                 ORDER BY l.created_ts DESC, l.rowid DESC LIMIT 1)))"
+    )
+}
+
+/// One chat's state as its row in the list has it: whether a turn of it runs (0040), whether it
+/// needs the person, for a notice, and the most pressing of three marks for its row (0071).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChatState {
+    pub working: bool,
+    pub needs: bool,
+    pub mark: Option<&'static str>,
+}
+
+impl ChatState {
+    /// From the row's columns: working, needs, asks the person, and can't run.
+    fn read(r: &rusqlite::Row<'_>, at: usize) -> rusqlite::Result<ChatState> {
+        let (working, needs, asks, trouble): (bool, bool, bool, bool) =
+            (r.get(at)?, r.get(at + 1)?, r.get(at + 2)?, r.get(at + 3)?);
+        let mark = match () {
+            _ if asks => Some("needs_you"),
+            _ if trouble => Some("cant_run"),
+            _ if working => Some("working"),
+            _ => None,
+        };
+        Ok(ChatState {
+            working,
+            needs,
+            mark,
+        })
+    }
+
+    /// An approval waiting, which is in no table: the chat needs the person.
+    pub fn asked(self) -> ChatState {
+        ChatState {
+            needs: true,
+            mark: Some("needs_you"),
+            ..self
+        }
+    }
+}
+
+/// The chats in the list, newest first, each with whether it's `working`, `needs` the person and
+/// its `mark`; with `archived`, the archived ones, last archived first, which carry none of them.
 pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
-         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
+         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC",
+        trouble()
     ))?;
     let rows = stmt.query_map([archived], |r| {
         let mut chat = json!({
@@ -84,20 +142,23 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
             "archived": r.get::<_, Option<i64>>(7)?.map(crate::ids::utc),
         });
         if !archived {
-            chat["working"] = r.get::<_, bool>(8)?.into();
-            chat["needs"] = r.get::<_, bool>(9)?.into();
+            let state = ChatState::read(r, 8)?;
+            chat["working"] = state.working.into();
+            chat["needs"] = state.needs.into();
+            chat["mark"] = state.mark.into();
         }
         Ok(chat)
     })?;
     Ok(Value::Array(rows.collect::<Result<_, _>>()?))
 }
 
-/// One chat's `working` and `needs` as its row in the list has them; none for an archived chat, or
-/// one that's gone.
-pub fn chat_state(conn: &Connection, chat: &str) -> Result<Option<(bool, bool)>, Error> {
-    let sql =
-        format!("SELECT {WORKING}, {NEEDS} FROM chats c WHERE c.id = ?1 AND c.archived_ts IS NULL");
-    let row = |r: &rusqlite::Row<'_>| Ok((r.get(0)?, r.get(1)?));
+/// One chat's state as its row in the list has it; none for an archived chat, or one that's gone.
+pub fn chat_state(conn: &Connection, chat: &str) -> Result<Option<ChatState>, Error> {
+    let sql = format!(
+        "SELECT {WORKING}, {NEEDS}, {ASKS}, {} FROM chats c WHERE c.id = ?1 AND c.archived_ts IS NULL",
+        trouble()
+    );
+    let row = |r: &rusqlite::Row<'_>| ChatState::read(r, 0);
     Ok(conn
         .prepare_cached(&sql)?
         .query_row([chat], row)
@@ -402,6 +463,9 @@ pub struct Waiting {
 pub const ASK: &str = "(SELECT group_concat(body, char(10) || char(10) ORDER BY ts) FROM messages m
                         WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr'))";
 
+/// Why a turn that was running when the service stopped reads failed: a restart cut it.
+pub const CUT_BY_RESTART: &str = "the service stopped during this turn";
+
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. Turns that were running then can't
 /// be continued: they're marked failed, with why, and the steps they left running are stopped.
@@ -418,9 +482,8 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         [],
     )?;
     conn.execute(
-        "UPDATE turns SET status = 'failed', why = 'the service stopped during this turn', ended_ts = ?1
-         WHERE status = 'running'",
-        [now_us()],
+        "UPDATE turns SET status = 'failed', why = ?2, ended_ts = ?1 WHERE status = 'running'",
+        params![now_us(), CUT_BY_RESTART],
     )?;
     // An update held these until the service before stopped: nothing holds them now (0032).
     conn.execute(

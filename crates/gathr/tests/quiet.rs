@@ -166,7 +166,7 @@ fn said(conn: &Connection) -> Vec<String> {
 }
 
 fn needs(conn: &Connection) -> bool {
-    store::chat_state(conn, "c").unwrap().unwrap().1
+    store::chat_state(conn, "c").unwrap().unwrap().needs
 }
 
 /// The events of one name, oldest first: each one's duration and attributes.
