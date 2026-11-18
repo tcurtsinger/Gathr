@@ -106,6 +106,7 @@ pub(super) fn standings(
             since_us: None,
             on: Vec::new(),
             until_us: None,
+            failing: false,
         };
         let state = needs_you(live, open, &plans, id, &running)
             .or_else(|| cant_run(&own, last.as_ref()))
@@ -122,6 +123,10 @@ pub(super) fn standings(
             None if !on.is_empty() => {
                 let names: Vec<&str> = on.iter().map(|o| o.what.as_str()).collect();
                 stand.on = on.clone();
+                let mine = waiting.iter().filter(|w| w.agent == id);
+                stand.failing = mine
+                    .filter_map(waits::Wait::failing)
+                    .any(|(failed, _)| failed >= waits::SHOWN_AFTER);
                 let since = on.iter().map(|o| o.since_us).min();
                 let words = format!("Waiting for {}", words::list(&names));
                 now("waiting", &words, since).what(&words::list(&names))
