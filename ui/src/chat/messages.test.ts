@@ -1,127 +1,11 @@
 // The chat as one timeline (0037): where each block sits, what a turn folds into its row, who talks to
-// whom, and which of Gathr's notes become one-line events.
-import type { ThreadMessageLike } from '@assistant-ui/react';
+// whom, and which of Gathr's notes become its own messages.
 import { expect, test } from 'vitest';
-import {
-  type Agent,
-  Failure,
-  type Message,
-  type Task,
-  type ThinkingBody,
-  type ToolBody,
-  type Turn,
-} from '../api';
+import { Failure, type Message, type ThinkingBody } from '../api';
 import { duration } from './fold';
-import { type Custom, toThread } from './messages';
-import { apply, type ChatState, empty } from './state';
-
-const people = ['Mira', 'Rowan', 'Kit', 'Lane', 'Sol'];
-const agents: Agent[] = people.map((name) => ({
-  id: name.toLowerCase(),
-  name,
-  account: 'x',
-  model: null,
-  effort: null,
-  approvals: 'auto',
-  face_seed: 'Made-up',
-  gender: null,
-  skin: null,
-  background: null,
-}));
-const members = people.map((name, i) => ({
-  agent: name.toLowerCase(),
-  name,
-  role: i === 0 ? ('supervisor' as const) : i === 4 ? ('reviewer' as const) : ('member' as const),
-}));
-
-let clock = 0;
-const at = () => new Date(Date.UTC(2026, 10, 8, 9, 0, clock++)).toISOString();
-const turn = (id: string, agent: string, more: Partial<Turn> = {}): Turn => ({
-  id,
-  agent,
-  status: 'done',
-  why: null,
-  ref: id,
-  created: at(),
-  ...more,
-});
-const said = (turnId: string, role: Message['role'], text: string): Message => ({
-  id: `${turnId}-${role}-${clock}`,
-  turn: turnId,
-  time: at(),
-  role,
-  kind: 'text',
-  body: text,
-});
-const tool = (
-  turnId: string,
-  id: string,
-  name: string,
-  more: Partial<ToolBody> = {},
-  time = at(),
-): Message => ({
-  id,
-  turn: turnId,
-  time,
-  role: 'assistant',
-  kind: 'tool',
-  body: { tool: name, status: 'ok', ...more },
-});
-const task = (number: number, owner: string, given_in: string, more: Partial<Task> = {}): Task => ({
-  number,
-  chat: 'c',
-  giver: 'mira',
-  owner,
-  given_in,
-  kind: 'work',
-  what: `Task ${number}`,
-  state: 'done',
-  reason: null,
-  after: [],
-  created_us: 0,
-  ...more,
-});
-
-/** A round: the person asks Mira, Mira hands Rowan and Kit a task each, the person asks Mira something
- * meanwhile, and @Lane directly; the members' turns start after that. */
-function round(): ChatState {
-  clock = 0;
-  const turns = [
-    turn('ask', 'mira'),
-    turn('mid', 'mira'),
-    turn('direct', 'lane'),
-    // A turn on a task answers the turn that gave it, as the service links them.
-    turn('rowan', 'rowan', { task: 1, answers: 'ask' }),
-    turn('kit', 'kit', { task: 2, answers: 'ask' }),
-  ];
-  const messages = [
-    said('ask', 'user', 'Fix the reconnect'),
-    said('ask', 'assistant', 'Rowan and Kit, over to you'),
-    said('mid', 'user', 'Keep the partial answer'),
-    said('mid', 'assistant', 'Yes'),
-    said('direct', 'user', '@Lane does Retry keep my draft?'),
-    said('direct', 'assistant', 'It does'),
-    said('rowan', 'gathr', 'Task #1 from Mira: Task 1'),
-    said('rowan', 'assistant', 'Cursor fixed'),
-    said('kit', 'gathr', 'Task #2 from Mira: Task 2'),
-    said('kit', 'assistant', 'Checked'),
-  ];
-  return {
-    ...empty,
-    members,
-    messages,
-    turns: Object.fromEntries(turns.map((t, position) => [t.id, { ...t, position }])),
-    tasks: [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask', { state: 'working' })],
-  };
-}
-
-const view = (state: ChatState) => toThread(state, agents, [], new Map());
-const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
-const ids = (all: ThreadMessageLike[]) => all.map((m) => (m.id ?? '').replace(/-(user|gathr)-\d+$/, '-$1'));
-const byId = (all: ThreadMessageLike[], id: string) => all.find((m) => m.id === id);
-const text = (m: ThreadMessageLike | undefined) =>
-  ((m?.content ?? []) as readonly { text?: string }[]).map((p) => p.text).join(' | ');
-const events = (all: ThreadMessageLike[]) => all.flatMap((m) => custom(m).events ?? []);
+import { agents, at, byId, custom, events, ids, round, said, task, text, tool, turn, view } from './madeUp';
+import { toThread } from './messages';
+import { apply, type ChatState } from './state';
 
 test('the chat is one list in order: the person, the lead and each member where its turn began', () => {
   const { items } = view(round());
@@ -408,16 +292,9 @@ test('messages between agents are a thread under the block they were sent from, 
   expect(find('answer-1')).toEqual({ id: 'ask-1', text: 'Yes, 30 seconds.', nth: 0 });
 });
 
-test('Gathr’s notes are one-line events: a task heard back, the person’s answer, a question, a wake-up', () => {
+test('Gathr’s notes are its own messages: a task heard back and a wake-up, each with its time', () => {
   const state = round();
-  const asked = { owner: null, giver: 'mira', kind: 'person' as const };
-  state.tasks.push(
-    task(5, 'mira', 'ask', { ...asked, what: 'Which notice?', reason: 'B: two sections', heard_in: 'heard' }),
-    task(6, 'mira', 'ask', { ...asked, state: 'cancelled', heard_in: 'heard' }),
-    task(9, 'mira', 'heard', { ...asked, what: 'Ship it?', why: 'Two halves', state: 'ready' }),
-  );
   state.turns.back = { ...turn('back', 'mira', { answers: 'ask' }), position: 5 };
-  state.turns.heard = { ...turn('heard', 'mira', { answers: 'ask' }), position: 6 };
   state.turns.woke = { ...turn('woke', 'mira'), position: 7 };
   state.messages.push(
     said(
@@ -426,15 +303,11 @@ test('Gathr’s notes are one-line events: a task heard back, the person’s ans
       'The task you gave is settled:\n- #1 Rowan, Task 1: done: Approved at head 9a41c07\nRead.',
     ),
     said('back', 'assistant', 'Rowan is done'),
-    said('heard', 'gathr', 'The person answered:\n- #5 Which notice?: B: two sections\nContinue.'),
-    said('heard', 'assistant', 'B it is'),
     said('woke', 'gathr', 'Your wait on CI on #12 ended'),
     said('woke', 'assistant', 'CI passed'),
   );
   const { items } = view(state);
   expect(events(items)).toEqual([
-    { kind: 'question', who: 'Mira asked you:', text: 'Which notice?', more: 'Question #5', task: 5 },
-    { kind: 'question', who: 'Mira asked you:', text: 'Task 6', more: 'Question #6', task: 6 },
     {
       kind: 'task',
       who: 'Rowan completed:',
@@ -442,88 +315,13 @@ test('Gathr’s notes are one-line events: a task heard back, the person’s ans
       more: 'Task #1. Approved at head 9a41c07',
       task: 1,
     },
-    {
-      kind: 'answer',
-      who: 'You answered Mira:',
-      text: 'B: two sections',
-      more: 'Question #5: Which notice?',
-      task: 5,
-    },
-    { kind: 'question', who: 'Mira asked you:', text: 'Ship it?', more: 'Question #9. Two halves', task: 9 },
     { kind: 'note', text: 'Your wait on CI on #12 ended' },
   ]);
-  // Each line sits where it happened: before the reply it woke, a question after the turn that asked it.
-  expect(ids(items).slice(-7)).toEqual([
-    'back-gathr',
-    'a-back',
-    'heard-gathr',
-    'a-heard',
-    'asked-heard',
-    'woke-gathr',
-    'a-woke',
-  ]);
+  // Each sits where it happened, before the reply it woke.
+  expect(ids(items).slice(-4)).toEqual(['back-gathr', 'a-back', 'woke-gathr', 'a-woke']);
+  const woke = state.messages.at(-2) as Message;
+  expect(custom(items.at(-2)).time).toBe(woke.time);
   expect(items.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
-});
-
-test('a question no agent gave reads as Gathr’s in the turn it was given in; an agent’s keeps its name', () => {
-  const state = round();
-  const gathrs = 'Task #1 adds 1,240 lines, over a Fix’s line of 1,000: let it go on?';
-  state.tasks.push(
-    task(7, 'rowan', 'rowan', { kind: 'person', giver: null, owner: null, what: gathrs, state: 'ready' }),
-    task(8, 'mira', 'ask', { kind: 'person', owner: null, what: 'Which notice?', state: 'ready' }),
-  );
-  const { items } = view(state);
-  expect(custom(byId(items, 'asked-rowan')).events).toEqual([
-    { kind: 'question', who: 'Gathr asked you:', text: gathrs, more: 'Question #7', task: 7 },
-  ]);
-  expect(custom(byId(items, 'asked-ask')).events).toEqual([
-    { kind: 'question', who: 'Mira asked you:', text: 'Which notice?', more: 'Question #8', task: 8 },
-  ]);
-});
-
-test('a Discuss reads "You to Mira:" at the turn it reached, on the main line, and stays so once answered', () => {
-  const state = round();
-  // Rowan's request #3, filed by Mira as #12; the person's Discuss woke her turn on #3.
-  state.turns.file = { ...turn('file', 'mira', { task: 3, answers: 'rowan' }), position: 5 };
-  state.turns.talk = { ...turn('talk', 'mira', { task: 3, answers: 'file' }), position: 6 };
-  const talk = 'The person wants to discuss:\n- #12 Which notice text should ship?: Does it retry by itself?';
-  state.messages.push(said('talk', 'gathr', talk), said('talk', 'assistant', 'It does'));
-  const discussed = [{ text: 'Does it retry by itself?', turn: 'talk' }];
-  const question = task(12, 'mira', 'file', {
-    kind: 'person',
-    owner: null,
-    what: 'Which notice text should ship?',
-  });
-  state.tasks.push(task(3, 'mira', 'rowan', { kind: 'person_request', giver: 'rowan', state: 'held' }), {
-    ...question,
-    state: 'held',
-    heard_in: 'talk',
-    answer: { discussed },
-  });
-  const line = {
-    kind: 'answer',
-    who: 'You to Mira:',
-    text: 'Does it retry by itself?',
-    more: 'Question #12: Which notice text should ship?',
-    task: 12,
-  };
-  const lines = (items: ThreadMessageLike[], at: string) =>
-    custom(items.find((m) => m.id?.startsWith(at))).events;
-  // Mira answers the person there, not inside Rowan's thread: her reply is a main-line word with its time.
-  const mainLine = (items: ThreadMessageLike[]) => custom(byId(items, 'a-talk')).tick;
-  expect(lines(view(state).items, 'talk-gathr')).toEqual([line]);
-  expect(mainLine(view(state).items)).toBeTruthy();
-
-  // Answered later: the answer has its own turn, and the Discuss keeps its own.
-  state.turns.answered = { ...turn('answered', 'mira', { answers: 'file' }), position: 7 };
-  state.messages.push(
-    said('answered', 'gathr', 'The person answered:\n- #12 Which notice text should ship?: Picked: A'),
-  );
-  state.tasks[3] = { ...question, state: 'done', reason: 'A', heard_in: 'answered', answer: { discussed } };
-  const { items } = view(state);
-  expect(lines(items, 'talk-gathr')).toEqual([line]);
-  expect(mainLine(items)).toBeTruthy();
-  expect(lines(items, 'answered-gathr')).toEqual([{ ...line, who: 'You answered Mira:', text: 'A' }]);
 });
 
 test('a speaker is named when it changes, not on each of its blocks in a row', () => {
@@ -729,14 +527,6 @@ test('a stopped turn says it carried on once its carry-on runs, never while that
 
   state.turns.next = { ...state.turns.next, status: 'running' };
   expect(notice()).toMatchObject({ carried: true });
-});
-
-test('the questions a split turn asked show once, after its first block', () => {
-  const state = round();
-  state.turns.kit.status = 'running';
-  state.tasks.push(task(9, 'kit', 'kit', { owner: null, giver: 'kit', kind: 'person', what: 'Ship it?' }));
-  state.messages.push(said('kit', 'user', '@Kit one thing'), said('kit', 'assistant', 'Kept'));
-  expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'asked-kit', 'kit-user', 'a-kit-1']);
 });
 
 test('a hear-back whose reason runs over lines keeps the reason whole, even a bullet that names a task', () => {

@@ -369,3 +369,71 @@ fn work_blocked_on_a_request_the_person_answers_carries_on_with_the_answer() {
     );
     assert!(to_ann.text.contains(&carry), "{}", to_ann.text);
 }
+
+/// The person's answer and each Discuss keep when they were sent: the chat shows each as the person's
+/// own message at that time, Gathr's own question's answer too, which no agent hears.
+#[test]
+fn an_answer_and_a_discuss_keep_when_they_were_sent() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    running(&conn, "c", "lead-1", "lead", None);
+    let asked = |conn: &mut Connection, what: &str| {
+        let q = ask("c", "lead", "lead-1", Some(what));
+        person::ask(conn, q, T).unwrap().0.number
+    };
+    let (talked, picked) = (
+        asked(&mut conn, "Which notice?"),
+        asked(&mut conn, "Which banner?"),
+    );
+    conn.execute(
+        "INSERT INTO tasks (chat_id, kind, what, state, form, choices, created_ts, updated_ts)
+         VALUES ('c', 'person', 'Let it go on?', 'ready', 'choice', ?1, 1, 1)",
+        [r#"[{"label":"Let it go on"},{"label":"Send it back"}]"#],
+    )
+    .unwrap();
+    let gathrs = conn.last_insert_rowid();
+    let pick = |task: i64, label: &str| Answer {
+        task,
+        pick: vec![label.into()],
+        ..Default::default()
+    };
+    let talk = Answer {
+        task: talked,
+        discuss: true,
+        text: Some("Does it retry by itself?".into()),
+        ..Default::default()
+    };
+
+    let before = gathr::ids::now_us();
+    for sent in [
+        talk,
+        pick(picked, "Connection lost"),
+        pick(gathrs, "Let it go on"),
+    ] {
+        let sent = person::answer(&mut conn, &[sent], T).unwrap();
+        assert!(sent.refused.is_empty(), "{:?}", sent.refused);
+    }
+    let after = gathr::ids::now_us();
+    let listed = tasks::list(&conn, "c").unwrap();
+    let answer = |n: i64| {
+        listed
+            .iter()
+            .find(|t| t.number == n)
+            .unwrap()
+            .answer
+            .clone()
+            .unwrap()
+    };
+    let times = [
+        answer(talked)["discussed"][0]["at"].as_i64(),
+        answer(picked)["at"].as_i64(),
+        answer(gathrs)["at"].as_i64(),
+    ];
+    for at in times {
+        let at = at.expect("each keeps when it was sent");
+        assert!(
+            (before..=after).contains(&at),
+            "{before} <= {at} <= {after}"
+        );
+    }
+}

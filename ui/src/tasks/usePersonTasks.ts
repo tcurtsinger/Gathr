@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure, type PersonTask, type StaleTask } from '../api';
 import { listen } from '../live';
 import { useNewestWins } from '../newest';
@@ -41,8 +41,12 @@ export function usePersonTasks(onFailure: (f: Failure) => void) {
     });
   }, [load, show]);
 
+  // The chat and the Tasks view both offer a question (0073): while one Send of it is out, another sends nothing.
+  const sending = useRef(new Set<number>());
   // One question at a time (0065): its draft goes as it is now, so a pick that answers at once needn't wait for it.
   const send = async (task: PersonTask, draft: Draft): Promise<Refusal | null> => {
+    if (sending.current.has(task.number)) return null;
+    sending.current.add(task.number);
     try {
       const { answered, refused } = await api.answer([toAnswer(task, draft)]);
       const closed = new Set(answered.map((t) => t.number));
@@ -52,6 +56,8 @@ export function usePersonTasks(onFailure: (f: Failure) => void) {
     } catch (e) {
       const f = e as Failure;
       return { task: task.number, why: f.why ?? f.error, ref: f.ref };
+    } finally {
+      sending.current.delete(task.number);
     }
   };
 

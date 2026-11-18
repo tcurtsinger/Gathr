@@ -374,6 +374,7 @@ pub fn resize(
         )?;
         resized(&chat, (ask, size, was.as_deref()), "person", trace).insert(&tx)?;
         let (moved, released) = plan_wait::resized(&tx, ask, trace)?;
+        plan_wait::noted(&tx, ask, &moved)?;
         starts.extend(released);
         starts.extend(plan_wait::told(&tx, ask, (size, was.as_deref()), &moved)?);
     }

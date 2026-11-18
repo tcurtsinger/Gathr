@@ -267,31 +267,43 @@ Pointing at it or focusing it shows who gave it, as their names, one a line, in 
 names, never help. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
 its own (0062); a question stays a reply.
 
-Everything Gathr tells an agent is a one-line event, with two exceptions that are never
-drawn: the brief of a member's own task (Gathr's message that opens with "Task #<number>
-from", in a turn on that task), because the member's header says the task and the giver's row
-lists it; and Gathr's copy of an agent's message. A hear-back draws one line for each task it
-reports, in the state that hear-back gave, not the task's state now: "Vale completed: Review
-PR #138", "Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix
-up to date", also failed, stopped and cancelled. A task that ends done is such a line when it
-ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (0051). The person's answer reads "You answered
-Orin: Hold the button", a message sent with Discuss "You to Orin: Does it retry by itself?", a question "Orin asked you: Ship it?", or "Gathr asked you: …" for Gathr's own. The size of an ask is one too,
-after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix"
-or "You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn
-only once the ask has a task or Gathr held something of it (a refused give, write or push, or a caught change: 0063), with a wrench for Fix and a clipboard for Plan. Opened, it shows
-the two sizes, "Just fix it." and "Plan it with me first.", the current one marked, and nothing
-that explains them (0061). A change Gathr caught in a held turn is one too, of a kind apart (`changed`, the `FilePen` icon): "Mira changed 3 files before the plan was approved" ("on look-into task #12" for a look-into task; "1 file" for one), opening to one file per line, at most 20, then "and 2 more", then "Committed: 1" when some came from commits (0063). It reads after the turn's last block, not as a note. When a repair's work is in, Gathr says "Fixed: <the ask>", a check
-icon, which opens to each finished task with its PR and its proof. The plan's lines are one
-too, of a kind apart from the size line, with a clipboard: the lead-in "Plan v1:" and
-"3 findings" or "Bo didn't finish" (a check that agrees is a thumbs-up instead) (opening to the plan's title), "Sent back" (opening to the
-person's words), and "Plan v2:" "Approved" or "Dropped"; each opens to the whole line and Open plan
-(0062). Anything else (a wait's
-result, a wake-up, a stale-task nudge, a usage interruption) is drawn in Gathr's own words.
-13px, muted, the lead-in in the foreground colour at 500, an icon first, no Gathr speaker.
-Closed, a line stays on one line, with an ellipsis (…) for overflow. Click or Enter opens it
-in place: the whole line, the reason or the question, and Open task. Click or Enter again
-closes it. Keyboard focus uses the hover highlight, without an outline or ring.
+What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time
+on the name line, and its words in an outlined bubble one step quieter than an agent's: a 1px border, no
+fill, the words at 88% of the foreground and 14.5px. Gathr is never an agent: no panel, no mark, never "he"
+or "she". When a repair's work is in it quotes the ask, says "Fixed." and lists the finished tasks with their
+PRs, muted. A change Gathr caught in a held turn is its line, "Mira changed 3 files before the plan was
+approved" ("on look-into task #12" for a look-into task; "1 file" for one), then one file per line, each with
+a file icon in monospace, at most 20, then "and 2 more", then "Committed: 1" when some came from commits (0063).
+A check that ran late is "Plan v1 came to you before Rev finished checking it.". When the person's change of
+size held or released tasks: "Tag picker waits for the plan." or "Tag picker is back in line.". Anything else
+(a wait's result, a wake-up, a stale-task nudge, a usage interruption) is its words, whole.
 
+Gathr's question is its message too: the question's why as its words, and the question block (Human tasks) in
+its bubble. An agent's question sits in the bubble of the block that asked it, with the same block. The
+person's answer, and each Discuss, is their own message at the time they sent it, below the question; once
+answered the question reads as answered, its words alone.
+
+Two things Gathr tells an agent are never drawn: the brief of a member's own task (Gathr's message that opens
+with "Task #<number> from", in a turn on that task), because the member's header says the task and the
+giver's row lists it, and what the lead is told after the person changes a size (Gathr's own line says it);
+nor is Gathr's copy of an agent's message, or what a turn that hears the person's answer opens with.
+
+Some of Gathr's lines are still one-line events, inside Gathr's bubble: a hear-back draws one line for each
+task it reports, in the state that hear-back gave, not the task's state now: "Vale completed: Review PR #138",
+"Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix up to date", also failed,
+stopped and cancelled; a member's request the person's answer settled has none. A task that ends done is such
+a line when it ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (0051). The
+plan's lines, with a clipboard: the lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up
+instead) (opening to the plan's title), "Sent back" (opening to the person's words), and "Plan v2:" "Approved"
+or "Dropped"; each opens to the whole line and Open plan (0062). The size of an ask is one too, outside any
+bubble, after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix" or
+"You: Plan" once the person changed it, "Plan" alone for an ask the lead hasn't sized, drawn only once the ask
+has a task or Gathr held something of it (a refused give, write or push, or a caught change: 0063), with a
+wrench for Fix and a clipboard for Plan. Opened, it shows the two sizes, "Just fix it." and "Plan it with me
+first.", the current one marked, and nothing that explains them (0061). A line is 13px, muted, the lead-in in
+the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for overflow.
+Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
+Keyboard focus uses the hover highlight, without an outline or ring.
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
 composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's face,
 "Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in
@@ -547,7 +559,7 @@ the line "Ann · PR #18 · Working" (its owner's 16px face first), then the fiel
 name and time; Gathr for its own question and for a fix it gave after a review), Why, the brief, Report ("None
 yet" while it works) and the rest; the foot holds only what acts: none when done, Cancel while open, Cancel and
 Restart (primary) once blocked, failed or stopped, Restart once cancelled.
-A question opens as itself, from its row or its line's Open task: the asker's message (its 36px face, name,
+A question opens as itself, from its row: the asker's message (its 36px face, name,
 role, time, "for Ann") with the one question block in its bubble, answered there, each question by itself
 (0065). Only the Supervisor asks the person (the sole agent in a one-agent chat). The block: the question with
 its icon and "Waiting" in the attention colour; for a question an agent gave, the shared Switch, small, labelled
@@ -562,9 +574,9 @@ question has no pick. A refused Send stays in the block under its field: "Not se
 and its reference, with what was typed kept. Once sent the block closes, reads Discussing while discussed, and
 the person's own message follows the asker's. A discussed question leaves the For you count and the chat's dot
 until the lead's turn that got the message ends, or is replaced by a new question (0065).
-After an accepted answer, show the shared answer line at the asker's wake-up turn
-in that agent's column. It stays after reload. Main-column team completion reports
-stay hidden.
+In the chat the same block sits in the asker's bubble, with the same draft as here: a pick, notes or Discuss
+started in one place is there in the other, and while one Send of a question is out, another sends nothing.
+The answer, and each Discuss, is the person's own message in the chat, at the time it was sent (0073).
 Lifecycle/history policy and persistence are service work, not prototype rules.
 
 ### Archive and stale (F11)

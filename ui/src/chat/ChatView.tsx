@@ -11,6 +11,7 @@ import {
   type Named,
   type PauseScope,
   type Pauses,
+  type PersonTask,
   type Project,
   type Task,
 } from '../api';
@@ -19,8 +20,11 @@ import { FaceCards } from '../components/FaceCard';
 import { first as firstPick, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
+import type { Draft, Refusal } from '../tasks/model';
+import { asQuestion } from '../tasks/rows';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
 import { ApprovalDock } from './ApprovalDock';
+import type { Questions } from './Asked';
 import { ChatMenu } from './ChatMenu';
 import { MarksContext, useChatMarks } from './faceMarks';
 import { useLatest, useTarget } from './found';
@@ -91,6 +95,12 @@ interface Props {
   /** A search hit's message to open at (none: a title, the latest), and when it was picked; done once shown. */
   found?: { message?: string; at: number };
   onFound?: () => void;
+  /** The person's drafts of their answers and the Send the Tasks view uses: questions are answered in place (0073). */
+  answers?: {
+    drafts: Record<number, Draft>;
+    onDraft: (task: number, draft: Draft) => void;
+    onSend: (task: PersonTask, draft: Draft) => Promise<Refusal | null>;
+  };
 }
 
 const NONE: Named[] = [];
@@ -120,6 +130,19 @@ export function ChatView(props: Props) {
   const { removed = NONE } = props;
   const named = useMemo(() => [...agents, ...removed], [agents, removed]);
   const timeline = useMemo(() => toThread(state, named, failed, cache.current), [state, named, failed]);
+  const { answers } = props;
+  const chatTasks = state.tasks;
+  const questions = useMemo<Questions | undefined>(
+    () =>
+      answers && {
+        tasks: chatTasks,
+        drafts: answers.drafts,
+        onDraft: answers.onDraft,
+        onSend: (task, draft) => answers.onSend(asQuestion(task, chatTasks), draft),
+        name: (agent) => named.find((a) => a.id === agent)?.name ?? 'An agent',
+      },
+    [answers, chatTasks, named],
+  );
   const team = !fresh && state.members.length > 1;
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
@@ -213,7 +236,7 @@ export function ChatView(props: Props) {
         : { id, name, panel: <div className="agent-slot" ref={setSlot} /> },
     [id, name],
   );
-  const { tasks: chatTasks, members: chatMembers } = state;
+  const { members: chatMembers } = state;
   const beside = useMemo(
     () => workspace?.(tab, { tasks: chatTasks, members: chatMembers }),
     [workspace, tab, chatTasks, chatMembers],
@@ -308,6 +331,7 @@ export function ChatView(props: Props) {
               actions={actions}
               target={target}
               onTarget={props.onFound}
+              questions={questions}
               empty={loaded && state.messages.length === 0 && failed.length === 0}
               after={!archived && <RunLine run={run} members={state.members} />}
               header={

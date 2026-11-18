@@ -236,7 +236,8 @@ test('a check line says the outcome the version reached the person with', () => 
     view(state)
       .flatMap((m) => custom(m).events ?? [])
       .find((e) => e.kind === 'version')?.text;
-  expect([findings, late, failed].map(said)).toEqual(['2 findings', "Bo didn't finish", "Bo didn't finish"]);
+  const unfinished = 'Plan v1 came to you before Bo finished checking it.';
+  expect([findings, late, failed].map(said)).toEqual(['2 findings', unfinished, unfinished]);
   // None of them is a thumbs-up on the version.
   const first = (state: ChatState) => custom(view(state).find((m) => m.id === 'v1')).agreed;
   expect([findings, late, failed].map(first)).toEqual([[], [], []]);

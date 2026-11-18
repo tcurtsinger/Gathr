@@ -156,11 +156,11 @@ fn discussed(t: &Task, how: &str, trace: &str) -> Event {
 }
 
 /// The person's Discuss on `q`, once the lead's turn that hears it is queued: kept in its answer
-/// with that turn, beside any earlier one.
+/// with that turn and when it was sent, beside any earlier one.
 pub(crate) fn discuss(tx: &Transaction, q: i64, text: &str, trace: &str) -> Result<(), Error> {
     let t = read(tx, q)?;
     let mut answer = t.answer.clone().unwrap_or_else(|| json!({}));
-    let entry = json!({ "text": text, "turn": t.heard_in });
+    let entry = json!({ "text": text, "turn": t.heard_in, "at": crate::ids::now_us() });
     match answer["discussed"].as_array_mut() {
         Some(all) => all.push(entry),
         None => answer["discussed"] = json!([entry]),

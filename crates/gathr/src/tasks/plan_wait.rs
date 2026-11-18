@@ -73,6 +73,35 @@ pub fn resized(tx: &Transaction, ask: &str, trace: &str) -> Result<(Vec<i64>, Ve
     Ok((moved, starts))
 }
 
+/// The person's line for what their change of size held or released, in Gathr's own words
+/// ("Add the tags table waits for the plan."), never the words an agent is told (0073).
+pub fn noted(tx: &Transaction, ask: &str, moved: &[i64]) -> Result<(), Error> {
+    if moved.is_empty() {
+        return Ok(());
+    }
+    let mut whats = Vec::new();
+    for &n in moved {
+        let what = super::read(tx, n)?.what;
+        whats.push(what.trim_end_matches(['.', '!', '?']).to_string());
+    }
+    let tail = match (crate::hold::ask_held(tx, ask)?, whats.len() == 1) {
+        (true, true) => "waits for the plan.",
+        (true, false) => "wait for the plan.",
+        (false, true) => "is back in line.",
+        (false, false) => "are back in line.",
+    };
+    let chat: String = tx.query_row("SELECT chat_id FROM asks WHERE id = ?1", [ask], |r| {
+        r.get(0)
+    })?;
+    let last = whats.pop().unwrap_or_default();
+    let what = match whats.is_empty() {
+        true => last,
+        false => format!("{} and {last}", whats.join(", ")),
+    };
+    crate::store::say(tx, &chat, &format!("{what} {tail}"))?;
+    Ok(())
+}
+
 /// The person changed the ask's size (I4.5): to new from a repair, its Supervisor is told while it
 /// has open work; to a repair, the agent its message went to, when Gathr held something of it or
 /// tasks went back in line. `moved` are the tasks the change held or released.

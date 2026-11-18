@@ -1,11 +1,11 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Message, Named, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Failure, Message, Named, Role, Task, ThinkingBody, ToolBody, Turn } from '../api';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
-import { asker } from '../tasks/model';
 import { changed, fixed, sizeLines } from './asks';
 import { fold, type Given, type Work } from './fold';
 import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
+import { heardTurns, questions } from './questions';
 import type { Approval, ChatState } from './state';
 import { type Team, team } from './team';
 import { type Said, talks, threadItem } from './threads';
@@ -30,7 +30,7 @@ export interface TurnNotice {
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
-  kind: 'task' | 'answer' | 'question' | 'note' | 'fix' | 'plan' | 'version' | 'changed';
+  kind: 'task' | 'note' | 'fix' | 'plan' | 'version' | 'changed';
   /** Who did what, ahead of the text: "Vale completed:". */
   who?: string;
   text: string;
@@ -74,6 +74,10 @@ export type Custom = {
   events?: EventLine[];
   /** A version of the lead's plan: its chip opens the plan's tab (0062). */
   plan?: { plan: number; version: number; parts: number };
+  /** The person's questions asked in it, by task, each answered in place (0073). */
+  asked?: number[];
+  /** Gathr says it, as a speaker of its own (0073). */
+  gathr?: boolean;
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message, or
    * the lead's reply to them, which is the last block of each of its main-line turns once it has ended.
@@ -100,7 +104,7 @@ export interface Group {
   key: string;
   turn: string | null;
   msgs: Message[];
-  kind: 'person' | 'gathr' | 'reply' | 'to' | 'version';
+  kind: 'person' | 'gathr' | 'reply' | 'to' | 'version' | 'question' | 'said';
   /** Where its first message is among the chat's saved ones; one with none yet sits after its turn's latest. */
   at: number;
   /** It opens its turn: the message that started it, or its first reply. */
@@ -109,6 +113,10 @@ export interface Group {
   last?: boolean;
   /** A message to an agent: the block its turn was writing when it was sent. */
   root?: Group;
+  /** A question that is a block of its own, or the person's answer or Discuss to it, which has no message. */
+  task?: number;
+  text?: string;
+  time?: string;
 }
 
 const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
@@ -130,7 +138,10 @@ const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
  */
 export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[], cache: Cache): Timeline {
   const crew = team(state, new Map(agents.map((a) => [a.id, a.name])));
-  const groups = place(grouped(state), state);
+  const saved = grouped(state);
+  const { extra, hosts } = questions(state, saved);
+  const groups = place(extra.length ? [...saved, ...extra] : saved, state);
+  const heardIn = heardTurns(state.tasks);
   const gave = givenBy(state, crew);
   const sizes = sizeLines(state, groups, crew);
   // The tasks whose end Gathr said in a line of its own (0051), each with where that line is.
@@ -167,9 +178,14 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     }
     if (quiet.has(g)) continue;
     if (g.kind === 'gathr') {
-      const lines = heard(g, state, crew, said);
+      const lines = heardIn.has(g.turn ?? '') ? [] : heard(g, state, crew, said);
       if (!lines.length) continue;
-      add(eventsOf(cache, g.key, lines), [g]);
+      add(eventsOf(cache, g.key, lines, g.msgs[0].time), [g]);
+      speaker = undefined;
+      continue;
+    }
+    if (g.kind === 'question' || g.kind === 'said') {
+      add(g.kind === 'said' ? saidBlock(cache, g) : questionBlock(cache, g, state, crew), [g]);
       speaker = undefined;
       continue;
     }
@@ -193,17 +209,12 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
     const on = led || turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task)?.what;
     const who = `${turn?.agent}|${on}`;
-    add(block(cache, g, state, crew, gave, { on, head: who !== speaker }), [g]);
+    add(block(cache, g, state, crew, gave, { on, head: who !== speaker, asked: hosts.get(g) }), [g]);
     speaker = who;
     const talk = under.get(g);
     if (talk) thread(talk);
     for (const size of sizes.get(g) ?? []) {
       items.push(eventsOf(cache, `size-${size.ask}`, [size]));
-      speaker = undefined;
-    }
-    const asked = g.bound && g.turn ? questions(state, g.turn, crew) : [];
-    if (asked.length) {
-      items.push(eventsOf(cache, `asked-${g.turn}`, asked));
       speaker = undefined;
     }
   }
@@ -321,7 +332,7 @@ function block(
   state: ChatState,
   crew: Team,
   gave: Map<string, Given>,
-  { on, head }: { on?: string; head: boolean },
+  { on, head, asked }: { on?: string; head: boolean; asked?: number[] },
 ) {
   const id = group.turn;
   const turn = id ? state.turns[id] : undefined;
@@ -357,8 +368,8 @@ function block(
   const agreed = !partial && last?.kind === 'text' ? agreedBy(state, crew, last.id) : [];
   const done = !!on && state.tasks.find((t) => t.number === turn?.task)?.state === 'done';
   const who = `${agent}|${role}|${on}|${done}|${head}|${tick}|${agreed}`;
-  const asked = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
-  const sig = `${parts}|${partial.length}|${ending}|${asked}|${who}`;
+  const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
+  const sig = `${parts}|${partial.length}|${ending}|${answering}|${who}|${asked}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -373,6 +384,7 @@ function block(
     approvals,
     tick,
     agreed,
+    asked,
   };
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave, carried);
   cache.set(group.key, { sig, value });
@@ -445,11 +457,15 @@ function versionBlock(
   }));
 }
 
+// The service's words that open a turn after the person changes a size (plan_wait.rs `told`): for the agent, never
+// drawn. Gathr's own short line says what the change held or released (0073).
+const RESIZED = 'The person made "';
+
 /**
- * What Gathr told an agent, as lines: the person's answers it heard, the tasks a hear-back reports as
- * that hear-back said them, else its own words. None for the brief of the turn's own task: the member's
- * block is headed by the task. A task whose end a line above already said (`said`: where) isn't said
- * again by the hear-back that follows.
+ * What Gathr told an agent, as lines: the tasks a hear-back reports as that hear-back said them, else its own words.
+ * None for the brief of the turn's own task (the member's block is headed by the task), for what a size change tells
+ * the lead, or for a request the person's answer settled, which their own message says (0073). A task whose end a
+ * line above already said (`said`: where) isn't said again by the hear-back that follows.
  */
 function heard(group: Group, state: ChatState, crew: Team, said: Map<number, number>): EventLine[] {
   const m = group.msgs[0];
@@ -458,30 +474,15 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   if (plan !== undefined) return plan ? [plan] : [];
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
-  const answers = state.tasks
-    .filter((t) => t.kind === 'person' && !!turn)
-    .flatMap((t) =>
-      [
-        ...(t.state === 'done' && t.heard_in === turn?.id ? [['You answered', t.reason ?? 'Done']] : []),
-        // A Discuss stays at the turn it reached, wherever a later answer is heard (0065).
-        ...(t.answer?.discussed ?? []).filter((d) => d.turn === turn?.id).map((d) => ['You to', d.text]),
-      ].map(
-        ([who, text]): EventLine => ({
-          kind: 'answer',
-          who: `${who} ${crew.name(t.giver) ?? 'an agent'}:`,
-          text,
-          more: `Question #${t.number}: ${t.what}`,
-          task: t.number,
-        }),
-      ),
-    );
-  if (answers.length) return answers;
+  if (turn && text.startsWith(RESIZED)) return [];
   const fix = m.turn ? undefined : fixed(text);
   if (fix) return [fix];
   const shown = (task: number, how: string) => how === 'done' && (said.get(task) ?? group.at) < group.at;
   // A plan's check has no line of its own: its plan's line says how it ended.
+  const answered = (r: Task) =>
+    state.tasks.some((q) => q.kind === 'person' && q.request === r.number && q.state === 'done');
   const reported = hearBack(text, state.tasks)?.filter(
-    (r) => !shown(r.task.number, r.state) && r.task.checks == null,
+    (r) => !shown(r.task.number, r.state) && r.task.checks == null && !answered(r.task),
   );
   const back = reported?.map(
     ({ task, state: how, reason }): EventLine => ({
@@ -498,19 +499,40 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   return brief ? [] : [{ kind: 'note', text }];
 }
 
-/** The questions to the person a turn asked. */
-function questions(state: ChatState, turn: string, crew: Team): EventLine[] {
-  return state.tasks
-    .filter((t) => t.kind === 'person' && t.given_in === turn)
-    .map(
-      (t): EventLine => ({
-        kind: 'question',
-        who: `${asker(t, (a) => crew.name(a) ?? 'An agent')} asked you:`,
-        text: t.what,
-        more: [`Question #${t.number}`, t.why].filter(Boolean).join('. '),
-        task: t.number,
-      }),
-    );
+/**
+ * A question with no block of its asker's to sit in: Gathr's own, as Gathr's message, or an agent's whose turn drew
+ * none, as that agent's. Its words are the block's (Asked.tsx); this is who asks and when.
+ */
+function questionBlock(cache: Cache, group: Group, state: ChatState, crew: Team): ThreadMessageLike {
+  const t = state.tasks.find((x) => x.number === group.task);
+  const time = t && new Date(t.created_us / 1000).toISOString();
+  const custom: Custom = t?.giver
+    ? {
+        agent: crew.name(t.giver),
+        by: t.giver,
+        role: crew.role(t.giver),
+        time,
+        head: true,
+        asked: [t.number],
+      }
+    : { gathr: true, time, asked: [group.task as number] };
+  return kept(cache, group.key, JSON.stringify(custom), () => ({
+    id: group.key,
+    role: t?.giver ? 'assistant' : 'system',
+    content: t?.giver ? [] : [{ type: 'text', text: t?.what ?? '' }],
+    metadata: { custom },
+  }));
+}
+
+/** The person's answer or Discuss to a question, as their own message, when they sent it. */
+function saidBlock(cache: Cache, group: Group): ThreadMessageLike {
+  const text = group.text ?? '';
+  return kept(cache, group.key, `${text}|${group.time}`, () => ({
+    id: group.key,
+    role: 'user',
+    content: [{ type: 'text', text }],
+    metadata: { custom: { time: group.time } satisfies Custom },
+  }));
 }
 
 /** The block made on an earlier draw, while what it's made from (`sig`) is the same. */
@@ -522,12 +544,13 @@ function kept(cache: Cache, key: string, sig: string, make: () => ThreadMessageL
   return value;
 }
 
-function eventsOf(cache: Cache, key: string, events: EventLine[]): ThreadMessageLike {
-  const sig = JSON.stringify(events);
+/** Gathr's lines: said by Gathr when they have its message's `time`, else a size's lines, as they were (0061). */
+function eventsOf(cache: Cache, key: string, events: EventLine[], time?: string): ThreadMessageLike {
+  const sig = `${time}|${JSON.stringify(events)}`;
   const hit = cache.get(key);
   if (hit?.sig === sig) return hit.value;
   const text = events.map((e) => [e.who, e.text].filter(Boolean).join(' ')).join('\n');
-  const custom: Custom = { events };
+  const custom: Custom = time ? { events, gathr: true, time } : { events };
   const value: ThreadMessageLike = {
     id: key,
     role: 'system',

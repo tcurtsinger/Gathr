@@ -243,6 +243,8 @@ export function App() {
     setDeleting(null);
   };
   const chatTasks = person.tasks.filter((t) => t.chat === chat?.id);
+  // One draft and one Send per question, in the chat and in the Tasks view alike (0073).
+  const answers = { drafts: person.drafts, onDraft: person.draft, onSend: person.send };
   const paneOpen = !!chat?.id && !!person.open[chat.id];
   const tabsOf = (c: string): Tabs => tabs[c] ?? { files: [], selected: 'tasks' };
   const setTab = (c: string, change: (t: Tabs) => Partial<Tabs>) =>
@@ -406,6 +408,7 @@ export function App() {
           }}
           found={found?.chat === chat.id ? found : undefined}
           onFound={() => setFound(null)}
+          answers={answers}
           notice={notice}
           workspace={(agent, work) =>
             paneOpen && (

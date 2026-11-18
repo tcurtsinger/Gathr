@@ -426,9 +426,9 @@ fn the_persons_answer_begins_a_new_round() {
 }
 
 /// Found in real use: a chat reads in the order its turns began, and a line said in no turn has
-/// none, so on a reload every such line sat at the foot of the chat. It reads after the block of
-/// whoever spoke last before it, first when nobody has spoken yet, and never after a turn that
-/// hasn't started, which reads last.
+/// none, so on a reload every such line sat at the foot of the chat. It reads where the window put
+/// it live: after every turn that had said something by then, first when nobody had, and never
+/// after a turn that hasn't started, which reads last.
 #[test]
 fn a_line_said_in_no_turn_reads_where_it_was_said() {
     let dir = TempDir::new();
@@ -436,18 +436,7 @@ fn a_line_said_in_no_turn_reads_where_it_was_said() {
     let say = |turn: &str, text: &str| {
         gathr::store::add_message(&conn, "c", turn, "assistant", "text", text).unwrap();
     };
-    for (id, agent) in [("first", "ann"), ("second", "bo")] {
-        gathr::store::add_turn(
-            &conn,
-            "c",
-            id,
-            T,
-            (Some(agent), None, None),
-            gathr::words::Opened::Person,
-        )
-        .unwrap();
-        gathr::store::set_turn(&conn, id, "running", None).unwrap();
-    }
+    started(&conn, &[("first", "ann"), ("second", "bo")]);
     gathr::store::say(&conn, "c", "Said before anyone spoke").unwrap();
     say("first", "Ann starts");
     say("second", "Bo starts");
@@ -465,21 +454,64 @@ fn a_line_said_in_no_turn_reads_where_it_was_said() {
     gathr::store::say(&conn, "c", "A task is done:\n- #1 Ann, Fix the build: done").unwrap();
     say("second", "Bo goes on");
 
-    let history = gathr::store::history(&conn, "c").unwrap();
-    let read: Vec<&str> = history["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| m["body"].as_str().unwrap().lines().next().unwrap())
-        .collect();
     let order = [
         "Said before anyone spoke",
         "Ann starts",
         "Ann ends",
-        "A task is done:",
         "Bo starts",
+        "A task is done:",
         "Bo goes on",
         "Not started yet",
     ];
-    assert_eq!(read, order);
+    assert_eq!(history(&conn), order);
+}
+
+/// Seen in real use: two turns end together, and Gathr's line about the later-started one (a plan's
+/// check that agreed) came last live but sat above that turn's reply after a reload, under the
+/// earlier-started turn that happened to speak last.
+#[test]
+fn a_line_after_two_turns_end_together_stays_below_both_after_a_reload() {
+    let dir = TempDir::new();
+    let conn = team(&dir);
+    started(&conn, &[("lead", "ann"), ("check", "bo")]);
+    gathr::store::add_message(&conn, "c", "check", "assistant", "text", "Bo agrees").unwrap();
+    gathr::store::add_message(&conn, "c", "lead", "assistant", "text", "Ann goes on").unwrap();
+    gathr::store::say(&conn, "c", "Plan v1: Bo agrees").unwrap();
+    assert_eq!(
+        history(&conn),
+        ["Ann goes on", "Bo agrees", "Plan v1: Bo agrees"]
+    );
+}
+
+/// Turns of the chat, started in this order.
+fn started(conn: &Connection, turns: &[(&str, &str)]) {
+    for (id, agent) in turns {
+        gathr::store::add_turn(
+            conn,
+            "c",
+            id,
+            T,
+            (Some(*agent), None, None),
+            gathr::words::Opened::Person,
+        )
+        .unwrap();
+        gathr::store::set_turn(conn, id, "running", None).unwrap();
+    }
+}
+
+/// The chat as a reload reads it: each message's first line.
+fn history(conn: &Connection) -> Vec<String> {
+    let history = gathr::store::history(conn, "c").unwrap();
+    let messages = history["messages"].as_array().unwrap().iter();
+    messages
+        .map(|m| {
+            m["body"]
+                .as_str()
+                .unwrap()
+                .lines()
+                .next()
+                .unwrap()
+                .to_string()
+        })
+        .collect()
 }

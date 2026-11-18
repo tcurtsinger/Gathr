@@ -25,6 +25,14 @@ fn told(conn: &Connection) -> Vec<Told> {
     rows.unwrap().map(Result::unwrap).collect()
 }
 
+/// What Gathr said to the person in chat `c`, in no turn, oldest first.
+fn gathr_said(conn: &Connection) -> Vec<String> {
+    let sql = "SELECT body FROM messages WHERE chat_id = 'c' AND turn_id IS NULL AND role = 'gathr' ORDER BY ts";
+    let mut stmt = conn.prepare(sql).unwrap();
+    let rows = stmt.query_map([], |r| r.get(0)).unwrap();
+    rows.map(Result::unwrap).collect()
+}
+
 fn stop_why(conn: &Connection, turn: &str) -> Option<String> {
     let sql = "SELECT stop_why FROM turns WHERE id = ?1";
     conn.query_row(sql, [turn], |r| r.get(0)).unwrap()
@@ -51,7 +59,8 @@ fn after(conn: &mut Connection, owner: &str, turn: &str, after: &[i64]) -> i64 {
 
 /// I4.2 to I4.5: the person's change to new holds what hasn't started and tells the lead; back to
 /// repair releases it and tells the agent the ask went to. The lead's own change and a split hold
-/// too, and tell nobody.
+/// too, and tell nobody. The person reads what their change held or released in a short line of
+/// Gathr's own, never the words the lead is told.
 #[test]
 fn a_change_to_new_holds_tasks_not_started_and_the_lead_is_told() {
     let dir = TempDir::new();
@@ -130,6 +139,11 @@ fn a_change_to_new_holds_tasks_not_started_and_the_lead_is_told() {
     assert_eq!(mira.len(), 2, "{mira:?}");
     samples::same("resized: repair with tasks", &mira[1].4);
     assert_eq!(events(&conn, "wait")[1]["gathr.hold.how"], "released");
+    let notes = [
+        "Add the tags table waits for the plan.",
+        "Add the tags table is back in line.",
+    ];
+    assert_eq!(gathr_said(&conn), notes);
 
     // A repair whose work is all done, made new: nobody told.
     let m2 = sent(&mut conn, ("c", "mira"), "T2", "Fix the label");
@@ -201,6 +215,13 @@ fn a_change_to_new_holds_tasks_not_started_and_the_lead_is_told() {
         (Some("T6"), Some(steered.as_str())),
         "answers T6, serves the split-off ask"
     );
+    let notes = gathr_said(&conn);
+    assert_eq!(
+        notes.len(),
+        3,
+        "the lead's own change says nothing: {notes:?}"
+    );
+    assert_eq!(notes[2], "Add the tags table is back in line.");
 }
 
 /// I4.1a: a task waiting for its plan follows the plan: no wake for the lead, the person told once
@@ -256,19 +277,12 @@ fn a_task_waiting_for_its_plan_wakes_nobody_and_is_cancelled_only_with_no_plan()
         )
         .unwrap();
     assert_eq!(woke, 0, "the lead isn't woken");
-    let said: Vec<String> = {
-        let sql =
-            "SELECT body FROM messages WHERE chat_id = 'c' AND turn_id IS NULL AND role = 'gathr'";
-        let mut stmt = conn.prepare(sql).unwrap();
-        stmt.query_map([], |r| r.get(0))
-            .unwrap()
-            .map(Result::unwrap)
-            .collect()
-    };
-    assert!(
-        said.len() == 1 && said[0].contains("#1 (Ann) waits for its plan"),
-        "the person is told: {said:?}"
-    );
+    let stuck = gathr_said(&conn);
+    let stuck: Vec<_> = stuck
+        .iter()
+        .filter(|s| s.contains("#1 (Ann) waits for its plan"))
+        .collect();
+    assert_eq!(stuck.len(), 1, "the person is told: {stuck:?}");
 
     let swept = stale::sweep(&mut conn, now + 3 * DAY + S, DAY, &[], T).unwrap();
     assert_eq!(swept.marked, [one], "marked stale");

@@ -152,8 +152,18 @@ export interface Task {
   created_us: number;
   /** The turn its giver heard it was settled in: a person task's answer shows there. */
   heard_in?: string | null;
-  /** A person task's answer as sent; each Discuss keeps the turn that heard it. */
-  answer?: { discussed?: { text: string; turn: string }[] } | null;
+  /**
+   * A person task's answer as sent, and when (µs); each Discuss keeps the turn that heard it and when it was sent.
+   * Answers sent before 0073 have no time.
+   */
+  answer?: {
+    pick?: string[] | null;
+    yes?: boolean | null;
+    done?: boolean | null;
+    text?: string | null;
+    at?: number;
+    discussed?: { text: string; turn: string; at?: number }[];
+  } | null;
   /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
   pr?: number | null;
   pr_head?: string | null;

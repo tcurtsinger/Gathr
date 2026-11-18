@@ -87,3 +87,23 @@ test('a list read that answers after a cancel and its read never brings back the
   await new Promise((r) => setTimeout(r, 50));
   await expect.element(screen.getByText('stale')).toBeVisible();
 });
+
+test('a second Send of a question while its first is out sends nothing: two places offer it (0073)', async () => {
+  const posted: string[] = [];
+  const held: (() => void)[] = [];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/person-tasks') return json({ tasks: [ask(1)], stale: [] });
+    posted.push(String(init?.body));
+    await new Promise<void>((done) => held.push(done));
+    return json({ answered: [ask(1)], refused: [] });
+  });
+  const screen = await render(<Probe />);
+  await expect.element(screen.getByText('open 1 drafts')).toBeVisible();
+  const first = person.send(ask(1), { values: ['Yes'], notes: '' });
+  await expect.poll(() => posted.length).toBe(1);
+  const second = person.send(ask(1), { values: ['No'], notes: '' });
+  await new Promise((r) => setTimeout(r, 50));
+  for (const done of held) done();
+  expect(await Promise.all([first, second])).toEqual([null, null]);
+  expect(posted).toEqual(['{"answers":[{"task":1,"yes":true}]}']);
+});

@@ -177,9 +177,7 @@ pub fn chat_exists(conn: &Connection, chat: &str) -> Result<bool, Error> {
 /// Messages keep their turn's place, taken when the turn started (0028): replies from agents
 /// working at once never interleave, and a turn not started yet shows last.
 pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
-    let mut stmt = conn.prepare_cached(&format!(
-        "{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.turn_id IS NULL, m.ts, m.id"
-    ))?;
+    let mut stmt = conn.prepare_cached(&history_order())?;
     let messages = stmt
         .query_map([chat], message_row)?
         .collect::<Result<Vec<_>, _>>()?;
@@ -224,18 +222,23 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
     )
 }
 
+/// A chat's messages in the order history reads them.
+fn history_order() -> String {
+    format!("{MESSAGE} WHERE m.chat_id = ?1 ORDER BY {PLACE} IS NULL, {PLACE}, m.ts, m.id")
+}
+
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
 const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
      m.copy_of FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
-/// said in no turn (0051) reads after the block of whoever spoke last before it, and first when
-/// nobody had.
+/// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
+/// that had a message by then, by time among that turn's, and first when no turn had. One window over the chat's
+/// messages in time order, whose frame takes the rows of the same time too: a subquery for each such message read
+/// every message before it.
 const PLACE: &str = "CASE WHEN m.turn_id IS NOT NULL THEN t.position ELSE COALESCE(
-     (SELECT u.position FROM messages x JOIN turns u ON u.id = x.turn_id
-      WHERE x.chat_id = m.chat_id AND x.ts <= m.ts AND x.role = 'assistant' AND u.position IS NOT NULL
-      ORDER BY x.ts DESC, x.id DESC LIMIT 1), 0) END";
+     max(t.position) OVER (ORDER BY m.ts), 0) END";
 
 /// A message as the API shows it; tool and thinking messages carry their JSON body as an object.
 fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
@@ -587,4 +590,65 @@ pub fn add_raw(conn: &Connection, frame: &RawFrame<'_>) -> Result<(), Error> {
         body
     ])?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use rusqlite::{StatementStatus, params};
+
+    /// The steps SQLite takes to read the history of a chat of `turns` turns of 9 messages, each followed by a line
+    /// said in no turn.
+    fn steps(turns: i64) -> i32 {
+        let path = std::env::temp_dir().join(format!("gathr-order-{}.db", crate::ids::uuid()));
+        let conn = crate::db::open(&path).unwrap();
+        conn.execute(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 0)",
+            [],
+        )
+        .unwrap();
+        let mut ts = 0;
+        for turn in 0..turns {
+            let id = format!("t{turn}");
+            conn.execute(
+                "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, position)
+                 VALUES (?1, 'c', 'x', 'done', ?2, ?3)",
+                params![id, ts, turn + 1],
+            )
+            .unwrap();
+            for i in 0..10 {
+                ts += 1;
+                let (turn_id, role) = match i < 9 {
+                    true => (Some(id.as_str()), "assistant"),
+                    false => (None, "gathr"),
+                };
+                conn.execute(
+                    "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
+                     VALUES (?1, 'c', ?2, ?3, ?4, 'text', '')",
+                    params![format!("m{ts}"), turn_id, ts, role],
+                )
+                .unwrap();
+            }
+        }
+        let mut stmt = conn.prepare(&super::history_order()).unwrap();
+        let read = stmt.query_map(["c"], |_| Ok(())).unwrap().count();
+        assert_eq!(read as i64, turns * 10);
+        let steps = stmt.get_status(StatementStatus::VmStep);
+        drop(stmt);
+        drop(conn);
+        for end in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{end}", path.display()));
+        }
+        steps
+    }
+
+    /// Found in review: the order once read every earlier message for each line said in no turn, so a long chat
+    /// with many such lines took seconds to open. Twice the chat is about twice the steps, not four times.
+    #[test]
+    fn the_history_order_grows_with_the_chat_not_with_its_lines_said_in_no_turn() {
+        let (small, large) = (steps(100), steps(200));
+        assert!(
+            large < small * 3,
+            "{small} steps for 1,000 messages, {large} for 2,000"
+        );
+    }
 }
