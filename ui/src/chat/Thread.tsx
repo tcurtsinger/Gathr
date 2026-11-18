@@ -13,7 +13,7 @@ import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
 import { useFound, useLatest } from './found';
 import { GathrMessage } from './Gathr';
-import type { SendFailure } from './messages';
+import type { Custom, SendFailure } from './messages';
 import { useOlder } from './older';
 import { AssistantMessage, UserMessage } from './Replies';
 import { FoundContext } from './TurnParts';
@@ -38,10 +38,18 @@ export interface Actions {
   openPlan?: (plan: number, version: number) => void;
   /** Gives the person's like on a message, answering the waiting questions it holds, or takes it back (0057). */
   like?: (message: string, questions: number[], give: boolean) => void;
+  /** Folds a thread, or opens it (0075). */
+  fold?: (topic: string) => void;
+  /** Shows a long thread's earlier replies. */
+  earlier?: (topic: string) => void;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
 export const useActions = () => useContext(ActionsContext) as Actions;
+
+/** Scrolls to a message, or to a thread's main message by its topic, and holds it there as a search hit is. */
+const JumpContext = createContext<(to: string) => void>(() => {});
+export const useJump = () => useContext(JumpContext);
 
 interface Props {
   /** Its messages, from toThread. */
@@ -92,6 +100,19 @@ export function Thread(props: Props) {
   // A tick of the map opens its message as a search hit opens: whichever was picked last.
   const { target, own, pick } = useLatest(props.target);
   const onJump = useCallback((id: string) => pick({ id, top: true, at: performance.now() }), [pick]);
+  const all = useRef(props.messages);
+  all.current = props.messages;
+  const jump = useCallback(
+    (to: string) => {
+      const main = (m: ThreadMessageLike) => {
+        const own = m.metadata?.custom as Custom | undefined;
+        return own?.topic === to && !own.reply && !own.fold && !own.earlier;
+      };
+      const id = all.current.find((m) => m.id === to || main(m))?.id;
+      if (id) pick({ id, at: performance.now() });
+    },
+    [pick],
+  );
   const found = useFound(props.messages, viewport, reach, target, own ? undefined : props.onTarget);
   useEdges(viewport);
   const runtime = useExternalStoreRuntime({
@@ -106,43 +127,45 @@ export function Thread(props: Props) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
-        <QuestionsContext value={props.questions ?? null}>
-          <FoundContext value={found.text}>
-            <ThreadPrimitive.Root className="thread">
-              <ThreadPrimitive.Viewport
-                ref={viewport}
-                className="thread-viewport"
-                scrollToBottomOnRunStart={!found.held}
-                onScroll={() => {
-                  onScroll();
-                  found.onScroll();
-                }}
-              >
-                <div className="thread-column" data-empty={empty || undefined}>
-                  {header}
-                  {empty && <h2 className="welcome">What are we working on?</h2>}
-                  <div className="thread-messages">
-                    <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+        <JumpContext value={jump}>
+          <QuestionsContext value={props.questions ?? null}>
+            <FoundContext value={found.text}>
+              <ThreadPrimitive.Root className="thread">
+                <ThreadPrimitive.Viewport
+                  ref={viewport}
+                  className="thread-viewport"
+                  scrollToBottomOnRunStart={!found.held}
+                  onScroll={() => {
+                    onScroll();
+                    found.onScroll();
+                  }}
+                >
+                  <div className="thread-column" data-empty={empty || undefined}>
+                    {header}
+                    {empty && <h2 className="welcome">What are we working on?</h2>}
+                    <div className="thread-messages">
+                      <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                    </div>
+                    {after}
+                    <ThreadPrimitive.ViewportFooter className="thread-footer">
+                      <ThreadPrimitive.ScrollToBottom asChild>
+                        <IconButton
+                          aria-label="Scroll to bottom"
+                          variant="outline"
+                          className="thread-bottom bg-background"
+                        >
+                          <ArrowDown />
+                        </IconButton>
+                      </ThreadPrimitive.ScrollToBottom>
+                      {children}
+                    </ThreadPrimitive.ViewportFooter>
                   </div>
-                  {after}
-                  <ThreadPrimitive.ViewportFooter className="thread-footer">
-                    <ThreadPrimitive.ScrollToBottom asChild>
-                      <IconButton
-                        aria-label="Scroll to bottom"
-                        variant="outline"
-                        className="thread-bottom bg-background"
-                      >
-                        <ArrowDown />
-                      </IconButton>
-                    </ThreadPrimitive.ScrollToBottom>
-                    {children}
-                  </ThreadPrimitive.ViewportFooter>
-                </div>
-              </ThreadPrimitive.Viewport>
-              <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
-            </ThreadPrimitive.Root>
-          </FoundContext>
-        </QuestionsContext>
+                </ThreadPrimitive.Viewport>
+                <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
+              </ThreadPrimitive.Root>
+            </FoundContext>
+          </QuestionsContext>
+        </JumpContext>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );
@@ -165,6 +188,8 @@ export function useStable(actions: Actions): Actions {
       openAgent: (agent) => latest.current.openAgent(agent),
       openPlan: (plan, version) => latest.current.openPlan?.(plan, version),
       like: (message, questions, give) => latest.current.like?.(message, questions, give),
+      fold: (topic) => latest.current.fold?.(topic),
+      earlier: (topic) => latest.current.earlier?.(topic),
     }),
     [],
   );

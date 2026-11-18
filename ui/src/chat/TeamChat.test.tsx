@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, ToolBody, Turn } from '../api';
+import { useFolds } from './folds';
 import { toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -53,8 +54,12 @@ const tool = (id: string, turnId: string, name: string, more: Partial<ToolBody> 
 
 function View({ state }: { state: ChatState }) {
   const cache = useRef(new Map());
+  // Every thread starts open here; a press on its fold line folds it, as in the chat.
+  const threads = useFolds();
   const none = () => {};
   const actions: Actions = {
+    fold: threads.fold,
+    earlier: threads.earlier,
     openTask: none,
     openAgent: none,
     diagnostics: none,
@@ -68,7 +73,7 @@ function View({ state }: { state: ChatState }) {
   return (
     <div style={{ height: 900, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, [], cache.current).items}
+        messages={toThread(state, agents, [], cache.current, { ...threads.folds, start: new Set() }).items}
         running={false}
         actions={actions}
         empty={false}
@@ -93,10 +98,12 @@ function talk(): ChatState {
   return {
     ...empty,
     members,
+    // What each turn is about, as the service names it: the member's turn nothing ties is its own main message, and the
+    // turn its message opened sits with it.
     turns: {
-      work: turn('work', 'b', 0),
-      you: turn('you', 'a', 1),
-      told: turn('told', 'a', 2, { answers: 'work' }),
+      work: turn('work', 'b', 0, { topic: 'b:work' }),
+      you: turn('you', 'a', 1, { topic: 'm:u' }),
+      told: turn('told', 'a', 2, { answers: 'work', topic: 'b:work' }),
     },
     messages: [
       said('found', 'work', 'Made-up finding'),
@@ -109,24 +116,24 @@ function talk(): ChatState {
   };
 }
 
-test('a reply between agents shows under the message it answers, and the thread folds', async () => {
+test('a reply between agents reads in the thread of what it answers, and the thread folds', async () => {
   const screen = await render(<View state={talk()} />);
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
   // Under the member's message and the question, before what the person wrote in between.
   expect(order('Made-up finding', 'Made-up question', 'Made-up answer', 'Made-up words of the person')).toBe(
     true,
   );
-  const thread = screen.getByRole('region', { name: 'Replies' });
-  expect(thread.element().textContent).toContain('Made-up question');
-  expect(thread.element().textContent).toContain('Made-up answer');
+  const replies = [...document.querySelectorAll('.said[data-reply]')].map((r) => r.textContent).join(' ');
+  expect(replies).toContain('Made-up question');
+  expect(replies).toContain('Made-up answer');
   // The turn that only answered has no message of its own: its step is on the answer's name line.
   expect(document.querySelectorAll('.said')).toHaveLength(4);
 
-  await screen.getByRole('button', { name: 'Hide' }).click();
+  const line = screen.getByRole('button', { name: /2 replies/ });
+  await line.click();
   await expect.element(screen.getByText('Made-up answer')).not.toBeInTheDocument();
-  const shut = screen.getByRole('button', { name: '2 replies' });
-  await expect.element(shut).toBeVisible();
-  await shut.click();
+  expect(line.element().getAttribute('aria-expanded')).toBe('false');
+  await line.click();
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
 });
 

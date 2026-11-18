@@ -6,6 +6,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, PlanSummary, Task, Turn } from '../api';
+import { opened } from './madeUp';
 import { toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -140,7 +141,7 @@ function View(props: {
   return (
     <div style={{ height: 1400, width, display: 'flex' }}>
       <Thread
-        messages={toThread(state, [...agents, ...extra], [], cache.current).items}
+        messages={toThread(state, [...agents, ...extra], [], cache.current, opened).items}
         running={false}
         actions={actions}
         empty={false}

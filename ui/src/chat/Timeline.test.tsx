@@ -6,6 +6,7 @@ import { server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
+import { opened as everyThread } from './madeUp';
 import { toThread } from './messages';
 import { type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -82,7 +83,7 @@ function View({ state, actions }: { state: ChatState; actions?: Partial<Actions>
   return (
     <div style={{ height: 600, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, [], cache.current).items}
+        messages={toThread(state, agents, [], cache.current, everyThread).items}
         running={false}
         actions={all}
         empty={false}

@@ -115,9 +115,10 @@ function planned(): ChatState {
     ...empty,
     members,
     turns: {
-      ask: turn('ask', 'mira', 0),
-      check: turn('check', 'bo', 1, { task: 2, answers: 'ask' }),
-      back: turn('back', 'mira', 2, { answers: 'ask' }),
+      // What each is about, as the service names it (0075): the ask, then the version checked and sent back.
+      ask: turn('ask', 'mira', 0, { topic: 'm:m1' }),
+      check: turn('check', 'bo', 1, { task: 2, answers: 'ask', topic: 'm:v1' }),
+      back: turn('back', 'mira', 2, { answers: 'ask', topic: 'm:v1' }),
     },
     messages: [
       message('m1', 'ask', 'user', 0, 'Add tags to notes'),
@@ -127,7 +128,10 @@ function planned(): ChatState {
       message('v1', 'ask', 'assistant', 31, body(1)),
       message('r2', 'ask', 'assistant', 40, 'Bo checks it next.'),
       message('b1', 'check', 'gathr', 100, 'Task #2 from Mira: Check plan v1: Tags on notes'),
-      message('c1', null, 'gathr', 160, 'Bo agrees with version 1 of the plan "Tags on notes".'),
+      {
+        ...message('c1', null, 'gathr', 160, 'Bo agrees with version 1 of the plan "Tags on notes".'),
+        topic: 'm:v1',
+      },
       message(
         'sb',
         'back',
@@ -136,7 +140,10 @@ function planned(): ChatState {
         'The person sent back version 1 of your plan "Tags on notes" (plan #3):\nSplit part 2\nWrite the next version with plan.',
       ),
       message('v2', 'back', 'assistant', 210, body(2)),
-      message('ap', null, 'gathr', 500, 'Approved: version 2 of the plan "Tags on notes", 9 tasks.'),
+      {
+        ...message('ap', null, 'gathr', 500, 'Approved: version 2 of the plan "Tags on notes", 9 tasks.'),
+        topic: 'm:v2',
+      },
     ],
     tasks: [
       task(1, 'ann', { what: 'Read the notes schema' }),
@@ -154,7 +161,8 @@ function planned(): ChatState {
   };
 }
 
-const view = (state: ChatState) => toThread(state, agents, [], new Map()).items;
+// Every block, in its thread or not: what each block is, not which threads are open (0075).
+const view = (state: ChatState) => toThread(state, agents, [], new Map()).all;
 const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
 const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const text = (m: ThreadMessageLike | undefined) =>
@@ -178,18 +186,16 @@ test("a version is its own block after the lead's earlier text, headed by the le
   expect(text(second)).toBe('');
 });
 
-test("the lead's text after the plan call reads in a block after the chip, not before it", () => {
-  const order = ids(view(planned()));
-  expect(order.slice(order.indexOf('a-ask'), order.indexOf('a-ask-1') + 1)).toEqual([
-    'a-ask',
-    'v1',
-    'a-ask-1',
-  ]);
-  // The chip follows the lead's own block with nothing between: it doesn't name the lead again.
-  expect(custom(view(planned()).find((m) => m.id === 'v1')).head).toBe(false);
-  expect(text(view(planned()).find((m) => m.id === 'a-ask-1'))).toBe('Bo checks it next.');
+test("the lead's text after the plan call is a block of its own in the ask's thread; the version is a main message", () => {
+  const items = view(planned());
+  const order = ids(items);
+  // The ask's thread holds the lead's text before and after the call; the chip is its own main message after it.
+  expect(order.slice(order.indexOf('m1'), order.indexOf('a-ask-1') + 1)).toEqual(['m1', 'a-ask', 'a-ask-1']);
+  expect(order.indexOf('v1')).toBeGreaterThan(order.indexOf('a-ask-1'));
+  expect(custom(items.find((m) => m.id === 'v1'))).toMatchObject({ head: true, topic: 'm:v1' });
+  expect(custom(items.find((m) => m.id === 'v1')).reply).toBeUndefined();
+  expect(text(items.find((m) => m.id === 'a-ask-1'))).toBe('Bo checks it next.');
 });
-
 test("Gathr's plan lines are kind version, each with its plan", () => {
   const items = view(planned());
   const lines = items.flatMap((m) => custom(m).events ?? []);

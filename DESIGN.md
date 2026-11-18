@@ -219,18 +219,29 @@ lines and question, a bubble holding a waiting question with no pick, and words 
 Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
-### Team messages: one timeline
+### Team messages: main messages and threads
 
-The owner retired the split chat on 2026-11-11
-([0037](docs/decisions/0037-one-timeline.md)): the chat is one timeline in order, for one
-agent or five. There is no team column, no header toggle and no split state. The approved
-design (Shared/designs/chat-redesign) is a reference only: compose the existing assistant-ui
-registry components and Gathr state in React; never port its HTML.
+A team chat is main messages, each with its thread
+([0075](docs/decisions/0075-a-team-chat-is-main-messages-each-with-its-thread.md), the threads mock-up's `#day`,
+`#roots` A and `#result` A). A main message is something put to someone that starts a piece of work or needs the
+person: the person's own message, each task the lead hands out, each version of a plan, a question to the person,
+the result of an ask, and anything nothing ties. Main messages read in the order they were put; under each, its
+thread: the answers, the agents' progress and talk, the PR, its review and fix, Gathr's lines about it. The service
+says what each turn, task and line is about; the window never guesses. A chat of one agent is one timeline, as the
+chat was before ([0037](docs/decisions/0037-one-timeline.md)), and so is what a chat said before it became a team.
+The approved designs (Shared/designs) are a reference only: compose the existing registry components and Gathr
+state in React; never port their HTML.
 
-A turn is one block where it began, in 0028's turn-start order between turns, so replies
-streaming at once never interleave and a later reply lands in its own turn's block. Only a
-person's message sent into a running turn splits that turn: one block before it, one after.
+Inside a thread, and in a chat of one, a turn is one block where it began, in 0028's turn-start order between
+turns, so replies streaming at once never interleave and a later reply lands in its own turn's block. Only a
+person's message sent into a running turn splits that turn: one block before it, one after, and what the turn says
+after it is about that message.
 
+**The words are as wide as the message box** (the owner's rule): a main message's bubble starts at the box's left
+edge and a full one ends at its right edge; its face hangs in a 48px gutter left of that width. Where the pane
+leaves no room beside the column for the gutter (a narrow pane, the 360 column beside the side panel), the column's
+left padding makes it and the box moves in with the words, so the two stay the same width at every size. The
+conversation map shows only where it fits left of the faces.
 Every message stands in a bubble beside its author's face, everyone on the left, as a team chat
 reads ([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
 the face 36px, 12px from the bubble, level with the bubble's top under the name line; the person's own
@@ -244,7 +255,8 @@ approval, open steps), the face sits level with it as with a bubble, 5px under t
 
 Above the bubble, one name line, 20px: the name at 15px/650, 8px, then every other piece in one size and
 colour, 12.5px at 450, muted, tabular figures, with "·" between them 6px each side: Supervisor (the lead,
-in a chat of two or more), the time, and for a member or reviewer "on" the task its turn works on, cut
+in a chat of two or more, on a main message; never in a thread, and not in the 360 column), the time, "Result"
+on an ask's result, and for a member or reviewer "on" the task its turn works on, cut
 with an ellipsis. How the task ended is on its member's last message alone, after the task: a 12px tick once it
 is done, else Cancelled (a circle with a slash) or Failed (a circle with !, in the danger colour) as words; blocked,
 stopped and merging are the face's mark, never a tick. How a turn ended is a word after that, always shown, in the
@@ -280,19 +292,44 @@ step, with their time together. While a turn runs and its steps are closed, what
 message. A turn that only wrote once has no steps, nor has one whose only work was a thought under a
 second.
 
-Messages agents write to each other are a thread under the message they belong to: a reply joins the
-thread of the message it answers (the one Gathr carried into its turn from the agent it writes to), and
-a message that answers none sits under the block its own turn was writing when it sent it. The thread
-hangs 48px in, a 1px border line at its left, 12px to its messages, 14px between them, with faces at
-28px, names at 14px and words at 14.5px. A toggle on top, 13px muted, reads "Hide" with a chevron
-turned down; folded, it shows the faces of who talked and "4 replies". A talk with no block to sit under
-stands where it began, its messages as any other. A message to an agent opens with the agent's @Name in
-the accent blue at the words' weight, no underline, unless it quotes what it answers: when something
-came between the two, the answered words lead the bubble plainly, one line cut with an ellipsis, 13px
-muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no block of
-its own: its steps are on its first message's name line. Gathr's copy of a message in the receiver's turn
-is never shown.
+A main message says where it stands at its name line's right, 10px after the other pieces, which give way to it
+(a long task is cut, never the state): the mark's shape still at 12px and its word, from the same function the
+Tasks list reads (0071's marks). The person's ask: Working (the ring in the attention colour, the word in the words'
+colour) or Done (a tick); Done is a link that scrolls to the ask's newest result. A task: its PR first ("PR #22")
+when it has one, then its state as its row says it, Waiting saying on what when it waits on one thing ("Waiting on
+PR #22 checks"). A plan version: Checking, Needs you, Working, Approved, Sent back or Dropped. A question: Needs you,
+Discussing or Answered. Needs you is the attention blue at 550 with its dot. A result and a turn nothing ties say none.
 
+A task the lead hands out is drawn from its record, as no message carries the hand-out: the giver's face and name
+(You for one the person gave) and the time it was given, then in a bubble as wide as the box the owner's blue
+@Name and the task's title at 600 (a press opens it in the Tasks tab), and under it the first line of why it was
+given, 14px at 78%, cut with an ellipsis, then "More" (13px muted, dotted underline) that opens the rest of why and
+the brief's Done when, Proof, Where and Size in place; "Less" closes them. The lead's turn that gave it stays in
+the ask's thread, its steps saying "gave 3 tasks".
+
+An ask's result is the lead's own block, at the bottom, opening with a plain quote of the ask's first line (the
+quote style below): a press on it scrolls up to the ask and holds it there, as a search hit does.
+
+Under a main message with replies, one fold line, the same open or folded: a chevron (turned down when open), the
+faces of who replied at 18px, "1 reply" or "4 replies", and the newest reply's time, 13px muted. A press folds or
+opens the thread; the line stays where it was, and a thread opened at the chat's foot scrolls up to show above the
+box. A thread starts open; when the chat is opened, one whose main message is handled starts folded (a task done or
+cancelled, a decided version, an answered question, an ask with nothing open, every turn of it over and no approval
+waiting). Nothing folds or opens by itself while the chat is open, not for a new reply; the person's own fold holds
+until the chat closes. Each reply is an item of the chat's own, 13px in from the main message's left edge: a 1px
+border line at the edge joins the thread's items, 14px apart, faces at 28px, names at 14px, words at 14.5px, and its
+words still end at the box's right edge. Threads never nest. An open thread of more than three replies shows its
+newest three under "Show 4 earlier replies" (13px muted); a reply that holds an approval waiting, a failed step or a
+running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit or the
+approval dock opens the thread, and its earlier replies, to show what it leads to.
+
+Messages agents write to each other sit in the thread of what the writer's work is about; a reply sits where the
+message it answers sits (the one Gathr carried into its turn from the agent it writes to). A message to an agent
+opens with the agent's @Name in the accent blue at the words' weight, no underline, unless it quotes what it
+answers: when something came between the two, the answered words lead the bubble plainly, one line cut with an
+ellipsis, 13px muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no
+block of its own: its steps are on its first message's name line. Gathr's copy of a message in the receiver's turn
+is never shown.
 A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box.
 Pointing at it or focusing it shows who gave it, as their names on one line beside the count, in a small box as tall
 as the count, so it covers no message; with no room beside it (a narrow column, a thread) it wraps under the count, in
@@ -313,10 +350,11 @@ A check that ran late is "Plan v1 came to you before Rev finished checking it.".
 size held or released tasks: "Tag picker waits for the plan." or "Tag picker is back in line.". Anything else
 (a wait's result, a wake-up, a stale-task nudge, a usage interruption) is its words, whole.
 
-Gathr's question is its message too: the question's why as its words, and the question block (Human tasks) in
-its bubble. An agent's question sits in the bubble of the block that asked it, with the same block. The
-person's answer, and each Discuss, is their own message at the time they sent it, below the question; once
-answered the question reads as answered, its words alone.
+Gathr's question is its message too, a main message: the question's why as its words, and the question block (Human
+tasks) in its bubble. An agent's question sits in the bubble of the block that asked it, with the same block; that
+block is the question's main message, and the rest of its turn stays in the turn's thread. The person's answer, and
+each Discuss, is their own message in the question's thread, whenever they sent it, with the lead's turns that heard
+them; once answered the question reads as answered, its words alone. The question keeps its Discuss switch.
 
 Two things Gathr tells an agent are never drawn: the brief of a member's own task (Gathr's message that opens
 with "Task #<number> from", in a turn on that task), because the member's header says the task and the
@@ -340,10 +378,8 @@ tinted and carries a blue tick, and the arrow keys move between them. Choosing o
 nothing explains them. A refused change shows under the bubble with its reference. An archived chat shows the
 face and the word alone.
 
-Work on a pull request reads under the PR's message: a review's turns and later work on the same PR (its fix)
-are a thread under the last message of the PR's own task, each whole, with its name line, its task and its tick.
-The thread is open while anything in it is open, and folds to its faces and how many replies once every task in
-it is done or cancelled (0072).
+Work on a pull request reads in the thread of the task whose PR it is: a review's turns and the fix Gathr gave after it,
+each whole, with its name line, its task and its tick (0075).
 An approval keeps its card where the agent asked. Waiting approvals also dock above the
 composer, and a plan waiting on you after them: an attention border at 50%, 16px radius, the popover surface; the agent's face,
 "Needs you · 1 of 3" in the attention colour, "Vale wants to run" and the command or tool in
@@ -397,11 +433,11 @@ The registry's ConversationMap as published ([0039](docs/decisions/0039-conversa
 14px inside the chat pane's left edge. Its length is at most half the pane's height below the header and
 never more than 616px (44 ticks at 14px); it is centred in that height, with the same space above it as
 below it down to the pane's bottom edge. It shows from three ticks up and only with 44px left of the
-column, so it never lies over the text, the composer, the approval dock or the scroll-to-bottom button.
+faces that hang left of the column's words (0075), so it never lies over a face, the text, the composer, the approval dock or the scroll-to-bottom button.
 Only its ticks take the pointer.
 
-- Ticks: 12px long and 2px thick for a message from the person (foreground 22%), 6px for the lead's reply to
-  them (15%), 12px long and 4px thick for a folded day (22%). On screen 50%; current 3px thick at 90%.
+- Ticks: 12px long and 2px thick for a message from the person (foreground 22%), 6px for an ask's result in a
+  team chat, or in a chat of one the agent's reply to the person (15%), 12px long and 4px thick for a folded day (22%). On screen 50%; current 3px thick at 90%.
   Pointing at the rail lengthens the ticks on screen by 6px, and the current one and the one under the
   pointer by 12px; a reply's stays 6px shorter than the others throughout. Reduced motion removes the
   transition. No other agent's turn, work row, exchange or event has a tick, nor a turn still running.

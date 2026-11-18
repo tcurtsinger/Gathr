@@ -385,47 +385,7 @@
   font-weight: 600;
 }
 
-/* Talk between agents under the message it belongs to: a thin line at the bubble's left edge, a toggle on top. */
-.talk {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.talk[data-thread] {
-  gap: 14px;
-  margin: -10px 0 0 48px;
-  padding: 0 0 4px 12px;
-  border-left: 1px solid var(--border);
-}
-.talk-toggle {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 6px;
-  min-height: 0;
-  padding: 2px 0;
-  border: 0;
-  background: none;
-  color: var(--muted-foreground);
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-.talk-toggle:hover {
-  color: var(--foreground);
-}
-.talk-chevron {
-  width: 14px;
-  height: 14px;
-}
-.talk[data-open] .talk-chevron {
-  rotate: 90deg;
-}
-.talk-replies {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
+/* A reply in a thread (0075): a smaller face and words. Where it sits is mains.css's. */
 .said[data-small] {
   grid-template-columns: 28px minmax(0, 1fr);
   column-gap: 10px;

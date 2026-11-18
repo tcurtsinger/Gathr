@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react';
 import { useContext } from 'react';
 import { GathrFace } from '../components/Face';
 import { Asked, QuestionsContext } from './Asked';
+import { MainWord } from './MainWord';
 import type { EventLine } from './messages';
 import { custom } from './Replies';
 import { Bubble, NameLine, Said, When } from './Said';
@@ -24,8 +25,16 @@ export function GathrMessage() {
     <Said
       root
       gathr
-      face={<GathrFace size={36} />}
-      line={<NameLine name="Gathr" pieces={[<When key="t" time={own.time} />]} />}
+      reply={own.reply}
+      small={own.reply}
+      face={<GathrFace size={own.reply ? 28 : 36} />}
+      line={
+        <NameLine
+          name="Gathr"
+          pieces={[<When key="t" time={own.time} />]}
+          state={<MainWord state={own.state} />}
+        />
+      }
     >
       <Bubble quote={fixed?.text}>
         {why && <p className="gathr-says">{why}</p>}

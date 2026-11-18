@@ -29,6 +29,7 @@ import { ApprovalDock } from './ApprovalDock';
 import type { Questions } from './Asked';
 import { ChatMenu } from './ChatMenu';
 import { MarksContext, useChatMarks } from './faceMarks';
+import { useFolds } from './folds';
 import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
@@ -131,7 +132,13 @@ export function ChatView(props: Props) {
   const cache = useRef(new Map());
   const { removed = NONE } = props;
   const named = useMemo(() => [...agents, ...removed], [agents, removed]);
-  const timeline = useMemo(() => toThread(state, named, failed, cache.current), [state, named, failed]);
+  const threads = useFolds();
+  const { folds, start } = threads;
+  const timeline = useMemo(
+    () => toThread(state, named, failed, cache.current, { ...folds, start: start.current }),
+    [state, named, failed, folds, start],
+  );
+  threads.settle(timeline, loaded);
   const { answers } = props;
   const chatTasks = state.tasks;
   const questions = useMemo<Questions | undefined>(
@@ -149,7 +156,7 @@ export function ChatView(props: Props) {
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
-  const crew = glances(state, activity(timeline.items), waiting, before.current);
+  const crew = glances(state, activity(timeline.all), waiting, before.current);
   before.current = crew;
   const marks = useChatMarks(crew, timeline.items, archived);
   // Who the message box can name, and who gets a message that names nobody: there is no picker.
@@ -159,18 +166,19 @@ export function ChatView(props: Props) {
   const to = addressed(picks, people, fallback, fresh);
   const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
+  threads.open(hit);
   // An approval shown from the dock, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
   const member = (id: string) => ({ id, name: members.find((m) => m.agent === id)?.name ?? 'An agent' });
   const show = (request: string) => {
-    const asks = (m: (typeof timeline.items)[number]) => {
-      const own = m.metadata?.custom as Custom | undefined;
-      // A block in a thread under a PR asks in the thread's item.
-      const blocks = [own, ...(own?.thread ?? []).map((s) => s.block)];
-      return blocks.some((b) => b?.approvals?.some((a) => a.request === request));
-    };
-    const id = timeline.items.find(asks)?.id;
-    if (id) setShown({ id, card: request, at: performance.now() });
+    const asks = (m: (typeof timeline.all)[number]) =>
+      (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);
+    const item = timeline.all.find(asks);
+    if (!item) return;
+    const topic = (item.metadata?.custom as Custom | undefined)?.topic;
+    // The dock opens the thread it waits in, as a search hit does.
+    if (topic && !timeline.items.includes(item)) threads.reveal(topic);
+    setShown({ id: item.id as string, card: request, at: performance.now() });
   };
 
   useFirstTokenReport(state.partial);
@@ -216,6 +224,8 @@ export function ChatView(props: Props) {
     openAgent: (id) => {
       if (crew.some((g) => g.member.agent === id)) props.onOpenAgent?.(id);
     },
+    fold: threads.fold,
+    earlier: threads.earlier,
   };
   const stable = useStable(actions);
   const { agentOpen, workspace } = props;
@@ -283,7 +293,7 @@ export function ChatView(props: Props) {
             glance={opened}
             tasks={state.tasks}
             members={state.members}
-            {...blocksOf(timeline.items, agent, mine)}
+            {...blocksOf(timeline.all, agent, mine)}
             actions={stable}
             onMessage={!archived && people.some((p) => p.id === agent) ? message : undefined}
             onCompact={archived ? undefined : compact}

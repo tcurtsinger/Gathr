@@ -12,15 +12,28 @@ import { asked } from './ApprovalDock';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
 import type { Like } from './likes';
+import { MainWord } from './MainWord';
 import type { Custom } from './messages';
-import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
+import {
+  AgentFace,
+  Bubble,
+  EndRow,
+  EndWord,
+  NameLine,
+  OnTask,
+  Reactions,
+  RoleWord,
+  Said,
+  When,
+  YouSaid,
+} from './Said';
 import { SizeWord } from './Size';
 import { StepsButton, useStepsOpen } from './Steps';
 import type { Approval } from './state';
-import { Talk } from './Talk';
-import { type Actions, useActions } from './Thread';
+import { Earlier, FoldLine, TalkMessage } from './Talk';
+import { TaskMain } from './TaskMain';
+import { type Actions, useActions, useJump } from './Thread';
 import { FoundContext, PlanChip, WorkRow } from './TurnParts';
-import { roleName } from './team';
 
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
@@ -41,8 +54,10 @@ export function UserMessage() {
     <Said
       root
       you
+      reply={own.reply}
+      small={own.reply}
       bare={stop}
-      face={<YouSaid />}
+      face={<YouSaid small={own.reply} />}
       line={
         <NameLine
           name="You"
@@ -51,6 +66,7 @@ export function UserMessage() {
             unsent && !stop && <EndWord key="e" word="Not sent" bad />,
             size && <SizeWord key="size" size={size} onFailure={setRefused} />,
           ]}
+          state={<MainWord state={own.state} />}
         />
       }
     >
@@ -87,10 +103,14 @@ function PersonText({ text }: { text: string }) {
 }
 const personParts = { Text: PersonText };
 
+/** An agent's message, or what a thread draws between them: its fold line, "Show earlier", a task handed out. */
 export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
-  if (own.thread) return <Talk said={own.thread} under={!!own.under} settled={!!own.settled} />;
+  if (own.fold) return <FoldLine fold={own.fold} />;
+  if (own.earlier) return <Earlier earlier={own.earlier} />;
+  if (own.brief) return <TaskMain own={own} />;
+  if (own.said) return <TalkMessage own={own} said={own.said} />;
   return <Reply own={own} id={id} />;
 }
 
@@ -98,24 +118,16 @@ export function AssistantMessage() {
  * A block of an agent's turn: its face and name line (with how its task or turn ended, and its steps), its words in a
  * bubble with its plan's chip, thumbs-ups, then its approvals and what the person can do about how it ended. A block
  * with nothing to show draws nothing: a turn that has just started shows on the status line, not as an empty message.
- * In a thread it is one of the thread's messages (`index`: its words' part there), `small` under the message it
- * belongs to.
+ * A main message says its state at its name line's right; an ask's result quotes the ask (0075). A reply sits in its
+ * thread, smaller.
  */
-export function Reply({
-  own,
-  id,
-  index,
-  small,
-}: {
-  own: Custom;
-  id: string;
-  index?: number;
-  small?: boolean;
-}) {
-  const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked } = own;
+export function Reply({ own, id }: { own: Custom; id: string }) {
+  const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked, result } = own;
   const actions = useActions();
+  const jump = useJump();
   const like = liking(own.like, actions);
   const [open, setOpen] = useStepsOpen(work);
+  const small = own.reply;
   const words = !!own.text || !!plan || !!asked?.length;
   if (!words && !work && !approvals?.length && !ending && !out && !agreed?.length) return null;
   // How it ended says who: a block of its own is named.
@@ -124,8 +136,9 @@ export function Reply({
   const lined = named || !!work || !!ending?.word;
   return (
     <Said
-      root={index === undefined}
+      root
       small={small}
+      reply={small}
       agent={by}
       // With no words, the steps are all the block has: they stay shown.
       keep={!!work && (work.running || !!work.failed || !!work.refused || !words)}
@@ -150,13 +163,17 @@ export function Reply({
           <NameLine
             name={agent ?? ''}
             pieces={[
-              role === 'supervisor' && roleName.supervisor,
+              // In a thread the lead is named alone, as every reply is.
+              role === 'supervisor' && !small && <RoleWord key="role" />,
               <When key="t" time={own.time} />,
+              // The smallest honest mark of an ask's result: it closes the ask it quotes.
+              result && 'Result',
               on && <OnTask key="on" what={on} done={done} />,
               out && <Outcome key="out" out={out} />,
               ending?.word && <EndWord key="end" word={ending.word} bad={ending.bad} />,
             ]}
             end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
+            state={<MainWord state={own.state} />}
           />
         )
       }
@@ -166,12 +183,12 @@ export function Reply({
         <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
       )}
       {words && (
-        <Bubble actions={like && <MessageActions like={like} />}>
-          {index !== undefined ? (
-            <MessagePrimitive.PartByIndex index={index} components={parts} />
-          ) : (
-            <MessagePrimitive.Parts components={parts} />
-          )}
+        <Bubble
+          quote={result?.quote}
+          onQuote={result && (() => jump(result.ask))}
+          actions={like && <MessageActions like={like} />}
+        >
+          <MessagePrimitive.Parts components={parts} />
           {plan && (
             <PlanChip
               version={plan.version}

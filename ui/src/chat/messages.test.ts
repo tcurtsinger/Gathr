@@ -1,15 +1,29 @@
-// The chat as one timeline (0037): where each block sits, what a turn folds into its row, who talks to
-// whom, and which of Gathr's notes become its own messages.
+// The chat's blocks (0037, 0075): where each sits, in a chat of one as one timeline and in a team in its main message's
+// thread, what a turn folds into its row, who talks to whom, and which of Gathr's notes become its own messages.
 import { expect, test } from 'vitest';
 import { Failure, type Message, type ThinkingBody } from '../api';
 import { duration } from './fold';
-import { agents, at, byId, custom, events, ids, round, said, task, text, tool, turn, view } from './madeUp';
+import {
+  agents,
+  alone,
+  at,
+  byId,
+  custom,
+  events,
+  ids,
+  round,
+  said,
+  task,
+  text,
+  tool,
+  turn,
+  view,
+} from './madeUp';
 import { toThread } from './messages';
 import { apply, type ChatState } from './state';
 
-test('the chat is one list in order: the person, the lead and each member where its turn began', () => {
-  const { items } = view(round());
-  expect(ids(items)).toEqual([
+test('a chat of one agent is one list in order: the person, then each turn where it began', () => {
+  expect(ids(view(alone(round())).items)).toEqual([
     'ask-user',
     'a-ask',
     'mid-user',
@@ -19,17 +33,55 @@ test('the chat is one list in order: the person, the lead and each member where 
     'a-rowan',
     'a-kit',
   ]);
-  // A member's block is headed by the task it works on; Gathr's message that gave it isn't drawn.
-  expect(custom(byId(items, 'a-rowan'))).toMatchObject({ agent: 'Rowan', role: 'member', on: 'Task 1' });
-  expect(custom(byId(items, 'a-ask')).on).toBeUndefined();
 });
 
+test('a team chat is its main messages in time order, each with its thread; a member is headed by its task', () => {
+  const { items, all } = view(round());
+  // The tasks the lead handed out are main messages, at the time they were given; a done task's thread starts folded.
+  expect(ids(items)).toEqual([
+    'ask-user',
+    'fold-m:ask-user',
+    'task-1',
+    'fold-t:1',
+    'task-2',
+    'fold-t:2',
+    'a-kit',
+    'mid-user',
+    'fold-m:mid-user',
+    'direct-user',
+    'fold-m:direct-user',
+  ]);
+  expect(ids(all)).toEqual([
+    'ask-user',
+    'a-ask',
+    'task-1',
+    'a-rowan',
+    'task-2',
+    'a-kit',
+    'mid-user',
+    'a-mid',
+    'direct-user',
+    'a-direct',
+  ]);
+  // A member's block is headed by the task it works on; Gathr's message that gave it isn't drawn.
+  expect(custom(byId(all, 'a-rowan'))).toMatchObject({
+    agent: 'Rowan',
+    role: 'member',
+    on: 'Task 1',
+    reply: true,
+  });
+  expect(custom(byId(all, 'a-ask')).on).toBeUndefined();
+  expect(custom(byId(items, 'task-2'))).toMatchObject({
+    brief: { what: 'Task 2', owner: 'Kit' },
+    agent: 'Mira',
+  });
+});
 test("replies that finish out of order keep their turns' order, as a reload shows them", () => {
   const state = round();
   // Rowan's turn started first; Kit's reply was saved first.
   const rowan = state.messages.filter((m) => m.turn === 'rowan');
   state.messages = [...state.messages.filter((m) => m.turn !== 'rowan'), ...rowan];
-  expect(ids(view(state).items).slice(-2)).toEqual(['a-rowan', 'a-kit']);
+  expect(ids(view(alone(state)).items).slice(-2)).toEqual(['a-rowan', 'a-kit']);
 });
 
 test("two turns started live keep the service's order, whatever order their updates arrive in", () => {
@@ -59,7 +111,7 @@ test('turns streaming at once never interleave, and a late reply lands in its ow
     // The lead, whose turn began first, writes once more after its members.
     said('ask', 'assistant', 'Both are on it'),
   );
-  const { items } = view(state);
+  const { items } = view(alone(state));
   expect(ids(items)).toEqual([
     'ask-user',
     'a-ask',
@@ -80,10 +132,8 @@ test('a turn waiting to start stays where its message was sent, and what comes a
   // Held by a pause: no place among the turns yet.
   state.turns.held = turn('held', 'mira', { status: 'queued', held: 'pause' });
   state.turns.late = { ...turn('late', 'lane'), position: 5 };
-  const note: Message = { ...said('kit', 'assistant', 'Kit to Rowan'), id: 'note-1', to: 'rowan' };
-  state.messages.push(said('held', 'user', 'One more thing'), note, said('late', 'assistant', 'Lane, later'));
-  // Kit's message to Rowan sits under what Kit was writing when it sent it (0072).
-  expect(ids(view(state).items).slice(-4)).toEqual(['a-kit', 'note-1', 'held-user', 'a-late']);
+  state.messages.push(said('held', 'user', 'One more thing'), said('late', 'assistant', 'Lane, later'));
+  expect(ids(view(alone(state)).items).slice(-3)).toEqual(['a-kit', 'held-user', 'a-late']);
 });
 
 test("a person's message sent into a running turn splits that turn's block where it was sent", () => {
@@ -91,7 +141,7 @@ test("a person's message sent into a running turn splits that turn's block where
   state.turns.kit.status = 'running';
   state.messages.push(said('kit', 'user', '@Kit keep the shortcuts'), said('kit', 'assistant', 'Kept'));
   state.partial = { kit: 'Still checking' };
-  const { items } = view(state);
+  const { items } = view(alone(state));
   expect(ids(items).slice(-3)).toEqual(['a-kit', 'kit-user', 'a-kit-1']);
   expect(text(byId(items, 'a-kit'))).toBe('Checked');
   // What it said before the stream is mid-work now; the stream is its message.
@@ -118,7 +168,7 @@ test('a finished turn folds what it did into one row, and its last text is the m
     tool('lead', 't6', 'mcp__gathr__give_task', { duration_ms: 9_000 }, iso(100)),
     { ...said('lead', 'assistant', 'Two things are left.'), time: iso(109) },
   );
-  const block = byId(view(state).items, 'a-lead');
+  const block = byId(view(state).all, 'a-lead');
   expect(text(block)).toBe('Two things are left.');
   const work = custom(block).work;
   expect(work).toMatchObject({
@@ -159,7 +209,7 @@ test('a look-into task the turn gave reads so in its chip', () => {
     tool('lead', 't1', 'mcp__gathr__give_task'),
     said('lead', 'assistant', 'Rowan looks first.'),
   );
-  expect(custom(byId(view(state).items, 'a-lead')).work?.steps).toMatchObject([
+  expect(custom(byId(view(state).all, 'a-lead')).work?.steps).toMatchObject([
     { label: 'Gave Rowan a task', detail: '#12 Look into: Survey tag libraries', task: 12 },
   ]);
 });
@@ -188,7 +238,7 @@ test('a step shows what it ran as its chip, under the engine’s own words for i
     tool('lead', 's15', 'WebSearch', { status: 'running' }),
   );
   state.turns.lead.status = 'running';
-  const work = custom(byId(view(state).items, 'a-lead')).work;
+  const work = custom(byId(view(state).all, 'a-lead')).work;
   // What each step says now: a running one in the present (Tool call swaps between the two).
   const shown = work?.steps.map((s) =>
     'say' in s ? s.say : [s.state === 'running' ? s.doing : s.label, s.detail],
@@ -218,21 +268,21 @@ test('a running turn’s row says what the agent is doing now; text streaming la
   const state = round();
   state.turns.kit.status = 'running';
   state.messages.push(tool('kit', 'k1', 'Edit'), tool('kit', 'k2', 'Shell', { status: 'running' }));
-  const running = custom(byId(view(state).items, 'a-kit')).work;
+  const running = custom(byId(view(state).all, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Running a command', notes: ['2 steps'] });
   expect(running?.steps[0]).toEqual({ id: expect.any(String), say: 'Checked' });
-  expect(text(byId(view(state).items, 'a-kit'))).toBe('');
+  expect(text(byId(view(state).all, 'a-kit'))).toBe('');
 
   // The command ended and it writes: the row stays, the words show as its message.
   state.messages[state.messages.length - 1] = tool('kit', 'k2', 'Shell');
   state.partial = { kit: 'All 360 pass' };
-  const block = byId(view(state).items, 'a-kit');
+  const block = byId(view(state).all, 'a-kit');
   expect(custom(block).work).toMatchObject({ running: true, label: 'Working', notes: ['2 steps'] });
   expect(text(block)).toBe('All 360 pass');
 });
 
 test('a turn that only wrote once has no row', () => {
-  const { items } = view(round());
+  const { all: items } = view(round());
   expect(custom(byId(items, 'a-rowan')).work).toBeUndefined();
   expect(text(byId(items, 'a-rowan'))).toBe('Cursor fixed');
 });
@@ -254,11 +304,12 @@ test('a row’s times read as a person says them, and nothing under a second sho
   ]);
 });
 
-test('messages between agents are a thread under the block they were sent from, a reply with what it answers; Gathr’s copy stays hidden', () => {
+test('messages between agents sit in the thread of what they are about, a reply after what it answers; Gathr’s copy stays hidden', () => {
   const state = round();
-  // Kit asks Mira mid-turn, Mira answers from her own turn; later Mira writes to Rowan.
+  // Kit asks Mira mid-turn, Mira answers from the turn Kit's message opened; later Mira writes to Rowan.
   const ask: Message = { ...said('kit', 'assistant', 'Is 30 seconds fine?'), id: 'ask-1', to: 'mira' };
-  state.turns.told = { ...turn('told', 'mira', { answers: 'kit' }), position: 5 };
+  // The turn Kit's message opened is about what Kit's turn is about (the service follows the copy).
+  state.turns.told = { ...turn('told', 'mira', { answers: 'kit', topic: 't:2' }), position: 5 };
   const copy: Message = {
     ...said('told', 'gathr', 'Kit wrote to you: Is 30 seconds fine?'),
     copy_of: 'ask-1',
@@ -273,29 +324,35 @@ test('messages between agents are a thread under the block they were sent from, 
   );
   const later: Message = { ...said('told', 'assistant', 'Rowan, rebase first'), id: 'later-1', to: 'rowan' };
   state.messages.push(later);
-  const { items, find } = view(state);
+  const { all: items, find } = view(state);
 
-  // Kit's question and Mira's answer under Kit's block; Mira's later message under her own.
-  expect(ids(items).slice(-4)).toEqual(['a-kit', 'ask-1', 'a-told', 'later-1']);
-  const talk = byId(items, 'ask-1');
-  expect(custom(talk)).toMatchObject({ under: true });
-  expect(custom(talk).thread).toMatchObject([
-    { from: 'Kit', to: 'Mira' },
-    { from: 'Mira', to: 'Kit' },
+  // Each is an item of its own in Kit's task's thread, in the order they were said.
+  const order = ids(items);
+  expect(order.slice(order.indexOf('task-2'), order.indexOf('mid-user'))).toEqual([
+    'task-2',
+    'a-kit',
+    'ask-1',
+    'a-told',
+    'answer-1',
+    'later-1',
   ]);
-  expect(text(talk)).toBe('Is 30 seconds fine? | Yes, 30 seconds.');
-  expect(custom(byId(items, 'later-1')).thread).toMatchObject([{ from: 'Mira', to: 'Rowan' }]);
+  expect(custom(byId(items, 'ask-1'))).toMatchObject({ reply: true, said: { from: 'Kit', to: 'Mira' } });
+  expect(custom(byId(items, 'answer-1')).said).toMatchObject({ from: 'Mira', to: 'Kit' });
+  expect(text(byId(items, 'answer-1'))).toBe('Yes, 30 seconds.');
+  expect(custom(byId(items, 'later-1')).said).toMatchObject({ from: 'Mira', to: 'Rowan' });
   expect(text(byId(items, 'a-told'))).toBe('Kit has its answer');
   expect(custom(byId(items, 'a-told')).work?.steps).toMatchObject([{ label: 'Sent a message' }]);
-  // A search hit on Gathr's copy opens at the message it carries.
-  expect(find(copy.id)).toEqual({ id: 'ask-1', text: 'Is 30 seconds fine?', nth: 0 });
-  expect(find('answer-1')).toEqual({ id: 'ask-1', text: 'Yes, 30 seconds.', nth: 0 });
+  // A search hit on Gathr's copy opens at the message it carries, here behind the thread's earlier replies.
+  expect(find(copy.id)).toEqual({ id: 'ask-1', text: 'Is 30 seconds fine?', nth: 0, topic: 't:2' });
+  expect(find('answer-1')).toEqual({ id: 'answer-1', text: 'Yes, 30 seconds.', nth: 0 });
 });
 
 test('Gathr’s notes are its own messages, each with its time; what a task’s end told is not drawn, read or not', () => {
   const state = round();
-  state.turns.back = { ...turn('back', 'mira', { answers: 'ask' }), position: 5 };
-  state.turns.woke = { ...turn('woke', 'mira'), position: 7 };
+  const ask = `m:${state.messages[0].id}`;
+  state.turns.back = { ...turn('back', 'mira', { answers: 'ask', topic: ask }), position: 5 };
+  // A wake nothing ties: a main message of its own, opened by Gathr's words.
+  state.turns.woke = { ...turn('woke', 'mira', { topic: 'b:woke' }), position: 7 };
   state.messages.push(
     said(
       'back',
@@ -309,33 +366,33 @@ test('Gathr’s notes are its own messages, each with its time; what a task’s 
       'gathr',
       'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #7 Sol, Task 7: done\nRead.',
     ),
-    { ...said('none', 'gathr', 'A task is done:\n- #1 Rowan, Task 1: done'), turn: null },
+    { ...said('none', 'gathr', 'A task is done:\n- #1 Rowan, Task 1: done'), turn: null, topic: 't:1' },
     said('woke', 'gathr', 'Your wait on CI on #12 ended'),
     said('woke', 'assistant', 'CI passed'),
   );
-  const { items } = view(state);
-  expect(events(items)).toEqual([{ kind: 'note', text: 'Your wait on CI on #12 ended' }]);
-  // It sits where it happened, before the reply it woke.
-  expect(ids(items).slice(-3)).toEqual(['a-back', 'woke-gathr', 'a-woke']);
+  const { all } = view(state);
+  expect(events(all)).toEqual([{ kind: 'note', text: 'Your wait on CI on #12 ended' }]);
+  // It is the wake's main message, and the reply it woke is in its thread.
+  expect(ids(all).slice(-2)).toEqual(['woke-gathr', 'a-woke']);
+  expect(custom(all.at(-1)).reply).toBe(true);
   const woke = state.messages.at(-2) as Message;
-  expect(custom(items.at(-2)).time).toBe(woke.time);
-  expect(items.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
+  expect(custom(all.at(-2)).time).toBe(woke.time);
+  expect(all.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
 });
-
 test('a speaker is named when it changes, not on each of its blocks in a row', () => {
   const state = round();
-  state.turns.again = { ...turn('again', 'kit', { task: 2 }), position: 5 };
-  state.turns.other = { ...turn('other', 'kit', { task: 3 }), position: 6 };
+  state.turns.again = { ...turn('again', 'kit', { task: 2, topic: 't:2' }), position: 5 };
+  state.turns.other = { ...turn('other', 'kit', { task: 3, topic: 't:3' }), position: 6 };
   state.tasks.push(task(3, 'kit', 'ask'));
   state.messages.push(said('again', 'assistant', 'One more thing'), said('other', 'assistant', 'Next task'));
-  const { items } = view(state);
+  const { all: items } = view(state);
   const heads = Object.fromEntries(items.map((m) => [m.id, custom(m).head]));
   expect(heads).toMatchObject({
     'a-ask': true,
     'a-rowan': true,
     'a-kit': true,
     'a-again': false,
-    // The same agent on another task says which.
+    // The same agent on another task, in that task's thread, says which.
     'a-other': true,
   });
 });
@@ -349,20 +406,22 @@ test('a search hit opens at its message: the text in its block, or the block for
   );
   const { find } = view(state);
   const [first, , last] = state.messages.slice(-3);
-  // A mid-work text is in the row; the same words as the message are the second passage.
-  expect(find(first.id)).toEqual({ id: 'a-rowan', text: 'Same words', nth: 0 });
-  expect(find(last.id)).toEqual({ id: 'a-rowan', text: 'Same words', nth: 1 });
-  // Gathr's message that gave the task isn't drawn: the member's block stands for it.
+  // A mid-work text is in the row; the same words as the message are the second passage. The task is done: its thread
+  // is folded, so the hit names it, to open first.
+  expect(find(first.id)).toEqual({ id: 'a-rowan', text: 'Same words', nth: 0, topic: 't:1' });
+  expect(find(last.id)).toEqual({ id: 'a-rowan', text: 'Same words', nth: 1, topic: 't:1' });
+  // Gathr's message that gave the task isn't drawn: the task's own message stands for it.
   const gave = state.messages.find((m) => m.role === 'gathr' && m.turn === 'rowan') as Message;
-  expect(find(gave.id)).toEqual({ id: 'a-rowan' });
+  expect(find(gave.id)).toEqual({ id: 'task-1' });
   expect(find('gone')).toBeUndefined();
 });
 
 const lines = (state: ChatState) =>
-  events(view(state).items).map((e) => [e.who, e.text, e.more].filter(Boolean));
-/** Mira hears back in a turn that answers `ask`, with these words from Gathr. */
+  events(view(state).all).map((e) => [e.who, e.text, e.more].filter(Boolean));
+/** Mira hears back in a turn that answers `ask`, with these words from Gathr; it is about the person's ask. */
 function heardBack(state: ChatState, id: string, body: string, position: number) {
-  state.turns[id] = { ...turn(id, 'mira', { answers: 'ask' }), position };
+  const topic = `m:${state.messages[0].id}`;
+  state.turns[id] = { ...turn(id, 'mira', { answers: 'ask', topic }), position };
   state.messages.push(said(id, 'gathr', body), said(id, 'assistant', 'Noted'));
 }
 
@@ -374,28 +433,33 @@ test('what Gathr says that is not a hear-back is drawn in its own words, never r
   heardBack(state, 'woke', woke, 5);
   // A member on its task is told its turn was interrupted; only the task's own brief stays hidden.
   const usage = "The account's usage limit interrupted your turn. Check what is done first.";
-  state.turns.again = { ...turn('again', 'kit', { task: 2, answers: 'ask' }), position: 6 };
+  state.turns.again = { ...turn('again', 'kit', { task: 2, answers: 'ask', topic: 't:2' }), position: 6 };
   state.messages.push(said('again', 'gathr', usage), said('again', 'assistant', 'Carrying on'));
-  state.turns.redo = { ...turn('redo', 'kit', { task: 2, answers: 'ask' }), position: 7 };
+  state.turns.redo = { ...turn('redo', 'kit', { task: 2, answers: 'ask', topic: 't:2' }), position: 7 };
   state.messages.push(said('redo', 'gathr', 'Task #2 from Mira: Task 2\nContinue from here: half done.'));
   state.messages.push(said('redo', 'assistant', 'Done now'));
   expect(lines(state)).toEqual([[woke], [usage]]);
-  expect(ids(view(state).items).slice(-5)).toEqual([
+  // Each in its thread, where it happened: the wake's words before the reply they woke.
+  const all = ids(view(state).all);
+  expect(all.slice(all.indexOf('woke-gathr'), all.indexOf('woke-gathr') + 2)).toEqual([
     'woke-gathr',
     'a-woke',
+  ]);
+  expect(all.slice(all.indexOf('again-gathr'), all.indexOf('again-gathr') + 3)).toEqual([
     'again-gathr',
     'a-again',
     'a-redo',
   ]);
 });
 
-test('a hit on a task brief whose member has not started opens at the turn that gave the task', () => {
+test('a hit on a task brief opens at the task’s message; in a chat of one, at the turn that gave the task', () => {
   const state = round();
-  state.turns.wait = turn('wait', 'lane', { task: 3, status: 'queued', held: 'pause' });
+  state.turns.wait = turn('wait', 'lane', { task: 3, status: 'queued', held: 'pause', topic: 't:3' });
   state.tasks.push(task(3, 'lane', 'ask', { state: 'ready' }));
   const brief = said('wait', 'gathr', 'Task #3 from Mira: Task 3');
   state.messages.push(brief);
-  expect(view(state).find(brief.id)).toEqual({ id: 'a-ask' });
+  expect(view(state).find(brief.id)).toEqual({ id: 'task-3' });
+  expect(view(alone(state)).find(brief.id)).toEqual({ id: 'a-ask' });
 });
 
 test('a turn that wrote no words and only sent a message has no block: its steps are on the message, where it began', () => {
@@ -405,29 +469,30 @@ test('a turn that wrote no words and only sent a message has no block: its steps
   state.turns.other = { ...turn('other', 'lane'), position: 5 };
   const second: Message = { ...said('other', 'assistant', 'Lane to Sol'), id: 'second-1', to: 'sol' };
   state.messages.push(first, tool('other', 'o1', 'mcp__gathr__message'), second);
-  const { items } = view(state);
-  expect(ids(items).slice(-3)).toEqual(['a-kit', 'first-1', 'second-1']);
-  expect(custom(byId(items, 'first-1'))).toMatchObject({ under: true });
-  expect(custom(byId(items, 'second-1'))).toMatchObject({ under: false });
-  expect(custom(byId(items, 'second-1')).thread?.[0].work?.steps).toMatchObject([
-    { label: 'Sent a message' },
-  ]);
+  const { all } = view(state);
+  // Kit's is in its task's thread; Lane's turn is tied to nothing, so its message is a main message of its own.
+  expect(custom(byId(all, 'first-1'))).toMatchObject({ reply: true, topic: 't:2' });
+  expect(custom(byId(all, 'second-1'))).toMatchObject({ topic: 'b:other' });
+  expect(custom(byId(all, 'second-1')).reply).toBeUndefined();
+  expect(ids(all)).not.toContain('a-other');
+  expect(custom(byId(all, 'second-1')).said?.work?.steps).toMatchObject([{ label: 'Sent a message' }]);
 });
 
 test('a block that did not change is the same object on the next draw; a changed one is new', () => {
   const state = round();
   state.messages.push(tool('kit', 'k1', 'Bash', { status: 'running' }));
   const cache = new Map();
-  const before = toThread(state, agents, [], cache).items;
-  const after = toThread({ ...state, partial: { rowan: 'More' } }, agents, [], cache).items;
+  const before = toThread(state, agents, [], cache).all;
+  const after = toThread({ ...state, partial: { rowan: 'More' } }, agents, [], cache).all;
   const same = before.map((m, i) => m === after[i]);
   // Only Rowan's block, now streaming, was made again: the person's messages are kept too.
   expect(same).toEqual(ids(before).map((id) => id !== 'a-rowan'));
 
   const ended = { ...state, messages: [...state.messages.slice(0, -1), tool('kit', 'k1', 'Bash')] };
-  const next = toThread(ended, agents, [], cache).items;
-  expect(next.at(-1)).not.toBe(before.at(-1));
-  expect(custom(next.at(-1)).work?.steps.at(-1)).toMatchObject({ state: 'ok' });
+  const next = toThread(ended, agents, [], cache).all;
+  const kit = (all: typeof next) => byId(all, 'a-kit');
+  expect(kit(next)).not.toBe(kit(before));
+  expect(custom(kit(next)).work?.steps.at(-1)).toMatchObject({ state: 'ok' });
 });
 
 test('a turn with only its ending has its block after the message that began it; one still waiting has none', () => {
@@ -440,7 +505,7 @@ test('a turn with only its ending has its block after the message that began it;
     said('queued', 'user', 'And this'),
     said('cut', 'user', '@Lane'),
   );
-  const { items } = view(state);
+  const { items } = view(alone(state));
   expect(ids(items).slice(-5)).toEqual(['bad-user', 'a-bad', 'queued-user', 'cut-user', 'a-cut']);
   expect(custom(byId(items, 'a-bad')).ending).toMatchObject({ word: 'Failed', act: 'retry' });
   expect(text(byId(items, 'a-cut'))).toBe('');
@@ -451,7 +516,7 @@ test('a stopped turn offers Continue until its carry-on runs, also while that wa
   state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped' }), position: 5 };
   state.turns.next = turn('next', 'lane', { status: 'queued', held: 'pause', answers: 'cut' });
   state.messages.push(said('cut', 'user', '@Lane'), said('next', 'gathr', 'Stop now ended your turn.'));
-  const ending = () => custom(byId(view(state).items, 'a-cut')).ending;
+  const ending = () => custom(byId(view(state).all, 'a-cut')).ending;
   expect(ending()).toMatchObject({ act: 'continue' });
 
   // Stopped before it ever started (its task cancelled while it waited): nothing carried on.
@@ -508,7 +573,7 @@ test('a thought is a step that says how long it took, never counted with what th
     thought('lead', 'th4', { status: 'stopped' }, iso(14)),
   );
   state.turns.lead.status = 'stopped';
-  const block = byId(view(state).items, 'a-lead');
+  const block = byId(view(state).all, 'a-lead');
   // A thought is never the turn's message, and one that ends the turn still counts in its time.
   expect(text(block)).toBe('');
   const work = custom(block).work;
@@ -524,14 +589,14 @@ test('a thought is a step that says how long it took, never counted with what th
   const only = round();
   only.turns.lead = { ...turn('lead', 'mira', { status: 'failed' }), position: 9 };
   only.messages.push(thought('lead', 'th1', { status: 'done', duration_ms: 20 }));
-  expect(custom(byId(view(only).items, 'a-lead')).work).toBeUndefined();
+  expect(custom(byId(view(only).all, 'a-lead')).work).toBeUndefined();
 });
 
 test('while a thought runs the turn’s row says Thinking; its end over the socket makes it the step', () => {
   let state = round();
   state.turns.kit.status = 'running';
   state.messages.push(tool('kit', 'k1', 'Edit'), thought('kit', 'th', { status: 'running' }));
-  const running = custom(byId(view(state).items, 'a-kit')).work;
+  const running = custom(byId(view(state).all, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Thinking', notes: ['1 step'] });
   expect(running?.steps.at(-1)).toEqual({ id: 'th', label: 'Thinking', state: 'running' });
 
@@ -541,7 +606,7 @@ test('while a thought runs the turn’s row says Thinking; its end over the sock
     message: 'th',
     body: { status: 'done', duration_ms: 6_000 },
   });
-  const after = custom(byId(view(state).items, 'a-kit')).work;
+  const after = custom(byId(view(state).all, 'a-kit')).work;
   expect(after).toMatchObject({ running: true, label: 'Working', notes: ['1 step'] });
   expect(after?.steps.at(-1)).toMatchObject({ label: 'Thought for 6s', state: 'ok' });
 });
@@ -557,7 +622,7 @@ test('thoughts with nothing between them are one step, with their time together 
     thought('kit', 'd', { status: 'done', duration_ms: 5_000 }),
     thought('kit', 'e', { status: 'running' }),
   );
-  const work = custom(byId(view(state).items, 'a-kit')).work;
+  const work = custom(byId(view(state).all, 'a-kit')).work;
   expect(work).toMatchObject({ running: true, label: 'Thinking' });
   expect(work?.steps.slice(-3)).toMatchObject([
     { id: 'a', label: 'Thought for 1m 02s', state: 'ok' },
@@ -572,7 +637,7 @@ test('thoughts with nothing between them are one step, with their time together 
     message: 'e',
     body: { status: 'stopped', duration_ms: 2_000 },
   });
-  expect(custom(byId(view(after).items, 'a-kit')).work?.steps.at(-1)).toMatchObject({
+  expect(custom(byId(view(after).all, 'a-kit')).work?.steps.at(-1)).toMatchObject({
     id: 'd',
     label: 'Thought for 7s',
     state: 'stopped',
@@ -594,7 +659,7 @@ test('a step opens to what it ran, whole, and the first lines of what came back 
     tool('lead', 't3', 'Bash', { status: 'error', input: { text: 'npx vitest run' } }),
     { ...said('lead', 'assistant', 'Done.') },
   );
-  const steps = custom(byId(view(state).items, 'a-lead')).work?.steps;
+  const steps = custom(byId(view(state).all, 'a-lead')).work?.steps;
   expect(steps).toEqual([
     {
       id: 't1',

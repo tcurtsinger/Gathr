@@ -2,7 +2,7 @@
 // each, and what the timeline makes of it.
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
-import { type Custom, toThread } from './messages';
+import { type Custom, toThread, type View } from './messages';
 import { type ChatState, empty } from './state';
 
 export const people = ['Mira', 'Rowan', 'Kit', 'Lane', 'Sol'];
@@ -96,16 +96,36 @@ export function round(): ChatState {
     said('kit', 'gathr', 'Task #2 from Mira: Task 2'),
     said('kit', 'assistant', 'Checked'),
   ];
+  // What each turn is about, as the service names it (0075): a turn the person's message opened is about that
+  // message; a turn on a task the lead handed out is about that task.
+  const about: Record<string, string> = {
+    ask: `m:${messages[0].id}`,
+    mid: `m:${messages[2].id}`,
+    direct: `m:${messages[4].id}`,
+    rowan: 't:1',
+    kit: 't:2',
+  };
   return {
     ...empty,
     members,
     messages,
-    turns: Object.fromEntries(turns.map((t, position) => [t.id, { ...t, position }])),
-    tasks: [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask', { state: 'working' })],
+    turns: Object.fromEntries(turns.map((t, position) => [t.id, { ...t, position, topic: about[t.id] }])),
+    // Handed out in the lead's turn, as its reply was written.
+    tasks: [1, 2].map((n) =>
+      task(n, n === 1 ? 'rowan' : 'kit', 'ask', {
+        state: n === 1 ? 'done' : 'working',
+        created_us: Date.parse(messages[1].time) * 1000,
+      }),
+    ),
   };
 }
 
+/** The same round in a chat of one agent: one timeline, as the chat was before it had threads (0037). */
+export const alone = (state: ChatState): ChatState => ({ ...state, members: [] });
+
 export const view = (state: ChatState) => toThread(state, agents, [], new Map());
+/** Every thread open and whole: for tests of how a block draws, wherever it sits. */
+export const opened: View = { open: new Map(), start: new Set(), earlier: { has: () => true } };
 export const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
 export const ids = (all: ThreadMessageLike[]) =>
   all.map((m) => (m.id ?? '').replace(/-(user|gathr)-\d+$/, '-$1'));

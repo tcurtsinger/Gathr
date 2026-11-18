@@ -27,8 +27,8 @@ export const noneKept = (): Kept => ({ blocks: new WeakMap(), earlier: [] });
 
 /**
  * An agent's part of the timeline: its running turn's row, and its earlier blocks, newest first, the latest
- * ten. A block of its own is headed by its name, as none other sits between them here; of a talk between
- * agents, only what it wrote. A block made on an earlier draw is the same object, and so is the list while
+ * ten, from every thread, folded or not. A block of its own is headed by its name, as none other sits between them
+ * here. A block made on an earlier draw is the same object, and so is the list while
  * none of its blocks changed (`kept`): another agent's token leaves the panel's inputs as they were.
  */
 export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) {
@@ -41,23 +41,13 @@ export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) 
   };
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
-    if (custom.thread) {
-      const { thread } = custom;
-      const mine = thread.flatMap((m, at) => (m.by === agent ? at : []));
-      // A block of its own still running, in a thread under a PR, is its running row.
-      for (const at of mine) if (thread[at].running) now = thread[at].block?.work ?? now;
-      const own = mine.filter((at) => !thread[at].running);
-      if (!own.length || typeof item.content === 'string') continue;
-      const { content } = item;
-      keep(item, () => ({
-        ...item,
-        content: own.map((at) => content[at]),
-        metadata: { custom: { thread: own.map((at) => thread[at]) } },
-      }));
-    } else if (custom.by === agent && item.role === 'assistant') {
-      if (item.status?.type === 'running') now = custom.work ?? now;
-      else keep(item, () => ({ ...item, metadata: { custom: { ...custom, head: true } } }));
-    }
+    // A task handed out is its giver's record, not a block it wrote; a fold line is no one's.
+    if (custom.brief || custom.fold || custom.earlier) continue;
+    const by = custom.said ? custom.said.by : custom.by;
+    if (by !== agent || item.role !== 'assistant') continue;
+    if (item.status?.type === 'running') now = custom.work ?? now;
+    // Here every block reads on its own: named, at full size, outside any thread.
+    else keep(item, () => ({ ...item, metadata: { custom: { ...custom, head: true, reply: undefined } } }));
   }
   const earlier = all.reverse().slice(0, EARLIER);
   const same = earlier.length === kept.earlier.length && earlier.every((b, at) => b === kept.earlier[at]);

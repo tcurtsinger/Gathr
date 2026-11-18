@@ -91,3 +91,8 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   working"; it is never counted as an agent ("2 agents and Gathr are working"). A row's time is never cut away: a
   long what is cut instead. The list has a row for each after the agents', in the same row with Gathr's mark, opening nothing:
   no screen shows an update, a landing or a command's output. The lines and the words agents read don't change.
+
+## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
+
+- A task's main message in the chat says what it waits on in the status line's words ("Waiting on PR #22 checks"),
+  when it waits on one thing, and so does its row in the Tasks list: one function for both.

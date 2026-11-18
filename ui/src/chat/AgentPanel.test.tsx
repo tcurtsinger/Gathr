@@ -472,8 +472,8 @@ test('an agent that left the chat keeps its words in the timeline, with nothing 
   const words = page.getByText('Made-up words from an agent that left');
   await expect.element(words).toBeVisible();
   expect(words.element().closest('.said')?.querySelector('.said-open')).toBeNull();
-  // The members' own words in the timeline still open them.
-  expect(document.querySelectorAll('.talk .said-open').length).toBe(1);
+  // The members' own words in the chat still open them.
+  expect(document.querySelectorAll('.thread-messages .said-open').length).toBeGreaterThan(0);
 });
 
 test('a token streamed into the chat draws the workspace no more', async () => {
@@ -497,7 +497,7 @@ test('another agent’s token leaves an agent’s blocks the very same objects; 
   } as unknown as Parameters<typeof fromHistory>[0]);
   const cache = new Map();
   const kept = noneKept();
-  const first = blocksOf(toThread(state, agents, [], cache).items, 'c', kept);
+  const first = blocksOf(toThread(state, agents, [], cache).all, 'c', kept);
   expect(first.earlier.map((b) => (b.content as unknown as { text: string }[])[0].text)).toEqual(
     many
       .slice(2)
@@ -507,7 +507,7 @@ test('another agent’s token leaves an agent’s blocks the very same objects; 
 
   // The member's running turn streams a word: the third agent's list and its blocks are untouched.
   const streamed = apply(state, { type: 'delta', chat: 'c', turn: 'now', text: 'Made-up word' });
-  const next = blocksOf(toThread(streamed, agents, [], cache).items, 'c', kept);
+  const next = blocksOf(toThread(streamed, agents, [], cache).all, 'c', kept);
   expect(next.earlier).toBe(first.earlier);
   // Its own new block makes a new list, with the blocks it had the same objects.
   const more = apply(streamed, {
@@ -515,7 +515,7 @@ test('another agent’s token leaves an agent’s blocks the very same objects; 
     chat: 'c',
     message: said('w99', 'c11', 'Made-up afterthought'),
   });
-  const grown = blocksOf(toThread(more, agents, [], cache).items, 'c', kept);
+  const grown = blocksOf(toThread(more, agents, [], cache).all, 'c', kept);
   expect(grown.earlier).not.toBe(first.earlier);
   expect(grown.earlier[1]).toBe(first.earlier[1]);
 });

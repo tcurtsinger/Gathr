@@ -79,7 +79,7 @@ function latestFaces(items: readonly ThreadMessageLike[]): Map<string, string> {
   const latest = new Map<string, string>();
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
-    for (const m of custom.thread ?? []) if (m.agent) latest.set(m.agent, m.id);
+    if (custom.said?.agent && item.id) latest.set(custom.said.agent, item.id);
     if (custom.by && custom.head && custom.agent && item.id) latest.set(custom.by, item.id);
   }
   return latest;

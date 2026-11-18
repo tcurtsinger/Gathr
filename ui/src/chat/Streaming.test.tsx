@@ -1,5 +1,5 @@
-// A reply streaming into a long team chat draws only itself again (0072): the bubbles, name lines and threads above it
-// stay as they were drawn. React's own commit hook says which components ran (renderWatch.ts).
+// A reply streaming into a long team chat draws only itself again (0072, 0075): the bubbles, name lines, fold lines and
+// threads above it stay as they were drawn, and so does its own thread's fold line. React's own commit hook says which components ran (renderWatch.ts).
 import './renderWatch';
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
@@ -49,8 +49,18 @@ function chat(): ChatState {
   const say = (id: string, turn: string, body: string, more: Partial<Message> = {}) =>
     messages.push({ id, turn, time: '2026-11-08T09:00:00Z', role: 'assistant', kind: 'text', body, ...more });
   for (let n = 0; n < 20; n++) {
-    turns[`l${n}`] = { id: `l${n}`, agent: 'a', status: 'done', why: null, ref: 'r', position: 3 * n };
-    turns[`m${n}`] = { id: `m${n}`, agent: 'b', status: 'done', why: null, ref: 'r', position: 3 * n + 1 };
+    // Each round is about the person's ask, as the service names it.
+    const topic = `m:u${n}`;
+    turns[`l${n}`] = { id: `l${n}`, agent: 'a', status: 'done', why: null, ref: 'r', position: 3 * n, topic };
+    turns[`m${n}`] = {
+      id: `m${n}`,
+      agent: 'b',
+      status: 'done',
+      why: null,
+      ref: 'r',
+      position: 3 * n + 1,
+      topic,
+    };
     turns[`t${n}`] = {
       id: `t${n}`,
       agent: 'a',
@@ -59,6 +69,7 @@ function chat(): ChatState {
       ref: 'r',
       position: 3 * n + 2,
       answers: `m${n}`,
+      topic,
     };
     say(`u${n}`, `l${n}`, `Made-up ask ${n}`, { role: 'user' });
     say(`s${n}`, `l${n}`, '', { kind: 'tool', body: { tool: 'Read', status: 'ok' } });
@@ -68,7 +79,15 @@ function chat(): ChatState {
     say(`c${n}`, `t${n}`, 'Made-up words, carried', { role: 'gathr', copy_of: `q${n}` });
     say(`r${n}`, `t${n}`, `Made-up reply ${n}`, { to: 'b' });
   }
-  turns.live = { id: 'live', agent: 'a', status: 'running', why: null, ref: 'r', position: 60 };
+  turns.live = {
+    id: 'live',
+    agent: 'a',
+    status: 'running',
+    why: null,
+    ref: 'r',
+    position: 60,
+    topic: 'm:ul',
+  };
   say('ul', 'live', 'Made-up last ask', { role: 'user' });
   return { ...empty, members, turns, messages, reactions: [{ message: 'a3', agent: 'b', time: '' }] };
 }
@@ -77,7 +96,10 @@ test('a reply streaming into a long team chat draws only itself again', async ()
   const state = chat();
   const words = 'made-up streamed words '.repeat(40).split(' ');
   const screen = await render(<View state={{ ...state, partial: { live: words[0] } }} />);
-  await expect.element(screen.getByText('Made-up reply 19')).toBeInTheDocument();
+  // Earlier rounds are handled: their threads start folded.
+  await expect.element(screen.getByText('Made-up ask 19')).toBeInTheDocument();
+  // The thread it streams into is open, with its fold line above it.
+  expect(document.querySelector('[data-message-id="fold-m:ul"]')).not.toBeNull();
   const stop = watchRenders();
   for (let n = 2; n < 40; n += 2) {
     await screen.rerender(<View state={{ ...state, partial: { live: words.slice(0, n).join(' ') } }} />);

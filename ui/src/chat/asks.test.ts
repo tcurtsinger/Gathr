@@ -102,7 +102,8 @@ function steered(more: Partial<ChatState> = {}): ChatState {
   };
 }
 
-const view = (state: ChatState) => toThread(state, agents, [], new Map()).items;
+// Every block, in its thread or not: what each block is, not which threads are open (0075).
+const view = (state: ChatState) => toThread(state, agents, [], new Map()).all;
 const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
 const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const line = (items: ThreadMessageLike[], id: string) => custom(items.find((m) => m.id === id)).events;

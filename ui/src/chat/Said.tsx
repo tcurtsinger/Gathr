@@ -4,12 +4,14 @@ import type { ReactNode } from 'react';
 import { Face, type FaceSize, YouFace } from '../components/Face';
 import { Reference } from '../components/Notice';
 import { useMark } from './faceMarks';
-import { clock, list } from './team';
+import { clock, list, roleName } from './team';
 import './said.css';
+import './mains.css';
 
 /**
  * One message beside its author's face, everyone on the left (0072): the face, then the name line and what was
- * said under it. `root` makes it the thread's message itself; a message inside a thread item is not.
+ * said under it. `root` makes it an item of the chat's list. A main message's face hangs left of the column, so its words
+ * are as wide as the message box (0075); a `reply` sits in its main message's thread, smaller, inside the thread's rule.
  */
 export function Said({
   face,
@@ -21,6 +23,7 @@ export function Said({
   keep,
   bare,
   root,
+  reply,
   children,
 }: {
   face?: ReactNode;
@@ -37,6 +40,7 @@ export function Said({
   /** It has no words yet: its face sits beside its name line. */
   bare?: boolean;
   root?: boolean;
+  reply?: boolean;
   children?: ReactNode;
 }) {
   const props = {
@@ -47,6 +51,7 @@ export function Said({
     'data-gathr': gathr || undefined,
     'data-keep': keep || undefined,
     'data-bare': bare || undefined,
+    'data-reply': reply || undefined,
   };
   const inner = (
     <>
@@ -92,9 +97,20 @@ export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small 
 
 /**
  * The name line: the name, then every other piece in one size and colour with "·" between (the role, the time, the
- * task and its tick, how the task or the turn ended), and `end` after them: the steps.
+ * task and its tick, how the task or the turn ended), and `end` after them: the steps. A main message's `state` sits at
+ * the line's right (0075).
  */
-export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNode[]; end?: ReactNode }) {
+export function NameLine({
+  name,
+  pieces,
+  end,
+  state,
+}: {
+  name: string;
+  pieces: ReactNode[];
+  end?: ReactNode;
+  state?: ReactNode;
+}) {
   // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
   return (
     <div className="name-line">
@@ -103,9 +119,13 @@ export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNod
         {pieces.map((p) => (typeof p === 'string' ? <span key={p}>{p}</span> : p))}
         {end}
       </span>
+      {state}
     </div>
   );
 }
+
+/** The lead's role on its name line; the 360 column leaves it out (mains.css). */
+export const RoleWord = () => <span className="name-line-role">{roleName.supervisor}</span>;
 
 /** When it was said, as the clock reads. */
 export const When = ({ time }: { time?: string }) =>
@@ -153,18 +173,28 @@ export function EndRow({
  */
 export function Bubble({
   quote,
+  onQuote,
   mention,
   actions,
   children,
 }: {
   quote?: string;
+  /** The quote leads to what it quotes: an ask's result to its ask. */
+  onQuote?: () => void;
   mention?: string;
   actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="bubble">
-      {quote && <div className="bubble-quote">{quote}</div>}
+      {quote &&
+        (onQuote ? (
+          <button type="button" className="bubble-quote" onClick={onQuote}>
+            {quote}
+          </button>
+        ) : (
+          <div className="bubble-quote">{quote}</div>
+        ))}
       {mention && <span className="mention">@{mention}</span>}
       {children}
       {actions}

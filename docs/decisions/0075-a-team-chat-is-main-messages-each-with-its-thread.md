@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-18: the threads mock-up's `#roots` A and `#result` A, and the build plan's two questions answered: Gathr records which ask a turn about the whole room serves, and a chat's messages from before it became a team stay flat). Date: 2026-11-18.
 
-Built: partly (the service: what every turn, task and line said in no turn is about; the window draws it next). Proof: `crates/gathr/tests/topics.rs`, `crates/gathr/src/topics/tests.rs`, `crates/gathr/tests/questions_flow.rs`, `crates/gathr/tests/messages.rs`, `crates/gathr/tests/likes.rs`, `crates/gathr/tests/pauses.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/quiet_room.rs`, `crates/gathr/tests/stale.rs`, `crates/gathr/tests/merge/lands.rs`, `crates/gathr/tests/merge/review_questions.rs`.
+Built: yes (the service says what every turn, task and line said in no turn is about; the window draws the chat as main messages with threads). Proof: `ui/src/chat/mains.test.tsx` and `ui/src/chat/layout.test.tsx` (on the service's answers its own tests recorded), `ui/src/chat/Streaming.test.tsx`, `crates/gathr/tests/topics.rs`, `crates/gathr/src/tasks/touched.rs`, `crates/gathr/src/store.rs`, `crates/gathr/src/topics/tests.rs`, `crates/gathr/tests/questions_flow.rs`, `crates/gathr/tests/messages.rs`, `crates/gathr/tests/likes.rs`, `crates/gathr/tests/pauses.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/quiet_room.rs`, `crates/gathr/tests/stale.rs`, `crates/gathr/tests/merge/lands.rs`, `crates/gathr/tests/merge/review_questions.rs`.
 
 Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes an ask is its result) and [0028](0028-team-chats.md) (each turn says what it is about). Serves promise 6 of [the charter](../charter.md#the-promises), part 6.5 of [the truth map](../truth-map.md): the room explains itself, its talk read as threads.
 
@@ -42,7 +42,8 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
   naming work of several asks, or of none, it stays its own.
 - **An ask says whether it is open** (`open` with each ask), from the same rule that already decides it.
 - **The answer is in history** (`topic` on each turn and on each line said in no turn), **the tasks list** (`topic`
-  on each task) and **the live `turn` event**. `gathr diag threads --chat <id>` lists each turn, task and line, its
+  on each task), **the live `turn` event**, and each line said in no turn as it goes out live (read with the chat's
+  other lines, once per write that said one). `gathr diag threads --chat <id>` lists each turn, task and line, its
   topic and the fact that tied it, or why nothing did.
 - **The fallback is safe.** Anything nothing ties is a main message of its own. A link that leads nowhere (a turn or
   task that is gone), a chain that loops, or one longer than 32 links ends there, tied to nothing, and history
@@ -57,8 +58,31 @@ Settled while building, each the smaller choice:
 - **A review given by hand ties by its PR** to the task the PR was built in, where the plan had it sit with the turn
   that gave it: the PR's thread is where its work, Gathr's own review and the landing are.
 - **A turn that heard the answers to two questions** sits under the lowest-numbered one.
-- **When a chat became a team** for a window that keeps a one-agent chat flat is what the members' `added_ts`
-  already says; nothing new is recorded for it.
+- **When a chat became a team** is what the members' `added_ts` already says; nothing new is recorded for it. History
+  says it as `team_since`, the second member's `added_ts` (none for a chat of one), as members carry no time.
+
+## The window
+
+- **It draws what the service named,** and keeps its two rules inside a turn: a turn splits where the person's message
+  entered it, and what the turn says after it is about that message; a message between agents that answers one Gathr
+  carried into its turn sits where what it answers sits (`ui/src/chat/topics.ts`). A turn not named yet is its own.
+- **Main messages in time order, each followed by its thread** (`ui/src/chat/mains.ts`, `timeline.ts`). A task is drawn
+  from its record, as no message carries it (`TaskMain.tsx`): its giver to its owner, its title, the first line of why,
+  and More for the rest of the brief. A question's main message is the block that asked it. A result is the lead's own
+  block, never Gathr's words that opened its turn; it quotes its ask, and the ask's Done leads to it.
+- **Each main message says its state** at its name line's right, from `tasks/rows.ts`, the same function the Tasks
+  list reads, in the marks' words (0071): the person's ask Working or Done; a task as its row says it, with its PR;
+  a version Checking, Needs you, Approved, Sent back or Dropped; a question Needs you, Discussing or Answered.
+- **Each reply is an item of its own** in the chat's list, so a streamed word draws only its reply. A thread has one fold
+  line, the same open or folded; one longer than three shows its newest three under "Show N earlier replies", never
+  hiding a reply that holds an approval waiting, a failed step or a running turn.
+- **Folding never happens under the person's eyes:** a thread whose main message is handled when the chat is opened
+  starts folded, every other open, and nothing folds or opens by itself while it is open; the person's own fold holds
+  until the chat closes. A search hit and the approval dock open the thread they lead to.
+- **A chat of one agent is one timeline,** as before; so is what a chat said before it became a team.
+- **The words are as wide as the message box,** the faces hang left of that width (the owner's rule): a reply's smaller
+  face and the thread's rule sit inside it, its words still end at the box's right edge. Where the pane leaves no room
+  beside the column, the column's left padding makes it, and the box moves in with the words.
 
 ## Why
 
@@ -82,7 +106,7 @@ recorded would show. One answer serves the chat, the Tasks views and `gathr diag
 
 ## Not in it
 
-- How a thread is drawn, folded and marked handled (the next PR), replying in a thread, and where the person left
-  off.
+- Replying in a thread, every picked agent getting a message, and where the person left off (seen, the New line,
+  folds kept across a reload): later steps. Until then a fold lasts while the chat is open.
 - One topic per turn: a lead's turn that answers the person, hands out tasks and messages an agent sits in one
   thread. Only the person's message entering a turn splits it.

@@ -41,6 +41,7 @@ export type LiveEvent =
       held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
       created?: string;
       position?: number | null;
+      topic?: string | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
