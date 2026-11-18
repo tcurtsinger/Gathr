@@ -1,0 +1,41 @@
+/* The row on a bubble's top right corner (the reply-react mock-up's #actions B). Its lower edge stays in the bubble's
+   top padding, so it never covers a word of the first line. Shown by opacity, as a turn's steps are, so Tab reaches
+   its buttons. */
+.bubble:has(> .message-actions) {
+  position: relative;
+}
+.message-actions {
+  position: absolute;
+  top: -22px;
+  right: -6px;
+  z-index: 3;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--popover);
+  box-shadow: 0 2px 8px #00000029;
+  opacity: 0;
+}
+:root.light .message-actions {
+  box-shadow: 0 2px 8px #0000001a;
+}
+.said:is(:hover, :focus-within) > .said-main > .bubble > .message-actions {
+  opacity: 1;
+}
+/* 24px at every width: the row has no touch size of its own. */
+.message-actions [data-slot="button"] {
+  min-height: 0;
+  color: var(--muted-foreground);
+}
+.message-actions [data-slot="button"]:hover {
+  color: var(--foreground);
+}
+.message-actions [aria-pressed="true"] {
+  color: var(--attention);
+}
+.message-actions svg {
+  width: 15px;
+  height: 15px;
+}

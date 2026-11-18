@@ -207,6 +207,9 @@ export function ChatView(props: Props) {
       input.current?.focus();
     },
     approve,
+    // A refused like shows in the chat with its reference, as a refused Stop does; the mark comes live.
+    like: (message, questions, give) =>
+      attempt('like', () => (give ? api.like(chat.id, message, questions) : api.unlike(chat.id, message))),
     openTask: (task) => props.onOpenTask?.(task),
     openPlan: (plan, version) => props.onOpenPlan?.(plan, version),
     // Only an agent of this chat has a panel: one that left it can still be named in the timeline.

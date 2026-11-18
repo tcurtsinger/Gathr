@@ -17,6 +17,7 @@ mod coord;
 mod deletes;
 mod github;
 mod landing;
+mod likes;
 mod logs;
 mod merging;
 mod models;

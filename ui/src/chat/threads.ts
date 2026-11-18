@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Message, Turn } from '../api';
 import { fold, type Given, type Work } from './fold';
+import { type Like, saidLike } from './likes';
 import type { Cache, Custom, Group } from './messages';
 import type { ChatState } from './state';
 import type { Team } from './team';
@@ -19,6 +20,8 @@ export interface Said {
   quote?: string;
   time: string;
   agreed: string[];
+  /** The person's like (0057); a whole block carries its own. */
+  like?: Like;
   /** What the writer's turn did before it, when that turn drew nothing else. */
   work?: Work;
   /** A whole block of a turn, as it reads elsewhere: a review or a fix under its PR (reviews.ts). */
@@ -147,6 +150,7 @@ export function threadItem(
       quote,
       time: m.time,
       agreed: agreedBy(m.id),
+      like: saidLike(state, m.id),
       ...(did && { work: did }),
     };
   });

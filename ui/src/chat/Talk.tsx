@@ -2,7 +2,8 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { FaceStack } from '../components/Face';
-import { parts, Reply } from './Replies';
+import { MessageActions } from '../components/MessageActions';
+import { liking, parts, Reply } from './Replies';
 import { revealOpened } from './reveal';
 import { AgentFace, Bubble, NameLine, Reactions, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
@@ -76,6 +77,7 @@ function TalkMessage({ m, index, small }: { m: Message; index: number; small: bo
   const [open, setOpen] = useStepsOpen(m.work);
   const name = m.from ?? 'An agent';
   const { by, work } = m;
+  const like = liking(m.like, actions);
   return (
     <Said
       agent={m.agent}
@@ -101,10 +103,10 @@ function TalkMessage({ m, index, small }: { m: Message; index: number; small: bo
       {work && (open || work.running) && (
         <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
       )}
-      <Bubble quote={m.quote} mention={m.to}>
+      <Bubble quote={m.quote} mention={m.to} actions={like && <MessageActions like={like} />}>
         <MessagePrimitive.PartByIndex index={index} components={parts} />
       </Bubble>
-      {m.agreed.length > 0 && <Reactions names={m.agreed} />}
+      {m.agreed.length > 0 && <Reactions names={m.agreed} mine={like?.given} onToggle={like?.onToggle} />}
     </Said>
   );
 }

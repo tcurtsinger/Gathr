@@ -51,7 +51,7 @@ impl Task {
         self.db_save(ids, "user", add).await
     }
 
-    async fn db_save(
+    pub(super) async fn db_save(
         &self,
         ids: &Ids,
         role: &'static str,

@@ -366,10 +366,21 @@
   line-height: 18px;
   text-align: left;
   white-space: nowrap;
+  /* Names to read, never a target: the pointer leaving the count closes it, and it never holds the bubble's row. */
+  pointer-events: none;
 }
 .react:hover .react-who,
 .react:focus .react-who {
   display: flex;
+}
+/* The count the person can press: it gives their like or takes it back (0057). Theirs is in the attention blue. */
+.react[aria-pressed] {
+  cursor: pointer;
+}
+.react[data-mine] {
+  background: color-mix(in oklab, var(--attention) 16%, transparent);
+  color: var(--attention);
+  font-weight: 600;
 }
 
 /* Talk between agents under the message it belongs to: a thin line at the bubble's left edge, a toggle on top. */

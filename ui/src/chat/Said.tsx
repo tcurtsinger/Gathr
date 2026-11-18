@@ -147,14 +147,19 @@ export function EndRow({
   );
 }
 
-/** The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. */
+/**
+ * The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. ctions is the row on
+ * its corner (MessageActions).
+ */
 export function Bubble({
   quote,
   mention,
+  actions,
   children,
 }: {
   quote?: string;
   mention?: string;
+  actions?: ReactNode;
   children?: ReactNode;
 }) {
   return (
@@ -162,15 +167,34 @@ export function Bubble({
       {quote && <div className="bubble-quote">{quote}</div>}
       {mention && <span className="mention">@{mention}</span>}
       {children}
+      {actions}
     </div>
   );
 }
 
-/** Agents' thumbs-ups on the words above: the emoji and how many; who, on hover or focus, as names. */
-export function Reactions({ names }: { names: string[] }) {
+/**
+ * Thumbs-ups on the words above: the emoji and how many; who, on hover or focus, as names, "You" first. With
+ * onToggle, a click gives the person's like or takes it back (0057), and theirs is drawn in the attention blue.
+ */
+export function Reactions({
+  names,
+  mine,
+  onToggle,
+}: {
+  names: string[];
+  mine?: boolean;
+  onToggle?: () => void;
+}) {
   return (
     <div className="reacts">
-      <button type="button" className="react" aria-label={`Thumbs-up from ${list(names)}`}>
+      <button
+        type="button"
+        className="react"
+        aria-label={`Thumbs-up from ${list(names)}`}
+        aria-pressed={onToggle ? !!mine : undefined}
+        data-mine={mine || undefined}
+        onClick={onToggle}
+      >
         <span className="react-e" aria-hidden="true">
           👍
         </span>

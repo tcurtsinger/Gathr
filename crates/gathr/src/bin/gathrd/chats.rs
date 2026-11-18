@@ -31,6 +31,15 @@ pub enum Cmd {
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
     },
+    /// The person liked the agent's message `liked` (0057): `line` reaches the agent as a short message
+    /// of the person's would, into its running turn in the chat or a turn of its own.
+    Like {
+        chat: String,
+        liked: String,
+        line: String,
+        trace: String,
+        reply: oneshot::Sender<Result<Value, Failed>>,
+    },
     /// Stops the chat's turns: the task's queued ones, and its running one if it's the chat's.
     Stop {
         chat: String,

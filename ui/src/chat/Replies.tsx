@@ -4,12 +4,14 @@ import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
 import { MarkdownText } from '../components/Markdown';
+import { MessageActions } from '../components/MessageActions';
 import { FailureNotice } from '../components/Notice';
 import { Outcome } from '../components/Outcome';
 import { PickedText } from '../components/PickedText';
 import { asked } from './ApprovalDock';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
+import type { Like } from './likes';
 import type { Custom } from './messages';
 import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
@@ -112,6 +114,7 @@ export function Reply({
 }) {
   const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked } = own;
   const actions = useActions();
+  const like = liking(own.like, actions);
   const [open, setOpen] = useStepsOpen(work);
   const words = !!own.text || !!plan || !!asked?.length;
   if (!words && !work && !approvals?.length && !ending && !out && !agreed?.length) return null;
@@ -163,7 +166,7 @@ export function Reply({
         <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
       )}
       {words && (
-        <Bubble>
+        <Bubble actions={like && <MessageActions like={like} />}>
           {index !== undefined ? (
             <MessagePrimitive.PartByIndex index={index} components={parts} />
           ) : (
@@ -181,12 +184,19 @@ export function Reply({
           ))}
         </Bubble>
       )}
-      {!!agreed?.length && <Reactions names={agreed} />}
+      {!!agreed?.length && <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />}
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
       {ending?.act && <EndActs ending={ending} agent={by} actions={actions} />}
     </Said>
+  );
+}
+
+/** The person's like on a message, as its corner row and its count press it (0057). */
+export function liking(like: Like | undefined, actions: Actions) {
+  return (
+    like && { given: like.mine, onToggle: () => actions.like?.(like.message, like.questions, !like.mine) }
   );
 }
 

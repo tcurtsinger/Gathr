@@ -5,6 +5,7 @@ import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, askSizes, changed, fixed } from './asks';
 import { type Ending, ending } from './ends';
 import { fold, type Given, type Work } from './fold';
+import { blockLike, type Like, PERSON, versionLike } from './likes';
 import { place } from './order';
 import { heardTurns, questions } from './questions';
 import { prThread, underPrs } from './reviews';
@@ -70,8 +71,10 @@ export type Custom = {
   size?: AskSize;
   /** The person's message: the names they picked from the "@" list, drawn blue. */
   picks?: PickedName[];
-  /** Who gave its text a thumbs-up, in the order given. */
+  /** Who gave its text a thumbs-up: "You" first, then agents in the order given. */
   agreed?: string[];
+  /** The person's like it offers, or holds (0057). */
+  like?: Like;
   events?: EventLine[];
   /** A version of the lead's plan: its chip opens the plan's tab (0062). */
   plan?: { plan: number; version: number; parts: number };
@@ -409,12 +412,13 @@ function block(
   // Only the shown text's: an earlier text folds into the row, and its thumbs-up would sit under words
   // the giver didn't agree with.
   const last = group.msgs.at(-1);
-  const agreed = !partial && last?.kind === 'text' ? agreedBy(state, crew, last.id) : [];
+  const like = blockLike(state, group.msgs, asked ?? [], !!partial);
+  const agreed = !partial && last && (last.kind === 'text' || like) ? agreedBy(state, crew, last.id) : [];
   // A blocked, stopped or held task is its owner's face's mark, never a tick (0071); a word of the turn's says enough.
   const shown = on && lastOfTask ? task?.state : undefined;
   const done = shown === 'done';
   const out = !end?.word && (shown === 'cancelled' || shown === 'failed') ? shown : undefined;
-  const who = `${agent}|${role}|${on}|${done}|${out}|${head}|${tick}|${agreed}`;
+  const who = `${agent}|${role}|${on}|${done}|${out}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}`;
   const hit = cache.get(group.key);
@@ -433,6 +437,7 @@ function block(
     tick,
     agreed,
     asked,
+    like,
   };
   if (end) custom.ending = end;
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
@@ -468,9 +473,12 @@ function toReply(
   };
 }
 
-/** Who gave a message a thumbs-up, by name, in the order given; a giver Gathr can't name is left out. */
-const agreedBy = (state: ChatState, crew: Team, message: string) =>
-  state.reactions.flatMap((r) => (r.message === message && crew.name(r.agent)) || []);
+/** Who gave a message a thumbs-up, by name: "You" first, then agents in the order given; one Gathr can't name is left out. */
+function agreedBy(state: ChatState, crew: Team, message: string): string[] {
+  const on = state.reactions.filter((r) => r.message === message);
+  const agents = on.flatMap((r) => (r.agent !== PERSON && crew.name(r.agent)) || []);
+  return on.some((r) => r.agent === PERSON) ? ['You', ...agents] : agents;
+}
 
 /** A version of the lead's plan: the speaker, its chip and who gave it a thumbs-up; its words are the tab's. */
 function versionBlock(
@@ -493,6 +501,7 @@ function versionBlock(
       ...new Set([...agreedBy(state, crew, m.id), ...(found ? agreedCheck(found.version, state, crew) : [])]),
     ],
     plan: found && { plan: found.plan.id, version: found.version.n, parts: found.version.parts },
+    like: found && versionLike(state, found.plan, found.version.n, m.id),
   };
   return kept(cache, group.key, JSON.stringify(custom), () => ({
     id: group.key,

@@ -22,6 +22,7 @@ pub const CARRY_ON: i64 = 1;
 pub const PLAN_CHECK: i64 = 1;
 pub const SENT_BACK: i64 = 1;
 pub const RESIZED: i64 = 1;
+pub const LIKED: i64 = 1;
 /// A team's role lines in the briefing (`crate::roles`, 0066): no turn opens with them.
 pub const ROLE: i64 = 1;
 
@@ -56,6 +57,8 @@ pub enum Opened {
     SentBack,
     /// The person changed an ask's size (0063).
     Resized,
+    /// The person liked the agent's message (0057).
+    Liked,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -65,7 +68,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 19] = [
+    pub const ALL: [Opened; 20] = [
         Opened::Brief,
         Opened::ReviewBrief,
         Opened::RequestBrief,
@@ -81,6 +84,7 @@ impl Opened {
         Opened::PlanCheck,
         Opened::SentBack,
         Opened::Resized,
+        Opened::Liked,
         Opened::Person,
         Opened::Teammate,
         Opened::Compaction,
@@ -104,6 +108,7 @@ impl Opened {
             Opened::PlanCheck => "plan_check",
             Opened::SentBack => "sent_back",
             Opened::Resized => "resized",
+            Opened::Liked => "liked",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -129,6 +134,7 @@ impl Opened {
             Opened::PlanCheck => Some(PLAN_CHECK),
             Opened::SentBack => Some(SENT_BACK),
             Opened::Resized => Some(RESIZED),
+            Opened::Liked => Some(LIKED),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }

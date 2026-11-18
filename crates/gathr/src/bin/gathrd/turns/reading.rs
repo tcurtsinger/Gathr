@@ -539,6 +539,8 @@ impl Task {
         self.idle_since = std::time::Instant::now();
         // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
         let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
+        // A like asks the agent to end without replying when it has nothing to add (0057): that is done.
+        let empty = empty && !self.opened_by_like(&turn.ids.turn).await;
         // A compaction that ends without one failed, whatever the engine said (K4).
         let compaction = self.compactions.contains(&turn.ids.turn);
         let not_compacted = compaction && !turn.compacted && !turn.stopping && !turn.signed_out;

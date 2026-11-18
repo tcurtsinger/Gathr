@@ -133,7 +133,12 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
     case 'reaction': {
       // One the history already holds may also arrive while the chat loads.
       const { message, agent } = event.reaction;
-      if (state.reactions.some((r) => r.message === message && r.agent === agent)) return state;
+      const same = (r: Reaction) => r.message === message && r.agent === agent;
+      if (event.removed)
+        return state.reactions.some(same)
+          ? { ...state, reactions: state.reactions.filter((r) => !same(r)) }
+          : state;
+      if (state.reactions.some(same)) return state;
       return { ...state, reactions: [...state.reactions, event.reaction] };
     }
     case 'approval': {

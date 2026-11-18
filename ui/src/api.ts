@@ -577,7 +577,10 @@ export interface History {
   reactions?: Reaction[];
 }
 
-/** An agent's thumbs-up on another agent's message: the original's id, never Gathr's copy. */
+/**
+ * A thumbs-up on an agent's message, the original's id, never Gathr's copy: another agent's, or the person's like
+ * (`agent` is `person`, 0057).
+ */
 export interface Reaction {
   message: string;
   agent: string;
@@ -709,6 +712,19 @@ export const api = {
       agent,
       picks: picks?.length ? picks : undefined,
     }),
+  /**
+   * The person's like (0057): it reaches the message's agent, or answers the waiting `questions` its bubble holds
+   * with their picks, or approves the plan version it is.
+   */
+  like: (chat: string, message: string, questions?: number[]) =>
+    call<{ reaction: Reaction; did: string }>(
+      'PUT',
+      `/api/chats/${chat}/messages/${message}/like`,
+      questions?.length ? { questions } : {},
+    ),
+  /** Takes the like back: the mark goes, and nothing it did is undone. */
+  unlike: (chat: string, message: string) =>
+    call<{ removed: boolean }>('DELETE', `/api/chats/${chat}/messages/${message}/like`),
   /** Compacts the agent's conversation in the chat: a turn of its own, queued behind any it has under way. */
   compact: (chat: string, agent: string) =>
     call<{ turn: string; status: TurnStatus; ref: string }>(

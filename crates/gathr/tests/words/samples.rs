@@ -356,6 +356,12 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "The account's usage limit interrupted your turn. Check what is already done before repeating \
          work, then continue.",
     ),
+    (
+        "liked",
+        "liked: a message",
+        "The person liked your message <id> of <time>: \"Hi!\". A like means they approve it or agree. \
+         If it answers something you were waiting on, carry on. Otherwise end your turn without replying.",
+    ),
 ];
 
 /// Asserts that `built`, the text the real code built for the sample `name`, is that sample's text
