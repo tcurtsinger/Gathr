@@ -10,7 +10,7 @@ mod follow;
 mod notify;
 mod update;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -29,9 +29,11 @@ fn main() {
     let opened = Instant::now();
     let context = tauri::generate_context!();
     // `gathr dev --window`: the UI's dev server, which adds the token itself. Closing it quits.
+    // Its `--data` is the dev service's folder, which keeps the webview's data as a test folder's does.
     if let Some(ui) = arg("--ui") {
         let title = arg("--title").unwrap_or_else(|| "Gathr".into());
-        return dev(context, parse(&ui), title);
+        let webview_data = arg("--data").map(|data| webview_folder(Path::new(&data)));
+        return dev(context, parse(&ui), title, webview_data);
     }
     // `GATHR_DATA` for a Mac app bundle on a test folder: a bundle can't pass arguments, only its
     // `LSEnvironment`, and macOS ignores `HOME` there. Debug builds only, so a stray variable
@@ -44,11 +46,11 @@ fn main() {
     installed(context, data, opened);
 }
 
-fn dev(context: Context<Wry>, url: tauri::Url, title: String) {
+fn dev(context: Context<Wry>, url: tauri::Url, title: String, webview_data: Option<PathBuf>) {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
-            window(app.handle(), url, &title, None)?.show()?;
+            window(app.handle(), url, &title, webview_data)?.show()?;
             Ok(())
         })
         .run(context)
@@ -72,7 +74,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
         context.config_mut().identifier.push_str(key);
     }
     // A test folder keeps its webview's data with it, so deleting the folder leaves nothing behind.
-    let webview_data = key.map(|_| data.path().join("webview"));
+    let webview_data = key.map(|_| webview_folder(data.path()));
     let app = tauri::Builder::default()
         // A second launch on this folder hands over to this one and exits before its own setup runs.
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -214,6 +216,12 @@ fn still_running(app: &AppHandle) -> bool {
     };
     ServiceInfo::read(&service.data).is_ok_and(|now| now.pid == known.pid)
         && http::call(known.port, &known.token, "GET", "/health").is_ok_and(|r| r.status == 200)
+}
+
+/// Where a window on this data folder keeps its webview's data. Windows only: WKWebView takes no
+/// folder, so on the Mac the webview keeps the app's default store.
+fn webview_folder(data: &Path) -> PathBuf {
+    data.join("webview")
 }
 
 fn window(

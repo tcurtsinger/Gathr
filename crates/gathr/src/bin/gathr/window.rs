@@ -42,8 +42,11 @@ pub async fn start(data: &DataDir, port: u16) -> Result<Window, Error> {
     let address = format!("http://127.0.0.1:{ui_port}/");
     let exe = std::env::current_exe()?
         .with_file_name(format!("gathr-app{}", std::env::consts::EXE_SUFFIX));
+    // `--data` for the webview's own data in the dev folder: without it, it shared the installed Gathr's.
     let app = Command::new(exe)
         .args(["--ui", &address, "--title", &format!("Gathr (dev {port})")])
+        .arg("--data")
+        .arg(data.path())
         .kill_on_drop(true)
         .spawn()?;
     println!("Gathr window on {address} (a browser can open it too).");
