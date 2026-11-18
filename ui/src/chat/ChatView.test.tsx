@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import type { Picked } from '../components/mention';
 import { ChatView } from './ChatView';
 import type { SendFailure } from './messages';
 
@@ -97,31 +98,57 @@ function service(members: typeof team | [], last?: string) {
   return sent;
 }
 
-/** A chat in the window, its draft kept as the app keeps it. */
-function Open({ id = 'c', project: p, draft = '' }: { id?: string; project?: string; draft?: string }) {
-  const [text, setText] = useState(draft);
+/** A chat in the window, its draft and the names picked in it kept as the app keeps them, each chat's apart. */
+interface Shown {
+  id?: string;
+  project?: string;
+  draft?: string;
+  started?: unknown[];
+}
+
+function Open({ id = 'c', project: p, draft = '', started = [] }: Shown) {
+  const [drafts, setDrafts] = useState<Record<string, { text: string; picks: Picked[] }>>({
+    [id]: { text: draft, picks: [] },
+  });
+  const [open, setOpen] = useState(id);
+  const here = drafts[open] ?? { text: '', picks: [] };
   return (
-    <ChatView
-      chat={{ id, title: id ? 'Made-up chat' : 'New chat', project: p }}
-      agents={[made('a'), made('b'), made('c')]}
-      draft={text}
-      onDraft={setText}
-      unsent={[]}
-      onUnsent={() => {}}
-      openSettings={() => {}}
-      onNamed={() => {}}
-      projects={[project]}
-      onProject={() => {}}
-      onNewProject={() => {}}
-      onStart={() => {}}
-      pauses={{ pauses: [], usage: [] }}
-      onPause={async () => {}}
-    />
+    <>
+      <button type="button" onClick={() => setOpen(open === id ? 'other' : id)}>
+        Switch
+      </button>
+      <ChatView
+        key={open}
+        chat={{ id: open, title: open ? 'Made-up chat' : 'New chat', project: p }}
+        agents={[made('a'), made('b'), made('c'), { ...made('d'), name: 'Ann' }]}
+        draft={here.text}
+        picks={here.picks}
+        onDraft={(text, picks = []) => setDrafts((d) => ({ ...d, [open]: { text, picks } }))}
+        unsent={[]}
+        onUnsent={() => {}}
+        openSettings={() => {}}
+        onNamed={() => {}}
+        projects={[project]}
+        onProject={() => {}}
+        onNewProject={() => {}}
+        onStart={(text, agent) => started.push({ text, agent })}
+        pauses={{ pauses: [], usage: [] }}
+        onPause={async () => {}}
+      />
+    </>
   );
 }
 
 const input = () => page.getByRole('textbox', { name: 'Message' });
 const sign = (text: string) => page.getByRole('status').filter({ hasText: text });
+const blue = () => [...(CSS.highlights.get('composer-mention') ?? [])].map((r) => (r as Range).toString());
+/** Types `before`, then "@" and `query`, and picks the list's row `down` rows below the first. */
+async function pick(before: string, query: string, down = 0) {
+  await input().click();
+  await userEvent.keyboard(`${before}@${query}`);
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard(`${'{ArrowDown}'.repeat(down)}{Enter}`);
+}
 
 test('the hint names who gets a message with no name: the lead, the chat’s own agent, a new chat’s first', async () => {
   service(team, 'b');
@@ -145,18 +172,82 @@ test('a message with no name goes to the agent the hint names, as before', async
   vi.unstubAllGlobals();
 });
 
-test('a message naming a member sends no agent, so the service gives it to that member; By Send says To', async () => {
+test('a typed @Name is plain text: not blue, By Send names the lead, and the lead’s id is sent', async () => {
   const sent = service(team);
   await render(<Open project="p" />);
   await input().click();
   await userEvent.keyboard('Thanks, @made-up b can you look');
-  await expect.element(sign('To Made-up B')).toBeVisible();
+  await expect.element(sign('To Made-up A')).toBeVisible();
+  expect(blue()).toEqual([]);
   await userEvent.keyboard('{Enter}');
-  await expect.poll(() => sent).toEqual([{ text: 'Thanks, @made-up b can you look' }]);
+  await expect.poll(() => sent).toEqual([{ text: 'Thanks, @made-up b can you look', agent: 'a' }]);
   vi.unstubAllGlobals();
 });
 
-test('in a chat with no project, naming an agent not in it sends its id, so it joins; By Send says it joins', async () => {
+test('a name picked from the list is blue, By Send says To it, and its id is sent, in a team chat too', async () => {
+  const sent = service(team);
+  await render(<Open project="p" />);
+  await pick('Thanks, ', 'made-up', 1);
+  await userEvent.keyboard('can you look');
+  await expect.element(sign('To Made-up B')).toBeVisible();
+  expect(blue()).toEqual(['@Made-up B']);
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent).toEqual([{ text: 'Thanks, @Made-up B can you look', agent: 'b' }]);
+  vi.unstubAllGlobals();
+});
+
+test('an edit inside a picked name makes it plain text, and By Send goes back to the lead', async () => {
+  service(team);
+  await render(<Open project="p" />);
+  await pick('', 'made-up', 1);
+  await userEvent.keyboard('look');
+  await expect.element(sign('To Made-up B')).toBeVisible();
+  // Into the name: "@Made-up B look" with the caret after "Made".
+  (input().element() as HTMLTextAreaElement).setSelectionRange(5, 5);
+  await userEvent.keyboard('x');
+  await expect.element(sign('To Made-up A')).toBeVisible();
+  expect(blue()).toEqual([]);
+  vi.unstubAllGlobals();
+});
+
+test('text typed before a picked name leaves it picked and blue, where it now is', async () => {
+  service(team);
+  await render(<Open project="p" />);
+  await pick('', 'made-up', 1);
+  (input().element() as HTMLTextAreaElement).setSelectionRange(0, 0);
+  await userEvent.keyboard('Hi ');
+  await expect.element(input()).toHaveValue('Hi @Made-up B ');
+  await expect.element(sign('To Made-up B')).toBeVisible();
+  const [range] = [...(CSS.highlights.get('composer-mention') ?? [])] as Range[];
+  expect([range?.startOffset, range?.toString()]).toEqual([3, '@Made-up B']);
+  vi.unstubAllGlobals();
+});
+
+test('a draft kept while another chat is open keeps its picked name', async () => {
+  service(team);
+  await render(<Open project="p" />);
+  await pick('Ask ', 'made-up', 1);
+  await page.getByRole('button', { name: 'Switch' }).click();
+  await expect.element(input()).toHaveValue('');
+  await page.getByRole('button', { name: 'Switch' }).click();
+  await expect.element(input()).toHaveValue('Ask @Made-up B ');
+  await expect.element(sign('To Made-up B')).toBeVisible();
+  expect(blue()).toEqual(['@Made-up B']);
+  vi.unstubAllGlobals();
+});
+
+test('an email address names nobody, though its domain is an agent’s name', async () => {
+  const sent = service([], 'a');
+  await render(<Open />);
+  await input().click();
+  await userEvent.keyboard('write to bob@ann.com');
+  await expect.element(sign('To Made-up A')).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent).toEqual([{ text: 'write to bob@ann.com', agent: 'a' }]);
+  vi.unstubAllGlobals();
+});
+
+test('in a chat with no project, picking an agent not in it sends its id, so it joins; By Send says it joins', async () => {
   const sent = service([], 'a');
   await render(<Open />);
   await input().click();
@@ -165,39 +256,24 @@ test('in a chat with no project, naming an agent not in it sends its id, so it j
   const options = page.getByRole('listbox', { name: 'Agents' }).getByRole('option');
   await expect
     .poll(() => options.elements().map((o) => o.textContent))
-    .toEqual(['Made-up A', 'Made-up B', 'Made-up C']);
+    .toEqual(['Made-up A', 'Made-up B', 'Made-up C', 'Ann']);
   await expect
     .element(page.getByRole('group', { name: 'Bring in' }))
-    .toHaveTextContent('Bring inMade-up BMade-up C');
-  await userEvent.keyboard('{ArrowUp}{Enter}please help');
+    .toHaveTextContent('Bring inMade-up BMade-up CAnn');
+  await userEvent.keyboard('{ArrowUp}{ArrowUp}{Enter}please help');
   await expect.element(sign('Made-up C joins')).toBeVisible();
   await userEvent.keyboard('{Enter}');
   await expect.poll(() => sent).toEqual([{ text: '@Made-up C please help', agent: 'c' }]);
   vi.unstubAllGlobals();
 });
 
-test('a new chat’s first message goes to the agent it names, and By Send says so', async () => {
+test('a new chat’s first message goes to the agent picked in it, and By Send says so', async () => {
   const started: unknown[] = [];
-  await render(
-    <ChatView
-      chat={{ id: '', title: 'New chat' }}
-      agents={[made('a'), made('b'), made('c')]}
-      draft="@Made-up C what is left?"
-      onDraft={() => {}}
-      unsent={[]}
-      onUnsent={() => {}}
-      openSettings={() => {}}
-      onNamed={() => {}}
-      projects={[project]}
-      onProject={() => {}}
-      onNewProject={() => {}}
-      onStart={(text, agent) => started.push({ text, agent })}
-      pauses={{ pauses: [], usage: [] }}
-      onPause={async () => {}}
-    />,
-  );
+  await render(<Open id="" started={started} />);
+  await pick('', 'made-up', 2);
+  await userEvent.keyboard('what is left?');
   await expect.element(sign('To Made-up C')).toBeVisible();
-  await page.getByRole('button', { name: 'Send' }).click();
+  await userEvent.keyboard('{Enter}');
   expect(started).toEqual([{ text: '@Made-up C what is left?', agent: 'c' }]);
 });
 

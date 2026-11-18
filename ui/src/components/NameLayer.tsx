@@ -1,10 +1,10 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { named } from './mention';
+import type { Picked } from './mention';
 
 interface Props {
   text: string;
-  /** Who can be named: each `@Name` of one of them is blue. */
-  names: readonly string[];
+  /** The names picked from the list: these are blue, and nothing else. */
+  picks: readonly Picked[];
   box: RefObject<HTMLTextAreaElement | null>;
 }
 
@@ -13,12 +13,12 @@ const blue = typeof Highlight === 'function' && CSS.highlights ? new Highlight()
 if (blue) CSS.highlights.set('composer-mention', blue);
 
 /**
- * The message box's text drawn again under its see-through textarea, each `@Name` blue: the same font, padding and
+ * The message box's text drawn again under its see-through textarea, each picked `@Name` blue: the same font, padding and
  * wrap, the textarea's width without its scroll bar, and its scroll. The text stays one text node and the names are
  * coloured by a highlight, never spans: a span starts a new run of text, and the letters after it land up to 1/16px
  * from where the textarea draws them, which shows as a changed edge on a letter.
  */
-export function NameLayer({ text, names, box }: Props) {
+export function NameLayer({ text, picks, box }: Props) {
   const layer = useRef<HTMLDivElement>(null);
   const ranges = useRef<Range[]>([]);
   const follow = useCallback(() => {
@@ -37,10 +37,11 @@ export function NameLayer({ text, names, box }: Props) {
     for (const r of ranges.current) blue.delete(r);
     ranges.current = [];
     if (!(node instanceof Text)) return;
-    for (const name of named(text, names)) {
+    for (const pick of picks) {
+      if (pick.at + pick.name.length + 1 > node.length) continue;
       const r = new Range();
-      r.setStart(node, name.at);
-      r.setEnd(node, name.at + name.length);
+      r.setStart(node, pick.at);
+      r.setEnd(node, pick.at + pick.name.length + 1);
       ranges.current.push(r);
       blue.add(r);
     }

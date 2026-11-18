@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Member, Message, Task, ToolBody, Turn } from '../api';
+import type { Picked } from '../components/mention';
 import type { LiveEvent } from '../live';
 import { blocksOf, noneKept } from './AgentPanel';
 import { ChatView } from './ChatView';
@@ -154,14 +155,15 @@ interface Shown {
 function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown) {
   const [agent, setAgent] = useState<string>();
   const [shown, setShown] = useState(true);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState({ text: '', picks: [] as Picked[] });
   return (
     <div className="app" style={{ height: 760 }}>
       <ChatView
         chat={{ id: 'c', title: 'Made-up chat', archived: archived ? '2026-11-08T09:00:00Z' : null }}
         agents={known}
-        draft={draft}
-        onDraft={setDraft}
+        draft={draft.text}
+        picks={draft.picks}
+        onDraft={(text, picks = []) => setDraft({ text, picks })}
         unsent={[]}
         onUnsent={() => {}}
         openSettings={() => {}}
@@ -302,8 +304,8 @@ test('Message names the agent first in the message box and puts the keyboard the
   await expect.element(input).toHaveFocus();
   await expect.element(input).toHaveValue('@Made-up Third ');
   await userEvent.keyboard('Made-up note{Enter}');
-  // A member named: the service gives it to that member.
-  await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note' }]);
+  // The name the button puts in counts as picked: its id is sent.
+  await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note', agent: 'c' }]);
 });
 
 test('the Working line opens Summary and closes it; Escape gives focus back to the line', async () => {

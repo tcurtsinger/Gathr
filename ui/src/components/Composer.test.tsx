@@ -3,6 +3,7 @@ import { expect, test } from 'vitest';
 import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer, type Person } from './Composer';
+import type { Picked } from './mention';
 
 /** Made-up agents the box can name: two in the chat, one not in it yet. */
 const people: Person[] = [
@@ -14,6 +15,7 @@ const people: Person[] = [
 /** The composer as a chat holds it, at a chat's foot: sending clears the draft and lists what was sent. */
 function Chat({ running = false }: { running?: boolean }) {
   const [draft, setDraft] = useState('');
+  const [picks, setPicks] = useState<Picked[]>([]);
   const [sent, setSent] = useState<string[]>([]);
   const [stopped, setStopped] = useState(false);
   return (
@@ -23,7 +25,11 @@ function Chat({ running = false }: { running?: boolean }) {
         hint="Message Ann"
         people={people}
         draft={draft}
-        onDraft={setDraft}
+        picks={picks}
+        onDraft={(text, p) => {
+          setDraft(text);
+          setPicks(p);
+        }}
         onSend={() => {
           setSent([...sent, draft.replaceAll('\n', '/')]);
           setDraft('');
@@ -144,13 +150,13 @@ test('a pointer click on a name picks it, in place of the part typed, and the ke
   expect(list().query()).toBeNull();
 });
 
-test('each @Name of someone who can be named is drawn blue under the text, letter for letter', async () => {
+test('only a name picked from the list is blue under the text; one typed out is plain', async () => {
   const screen = await render(<Chat />);
   await screen.getByRole('textbox', { name: 'Message' }).click();
-  await userEvent.keyboard('@ann and @Abel, ask @bo.');
+  await userEvent.keyboard('@ann and @bo, ask @ab{Enter}now');
   const layer = document.querySelector('.composer-mirror') as HTMLElement;
-  // The box's text in one piece (a span would move the letters after it), and only whole names are blue.
-  expect([...layer.childNodes].map((n) => n.textContent)).toEqual(['@ann and @Abel, ask @bo. ']);
+  // The box's text in one piece (a span would move the letters after it), and only the picked name is blue.
+  expect([...layer.childNodes].map((n) => n.textContent)).toEqual(['@ann and @bo, ask @Abe now ']);
   const blue = [...(CSS.highlights.get('composer-mention') ?? [])] as Range[];
-  expect(blue.map((r) => r.toString())).toEqual(['@ann', '@bo']);
+  expect(blue.map((r) => r.toString())).toEqual(['@Abe']);
 });

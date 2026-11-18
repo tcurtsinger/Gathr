@@ -15,7 +15,7 @@ import {
 } from '../api';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
-import { firstNamed } from '../components/mention';
+import { first as firstPick, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
@@ -42,7 +42,9 @@ interface Props {
   /** Removed agents, by name: their old messages still say who wrote them (0069). */
   removed?: Named[];
   draft: string;
-  onDraft: (text: string) => void;
+  /** The names picked from the "@" list in the draft: only these count (C24). */
+  picks?: Picked[];
+  onDraft: (text: string, picks?: Picked[]) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
   /** Messages that never reached the service, kept by the app while other chats are open. */
@@ -89,9 +91,10 @@ interface Props {
 }
 
 const NONE: Named[] = [];
+const NO_PICKS: Picked[] = [];
 
 export function ChatView(props: Props) {
-  const { chat, agents, draft, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
+  const { chat, agents, draft, picks = NO_PICKS, onDraft, unsent, onUnsent, openSettings, onNamed } = props;
   const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
   const archived = !!chat.archived;
   const { onRestore, restoreFailure } = props;
@@ -126,7 +129,7 @@ export function ChatView(props: Props) {
   const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
-  const to = addressed(draft, people, fallback, room);
+  const to = addressed(picks, people, fallback, fresh);
   // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
   const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
@@ -144,9 +147,9 @@ export function ChatView(props: Props) {
   // A failed send is kept for Retry, so the composer is free for the next message at once.
   const sendDraft = () => {
     const first = state.messages.length === 0;
-    onDraft('');
-    if (fresh) return onStart(draft, to.agent);
-    send(draft, to.agent).then(() => first && onNamed());
+    onDraft('', []);
+    if (fresh) return onStart(draft, to.to?.id);
+    send(draft, to.to?.id).then(() => first && onNamed());
   };
 
   const actions: Actions = {
@@ -166,7 +169,7 @@ export function ChatView(props: Props) {
       onStart(f.text, f.agent);
     },
     carryOn: () => {
-      onDraft('Continue');
+      onDraft('Continue', []);
       input.current?.focus();
     },
     approve,
@@ -180,13 +183,16 @@ export function ChatView(props: Props) {
   const stable = useStable(actions);
   const { agentOpen, workspace } = props;
   const opened = crew.find((g) => g.member.agent === agentOpen?.agent);
-  // Message on a panel: the agent named first in the box, unless the text already gives it the message.
-  const typed = useRef({ draft, people, onDraft });
-  typed.current = { draft, people, onDraft };
+  // Message on a panel: the agent picked first in the box, unless it already is.
+  const typed = useRef({ draft, picks, people, onDraft });
+  typed.current = { draft, picks, people, onDraft };
   const message = useCallback((id: string) => {
-    const { draft, people, onDraft } = typed.current;
+    const { draft, picks, people, onDraft } = typed.current;
     const who = people.find((p) => p.id === id);
-    if (who && firstNamed(draft, people)?.id !== id) onDraft(`@${who.name} ${draft}`);
+    if (who && firstPick(picks)?.id !== id) {
+      const moved = picks.map((p) => ({ ...p, at: p.at + who.name.length + 2 }));
+      onDraft(`@${who.name} ${draft}`, [{ at: 0, id, name: who.name }, ...moved]);
+    }
     requestAnimationFrame(() => {
       const box = input.current;
       box?.focus();
@@ -376,6 +382,7 @@ export function ChatView(props: Props) {
                   />
                   <Composer
                     draft={draft}
+                    picks={picks}
                     onDraft={onDraft}
                     onSend={sendDraft}
                     onStop={turn ? () => act('stop', thisChat) : undefined}

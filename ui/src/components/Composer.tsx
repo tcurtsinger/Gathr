@@ -4,7 +4,6 @@ import {
   type SyntheticEvent,
   useCallback,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -17,7 +16,7 @@ import {
 } from '@/components/assistant-ui/elements/composer';
 import { Face } from './Face';
 import { MentionList, type Person } from './MentionList';
-import { insert, typing } from './mention';
+import { follow, insert, type Picked, typing } from './mention';
 import { NameLayer } from './NameLayer';
 import './composer.css';
 
@@ -25,7 +24,9 @@ export type { Person } from './MentionList';
 
 interface Props {
   draft: string;
-  onDraft: (text: string) => void;
+  /** The names picked from the list in it: only these count, and only these are blue. */
+  picks?: readonly Picked[];
+  onDraft: (text: string, picks: Picked[]) => void;
   onSend: () => void;
   /** Set while a turn runs: the button stops it instead of sending. */
   onStop?: () => void;
@@ -39,9 +40,11 @@ interface Props {
 }
 
 const NOBODY: readonly Person[] = [];
+const NONE: readonly Picked[] = [];
 
 /** The one composer, on the registry's composer parts. Enter sends, Shift+Enter is a new line; "@" lists names. */
-export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to }: Props) {
+export function Composer(props: Props) {
+  const { draft, picks = NONE, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to } = props;
   const canSend = draft.trim().length > 0;
   const stopping = !!onStop && !canSend;
   // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
@@ -76,14 +79,15 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, peopl
   const open = focused && !!mention && mention.at !== shut && matches.length > 0;
   const key = mention ? `${mention.at}:${mention.query}` : '';
   const at = lit.key === key ? lit.at : 0;
-  const names = useMemo(() => people.map((p) => p.name), [people]);
 
   const choose = (k: number) => {
     if (!mention) return;
-    const next = insert(draft, mention.at, caret, matches[k].name);
+    const who = matches[k];
+    const next = insert(draft, mention.at, caret, who.name);
     placed.current = next.caret;
     setRead(next);
-    onDraft(next.text);
+    const kept = follow(draft, next.text, next.caret, picks);
+    onDraft(next.text, [...kept, { at: mention.at, id: who.id, name: who.name }]);
   };
   const moved = (e: SyntheticEvent<HTMLTextAreaElement>) =>
     setRead({ text: e.currentTarget.value, caret: e.currentTarget.selectionStart });
@@ -115,7 +119,7 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, peopl
       {open && <MentionList people={matches} lit={at} onPick={choose} />}
       <ComposerBar>
         <div className="composer-field">
-          {people.length > 0 && <NameLayer text={draft} names={names} box={box} />}
+          {people.length > 0 && <NameLayer text={draft} picks={picks} box={box} />}
           <textarea
             ref={ref}
             className={people.length > 0 ? 'composer-input named' : 'composer-input'}
@@ -128,7 +132,7 @@ export function Composer({ draft, onDraft, onSend, onStop, inputRef, hint, peopl
               const now = { text: e.target.value, caret: e.target.selectionStart };
               if (!typing(now.text, now.caret)) setShut(null);
               setRead(now);
-              onDraft(now.text);
+              onDraft(now.text, follow(draft, now.text, now.caret, picks));
             }}
             onSelect={moved}
             onFocus={() => setFocused(true)}

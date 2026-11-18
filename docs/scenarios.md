@@ -35,18 +35,19 @@ Parts: 1.1, 1.9
 Parts: 1.2, 1.9
 
 - **Given** the person has an assistant and one other agent
-- **When** they start a new chat and their message begins with @ and the other agent's name
+- **When** they start a new chat, type @ and pick the other agent from the list
 - **Then** that agent gets the message, the assistant doesn't, and the chat is listed under that
-  agent's name
+  agent's name; the same name typed out without picking is plain text and goes to the assistant
 
 ### 1c. In a team chat, @Name reaches that member
 
 Parts: 1.3
 
 - **Given** a team chat with a lead and a builder, open in the window
-- **When** the person sends one message that @-names the builder, and one that names nobody
-- **Then** the builder gets the first and the lead gets the second, as the box said by Send ("To" and the
-  agent's name)
+- **When** the person sends one message with the builder picked from the @ list, one that names nobody,
+  and one with `@Builder` typed out without picking
+- **Then** the builder gets the first and the lead gets the other two, as the box said by Send ("To" and
+  the agent's name)
 
 ### 1d. An agent is created with what it is for
 

@@ -7,6 +7,7 @@ import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
 import { Confirm } from './components/Confirm';
 import { KnownFaces } from './components/Face';
+import type { Picked } from './components/mention';
 import { FailureNotice } from './components/Notice';
 import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
@@ -47,7 +48,8 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
-  const drafts = useRef(new Map<string, string>());
+  // Each chat's draft and the names picked in it, kept while another chat is open.
+  const drafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
   const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
   const person = usePersonTasks(setFailure);
@@ -359,9 +361,10 @@ export function App() {
           chat={chat}
           agents={agents}
           removed={removed}
-          draft={drafts.current.get(chat.id) ?? ''}
-          onDraft={(text) => {
-            drafts.current.set(chat.id, text);
+          draft={drafts.current.get(chat.id)?.text ?? ''}
+          picks={drafts.current.get(chat.id)?.picks}
+          onDraft={(text, picks = []) => {
+            drafts.current.set(chat.id, { text, picks });
             redraw((n) => n + 1);
           }}
           unsent={unsent[chat.id] ?? []}

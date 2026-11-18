@@ -1,7 +1,7 @@
 import type { Agent, Member } from '../api';
 import type { Person } from '../components/Composer';
 import type { FaceMark } from '../components/Face';
-import { firstNamed } from '../components/mention';
+import { first, type Picked } from '../components/mention';
 import { roleName } from './team';
 
 const MOST = 5;
@@ -55,13 +55,16 @@ export function unnamed(people: Person[], members: Member[], last?: string | nul
 }
 
 /**
- * Who a message goes to and what the window sends for it. A member named: no agent, so the service reads the text
- * as it does over the API. Anyone else: its id, so one not in a chat with no project joins it, and a message that
- * names nobody goes where the hint says, as it did with the picker.
+ * Who a message goes to (C24): the first agent picked from the "@" list, else the hint's agent. The window always
+ * sends its id, so a typed name is only text; one picked from outside a chat with no project joins it.
  */
-export function addressed(text: string, people: Person[], fallback: Person | undefined, chat: Chat) {
-  const named = firstNamed(text, people);
-  const to = named ?? fallback;
-  const member = !chat.fresh && !!named && chat.members.some((m) => m.agent === named.id);
-  return { to, joins: !chat.fresh && !!to?.out, agent: member ? undefined : to?.id };
+export function addressed(
+  picks: readonly Picked[],
+  people: Person[],
+  fallback: Person | undefined,
+  fresh: boolean,
+) {
+  const pick = first(picks.filter((p) => people.some((q) => q.id === p.id)));
+  const to = people.find((p) => p.id === pick?.id) ?? fallback;
+  return { to, joins: !fresh && !!to?.out };
 }
