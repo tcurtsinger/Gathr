@@ -14,38 +14,28 @@ export function insert(text: string, at: number, caret: number, name: string) {
 const wordy = /[\p{L}\p{N}_]/u;
 
 /**
- * The one whose `@Name` comes first in `text`, ignoring case; at one place, the longest name. A name counts only
- * where it ends: `@Al` isn't in `@Alex`. The service's own rule (`team.rs` `first_named`), so the window says what
- * the service will do.
+ * Each `@Name` of one of `names` in `text`, in order, as the service reads a name (`team.rs` `first_named`): case
+ * ignored, the longest name at one place, and only where the name ends (`@Al` isn't in `@Alex`).
  */
-export function firstNamed<T extends { name: string }>(text: string, people: readonly T[]): T | undefined {
-  const lower = text.toLowerCase();
-  let best: { at: number; len: number; who: T } | undefined;
-  for (const who of people) {
-    const mention = `@${who.name.toLowerCase()}`;
-    let at = lower.indexOf(mention);
-    while (at >= 0 && wordy.test(lower.charAt(at + mention.length))) at = lower.indexOf(mention, at + 1);
-    if (at < 0) continue;
-    if (!best || at < best.at || (at === best.at && mention.length > best.len))
-      best = { at, len: mention.length, who };
-  }
-  return best?.who;
-}
-
-/** The text cut where each `@Name` of someone named stands, as the service reads a name (see `firstNamed`). */
-export function marks(text: string, names: readonly string[]): { at: number; text: string; name: boolean }[] {
+export function named(text: string, names: readonly string[]): { at: number; length: number }[] {
   const lower = text.toLowerCase();
   const wanted = names.map((n) => `@${n.toLowerCase()}`).sort((a, b) => b.length - a.length);
-  const parts: { at: number; text: string; name: boolean }[] = [];
-  let from = 0;
+  const found: { at: number; length: number }[] = [];
   for (let at = lower.indexOf('@'); at >= 0; at = lower.indexOf('@', at + 1)) {
-    if (at < from) continue;
     const hit = wanted.find((m) => lower.startsWith(m, at) && !wordy.test(lower.charAt(at + m.length)));
     if (!hit) continue;
-    if (at > from) parts.push({ at: from, text: text.slice(from, at), name: false });
-    parts.push({ at, text: text.slice(at, at + hit.length), name: true });
-    from = at + hit.length;
+    found.push({ at, length: hit.length });
+    at += hit.length - 1;
   }
-  if (from < text.length) parts.push({ at: from, text: text.slice(from), name: false });
-  return parts;
+  return found;
+}
+
+/** The one whose `@Name` comes first in `text`: who the service gives a message to, so the window can say so. */
+export function firstNamed<T extends { name: string }>(text: string, people: readonly T[]): T | undefined {
+  const first = named(
+    text,
+    people.map((p) => p.name),
+  )[0];
+  const word = first && text.slice(first.at + 1, first.at + first.length).toLowerCase();
+  return people.find((p) => p.name.toLowerCase() === word);
 }

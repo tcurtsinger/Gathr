@@ -1,5 +1,5 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { marks } from './mention';
+import { named } from './mention';
 
 interface Props {
   text: string;
@@ -37,11 +37,10 @@ export function NameLayer({ text, names, box }: Props) {
     for (const r of ranges.current) blue.delete(r);
     ranges.current = [];
     if (!(node instanceof Text)) return;
-    for (const part of marks(text, names)) {
-      if (!part.name) continue;
+    for (const name of named(text, names)) {
       const r = new Range();
-      r.setStart(node, part.at);
-      r.setEnd(node, part.at + part.text.length);
+      r.setStart(node, name.at);
+      r.setEnd(node, name.at + name.length);
       ranges.current.push(r);
       blue.add(r);
     }
