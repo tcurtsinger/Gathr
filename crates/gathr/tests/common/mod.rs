@@ -828,6 +828,21 @@ pub fn hook_at(port: u16, path: &str, token: &str, tool: &str, input: Value) -> 
     http::post(port, path, &headers, &body.to_string()).unwrap()
 }
 
+/// The window's tests draw from the service's real answers (0075): with `GATHR_RECORD_UI` set to a
+/// folder, the chat's history and tasks list as they stand go to `<folder>/<name>.json`.
+pub fn record_ui(service: &TestService, chat: &str, name: &str) {
+    let Some(folder) = std::env::var_os("GATHR_RECORD_UI") else {
+        return;
+    };
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let work = service
+        .call("GET", &format!("/api/chats/{chat}/tasks"))
+        .json();
+    let both = serde_json::json!({ "history": history, "work": work });
+    let path = Path::new(&folder).join(format!("{name}.json"));
+    std::fs::write(path, serde_json::to_string_pretty(&both).unwrap()).unwrap();
+}
+
 /// 0075: the topics history gives (the chat read once) and those a live event gives (each turn's or
 /// task's own chain, one row at a time) are the same, for every turn and task of the chat.
 pub fn topics_agree(data: &Path, chat: &str) {

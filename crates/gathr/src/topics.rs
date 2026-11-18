@@ -482,6 +482,22 @@ pub fn on_tasks(
     topics.src.read()
 }
 
+/// The topics of lines said in no turn, for the live socket: the chat read once, as history reads
+/// it. Lines are a few a task, so a read of the whole chat each time costs little.
+pub fn of_lines(
+    conn: &Connection,
+    chat: &str,
+    ids: &[&str],
+) -> Result<HashMap<String, String>, Error> {
+    let topics = Topics::of_chat(conn, chat)?;
+    let lines = topics
+        .src
+        .lines
+        .iter()
+        .filter(|l| ids.contains(&l.id.as_str()));
+    Ok(lines.map(|l| (l.id.clone(), topics.line(l).key)).collect())
+}
+
 /// One turn's topic, for the live socket, from its own chain: none for a turn that isn't the chat's.
 pub fn of_turn(conn: &Connection, chat: &str, turn: &str) -> Result<Option<String>, Error> {
     Ok(of_turn_counted(conn, chat, turn)?.0)

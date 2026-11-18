@@ -149,6 +149,7 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
     let approved = service.send("POST", "/api/plans/1/approve", json!({ "version": 1 }));
     assert_eq!(approved.status, 200, "{}", approved.body);
     let ann_turn = turn_on(&service, &chat, 2, &["running"]);
+    common::record_ui(&service, &chat, "ask-at-work");
     let ann = token(&data.0, 2);
     let blocked = json!({ "task": 3, "how": "blocked", "note": "it needs the tags table first" });
     let said = text(&call_tool(port, &ann, "finish_task", blocked));
@@ -209,6 +210,7 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
         listed["asks"][0]["open"], false,
         "the ask is done: {listed}"
     );
+    common::record_ui(&service, &chat, "ask-done");
     common::topics_agree(&data.0, &chat);
 }
 
@@ -381,6 +383,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
     );
     let listed = listed(&service, "c");
     assert_eq!(task_topic(&listed, 1), json!("t:1"), "{listed}");
+    common::record_ui(&service, "c", "old-chat");
     common::topics_agree(&data.0, "c");
 }
 

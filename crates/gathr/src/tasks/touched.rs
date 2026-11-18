@@ -99,7 +99,7 @@ pub fn take_waiting(conn: &Connection) -> Result<Vec<String>, Error> {
 }
 
 /// What Gathr said in no turn since the last call, committed, oldest first: each chat and the
-/// message as the API shows it; noted no more.
+/// message as the API shows it, with its `topic` as history gives it (0075); noted no more.
 pub fn take_said(conn: &Connection) -> Result<Vec<(String, Value)>, Error> {
     let noted: Vec<(String, String)> = {
         let mut stmt = conn.prepare_cached("SELECT id, chat_id FROM temp.said ORDER BY id")?;
@@ -110,9 +110,22 @@ pub fn take_said(conn: &Connection) -> Result<Vec<(String, Value)>, Error> {
         return Ok(Vec::new());
     }
     conn.execute("DELETE FROM temp.said", [])?;
+    let mut topics = std::collections::HashMap::new();
+    for (_, chat) in &noted {
+        if !topics.contains_key(chat) {
+            let ids: Vec<&str> = noted
+                .iter()
+                .filter(|(_, c)| c == chat)
+                .map(|(id, _)| id.as_str())
+                .collect();
+            topics.insert(chat.clone(), crate::topics::of_lines(conn, chat, &ids)?);
+        }
+    }
     let mut said = Vec::new();
     for (id, chat) in noted {
-        said.push((chat, crate::store::message(conn, &id)?));
+        let mut message = crate::store::message(conn, &id)?;
+        message["topic"] = topics[&chat].get(&id).cloned().into();
+        said.push((chat, message));
     }
     Ok(said)
 }
@@ -141,6 +154,42 @@ mod tests {
         conn.execute(add, ["c2"]).unwrap();
         assert_eq!(take(&conn).unwrap(), ["c2"]);
         assert_eq!(take(&conn).unwrap(), Vec::<String>::new());
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 0075: a line said live carries the main message it sits under, as history gives it, so the
+    /// window draws it in its thread from the moment it comes.
+    #[test]
+    fn a_line_said_in_no_turn_goes_out_with_its_topic() {
+        let dir = std::env::temp_dir().join(format!("gathr-touched-{}", crate::ids::span_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let conn = crate::db::open(&dir.join("gathr.db")).unwrap();
+        watch(&conn).unwrap();
+        conn.execute_batch(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'One', 0);
+             INSERT INTO tasks (number, chat_id, owner, kind, what, state, created_ts, updated_ts)
+             VALUES (7, 'c', 'a', 'work', 'x', 'done', 0, 0);",
+        )
+        .unwrap();
+        crate::store::say_about(&conn, "c", "A task is done:\n- #7", Some("t:7")).unwrap();
+        crate::store::say(&conn, "c", "Something nothing ties").unwrap();
+        let said = take_said(&conn).unwrap();
+        let topic = |start: &str| {
+            let (_, m) = said
+                .iter()
+                .find(|(_, m)| m["body"].as_str().unwrap().starts_with(start))
+                .unwrap();
+            (
+                m["topic"].as_str().unwrap_or("none").to_string(),
+                m["id"].as_str().unwrap().to_string(),
+            )
+        };
+        let (lone, id) = topic("Something");
+        assert_eq!(
+            [topic("A task").0, lone],
+            ["t:7".to_string(), format!("m:{id}")]
+        );
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
     }

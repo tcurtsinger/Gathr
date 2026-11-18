@@ -213,9 +213,17 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .optional()?
         .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
+    // When its second agent joined (0075): what came before reads as it did in a chat of one.
+    let team_since: Option<i64> = conn
+        .prepare_cached(
+            "SELECT added_ts FROM chat_members WHERE chat_id = ?1 ORDER BY added_ts LIMIT 1 OFFSET 1",
+        )?
+        .query_row([chat], |r| r.get(0))
+        .optional()?;
     Ok(
         json!({ "chat": chat, "agent": agent, "project": project, "folder": folder,
-        "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns }),
+        "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns,
+        "team_since": team_since.map(crate::ids::utc) }),
     )
 }
 
@@ -714,6 +722,35 @@ mod tests {
             let _ = std::fs::remove_file(format!("{}{end}", path.display()));
         }
         steps
+    }
+
+    /// 0075: a chat that ran with one agent became a team when its second agent joined; what came
+    /// before stays flat. A chat that has one agent, or none listed, was never a team.
+    #[test]
+    fn history_says_when_the_chat_became_a_team() {
+        let path = std::env::temp_dir().join(format!("gathr-team-{}.db", crate::ids::uuid()));
+        let conn = crate::db::open(&path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 0);
+             INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('acc', 'claude', 'A', 'a', 0);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('ann', 'Ann', 'ann', 'acc', 0), ('bo', 'Bo', 'bo', 'acc', 0);
+             INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES ('c', 'ann', 'supervisor', 5000000);",
+        )
+        .unwrap();
+        let since =
+            |conn: &rusqlite::Connection| super::history(conn, "c").unwrap()["team_since"].clone();
+        assert_eq!(since(&conn), serde_json::Value::Null);
+        conn.execute(
+            "INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES ('c', 'bo', 'member', 9000000)",
+            [],
+        )
+        .unwrap();
+        assert_eq!(since(&conn), crate::ids::utc(9_000_000));
+        drop(conn);
+        for end in ["", "-wal", "-shm"] {
+            let _ = std::fs::remove_file(format!("{}{end}", path.display()));
+        }
     }
 
     /// Found in review: the order once read every earlier message for each line said in no turn, so a long chat
