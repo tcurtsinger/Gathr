@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec; the line's place is the owner's pick). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `ui/src/chat/StatusLine.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `crates/gathr/tests/merge/lands.rs` (a landing's failing looks), `ui/src/chat/StatusLine.test.tsx`.
 
 Serves promise 6 of [the charter](../charter.md#the-promises): the room explains itself (parts 6.1 and 6.2 of [the truth map](../truth-map.md)).
 
@@ -78,3 +78,15 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   tool, `gathr diag waiting`, Gathr's line in the chat when nothing moves (0052) and, for failing looks,
   Diagnostics (`gathr.wait.failing`). The window says a PR's waits as the approved pages do ("PR #18 checks",
   "PR #18 to merge"); the service's words, which agents read, are unchanged.
+- 2026-11-18, what the old list showed (the owner's picks of the status-line page's "What the old list showed":
+  "A, one word" and "A, like an agent"). **A failing check:** an agent whose wait's looks failed three times in a
+  row says so in the answer (`failing`), and its row and its face's card gain one word after what it waits on:
+  "Waiting · PR #18 checks · Can't read · 1h 4m", a shade brighter than the rest, no colour. The line is
+  unchanged, and the reason stays out of the list (`gathr diag waiting`, Diagnostics). **Gathr's own waits:**
+  what no agent is on is Gathr's, in the answer as rows of their own (`gathr`): its update (Working), each PR it
+  lands by itself (Waiting, since its review came clean, and "Can't read" once three looks in a row failed) and
+  each command an ended turn left running (Working, with the agent's name). A landing's failing looks are kept in
+  the running service only, as the rest it alone knows: no migration. On the line Gathr is said like an agent,
+  last, by the same word rule: "Gathr is waiting on PR #18 to land" when every agent is free, "Ann and Gathr are
+  working". The list has a row for each after the agents', in the same row with Gathr's mark, opening nothing:
+  no screen shows an update, a landing or a command's output. The lines and the words agents read don't change.

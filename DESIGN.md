@@ -290,8 +290,13 @@ run in the destructive one. Pointed at or open, it takes the raised tint as a 24
   counted ("Mira needs you", "Mira and Bo need you"). The rest name one or two agents in all and count from three,
   "agents" and the verb once: "Ann is working, Bo is blocked", "3 agents are working", "2 agents are working, 1
   waiting". What a wait is on is said only when the line waits alone and every wait is on one thing: "Rev is
-  waiting on PR #18 checks". A PR's waits read "PR #18 checks", "PR #18 to merge". Never "he" or "she", a time, a
-  step, a task's title, Free or Gathr. Nothing when everyone is free. A team holds at most five, so nothing folds.
+  waiting on PR #18 checks". A PR's waits read "PR #18 checks", "PR #18 to merge", "PR #18 to land". Never "he" or
+  "she", a time, a step, a task's title or Free. Nothing when nobody, agent or Gathr, has anything going. A team
+  holds at most five, so nothing folds.
+- **Gathr is said like an agent, last** (the owner's pick, 2026-11-18): its update, a PR it lands and a command
+  an agent's ended turn left running are Gathr's, in the most pressing of their states, by the same rule: "Gathr is
+  waiting on PR #18 to land" when every agent is free, "Ann and Gathr are working". Counted, Gathr is one of the
+  agents.
 - **Three dots** end it while an agent works: 4px, 3px apart, at 28% of the text colour, with a light that passes
   along them once per turn of the Working ring (1.6s) and rests; still, at 50%, under reduced motion. Without
   them, nothing runs.
@@ -299,8 +304,13 @@ run in the destructive one. Pointed at or open, it takes the raised tint as a 24
   pressing first: its 24px face, its name at 14px, then its state in the mark's shape at 12px and its word, what
   and how long, as its face's card says it, at 12.5px muted ("Needs you · Question · 1m", "Working · Fix the
   review of PR #18 · 1m 12s"); Needs you in the attention colour, Can't run in the destructive one. Seconds count
-  under a minute, each second. A silent turn's row says "silent 12m" for how long it has made no progress. A row
-  opens that agent's tab in the panel, and the keyboard follows. Escape closes it and gives focus back to the line.
+  under a minute, each second. A silent turn's row says "silent 12m" for how long it has made no progress. A wait
+  whose looks keep failing says "Can't read" after what it waits on, in the foreground colour, a shade brighter
+  than the rest, no colour of its own (the owner's pick, 2026-11-18): "Waiting · PR #18 checks · Can't read · 1h
+  4m", and its face's card says the same. Why it fails isn't in the list. Gathr's rows come after the agents', in
+  the same row with Gathr's 24px three-dot face: "Working · Update to 0.1.240", "Waiting · PR #18 to land · 4m",
+  "Working · Ann: Run the test suite · 12m" (a command, with the agent that left it). An agent's row opens that
+  agent's tab in the panel, and the keyboard follows; Gathr's rows open nothing and take no focus. Escape closes it and gives focus back to the line.
   Who and what the line says is announced from beside it, not by a live region around the button.
 
 ### Conversation map

@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-17: the status mock-up, all seven marks, the card, Spin "Latest"). Date: 2026-11-17.
 
-Built: yes. Proof: `crates/gathr/tests/waiting.rs` (each state, its words and since when), `crates/gathr/tests/chat_state.rs` (a chat's row's mark), `ui/src/chat/glance.test.ts` (the most pressing of what the chat and the service say), `ui/src/chat/marks.test.tsx` (the top line, a message's face, the card by pointer and by focus, an agent that left, an archived chat, reduced motion), `ui/src/chat/Summary.test.tsx`, `ui/src/sidebar.test.tsx`, `ui/src/live-lists.test.tsx`. How each mark is drawn is proved by pictures.
+Built: yes. Proof: `crates/gathr/tests/waiting.rs` (each state, its words and since when), `crates/gathr/tests/chat_state.rs` (a chat's row's mark), `ui/src/chat/glance.test.ts` (the most pressing of what the chat and the service say), `ui/src/chat/marks.test.tsx` (the top line, a message's face, the card by pointer and by focus, its "Can't read", an agent that left, an archived chat, reduced motion), `ui/src/chat/Summary.test.tsx`, `ui/src/sidebar.test.tsx`, `ui/src/live-lists.test.tsx`. How each mark is drawn is proved by pictures.
 
 Amends [0050](0050-what-a-chat-waits-on.md): where each agent stands is one of seven states, each with since when.
 
@@ -35,3 +35,12 @@ The owner's ask: every agent's state at a glance, on its face, the same everywhe
 - **Working turning on every face.** Many turning rings in a long chat pull the eye from what is happening now.
 - **A colour per state on a sidebar dot.** The row uses the faces' own marks, so a state has one shape everywhere.
 - **"+8" for many agents on the top line.** A team holds at most five.
+
+## Changes
+
+- 2026-11-18, the owner's picks of the status-line page's "What the old list showed" ("A, one word" and "A, like
+  an agent"). A Waiting agent whose wait's looks failed three times in a row carries `failing`, and its card and
+  its status list row say one word after what it waits on: "Waiting · PR #18 checks · Can't read · 1h 4m". The
+  state stays Waiting: a failing look changes no mark. Gathr's own holds are said in the same states, Working or
+  Waiting, as rows of their own after the agents' ([0050](0050-what-a-chat-waits-on.md)), with Gathr's own
+  three-dot mark and no state mark on it: Gathr isn't an agent of the chat.
