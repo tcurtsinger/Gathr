@@ -569,9 +569,11 @@ Parts: 6.2
 Parts: 6.4, 6.5
 
 - **Given** a team chat
-- **When** a builder @-names the reviewer in what it writes, and the reviewer answers
-- **Then** the reviewer gets the message. The chat shows it as the builder's, with the @, and the
-  reviewer's answer under it. The person reads both without opening anything
+- **When** a builder sends the reviewer a message, and the reviewer answers it
+- **Then** the reviewer gets the message. The chat shows it as the builder's, opening with the
+  reviewer's @Name, in a thread under what the builder was writing, and the reviewer's answer under it
+  in the same thread, even when the person wrote something in between. The person reads both without
+  opening anything, and can fold the thread
 
 ### 6f. Agreeing is a reaction, never a message
 
@@ -579,8 +581,8 @@ Parts: 6.6
 
 - **Given** a builder got a message from the lead
 - **When** all the builder has to say is that it agrees, it reacts to the id the message carried
-- **Then** the lead's message shows a thumbs-up from the builder, with the builder's name in its
-  tooltip. No new message is posted, and nobody is woken by it. The window shows it at once
+- **Then** the lead's message shows a thumbs-up and a count, with the builder's name when it is
+  pointed at or focused. No new message is posted, and nobody is woken by it. The window shows it at once
 
 ### 6i. An agent reads why something failed, in its own chat
 

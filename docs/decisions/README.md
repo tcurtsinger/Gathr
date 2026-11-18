@@ -81,4 +81,5 @@ fails in CI when the two differ.
 | 0069 | [Deleting a project or an agent](0069-deleting-a-project-or-an-agent.md) | accepted | yes |
 | 0070 | [The window's shell](0070-the-windows-shell.md) | accepted | yes |
 | 0071 | [An agent's state is one mark](0071-an-agents-state-is-one-mark.md) | accepted | yes |
+| 0072 | [The chat reads like a team chat](0072-the-chat-reads-like-a-team-chat.md) | accepted | yes |
 | 0074 | [An agent's face](0074-an-agents-face.md) | accepted | yes |

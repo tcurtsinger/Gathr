@@ -11,7 +11,8 @@ WebKit on macOS).
 Settings retains the centred Gathr layout. The split chat (0015, 2026-11-10) is
 retired: the chat is one timeline (0037, 2026-11-11), where a turn is one block with
 its work folded into a row, agents' messages to each other are their own block, and
-Gathr's notes are one-line events. Summary remains a popover. The recipient defaults
+Gathr's notes are one-line events; since 0072 (2026-11-17) its messages are bubbles beside
+their authors' faces and agents' messages to each other a thread. Summary remains a popover. The recipient defaults
 to the Supervisor by name and has no Everyone option.
 
 The split previews stay as history; the app no longer draws them.

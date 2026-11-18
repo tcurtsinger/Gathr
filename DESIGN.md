@@ -46,7 +46,8 @@ Surfaces take four steps. `shell` is the window's own surface, under the rail an
 around the frame ([0070](docs/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
 frame in light, with `shell-edge` (7% foreground) as the frame's 1px ring. `frame` is navigation and the
 workspace. `background` is the chat. `card` is what stands on the chat: an approval, a
-notice. In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
+notice. A message is no card: it stands in a bubble, the foreground at 8% over the chat
+([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md)). In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
@@ -55,7 +56,8 @@ light-grey frame and cards and a border dark enough to see. Each step differs
 from the next in both themes. `tokens.css` records both themes. Foreground carries text and primary
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
 `border` separates regions; `input` bounds inputs; `ring` is transparent.
-Blue is attention, links and active work, not an agent palette. `free` (dark `oklch(0.74 0.17 148)`,
+Blue is attention, links and active work, not an agent palette; on the owner's word it also tints
+the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with (0072). `free` (dark `oklch(0.74 0.17 148)`,
 light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
 ([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)).
 Errors combine destructive text, a tinted surface, an icon and a reference.
@@ -146,8 +148,8 @@ Blocking Settings uses the shared backdrop. Layers must not clip focused control
 
 Text actions use the prototype's shared 32px pill Button. Icon controls keep their
 contextual square or circular shape. Small controls use the 8px base radius;
-floating surfaces 16px; ComposerBar 24px with 10px padding. User messages have
-16px corners and fit their content. Agent replies remain unboxed.
+floating surfaces 16px; ComposerBar 24px with 10px padding. Every message, the person's and
+an agent's, is a bubble with 18px corners and 8px 13px padding that fits its words (0072).
 
 ## Components
 
@@ -205,43 +207,64 @@ A turn is one block where it began, in 0028's turn-start order between turns, so
 streaming at once never interleave and a later reply lands in its own turn's block. Only a
 person's message sent into a running turn splits that turn: one block before it, one after.
 
-One row above a turn's message holds everything it did first. Finished, it reads "Worked for
-1m 49s · 6 steps · gave 2 tasks": 14px, muted, one weight, a part omitted when it is zero.
-Running, its label is what the agent is doing now (Running a command, Reading a file), with
-the registry's shimmer and no spinner, then the steps and the elapsed time, muted. Click or
-Enter opens it: each tool call as a step in plain words from the tool's name, its duration at
-the right, Failed in the danger colour on a failed one; a task it gave reads "Gave Cass a
+Every message stands in a bubble beside its author's face, everyone on the left, as a team chat
+reads ([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
+the face 36px, 12px from the bubble, level with the bubble's top under the name line; the person's own
+face is "Y" on the accent surface. The bubble fits its words up to the column: the foreground at 8% over
+the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 8px 13px padding, 15px
+words at 450 and 1.45, paragraphs and what sits between them 10px apart, list items 3px, inline code
+0.88em on a 6% tint, a code block on the chat's own surface. A bubble with a table takes the column, so
+the table fills it as before. A message with no words yet (an agent at work) has no bubble: its face sits
+beside its name line, and nothing empty shows.
+
+Above the bubble, one name line, 20px: the name at 15px/650, 8px, then every other piece in one size and
+colour, 12.5px at 450, muted, tabular figures, with "·" between them 6px each side: Supervisor (the lead,
+in a chat of two or more), the time, and for a member or reviewer "on" the task its turn works on, cut
+with an ellipsis, with a 12px tick once that task is done. A block that follows its speaker's in the same
+turn has no face or name line and lines up with the one above. The face opens the agent's panel in a
+team chat.
+
+A turn's steps are the end of its name line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
+part omitted when it is zero, "1 failed" in the danger colour, the time ticking while it runs. They show
+while the message is pointed at or has keyboard focus, and always for a failed step, an agent still
+working or steps opened; at rest the line holds its place. Click or Enter opens the steps under the name
+line, above the bubble: each tool call as a step in plain words from the tool's name, Failed in the
+danger colour on a failed one; a task it gave reads "Gave Cass a
 task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip reads
 "#119 Look into: Survey tag libraries", 0063); what it wrote between
 steps shows as muted lines. A step that kept what it ran
 ([0041](docs/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
-status icon, a short label, the chip, the duration ("Ran" then "git merge origin/main"; also
+status icon, a short label, the chip ("Ran" then "git merge origin/main"; also
 Read, Edited, Searched, Fetched, Searched the web, Ran a sub-agent). When the engine gave the
 call its own words, they are the label ("Show what changed" then "git status --short"). The
 chip is one line, cut with an ellipsis to the column it is in, never widening it, before the
 label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
 the shared tooltip. A step that kept
-nothing reads as before ("Ran a command"), and the row's own label while it runs does not
-change. A thought ([0042](docs/decisions/0042-thinking.md)) is a step of its own, in order with
-the others: "Thought for 9s", with no chip, no duration at the right and nothing to open; one
-under a second is left out, and thoughts are not counted in "6 steps". Thoughts with nothing
-between them are one step, with their time together: an engine thinks in pieces, and four steps
-of "Thought for" read as a list of nothing. While a thought runs the
-row's label is "Thinking"; when an engine says it thought only afterwards (Codex, on a model
-that gives no reasoning summary), the row keeps its working label until the step arrives. The turn's last text is the message. A turn that only
-wrote once has no row, nor has one whose only work was a thought under a second.
+nothing reads as before ("Ran a command"). A thought ([0042](docs/decisions/0042-thinking.md)) is a step
+of its own, in order with the others: "Thought for 9s", with no chip and nothing to open; one under a
+second is left out, and thoughts are not counted in "6 steps". Thoughts with nothing between them are one
+step, with their time together. While a turn runs and its steps are closed, what the agent is doing now
+(Running a command, Thinking) reads under its name line, 13px muted. The turn's last text is the
+message. A turn that only wrote once has no steps, nor has one whose only work was a thought under a
+second.
 
-The lead's words read at 16px/400/1.6. A member's or reviewer's turn reads at 15px. A header
-names the speaker when it changes from the block before: the avatar, the name, then for a
-member or reviewer the task the turn works on ("on Open the settings tools PR", cut with an
-ellipsis; its role when it has no task) and for the lead always its role, and the time at the right. Bodies, rows and cards indent 34px to align with the speaker name
-(24px avatar plus 10px gap), with or without the header above them.
+Messages agents write to each other are a thread under the message they belong to: a reply joins the
+thread of the message it answers (the one Gathr carried into its turn from the agent it writes to), and
+a message that answers none sits under the block its own turn was writing when it sent it. The thread
+hangs 48px in, a 1px border line at its left, 12px to its messages, 14px between them, with faces at
+28px, names at 14px and words at 14.5px. A toggle on top, 13px muted, reads "Hide" with a chevron
+turned down; folded, it shows the faces of who talked and "4 replies". A talk with no block to sit under
+stands where it began, its messages as any other. A message to an agent opens with the agent's @Name in
+the accent blue at the words' weight, no underline, unless it quotes what it answers: when something
+came between the two, the answered words lead the bubble plainly, one line cut with an ellipsis, 13px
+muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no block of
+its own: its steps are on its first message's name line. Gathr's copy of a message in the receiver's turn
+is never shown.
 
-Messages agents write to each other are their own block: the card surface, a 6% foreground
-hairline, 16px radius, 14px 16px padding, 14px between messages, text at 15px. Each is headed
-"Juno to Orin" with its time. Messages that follow each other share one block, and an answer
-sits beside the message it answers. Gathr's copy of a message in the receiver's turn is never
-shown. The reviewer's agreement stays a named reaction; a question stays a reply. A reaction is the thumbs-up icon and a count of the agents who gave it, under the words it was given to, at their indent, in the type of an event line: 13px, muted. Hovering or focusing it shows who gave it, in the shared tooltip. The line has no label.
+A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box.
+Pointing at it or focusing it shows who gave it, as their names, one a line, in a small popover above it:
+names, never help. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
+its own (0062); a question stays a reply.
 
 Everything Gathr tells an agent is a one-line event, with two exceptions that are never
 drawn: the brief of a member's own task (Gathr's message that opens with "Task #<number>
@@ -258,8 +281,8 @@ only once the ask has a task or Gathr held something of it (a refused give, writ
 the two sizes, "Just fix it." and "Plan it with me first.", the current one marked, and nothing
 that explains them (0061). A change Gathr caught in a held turn is one too, of a kind apart (`changed`, the `FilePen` icon): "Mira changed 3 files before the plan was approved" ("on look-into task #12" for a look-into task; "1 file" for one), opening to one file per line, at most 20, then "and 2 more", then "Committed: 1" when some came from commits (0063). It reads after the turn's last block, not as a note. When a repair's work is in, Gathr says "Fixed: <the ask>", a check
 icon, which opens to each finished task with its PR and its proof. The plan's lines are one
-too, of a kind apart from the size line, with a clipboard: the lead-in "Plan v1:" and "Bo agrees",
-"3 findings" or "Bo didn't finish" (opening to the plan's title), "Sent back" (opening to the
+too, of a kind apart from the size line, with a clipboard: the lead-in "Plan v1:" and
+"3 findings" or "Bo didn't finish" (a check that agrees is a thumbs-up instead) (opening to the plan's title), "Sent back" (opening to the
 person's words), and "Plan v2:" "Approved" or "Dropped"; each opens to the whole line and Open plan
 (0062). Anything else (a wait's
 result, a wake-up, a stale-task nudge, a usage interruption) is drawn in Gathr's own words.
