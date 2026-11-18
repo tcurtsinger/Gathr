@@ -104,7 +104,9 @@ test('a question waiting on the person: "needs you" on the line goes to the ques
   await expect.element(needsYou()).toBeVisible();
   await needsYou().click();
   // Held as a search hit is: the message that asks, the one that says Needs you.
-  await expect.poll(() => document.querySelector('[data-search-hit]')?.textContent ?? '').toContain('Needs you');
+  await expect
+    .poll(() => document.querySelector('[data-search-hit]')?.textContent ?? '')
+    .toContain('Needs you');
 });
 
 test('with nothing to go to, the line is one button that opens the list', async () => {
