@@ -251,3 +251,31 @@ test('a turn’s steps show on its name line on hover or focus, and stay for a f
   await userEvent.click(steps('a'));
   await expect.element(screen.getByRole('button', { name: /^Read a file/ })).toBeVisible();
 });
+
+test('a turn that only ran steps shows them without hover; one with words still hides them', async () => {
+  const state: ChatState = {
+    ...empty,
+    members,
+    turns: { quiet: turn('quiet', 'a', 0), said: turn('said', 'b', 1) },
+    messages: [
+      tool('t1', 'quiet', 'Read'),
+      tool('t2', 'quiet', 'Bash'),
+      tool('t3', 'said', 'Read'),
+      said('m1', 'said', 'Made-up words'),
+    ],
+  };
+  const screen = await render(
+    <>
+      <p>Made-up place to point at</p>
+      <View state={state} />
+    </>,
+  );
+  // Nothing pointed at the messages: the pointer rests on the line above them.
+  await userEvent.hover(screen.getByText('Made-up place to point at').element());
+  const steps = (agent: string) =>
+    document.querySelector(`.said[data-agent="${agent}"] .steps-button`) as HTMLElement;
+  await expect.poll(() => !!steps('b')).toBe(true);
+  // The steps are all the quiet turn has: they show with nothing pointed at.
+  expect(getComputedStyle(steps('a')).opacity).toBe('1');
+  expect(getComputedStyle(steps('b')).opacity).toBe('0');
+});

@@ -82,8 +82,17 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
     <Said
       root
       agent={by}
-      keep={!!work && (work.running || !!work.failed)}
-      bare={!text && !plan}
+      // With no words, the steps are all the block has: they stay shown.
+      keep={!!work && (work.running || !!work.failed || (!text && !plan))}
+      // Nothing under the name line: the face sits beside it.
+      bare={
+        !text &&
+        !plan &&
+        !notice &&
+        !approvals?.length &&
+        !agreed?.length &&
+        !(work && (open || work.running))
+      }
       face={
         named && (
           <AgentFace

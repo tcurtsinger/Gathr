@@ -215,7 +215,8 @@ the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 
 words at 450 and 1.45, paragraphs and what sits between them 10px apart, list items 3px, inline code
 0.88em on a 6% tint, a code block on the chat's own surface. A bubble with a table takes the column, so
 the table fills it as before. A message with no words yet (an agent at work) has no bubble: its face sits
-beside its name line, and nothing empty shows.
+beside its name line, and nothing empty shows. When anything else follows the name line (a notice, an
+approval, open steps), the face sits level with it as with a bubble, 5px under the name line.
 
 Above the bubble, one name line, 20px: the name at 15px/650, 8px, then every other piece in one size and
 colour, 12.5px at 450, muted, tabular figures, with "·" between them 6px each side: Supervisor (the lead,
@@ -227,7 +228,7 @@ team chat.
 A turn's steps are the end of its name line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
 part omitted when it is zero, "1 failed" in the danger colour, the time ticking while it runs. They show
 while the message is pointed at or has keyboard focus, and always for a failed step, an agent still
-working or steps opened; at rest the line holds its place. Click or Enter opens the steps under the name
+working, steps opened or a block with no words (no text and no plan chip), whose steps are all it has; at rest the line holds its place. Click or Enter opens the steps under the name
 line, above the bubble: each tool call as a step in plain words from the tool's name, Failed in the
 danger colour on a failed one; a task it gave reads "Gave Cass a
 task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip reads

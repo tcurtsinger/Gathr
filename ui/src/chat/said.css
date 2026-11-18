@@ -27,6 +27,10 @@
   align-items: flex-start;
   gap: 5px;
 }
+/* A notice in a message follows the name line by the 5px a bubble does, with no margins of its own. */
+.said-main > .notice {
+  margin: 0;
+}
 /* The bubble and a thumbs-up fit their words; the steps, notices and approvals take the column. */
 .said-main > :not(.bubble, .reacts) {
   align-self: stretch;
@@ -96,15 +100,16 @@
   flex: 0 1 auto;
   min-width: 0;
   align-items: center;
-  gap: 4px;
 }
 .name-line-what {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The tick's own space, so the "·" before the task keeps 6px each side as every other does. */
 .name-line-task svg {
   flex: none;
+  margin-left: 4px;
 }
 
 /* A turn's steps on its name line: shown while the message is pointed at or has focus, and always for a failed
