@@ -1,11 +1,11 @@
 import { Popover } from 'radix-ui';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Waiting } from '../api';
-import { Face } from '../components/Face';
-import { cardLine, since, WORD } from '../components/marks';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Own, Waiting } from '../api';
+import { Face, GathrFace } from '../components/Face';
+import { CANT_READ, cardParts, type Mark, since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
 import type { Glance } from './glance';
-import { moving, parts } from './statusWords';
+import { gathrSaid, inWords, moving, parts } from './statusWords';
 import './status-line.css';
 
 interface Props {
@@ -24,7 +24,13 @@ interface Props {
  */
 export function StatusLine({ crew, waiting, onOpenAgent }: Props) {
   const busy = crew.filter((g) => g.standing !== 'free');
-  const team = busy.map((g) => ({ name: g.member.name, state: g.standing, on: g.on }));
+  const own = waiting?.gathr ?? [];
+  // Gathr's own is said like an agent's, last (the status-line design, its row A).
+  const gathr = gathrSaid(own);
+  const team = [
+    ...busy.map((g) => ({ name: g.member.name, state: g.standing, on: g.on })),
+    ...(gathr ? [gathr] : []),
+  ];
   const said = parts(team);
   const words = said.map((p) => p.text).join(', ');
   const [open, setOpen] = useState(false);
@@ -74,7 +80,7 @@ export function StatusLine({ crew, waiting, onOpenAgent }: Props) {
                 went.current = false;
               }}
             >
-              <Rows team={busy} silent={silent} onOpen={go} />
+              <Rows team={busy} own={own} silent={silent} onOpen={go} />
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -106,14 +112,17 @@ function Dots() {
 
 /**
  * One row for each agent: its face, its name, then its state in the mark's shape and word, what and how long, as
- * its face's card says it; a silent turn says for how long it has made no progress. Counted each second.
+ * its face's card says it; a silent turn says for how long it has made no progress. Then one for each of Gathr's own,
+ * in the same shape, with Gathr's mark; they open nothing. Counted each second.
  */
 function Rows({
   team,
+  own,
   silent,
   onOpen,
 }: {
   team: Glance[];
+  own: Own[];
   silent: Map<string, number>;
   onOpen: (agent: string) => void;
 }) {
@@ -122,25 +131,85 @@ function Rows({
     const tick = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
-  return team.map((g) => {
+  const agents = team.map((g) => {
     const { agent, name } = g.member;
     const quiet = silent.get(agent);
-    const line =
+    const said =
       quiet === undefined
-        ? cardLine(g.standing, [g.about], g.since, now)
-        : cardLine(g.standing, [g.about, `silent ${since(now - quiet)}`], undefined, now);
+        ? cardParts(g.standing, [g.about, g.failing ? CANT_READ : undefined], g.since, now)
+        : cardParts(g.standing, [g.about, `silent ${since(now - quiet)}`], undefined, now);
     return (
-      <button type="button" key={agent} className="status-row" onClick={() => onOpen(agent)}>
-        <Face agent={{ id: agent, name }} size={24} />
-        <span className="status-row-name">{name}</span>
-        <span className="status-row-state">
-          <span data-state={g.standing}>
-            <StateMark state={g.standing} size={12} />
-            {WORD[g.standing]}
-          </span>
-          {line.slice(WORD[g.standing].length)}
-        </span>
-      </button>
+      <Row
+        key={agent}
+        face={<Face agent={{ id: agent, name }} size={24} />}
+        name={name}
+        state={g.standing}
+        said={said}
+        cut={!!g.about}
+        onClick={() => onOpen(agent)}
+      />
     );
   });
+  const gathrs = own.map((o) => {
+    const what = o.name ? `${o.name}: ${o.what}` : inWords(o.what);
+    const began = o.since_us === null ? undefined : o.since_us / 1000;
+    const said = cardParts(o.state, [what, o.failing ? CANT_READ : undefined], began, now);
+    return (
+      <Row
+        key={`${o.kind}:${o.name}:${o.what}`}
+        face={<GathrFace size={24} />}
+        name="Gathr"
+        state={o.state}
+        said={said}
+        cut
+      />
+    );
+  });
+  return [...agents, ...gathrs];
+}
+
+/**
+ * One row: a face, a name, and what its card says, the state's word in its mark's shape and Can't read set apart. When
+ * `cut`, the piece after the word is the what: the part cut short when the row is too narrow, so the time stays.
+ */
+function Row({
+  face,
+  name,
+  state,
+  said,
+  cut,
+  onClick,
+}: {
+  face: ReactNode;
+  name: string;
+  state: Mark;
+  said: string[];
+  cut?: boolean;
+  onClick?: () => void;
+}) {
+  const [word, ...rest] = said;
+  const inner = (
+    <>
+      {face}
+      <span className="status-row-name">{name}</span>
+      <span className="status-row-state">
+        <span data-state={state}>
+          <StateMark state={state} size={12} />
+          {word}
+        </span>
+        {rest.map((piece, i) => (
+          <span key={piece} className={cut && i === 0 ? 'status-what' : undefined}>
+            {' · '}
+            {piece === CANT_READ ? <span className="status-cant">{piece}</span> : piece}
+          </span>
+        ))}
+      </span>
+    </>
+  );
+  if (!onClick) return <div className="status-row">{inner}</div>;
+  return (
+    <button type="button" className="status-row" onClick={onClick}>
+      {inner}
+    </button>
+  );
 }

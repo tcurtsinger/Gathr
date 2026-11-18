@@ -337,6 +337,174 @@ fn a_wait_says_what_its_last_look_saw_and_a_look_that_keeps_failing_moves_nothin
     );
 }
 
+/// The owner's pick, 2026-11-18 ("A, one word"): an agent whose wait's looks keep failing says so
+/// beside its state, for the window's row and card. Under three failed looks it doesn't, and a
+/// look that works ends it.
+#[test]
+fn a_wait_whose_looks_keep_failing_says_so_until_a_look_works() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let wait = ci_wait(&mut conn, "bo");
+    let failing = |conn: &Connection| {
+        let said = answer(conn, &service());
+        let bo = said.agents.iter().find(|a| a.name == "Bo").unwrap();
+        (bo.state, bo.failing)
+    };
+    for _ in 1..waits::SHOWN_AFTER {
+        waits::looked(
+            &conn,
+            &wait.id,
+            None,
+            None,
+            Some("HTTP 401: Bad credentials"),
+        )
+        .unwrap();
+    }
+    assert_eq!(failing(&conn), ("waiting", false), "two failed looks");
+    waits::looked(
+        &conn,
+        &wait.id,
+        None,
+        None,
+        Some("HTTP 401: Bad credentials"),
+    )
+    .unwrap();
+    assert_eq!(failing(&conn), ("waiting", true), "three failed looks");
+    let seen = "1 of 2 checks on #157 at 0123456 finished";
+    waits::looked(&conn, &wait.id, None, Some(seen), None).unwrap();
+    assert_eq!(failing(&conn), ("waiting", false), "a look that worked");
+}
+
+/// The owner's pick, 2026-11-18 ("A, like an agent"): what no agent is on is Gathr's, each with
+/// a state, what and since when: its update, a PR it lands and a command an ended turn left
+/// running. A PR it left to its reviewer isn't Gathr's, nor a command of a turn still running.
+#[test]
+fn gathrs_own_holds_come_as_rows_with_their_state_what_and_since() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let review = reviewed(&mut conn);
+    let clean: i64 = conn
+        .query_row(
+            "SELECT finish_ts FROM tasks WHERE number = ?1",
+            [review],
+            |r| r.get(0),
+        )
+        .unwrap();
+    turn(&conn, "left", "ann", None, "done");
+    turn(&conn, "going", "bo", None, "running");
+    conn.execute_batch(
+        "INSERT INTO background (id, turn_id, description, started_ts) VALUES
+             ('b1', 'left', 'Run the test suite', 7), ('b2', 'going', 'npm run dev', 8);",
+    )
+    .unwrap();
+    let live = Live {
+        updating: Some("0.1.240".into()),
+        ..service()
+    };
+    let rows = |said: &Answer| -> Vec<Row> {
+        let own = said.gathr.iter();
+        own.map(|o| {
+            (
+                o.kind,
+                o.state,
+                o.what.clone(),
+                o.name.clone(),
+                o.since_us,
+                o.failing,
+            )
+        })
+        .collect()
+    };
+    let said = answer(&conn, &live);
+    assert_eq!(
+        rows(&said),
+        [
+            (
+                "update",
+                "working",
+                "Update to 0.1.240".into(),
+                None,
+                None,
+                false
+            ),
+            (
+                "pr",
+                "waiting",
+                "#157 to land".into(),
+                None,
+                Some(clean),
+                false
+            ),
+            (
+                "command",
+                "working",
+                "Run the test suite".into(),
+                Some("Ann".into()),
+                Some(7),
+                false
+            ),
+        ]
+    );
+
+    // The service's looks at the PR fail: three in a row, it says so; fewer, it doesn't.
+    let fails = |n: i64| Live {
+        landing: HashMap::from([(157, (n, "#157 wasn't read from GitHub".to_string()))]),
+        ..service()
+    };
+    let pr = |said: &Answer| {
+        said.gathr
+            .iter()
+            .find(|o| o.kind == "pr")
+            .map(|o| o.failing)
+    };
+    assert_eq!(pr(&answer(&conn, &fails(2))), Some(false));
+    assert_eq!(pr(&answer(&conn, &fails(3))), Some(true));
+
+    // Left to its reviewer, it's not Gathr's to land; with the service stopped, nothing is.
+    let left = "CI on 0123456 has a failure, which the project doesn't require to pass";
+    gathr::landings::looked(&conn, ("c", 157, "0123456"), left, false).unwrap();
+    assert_eq!(pr(&answer(&conn, &service())), None);
+    assert!(answer(&conn, &Live::default()).gathr.is_empty());
+}
+
+/// One of Gathr's own: its kind, state, what, whose command, since when and whether it fails.
+type Row<'a> = (&'a str, &'a str, String, Option<String>, Option<i64>, bool);
+
+/// Bo's review of #157, done on 0123456 and reported clean.
+fn reviewed(conn: &mut Connection) -> i64 {
+    turn(conn, "giving", "lead", None, "done");
+    let review = Give {
+        chat: "c",
+        giver: Some("lead"),
+        owner: "bo",
+        given_in: Some("giving"),
+        parent: None,
+        kind: Kind::Review,
+        what: "Review #157",
+        brief: gathr::tasks::Brief::default(),
+        after: &[],
+        pr: Some(157),
+        in_passing: false,
+        look_into: false,
+    };
+    let review = tasks::give(conn, &review, T).unwrap().0.number;
+    begin(conn, review);
+    let done = Said {
+        commit: Some("0123456"),
+        nothing_unasked: true,
+        ..Said::default()
+    };
+    tasks::finish(conn, "bo", review, Finish::Done, &done, T).unwrap();
+    let ran: String = conn
+        .query_row("SELECT id FROM turns WHERE task = ?1", [review], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    gathr::store::set_turn(conn, &ran, "done", None).unwrap();
+    tasks::ended(conn, review, Outcome::Ok, T).unwrap();
+    review
+}
+
 /// A PR reviewed clean shows where Gathr's last look left it (0049): moving by itself while its
 /// checks run, and nobody's once it is left to its reviewer.
 #[test]

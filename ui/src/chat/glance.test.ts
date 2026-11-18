@@ -41,9 +41,10 @@ const stands = (agent: string, more: Partial<Standing> = {}): Standing => ({
   since_us: null,
   on: [],
   until_us: null,
+  failing: false,
   ...more,
 });
-const said = (...agents: Standing[]): Waiting => ({ lines: [], agents });
+const said = (...agents: Standing[]): Waiting => ({ lines: [], agents, gathr: [] });
 const doing = (state: ChatState, waiting?: Waiting) =>
   Object.fromEntries(glances(state, new Map(), waiting).map((g) => [g.member.agent, g.doing]));
 

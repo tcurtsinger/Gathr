@@ -1,4 +1,5 @@
-import type { Mark } from '../components/marks';
+import type { Own } from '../api';
+import { type Mark, pressing } from '../components/marks';
 import { list } from './team';
 
 /** An agent as the status line speaks of it: its state and, waiting, the one thing it waits on. */
@@ -6,6 +7,8 @@ export interface Said {
   name: string;
   state: Mark;
   on?: string;
+  /** It is Gathr, said like an agent but never counted as one. */
+  gathr?: boolean;
 }
 
 /** One part of the line, coloured by its state. */
@@ -36,15 +39,20 @@ export function parts(team: Said[]): Part[] {
   }
   const moving = MOVES.map((state) => [state, of(state)] as const).filter(([, l]) => l.length);
   const n = moving.reduce((sum, [, l]) => sum + l.length, 0);
-  moving.forEach(([state, l], i) => {
-    const text =
-      n <= 2
-        ? `${names(l)} ${l.length === 1 ? 'is' : 'are'} ${state}`
-        : i === 0
-          ? `${l.length} ${l.length === 1 ? 'agent is' : 'agents are'} ${state}`
-          : `${l.length} ${state}`;
+  // Counted, Gathr is never one of the agents: it is said beside their count, last.
+  let counted = false;
+  for (const [state, l] of moving) {
+    const agents = l.filter((a) => !a.gathr).length;
+    const and = l.some((a) => a.gathr) ? ' and Gathr' : '';
+    const noun = agents === 1 ? 'agent' : 'agents';
+    let text: string;
+    if (n <= 2) text = `${names(l)} ${l.length === 1 ? 'is' : 'are'} ${state}`;
+    else if (!agents) text = `Gathr is ${state}`;
+    else if (!counted) text = `${agents} ${noun}${and} ${agents === 1 && !and ? 'is' : 'are'} ${state}`;
+    else text = and ? `${agents} ${noun}${and} ${state}` : `${agents} ${state}`;
+    counted ||= n > 2 && agents > 0;
     out.push({ text, tone: state });
-  });
+  }
   const waits = of('waiting');
   const on = waits[0]?.on;
   if (out.length === 1 && out[0].tone === 'waiting' && on && waits.every((a) => a.on === on)) {
@@ -53,17 +61,29 @@ export function parts(team: Said[]): Part[] {
   return out;
 }
 
-/** The dots move only while an agent works. */
+/** The dots move only while an agent, or Gathr, works. */
 export const moving = (team: Said[]) => team.some((a) => a.state === 'working');
 
 /**
- * A pull request's wait in the approved pages' words: "PR #18 checks", "PR #18 to merge". The service names them
- * "CI on #18" and "#18 to merge or close" (`tasks::wait_name`), which agents read through the `waiting` tool;
- * anything else is said as the service says it.
+ * Gathr as the line speaks of it, when it has anything of its own going: said like an agent, in the most pressing
+ * of its states, and waiting on the one thing it waits on, when it is one.
+ */
+export function gathrSaid(own: Own[]): Said | undefined {
+  const state = pressing(own.map((o) => o.state));
+  if (!state) return undefined;
+  const waits = [...new Set(own.filter((o) => o.state === 'waiting').map((o) => inWords(o.what)))];
+  return { name: 'Gathr', state, on: waits.length === 1 ? waits[0] : undefined, gathr: true };
+}
+
+/**
+ * A pull request's wait in the approved pages' words: "PR #18 checks", "PR #18 to merge", "PR #18 to land". The
+ * service names them "CI on #18", "#18 to merge or close" (`tasks::wait_name`) and "#18 to land", as agents read
+ * them through the `waiting` tool; anything else is said as the service says it.
  */
 export function inWords(what: string): string {
   return what
     .replace(/^CI on #(\d+)$/, 'PR #$1 checks')
     .replace(/^#(\d+) to merge or close$/, 'PR #$1 to merge')
+    .replace(/^#(\d+) to land$/, 'PR #$1 to land')
     .replace(/^#(\d+) to be up to date$/, 'PR #$1 to be up to date');
 }

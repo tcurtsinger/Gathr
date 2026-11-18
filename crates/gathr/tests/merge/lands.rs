@@ -142,6 +142,14 @@ impl Room {
             .json()
     }
 
+    /// Gathr's own row for `pr` in the chat's answer to what it waits on (0050), while it has one.
+    fn gathrs(&self, pr: i64) -> Option<Value> {
+        let path = format!("/api/chats/{}/waiting", self.chat);
+        let said = self.service.call("GET", &path).json();
+        let mut own = said["gathr"].as_array()?.iter();
+        own.find(|o| o["what"] == format!("#{pr} to land")).cloned()
+    }
+
     /// What Gathr told a reviewer of a PR it can't land.
     fn told(&self) -> Vec<String> {
         let chat = self.chat();
@@ -472,4 +480,49 @@ fn a_push_github_doesnt_confirm_settles_nothing_and_isnt_tried_again() {
         })
         .unwrap();
     assert!(!closed, "a PR GitHub shows open was settled as merged");
+}
+
+/// The owner's pick, 2026-11-18 ("A, one word"): Gathr's own row for a PR it lands says its looks
+/// fail once three in a row have, until one works, and the failure is found from its reference.
+#[test]
+fn a_pr_whose_looks_keep_failing_says_so_on_gathrs_row_until_one_works() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let room = looking(&data.0, &repos.0, false);
+    room.set("ci", "ci");
+    room.ci(0, json!([running("Rust (macOS)")]));
+    room.review(1, 5, Some(&room.heads[0]));
+    room.looked();
+    let row = room.gathrs(5).expect("Gathr's row for #5");
+    assert_eq!(
+        (&row["state"], &row["failing"]),
+        (&json!("waiting"), &json!(false)),
+        "{row}"
+    );
+
+    // GitHub turns the landing's read of the PR down; the PR looks still read it.
+    let view = "state,headRefOid,baseRefName,statusCheckRollup,headRefName,isCrossRepository";
+    let refused = json!({ "args": ["pr", "view", "5", "--json", view], "code": 1, "err": "HTTP 401: Bad credentials" });
+    let mut all = room.answers();
+    all.as_array_mut().unwrap().insert(0, refused);
+    put_answers(&room.data, &all);
+    common::until(120, "Gathr's row to say its looks fail", || {
+        room.gathrs(5).filter(|row| row["failing"] == true)
+    });
+    let sql = "SELECT ref FROM event_log WHERE name = 'gathr.land.look' AND status = 'error'";
+    let found = common::rows(&room.data, sql);
+    assert_eq!(found.len(), 1, "recorded once while it lasts: {found:?}");
+    let (ok, trace) = gathr(
+        &room.data,
+        &["diag", "trace", found[0]["ref"].as_str().unwrap()],
+    );
+    assert!(
+        ok && trace.to_string().contains("Bad credentials"),
+        "{trace}"
+    );
+
+    all.as_array_mut().unwrap().remove(0);
+    put_answers(&room.data, &all);
+    common::until(120, "a look that works to end it", || {
+        room.gathrs(5).filter(|row| row["failing"] == false)
+    });
 }

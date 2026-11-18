@@ -44,7 +44,7 @@ export function useChatMarks(
   const sig = [
     archived,
     ...crew.map((g) =>
-      [g.member.agent, g.member.name, g.member.role, g.standing, g.about, g.since].join('|'),
+      [g.member.agent, g.member.name, g.member.role, g.standing, g.about, g.since, g.failing].join('|'),
     ),
     ...latest,
   ].join('\n');
@@ -65,6 +65,7 @@ function build(crew: Glance[], latest: Map<string, string>, archived: boolean): 
       state: g.standing,
       about: g.about,
       since: g.since,
+      failing: g.failing,
     };
     const mark = { state: g.standing, card };
     still.set(agent, mark);

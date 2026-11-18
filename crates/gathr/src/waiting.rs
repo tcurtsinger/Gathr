@@ -48,6 +48,8 @@ pub struct Live {
     pub updating: Option<String>,
     /// The running turns that have made no progress past the limit, each with when it last did.
     pub silent: HashMap<String, i64>,
+    /// The chat's PRs Gathr lands whose looks failed, by PR: how many in a row, and the last error.
+    pub landing: HashMap<i64, (i64, String)>,
 }
 
 /// One thing the chat waits on.
@@ -137,12 +139,46 @@ pub struct Standing {
     pub on: Vec<On>,
     /// Out of usage: when it resets.
     pub until_us: Option<i64>,
+    /// Waiting: the looks at one of its waits keep failing, so nothing moves it.
+    pub failing: bool,
+}
+
+/// What Gathr itself has going in the chat, that no agent is on: its update, a pull request it
+/// lands, a command an agent's ended turn left running. Each is said as an agent's state is.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Own {
+    /// `update`, `pr` or `command`.
+    pub kind: &'static str,
+    /// `working` or `waiting`.
+    pub state: &'static str,
+    /// In a few words: "Update to 0.1.240", "#18 to land", what the command runs.
+    pub what: String,
+    /// A command's: the agent whose turn left it running; none for the chat's own.
+    pub name: Option<String>,
+    pub since_us: Option<i64>,
+    /// The looks at a pull request it lands keep failing.
+    pub failing: bool,
+}
+
+impl Own {
+    fn new(kind: &'static str, state: &'static str, what: String) -> Own {
+        Own {
+            kind,
+            state,
+            what,
+            name: None,
+            since_us: None,
+            failing: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Answer {
     pub lines: Vec<Line>,
     pub agents: Vec<Standing>,
+    /// Gathr's own, while the service runs: its update, then the PRs it lands, then commands.
+    pub gathr: Vec<Own>,
 }
 
 /// The answer as the API and the command line give it: its lines and agents, the same in words,
@@ -151,6 +187,7 @@ pub fn shown(answer: &Answer, now_us: i64, from: &str) -> serde_json::Value {
     serde_json::json!({
         "lines": answer.lines,
         "agents": answer.agents,
+        "gathr": answer.gathr,
         "in_words": text(answer, now_us),
         "at_us": now_us,
         "from": from,
@@ -218,9 +255,7 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
         lines.push(line.of(Some(&lead), None, sent));
     }
     wait_lines(conn, chat, &pauses, &waiting, &mut lines)?;
-    command_lines(conn, chat, &mut lines)?;
-    pr_lines(conn, chat, &mut lines)?;
-    task_lines(conn, chat, &pauses, &open, &turns, &mut lines)?;
+    let mut gathr = Vec::new();
     if let Some(version) = &live.updating {
         let mut line = Line::new(
             "update",
@@ -229,8 +264,17 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
         );
         line.from = "service";
         lines.push(line);
+        gathr.push(Own::new(
+            "update",
+            "working",
+            format!("Update to {version}"),
+        ));
     }
+    pr_lines(conn, chat, live, &mut lines, &mut gathr)?;
+    command_lines(conn, chat, &mut lines, &mut gathr)?;
+    task_lines(conn, chat, &pauses, &open, &turns, &mut lines)?;
     if !live.running {
+        gathr.clear();
         // Nothing moves by itself while the service is stopped, whatever was under way.
         for line in lines.iter_mut().filter(|l| l.moves == Moves::Itself) {
             line.moves = Moves::Nobody;
@@ -253,7 +297,11 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
     });
     let saved = (&pauses[..], &turns[..], &open[..], &waiting[..]);
     let agents = standing::standings(conn, chat, live, saved, now_us)?;
-    Ok(Answer { lines, agents })
+    Ok(Answer {
+        lines,
+        agents,
+        gathr,
+    })
 }
 
 /// The chat's turns under way or to come. One to come that a cancel or its task's wait marked is
@@ -474,23 +522,44 @@ fn wait_lines(
     Ok(())
 }
 
-fn command_lines(conn: &Connection, chat: &str, lines: &mut Vec<Line>) -> Result<(), Error> {
+fn command_lines(
+    conn: &Connection,
+    chat: &str,
+    lines: &mut Vec<Line>,
+    gathr: &mut Vec<Own>,
+) -> Result<(), Error> {
     let mut stmt = conn.prepare_cached(
-        "SELECT b.description, b.started_ts, t.agent_id, t.task FROM background b
+        "SELECT b.description, b.started_ts, t.agent_id, t.task, t.status = 'running' FROM background b
          JOIN turns t ON t.id = b.turn_id WHERE t.chat_id = ?1 ORDER BY b.started_ts",
     )?;
-    let rows = stmt.query_map([chat], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))?;
+    let rows = stmt.query_map([chat], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+    })?;
     for row in rows {
-        let (described, started, agent, task): (String, i64, Option<String>, Option<i64>) = row?;
+        let (described, started, agent, task, running): (String, i64, Option<String>, _, bool) =
+            row?;
         let who = whose(conn, agent.as_deref())?;
         let what = format!("{who} runs a command in the background: {described}");
         lines.push(Line::new("command", what, Moves::Itself).of(agent.as_deref(), task, started));
+        // While its turn runs, the command is its agent's work; once the turn ends, Gathr's.
+        if !running {
+            let mut own = Own::new("command", "working", described);
+            own.name = agent.is_some().then_some(who);
+            own.since_us = Some(started);
+            gathr.push(own);
+        }
     }
     Ok(())
 }
 
 /// The PRs Gathr may land (0049): each as its last look left it.
-fn pr_lines(conn: &Connection, chat: &str, lines: &mut Vec<Line>) -> Result<(), Error> {
+fn pr_lines(
+    conn: &Connection,
+    chat: &str,
+    live: &Live,
+    lines: &mut Vec<Line>,
+    gathr: &mut Vec<Own>,
+) -> Result<(), Error> {
     let reviews = crate::landings::reviews(conn, None)?;
     for r in reviews
         .iter()
@@ -521,12 +590,24 @@ fn pr_lines(conn: &Connection, chat: &str, lines: &mut Vec<Line>) -> Result<(), 
             None if moving => (saw, Moves::Itself),
             None => (saw, Moves::Nobody),
         };
+        let on = format!("#{} to land", r.pr);
+        // Gathr's while it lands it by itself, as its last look that worked left it: not once it is
+        // left to its reviewer or the person.
+        if moves == Moves::Itself {
+            let mut own = Own::new("pr", "waiting", on.clone());
+            own.since_us = clean;
+            own.failing = live
+                .landing
+                .get(&r.pr)
+                .is_some_and(|(failed, _)| *failed >= waits::SHOWN_AFTER);
+            gathr.push(own);
+        }
         let mut line = Line::new("pr", format!("#{} to land: {saw}", r.pr), moves);
         line.looked_us = looked;
         line.agent = Some(r.reviewer.clone());
         line.task = Some(r.task);
         line.since_us = clean;
-        lines.push(line.on(&format!("#{} to land", r.pr)));
+        lines.push(line.on(&on));
     }
     Ok(())
 }

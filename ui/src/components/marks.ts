@@ -39,7 +39,12 @@ export interface Card {
   about?: string;
   /** Since when, in ms: the card counts from it when it shows. */
   since?: number;
+  /** Waiting: the looks at what it waits on keep failing. */
+  failing?: boolean;
 }
+
+/** What a row or card says, after what it waits on, when the looks at it keep failing. */
+export const CANT_READ = 'Can’t read';
 
 /** How long, as the card says it: "40s", "5m", "1m 12s" while it works, "2h 5m", "3d". */
 export function since(ms: number, exact = false): string {
@@ -51,13 +56,16 @@ export function since(ms: number, exact = false): string {
   return `${Math.floor(m / 1440)}d`;
 }
 
-/** The card's line: the state's word, then what, then since when. Free says only its word. */
-export function cardLine(
+/** The card's line in its pieces: the state's word, then what, then since when. Free says only its word. */
+export function cardParts(
   state: Mark,
   parts: (string | undefined)[],
   began?: number,
   now = Date.now(),
-): string {
+): string[] {
   const when = state !== 'free' && began !== undefined ? since(now - began, state === 'working') : undefined;
-  return [WORD[state], ...parts, when].filter(Boolean).join(' · ');
+  return [WORD[state], ...parts, when].filter((p): p is string => !!p);
 }
+
+/** The card's line: "Waiting · PR #18 checks · 5m". */
+export const cardLine = (...args: Parameters<typeof cardParts>) => cardParts(...args).join(' · ');

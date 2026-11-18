@@ -72,7 +72,7 @@ pub fn listed(conn: &rusqlite::Connection, chat: &str) -> Result<Value, gathr::E
 
 /// What only the running service knows of what the chat waits on (0050): why its queued turns
 /// wait, as their agents' queues say, the turns with an approval waiting, those that have gone
-/// silent, and Gathr's own update.
+/// silent, Gathr's own update, and the PRs it lands whose looks fail.
 pub fn live_now(chats: &Chats, chat: &str) -> gathr::waiting::Live {
     let said = chats.queued_in(chat);
     let behind = said
@@ -88,6 +88,7 @@ pub fn live_now(chats: &Chats, chat: &str) -> gathr::waiting::Live {
         approvals: chats.states.asking_in(chat),
         updating: chats.updating(),
         silent: chats.silent_in(chat).into_iter().collect(),
+        landing: crate::landing::failing_in(chat),
     }
 }
 

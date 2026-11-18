@@ -221,9 +221,11 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     since_us: null,
     on: [],
     until_us: null,
+    failing: false,
   });
   const waiting: Waiting = {
     lines: [],
+    gathr: [],
     agents: [
       stands('a', 'waiting', 'Waiting for Made-up Member'),
       stands('d', 'free', 'Free'),

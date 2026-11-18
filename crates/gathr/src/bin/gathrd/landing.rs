@@ -15,7 +15,7 @@ use gathr::ids::{now_us, trace_id};
 use gathr::landings::{self, Act, Review, Stand};
 use gathr::platform::env::Vars;
 use gathr::waits::ci;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::chats::Chats;
 use crate::merging::{self, By, Project, short};
@@ -26,8 +26,21 @@ const CI_STARTS_US: i64 = 120 * 1_000_000;
 /// How long a reviewer's report waits for another look at its project's PRs to end.
 const TURN: Duration = Duration::from_secs(15);
 
-/// Why the last look at each PR failed, so a look that keeps failing is recorded once.
-static FAILED: LazyLock<Mutex<HashMap<(String, i64), String>>> = LazyLock::new(Default::default);
+/// Why the last look at each PR failed, so a look that keeps failing is recorded once, and how many
+/// failed in a row, for the chat's answer to what it waits on (0050). Kept only while the service
+/// runs: its next look after a start finds the failure again.
+static FAILED: LazyLock<Mutex<Failed>> = LazyLock::new(Default::default);
+
+/// Each chat's PR whose last look failed: why, and how many failed in a row.
+type Failed = HashMap<(String, i64), (String, i64)>;
+
+/// The chat's PRs whose looks failed, by PR: how many in a row, and the last one's error.
+pub fn failing_in(chat: &str) -> HashMap<i64, (i64, String)> {
+    let failed = FAILED.lock().expect("never poisoned");
+    let mine = failed.iter().filter(|((c, _), _)| c == chat);
+    mine.map(|((_, pr), (why, n))| (*pr, (*n, why.clone())))
+        .collect()
+}
 
 /// What one look at a PR did or saw, in words, and whether the PR keeps its place in line: it
 /// lands by itself, so one reviewed after it isn't brought up to date yet.
@@ -167,17 +180,25 @@ async fn look(
     let looked = acted(chats, project, review, first, asker, &trace).await;
     let key = (review.chat.clone(), review.pr);
     let mut failed = FAILED.lock().expect("never poisoned");
-    match &looked {
-        Ok(_) => {
-            failed.remove(&key);
+    let shown = |n: i64| n >= gathr::waits::SHOWN_AFTER;
+    let was = failed.get(&key).cloned();
+    let now = match &looked {
+        Ok(_) => failed.remove(&key).map(|_| 0),
+        Err(why) => {
+            if was.as_ref().map(|(w, _)| w) != Some(why) {
+                let event = Event::point("gathr.land.look").trace(&trace).error("look");
+                let event = event.chat(&review.chat).attr("pr", review.pr);
+                chats.writer.record(event.attr("why", why.clone()));
+            }
+            let n = was.as_ref().map_or(0, |(_, n)| *n) + 1;
+            failed.insert(key, (why.clone(), n));
+            Some(n)
         }
-        Err(why) if failed.get(&key) != Some(why) => {
-            failed.insert(key, why.clone());
-            let event = Event::point("gathr.land.look").trace(&trace).error("look");
-            let event = event.chat(&review.chat).attr("pr", review.pr);
-            chats.writer.record(event.attr("why", why.clone()));
-        }
-        Err(_) => {}
+    };
+    // The chat's answer says a PR's looks fail once they have three times in a row, until one works.
+    let before = was.is_some_and(|(_, n)| shown(n));
+    if now.is_some_and(|n| shown(n) != before) {
+        chats.publish(json!({ "type": "waiting", "chat": review.chat }));
     }
     looked
 }
