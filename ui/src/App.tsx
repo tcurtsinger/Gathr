@@ -61,6 +61,8 @@ export function App() {
   const [settings, setSettings] = useState<SettingsTarget | null>(null);
   // Each chat's draft and the names picked in it, kept while another chat is open.
   const drafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
+  // Each thread's reply draft, by chat and thread (0076), kept the same way.
+  const replyDrafts = useRef(new Map<string, { text: string; picks: Picked[] }>());
   const [unsent, setUnsent] = useState<Record<string, SendFailure[]>>({});
   const [, redraw] = useState(0);
   const person = usePersonTasks(setFailure);
@@ -386,6 +388,11 @@ export function App() {
           picks={drafts.current.get(chat.id)?.picks}
           onDraft={(text, picks = []) => {
             drafts.current.set(chat.id, { text, picks });
+            redraw((n) => n + 1);
+          }}
+          replyDraft={(topic) => replyDrafts.current.get(`${chat.id}|${topic}`)}
+          onReplyDraft={(topic, text, picks) => {
+            replyDrafts.current.set(`${chat.id}|${topic}`, { text, picks });
             redraw((n) => n + 1);
           }}
           unsent={unsent[chat.id] ?? []}

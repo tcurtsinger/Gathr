@@ -110,6 +110,39 @@ pub fn for_message(conn: &Connection, chat: &str, turn: &str, message: &str) -> 
     Ok(())
 }
 
+/// The person's reply `message` (0076), saved in `turn`: the turn serves the ask of what it answers,
+/// when that has one, and the reply joins it. It never starts an ask of its own or joins the newest.
+pub fn for_reply(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    message: &str,
+    reply: &crate::replies::Target,
+) -> Result<(), Error> {
+    if !in_team(conn, chat)? {
+        return Ok(());
+    }
+    conn.prepare_cached(
+        "UPDATE turns SET ask_id = COALESCE(
+             (SELECT a.id FROM asks a WHERE a.id = ?2),
+             (SELECT u.ask_id FROM messages m JOIN turns u ON u.id = m.turn_id WHERE m.id = ?2),
+             (SELECT a.id FROM messages m JOIN asks a ON 'm:' || a.id = m.about WHERE m.id = ?2),
+             (SELECT t.ask_id FROM messages m JOIN tasks t ON 't:' || t.number = m.about WHERE m.id = ?2),
+             (SELECT t.ask_id FROM tasks t WHERE t.number = ?3))
+         WHERE id = ?1 AND ask_id IS NULL",
+    )?
+    .execute(params![turn, reply.reply_to, reply.reply_task])?;
+    let serves: Option<String> = conn
+        .prepare_cached("SELECT ask_id FROM turns WHERE id = ?1")?
+        .query_row([turn], |r| r.get(0))
+        .optional()?
+        .flatten();
+    match serves {
+        Some(_) => for_message(conn, chat, turn, message),
+        None => Ok(()),
+    }
+}
+
 /// A new task takes the ask of the turn that gave it, else of its parent.
 pub fn inherit(conn: &Connection, task: i64) -> Result<(), Error> {
     conn.prepare_cached(

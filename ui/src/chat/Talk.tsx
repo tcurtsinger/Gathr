@@ -7,6 +7,7 @@ import { revealOpened } from './reveal';
 import { AgentFace, Bubble, NameLine, Reactions, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import { useActions } from './Thread';
+import { useReply } from './ThreadBox';
 import { WorkRow } from './TurnParts';
 import type { Said as Message } from './threads';
 
@@ -24,10 +25,18 @@ export function FoldLine({ fold }: { fold: Fold }) {
   const thumbs = !!agreed?.length && (
     <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />
   );
+  // Reply on the thread's line (0076): a plain word after the thumbs-up, answering the main message.
+  const reply = useReply(fold.answer);
+  const replying = reply && (
+    <button type="button" className="fold-reply" onClick={(e) => reply(e.currentTarget)}>
+      Reply
+    </button>
+  );
   if (!count)
     return (
       <MessagePrimitive.Root className="fold" data-thread-item="" data-bare="">
         {thumbs}
+        {replying}
       </MessagePrimitive.Root>
     );
   return (
@@ -55,6 +64,7 @@ export function FoldLine({ fold }: { fold: Fold }) {
         {open ? 'Collapse replies' : replies}
       </button>
       {thumbs}
+      {replying}
     </MessagePrimitive.Root>
   );
 }
@@ -117,6 +127,7 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
   const name = m.from ?? 'An agent';
   const { by, work } = m;
   const like = liking(m.like, actions);
+  const reply = useReply(own.answer);
   const small = own.reply;
   return (
     <Said
@@ -145,7 +156,7 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       {work && (open || work.running) && (
         <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
       )}
-      <Bubble quote={m.quote} mention={m.to} actions={like && <MessageActions like={like} />}>
+      <Bubble quote={m.quote} mention={m.to} actions={<MessageActions like={like} reply={reply} />}>
         <MessagePrimitive.Parts components={parts} />
       </Bubble>
       {/* A main message's thumbs-up is on the row under it, with its fold line. */}

@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { MessageActions } from '../components/MessageActions';
 import { briefRows } from '../tasks/model';
 import { MainWord } from './MainWord';
 import type { Custom } from './messages';
 import { AgentFace, Bubble, NameLine, RoleWord, Said, When, YouSaid } from './Said';
 import { useActions } from './Thread';
+import { useReply } from './ThreadBox';
 
 /**
  * A task the lead hands out, as a main message (0075): drawn from the task's record, as no message carries the
@@ -18,6 +20,7 @@ export function TaskMain({ own }: { own: Custom }) {
   const rows = briefRows(brief, []).filter(([, words]) => !!words);
   const longer = rest.some((l) => l.trim()) || rows.length > 0;
   const { by, agent = 'You' } = own;
+  const reply = useReply(own.answer);
   return (
     <Said
       root
@@ -43,7 +46,7 @@ export function TaskMain({ own }: { own: Custom }) {
         />
       }
     >
-      <Bubble>
+      <Bubble actions={<MessageActions reply={reply} />}>
         <div className="task-main" data-more={more || undefined}>
           <p className="task-main-title">
             {brief.owner && <span className="mention">@{brief.owner}</span>}

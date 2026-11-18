@@ -33,6 +33,7 @@ import type { Approval } from './state';
 import { Earlier, FoldLine, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
 import { type Actions, useActions, useJump } from './Thread';
+import { ThreadBox, useReply } from './ThreadBox';
 import { FoundContext, PlanChip, WorkRow } from './TurnParts';
 
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
@@ -107,6 +108,7 @@ const personParts = { Text: PersonText };
 export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
+  if (own.box) return <ThreadBox topic={own.box.topic} />;
   if (own.fold) return <FoldLine fold={own.fold} />;
   if (own.earlier) return <Earlier earlier={own.earlier} />;
   if (own.brief) return <TaskMain own={own} />;
@@ -126,6 +128,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
   const actions = useActions();
   const jump = useJump();
   const like = liking(own.like, actions);
+  const reply = useReply(own.answer);
   const [open, setOpen] = useStepsOpen(work);
   const small = own.reply;
   const words = !!own.text || !!plan || !!asked?.length;
@@ -186,7 +189,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
         <Bubble
           quote={result?.quote}
           onQuote={result && (() => jump(result.ask))}
-          actions={like && <MessageActions like={like} />}
+          actions={<MessageActions like={like} reply={reply} />}
         >
           <MessagePrimitive.Parts components={parts} />
           {plan && (

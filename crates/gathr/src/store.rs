@@ -235,7 +235,7 @@ fn history_order() -> String {
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
 const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
-     m.copy_of, m.picks FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+     m.copy_of, m.picks, m.reply_to, m.reply_task FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
 /// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
@@ -266,6 +266,9 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "copy_of": r.get::<_, Option<String>>(8)?,
         // The person's message: the names they picked from the `@` list, to draw blue.
         "picks": r.get::<_, Option<String>>(9)?.and_then(|p| serde_json::from_str::<Value>(&p).ok()),
+        // A reply the person typed in a thread (0076): the message it answers, or the task.
+        "reply_to": r.get::<_, Option<String>>(10)?,
+        "reply_task": r.get::<_, Option<i64>>(11)?,
     }))
 }
 
@@ -349,6 +352,36 @@ pub fn add_person_message(
     picks: Option<&str>,
 ) -> Result<Value, Error> {
     insert_message(conn, chat, turn, ("user", "text"), body, now_us(), picks)
+}
+
+/// The person's reply in a thread (0076), answering `reply` (checked by `replies::check`). Its turn
+/// serves the ask of what it answers: a reply never starts an ask, or asks a size.
+pub fn add_reply(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    body: &str,
+    picks: Option<&str>,
+    reply: &crate::replies::Target,
+) -> Result<Value, Error> {
+    let ts = now_us();
+    let id = ulid(ts);
+    conn.prepare_cached(
+        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks, reply_to, reply_task)
+         VALUES (?1, ?2, ?3, ?4, 'user', 'text', ?5, ?6, ?7, ?8)",
+    )?
+    .execute(params![
+        id,
+        chat,
+        turn,
+        ts,
+        body,
+        picks,
+        reply.reply_to,
+        reply.reply_task
+    ])?;
+    crate::asks::for_reply(conn, chat, turn, &id, reply)?;
+    message(conn, &id)
 }
 
 /// Gathr's line telling an agent the person liked its message `liked` (0057), in `turn`: never drawn,
@@ -595,7 +628,14 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             person: r.get::<_, Option<bool>>(8)?.unwrap_or(false),
         })
     })?;
-    Ok(rows.collect::<Result<_, _>>()?)
+    let mut waiting: Vec<Waiting> = rows.collect::<Result<_, _>>()?;
+    // A reply's agent reads what it answers first, as it would have before the restart (0076).
+    for w in &mut waiting {
+        if let Some(line) = crate::replies::of_turn(conn, &w.turn)? {
+            w.text = format!("{line}\n\n{}", w.text);
+        }
+    }
+    Ok(waiting)
 }
 
 /// The agent's engine session in the chat (`None`: turns sent to no agent), if it lives in

@@ -13,9 +13,10 @@ import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
 import { useFound, useLatest } from './found';
 import { GathrMessage } from './Gathr';
-import type { Custom, SendFailure } from './messages';
+import type { Answer, Custom, SendFailure } from './messages';
 import { useOlder } from './older';
 import { AssistantMessage, UserMessage } from './Replies';
+import { type Box, BoxContext } from './ThreadBox';
 import { FoundContext } from './TurnParts';
 import './thread.css';
 
@@ -42,6 +43,10 @@ export interface Actions {
   fold?: (topic: string) => void;
   /** Shows a long thread's earlier replies. */
   earlier?: (topic: string) => void;
+  /** Opens the box at a thread's foot for a reply answering `answer` (0076); `opener` gets focus back. */
+  reply?: (answer: Answer, opener: HTMLElement) => void;
+  /** Whether a reply can reach the agent `answer` names: none for a removed agent, or in an archived chat. */
+  canReply?: (answer: Answer) => boolean;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
@@ -72,6 +77,8 @@ interface Props {
   onTarget?: () => void;
   /** What its questions are answered with, in place (0073). */
   questions?: Questions;
+  /** The box open for a reply in a thread (0076). */
+  box?: Box;
 }
 
 /**
@@ -129,41 +136,43 @@ export function Thread(props: Props) {
       <ActionsContext value={stable}>
         <JumpContext value={jump}>
           <QuestionsContext value={props.questions ?? null}>
-            <FoundContext value={found.text}>
-              <ThreadPrimitive.Root className="thread">
-                <ThreadPrimitive.Viewport
-                  ref={viewport}
-                  className="thread-viewport"
-                  scrollToBottomOnRunStart={!found.held}
-                  onScroll={() => {
-                    onScroll();
-                    found.onScroll();
-                  }}
-                >
-                  <div className="thread-column" data-empty={empty || undefined}>
-                    {header}
-                    {empty && <h2 className="welcome">What are we working on?</h2>}
-                    <div className="thread-messages">
-                      <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+            <BoxContext value={props.box}>
+              <FoundContext value={found.text}>
+                <ThreadPrimitive.Root className="thread">
+                  <ThreadPrimitive.Viewport
+                    ref={viewport}
+                    className="thread-viewport"
+                    scrollToBottomOnRunStart={!found.held}
+                    onScroll={() => {
+                      onScroll();
+                      found.onScroll();
+                    }}
+                  >
+                    <div className="thread-column" data-empty={empty || undefined}>
+                      {header}
+                      {empty && <h2 className="welcome">What are we working on?</h2>}
+                      <div className="thread-messages">
+                        <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                      </div>
+                      {after}
+                      <ThreadPrimitive.ViewportFooter className="thread-footer">
+                        <ThreadPrimitive.ScrollToBottom asChild>
+                          <IconButton
+                            aria-label="Scroll to bottom"
+                            variant="outline"
+                            className="thread-bottom bg-background"
+                          >
+                            <ArrowDown />
+                          </IconButton>
+                        </ThreadPrimitive.ScrollToBottom>
+                        {children}
+                      </ThreadPrimitive.ViewportFooter>
                     </div>
-                    {after}
-                    <ThreadPrimitive.ViewportFooter className="thread-footer">
-                      <ThreadPrimitive.ScrollToBottom asChild>
-                        <IconButton
-                          aria-label="Scroll to bottom"
-                          variant="outline"
-                          className="thread-bottom bg-background"
-                        >
-                          <ArrowDown />
-                        </IconButton>
-                      </ThreadPrimitive.ScrollToBottom>
-                      {children}
-                    </ThreadPrimitive.ViewportFooter>
-                  </div>
-                </ThreadPrimitive.Viewport>
-                <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
-              </ThreadPrimitive.Root>
-            </FoundContext>
+                  </ThreadPrimitive.Viewport>
+                  <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
+                </ThreadPrimitive.Root>
+              </FoundContext>
+            </BoxContext>
           </QuestionsContext>
         </JumpContext>
       </ActionsContext>
@@ -190,6 +199,8 @@ export function useStable(actions: Actions): Actions {
       like: (message, questions, give) => latest.current.like?.(message, questions, give),
       fold: (topic) => latest.current.fold?.(topic),
       earlier: (topic) => latest.current.earlier?.(topic),
+      reply: (answer, opener) => latest.current.reply?.(answer, opener),
+      canReply: (answer) => !!latest.current.canReply?.(answer),
     }),
     [],
   );

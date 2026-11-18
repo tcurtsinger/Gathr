@@ -6,7 +6,7 @@ use std::cell::{Cell, RefCell};
 
 use rusqlite::{Connection, OptionalExtension, Params, Row, StatementStatus, params};
 
-use super::load::{Opening, Source, Task, Turn};
+use super::load::{Opening, REPLY_COLUMNS, Source, Task, Turn, reply_at};
 use crate::Error;
 
 pub struct Rows<'c> {
@@ -63,9 +63,12 @@ impl<'c> Rows<'c> {
 
     /// The first message the person or Gathr put in the turn, by `messages_opening`.
     fn opening(&self, turn: &str) -> Option<Opening> {
-        let sql = "SELECT m.id, m.role, m.copy_of, o.turn_id FROM messages m LEFT JOIN messages o ON o.id = m.copy_of
-                   WHERE m.turn_id = ?1 AND m.role IN ('user', 'gathr') ORDER BY m.ts, m.rowid LIMIT 1";
-        self.one(sql, [turn], |r| {
+        let sql = format!(
+            "SELECT m.id, m.role, m.copy_of, o.turn_id, {REPLY_COLUMNS}
+             FROM messages m LEFT JOIN messages o ON o.id = m.copy_of LEFT JOIN messages r ON r.id = m.reply_to
+             WHERE m.turn_id = ?1 AND m.role IN ('user', 'gathr') ORDER BY m.ts, m.rowid LIMIT 1"
+        );
+        self.one(&sql, [turn], |r| {
             let copy: Option<String> = r.get(2)?;
             let copy_of = match copy {
                 Some(of) => Some((of, r.get(3)?)),
@@ -75,6 +78,7 @@ impl<'c> Rows<'c> {
                 id: r.get(0)?,
                 role: r.get(1)?,
                 copy_of,
+                reply: reply_at(r, 4)?,
             })
         })
     }

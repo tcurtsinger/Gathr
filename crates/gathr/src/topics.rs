@@ -223,6 +223,13 @@ impl<S: Source> Topics<S> {
             );
         }
         let opening = t.opening.as_ref();
+        // The person's reply (0076): in the thread of what it answers.
+        if let Some(r) = opening
+            .filter(|o| o.role == "user")
+            .and_then(|o| o.reply.as_ref())
+        {
+            return self.reply_of(&own, r, next);
+        }
         if let Some(o) = opening.filter(|o| o.role == "user") {
             return Topic::tied(
                 format!("m:{}", o.id),
@@ -309,6 +316,43 @@ impl<S: Source> Topics<S> {
             );
         }
         Topic::alone(own, "no task, no turn it answers and no ask".into())
+    }
+
+    /// Where a reply's turn sits: with the task it is about, or the message it answers. The
+    /// person's own message is its own main unless it is a reply too; Gathr's line in no turn
+    /// sits with what it is about, as recorded.
+    fn reply_of(&self, own: &str, reply: &load::Reply, next: usize) -> Topic {
+        let answered = match reply {
+            load::Reply::Task(n) => {
+                let why = format!("a reply about task #{n}");
+                let found = self.follow_task(*n, next);
+                return self.via(own, found, "reply", why, format!("task #{n}"));
+            }
+            load::Reply::Gone(id) => {
+                return Topic::broken(
+                    own.to_string(),
+                    format!("message {id} it replies to not found"),
+                );
+            }
+            load::Reply::Message(m) => m,
+        };
+        let why = format!("a reply to message {}", answered.id);
+        if answered.role == "user" && !answered.reply {
+            return Topic::tied(format!("m:{}", answered.id), "reply", why);
+        }
+        if let Some(turn) = &answered.turn {
+            let found = self.follow_turn(turn, next);
+            return self.via(own, found, "reply", why, format!("turn {turn}"));
+        }
+        let about = answered.about.as_deref().unwrap_or_default();
+        if let Some(n) = about.strip_prefix("t:").and_then(|n| n.parse().ok()) {
+            let found = self.follow_task(n, next);
+            return self.via(own, found, "reply", why, format!("task #{n}"));
+        }
+        match about.starts_with("m:") {
+            true => Topic::tied(about.to_string(), "reply", why),
+            false => Topic::tied(format!("m:{}", answered.id), "reply", why),
+        }
     }
 
     fn follow_task(&self, number: i64, depth: usize) -> Found {

@@ -2,7 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Task } from '../api';
 import { mainSaid, openSaid, type Said as State, versionSaid } from '../tasks/rows';
 import type { Group } from './groups';
-import type { Custom, Fold, MainState } from './messages';
+import type { Answer, Custom, Fold, MainState } from './messages';
 import type { ChatState } from './state';
 
 /** A thread opened long shows this many of its newest replies under "Show N earlier replies". */
@@ -145,11 +145,18 @@ export function foldOf(
   main: ThreadMessageLike,
   count: number,
   open: boolean,
+  answer?: Answer,
 ): Fold | undefined {
   const own = (main.metadata?.custom ?? {}) as Custom;
   const agreed = own.agreed ?? own.said?.agreed;
   if (!count && !agreed?.length) return undefined;
-  return { topic, open, count, ...(agreed?.length && { agreed, like: own.like ?? own.said?.like }) };
+  return {
+    topic,
+    open,
+    count,
+    ...(agreed?.length && { agreed, like: own.like ?? own.said?.like }),
+    ...(answer && { answer }),
+  };
 }
 
 /**

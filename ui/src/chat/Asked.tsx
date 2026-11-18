@@ -19,7 +19,10 @@ export const QuestionsContext = createContext<Questions | null>(null);
 
 const NONE: Draft = { values: [], notes: '' };
 
-/** A question in its asker's bubble, answered there with the one question block (0065, 0073). */
+/**
+ * A question in its asker's bubble, answered there with the one question block (0065, 0073). It is talked over with
+ * Reply in its thread, not the Discuss switch, which stays in the Tasks view (0076).
+ */
 export function Asked({ task: number }: { task: number }) {
   const questions = useContext(QuestionsContext);
   const actions = useActions();
@@ -33,6 +36,7 @@ export function Asked({ task: number }: { task: number }) {
       name={questions.name}
       onSend={(d) => questions.onSend(task, d)}
       onReference={actions.reference}
+      discuss={false}
     />
   );
 }

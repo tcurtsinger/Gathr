@@ -212,10 +212,22 @@ message) is a small row on the bubble's top right corner, shown while the messag
 focus (by opacity, as the steps are, so Tab reaches it), in a thread too: a popover-coloured box with a 1px border,
 10px corners and a soft shadow, holding 24px icon buttons with 15px icons, muted until pointed at. Its lower edge
 stays in the bubble's top padding, so it never covers a word of the first line; over a short bubble it may cover the
-end of the name line while it shows. Today it holds the person's like, a thumbs-up named "Like" (pressed: the
-attention blue); Reply joins it later. An agent's words, a message between agents, a bubble holding a waiting
-question with the asker's pick, and a plan version waiting for the person offer it; the person's own message, Gathr's
-lines and question, a bubble holding a waiting question with no pick, and words still streaming offer none (0057 C4).
+end of the name line while it shows, and on a main message the state word at its right. It holds Reply (a reply
+arrow, named "Reply", 0076), then the person's like, a thumbs-up named "Like" (pressed: the attention blue); the
+row is 30px with one button and 56px with both. Like: an agent's words, a message between agents, a bubble holding a
+waiting question with the asker's pick, and a plan version waiting for the person offer it; the person's own
+message, Gathr's lines and question, a bubble holding a waiting question with no pick, and words still streaming
+offer none (0057 C4). Reply (one rule, `chat/answer.ts`): an agent's message, a message between agents, a plan
+version, a task's message, a waiting question's bubble and a line of Gathr's offer it; the person's own message,
+their answers, Gathr's own question and a removed agent's message offer none.
+
+The thread box (0076, `#replybox` A) is the same Composer, placed by `chat/ThreadBox.tsx` as an item after the
+thread's last reply shown, inside the thread's rule where its replies sit: one row, 18px corners, 14.5px words, the
+"To Ann" sign, a 24px cross named "Close" and a 28px Send, the field still growing with what is typed. Its field is
+named "Reply" and so is its hint. Focus goes into it when Reply opens it; Escape (after an open @ list) or the cross
+closes it and focus goes back to that Reply. It has no Stop. One at a time: Reply elsewhere moves it, and each
+thread keeps its own draft. On a thread's fold line, Reply is a plain 13px muted word after the thumbs-up, shown by
+opacity while the row is pointed at or focused, as the corner row is.
 Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 

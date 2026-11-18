@@ -85,3 +85,4 @@ fails in CI when the two differ.
 | 0073 | [Gathr speaks as a speaker](0073-gathr-speaks-as-a-speaker.md) | accepted | yes |
 | 0074 | [An agent's face](0074-an-agents-face.md) | accepted | yes |
 | 0075 | [A team chat is main messages, each with its thread](0075-a-team-chat-is-main-messages-each-with-its-thread.md) | accepted | yes |
+| 0076 | [Replying in a thread](0076-replying-in-a-thread.md) | accepted | yes |

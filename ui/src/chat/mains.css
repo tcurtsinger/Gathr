@@ -65,7 +65,8 @@
   content: none;
 }
 .fold-line,
-.earlier-button {
+.earlier-button,
+.fold-reply {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -81,8 +82,24 @@
   cursor: pointer;
 }
 .fold-line:hover,
-.earlier-button:hover {
+.earlier-button:hover,
+.fold-reply:hover {
   color: var(--foreground);
+}
+/* Reply on the thread's line (0076): a plain word after the thumbs-up, shown while the row is pointed at or holds
+   keyboard focus (the mock-up's .th-reply), by opacity, so Tab reaches it. */
+.fold-reply {
+  padding-inline: 2px;
+  opacity: 0;
+}
+.fold:is(:hover, :focus-within) > .fold-reply {
+  opacity: 1;
+}
+
+/* The message box at a thread's foot (0076): inside the thread's rule, as its replies are, as wide as they reach. */
+.thread-messages > .thread-box {
+  margin-top: 0;
+  padding-top: 2px;
 }
 .fold-chevron {
   width: 14px;

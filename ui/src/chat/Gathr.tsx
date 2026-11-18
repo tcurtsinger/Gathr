@@ -2,12 +2,14 @@ import { useAuiState } from '@assistant-ui/react';
 import { FileText } from 'lucide-react';
 import { useContext } from 'react';
 import { GathrFace } from '../components/Face';
+import { MessageActions } from '../components/MessageActions';
 import { Asked, QuestionsContext } from './Asked';
 import { MainWord } from './MainWord';
 import type { EventLine } from './messages';
 import { custom } from './Replies';
 import { Bubble, NameLine, Said, When } from './Said';
 import { useActions } from './Thread';
+import { useReply } from './ThreadBox';
 import { Event } from './TurnParts';
 
 /**
@@ -21,6 +23,8 @@ export function GathrMessage() {
   const events = own.events ?? [];
   const why = useContext(QuestionsContext)?.tasks.find((t) => asked.includes(t.number))?.why;
   const fixed = events.find(isFixed);
+  // Gathr's own question can't be talked over: only its lines offer Reply (0076).
+  const reply = useReply(asked.length ? undefined : own.answer);
   return (
     <Said
       root
@@ -36,7 +40,7 @@ export function GathrMessage() {
         />
       }
     >
-      <Bubble quote={fixed?.text}>
+      <Bubble quote={fixed?.text} actions={<MessageActions reply={reply} />}>
         {why && <p className="gathr-says">{why}</p>}
         {events.map((e, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: its lines keep their order

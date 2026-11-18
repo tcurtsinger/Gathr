@@ -35,6 +35,7 @@ import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
 import { type PauseAction, type Run, runOf } from './pauses';
 import { addressed, nameable, unnamed } from './recipient';
+import { type Opened, useReplying } from './replying';
 import { StatusLine } from './StatusLine';
 import { Summary } from './Summary';
 import { running } from './state';
@@ -52,6 +53,9 @@ interface Props {
   /** The names picked from the "@" list in the draft: only these count, never a name typed. */
   picks?: Picked[];
   onDraft: (text: string, picks?: Picked[]) => void;
+  /** Each thread's reply draft, by its topic, kept by the app beside the chat's (0076). */
+  replyDraft?: (topic: string) => { text: string; picks: Picked[] } | undefined;
+  onReplyDraft?: (topic: string, text: string, picks: Picked[]) => void;
   /** Opens Settings at a category; Diagnostics opens at the turn given. */
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
   /** Messages that never reached the service, kept by the app while other chats are open. */
@@ -134,9 +138,12 @@ export function ChatView(props: Props) {
   const named = useMemo(() => [...agents, ...removed], [agents, removed]);
   const threads = useFolds();
   const { folds, start } = threads;
+  // The reply being typed in a thread (0076): its box is drawn at that thread's foot.
+  const answering = useState<Opened>();
+  const replying = answering[0]?.answer.topic;
   const timeline = useMemo(
-    () => toThread(state, named, failed, cache.current, { ...folds, start: start.current }),
-    [state, named, failed, folds, start],
+    () => toThread(state, named, failed, cache.current, { ...folds, start: start.current, replying }),
+    [state, named, failed, folds, start, replying],
   );
   threads.settle(timeline, loaded);
   const { answers } = props;
@@ -164,6 +171,15 @@ export function ChatView(props: Props) {
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
   const to = addressed(picks, people, fallback, fresh);
+  const reply = useReplying(answering, {
+    state,
+    people,
+    archived,
+    drafts: { get: props.replyDraft, set: props.onReplyDraft },
+    send,
+    discuss: answers && ((task, draft) => answers.onSend(asQuestion(task, state.tasks), draft)),
+    show: threads.show,
+  });
   const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   threads.open(hit);
@@ -200,7 +216,13 @@ export function ChatView(props: Props) {
     retry: (t) => {
       const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
       const turn = state.turns[t];
-      if (asked && turn) send(asked.body as string, turn.agent ?? undefined, asked.picks ?? undefined);
+      // A reply goes again as a reply to what it answered (0076).
+      const target = asked && {
+        ...(asked.reply_to && { reply_to: asked.reply_to }),
+        ...(asked.reply_task != null && { reply_task: asked.reply_task }),
+      };
+      if (asked && turn)
+        send(asked.body as string, turn.agent ?? undefined, asked.picks ?? undefined, undefined, target);
     },
     resend: (f) => {
       if (!fresh) return send(f.text, f.agent, f.picks, f);
@@ -226,6 +248,8 @@ export function ChatView(props: Props) {
     },
     fold: threads.fold,
     earlier: threads.earlier,
+    reply: reply.open,
+    canReply: reply.can,
   };
   const stable = useStable(actions);
   const { agentOpen, workspace } = props;
@@ -354,6 +378,7 @@ export function ChatView(props: Props) {
               target={target}
               onTarget={props.onFound}
               questions={questions}
+              box={reply.box}
               empty={loaded && state.messages.length === 0 && failed.length === 0}
               after={!archived && <RunLine run={run} members={state.members} />}
               header={

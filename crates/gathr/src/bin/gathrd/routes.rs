@@ -129,6 +129,9 @@ struct NewMessage {
     agent: Option<String>,
     #[serde(default)]
     picks: Vec<gathr::picks::Pick>,
+    /// A reply in a thread (0076): the message or task it answers.
+    #[serde(flatten)]
+    target: gathr::replies::Target,
 }
 
 async fn send(
@@ -155,6 +158,7 @@ async fn send(
         gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
     })
     .await?;
+    let target = replying(&s, &t, &chat, body.target).await?;
     let agent = addressee(&s, &t, &chat, body.agent).await?;
     let (reply, answer) = oneshot::channel();
     let task = s.chats.task(&chat, agent.as_deref());
@@ -163,6 +167,7 @@ async fn send(
         text: body.text,
         agent,
         picks,
+        target,
         trace: t.0.clone(),
         reply,
     };
@@ -179,6 +184,42 @@ async fn send(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",
             "the chat's task ended",
+            &t.0,
+        )),
+    }
+}
+
+/// What a reply answers, checked against the chat (0076): refused with why when it isn't a
+/// message's words or a task of this chat.
+async fn replying(
+    s: &State,
+    t: &Trace,
+    chat: &str,
+    target: gathr::replies::Target,
+) -> Result<gathr::replies::Target, Fail> {
+    if !target.is_reply() {
+        return Ok(target);
+    }
+    let id = chat.to_string();
+    let checked = s
+        .writer
+        .call(move |conn| gathr::replies::check(conn, &id, &target))
+        .await;
+    match checked {
+        Some(Ok(target)) => Ok(target),
+        Some(Err(gathr::Error::Refused(why))) => {
+            Err(fail(StatusCode::BAD_REQUEST, "Send failed", &why, &t.0))
+        }
+        Some(Err(e)) => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Send failed",
+            &e.to_string(),
+            &t.0,
+        )),
+        None => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Send failed",
+            "the database didn't answer",
             &t.0,
         )),
     }

@@ -13,6 +13,8 @@ interface Props {
   /** Sends this question's answer, or its Discuss message: none once the service took it, else why not. */
   onSend: (draft: Draft) => Promise<Refusal | null>;
   onReference: (ref: string) => void;
+  /** Offers the Discuss switch: the Tasks view does; the chat talks a question over with Reply instead (0076). */
+  discuss?: boolean;
 }
 
 /**
@@ -21,13 +23,13 @@ interface Props {
  * and Send sends it with its notes. Discuss, right under the question, swaps the choices and notes for a message to
  * the asker; each is kept while the other shows. A refused Send stays here with why and its reference.
  */
-export function Question({ task, draft, onDraft, name, onSend, onReference }: Props) {
+export function Question({ task, draft, onDraft, name, onSend, onReference, discuss = true }: Props) {
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const label = useId();
   const open = task.state === 'ready';
   const own = gathrs(task);
-  const talking = !own && !!draft.discuss;
+  const talking = !own && discuss && !!draft.discuss;
   const words = task.form === 'text';
   const many = task.form === 'choices' || task.form === 'done';
 
@@ -75,7 +77,7 @@ export function Question({ task, draft, onDraft, name, onSend, onReference }: Pr
       </div>
       {open && (
         <>
-          {!own && (
+          {!own && discuss && (
             <div className="question-discuss">
               <Switch
                 on={talking}

@@ -375,6 +375,10 @@ Parts: 4.2, 4.4
   turn. The builder keeps waiting and hears nothing. When the lead's turn ends without a new question,
   the question is back on the list as it was. When the lead asks a new question in that turn, the new
   one takes the old one's place
+- **Given** that question in the chat, waiting on the person
+- **When** the person presses Reply in its thread, types there and sends
+- **Then** it is the same Discuss: the words reach the lead, and the question stays open in its bubble. The
+  chat's question has no Discuss switch; the Tasks view's has
 
 ## 5. Work tells the truth
 
@@ -586,6 +590,15 @@ Parts: 6.4, 6.5
   answer after it in the same thread, even when the person wrote something in between. A review and the
   fix after it read in the thread of the work task whose PR they are on, never on the main line. The
   person reads them under one fold line, and can fold the thread
+- **Given** a team chat with a task Ann works on, far up, and the lead's words under the person's ask
+- **When** the person presses Reply on Ann's words, types in the box at that thread's foot and presses Enter
+- **Then** the reply goes to Ann, saying what it answers, and sits at the end of that thread, with Ann's answer
+  after it; the reply serves that ask, and the task's state doesn't change. Reply on the task's own message goes
+  to Ann about the task. The box closes, and focus goes back to Reply; the box at the chat's foot still sends a
+  new main message. A reply to a step, or to another chat's message or task, is refused with a reference
+- **Given** a chat with one agent
+- **When** the person replies to an older answer of the agent
+- **Then** the reply and the answer to it sit in a thread under that older answer; the rest stays flat
 
 ### 6k. The chat says what each main message waits on
 

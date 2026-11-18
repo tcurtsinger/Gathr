@@ -23,6 +23,10 @@ export function useFolds() {
     start,
     reveal,
     fold: (topic: string) => setFolds((f) => ({ ...f, open: new Map(f.open).set(topic, !isOpen(topic)) })),
+    /** Opens a thread to reply in it (0076); one already open stays as it is. */
+    show: (topic: string) => {
+      if (!isOpen(topic)) setFolds((f) => ({ ...f, open: new Map(f.open).set(topic, true) }));
+    },
     earlier: (topic: string) => setFolds((f) => ({ ...f, earlier: new Set(f.earlier).add(topic) })),
     /** Called with each draw: the first once the chat has loaded fixes what starts folded. */
     settle: (timeline: Timeline, loaded: boolean) => {

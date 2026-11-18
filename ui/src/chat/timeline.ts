@@ -1,5 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Message } from '../api';
+import { answerOf, flatThreads, threadAnswer } from './answer';
 import { askSizes } from './asks';
 import {
   block,
@@ -17,6 +18,7 @@ import { fold } from './fold';
 import { type Group, givenBy, grouped, hasEnding, lastBlocks } from './groups';
 import { askOf, foldOf, newest, stateOf, type Thread, threadsOf, timeOf } from './mains';
 import {
+  type Answer,
   briefOf,
   type Cache,
   type Custom,
@@ -132,8 +134,19 @@ export function drawn(
     : Number.POSITIVE_INFINITY;
   const flat = isTeam ? groups.filter((g) => timeOf(g, state) < since) : groups;
   const run: { speaker?: string } = {};
+  // Drawn flat, but a reply to an older message makes a thread under it (0076).
+  const under = flatThreads(flat);
+  const inThread = new Set([...under.values()].flat());
   for (const g of flat) {
-    const item = draw(g, {}, run);
+    if (inThread.has(g)) continue;
+    const answer = answerOf(g, flatTopic(g), state);
+    const replies = under.get(g);
+    if (replies || (answer && answer.topic === view?.replying)) {
+      const t: Thread = { topic: flatTopic(g), main: g, replies: replies ?? [], at: 0 };
+      drawThread(t, new Map(), undefined, true);
+      continue;
+    }
+    const item = draw(g, answer ? { answer } : {}, run);
     if (!item) continue;
     items.push(item);
     all.push(item);
@@ -168,23 +181,33 @@ export function drawn(
   }
   return { items, all, find, handled };
 
-  function drawThread(t: Thread, results: Map<string, string>, ask: string | undefined) {
+  /** A main message and its thread; `flat`, in a chat drawn flat: no state word. */
+  function drawThread(t: Thread, results: Map<string, string>, ask: string | undefined, flat = false) {
     const { state: word, handled: settled } = stateOf(t, state, results);
     const quote = ask && state.asks.find((a) => a.id === ask)?.title;
-    const mainPlace: Place = { topic: t.topic, state: word, ...(ask && quote && { result: { ask, quote } }) };
+    const mainPlace: Place = {
+      topic: t.topic,
+      ...(!flat && { state: word }),
+      ...(ask && quote && { result: { ask, quote } }),
+    };
     const runs: { speaker?: string } = {};
     let main: ThreadMessageLike | null = null;
     let mainGroup = t.main;
+    let mainAnswer: Answer | undefined;
     const replies = [...t.replies];
+    const drawMain = (g: Group | undefined) => {
+      mainAnswer = g && answerOf(g, t.topic, state);
+      return g ? draw(g, { ...mainPlace, answer: mainAnswer }, runs, !!ask) : null;
+    };
     if (t.task) {
-      main = taskBlock(t, mainPlace);
+      main = taskBlock(t, { ...mainPlace, answer: threadAnswer(t, undefined, state) });
       taskMains.set(t.task.number, main.id as string);
     } else {
-      main = mainGroup ? draw(mainGroup, mainPlace, runs, !!ask) : null;
+      main = drawMain(mainGroup);
       // Its first block drew nothing (Gathr's words that opened a hear-back): the first that does is the message.
       while (!main && replies.length) {
         mainGroup = replies.shift();
-        main = mainGroup ? draw(mainGroup, mainPlace, runs, !!ask) : null;
+        main = drawMain(mainGroup);
       }
     }
     if (!main) return;
@@ -195,7 +218,7 @@ export function drawn(
     const drawnReplies: { g: Group; item: ThreadMessageLike }[] = [];
     const run: { speaker?: string } = {};
     for (const g of replies) {
-      const item = draw(g, reply, run);
+      const item = draw(g, { ...reply, answer: answerOf(g, t.topic, state) }, run);
       if (item) drawnReplies.push({ g, item });
     }
     const replyItems = drawnReplies.map((r) => r.item);
@@ -203,8 +226,9 @@ export function drawn(
     const done = settled && ![main, ...replyItems].some(needsYou);
     if (done) handled.add(t.topic);
     const open = view ? (view.open.get(t.topic) ?? !(view.start ?? handled).has(t.topic)) : !done;
-    const line = foldOf(t.topic, main, replyItems.length, replyItems.length > 0 && open);
-    if (!line) return;
+    const answer = threadAnswer({ ...t, main: mainGroup }, mainAnswer, state);
+    const line = foldOf(t.topic, main, replyItems.length, replyItems.length > 0 && open, answer);
+    if (!line) return boxFor(t.topic);
     all.push(...replyItems);
     items.push(
       kept(cache, `fold-${t.topic}`, JSON.stringify(line), () => ({
@@ -230,6 +254,27 @@ export function drawn(
     const showing = new Set(shown);
     for (const { g, item } of drawnReplies)
       spots.set(g, { id: item.id as string, ...(!showing.has(item) && { topic: t.topic }) });
+    boxFor(t.topic);
+  }
+
+  /** The message box at the foot of the thread it is open for (0076), after its last reply shown. */
+  function boxFor(topic: string) {
+    if (view?.replying !== topic) return;
+    const box = { topic };
+    items.push(
+      kept(cache, `box-${topic}`, topic, () => ({
+        id: `box-${topic}`,
+        role: 'assistant',
+        content: [],
+        metadata: { custom: { box } satisfies Custom },
+      })),
+    );
+  }
+
+  /** A block's thread in a chat drawn flat: its own, by the message Reply on it answers. */
+  function flatTopic(g: Group): string {
+    const words = g.msgs.findLast((m) => m.kind === 'text') ?? g.msgs[0];
+    return `m:${words?.id ?? g.key}`;
   }
 
   function needsYou(item: ThreadMessageLike) {

@@ -362,6 +362,16 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "The person liked your message <id> of <time>: \"Hi!\". A like means they approve it or agree. \
          If it answers something you were waiting on, carry on. Otherwise end your turn without replying.",
     ),
+    (
+        "reply",
+        "reply: a message",
+        "The person replies to your message (message <id>, <time>): \"Hi!\"",
+    ),
+    (
+        "reply",
+        "reply: a task",
+        "The person replies about your task #1 \"Write the exporter\".",
+    ),
 ];
 
 /// Asserts that `built`, the text the real code built for the sample `name`, is that sample's text
