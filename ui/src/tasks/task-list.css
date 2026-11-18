@@ -39,8 +39,11 @@
 .task-row[data-bare] {
   grid-template-columns: minmax(0, 1fr);
 }
-.task-row:hover {
+button.task-row:hover {
   background: var(--raised);
+}
+div.task-row {
+  cursor: default;
 }
 .task-row-text {
   display: flex;

@@ -151,9 +151,9 @@ Parts: 2.1
 - **Given** a plan the person sent back with words
 - **When** the lead writes the next version
 - **Then** Gathr holds both versions, the words and the lead's answers. The new version is checked again
-  before the person sees it, and the old one reads as replaced. From its first version a plan is in one
+  before the person sees it, and the old one reads as replaced, with the words as Sent back. From its first version a plan is in one
   state at every moment, read from its rows: checking, revising, waiting on the person, approved or
-  dropped. A second plan for an ask keeps the first
+  dropped. Once approved, each part is the task it became, and opens it. A second plan for an ask keeps the first
 
 ### 2e. The lead asks its questions first, one at a time
 
