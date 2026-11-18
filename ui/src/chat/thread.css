@@ -40,7 +40,8 @@
   display: flex;
   flex-direction: column;
   gap: 22px;
-  margin-bottom: 56px;
+  /* The status line's slot under it (DESIGN.md "Status line"). */
+  margin-bottom: 6px;
 }
 .thread-messages:empty {
   display: none;

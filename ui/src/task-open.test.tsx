@@ -103,7 +103,10 @@ test("an agent in Summary opens as a workspace tab, and its task opens from ther
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
   await page.getByRole('button', { name: /^Summary/ }).click();
-  await page.getByRole('button', { name: /^Made-up Sol/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Summary' })
+    .getByRole('button', { name: /^Made-up Sol/ })
+    .click();
   const tab = page.getByRole('tab', { name: 'Made-up Sol' });
   await expect.element(tab).toHaveAttribute('aria-selected', 'true');
   // The keyboard follows to the tab, not back to Summary's button.

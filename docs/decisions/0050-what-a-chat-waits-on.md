@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec; the line's place is the owner's pick). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `ui/src/chat/Waiting.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `ui/src/chat/StatusLine.test.tsx`.
 
 Serves promise 6 of [the charter](../charter.md#the-promises): the room explains itself (parts 6.1 and 6.2 of [the truth map](../truth-map.md)).
 
@@ -31,10 +31,9 @@ Serves promise 6 of [the charter](../charter.md#the-promises): the room explains
   own chat; and `gathr diag waiting --chat <id>`, from the service when it runs and from the database when it
   doesn't, where what only the service knew is said as it was when it stopped and nothing is said to move by
   itself.
-- **In the window, a line at the foot of the chat,** where "Working" shows, while no turn runs and the answer
-  has a line. Its words are the first of: "Waiting on you: 2 questions"; "Waiting: …" with what has waited
-  longest among the things that move by themselves; "Not moving: …" with what nobody is on. Then "and N more".
-  It opens the whole list in a popover of Summary's kind.
+- **In the window, the status line above the message box** (changed 2026-11-17, below): how the team stands,
+  from each agent's state in this answer, and a row for each agent that isn't free. The lines stay for the
+  API, the `waiting` tool and `gathr diag waiting`.
 - **Summary and the agent panel keep what they work out** (who needs you, who works and on what). The words for
   an agent that does neither ("Waiting for CI on #157", "Held", "Paused", "Usage limit until 14:05") are the
   answer's, and the window's own working-out of them is gone.
@@ -69,3 +68,13 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   reads "Working: Cass silent 12m" in place of "Working". A task whose owner is paused, by the agent's pause,
   the chat's or the app's, waits on you and says ", paused", as a wait under a pause does; its line didn't
   name the pause before. Gathr now acts on a chat where nothing moves, which is 0052's own.
+- 2026-11-17, the status line (the owner's pick of the status-line page, A): the window's foot is one line above
+  the message box, always in its 28px slot, read from each agent's state ([0071](0071-an-agents-state-is-one-mark.md)):
+  "Mira needs you, Ann is working, Bo is blocked", "3 agents are working", "Rev is waiting on PR #18 checks",
+  nothing when everyone is free, three dots while an agent works. It opens a row for each agent that isn't free:
+  its face, name, state, what and how long, and a silent turn's "silent 12m" ([0052](0052-a-quiet-chat-is-noticed.md));
+  a row opens that agent's tab. The Working line, the line at the foot of the chat and the list it opened are
+  gone from the window. What only the list said, a wait's last look and why its looks fail, is in the `waiting`
+  tool, `gathr diag waiting`, Gathr's line in the chat when nothing moves (0052) and, for failing looks,
+  Diagnostics (`gathr.wait.failing`). The window says a PR's waits as the approved pages do ("PR #18 checks",
+  "PR #18 to merge"); the service's words, which agents read, are unchanged.
