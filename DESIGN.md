@@ -393,11 +393,11 @@ Home/End and Delete operate tabs. Summary and the one timeline (0037) replace
 0015's earlier Team tab, inline thread and split. The agent's panel is a tab after
 Tasks (0038). Other tab workflows remain governed by their decisions.
 
-Agents show their face beside their name, replacing the shared robot icon (0074): a drawn face on a
-pale tint of the agent's colour, the same everywhere, at 36 heading its panel, 24 on a message, in Summary's
+Agents show their face beside their name, replacing the shared robot icon (0074): a drawn face on the
+background the person picked, the same everywhere, at 36 heading its panel, 24 on a message, in Summary's
 rows, the dock and a project's team, 20 in a stack and 16 on its tab. The face is hidden from screen readers
-beside the name and carries the name where it stands alone. Five colours, picked by the agent's id with no
-setting; the tint is 30% of the colour in white. The person and Gathr keep their own marks.
+beside the name and carries the name where it stands alone. The background shows as picked, the same in light
+and dark; until one is picked it is a grey, #CECECE. The person and Gathr keep their own marks.
 Roles such as Supervisor, Member and Reviewer use the normal sans-serif.
 
 Team status appears in Summary, and each agent's detail in its panel. Progress must
@@ -531,10 +531,14 @@ stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Face, Gender, Skin tone, Account, Model, Effort, Approvals. Face is the agent's
+one shared editor: Face, Gender, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
 56px face and Shuffle, which draws it from a new seed and keeps the gender and tone shown; Gender is Man or Woman; Skin tone is six swatches,
-light to deep, named Skin tone 1 to 6. Each redraws the face at once and is saved with Save. A gender or tone
-never set shows what the face's seed picked (0074). Account implies engine;
+light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
+for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
+row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
+not among the twelve shows on the +, pressed. Escape or a click outside closes the picker, not Settings. Each
+redraws the face at once and is saved with Save. A gender or tone never set shows what the face's seed picked;
+a background never set is the grey, with no swatch pressed (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,
 temperature or extra toggles as product settings. Save affects future turns in
