@@ -54,11 +54,13 @@ export function drawn(
   const worked = new Map([...quiet].map(([work, to]) => [to, work]));
 
   /** Who a reply block is by and the task it is on: a block that follows its speaker's isn't named again. */
-  const heading = (g: Group) => {
+  const heading = (g: Group, topic?: string) => {
     const turn = g.turn ? state.turns[g.turn] : undefined;
-    // Only a member or the reviewer is headed by its task; the lead always by its role.
+    // Only a member or the reviewer is headed by its task; the lead always by its role. In its own task's thread the
+    // task's message says it, and its state: a reply there names no task.
     const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
-    const on = led || turn?.task == null ? undefined : numbered.get(turn.task)?.what;
+    const own = turn?.task != null && topic === `t:${turn.task}`;
+    const on = led || own || turn?.task == null ? undefined : numbered.get(turn.task)?.what;
     const last = turn?.task != null && lastOf.get(turn.task) === g;
     return { on, last, who: `${turn?.agent}|${on}` };
   };
@@ -105,7 +107,7 @@ export function drawn(
           place,
         );
       default: {
-        const h = heading(g);
+        const h = heading(g, place.topic);
         const value = block(cache, g, state, crew, gave, {
           ...h,
           head: head(h.who),
@@ -139,7 +141,8 @@ export function drawn(
   }
 
   if (isTeam) {
-    const rest = flat.length ? groups.filter((g) => !flat.includes(g)) : groups;
+    const before = new Set(flat);
+    const rest = flat.length ? groups.filter((g) => !before.has(g)) : groups;
     const topics = topicsOf(rest, state, spoken, hosts);
     const threads = threadsOf(rest, topics, state);
     // Each ask's newest result, by its topic: the ask's Done leads there, and the result quotes the ask.

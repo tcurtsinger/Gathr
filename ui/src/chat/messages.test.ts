@@ -63,13 +63,10 @@ test('a team chat is its main messages in time order, each with its thread; a me
     'direct-user',
     'a-direct',
   ]);
-  // A member's block is headed by the task it works on; Gathr's message that gave it isn't drawn.
-  expect(custom(byId(all, 'a-rowan'))).toMatchObject({
-    agent: 'Rowan',
-    role: 'member',
-    on: 'Task 1',
-    reply: true,
-  });
+  // In its own task's thread a member's block names no task: the task's message says it. Gathr's message that gave it
+  // isn't drawn.
+  expect(custom(byId(all, 'a-rowan'))).toMatchObject({ agent: 'Rowan', role: 'member', reply: true });
+  expect(custom(byId(all, 'a-rowan')).on).toBeUndefined();
   expect(custom(byId(all, 'a-ask')).on).toBeUndefined();
   expect(custom(byId(items, 'task-2'))).toMatchObject({
     brief: { what: 'Task 2', owner: 'Kit' },
@@ -546,7 +543,19 @@ test('the lead is headed by its role, whatever task its turn runs on; a member b
   const { items } = view(state);
   expect(custom(byId(items, 'a-mira7'))).toMatchObject({ role: 'supervisor', head: true });
   expect(custom(byId(items, 'a-mira7')).on).toBeUndefined();
-  expect(custom(byId(items, 'a-kit')).on).toBe('Task 2');
+  // A member is headed by its task where the thread is another's; in its task's own thread, by nothing.
+  expect(custom(byId(items, 'a-kit')).on).toBeUndefined();
+  expect(
+    custom(
+      byId(
+        view({
+          ...state,
+          turns: { ...state.turns, kit: { ...state.turns.kit, topic: state.turns.ask.topic } },
+        }).all,
+        'a-kit',
+      ),
+    ).on,
+  ).toBe('Task 2');
 });
 
 const thought = (turnId: string, id: string, body: ThinkingBody, time = at()): Message => ({

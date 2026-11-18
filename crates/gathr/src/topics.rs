@@ -230,6 +230,14 @@ impl<S: Source> Topics<S> {
                 "opened by the person's message".into(),
             );
         }
+        // A send-back's turn answers the turn that wrote the version, which may be the ask's: it sits with the version.
+        if let Some(version) = f.sent_back(t) {
+            return Topic::tied(
+                format!("m:{version}"),
+                "sent_back",
+                format!("opened by the send-back of plan version {version}"),
+            );
+        }
         if let Some(q) = f.heard(t) {
             return Topic::tied(
                 format!("t:{q}"),
@@ -483,7 +491,7 @@ pub fn on_tasks(
 }
 
 /// The topics of lines said in no turn, for the live socket: the chat read once, as history reads
-/// it. Lines are a few a task, so a read of the whole chat each time costs little.
+/// it, unlike a turn's or task's own chain. Lines are a few a task: about 7 ms at 10,000 messages.
 pub fn of_lines(
     conn: &Connection,
     chat: &str,

@@ -85,6 +85,25 @@ test("a review and the fix after it read in the work task's thread, never on the
   expect(fold.compareDocumentPosition(vale as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
+test("a reply on another task than its thread's says which", async () => {
+  await render(<View state={chat('reviewAndFix')} />);
+  await expect.element(page.getByText('Add the feature')).toBeVisible();
+  const lines = () => replies().map((r) => r.querySelector('.name-line')?.textContent ?? '');
+  await expect.poll(() => lines().some((l) => l.startsWith('Vale'))).toBe(true);
+  // Vale's review is its own task, in the work's thread: it says which.
+  expect(lines().find((l) => l.startsWith('Vale'))).toContain('on Review #5');
+});
+
+test("a reply on the thread's own task doesn't name it again", async () => {
+  await render(<View state={chat('askDone')} />);
+  await expect.element(page.getByText('Add the tags table')).toBeVisible();
+  await (foldOf(mainWith('Add the tags table')) as HTMLButtonElement).click();
+  const ann = () => replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Ann');
+  await expect.poll(() => !!ann()).toBe(true);
+  expect(ann()?.querySelector('.name-line')?.textContent).not.toContain('on Add the tags table');
+  expect(ann()?.querySelector('.name-line-task')).toBeNull();
+});
+
 test("the result is at the bottom quoting its ask; the quote leads to the ask, and the ask's Done to it", async () => {
   await render(<View state={chat('askDone')} />);
   const all = document.querySelectorAll('.thread-messages > .said:not([data-reply])');

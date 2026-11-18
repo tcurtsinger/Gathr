@@ -14,9 +14,12 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
   Everything else is a reply in the thread of the main message it serves.
 - **The service works out what everything is about, in one place** (`crates/gathr/src/topics.rs`). It reads a
   chat's turns, tasks, plan versions, asks, landings and lines once, one query a table by the chat's own indexes,
-  and follows the links in memory: never a query for each row (0073's lesson). A live event's topic (the `turn`
-  event, the tasks list) uses the same rule fed one row at a time instead: it follows only that turn's or task's
-  own chain, each link by an index, so its cost doesn't grow with the chat, on the busiest path. One resolver,
+  and follows the links in memory: never a query for each row (0073's lesson). The live `turn` event's topic and
+  the tasks list's use the same rule fed one row at a time instead: each follows only that turn's or task's own
+  chain, each link by an index, so its cost doesn't grow with the chat, on the busiest path. A line said in no turn
+  is the exception: its topic as it goes out live reads the chat once, as history does, once per write that said
+  one (a few a task), about 7 ms on a chat of 10,030 messages (release build: `gathr diag threads`, which reads
+  the same, took 16 ms against 9 ms for a command that reads nothing). One resolver,
   two sources of its facts (`topics/load.rs`, `topics/rows.rs`). Each answer is a key: `t:<task>`
   (a task or question), `m:<message>` (the person's message, a plan version, a main line of Gathr's), `r:<turn>`
   (a result) or `b:<turn>` (a turn tied to nothing).
@@ -26,7 +29,8 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
   that gave it; given in no turn, its own.
 - **A turn's topic,** in order: the result of an ask is its own; a turn the person's message opened sits under
   that message; one that heard the person's answer or Discuss under that question; one Gathr queued for a PR it
-  can't land with the PR's task; one that carries a copy (a teammate's message, a like) where that message sits;
+  can't land with the PR's task; one a send-back queued with the version sent back (its opening line is that
+  version's decided line); one that carries a copy (a teammate's message, a like) where that message sits;
   then its task's topic; then the turn it answers; then the ask it serves; a compaction where its agent's turn
   before it was; else its own.
 - **A line said in no turn** sits with what it is about: the task of a done line or of a merge that didn't update
@@ -42,8 +46,7 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
   naming work of several asks, or of none, it stays its own.
 - **An ask says whether it is open** (`open` with each ask), from the same rule that already decides it.
 - **The answer is in history** (`topic` on each turn and on each line said in no turn), **the tasks list** (`topic`
-  on each task), **the live `turn` event**, and each line said in no turn as it goes out live (read with the chat's
-  other lines, once per write that said one). `gathr diag threads --chat <id>` lists each turn, task and line, its
+  on each task), **the live `turn` event**, and each line said in no turn as it goes out live. `gathr diag threads --chat <id>` lists each turn, task and line, its
   topic and the fact that tied it, or why nothing did.
 - **The fallback is safe.** Anything nothing ties is a main message of its own. A link that leads nowhere (a turn or
   task that is gone), a chain that loops, or one longer than 32 links ends there, tied to nothing, and history

@@ -113,9 +113,24 @@
   align-items: center;
   gap: 5px;
 }
-.main-state-word svg {
+/* One gap between every mark's drawing and its word: each mark fills its box but the tick, the ring and the square,
+   whose drawings stop 2px, 1.5px and 1px short of their right edge. Needs you is the mock-up's small dot. */
+.main-state-word > .mark {
+  --mark: 12px;
+}
+.main-state-word > .mark[data-state="needs"] {
+  --mark: 7px;
+}
+.main-state-word > .mark[data-state="working"] {
+  margin-right: -1.5px;
+}
+.main-state-word > .mark[data-state="stopped"] {
+  margin-right: -1px;
+}
+.main-state-word > svg {
   width: 12px;
   height: 12px;
+  margin-right: -2px;
 }
 /* Needs you is the attention blue (0071); Working reads in the words' colour beside its ring. */
 .main-state-word[data-state="you"] {

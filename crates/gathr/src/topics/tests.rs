@@ -136,6 +136,42 @@ fn the_topics_cost_grows_with_the_chat_not_with_its_rows_times_the_chat() {
     );
 }
 
+/// Found in review: the lead's turn a send-back queued answers the turn that wrote the version, which
+/// is the person's ask's, so it sat in the ask's thread. Its opening line is the version's decided
+/// line: it sits with the version sent back, read whole or one row at a time.
+#[test]
+fn the_turn_a_send_back_queued_sits_with_the_version_sent_back() {
+    let path = std::env::temp_dir().join(format!("gathr-topics-{}.db", crate::ids::uuid()));
+    let conn = crate::db::open(&path).unwrap();
+    conn.execute_batch(
+        "INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('acc', 'claude', 'A', 'a', 0);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('lead', 'Lead', 'lead', 'acc', 0);
+         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 0);
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, opened_by) VALUES
+             ('asked', 'c', 'x', 'done', 1, 'lead', 'person');
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, answers, opened_by) VALUES
+             ('back', 'c', 'x', 'done', 5, 'lead', 'asked', 'sent_back');
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES
+             ('ask', 'c', 'asked', 1, 'user', 'text', 'Add tags'),
+             ('v1', 'c', 'asked', 2, 'assistant', 'text', 'Plan'),
+             ('told', 'c', 'back', 5, 'gathr', 'text', 'The person sent back version 1');
+         INSERT INTO asks (id, chat_id) VALUES ('ask', 'c');
+         INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'ask', 'lead', 2);
+         INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, decided, decided_line)
+             VALUES (1, 1, 1, 'v1', 'asked', 'Tags', 'x', 2, 'sent_back', 'told');",
+    )
+    .unwrap();
+    let whole = super::Topics::of_chat(&conn, "c").unwrap();
+    let rows = super::Topics::on_demand(&conn, "c");
+    let found = [whole.turn("back"), rows.turn("back")].map(|t| t.unwrap().key);
+    assert_eq!(found, ["m:v1", "m:v1"]);
+    assert_eq!(whole.turn("asked").unwrap().key, "m:ask");
+    rows.src.read().unwrap();
+    drop((whole, rows));
+    drop(conn);
+    remove(&path);
+}
+
 /// A chain that loops ends where it loops, tied to nothing, and says so.
 #[test]
 fn a_chain_that_loops_ties_to_nothing() {

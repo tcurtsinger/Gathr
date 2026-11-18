@@ -257,7 +257,7 @@ Above the bubble, one name line, 20px: the name at 15px/650, 8px, then every oth
 colour, 12.5px at 450, muted, tabular figures, with "·" between them 6px each side: Supervisor (the lead,
 in a chat of two or more, on a main message; never in a thread, and not in the 360 column), the time, "Result"
 on an ask's result, and for a member or reviewer "on" the task its turn works on, cut
-with an ellipsis. How the task ended is on its member's last message alone, after the task: a 12px tick once it
+with an ellipsis; not in that task's own thread, where the task's message says it. How the task ended is on its member's last message alone, after the task: a 12px tick once it
 is done, else Cancelled (a circle with a slash) or Failed (a circle with !, in the danger colour) as words; blocked,
 stopped and merging are the face's mark, never a tick. How a turn ended is a word after that, always shown, in the
 words' colour: "Gathr restarted", or Gathr's reason when it ended the turn itself ("Needs plan", "Not needed",
@@ -298,7 +298,8 @@ Tasks list reads (0071's marks). The person's ask: Working (the ring in the atte
 colour) or Done (a tick); Done is a link that scrolls to the ask's newest result. A task: its PR first ("PR #22")
 when it has one, then its state as its row says it, Waiting saying on what when it waits on one thing ("Waiting on
 PR #22 checks"). A plan version: Checking, Needs you, Working, Approved, Sent back or Dropped. A question: Needs you,
-Discussing or Answered. Needs you is the attention blue at 550 with its dot. A result and a turn nothing ties say none.
+Discussing or Answered. Needs you is the attention blue at 550 with a 7px dot. Every mark's drawing sits 5px from its
+word. A result and a turn nothing ties say none.
 
 A task the lead hands out is drawn from its record, as no message carries the hand-out: the giver's face and name
 (You for one the person gave) and the time it was given, then in a bubble as wide as the box the owner's blue

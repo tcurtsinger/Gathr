@@ -51,6 +51,11 @@ const lines = () =>
       .map((p) => p.textContent)
       .join(' | '),
   );
+/** The members' turns as the ask's, not their own tasks'. */
+function inTheAsk(state: ChatState): ChatState {
+  for (const id of ['rowan', 'kit']) state.turns[id] = { ...state.turns[id], topic: state.turns.ask.topic };
+  return state;
+}
 const button = (name: string) => page.getByRole('button', { name, exact: true });
 /** The danger colour as the page computes it. */
 function danger() {
@@ -62,9 +67,12 @@ function danger() {
   return color;
 }
 
-/** Rowan's turn on task 1, ended as `more` says, with the words it had said by then. */
+/**
+ * Rowan's turn on task 1, ended as `more` says, with the words it had said by then. The members' turns read in the
+ * ask's thread here, where a member's message names its task, as it does in any thread but its task's own (0075).
+ */
 function ended(more: Partial<Turn>, words = true): ChatState {
-  const state = round();
+  const state = inTheAsk(round());
   state.tasks = [task(1, 'rowan', 'ask', { state: 'working' }), task(2, 'kit', 'ask')];
   state.turns.rowan = { ...state.turns.rowan, ...more };
   if (!words) state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
@@ -81,7 +89,7 @@ test('a turn a restart cut reads "Gathr restarted" on its name line, with Contin
 });
 
 test('a turn Gathr ended says why in a word and offers no Continue: it does not read as the person’s stop', async () => {
-  const state = round();
+  const state = inTheAsk(round());
   // Rev's check of a plan the person approved meanwhile, and Kit's queued task held for its plan.
   state.turns.kit = {
     ...state.turns.kit,
@@ -213,12 +221,15 @@ test('a task cancelled under its member’s turn says Cancelled on that turn’s
 
 /** Rowan works on task 1 in two turns with the lead's words between them; the task ends `state`. */
 function twice(state: string): ChatState {
-  const chat = round();
+  const chat = inTheAsk(round());
   chat.tasks = [
     task(1, 'rowan', 'ask', { state: state as never }),
     task(2, 'kit', 'ask', { state: 'working' }),
   ];
-  chat.turns.fixup = { ...turn('fixup', 'rowan', { task: 1, answers: 'mid' }), position: 9 };
+  chat.turns.fixup = {
+    ...turn('fixup', 'rowan', { task: 1, answers: 'mid', topic: chat.turns.ask.topic }),
+    position: 9,
+  };
   chat.messages.push(
     said('mid', 'assistant', 'Rowan, one more thing'),
     said('fixup', 'assistant', 'Fixed that too'),
