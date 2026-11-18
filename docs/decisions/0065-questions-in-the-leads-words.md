@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-14, with Stage 3's spec, part F; the owner's answers of 2026-11-16: "Leave it" for merging, "Leave my list", "A switch", and "Discuss" for the word; its detail and its departures, 2026-11-17, "Approve F"). Date: 2026-11-17.
 
-Built: yes. Proof: `crates/gathr/tests/questions.rs`, `crates/gathr/tests/questions_flow.rs`, `ui/src/tasks/TasksTab.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/questions.rs`, `crates/gathr/tests/questions_flow.rs`, `ui/src/tasks/Question.test.tsx`, `ui/src/tasks/TasksTab.test.tsx`.
 
 Builds on [0010](0010-coordination-as-state.md) and [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md). Amends 0010, below. Serves promise 4 of [the charter](../charter.md#the-promises), parts 4.2 to 4.5 of [the truth map](../truth-map.md). Stage 3's part F.
 
@@ -75,3 +75,24 @@ What differs from the detail, from the code as it landed:
 - **The request's closing line is conditional:** `If you ask the person, their answer reaches <member> by itself: …`, not the detail's `The person's answer reaches <member> by itself: …`. The same brief opens the lead's turn on a folded request once its question is answered, where the lead must finish it, and the unconditional line told it not to (seen twice in real use).
 - **A folded request's carry says what to do:** when the task readied by a question's answer is a `person_request`, its carry ends `Finish #<r> done with this answer in note: <member> hears it then.` A member's own task blocked on its request gets no such sentence.
 - **Window places that would show a discussed (`held`) question wrongly, read and not changed:** its task view shows state `held`, an enabled Cancel, and a disabled Restart; and the window drops its staged picks when it goes (the question returns unstaged).
+
+## Amended: answered in place, one at a time (2026-11-17)
+
+The owner approved the Tasks views (the UI pass's `tasks` mock-up, New), with two calls: with a Notes field a pick
+marks the choice and Send sends it, with none a pick answers at once; and each question is answered by itself.
+This replaces F9's window and the pager described above:
+
+- **One question block.** A question opens as itself in the Tasks tab, from its row or from Open task on its line
+  in the chat: the asker's message with the block in its bubble, answered there. The block is one shared component
+  (`ui/src/tasks/Question.tsx`), so the chat can answer in it too. There is no pager and no Send of several
+  answers: each Send answers one question (`POST /api/person-tasks/answer` with one answer).
+- **A pick.** Gathr's own question has no field and no switch, so a pick answers it at once. An agent's has a field
+  (Notes, or Answer for a question in words), so a pick marks the choice, with a mark on every choice, and Send or
+  Enter sends it. Notes alone still answer it in words.
+- **Discuss** sits right under the question, so nothing above it moves when it is turned on. Its field is
+  `Message to <asker>`, kept apart from the answer's notes: each is kept while the other shows, and what was picked
+  stays picked. This replaces As built's "the words are kept in the draft's notes".
+- **A refused Send** stays in the block, under its field: `Not sent`, why, and its reference, with what was typed
+  kept; Send tries again. The notice titled "Answer failed:" is gone.
+- **Turned down:** the pager kept for questions alone (the owner: each by itself), and a Send that waits for a
+  pick on Gathr's question.
