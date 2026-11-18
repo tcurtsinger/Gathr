@@ -5,26 +5,6 @@
   min-height: 0;
   background: var(--background);
 }
-/* The top line (0070): on the shell from the sidebar's edge to the frame's end, the chat's title and More,
-   then the faces and the panel's button. */
-.topline {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  padding: 0 8px 0 20px;
-}
-/* A short divider where the sidebar ends: left -1px puts it on the sidebar's border, its last pixel. */
-.topline::before {
-  content: "";
-  position: absolute;
-  top: 12px;
-  bottom: 12px;
-  left: -1px;
-  width: 1px;
-  background: var(--border);
-}
 /* The title, then More 4px after it: the title truncates, More stays. */
 .topline-title {
   display: flex;

@@ -11,7 +11,7 @@ use gathr::data::ServiceInfo;
 use gathr::{Error, http, launch};
 use tauri::{AppHandle, Manager};
 
-use crate::{Service, parse, report, update};
+use crate::{Service, frame, parse, report, update};
 
 /// Seconds without an answer before the window starts the service again: longer than a
 /// hand-over's gap, which ends with a new `service.json` first.
@@ -100,7 +100,10 @@ fn sign_in(app: &AppHandle, info: ServiceInfo, event: &str, mut attrs: serde_jso
             true => window.eval(format!(
                 "fetch({url:?}, {{credentials: 'same-origin'}}).catch(() => location.replace({url:?}))"
             )),
-            false => window.navigate(parse(&url)),
+            false => {
+                let url = parse(&url);
+                frame(&window, &url).and_then(|()| window.navigate(url))
+            }
         };
         done.map_err(|e| Error::Other(e.to_string()))
     });

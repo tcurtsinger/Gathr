@@ -24,7 +24,7 @@
   grid-area: 2 / 1;
 }
 .app > .topline {
-  grid-area: 1 / 3 / 2 / -1;
+  grid-area: 1 / 1 / 2 / -1;
 }
 /* The frame's ring, round its four corners; each column rounds its own outer corners. */
 .app::before {

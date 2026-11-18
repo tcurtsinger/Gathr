@@ -177,7 +177,7 @@ fn reopen(app: &AppHandle, via: &'static str, chat: Option<String>) {
         if !still_running(&app) {
             let url;
             (url, started) = connect(&app);
-            if let Err(e) = window.navigate(url) {
+            if let Err(e) = frame(&window, &url).and_then(|()| window.navigate(url)) {
                 report(
                     &app,
                     "gathr.ui.window.reopen",
@@ -222,6 +222,7 @@ fn window(
     title: &str,
     webview_data: Option<PathBuf>,
 ) -> tauri::Result<WebviewWindow> {
+    let page = url.clone();
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
         .title(title)
         .inner_size(1440.0, 900.0)
@@ -237,7 +238,35 @@ fn window(
     if let Some(folder) = webview_data {
         builder = builder.data_directory(folder);
     }
-    builder.build()
+    // No system title bar: the page's top line moves the window and, on Windows, holds its three buttons (0070).
+    // Windows keeps the system's border, shadow and resizing edges; the Mac keeps its own three buttons.
+    #[cfg(windows)]
+    {
+        builder = builder.decorations(false).shadow(true);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true);
+    }
+    let window = builder.build()?;
+    frame(&window, &page)?;
+    Ok(window)
+}
+
+/// The window's frame for the page it loads. "Start failed" is a file, which draws no top line and may
+/// not call the window: it gets the system's title bar back, so the window can still be moved and closed.
+fn frame(window: &WebviewWindow, page: &tauri::Url) -> tauri::Result<()> {
+    let drawn = page.scheme() != "file";
+    #[cfg(windows)]
+    window.set_decorations(!drawn)?;
+    #[cfg(target_os = "macos")]
+    window.set_title_bar_style(match drawn {
+        true => tauri::TitleBarStyle::Overlay,
+        false => tauri::TitleBarStyle::Visible,
+    })?;
+    Ok(())
 }
 
 /// The tray icon (the menu bar on macOS). On Windows a click opens the window and the menu is on
