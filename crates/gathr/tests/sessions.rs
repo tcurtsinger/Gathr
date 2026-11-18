@@ -582,6 +582,43 @@ fn a_fix_task_continues_the_builders_session_for_its_pr() {
     assert_eq!(shown, (&json!(false), &json!("new"), &json!(fix)), "{last}");
 }
 
+/// N7 for a fix: the conversation it resumes shows that conversation's last fill from its open,
+/// before its first call, though the fix has no row of its own yet.
+#[test]
+fn a_fix_shows_the_fill_of_the_conversation_it_resumes_before_its_first_call() {
+    let data = TempDir::new();
+    let room = room(&data.0, &plain(&data.0), "claude", &[]);
+    let account = room
+        .service
+        .call("GET", &format!("/api/agents/{}", room.lead))
+        .json()["account"]
+        .clone();
+    let rev = join(&room, "Rev", "reviewer", account.as_str().unwrap());
+    let work = give(
+        &room,
+        &room.lead_token(),
+        json!({ "to": "Ann", "what": "Build it", "pr": 7 }),
+    );
+    settled(&room, work, "held");
+    give_ann(&room, "Something else");
+    // A fill only the work task's row holds, so what shows can't come from another conversation.
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    db.execute(
+        "UPDATE task_sessions SET used = 300000 WHERE task = ?1",
+        [work],
+    )
+    .unwrap();
+    let updates = context_updates(&room.service, &room.ann);
+
+    reviewed_with_a_wrong_note(&room, &rev, 7);
+    let shown = updates.lock().unwrap().clone();
+    assert_eq!(
+        shown.first().map(|c| &c["used"]),
+        Some(&json!(300_000)),
+        "the fix's conversation as it opened: {shown:?}"
+    );
+}
+
 /// Rev reviews `pr` and leaves a wrong note: the fix Gathr gives Ann, once its turns have ended.
 fn reviewed_with_a_wrong_note(room: &Room, rev: &str, pr: i64) -> i64 {
     let review =

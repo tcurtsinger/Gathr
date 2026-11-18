@@ -3,7 +3,7 @@ import type { Member, Standing, Task, Turn, Waiting } from '../api';
 import type { Mark } from '../components/marks';
 import { glances, markOf } from './glance';
 import { type ChatState, empty } from './state';
-import { began, clock } from './team';
+import { clock } from './team';
 
 const members: Member[] = [
   { agent: 'a', name: 'Made-up Lead', role: 'supervisor' },
@@ -93,7 +93,7 @@ test('an agent that is not working says what the service says it waits for: held
     c: 'Free',
   });
 
-  // Whom and what it waits for is one phrase in Summary; its panel adds since when.
+  // Whom and what it waits for is one phrase in Summary, and what it waits on, its card's and its panel's.
   const since = Date.now() * 1000;
   const on = [
     { what: 'CI on #12', since_us: since },
@@ -102,9 +102,7 @@ test('an agent that is not working says what the service says it waits for: held
   const named = said(stands('b', { words: 'Waiting for CI on #12 and Made-up Third', on }));
   const member = glances(state, new Map(), named).find((g) => g.member.agent === 'b');
   expect(member?.doing).toBe('Waiting for CI on #12 and Made-up Third');
-  expect(member?.detail).toBe(
-    `Waiting for CI on #12 since ${began(since)} and Made-up Third since ${began(since)}`,
-  );
+  expect(member?.about).toBe('PR #12 checks and Made-up Third');
 
   // Nor does it hide a turn just queued for an agent it still calls free.
   const justQueued = { ...state, turns: { t: turn('t', 'c', 'queued') } };

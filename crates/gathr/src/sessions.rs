@@ -221,16 +221,22 @@ pub fn forget(
     Ok(())
 }
 
-/// The row's fill and whether it was told, for `context::switched`.
+/// The fill of `session`, resumed for `task`, and whether it was told, for `context::switched`:
+/// the task's own row, else the newest task's row on the same session that holds one. A fix
+/// resumes its work task's session before it has a row, and a task kept in the open conversation
+/// (N4) never saved a fill of its own.
 pub(crate) fn context_of(
     conn: &Connection,
     task: i64,
     agent: &str,
+    session: &str,
 ) -> Result<Option<(Option<i64>, bool)>, Error> {
     Ok(conn
         .query_row(
-            "SELECT used, told FROM task_sessions WHERE task = ?1 AND agent_id = ?2",
-            params![task, agent],
+            "SELECT used, told FROM task_sessions
+             WHERE agent_id = ?2 AND (task = ?1 OR session_id = ?3)
+             ORDER BY used IS NOT NULL DESC, task = ?1 DESC, task DESC LIMIT 1",
+            params![task, agent, session],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?)

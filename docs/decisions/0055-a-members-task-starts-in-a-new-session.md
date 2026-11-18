@@ -66,7 +66,7 @@ The lead's conversation per plan; the task's full record in the opening, and wha
 - The service writes the row's fill and notice in the same transaction as `context::tell_soon`, `untold` and `filled`, through `sessions::told` and `sessions::used`; those context functions are unchanged. `context::switched` is the one new context function.
 - `sessions::set` on a row with another session id resets its fill and notice; the same id keeps both.
 - A turn that ended signed out is never taken for a refused resume: a refused login doesn't delete a conversation.
-- A fix that resumes its work task's conversation shows an empty context bar until its first call, since the fix has no row of its own yet.
+- A resumed conversation's fill comes from the row that holds its session: the task's own when it has a fill, else the newest task's on that session. So a fix that resumes its work task's conversation shows that task's fill before the fix has a row of its own.
 - If the engine has not reported an Init yet, any resume counts as another conversation and switches.
 - If reading the key or the row fails, the turn runs on Latest, and the failure is recorded as `gathr.engine.session` with the error `sqlite`, as a failed write of a row is.
 - A second refusal of the same turn isn't reached by a test: after the first, the rows holding the id are gone, so the retry opens New. A double requeue is not caught by any test.

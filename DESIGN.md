@@ -464,11 +464,19 @@ this chat yet".
 Its face in the timeline is a button the face's size, which takes the hover tint. An agent that has
 left the chat keeps its words, and its steps in Plan, but has nothing to open.
 
-- **Header:** the 36px face with its mark, still, the name at 20px/600, and under it the role
-  and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
-  · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Free". Start times
-  live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
-  puts "@Juno " first in the composer as a picked name, unless its first picked name is already Juno, and focuses it. An archived chat, or an agent that can't be sent to, has no Message.
+- **Header:** two lines beside the 36px face with its mark, still, that never wrap. First the name at
+  20px/600 (26px line) and the role 8px after it in 13px muted; at the right, Message, the chat icon
+  (lucide `message-square-text`, named "Message Juno", no words), which puts "@Juno " first in the
+  composer as a picked name, unless its first picked name is already Juno, and focuses it; then More.
+  Under them, in the chat's name line words (12.5px muted, "·" between), the state as its mark says it,
+  what, and since when: "Working · Tag picker · since 16:06", "Needs you · Approval · since 14:52",
+  "Waiting · PR #18 checks · since 09:42", "Free". The state's word is in the foreground colour, Needs
+  you in blue and Can't run in red. The name and what are cut first; the role, the state's word, the
+  time and the context bar never are. At that line's right, the context bar: a 48 x 4px track and the
+  percent, amber from 65% and red past 85% (the registry's colours), its numbers on hover. Until the
+  conversation's first call is measured, the track is empty and says New; a resumed conversation shows
+  its last fill from the moment it opens; while a compaction asked here runs, it says Compacting. An
+  archived chat, or an agent that can't be sent to, has no Message.
 - **Task:** the task its running turn works on, else its first open one: the title, "From Orin" ("From Gathr" for a fix Gathr gave) and
   Open task, which opens it in the Tasks tab.
 - **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done

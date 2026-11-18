@@ -205,16 +205,16 @@ pub fn untold(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
 }
 
 /// The agent's engine opens another conversation than the one shown (0055, N7): a new one has no
-/// fill yet and hasn't been told; a task's resumed one brings both back from its row. Its context
-/// as now shown.
+/// fill yet and hasn't been told; a session resumed for a task brings both back from its row. Its
+/// context as now shown.
 pub fn switched(
     conn: &Connection,
     chat: &str,
     agent: &str,
-    resumed: Option<i64>,
+    resumed: Option<(i64, &str)>,
 ) -> Result<Value, Error> {
     let row = match resumed {
-        Some(task) => crate::sessions::context_of(conn, task, agent)?,
+        Some((task, session)) => crate::sessions::context_of(conn, task, agent, session)?,
         None => None,
     };
     let (used, told) = row.unwrap_or((None, false));
