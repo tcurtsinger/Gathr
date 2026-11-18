@@ -3,6 +3,7 @@ import type { Member, Waiting } from '../api';
 import { FROM_SERVICE, MARKS, type Mark, pressing, WORD } from '../components/marks';
 import type { Custom } from './messages';
 import { type ChatState, unanswered } from './state';
+import { inWords } from './statusWords';
 import { began, clock, list, open } from './team';
 
 /** Where an agent stands: the one state its face shows (0071), most pressing first. */
@@ -28,6 +29,8 @@ export interface Glance {
   about?: string;
   /** Since when it has been in this state, in ms. */
   since?: number;
+  /** Waiting: the one thing it waits on, when it is one ("PR #18 checks"). */
+  on?: string;
   /** Its tasks in this chat, cancelled ones left out. */
   done: number;
   total: number;
@@ -36,7 +39,18 @@ export interface Glance {
 /** What each agent with a running turn is doing now, as that turn's row says it, and how many steps it took. */
 export type Activity = Map<string, { label: string; steps?: string }>;
 
-const FIELDS = ['standing', 'doing', 'began', 'detail', 'task', 'about', 'since', 'done', 'total'] as const;
+const FIELDS = [
+  'standing',
+  'doing',
+  'began',
+  'detail',
+  'task',
+  'about',
+  'since',
+  'on',
+  'done',
+  'total',
+] as const;
 
 /**
  * Every agent of the chat, the most pressing first, the Supervisor first among equals. `activity` is what each
@@ -65,7 +79,7 @@ export function glances(
   return all.sort((a, b) => rank(a) - rank(b) || lead(a) - lead(b));
 }
 
-type Stands = Pick<Glance, 'standing' | 'doing' | 'began' | 'detail' | 'task' | 'about' | 'since'>;
+type Stands = Pick<Glance, 'standing' | 'doing' | 'began' | 'detail' | 'task' | 'about' | 'since' | 'on'>;
 
 /**
  * The state an agent's face shows: the most pressing of what the chat as it streams says (an approval or a
@@ -137,11 +151,13 @@ function standing(m: Member, state: ChatState, activity: Activity, waiting?: Wai
   if (mark === 'waiting') {
     const until = stand.until_us ? ` until ${clock(new Date(stand.until_us / 1000).toISOString())}` : '';
     const since = stand.on.map((on) => `${on.what} since ${began(on.since_us)}`);
+    const on = stand.on.map((o) => inWords(o.what));
     return {
       ...shown,
       doing: `${stand.words}${until}`,
       detail: since.length ? `Waiting for ${list(since)}` : undefined,
-      about: stand.what ?? undefined,
+      about: on.length ? list(on) : (stand.what ?? undefined),
+      on: on.length === 1 ? on[0] : undefined,
     };
   }
   return { ...shown, doing: stand.words, about: about(stand.what, what(stand.task)) };
