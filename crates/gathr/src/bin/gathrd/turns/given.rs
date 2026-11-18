@@ -32,6 +32,11 @@ impl Task {
             Some(task) => event.task(task),
             None => event,
         };
+        // The turn, as saved, goes out before its message: a window tells a task's brief by its
+        // turn's task, and drew it as a line until the turn came.
+        let saved = json!({ "type": "turn", "turn": ids.turn, "status": "queued",
+            "agent": ids.agent, "task": ids.task, "answers": ids.answers });
+        self.publish_turn(&ids, saved).await;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
             event
