@@ -239,6 +239,7 @@
 /* An ask's result quotes the ask: a press scrolls up to it. */
 button.bubble-quote {
   display: block;
+  border-radius: 0;
   width: 100%;
   min-height: 0;
   padding-block: 0;
