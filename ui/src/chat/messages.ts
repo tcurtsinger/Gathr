@@ -1,9 +1,10 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Message, Named, Role, Task, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Failure, Message, Named, Role, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Out } from '../components/Outcome';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { changed, fixed, sizeLines } from './asks';
+import { type Ending, ending } from './ends';
 import { fold, type Given, type Work } from './fold';
-import { ended, hearBack, outcome } from './hearback';
 import { place } from './order';
 import { heardTurns, questions } from './questions';
 import type { Approval, ChatState } from './state';
@@ -19,15 +20,6 @@ export interface SendFailure {
   failure: Failure;
 }
 
-/** What a turn's reply shows under its text: a notice for a turn that stopped, waits or failed. */
-export interface TurnNotice {
-  turn: Turn;
-  /** Some of the reply arrived, so a failure reads "Reply failed", not "Send failed". */
-  replied: boolean;
-  /** A stopped turn whose carry-on has started (after an update, or Restart): nothing is left to continue. */
-  carried: boolean;
-}
-
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
 export interface EventLine {
   kind: 'task' | 'note' | 'fix' | 'plan' | 'version' | 'changed';
@@ -36,7 +28,6 @@ export interface EventLine {
   text: string;
   /** What a click on the line adds: the reason, the question. */
   more?: string;
-  task?: number;
   /** A size line's ask: it opens to the ask's two sizes (0061). */
   ask?: string;
   /** A plan line's version: it opens the plan's tab there (0062). */
@@ -55,13 +46,16 @@ export type Custom = {
   head?: boolean;
   /** The task a member's turn works on, after its name: "on Review PR #138". */
   on?: string;
-  /** That task is done: a tick after it. */
+  /** That task is done, and this is its last message: a tick after it. */
   done?: boolean;
+  /** That task was cancelled or failed, and this is its last message: the word after it. */
+  out?: Out;
   /** What the turn did before its message, as one row. */
   work?: Work;
   /** It has words to show, saved or streaming. */
   text?: boolean;
-  notice?: TurnNotice;
+  /** How its turn ended, on its last block: a word on its name line, what the person can do under the bubble. */
+  ending?: Ending;
   approvals?: Approval[];
   /** A message that never reached the service. */
   unsent?: SendFailure;
@@ -119,18 +113,19 @@ export interface Group {
   time?: string;
 }
 
-const noticed = new Set(['stopped', 'waiting_sign_in', 'failed']);
+const ended = new Set(['stopped', 'waiting_sign_in', 'failed']);
 const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
-const hasNotice = (t: Turn) => noticed.has(t.status) || engineWait(t);
+const hasEnding = (t: Turn) => ended.has(t.status);
 
 /**
  * Gathr's chat as assistant-ui messages, one timeline (0037). A turn is one block where it began: what it
  * did folds into a row, its last text is the message, and a later reply of the turn lands in that block,
  * so turns streaming at once never interleave. Only a person's message sent into a running turn splits it,
- * one block before and one after; the last holds the streaming text, the notice and the approvals.
+ * one block before and one after; the last holds the streaming text, how the turn ended and the approvals.
  * Messages between agents are a thread under the block they were sent from, a reply joining the thread of the
  * message it answers (threads.ts, 0072); Gathr's copy of one in the receiver's turn isn't shown. What Gathr told an
- * agent is drawn as one-line events, all but the brief of a member's own task.
+ * agent is drawn as Gathr's message, all but the brief of a member's own task and what a task's end told: how a task
+ * ended sits on its member's last block (0051).
  *
  * A block keeps one id from its first streamed text to its saved messages, so nothing remounts when a
  * stream ends. One that didn't change is the same object as on the draw before (`cache`), so the thread
@@ -144,12 +139,7 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
   const heardIn = heardTurns(state.tasks);
   const gave = givenBy(state, crew);
   const sizes = sizeLines(state, groups, crew);
-  // The tasks whose end Gathr said in a line of its own (0051), each with where that line is.
-  const said = new Map<number, number>();
-  state.messages.forEach((m, at) => {
-    const task = m.role === 'gathr' && !m.turn ? ended(m.body as string, state.tasks) : undefined;
-    if (task !== undefined && !said.has(task)) said.set(task, at);
-  });
+  const lastOf = lastBlocks(groups, state);
   const items: ThreadMessageLike[] = [];
   /** Each group's block; one not drawn has none. */
   const shown = new Map<Group, { id: string; msgs: Message[] }>();
@@ -159,7 +149,7 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     items.push(value);
   };
   let speaker: string | undefined;
-  const { of, quiet, spoken } = talks(groups, state, crew, hasNotice);
+  const { of, quiet, spoken } = talks(groups, state, crew, hasEnding);
   const agreed = (message: string) => agreedBy(state, crew, message);
   const thread = (talk: NonNullable<ReturnType<typeof of.get>>) => {
     const item = threadItem(cache, talk, state, crew, { quiet, spoken, gave, agreedBy: agreed });
@@ -178,7 +168,7 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     }
     if (quiet.has(g)) continue;
     if (g.kind === 'gathr') {
-      const lines = heardIn.has(g.turn ?? '') ? [] : heard(g, state, crew, said);
+      const lines = heardIn.has(g.turn ?? '') ? [] : heard(g, state, crew);
       if (!lines.length) continue;
       add(eventsOf(cache, g.key, lines, g.msgs[0].time), [g]);
       speaker = undefined;
@@ -209,7 +199,8 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
     const led = !crew.role(turn?.agent) || crew.role(turn?.agent) === 'supervisor';
     const on = led || turn?.task == null ? undefined : state.tasks.find((t) => t.number === turn.task)?.what;
     const who = `${turn?.agent}|${on}`;
-    add(block(cache, g, state, crew, gave, { on, head: who !== speaker, asked: hosts.get(g) }), [g]);
+    const last = turn?.task != null && lastOf.get(turn.task) === g;
+    add(block(cache, g, state, crew, gave, { on, last, head: who !== speaker, asked: hosts.get(g) }), [g]);
     speaker = who;
     const talk = under.get(g);
     if (talk) thread(talk);
@@ -298,11 +289,21 @@ function grouped(state: ChatState): Group[] {
       last.last = true;
       continue;
     }
-    if (!(state.partial[t.id] || hasNotice(t) || waiting.has(t.id))) continue;
+    if (!(state.partial[t.id] || hasEnding(t) || waiting.has(t.id))) continue;
     const after = latest.get(t.id);
     groups.push({ ...reply(t.id, after === undefined ? Number.POSITIVE_INFINITY : after + 0.5), last: true });
   }
   return groups;
+}
+
+/** Each task's last block of a turn on it: how the task ended is said there, once (0051). */
+function lastBlocks(groups: Group[], state: ChatState): Map<number, Group> {
+  const last = new Map<number, Group>();
+  for (const g of groups) {
+    const task = g.kind === 'reply' ? state.turns[g.turn ?? '']?.task : undefined;
+    if (task != null) last.set(task, g);
+  }
+  return last;
 }
 
 /** The task each give_task call made: a turn's calls that worked and the tasks it gave, in order. */
@@ -332,7 +333,7 @@ function block(
   state: ChatState,
   crew: Team,
   gave: Map<string, Given>,
-  { on, head, asked }: { on?: string; head: boolean; asked?: number[] },
+  { on, last: lastOfTask, head, asked }: { on?: string; last: boolean; head: boolean; asked?: number[] },
 ) {
   const id = group.turn;
   const turn = id ? state.turns[id] : undefined;
@@ -352,13 +353,15 @@ function block(
   const carried =
     turn?.status === 'stopped' &&
     Object.values(state.turns).some((t) => t.answers === id && went.includes(t.status));
-  const ending = group.last ? `${turn?.status}|${turn?.ref}|${turn?.held}|${turn?.why}|${carried}` : '';
+  const task = state.tasks.find((t) => t.number === turn?.task);
+  const end = group.last && turn ? ending(turn, task, carried) : undefined;
+  const ended = end ? `${turn?.status}|${turn?.ref}|${end.word}|${end.act}` : '';
   // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;
   // A turn still running has no last words yet, so a streamed token never touches the map.
   // One waiting for sign-in runs again later under the same id.
-  const ended = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
-  const toPerson = group.last && !!id && lead && ended && !crew.rootOf(id);
+  const over = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
+  const toPerson = group.last && !!id && lead && over && !crew.rootOf(id);
   const tick = toPerson
     ? (group.msgs.findLast((m) => m.kind === 'text')?.time ?? turn?.created ?? '')
     : undefined;
@@ -366,10 +369,13 @@ function block(
   // the giver didn't agree with.
   const last = group.msgs.at(-1);
   const agreed = !partial && last?.kind === 'text' ? agreedBy(state, crew, last.id) : [];
-  const done = !!on && state.tasks.find((t) => t.number === turn?.task)?.state === 'done';
-  const who = `${agent}|${role}|${on}|${done}|${head}|${tick}|${agreed}`;
+  // A blocked, stopped or held task is its owner's face's mark, never a tick (0071); a word of the turn's says enough.
+  const shown = on && lastOfTask ? task?.state : undefined;
+  const done = shown === 'done';
+  const out = !end?.word && (shown === 'cancelled' || shown === 'failed') ? shown : undefined;
+  const who = `${agent}|${role}|${on}|${done}|${out}|${head}|${tick}|${agreed}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
-  const sig = `${parts}|${partial.length}|${ending}|${answering}|${who}|${asked}`;
+  const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -380,13 +386,15 @@ function block(
     time,
     on,
     done,
+    out,
     head,
     approvals,
     tick,
     agreed,
     asked,
   };
-  const value = toReply(group, partial, group.last ? turn : undefined, custom, gave, carried);
+  if (end) custom.ending = end;
+  const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
   cache.set(group.key, { sig, value });
   return value;
 }
@@ -397,16 +405,12 @@ function toReply(
   turn: Turn | undefined,
   custom: Custom,
   gave: Map<string, Given>,
-  carried: boolean,
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
   const { work, text } = fold(group.msgs, partial, status === 'running', gave, began);
   if (work) custom.work = work;
   if (text) custom.text = true;
-  if (turn && hasNotice(turn)) {
-    custom.notice = { turn, replied: group.msgs.length > 0 || !!partial, carried };
-  }
   return {
     id: group.key,
     role: 'assistant',
@@ -461,13 +465,16 @@ function versionBlock(
 // drawn. Gathr's own short line says what the change held or released (0073).
 const RESIZED = 'The person made "';
 
+// What a task's end told (tasks/words.rs): a hear-back's first line, and Gathr's line for a task that ended done (`DONE`,
+// 0051). The agents read both; the person reads each end on its member's own last message.
+const TOLD =
+  /^(?:The (?:task|\d+ tasks) you gave (?:is|are) settled|Where the (?:task|\d+ tasks) you gave stands?|A task is done):\n/;
+
 /**
- * What Gathr told an agent, as lines: the tasks a hear-back reports as that hear-back said them, else its own words.
- * None for the brief of the turn's own task (the member's block is headed by the task), for what a size change tells
- * the lead, or for a request the person's answer settled, which their own message says (0073). A task whose end a
- * line above already said (`said`: where) isn't said again by the hear-back that follows.
+ * What Gathr told an agent, as lines in its own words. None for the brief of the turn's own task (the member's block
+ * is headed by the task), for what a size change tells the lead (0073), or for what a task's end told (`TOLD`).
  */
-function heard(group: Group, state: ChatState, crew: Team, said: Map<number, number>): EventLine[] {
+function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
   const m = group.msgs[0];
   if (state.caught.includes(m.id)) return [changed(m.body as string)];
   const plan = planLine(m, state, crew);
@@ -477,23 +484,7 @@ function heard(group: Group, state: ChatState, crew: Team, said: Map<number, num
   if (turn && text.startsWith(RESIZED)) return [];
   const fix = m.turn ? undefined : fixed(text);
   if (fix) return [fix];
-  const shown = (task: number, how: string) => how === 'done' && (said.get(task) ?? group.at) < group.at;
-  // A plan's check has no line of its own: its plan's line says how it ended.
-  const answered = (r: Task) =>
-    state.tasks.some((q) => q.kind === 'person' && q.request === r.number && q.state === 'done');
-  const reported = hearBack(text, state.tasks)?.filter(
-    (r) => !shown(r.task.number, r.state) && r.task.checks == null && !answered(r.task),
-  );
-  const back = reported?.map(
-    ({ task, state: how, reason }): EventLine => ({
-      kind: 'task',
-      who: `${crew.name(task.owner) ?? 'An agent'} ${outcome(how)}:`,
-      text: task.what,
-      more: [`Task #${task.number}`, reason].filter(Boolean).join('. '),
-      task: task.number,
-    }),
-  );
-  if (back) return back;
+  if (TOLD.test(text)) return [];
   // The service's brief (tasks/words.rs `brief`) opens with the task's number and its giver.
   const brief = turn?.task != null && text.startsWith(`Task #${turn.task} from `);
   return brief ? [] : [{ kind: 'note', text }];

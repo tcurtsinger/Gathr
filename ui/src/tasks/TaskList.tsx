@@ -1,15 +1,13 @@
-import { Ban, Check, CircleAlert, GitMerge } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import type { Task } from '../api';
 import { Face, GathrFace } from '../components/Face';
 import { WORD } from '../components/marks';
+import { Outcome } from '../components/Outcome';
 import { StateMark } from '../components/StateMark';
 import { asker, gathrs } from './model';
 import { ended, grouped, said } from './rows';
 import './task-list.css';
-
-const ICONS = { merge: GitMerge, failed: CircleAlert, cancelled: Ban };
-const OUT = { merge: 'Merging', failed: 'Failed', cancelled: 'Cancelled' };
 
 /** A task's state on its line, in the line's colour: Failed red, a question waiting on you blue (0071's shapes). */
 export function TaskState({ task, tasks }: { task: Task; tasks: Task[] }) {
@@ -24,13 +22,7 @@ export function TaskState({ task, tasks }: { task: Task; tasks: Task[] }) {
         {WORD[s.mark]}
       </span>
     );
-  const Icon = ICONS[s.icon];
-  return (
-    <span className="task-state" data-out={s.icon}>
-      <Icon aria-hidden="true" />
-      {OUT[s.icon]}
-    </span>
-  );
+  return <Outcome out={s.icon} className="task-state" />;
 }
 
 /** One quiet line, "·" between its pieces: the same pieces in the same order wherever it is drawn. */

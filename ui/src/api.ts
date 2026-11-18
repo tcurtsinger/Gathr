@@ -45,10 +45,18 @@ export interface Message {
   copy_of?: string | null;
 }
 
+/**
+ * Who or what stopped a turn (0051): the person (`you`), a restart, or Gathr for a reason of its own: its task waits
+ * for its plan, its task was cancelled, the account ran out of usage, or anything else (`gathr`).
+ */
+export type TurnEnd = 'you' | 'restart' | 'plan' | 'cancelled' | 'usage' | 'gathr';
+
 export interface Turn {
   id: string;
   status: TurnStatus;
   why: string | null;
+  /** A stopped turn's: who or what stopped it. */
+  end?: TurnEnd | null;
   ref: string;
   /** The agent it was sent to; null for a turn sent to no agent. */
   agent: string | null;

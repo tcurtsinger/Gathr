@@ -49,7 +49,7 @@ pub fn resized(tx: &Transaction, ask: &str, trace: &str) -> Result<(Vec<i64>, Ve
         } else if waits(tx, n)? {
             tx.execute(
                 "UPDATE turns SET stop_why = ?2 WHERE task = ?1 AND status IN ('queued', 'waiting_sign_in')",
-                params![n, format!("its task #{n} waits for its plan")],
+                params![n, crate::ends::waits_for_plan(n)],
             )?;
             set(tx, n, State::Waiting, Some(PLAN_WAIT), trace)?;
         } else {

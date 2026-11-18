@@ -117,6 +117,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         id: event.turn,
         status: event.status,
         why: event.why ?? before?.why ?? null,
+        end: event.end ?? null,
         ref: event.ref ?? before?.ref ?? '',
         agent: event.agent,
         created: event.created ?? before?.created,

@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec: "All in, or trouble"). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/hear_backs.rs`, `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `ui/src/chat/plan.test.ts`, `ui/src/chat/messages.test.ts`.
+Built: yes. Proof: `crates/gathr/tests/tasks/hear_backs.rs`, `crates/gathr/tests/tasks.rs`, `crates/gathr/tests/coordination.rs`, `ui/src/chat/plan.test.ts`, `ui/src/chat/messages.test.ts`; how an end is told (Changes): `crates/gathr/tests/turn_end.rs`, `crates/gathr/src/ends.rs`, `crates/gathr/src/db.rs`, `crates/gathr/tests/waiting.rs`, `ui/src/chat/Ends.test.tsx`, `ui/src/chat/ChatView.test.tsx`.
 
 Amends [0047](0047-a-report-is-a-record.md)'s rule for hear-backs. Serves promise 5 of [the charter](../charter.md#the-promises), part 5.7 of [the truth map](../truth-map.md), and the charter's rule that a turn buys something: work, a check or a decision.
 
@@ -78,3 +78,30 @@ one needs its giver now.
 - A reviewer still gets a turn when a fix it gave lands, though that tells it nothing new.
 - Whether leads give follow-on work with `after`, so that it starts without waiting for the round's hear-back,
   is for the first days of real use.
+
+## Changes
+
+- 2026-11-18, how an end is told, from the UI pass's chat-lines mock-up (the owner's picks of 2026-11-17, groups
+  "Stopped, held and failed", "How a task ended", "Everything else" and "Lines that go away"). The person reads an end
+  on the message it belongs to, never as a line of its own:
+  - **A task's end sits on its member's last message,** after the task on the name line: a tick for done, Cancelled
+    and Failed as words. Blocked, stopped and merging are the face's mark ([0071](0071-an-agents-state-is-one-mark.md)),
+    never a tick. Which message is read from what is kept: the task's last block of a turn on it. Gathr's line for a
+    done task, and a hear-back's opening, are still said, as the agents read them (`read_chat`), but the window
+    draws neither: a done task showed twice when both came. A task with no message of its member's in the chat (it
+    never ran) says its end in Tasks only.
+  - **A stopped turn is told apart** by `end` on each turn, read from its status and `why` (`gathr::ends`, no new
+    column): `you` (the person's Stop or Stop now, which say no why), `restart`, and Gathr's own, `plan` (its task
+    waits for its plan), `cancelled` (its task was cancelled), `usage` and `gathr` (anything else). The person's stop
+    is the face's mark, with Continue under the message until its carry-on starts, and no "Stopped, then carried on".
+    A restart's says "Gathr restarted", with Continue. Gathr's own says why in a word ("Needs plan", "Not needed" for
+    a plan's check, "Usage limit", "Gathr ended it") and offers no Continue: it never reads as the person's stop.
+    Continue under a member's message puts its @Name in the box, so it goes to that member.
+  - **A turn a restart cut is stopped, not failed:** its message reached the agent, which can carry on. Migration
+    0053 turns those cut before into stopped ones, and each cut is an event, `gathr.turn.cut`, on the turn's
+    reference.
+  - **A failed turn says Failed** on its name line, its reference and Retry under the bubble; a message that wasn't
+    sent says Not sent, why, its reference and Retry. A turn waiting for a sign-in offers Sign in; one waiting for its
+    engine's download draws nothing, and its agent's card says "Claude Code download".
+  - **A step Gathr refused reads Refused,** and the steps on the name line count it apart from failed ones: Gathr's own
+    tools answer an error only to refuse.

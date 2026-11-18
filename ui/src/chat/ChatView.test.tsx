@@ -296,6 +296,23 @@ test('Retry sends a failed turn to the agent it was sent to', async () => {
   vi.unstubAllGlobals();
 });
 
+test('Continue under a member’s stopped turn puts its @Name in the box, so it goes to that member', async () => {
+  const sent: unknown[] = [];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.endsWith('/messages')) sent.push(JSON.parse(String(init.body)));
+    const said = { id: 'm', turn: 't', time: '', role: 'assistant', kind: 'text', body: 'Made-up half' };
+    const turns = [{ id: 't', status: 'stopped', why: null, end: 'you', ref: 'r', agent: 'b' }];
+    return new Response(JSON.stringify({ chat: 'c', messages: [said], turns, approvals: [], members: team }));
+  });
+  await render(<Open project="p" />);
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect.element(input()).toHaveValue('@Made-up B Continue');
+  await expect.element(sign('To Made-up B')).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent).toEqual([{ text: '@Made-up B Continue', agent: 'b' }]);
+  vi.unstubAllGlobals();
+});
+
 test('a new chat is made with its first message, in its project, to its Supervisor', async () => {
   const started: unknown[] = [];
   const screen = await render(

@@ -221,12 +221,19 @@ approval, open steps), the face sits level with it as with a bubble, 5px under t
 Above the bubble, one name line, 20px: the name at 15px/650, 8px, then every other piece in one size and
 colour, 12.5px at 450, muted, tabular figures, with "·" between them 6px each side: Supervisor (the lead,
 in a chat of two or more), the time, and for a member or reviewer "on" the task its turn works on, cut
-with an ellipsis, with a 12px tick once that task is done. A block that follows its speaker's in the same
-turn has no face or name line and lines up with the one above. The face opens the agent's panel in a
-team chat.
+with an ellipsis. How the task ended is on its member's last message alone, after the task: a 12px tick once it
+is done, else Cancelled (a circle with a slash) or Failed (a circle with !, in the danger colour) as words; blocked,
+stopped and merging are the face's mark, never a tick. How a turn ended is a word after that, always shown, in the
+words' colour: "Gathr restarted", or Gathr's reason when it ended the turn itself ("Needs plan", "Not needed",
+"Usage limit", "Gathr ended it"); Failed, and Not sent on the person's own message, in the danger colour. The
+person's own stop has no word: the face's mark says Stopped. Under the bubble, 13px muted, what can be done about
+it: why, the reference (12px mono, dotted underline, opening Diagnostics) and one outline button 26px high,
+Continue (until its carry-on starts), Retry or Sign in (0051). A block that follows its speaker's in the same
+turn has no face or name line and lines up with the one above, unless it says how its task or turn ended. The face
+opens the agent's panel in a team chat.
 
 A turn's steps are the end of its name line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
-part omitted when it is zero, "1 failed" in the danger colour, the time ticking while it runs. They show
+part omitted when it is zero, "1 failed" and "1 refused" in the danger colour, the time ticking while it runs. They show
 while the message is pointed at or has keyboard focus, and always for a failed step, an agent still
 working, steps opened or a block with no words (no text and no plan chip), whose steps are all it has; at rest the line holds its place. Click or Enter opens the steps under the name
 line, above the bubble: each tool call as a step in plain words from the tool's name, Failed in the
@@ -288,12 +295,9 @@ with "Task #<number> from", in a turn on that task), because the member's header
 giver's row lists it, and what the lead is told after the person changes a size (Gathr's own line says it);
 nor is Gathr's copy of an agent's message, or what a turn that hears the person's answer opens with.
 
-Some of Gathr's lines are still one-line events, inside Gathr's bubble: a hear-back draws one line for each
-task it reports, in the state that hear-back gave, not the task's state now: "Vale completed: Review PR #138",
-"Cass is blocked: Fix the build", "Juno finished, waiting to merge: Bring the fix up to date", also failed,
-stopped and cancelled; a member's request the person's answer settled has none. A task that ends done is such
-a line when it ends, said by Gathr in no turn, and a hear-back after it doesn't draw it again (0051). The
-plan's lines, with a clipboard: the lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up
+What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a done task are for the agents, and
+the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
+bubble: the plan's lines, with a clipboard: the lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up
 instead) (opening to the plan's title), "Sent back" (opening to the person's words), and "Plan v2:" "Approved"
 or "Dropped"; each opens to the whole line and Open plan (0062). The size of an ask is one too, outside any
 bubble, after the lead's turn that sized it: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix" or

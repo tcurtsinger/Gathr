@@ -481,6 +481,17 @@ Parts: 5.2, 5.6
 
 ## 6. The room explains itself
 
+### 5k. A turn's end reads as what ended it
+
+Parts: 5.2
+
+- **Given** a team chat where turns end: one the person stops, one a restart cuts, one Gathr ends as its task now
+  waits for its plan, one that fails, and a task that ends done after two turns of its member's
+- **When** the person reads the chat, live or after a reload
+- **Then** the person's stop has Continue under it and no word; the restart's says "Gathr restarted", with Continue,
+  and never failed; Gathr's says "Needs plan", with nothing to continue; the failed one says Failed, with its
+  reference and Retry. The done task's tick is on its member's last message, once, and no line repeats it
+
 ### 6a. Gathr can say who is doing what
 
 Parts: 6.1

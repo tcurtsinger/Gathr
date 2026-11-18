@@ -920,9 +920,10 @@ impl Task {
             .filter(|t| !t.stopping && t.ids.chat == chat)?;
         running.stopping = true;
         let ids = running.ids.clone();
+        let end = gathr::ends::word("stopped", running.stop_why.as_deref());
         // Shown at once; the turn's row and end event follow when the engine says it ended.
-        let update =
-            json!({ "type": "turn", "turn": ids.turn, "status": "stopped", "agent": ids.agent });
+        let update = json!({ "type": "turn", "turn": ids.turn, "status": "stopped",
+            "agent": ids.agent, "end": end });
         self.publish_turn(&ids, update).await;
         let event = Event::point("gathr.turn.stop").trace(&ids.trace);
         self.record(event.chat(&ids.chat).ok());

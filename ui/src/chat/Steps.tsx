@@ -21,8 +21,8 @@ export function useStepsOpen(work: Work | undefined, startOpen = false) {
 
 /**
  * A turn's steps on its message's name line (0072): "· 10 steps · 6m 40s · 1 failed ›". It shows while the message
- * is pointed at or has focus, and always for a failed step or an agent still working (said.css); it opens the
- * steps under the name line.
+ * is pointed at or has focus, and always for a failed or refused step or an agent still working (said.css); it opens
+ * the steps under the name line.
  */
 export function StepsButton({
   work,
@@ -33,16 +33,20 @@ export function StepsButton({
   open: boolean;
   onOpen: (open: boolean) => void;
 }) {
+  const bad = [work.failed && `${work.failed} failed`, work.refused && `${work.refused} refused`];
   const pieces = [
     ...work.notes,
     work.running && work.since !== undefined ? <LiveTime key="t" since={work.since} /> : work.took,
-    work.failed ? (
-      <span key="f" className="steps-failed">
-        {work.failed} failed
-      </span>
-    ) : undefined,
+    ...bad.map(
+      (b) =>
+        b && (
+          <span key={b} className="steps-failed">
+            {b}
+          </span>
+        ),
+    ),
   ].filter(Boolean);
-  const label = [...work.notes, work.running ? undefined : work.took, work.failed && `${work.failed} failed`];
+  const label = [...work.notes, work.running ? undefined : work.took, ...bad];
   return (
     <button
       type="button"

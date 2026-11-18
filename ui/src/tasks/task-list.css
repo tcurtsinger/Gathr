@@ -97,14 +97,6 @@
 .task-state.you {
   color: var(--attention);
 }
-.task-state[data-out="failed"] {
-  color: var(--destructive);
-}
-.task-state > svg {
-  width: 12px;
-  height: 12px;
-  translate: 0 0.5px;
-}
 .task-state > .mark {
   --mark: 12px;
   translate: 0 0.5px;

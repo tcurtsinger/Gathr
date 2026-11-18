@@ -252,7 +252,7 @@ test("a check that agrees is its checker's thumbs-up on the version, with no lin
   expect(custom(view(both).find((m) => m.id === 'v1')).agreed).toEqual(['Bo']);
 });
 
-test("a hear-back says no line for a plan's check, whose plan line says how it ended, and keeps the others", () => {
+test("a hear-back draws no line: the plan's own lines say how its check ended", () => {
   const state = planned();
   state.plans[0].versions[0].sent = null;
   state.tasks[0] = {
@@ -284,12 +284,7 @@ test("a hear-back says no line for a plan's check, whose plan line says how it e
   const lines = view(state).flatMap((m) => custom(m).events ?? []);
   expect(
     lines.filter((e) => e.kind === 'task' || e.kind === 'version').map((e) => `${e.who} ${e.text}`),
-  ).toEqual([
-    'Plan v1: 1 finding',
-    'Ann completed: Read the notes schema',
-    'Plan v1: Sent back',
-    'Plan v2: Approved',
-  ]);
+  ).toEqual(['Plan v1: 1 finding', 'Plan v1: Sent back', 'Plan v2: Approved']);
 });
 
 test('a give_task call in the same turn as the plan keeps its label', () => {

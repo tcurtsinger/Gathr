@@ -787,6 +787,20 @@ fn a_failed_turn_not_retried_or_a_sign_in_reads_cant_run() {
     assert!(since.is_some(), "{:#?}", said.agents);
 }
 
+/// A turn held for its engine's download: the agent waits, and its face's card says on what, as the chat no longer
+/// draws a line for it.
+#[test]
+fn a_turn_held_for_its_engines_download_reads_waiting_on_it() {
+    let dir = TempDir::new();
+    let conn = team(&dir);
+    turn(&conn, "held", "ann", None, "queued");
+    gathr::store::set_held(&conn, "held", Some("codex"), Some("Codex is downloading")).unwrap();
+    let said = answer(&conn, &service());
+    let (state, what, since) = stand(&said, "Ann");
+    assert_eq!((state, what), ("waiting", Some("Codex download")));
+    assert!(since.is_some(), "{:#?}", said.agents);
+}
+
 /// 0071: an agent is stopped while the person stopped its turn, while a pause holds it, or after a
 /// restart cut its turn. A turn Gathr stopped itself (its task cancelled) doesn't stop the agent.
 #[test]

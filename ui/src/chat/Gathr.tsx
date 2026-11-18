@@ -30,7 +30,8 @@ export function GathrMessage() {
       <Bubble quote={fixed?.text}>
         {why && <p className="gathr-says">{why}</p>}
         {events.map((e, i) => (
-          <Says key={e.task ?? `at-${i}`} event={e} />
+          // biome-ignore lint/suspicious/noArrayIndexKey: its lines keep their order
+          <Says key={i} event={e} />
         ))}
         {asked.map((n) => (
           <Asked key={n} task={n} />
@@ -74,12 +75,5 @@ function Says({ event }: { event: EventLine }) {
         </ul>
       </>
     );
-  return (
-    <Event
-      event={event}
-      onOpenTask={actions.openTask}
-      onOpenPlan={actions.openPlan}
-      onReference={actions.reference}
-    />
-  );
+  return <Event event={event} onOpenPlan={actions.openPlan} onReference={actions.reference} />;
 }

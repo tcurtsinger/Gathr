@@ -140,7 +140,7 @@ test('a table shows whole in the chat at its widest: words unbroken, header in v
 test('an engine that exits mid-reply keeps the text shown and fails with its reference', async () => {
   const screen = await render(<View state={replay(exitsMidReply)} />);
   await expect.element(screen.getByText('Already visible answer')).toBeVisible();
-  await expect.element(screen.getByRole('alert').getByText('Reply failed', { exact: true })).toBeVisible();
+  await expect.element(screen.getByText('Failed', { exact: true })).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Reference 5236079d' })).toBeVisible();
 });
 
@@ -149,7 +149,8 @@ test('a send that fails says so once, with its reference', async () => {
   const unsent = [{ id: '1', text: 'Summarise the release notes.', failure: answer }];
   const screen = await render(<View state={replay(sendFailed)} unsent={unsent} />);
   await expect.element(screen.getByRole('button', { name: 'Reference a0c5a2a6' })).toBeVisible();
-  expect(screen.getByRole('alert').elements()).toHaveLength(1);
+  expect(screen.getByRole('button', { name: 'Reference a0c5a2a6' }).elements()).toHaveLength(1);
+  expect(screen.getByText(/^(Failed|Not sent)$/).elements()).toHaveLength(1);
 });
 
 const said = (id: string, role: 'user' | 'assistant', body: string): Message => ({

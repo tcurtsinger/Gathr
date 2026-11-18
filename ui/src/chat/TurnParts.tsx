@@ -112,7 +112,7 @@ function StepEntry({
     );
   return (
     <ToolCall
-      className="work-step"
+      className={step.refused ? 'work-step refused' : 'work-step'}
       label={step.label}
       activeLabel={step.doing}
       query={step.detail ?? ''}
@@ -157,47 +157,37 @@ const ICON = {
 /** Gathr's notes that belong to no turn's row, one line each. */
 export function Events({
   events,
-  onOpenTask,
   onOpenPlan,
   onReference,
 }: {
   events: EventLine[];
-  onOpenTask: (task: number) => void;
   onOpenPlan?: (plan: number, version: number) => void;
   onReference?: (ref: string) => void;
 }) {
   return (
     <MessagePrimitive.Root className="events">
       {events.map((e, index) => (
-        // Two lines can read the same ("You answered Orin: Done"): its task tells them apart, else its place.
-        <Event
-          key={e.task ?? `at-${index}`}
-          event={e}
-          onOpenTask={onOpenTask}
-          onOpenPlan={onOpenPlan}
-          onReference={onReference}
-        />
+        // biome-ignore lint/suspicious/noArrayIndexKey: its lines keep their order
+        <Event key={index} event={e} onOpenPlan={onOpenPlan} onReference={onReference} />
       ))}
     </MessagePrimitive.Root>
   );
 }
 
 /**
- * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27) and
- * its task, which opens in the Tasks tab (room task 70), or an ask's sizes (0061).
+ * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27), its plan, which
+ * opens in the plan's tab, or an ask's sizes (0061).
  */
 export function Event({
   event,
-  onOpenTask,
   onOpenPlan,
   onReference,
 }: {
   event: EventLine;
-  onOpenTask: (task: number) => void;
   onOpenPlan?: (plan: number, version: number) => void;
   onReference?: (ref: string) => void;
 }) {
-  const { who, text, more, task, ask, plan } = event;
+  const { who, text, more, ask, plan } = event;
   const Icon = ICON[event.kind];
   return (
     <CollapsibleRoot>
@@ -208,14 +198,9 @@ export function Event({
           {text}
         </span>
       </CollapsibleTrigger>
-      {(more || task !== undefined || ask || plan) && (
+      {(more || ask || plan) && (
         <CollapsibleContent className="event-more">
           {more && <span>{more}</span>}
-          {task !== undefined && (
-            <button type="button" className="link" onClick={() => onOpenTask(task)}>
-              Open task
-            </button>
-          )}
           {plan && onOpenPlan && (
             <button type="button" className="link" onClick={() => onOpenPlan(plan.id, plan.version)}>
               Open plan

@@ -13,6 +13,8 @@ export type Step =
       /** The task it gave, which its chip opens. */
       task?: number;
       state: ToolBody['status'];
+      /** Gathr refused it: a call to one of Gathr's own tools that answered an error. */
+      refused?: boolean;
       /** What it ran, whole (0044): a command's full text, else its chip. */
       request?: string;
       /** The first lines of what came back (0044), "…" after them when more did. */
@@ -33,6 +35,8 @@ export interface Work {
   took?: string;
   /** How many of its steps failed. */
   failed?: number;
+  /** How many of its calls to Gathr's own tools Gathr refused. */
+  refused?: number;
 }
 
 // What each tool did, and is doing while it runs. One not listed shows its own name.
@@ -88,6 +92,7 @@ export function duration(ms: number, to: 'second' | 'minute' = 'second'): string
 }
 
 const THINKING = 'Thinking';
+const GATHRS = 'mcp__gathr__';
 
 /**
  * A thought, as its step (0042): "Thinking" while it runs, "Thought for 9s" after, with nothing to open.
@@ -166,6 +171,8 @@ export function fold(
     // A message from before steps kept their input has none, and reads as it did.
     const ran = made ? undefined : body.input;
     const [didIt, doingIt] = (ran && BESIDE[body.tool]) || [did, now];
+    // Gathr's own tools answer an error only to refuse: the step says so, never what it would have done.
+    const refused = body.status === 'error' && body.tool.startsWith(GATHRS);
     const result =
       body.result &&
       (body.result.more
@@ -174,19 +181,22 @@ export function fold(
         : body.result.text);
     return {
       id: m.id,
-      label: made?.owner ? `Gave ${made.owner} a task` : (ran?.title ?? didIt),
+      label: refused ? 'Refused' : made?.owner ? `Gave ${made.owner} a task` : (ran?.title ?? didIt),
       doing: ran?.title ?? doingIt,
       detail: made
         ? `#${made.task.number} ${made.task.look_into ? 'Look into: ' : ''}${made.task.what}`
         : ran?.text,
       task: made?.task.number,
       state: body.status,
+      ...(refused && { refused }),
       request: ran?.request ?? ran?.text,
       result,
     };
   });
   if (steps.length === 0) return { text };
-  const failed = steps.filter((s) => 'state' in s && s.state === 'error').length;
+  const bad = steps.filter((s) => 'state' in s && s.state === 'error');
+  const refused = bad.filter((s) => 'refused' in s && s.refused).length;
+  const failed = bad.length - refused;
   const notes = [tools && plural(tools, 'step'), given && `gave ${plural(given, 'task')}`].filter(
     (n): n is string => !!n,
   );
@@ -194,11 +204,12 @@ export function fold(
     .map((t) => Date.parse(t ?? ''))
     .filter((t) => !Number.isNaN(t));
   const since = times.length ? Math.min(...times) : undefined;
-  if (running) return { text, work: { steps, running, label: doing ?? 'Working', notes, since, failed } };
+  if (running)
+    return { text, work: { steps, running, label: doing ?? 'Working', notes, since, failed, refused } };
   const ends = msgs
     .map((m) => Date.parse(m.time) + ((m.kind !== 'text' && (m.body as ToolBody).duration_ms) || 0))
     .filter((t) => !Number.isNaN(t));
   const took = since === undefined ? '' : duration(Math.max(...ends) - since);
   const label = took ? `Worked for ${took}` : 'Worked';
-  return { text, work: { steps, running, label, notes, ...(took && { took }), failed } };
+  return { text, work: { steps, running, label, notes, ...(took && { took }), failed, refused } };
 }

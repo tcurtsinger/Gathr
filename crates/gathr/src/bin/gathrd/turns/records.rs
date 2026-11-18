@@ -164,8 +164,8 @@ impl Task {
         self.chats.settle_pauses(false).await;
         let reference = gathr::ids::reference(&ids.trace);
         let update = json!({ "type": "turn", "turn": ids.turn, "status": status,
-            "agent": ids.agent, "why": why, "ref": reference, "task": ids.task,
-            "answers": ids.answers });
+            "agent": ids.agent, "why": why, "end": gathr::ends::word(status, why), "ref": reference,
+            "task": ids.task, "answers": ids.answers });
         self.publish_turn(ids, update).await;
         self.chat_state(ids).await;
     }

@@ -69,17 +69,13 @@ const ASKS: &str = "(EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.
         AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
 /// Whether an agent of chat `c` can't run (0071): it waits for a sign-in, or its last turn there
-/// failed and wasn't retried (one a restart cut was stopped, not failed).
-fn trouble() -> String {
-    format!(
-        "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
-            AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
-        OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = c.id
-            AND (SELECT l.status = 'failed' AND l.why IS NOT '{CUT_BY_RESTART}' FROM turns l
-                 WHERE l.chat_id = c.id AND l.agent_id = cm.agent_id
-                 ORDER BY l.created_ts DESC, l.rowid DESC LIMIT 1)))"
-    )
-}
+/// failed and wasn't retried.
+const TROUBLE: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
+        AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
+    OR EXISTS (SELECT 1 FROM chat_members cm WHERE cm.chat_id = c.id
+        AND (SELECT l.status = 'failed' FROM turns l
+             WHERE l.chat_id = c.id AND l.agent_id = cm.agent_id
+             ORDER BY l.created_ts DESC, l.rowid DESC LIMIT 1)))";
 
 /// One chat's state as its row in the list has it: whether a turn of it runs (0040), whether it
 /// needs the person, for a notice, and the most pressing of three marks for its row (0071).
@@ -124,10 +120,9 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {}
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
-         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC",
-        trouble()
+         ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
     ))?;
     let rows = stmt.query_map([archived], |r| {
         let mut chat = json!({
@@ -155,8 +150,7 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
 /// One chat's state as its row in the list has it; none for an archived chat, or one that's gone.
 pub fn chat_state(conn: &Connection, chat: &str) -> Result<Option<ChatState>, Error> {
     let sql = format!(
-        "SELECT {WORKING}, {NEEDS}, {ASKS}, {} FROM chats c WHERE c.id = ?1 AND c.archived_ts IS NULL",
-        trouble()
+        "SELECT {WORKING}, {NEEDS}, {ASKS}, {TROUBLE} FROM chats c WHERE c.id = ?1 AND c.archived_ts IS NULL"
     );
     let row = |r: &rusqlite::Row<'_>| ChatState::read(r, 0);
     Ok(conn
@@ -188,10 +182,13 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
     )?;
     let turns = stmt
         .query_map([chat], |r| {
+            let (status, why): (String, Option<String>) = (r.get(1)?, r.get(2)?);
             Ok(json!({
                 "id": r.get::<_, String>(0)?,
-                "status": r.get::<_, String>(1)?,
-                "why": r.get::<_, Option<String>>(2)?,
+                // Who or what stopped it (0051): the person, a restart, or Gathr for a reason of its own.
+                "end": crate::ends::word(&status, why.as_deref()),
+                "status": status,
+                "why": why,
                 "ref": r.get::<_, String>(3)?,
                 "created": crate::ids::utc(r.get(4)?),
                 "ended": r.get::<_, Option<i64>>(5)?.map(crate::ids::utc),
@@ -466,12 +463,25 @@ pub struct Waiting {
 pub const ASK: &str = "(SELECT group_concat(body, char(10) || char(10) ORDER BY ts) FROM messages m
                         WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr'))";
 
-/// Why a turn that was running when the service stopped reads failed: a restart cut it.
-pub const CUT_BY_RESTART: &str = "the service stopped during this turn";
+/// A turn that was running when the service stopped: a restart cut it. It stops, never fails: its message reached
+/// the agent, which can carry on. Its reference leads to the cut.
+pub fn cut(conn: &Connection, turn: &str) -> Result<(), Error> {
+    let (chat, trace): (String, String) = conn.query_row(
+        "SELECT chat_id, trace_id FROM turns WHERE id = ?1",
+        [turn],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    set_turn(conn, turn, "stopped", Some(crate::ends::CUT_BY_RESTART))?;
+    let event = crate::event::Event::point("gathr.turn.cut")
+        .trace(&trace)
+        .chat(&chat);
+    event.attr("gathr.turn.id", turn).ok().insert(conn)?;
+    Ok(())
+}
 
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
-/// a message another agent sent before it started joined it. Turns that were running then can't
-/// be continued: they're marked failed, with why, and the steps they left running are stopped.
+/// a message another agent sent before it started joined it. Turns that were running then are cut
+/// (`cut`), and the steps they left running are stopped.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     // By chat first: `messages` has no index on its turn. A thought's time isn't known, so it
     // gets none. `json_valid` first: a body that isn't JSON would fail the statement, and with
@@ -484,10 +494,13 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
            AND CASE WHEN json_valid(body) THEN json_extract(body, '$.status') END = 'running'",
         [],
     )?;
-    conn.execute(
-        "UPDATE turns SET status = 'failed', why = ?2, ended_ts = ?1 WHERE status = 'running'",
-        params![now_us(), CUT_BY_RESTART],
-    )?;
+    let running: Vec<String> = conn
+        .prepare("SELECT id FROM turns WHERE status = 'running'")?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for turn in running {
+        cut(conn, &turn)?;
+    }
     // An update held these until the service before stopped: nothing holds them now (0032).
     conn.execute(
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
