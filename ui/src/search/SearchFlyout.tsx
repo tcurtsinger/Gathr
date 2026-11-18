@@ -20,7 +20,6 @@ type Found = { chats: ChatHit[]; messages: MessageHit[] };
 // The owner's SerenityOS palette waits as long; an answer slower than SLOW shows Searching….
 const DEBOUNCE = 150;
 const SLOW = 300;
-const key = /Mac/.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
 
 /**
  * Search across chats (plans/search.md, DESIGN.md "Navigation and workspace"): chat titles, then
@@ -149,7 +148,6 @@ export function SearchFlyout({ name, onOpen, onReference }: Props) {
         <>
           <Search aria-hidden="true" />
           Search
-          <kbd className="nav-count">{key}</kbd>
         </>
       }
     >

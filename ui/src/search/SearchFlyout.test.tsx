@@ -61,6 +61,14 @@ test('one cursor runs across Chats and Messages, and Enter opens the row under i
   await expect.element(input()).not.toBeInTheDocument();
 });
 
+test('Search reads only "Search", and Ctrl K still opens it (C73)', async () => {
+  setup();
+  await expect.element(page.getByRole('button', { name: /Search/ })).toBeVisible();
+  expect(page.getByRole('button', { name: /Search/ }).element().textContent).toBe('Search');
+  await userEvent.keyboard('{Control>}k{/Control}');
+  await expect.element(input()).toHaveFocus();
+});
+
 test('Escape closes it, and Ctrl K opens it again with the query kept', async () => {
   setup();
   await page.getByRole('button', { name: /Search/ }).click();
