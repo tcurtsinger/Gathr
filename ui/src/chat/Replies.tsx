@@ -1,7 +1,8 @@
 import { MessagePrimitive, useAuiState } from '@assistant-ui/react';
-import { useContext, useEffect, useRef } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { Button } from '@/components/ui/button';
+import type { Failure } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { Outcome } from '../components/Outcome';
@@ -10,6 +11,7 @@ import { Asked } from './Asked';
 import type { Ending } from './ends';
 import type { Custom } from './messages';
 import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
+import { SizeWord } from './Size';
 import { StepsButton, useStepsOpen } from './Steps';
 import type { Approval } from './state';
 import { Talk } from './Talk';
@@ -20,11 +22,15 @@ import { roleName } from './team';
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
 
-/** The person's own words, beside their face, in the blue-tinted bubble (0072); one not sent says so, with Retry. */
+/**
+ * The person's own words, beside their face, in the blue-tinted bubble (0072), with their ask's size last on the name
+ * line (0061); one not sent says so, with Retry.
+ */
 export function UserMessage() {
   const own = useAuiState(custom);
-  const { unsent } = own;
+  const { unsent, size } = own;
   const actions = useActions();
+  const [refused, setRefused] = useState<Failure>();
   // A failed Stop or Pause sent no text: only its notice shows, with nothing to resend.
   const stop = unsent?.text === '';
   const failure = unsent?.failure;
@@ -40,6 +46,7 @@ export function UserMessage() {
           pieces={[
             <When key="t" time={own.tick ?? own.time} />,
             unsent && !stop && <EndWord key="e" word="Not sent" bad />,
+            size && <SizeWord key="size" size={size} onFailure={setRefused} />,
           ]}
         />
       }
@@ -51,6 +58,7 @@ export function UserMessage() {
           </div>
         </Bubble>
       )}
+      {refused && <FailureNotice failure={refused} onReference={actions.reference} />}
       {unsent && stop && (
         <FailureNotice
           failure={unsent.failure}
@@ -74,20 +82,32 @@ export const parts = { Text: TextPart };
 export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
-  if (own.thread) return <Talk said={own.thread} under={!!own.under} />;
-  return <Reply own={own} id={id} text={!!own.text} />;
+  if (own.thread) return <Talk said={own.thread} under={!!own.under} settled={!!own.settled} />;
+  return <Reply own={own} id={id} />;
 }
 
 /**
  * A block of an agent's turn: its face and name line (with how its task or turn ended, and its steps), its words in a
  * bubble with its plan's chip, thumbs-ups, then its approvals and what the person can do about how it ended. A block
  * with nothing to show draws nothing: a turn that has just started shows on the status line, not as an empty message.
+ * In a thread it is one of the thread's messages (`index`: its words' part there), `small` under the message it
+ * belongs to.
  */
-function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
+export function Reply({
+  own,
+  id,
+  index,
+  small,
+}: {
+  own: Custom;
+  id: string;
+  index?: number;
+  small?: boolean;
+}) {
   const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked } = own;
   const actions = useActions();
   const [open, setOpen] = useStepsOpen(work);
-  const words = text || !!plan || !!asked?.length;
+  const words = !!own.text || !!plan || !!asked?.length;
   if (!words && !work && !approvals?.length && !ending && !out && !agreed?.length) return null;
   // How it ended says who: a block of its own is named.
   const named = !!agent && (own.head || !!work || !!ending?.word || !!out || !!done);
@@ -95,7 +115,8 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
   const lined = named || !!work || !!ending?.word;
   return (
     <Said
-      root
+      root={index === undefined}
+      small={small}
       agent={by}
       // With no words, the steps are all the block has: they stay shown.
       keep={!!work && (work.running || !!work.failed || !!work.refused || !words)}
@@ -109,7 +130,7 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
             agent={by}
             name={agent}
             message={id}
-            size={36}
+            size={small ? 28 : 36}
             // Only a team chat has a panel to open: its agents have roles.
             onOpen={by && role ? () => actions.openAgent(by) : undefined}
           />
@@ -137,7 +158,11 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
       )}
       {words && (
         <Bubble>
-          <MessagePrimitive.Parts components={parts} />
+          {index !== undefined ? (
+            <MessagePrimitive.PartByIndex index={index} components={parts} />
+          ) : (
+            <MessagePrimitive.Parts components={parts} />
+          )}
           {plan && (
             <PlanChip
               version={plan.version}

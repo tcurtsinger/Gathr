@@ -365,17 +365,26 @@ async fn a_held_turns_change_is_what_git_tracks_and_nothing_else() {
         got,
         changed(&["p.txt"], 1),
     ));
+    // Each untracked file is listed whole, never its folder alone.
     let w = clone(root, "notes");
     let second = |w: &Path| write(w, "notes/two.md", "2\n");
     let got = caught(&w, |w| write(w, "notes/one.md", "1\n"), second).await;
     seen.push((
-        "a file added in an untracked folder from before (a limit)",
+        "a file added in an untracked folder from before",
         got,
-        none.clone(),
+        changed(&["notes/two.md"], 0),
     ));
     let w = clone(root, "drafts");
-    let got = caught(&w, |_| {}, |w| write(w, "drafts/x.md", "x\n")).await;
-    seen.push(("a new untracked folder", got, changed(&["drafts/"], 0)));
+    let new = |w: &Path| {
+        write(w, "drafts/x.md", "x\n");
+        write(w, "drafts/deep/y.md", "y\n");
+    };
+    let got = caught(&w, |_| {}, new).await;
+    seen.push((
+        "files in a new untracked folder",
+        got,
+        changed(&["drafts/deep/y.md", "drafts/x.md"], 0),
+    ));
 
     let wrong: Vec<_> = seen.iter().filter(|(_, got, want)| got != want).collect();
     assert!(

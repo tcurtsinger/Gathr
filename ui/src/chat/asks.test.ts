@@ -1,5 +1,5 @@
-// Every ask has a size (0061): where its size line sits in the thread, what it reads, and the line
-// Gathr says when a repair's work is in.
+// Every ask has a size (0061): which message it sits on, what it says, and the line Gathr says when a repair's
+// work is in.
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import { expect, test } from 'vitest';
 import type { Agent, Ask, Message, Task, Turn } from '../api';
@@ -106,150 +106,72 @@ const view = (state: ChatState) => toThread(state, agents, [], new Map()).items;
 const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
 const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const line = (items: ThreadMessageLike[], id: string) => custom(items.find((m) => m.id === id)).events;
-const sizes = (items: ThreadMessageLike[]) => ids(items).filter((id) => id?.startsWith('size-'));
+/** Each message's size, by the message's id: none drawn for the rest. */
+const sizes = (items: ThreadMessageLike[]) =>
+  Object.fromEntries(items.flatMap((m) => (custom(m).size ? [[m.id, custom(m).size]] : [])));
+const mira = { agent: 'mira', name: 'Mira' };
 
-test("a sized ask's line sits after the lead's turn that sized it, and reads its name and size", () => {
+test('a sized ask’s size sits on its own message, with who sized it, and on no line of its own', () => {
   const question = task(2, { kind: 'person', owner: null, given_in: 'hb', what: 'Which export?' });
   const state = chat({
     tasks: [question],
     asks: [ask('m1', { size: 'repair', by: 'mira', sized_in: 'hb' })],
   });
   const items = view(state);
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1']);
-  expect(line(items, 'size-m1')).toEqual([{ kind: 'fix', who: 'Mira:', text: 'Fix', ask: 'm1' }]);
+  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb']);
+  expect(sizes(items)).toEqual({ m1: { ask: 'm1', size: 'repair', by: mira } });
 
   const resized = chat({
     tasks: [question],
     asks: [ask('m1', { size: 'new', by: 'person', sized_in: 'hb' })],
   });
-  const again = view(resized);
-  expect(ids(again)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1']);
-  expect(line(again, 'size-m1')).toEqual([{ kind: 'plan', who: 'You:', text: 'Plan', ask: 'm1' }]);
+  expect(sizes(view(resized))).toEqual({ m1: { ask: 'm1', size: 'new', yours: true } });
 });
 
-test('a message steered into the turn that sized it has its line below it', () => {
+test('a message steered into a running turn and split off carries its own size', () => {
   const items = view(
     steered({ asks: [ask('m0'), ask('m2', { size: 'repair', by: 'mira', sized_in: 'lead' })] }),
   );
-  expect(ids(items)).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1', 'size-m2']);
-  expect(line(items, 'size-m2')).toEqual([{ kind: 'fix', who: 'Mira:', text: 'Fix', ask: 'm2' }]);
+  expect(ids(items)).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1']);
+  expect(sizes(items)).toEqual({ m2: { ask: 'm2', size: 'repair', by: mira } });
 });
 
-test('a split ask whose message moved into a later turn has its line below it', () => {
-  // `m2` was steered into `lead` and split off there, but the engine read it only after `lead` ended.
-  clock = 0;
-  const items = view({
-    ...empty,
-    members,
-    turns: { lead: { ...turn('lead'), position: 0 }, later: { ...turn('later'), position: 1 } },
-    messages: [
-      msg('m1', 'lead', 'user', 'Rename the export menu'),
-      msg('r1', 'lead', 'assistant', 'On it'),
-      msg('m2', 'later', 'user', 'Add tags to notes'),
-      msg('r2', 'later', 'assistant', 'That one is its own ask'),
-    ],
-    asks: [ask('m1'), ask('m2', { size: 'new', by: 'mira', sized_in: 'lead' })],
-  });
-  expect(ids(items)).toEqual(['m1', 'a-lead', 'm2', 'a-later', 'size-m2']);
-  expect(line(items, 'size-m2')).toEqual([{ kind: 'plan', who: 'Mira:', text: 'Plan', ask: 'm2' }]);
-});
-
-test('an unsized ask not held, with no task, still draws none', () => {
-  // Another ask's task, whose message isn't loaded, draws none either.
+test('an unsized ask not held, with no task, still shows none', () => {
+  // Another ask's task, whose message isn't loaded, shows none either.
   const items = view(
     chat({ tasks: [task(1, { ask: 'm9' })], asks: [ask('m9'), ask('m1', { held: false })] }),
   );
   expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb']);
-  expect(sizes(items)).toEqual([]);
+  expect(sizes(items)).toEqual({});
 });
 
-test("an unsized ask Gathr held shows Plan after its message's turn", () => {
-  const items = view(chat({ asks: [ask('m1', { held: true })] }));
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
-  expect(line(items, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
-
-  // Live: the tasks event that says Gathr held it brings the line, with no task.
-  const before = chat({ asks: [ask('m1')] });
-  expect(sizes(view(before))).toEqual([]);
-  const after = apply(before, {
-    type: 'tasks',
-    chat: 'c',
-    tasks: [],
-    waits: [],
-    asks: [ask('m1', { held: true })],
+test('an unsized ask Gathr held, or with a task, reads Plan, live too', () => {
+  expect(sizes(view(chat({ asks: [ask('m1', { held: true })] })))).toEqual({
+    m1: { ask: 'm1', size: 'new' },
   });
-  expect(ids(view(after))).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
-});
-
-test("an unsized held ask whose message moved to a later turn shows Plan after that turn's reply, never above the message", () => {
-  clock = 0;
-  const items = view({
-    ...empty,
-    members,
-    turns: { lead: { ...turn('lead'), position: 0 }, later: { ...turn('later'), position: 1 } },
-    messages: [
-      msg('m1', 'lead', 'user', 'Rename the export menu'),
-      msg('r1', 'lead', 'assistant', 'On it'),
-      msg('m2', 'later', 'user', 'Add tags to notes'),
-      msg('r2', 'later', 'assistant', 'Looking at tag libraries'),
-    ],
-    asks: [ask('m1'), ask('m2', { held: true })],
-  });
-  expect(ids(items)).toEqual(['m1', 'a-lead', 'm2', 'a-later', 'size-m2']);
-  expect(line(items, 'size-m2')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm2' }]);
-});
-
-test("an unsized held ask whose message's turn has no reply below it yet draws none", () => {
-  // `m2` was sent into `lead` after its reply `r0`, and a later turn replied: neither is below it in its own turn.
-  const state = steered({ asks: [ask('m0'), ask('m2', { held: true })] });
-  const reply = state.messages.splice(3, 1)[0];
-  state.turns.hb = { ...turn('hb', 'rowan'), position: 1 };
-  state.messages.push(msg('r4', 'hb', 'assistant', 'Tags need a plan'));
-  expect(ids(view(state))).toEqual(['m0', 'a-lead', 'm2', 'a-hb']);
-
-  // Once its own turn replies below it, the line follows that reply.
-  state.messages.splice(3, 0, reply);
-  expect(ids(view(state))).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1', 'size-m2', 'a-hb']);
-});
-
-test("an unsized ask with a task reads Plan after its message's turn", () => {
-  // Any state counts: this one is done.
-  const items = view(chat({ tasks: [task(1, { ask: 'm1', state: 'done' })], asks: [ask('m1')] }));
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
-  expect(line(items, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
-
-  // Steered into a running turn: after the block that follows it, not the turn's first block above it.
-  const into = view(
-    steered({ tasks: [task(1, { ask: 'm2', given_in: 'lead' })], asks: [ask('m0'), ask('m2')] }),
-  );
-  expect(ids(into)).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1', 'size-m2']);
-
-  // A question to the person is a task of the ask too; it sits in the block that asked it (0073).
+  // Any state counts: this one is done. A question to the person is a task of the ask too.
+  const done = chat({ tasks: [task(1, { ask: 'm1', state: 'done' })], asks: [ask('m1')] });
+  expect(sizes(view(done))).toEqual({ m1: { ask: 'm1', size: 'new' } });
   const question = task(3, { kind: 'person', owner: null, ask: 'm1', what: 'Which export?' });
-  const asked = view(chat({ tasks: [question], asks: [ask('m1')] }));
-  expect(ids(asked)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
-  expect(line(asked, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
-});
-
-test('a live tasks event that brings the first task makes the line appear', () => {
-  const before = chat({ asks: [ask('m1')] });
-  expect(sizes(view(before))).toEqual([]);
-  const after = apply(before, {
-    type: 'tasks',
-    chat: 'c',
-    tasks: [task(1, { ask: 'm1' })],
-    waits: [],
-    asks: [ask('m1')],
+  expect(sizes(view(chat({ tasks: [question], asks: [ask('m1')] })))).toEqual({
+    m1: { ask: 'm1', size: 'new' },
   });
-  const items = view(after);
-  expect(sizes(items)).toEqual(['size-m1']);
-  expect(line(items, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
+
+  // Live: the tasks event that says Gathr held it, or that brings the first task, brings the size.
+  const before = chat({ asks: [ask('m1')] });
+  expect(sizes(view(before))).toEqual({});
+  for (const [tasks, asks] of [
+    [[], [ask('m1', { held: true })]],
+    [[task(1, { ask: 'm1' })], [ask('m1')]],
+  ] as const) {
+    const after = apply(before, { type: 'tasks', chat: 'c', tasks: [...tasks], waits: [], asks: [...asks] });
+    expect(sizes(view(after))).toEqual({ m1: { ask: 'm1', size: 'new' } });
+  }
 });
 
 test('an ask the person sized that the lead never sized', () => {
   const items = view(chat({ asks: [ask('m1', { size: 'repair', by: 'person', sized_in: null })] }));
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
-  expect(line(items, 'size-m1')).toEqual([{ kind: 'fix', who: 'You:', text: 'Fix', ask: 'm1' }]);
+  expect(sizes(items)).toEqual({ m1: { ask: 'm1', size: 'repair', yours: true } });
 });
 
 test("a repair's Fixed line opens to its tasks' PRs and proof", () => {

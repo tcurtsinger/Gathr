@@ -1,5 +1,4 @@
-import { MessagePrimitive } from '@assistant-ui/react';
-import { Bell, CircleCheck, CircleHelp, ClipboardList, FilePen, PenLine, Send, Wrench } from 'lucide-react';
+import { Bell, CircleCheck, CircleHelp, ClipboardList, FilePen, PenLine, Send } from 'lucide-react';
 import { createContext, useContext, useState } from 'react';
 import {
   CollapsibleContent,
@@ -11,7 +10,6 @@ import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { counted } from '../plans/plans';
 import type { Step, Work } from './fold';
 import type { EventLine } from './messages';
-import { SizeChoice } from './Size';
 import { LiveTime, useStepsOpen } from './Steps';
 import './team.css';
 import '../plans/plans.css';
@@ -148,46 +146,22 @@ const ICON = {
   answer: PenLine,
   question: CircleHelp,
   note: Bell,
-  fix: Wrench,
-  plan: ClipboardList,
   version: ClipboardList,
   changed: FilePen,
 };
 
-/** Gathr's notes that belong to no turn's row, one line each. */
-export function Events({
-  events,
-  onOpenPlan,
-  onReference,
-}: {
-  events: EventLine[];
-  onOpenPlan?: (plan: number, version: number) => void;
-  onReference?: (ref: string) => void;
-}) {
-  return (
-    <MessagePrimitive.Root className="events">
-      {events.map((e, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: its lines keep their order
-        <Event key={index} event={e} onOpenPlan={onOpenPlan} onReference={onReference} />
-      ))}
-    </MessagePrimitive.Root>
-  );
-}
-
 /**
- * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27), its plan, which
- * opens in the plan's tab, or an ask's sizes (0061).
+ * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27), or its plan, which
+ * opens in the plan's tab.
  */
 export function Event({
   event,
   onOpenPlan,
-  onReference,
 }: {
   event: EventLine;
   onOpenPlan?: (plan: number, version: number) => void;
-  onReference?: (ref: string) => void;
 }) {
-  const { who, text, more, ask, plan } = event;
+  const { who, text, more, plan } = event;
   const Icon = ICON[event.kind];
   return (
     <CollapsibleRoot>
@@ -198,16 +172,13 @@ export function Event({
           {text}
         </span>
       </CollapsibleTrigger>
-      {(more || ask || plan) && (
+      {(more || plan) && (
         <CollapsibleContent className="event-more">
           {more && <span>{more}</span>}
           {plan && onOpenPlan && (
             <button type="button" className="link" onClick={() => onOpenPlan(plan.id, plan.version)}>
               Open plan
             </button>
-          )}
-          {ask && (
-            <SizeChoice ask={ask} size={event.kind === 'fix' ? 'repair' : 'new'} onReference={onReference} />
           )}
         </CollapsibleContent>
       )}

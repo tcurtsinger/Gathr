@@ -924,8 +924,14 @@ fn a_repair_whose_work_is_in_is_said_fixed_once() {
     asks::fixed(&mut conn, "c", T).unwrap();
     assert_eq!(fixed_lines(&conn).len(), 1, "said once");
 
-    // New, all done, then made a repair: said at the next look.
-    let m5 = sent(&mut conn, ("c", "lead"), "p5", "Rename the menu");
+    // New, all done, then made a repair: said at the next look, naming the ask's first line whole.
+    let menu = "Rename the menu that opens from the toolbar's gear, and keep its shortcut";
+    let m5 = sent(
+        &mut conn,
+        ("c", "lead"),
+        "p5",
+        &format!("{menu}\nIt reads Options today."),
+    );
     status(&conn, "p5", "done");
     let five = gives(&mut conn, ("lead", "ann"), Some("p5"), None);
     conn.execute("UPDATE turns SET status = 'done' WHERE task = ?1", [five])
@@ -939,7 +945,7 @@ fn a_repair_whose_work_is_in_is_said_fixed_once() {
     let lines = fixed_lines(&conn);
     assert_eq!(lines.len(), 2, "{lines:?}");
     assert!(
-        lines[1].starts_with("Fixed: Rename the menu\n"),
+        lines[1].starts_with(&format!("Fixed: {menu}\n")),
         "{lines:?}"
     );
 

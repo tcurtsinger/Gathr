@@ -408,7 +408,7 @@ pub fn fixed(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Error
             let rows = stmt.query_map([&ask], |r| r.get(0))?;
             rows.collect::<Result<_, _>>()?
         };
-        let mut lines = vec![format!("{FIXED} {}", title(&tx, &ask)?)];
+        let mut lines = vec![format!("{FIXED} {}", first_line(&tx, &ask)?)];
         for number in &done {
             if let Some(t) = crate::tasks::get(&tx, *number)? {
                 lines.push(line(&t));
@@ -446,14 +446,27 @@ fn line(t: &crate::tasks::Task) -> String {
 
 /// The ask's title: the first line of the message that started it, as a chat's title is made.
 pub(crate) fn title(conn: &Connection, ask: &str) -> Result<String, Error> {
-    let body: Option<String> = conn
+    Ok(body(conn, ask)?
+        .and_then(|b| crate::store::title_from(&b))
+        .unwrap_or_default())
+}
+
+/// The first line of the message that started the ask, whole: "Fixed" names the ask by it.
+fn first_line(conn: &Connection, ask: &str) -> Result<String, Error> {
+    let body = body(conn, ask)?;
+    Ok(body
+        .as_deref()
+        .and_then(crate::text::first_line)
+        .unwrap_or_default()
+        .to_string())
+}
+
+fn body(conn: &Connection, ask: &str) -> Result<Option<String>, Error> {
+    Ok(conn
         .query_row("SELECT body FROM messages WHERE id = ?1", [ask], |r| {
             r.get(0)
         })
-        .optional()?;
-    Ok(body
-        .and_then(|b| crate::store::title_from(&b))
-        .unwrap_or_default())
+        .optional()?)
 }
 
 fn row(r: &rusqlite::Row) -> rusqlite::Result<Ask> {

@@ -161,8 +161,12 @@ export function ChatView(props: Props) {
   const { target, pick: setShown } = useLatest(hit);
   const member = (id: string) => ({ id, name: members.find((m) => m.agent === id)?.name ?? 'An agent' });
   const show = (request: string) => {
-    const asks = (m: (typeof timeline.items)[number]) =>
-      (m.metadata?.custom as Custom | undefined)?.approvals?.some((a) => a.request === request);
+    const asks = (m: (typeof timeline.items)[number]) => {
+      const own = m.metadata?.custom as Custom | undefined;
+      // A block in a thread under a PR asks in the thread's item.
+      const blocks = [own, ...(own?.thread ?? []).map((s) => s.block)];
+      return blocks.some((b) => b?.approvals?.some((a) => a.request === request));
+    };
     const id = timeline.items.find(asks)?.id;
     if (id) setShown({ id, card: request, at: performance.now() });
   };

@@ -1,12 +1,11 @@
-import type { Ask } from '../api';
-import type { EventLine, Group } from './messages';
+import type { EventLine } from './messages';
 import type { ChatState } from './state';
 import type { Team } from './team';
 
 // The service's own word (asks.rs `FIXED`): how its line for a repair whose work is in begins.
 const FIXED = 'Fixed: ';
 
-/** Gathr's line for a repair whose work is in: the ask's title, opening to its tasks' lines. */
+/** Gathr's line for a repair whose work is in: the ask's first line, opening to its tasks' lines. */
 export function fixed(text: string): EventLine | undefined {
   if (!text.startsWith(FIXED)) return undefined;
   const [first, ...tasks] = text.split('\n');
@@ -24,33 +23,28 @@ export function changed(text: string): EventLine {
   return { kind: 'changed', text: first, more: files.join('\n') || undefined };
 }
 
-/**
- * Each ask's size line, by the block it follows (0061 G5.2): the first block below the message of the
- * lead's turn that sized it, else of the message's own turn, so a line never sits above the message it
- * sizes. The message can land in a later turn than the one that sized it, when the engine reads it only
- * after that turn ends. An unsized ask with no task, that Gathr never held, has none. `groups` is in the
- * thread's order.
- */
-export function sizeLines(state: ChatState, groups: Group[], crew: Team): Map<Group, EventLine[]> {
-  const lines = new Map<Group, EventLine[]>();
-  for (const ask of state.asks) {
-    if (!ask.size && !ask.held && !state.tasks.some((t) => t.ask === ask.id)) continue;
-    const from = groups.findIndex((g) => g.msgs.some((m) => m.id === ask.id));
-    const own = groups[from]?.turn;
-    if (!own) continue;
-    const below = (turn: string | null) =>
-      groups.slice(from + 1).find((g) => g.kind === 'reply' && g.turn === turn);
-    const after = (ask.sized_in && below(ask.sized_in)) || below(own);
-    if (after) lines.set(after, [...(lines.get(after) ?? []), line(ask, crew)]);
-  }
-  return lines;
+/** An ask's size as its own message shows it (0061): who sized it, an agent by name, or the person. */
+export interface AskSize {
+  ask: string;
+  size: 'repair' | 'new';
+  by?: { agent: string; name: string };
+  yours?: boolean;
 }
 
-/** "Mira: Fix", "You: Plan", or "Plan" alone while unsized. */
-function line(ask: Ask, crew: Team): EventLine {
-  const kind = ask.size === 'repair' ? 'fix' : 'plan';
-  const text = kind === 'fix' ? 'Fix' : 'Plan';
-  if (!ask.size) return { kind, text, ask: ask.id };
-  const who = ask.by === 'person' ? 'You:' : `${crew.name(ask.by) ?? 'An agent'}:`;
-  return { kind, who, text, ask: ask.id };
+/**
+ * Each ask's size, by its message's id (the ask's own): it sits on the person's message that started the ask, so it
+ * shows as soon as there is one, whoever has spoken. An unsized ask with no task, that Gathr never held, shows none
+ * (0061 G5).
+ */
+export function askSizes(state: ChatState, crew: Team): Map<string, AskSize> {
+  const tasked = new Set(state.tasks.map((t) => t.ask));
+  const sizes = new Map<string, AskSize>();
+  for (const ask of state.asks) {
+    if (!ask.size && !ask.held && !tasked.has(ask.id)) continue;
+    const size: AskSize = { ask: ask.id, size: ask.size === 'repair' ? 'repair' : 'new' };
+    if (ask.size && ask.by === 'person') size.yours = true;
+    else if (ask.size && ask.by) size.by = { agent: ask.by, name: crew.name(ask.by) ?? 'An agent' };
+    sizes.set(ask.id, size);
+  }
+  return sizes;
 }

@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-14, with Stage 3's spec, part G; its departures and two answers, 2026-11-15). Date: 2026-11-15.
 
-Built: yes. Proof: `crates/gathr/tests/tasks/asks.rs`, `crates/gathr/tests/sizes.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/asks.test.ts`, `ui/src/chat/Size.test.tsx`. When it was built nothing held new work: part I ([0063](0063-building-waits-for-a-new-asks-plan.md)) now holds building on an ask with no approved plan, and shows an unsized ask's line once something of it was held.
+Built: yes. Proof: `crates/gathr/tests/tasks/asks.rs`, `crates/gathr/tests/sizes.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/asks.test.ts`, `ui/src/chat/Size.test.tsx` (the size on the ask's message, before the lead has said anything; the arrow keys and the tick; no choices in an archived chat). When it was built nothing held new work: part I ([0063](0063-building-waits-for-a-new-asks-plan.md)) now holds building on an ask with no approved plan, and shows an unsized ask's line once something of it was held.
 
 Builds on [0010](0010-coordination-as-state.md), [0051](0051-the-giver-hears-when-all-is-in.md) and [0059](0059-a-work-task-carries-a-complete-brief.md). Serves promise 2 of [the charter](../charter.md#the-promises), parts 2.4 and 2.6 of [the truth map](../truth-map.md), and part 10.3: a repair and a new ask are told apart, and the person can correct the lead. Stage 3's part G.
 
@@ -30,13 +30,13 @@ In this code "ask" already means a turn's opening text (`store::ASK`) and Gathr'
   #<n> <what>: PR #<pr>. Proof: <proof>
   ```
 
-  One task line for each done work task, by number: the PR when it has one, else what its report names (`see`), then its proof when it has one. The title is the first line of the ask's message, as a chat's title is made. A repair with no task gets no line, and neither does one whose tasks failed or were blocked. Stage 2's line for a task that ends done stays, and "Fixed" comes after it. It is decided in the quiet check (`coord/quiet.rs`), in a writer job of its own after the check, so it sees what the last write committed, the giver's hear-back included; `asks.fixed` holds the line's message id, so a later resize or task says nothing again, and an ask resized from new to repair after its work is in gets its line at the next check. The event is `gathr.ask.fixed`; a failed check records it with `error("sqlite")` and why.
-- **G5: the window.** One of Gathr's event lines, after a block, drawn by `Events` like the others, one line closed and opened in place by click or Enter.
-  - Closed: "Mira: Fix" or "Mira: Plan" (the lead's name), "You: Fix" or "You: Plan" after the person changed it, "Plan" alone for an ask the lead hasn't sized. Opened: the shared `OptionList` as published, in its draft mode, named "Size": "Just fix it." and "Plan it with me first.", the current one marked. Choosing the other calls the route; choosing the marked one does nothing. A refusal shows under the choices with the shared failure notice: its words, and its reference.
-  - **Where.** An ask's line is after the first block below its message of the lead's turn that sized it (`sized_in`). When that turn has none (the lead never sized it, or the message landed in a later turn), it's after the first block below the message of the message's own turn. So it never sits above the message it sizes. Two asks after one block each get a line, oldest first.
-  - **No line for an unsized ask until it has a task** (any state or kind, a question to the person included), then "Plan". An ask that leads to no work (a "thanks") never has one.
-  - The "Fixed" line is drawn as one line with the check icon: "Fixed:" and the title, opening to the task lines. No "Open task".
-  - Icons: `Wrench` for Fix, `ClipboardList` for Plan.
+  One task line for each done work task, by number: the PR when it has one, else what its report names (`see`), then its proof when it has one. The title is the first line of the ask's message, whole: the window quotes it, so it names the ask however far away the line sits (it was cut at 60 characters as a chat's title is, until the size moved onto the ask). A repair with no task gets no line, and neither does one whose tasks failed or were blocked. Stage 2's line for a task that ends done stays, and "Fixed" comes after it. It is decided in the quiet check (`coord/quiet.rs`), in a writer job of its own after the check, so it sees what the last write committed, the giver's hear-back included; `asks.fixed` holds the line's message id, so a later resize or task says nothing again, and an ask resized from new to repair after its work is in gets its line at the next check. The event is `gathr.ask.fixed`; a failed check records it with `error("sqlite")` and why.
+- **G5: the window. The size sits on the ask** (the approved chat-lines mock-up): the last piece of the name line of the person's message that started the ask, never a line of its own.
+  - **Where.** On the message whose id is the ask's, wherever it is: an ask split off a message steered into a running turn is that message's too. It shows as soon as the ask is sized, has a task or was held, with no wait for the lead's words, and two asks answered in one turn each carry their own. A message that joined an ask shows none.
+  - Closed: the lead's 16px face when the lead sized it, none when the person did or nobody has, then "Fix" or "Plan" and a chevron, named for a screen reader "Size: Fix, by Mira", "Size: Plan, by you" or "Size: Plan". Opened in place: the shared `OptionList`, composed from outside its registry file, named "Size": "Just fix it." and "Plan it with me first.", focus on the current one, which is tinted, in the words' colour and ticked in blue, `aria-pressed` as before. The arrow keys move between the two, wrapping; choosing one or Escape closes them and puts focus back on the word, and focus leaving them closes them. Choosing the other calls the route; choosing the current one does nothing. A refusal shows under the message's bubble with the shared failure notice: its words, and its reference.
+  - **An archived chat** shows the face and the word, with nothing to open.
+  - **No size for an unsized ask until it has a task** (any state or kind, a question to the person included) or was held, then "Plan". An ask that leads to no work (a "thanks") never has one.
+  - The "Fixed" line is Gathr's message ([0073](0073-gathr-speaks-as-a-speaker.md)), quoting the ask's first line, opening to the task lines. No "Open task".
 - **The service tells the window.** `GET /api/chats/<id>/tasks` and the live `tasks` event carry `asks`, oldest first: `{"id", "title", "size", "by", "sized_in"}`, and each task carries its `ask`. Two temporary triggers on `asks` note the chat, so the event goes out after any change to an ask, whichever code made it.
 - **The schema** (migration `0046_asks.sql`): the table `asks` (`id`, `chat_id`, `size`, `sized_by`, `sized_in`, `sized_ts`, `fixed`), the columns `turns.ask_id` and `tasks.ask_id`, and an index for each. No foreign key from `asks.id` to `messages`: deleting a chat removes messages before turns, and turns and tasks point at `asks`, so `archive::delete` removes the asks right after the tasks. **A database from before gets nothing.** Every turn and task keeps `ask_id` NULL, and the first message after the upgrade in a team chat starts a new ask even while old work is open. A backfill by rounds would make an unsized ask, counting as new, of everything in flight, and once part I lands all of it would be held.
 
@@ -65,7 +65,7 @@ Where the code differs from the detail the owner approved, the code stands.
 - **Ordering is by insertion, not by id.** Two ids of one millisecond don't sort by time, so the newest ask with open work (`for_message`), the asks of a chat (`in_chat`) and the asks said "Fixed" at one check (`fixed`) are ordered by `rowid`.
 - **The Supervisor's name in the refusal** is the agent's name, read with `team::members`, not `words::name_of`.
 - **A resize refuses, in order,** `there's no ask <id>`, `` `<size>` isn't a size: repair or new ``, then an archived chat's own words, each as a 409 `Size failed` with a reference.
-- **The window's refusal title** is the failure's own `error`: the route's "Size failed", or "Connection failed" when the call never reached the service. `SizeChoice` calls the route itself, and `Events` and `Event` take an optional `onReference`, so a refusal's reference opens Diagnostics.
+- **The window's refusal title** is the failure's own `error`: the route's "Size failed", or "Connection failed" when the call never reached the service. `SizeWord` calls the route itself and hands a refusal to the message, whose notice's reference opens Diagnostics.
 - **The window reads `asks` as optional** in a chat's first load, so a stub that gives none draws no lines; the live event always has it.
 
 ## Said plainly
@@ -95,7 +95,8 @@ Where the code differs from the detail the owner approved, the code stands.
 - **A split moving a turn it didn't open.**
 - **The person's open questions as open work** (the owner's answer).
 - **A "Plan" line for every unsized ask from its first block** (the owner's answer).
-- **The mock-up's explaining words and its third choice.** The line says Fix or Plan, and nothing explains it.
+- **The mock-up's explaining words and its third choice.** The size says Fix or Plan, and nothing explains it.
+- **The size as a line after a block of the lead's turn** (as built first): it waited for the lead's words, sat away from the ask it sized, and two asks sized in one turn gave two lines that didn't say which was which.
 - **A setting for any of it.**
 
 ## Amended by

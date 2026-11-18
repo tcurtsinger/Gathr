@@ -21,6 +21,10 @@ export interface Said {
   agreed: string[];
   /** What the writer's turn did before it, when that turn drew nothing else. */
   work?: Work;
+  /** A whole block of a turn, as it reads elsewhere: a review or a fix under its PR (reviews.ts). */
+  block?: Custom;
+  /** That block's turn is running. */
+  running?: boolean;
 }
 
 /** Talk between agents: the block it belongs under (none: it stands where it began) and its messages, in order. */

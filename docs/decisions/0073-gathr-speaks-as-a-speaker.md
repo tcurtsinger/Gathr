@@ -42,7 +42,7 @@ Amends [0037](0037-one-timeline.md) and [0072](0072-the-chat-reads-like-a-team-c
 
 ## Said plainly
 
-- **Lines that belong to later changes keep today's line inside Gathr's bubble:** a task heard back or done ("Ann completed: …"), and a plan's findings, Approved, Sent back and Dropped. A size's lines ("Mira: Fix") stay as they are, outside Gathr's bubble.
+- **Lines that belong to later changes keep today's line inside Gathr's bubble:** a task heard back or done ("Ann completed: …"), and a plan's findings, Approved, Sent back and Dropped. An ask's size is no line: it sits on the person's own message ([0061](0061-every-ask-has-a-size.md)).
 - **Gathr's notes keep their words,** which were written for the agent ("Your wait on CI … ended"); only a size change's are new.
 - **A question's files** are opened from the Tasks view, not from the chat.
 - **The agent's panel** shows an agent's earlier blocks without their questions.

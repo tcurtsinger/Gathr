@@ -198,12 +198,14 @@ export function counts(all: Glance[]): string {
 export function activity(items: ThreadMessageLike[]): Activity {
   const doing: Activity = new Map();
   for (const item of items) {
-    const { by, work } = (item.metadata?.custom ?? {}) as Custom;
-    if (by && work?.running)
-      doing.set(by, {
-        label: work.label,
-        steps: work.notes.find((n) => n.endsWith('step') || n.endsWith('steps')),
-      });
+    const own = (item.metadata?.custom ?? {}) as Custom;
+    // A thread under a PR holds whole blocks.
+    for (const { by, work } of [own, ...(own.thread ?? []).flatMap((m) => m.block ?? [])])
+      if (by && work?.running)
+        doing.set(by, {
+          label: work.label,
+          steps: work.notes.find((n) => n.endsWith('step') || n.endsWith('steps')),
+        });
   }
   return doing;
 }
