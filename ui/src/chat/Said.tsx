@@ -199,12 +199,13 @@ export function Reactions({
           👍
         </span>
         <span aria-hidden="true">{names.length}</span>
-        <span className="react-who" aria-hidden="true">
-          {names.map((n) => (
-            <span key={n}>{n}</span>
-          ))}
-        </span>
       </button>
+      {/* Beside the count, on its line; with no room there, under it: never over a message (said.css). */}
+      <span className="react-who" aria-hidden="true">
+        {names.map((n) => (
+          <span key={n}>{n}</span>
+        ))}
+      </span>
     </div>
   );
 }

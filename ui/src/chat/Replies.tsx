@@ -258,6 +258,8 @@ function AskApproval({
 /** Under the bubble, what the person can do about how the turn ended: Continue, Retry with its reference, or Sign in. */
 function EndActs({ ending, agent, actions }: { ending: Ending; agent?: string; actions: Actions }) {
   const { turn, act } = ending;
+  if (act === 'reference')
+    return <EndRow reference={turn.ref} onReference={() => actions.diagnostics(turn.id)} />;
   const [label, onClick] =
     act === 'retry'
       ? ['Retry', () => actions.retry(turn.id)]

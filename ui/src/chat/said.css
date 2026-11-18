@@ -325,6 +325,10 @@
 /* A thumbs-up: the emoji and the count, no box. Who gave it shows on hover or focus: names, not help. */
 .reacts {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  max-width: 100%;
   margin-top: 2px;
 }
 .react {
@@ -349,31 +353,29 @@
   font-size: 15px;
   line-height: 20px;
 }
+/* Who gave it: beside the count, on its line, as tall as the count, so it covers no message and moves nothing. With
+   no room beside it (a narrow column, a thread, many names) the row wraps it under the count, in the flow, so what
+   follows moves down rather than being covered. */
 .react-who {
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 4px);
-  z-index: 4;
   display: none;
-  flex-direction: column;
-  padding: 6px 10px;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  max-width: 100%;
+  padding: 1px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--popover);
   color: var(--popover-foreground);
   font-size: 12.5px;
   font-weight: 600;
-  line-height: 18px;
-  text-align: left;
-  white-space: nowrap;
-  /* Names to read, never a target: the pointer leaving the count closes it, and it never holds the bubble's row. */
+  line-height: 20px;
+  /* Names to read, never a target: the pointer leaving the count closes them. */
   pointer-events: none;
 }
-.react:hover .react-who,
-.react:focus .react-who {
+.react:hover + .react-who,
+.react:focus + .react-who {
   display: flex;
-}
-/* The count the person can press: it gives their like or takes it back (0057). Theirs is in the attention blue. */
+} /* The count the person can press: it gives their like or takes it back (0057). Theirs is in the attention blue. */
 .react[aria-pressed] {
   cursor: pointer;
 }

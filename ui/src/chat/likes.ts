@@ -63,3 +63,14 @@ export const saidLike = (state: ChatState, message: string): Like => ({
   questions: [],
   mine: mine(state, message),
 });
+
+/**
+ * Whether a like opened the turn: it opens with Gathr's copy of its own agent's message (a teammate's copy is of
+ * another agent's). Retry resends the person's message of a turn, and such a turn has none: it offers none.
+ */
+export function likeOpened(state: ChatState, turn: string): boolean {
+  const opening = state.messages.find((m) => m.turn === turn && (m.role === 'gathr' || m.role === 'user'));
+  if (opening?.role !== 'gathr' || !opening.copy_of) return false;
+  const liked = state.messages.find((m) => m.id === opening.copy_of);
+  return !!liked && state.turns[liked.turn ?? '']?.agent === state.turns[turn]?.agent;
+}

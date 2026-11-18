@@ -5,7 +5,7 @@ import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, askSizes, changed, fixed } from './asks';
 import { type Ending, ending } from './ends';
 import { fold, type Given, type Work } from './fold';
-import { blockLike, type Like, PERSON, versionLike } from './likes';
+import { blockLike, type Like, likeOpened, PERSON, versionLike } from './likes';
 import { place } from './order';
 import { heardTurns, questions } from './questions';
 import { prThread, underPrs } from './reviews';
@@ -398,7 +398,9 @@ function block(
     turn?.status === 'stopped' &&
     Object.values(state.turns).some((t) => t.answers === id && went.includes(t.status));
   const task = state.tasks.find((t) => t.number === turn?.task);
-  const end = group.last && turn ? ending(turn, task, carried) : undefined;
+  const how = group.last && turn ? ending(turn, task, carried) : undefined;
+  const end =
+    how?.act === 'retry' && id && likeOpened(state, id) ? { ...how, act: 'reference' as const } : how;
   const ended = end ? `${turn?.status}|${turn?.ref}|${end.word}|${end.act}` : '';
   // The lead: the Supervisor in a team chat, whoever answers in a chat with one agent.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;

@@ -115,7 +115,14 @@ function room(): ChatState {
   };
 }
 
-function View({ state, like, width = 1440 }: { state: ChatState; like?: Actions['like']; width?: number }) {
+function View(props: {
+  state: ChatState;
+  like?: Actions['like'];
+  width?: number;
+  extra?: Agent[];
+  retry?: Actions['retry'];
+}) {
+  const { state, like, width = 1440, extra = [], retry } = props;
   const cache = useRef(new Map());
   const none = () => {};
   const actions: Actions = {
@@ -124,7 +131,7 @@ function View({ state, like, width = 1440 }: { state: ChatState; like?: Actions[
     diagnostics: none,
     reference: none,
     signIn: none,
-    retry: none,
+    retry: retry ?? none,
     resend: none,
     carryOn: none,
     approve: none,
@@ -133,7 +140,7 @@ function View({ state, like, width = 1440 }: { state: ChatState; like?: Actions[
   return (
     <div style={{ height: 1400, width, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, [], cache.current).items}
+        messages={toThread(state, [...agents, ...extra], [], cache.current).items}
         running={false}
         actions={actions}
         empty={false}
@@ -211,7 +218,9 @@ test('the button and the count give the like and take it back, and the names say
   expect(getComputedStyle(count()).color).toBe(getComputedStyle(blue).color);
   blue.remove();
   expect([...count().children].slice(0, 2).map((c) => c.textContent)).toEqual(['👍', '2']);
-  expect((count().querySelector('.react-who') as HTMLElement).textContent).toBe('YouMade-up Lead');
+  expect(
+    ((count().parentElement as HTMLElement).querySelector('.react-who') as HTMLElement).textContent,
+  ).toBe('YouMade-up Lead');
   expect((message('Done.').button as HTMLButtonElement).getAttribute('aria-pressed')).toBe('true');
   await userEvent.click(count());
   expect(like).toHaveBeenLastCalledWith('m-short', [], false);
@@ -283,3 +292,86 @@ for (const width of [1440, 360]) {
     }
   });
 }
+
+/** The room with the person's like and agents' thumbs-ups under a short, a long and a thread message, by long names. */
+function named(): ChatState {
+  const more = [
+    { agent: 'c', name: 'Made-up Reviewer Of Long Names', role: 'reviewer' as const },
+    { agent: 'd', name: 'Made-up Member With A Long Name', role: 'member' as const },
+  ];
+  const base = room();
+  const given = (message: string, agent: string) => ({ message, agent, time: '2026-11-08T10:40:00Z' });
+  return {
+    ...base,
+    members: [...members, ...more],
+    turns: { ...base.turns, work: turn('work', 'b', 7) },
+    messages: [
+      ...base.messages,
+      said('w', 'work', 'Made-up finding'),
+      said('wq', 'work', 'Made-up question in a thread', { to: 'a' }),
+    ],
+    reactions: ['m-short', 'm-long', 'wq'].flatMap((m) => [
+      given(m, 'person'),
+      given(m, 'c'),
+      given(m, 'd'),
+      ...(m === 'wq' ? [] : [given(m, 'b')]),
+    ]),
+  };
+}
+
+const overlap = (a: DOMRect, b: DOMRect) =>
+  a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+for (const width of [1440, 360]) {
+  test(`who gave a thumbs-up never covers a message, at ${width} wide`, async () => {
+    await page.viewport(width === 360 ? 1000 : 1440, 900);
+    const more: Agent[] = named()
+      .members.slice(2)
+      .map((m) => ({ ...agents[0], id: m.agent, name: m.name }));
+    const screen = await render(<View state={named()} width={width} extra={more} />);
+    await expect.element(screen.getByText('Done.')).toBeVisible();
+    for (const words of ['Done.', LONG, 'Made-up question in a thread']) {
+      const said = message(words).said;
+      const count = said.querySelector('.react') as HTMLElement;
+      count.scrollIntoView({ block: 'center' });
+      await userEvent.hover(count);
+      const who = said.querySelector('.react-who') as HTMLElement;
+      await expect.poll(() => getComputedStyle(who).display).not.toBe('none');
+      expect(who.textContent).toMatch(/^You/);
+      const box = who.getBoundingClientRect();
+      for (const bubble of document.querySelectorAll('.bubble')) {
+        const hit = overlap(box, bubble.getBoundingClientRect());
+        expect(hit, `${words}: the names cover "${bubble.textContent?.slice(0, 30)}"`).toBe(false);
+      }
+      // Within the chat's column.
+      expect(box.right).toBeLessThanOrEqual(said.getBoundingClientRect().right + 1);
+    }
+  });
+}
+
+test('a failed turn a like opened shows its reference and no Retry; others keep Retry', async () => {
+  const state = room();
+  state.turns = {
+    ...state.turns,
+    woke: turn('woke', 'a', 7, { status: 'failed', ref: 'ref-like' }),
+    told: turn('told', 'a', 8, { status: 'failed', ref: 'ref-mate' }),
+    again: turn('again', 'a', 9, { status: 'failed', ref: 'ref-mine' }),
+  };
+  state.messages = [
+    ...state.messages,
+    said('ln', 'woke', 'Made-up line of a like', { role: 'gathr', copy_of: 'm-long' }),
+    said('cp', 'told', 'Made-up words, carried', { role: 'gathr', copy_of: 't1' }),
+    said('mine', 'again', 'Made-up words of the person again', { role: 'user' }),
+  ];
+  const retry = vi.fn();
+  const screen = await render(<View state={state} retry={retry} />);
+  const block = (ref: string) =>
+    screen.getByText(ref, { exact: true }).element().closest('.said') as HTMLElement;
+  await expect.element(screen.getByText('ref-like', { exact: true })).toBeVisible();
+  const retries = (ref: string) =>
+    [...block(ref).querySelectorAll('button')].filter((b) => b.textContent === 'Retry');
+  expect(block('ref-like').textContent).toContain('Failed');
+  expect(retries('ref-like')).toHaveLength(0);
+  expect(retries('ref-mate')).toHaveLength(1);
+  expect(retries('ref-mine')).toHaveLength(1);
+});

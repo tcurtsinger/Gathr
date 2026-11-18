@@ -18,7 +18,7 @@ Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.m
   - **Deleting a chat** removes its reactions with its messages. Archiving keeps them.
 - **C2: the window shows it, live.**
   - `GET /api/chats/<id>` carries `reactions`, oldest first. The live socket sends `{"type": "reaction", "chat", "reaction"}` when a row is new.
-  - **The look is the thumbs-up icon and a count.** The names are in the shared tooltip, under the mark so it never covers the words, on hover and on keyboard focus, in the order the thumbs-ups were given. The accessible name says them too: "Thumbs-up from Vale and Juno". No names and no initials in the line, and no label.
+  - **The look is the thumbs-up icon and a count.** The names are in the shared tooltip, beside the mark so it never covers the words (C4), on hover and on keyboard focus, in the order the thumbs-ups were given. The accessible name says them too: "Thumbs-up from Vale and Juno". No names and no initials in the line, and no label.
   - The count is the number of givers the window can name. A giver Gathr no longer knows isn't counted, so the count always equals the names in the tooltip.
   - It sits under the words it was given to: a reply block's shown text, and each message of an exchange between agents. A reply block shows its turn's last text. A thumbs-up on an earlier text of the turn, which folds into the turn's steps, is kept and the API carries it, but the window draws none under the block: it would sit under words the giver didn't agree with.
 - **C3: no role text.** The briefing names the tool and says what it does, as it does for every tool. It doesn't tell agents to agree this way, and nothing refuses a message for its wording. That agents agree with a thumbs-up and not a message is measured later, in Stage 3's trial, so 6.6 stays Partly.
@@ -53,6 +53,9 @@ Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.m
     or turn is undone, and nothing is sent. **Given again** after that: the mark alone. A message's like acts once,
     the first time: a person toggling it never wakes the agent twice. Whether it acted is read from the record
     (`gathr.message.reaction` with `agent` `person` on that message), so it needs no new column.
+  - **Who gave it** shows beside the count on its line, never over a message; with no room there, under it in the
+    flow. **A failed turn a like opened** shows Failed and its reference with no Retry: Retry resends the person's
+    message of a turn, and that turn has none.
   - **Agents' thumbs-ups are unchanged:** they start no turn and can't be taken back. Agents liking the person's
     messages is its own change.
 - **The two changed texts aren't kept samples** of [0056](0056-gathr-records-which-words-opened-each-turn.md): neither the teammate's message (a kind with no version) nor the briefing is one of the 24. No version moved, and the words tests pass unchanged.
