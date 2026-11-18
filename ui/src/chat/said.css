@@ -1,0 +1,325 @@
+/* A message beside its author's face, everyone on the left (0072, the team-chat mock-up's look D, "Tuned"): a 36px
+   face level with the bubble, the name line above the bubble, the words in a soft bubble. */
+.said {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  column-gap: 12px;
+}
+/* The face sits level with the bubble, under the name line (20px and the 5px gap). */
+.said-face {
+  padding-top: 25px;
+}
+/* A message with no words yet (an agent at work, a turn that only ran steps): its face beside its name line. */
+.said[data-bare] {
+  align-items: center;
+}
+.said[data-bare] > .said-face {
+  padding-top: 0;
+}
+/* A block that follows its speaker's has no face or name line: its bubble lines up with the one above. */
+.said-face:empty {
+  padding: 0;
+}
+.said-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+}
+/* A notice in a message follows the name line by the 5px a bubble does, with no margins of its own. */
+.said-main > .notice {
+  margin: 0;
+}
+/* The bubble and a thumbs-up fit their words; the steps, notices and approvals take the column. */
+.said-main > :not(.bubble, .reacts) {
+  align-self: stretch;
+}
+/* In a team chat the face opens the agent's panel; pointed at, it takes the hover tint. */
+.said-open {
+  position: relative;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+.said-open:hover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--hover-tint);
+}
+
+/* The name line: the name, then one style for everything after it ("·" with 6px each side, 12px icons on the
+   letters' centre), on one line; a long task is cut with …. */
+.name-line {
+  display: flex;
+  align-self: stretch;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.name-line-name {
+  flex: none;
+  font-size: 15px;
+  font-weight: 650;
+}
+.name-line-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 450;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.name-line-meta > * {
+  flex: none;
+}
+/* "·" between the pieces, 6px each side; its text is no part of what a screen reader says. */
+.name-line-meta > * + *::before,
+.steps-piece::before {
+  content: "·" / "";
+  padding: 0 6px;
+}
+/* The steps button holds its own pieces, each with its "·". */
+.name-line-meta > .steps-button::before {
+  content: none;
+}
+.name-line-meta svg {
+  width: 12px;
+  height: 12px;
+  translate: 0 0.5px;
+}
+.name-line-meta > .name-line-task {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+.name-line-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The tick's own space, so the "·" before the task keeps 6px each side as every other does. */
+.name-line-task svg {
+  flex: none;
+  margin-left: 4px;
+}
+
+/* A turn's steps on its name line: shown while the message is pointed at or has focus, and always for a failed
+   step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */
+.steps-button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  opacity: 0;
+  cursor: pointer;
+}
+.said:hover .steps-button,
+.said:focus-within .steps-button,
+.said[data-keep] .steps-button,
+.steps-button[aria-expanded="true"] {
+  opacity: 1;
+}
+.steps-button:hover {
+  color: var(--foreground);
+}
+.steps-piece {
+  display: flex;
+  align-items: center;
+}
+.steps-failed {
+  color: var(--destructive);
+}
+.name-line-meta .steps-chevron {
+  margin-left: 4px;
+}
+.steps-button[aria-expanded="true"] .steps-chevron {
+  rotate: 90deg;
+}
+/* The steps open under the name line, with no button of their own: the name line holds it. */
+.work.steps-only > [data-slot="collapsible"] > [data-slot="collapsible-trigger"],
+.work.steps-only > p {
+  display: none;
+}
+.work.steps-only {
+  gap: 0;
+}
+.work.steps-only [data-slot="collapsible-content"] > ol {
+  margin-bottom: 4px;
+  padding-top: 4px;
+}
+/* A running turn's latest step, under its name line while the steps are closed. */
+.work.steps-only > [data-slot="collapsible"] > p {
+  padding-left: 0;
+  font-size: 13px;
+}
+
+/* The words: a soft bubble that lifts off the page; the person's own tinted blue (the owner's word, 0072). */
+.bubble {
+  max-width: 100%;
+  padding: 8px 13px;
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--foreground) 8%, var(--background));
+  font-size: 15px;
+  font-weight: 450;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+/* A table sizes itself to the column (markdown.css), so its bubble takes the column for it to fill. */
+.said-main > .bubble:has([data-streamdown="table"]) {
+  align-self: stretch;
+}
+.said[data-you] .bubble {
+  background: color-mix(in oklab, var(--attention) 22%, var(--background));
+}
+/* The person's words as they typed them. */
+.bubble-plain {
+  white-space: pre-wrap;
+}
+/* A quote, plain: the words it answers, no arrow, no name. */
+.bubble-quote {
+  margin-bottom: 8px;
+  padding-left: 10px;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An @Name: the accent blue, no underline, so a link stays told apart. It opens the first line of the words: the
+   words' first paragraph runs on after it, so the bubble fits them both. */
+.mention {
+  margin-right: 0.3em;
+  color: var(--accent);
+}
+.bubble:has(> .mention) > .markdown,
+.bubble:has(> .mention) > .markdown > div,
+.bubble:has(> .mention) > .markdown > div > p:first-child {
+  display: inline;
+}
+.bubble .plan-chip {
+  display: flex;
+  width: fit-content;
+  margin-top: 12px;
+  background: var(--background);
+}
+.bubble > .plan-chip:first-child {
+  margin-top: 0;
+}
+
+/* A thumbs-up: the emoji and the count, no box. Who gave it shows on hover or focus: names, not help. */
+.reacts {
+  display: flex;
+  margin-top: 2px;
+}
+.react {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 450;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+.react-e {
+  font-size: 15px;
+  line-height: 20px;
+}
+.react-who {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 4;
+  display: none;
+  flex-direction: column;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: left;
+  white-space: nowrap;
+}
+.react:hover .react-who,
+.react:focus .react-who {
+  display: flex;
+}
+
+/* Talk between agents under the message it belongs to: a thin line at the bubble's left edge, a toggle on top. */
+.talk {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.talk[data-thread] {
+  gap: 14px;
+  margin: -10px 0 0 48px;
+  padding: 0 0 4px 12px;
+  border-left: 1px solid var(--border);
+}
+.talk-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.talk-toggle:hover {
+  color: var(--foreground);
+}
+.talk-chevron {
+  width: 14px;
+  height: 14px;
+}
+.talk[data-open] .talk-chevron {
+  rotate: 90deg;
+}
+.talk-replies {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.said[data-small] {
+  grid-template-columns: 28px minmax(0, 1fr);
+  column-gap: 10px;
+}
+.said[data-small] .name-line-name {
+  font-size: 14px;
+}
+.said[data-small] .bubble {
+  font-size: 14.5px;
+}

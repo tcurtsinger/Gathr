@@ -231,15 +231,16 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
   // Newest first: what it wrote to the lead, then its earlier turn. Nobody else's blocks, nor the running one.
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
-  const blocks = [...earlier.element().querySelectorAll('.reply')].map((b) => [
-    b.querySelector('.speaker-who')?.textContent,
-    b.querySelector('.reply-body')?.textContent,
+  const blocks = [...earlier.element().querySelectorAll('.said')].map((b) => [
+    b.querySelector('.name-line-name')?.textContent,
+    b.querySelector('.name-line-what')?.textContent ?? null,
+    b.querySelector('.bubble')?.textContent,
   ]);
   expect(blocks).toEqual([
-    ['Made-up Memberto Made-up Lead', 'Made-up question for the lead'],
-    ['Made-up Memberon Made-up task 7', 'Made-up earlier finding'],
+    ['Made-up Member', null, '@Made-up LeadMade-up question for the lead'],
+    ['Made-up Member', 'on Made-up task 7', 'Made-up earlier finding'],
   ]);
-  await expect.element(earlier.getByRole('button', { name: 'Worked · 1 step' })).toBeVisible();
+  await expect.element(earlier.getByRole('button', { name: '1 step' })).toBeVisible();
 
   // Its tasks, open ones first; one opens in the Tasks tab.
   const list = panel.getByRole('region', { name: 'Tasks in this chat' });
@@ -415,9 +416,9 @@ test('an agent that left the chat keeps its words in the timeline, with nothing 
   await render(<Chat />);
   const words = page.getByText('Made-up words from an agent that left');
   await expect.element(words).toBeVisible();
-  expect(words.element().closest('.reply')?.querySelector('.speaker-open')).toBeNull();
+  expect(words.element().closest('.said')?.querySelector('.said-open')).toBeNull();
   // The members' own words in the timeline still open them.
-  expect(document.querySelectorAll('.exchange .speaker-open').length).toBe(1);
+  expect(document.querySelectorAll('.talk .said-open').length).toBe(1);
 });
 
 test('a token streamed into the chat draws the workspace no more', async () => {
@@ -468,7 +469,7 @@ test('behind another tab the panel keeps its scroll and its opened rows, and not
   service();
   await render(<Chat />);
   await openFromSummary(/^Made-up Member/);
-  const earlier = panel.getByRole('button', { name: 'Worked · 1 step' });
+  const earlier = panel.getByRole('button', { name: '1 step' });
   await earlier.click();
   await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
   const scroller = panel.element().querySelector('.agent-panel') as HTMLElement;

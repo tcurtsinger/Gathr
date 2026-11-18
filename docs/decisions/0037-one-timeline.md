@@ -6,7 +6,7 @@ recipient rules of 0015 and 0028 stand until their own slices of the redesign.
 
 Built: yes. Proof: `ui/src/chat/messages.test.ts`, `ui/src/chat/Timeline.test.tsx`, `ui/src/chat/WorkRow.test.tsx`.
 
-Out of date below: a step shows no time ([0044](0044-what-a-step-returned.md)); a running row says "Working" with its latest step under it; the "later slices" are built ([0038](0038-summary-holds-the-plan.md) to [0042](0042-thinking.md)).
+Drawn as bubbles since [0072](0072-the-chat-reads-like-a-team-chat.md): the timeline and its order stand; what a turn did is on its message's name line, shown on hover, not a row above it; who speaks is a face and one name line on every message; agents' messages to each other are a thread under the message they belong to, not a tinted block headed "Juno to Orin"; a reaction is the emoji and a count. Also out of date below: a step shows no time ([0044](0044-what-a-step-returned.md)); a running row says "Working" with its latest step under it; the "later slices" are built ([0038](0038-summary-holds-the-plan.md) to [0042](0042-thinking.md)).
 
 ## Choice
 

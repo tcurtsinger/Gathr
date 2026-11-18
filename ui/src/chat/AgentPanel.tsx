@@ -45,14 +45,14 @@ export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) 
   };
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
-    if (custom.exchange) {
-      const own = custom.exchange.flatMap((m, at) => (m.by === agent ? at : []));
+    if (custom.thread) {
+      const own = custom.thread.flatMap((m, at) => (m.by === agent ? at : []));
       if (!own.length || typeof item.content === 'string') continue;
       const { content } = item;
       keep(item, () => ({
         ...item,
         content: own.map((at) => content[at]),
-        metadata: { custom: { exchange: own.map((at) => custom.exchange?.[at]) } },
+        metadata: { custom: { thread: own.map((at) => custom.thread?.[at]) } },
       }));
     } else if (custom.by === agent && item.role === 'assistant') {
       if (item.status?.type === 'running') now = custom.work ?? now;

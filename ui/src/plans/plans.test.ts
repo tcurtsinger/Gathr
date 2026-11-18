@@ -197,13 +197,6 @@ test("Gathr's plan lines are kind version, each with its plan; the size line kee
     {
       kind: 'version',
       who: 'Plan v1:',
-      text: 'Bo agrees',
-      more: 'Tags on notes',
-      plan: { id: 3, version: 1 },
-    },
-    {
-      kind: 'version',
-      who: 'Plan v1:',
       text: 'Sent back',
       more: 'Split part 2',
       plan: { id: 3, version: 1 },
@@ -244,6 +237,18 @@ test('a check line says the outcome the version reached the person with', () => 
       .flatMap((m) => custom(m).events ?? [])
       .find((e) => e.kind === 'version')?.text;
   expect([findings, late, failed].map(said)).toEqual(['2 findings', "Bo didn't finish", "Bo didn't finish"]);
+  // None of them is a thumbs-up on the version.
+  const first = (state: ChatState) => custom(view(state).find((m) => m.id === 'v1')).agreed;
+  expect([findings, late, failed].map(first)).toEqual([[], [], []]);
+});
+
+test("a check that agrees is its checker's thumbs-up on the version, with no line of its own (0072)", () => {
+  const items = view(planned());
+  expect(custom(items.find((m) => m.id === 'v1')).agreed).toEqual(['Bo']);
+  // Given once: a thumbs-up Bo also gave by hand doesn't count twice.
+  const both = planned();
+  both.reactions.push({ message: 'v1', agent: 'bo', time: iso(170) });
+  expect(custom(view(both).find((m) => m.id === 'v1')).agreed).toEqual(['Bo']);
 });
 
 test("a hear-back says no line for a plan's check, whose plan line says how it ended, and keeps the others", () => {
