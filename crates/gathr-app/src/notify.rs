@@ -24,8 +24,8 @@ const KEPT: usize = 50;
 /// Each notification kept, by its id, with the chat a click on it opens.
 type Shown = Arc<Mutex<BTreeMap<i32, Option<String>>>>;
 
-/// Reads the service every few seconds, from `setup`. `after_update`: this start follows an update
-/// made while hidden, so what waits now was already told.
+/// Reads the service every few seconds, from `setup`. `after_update`: this start follows the
+/// window's own update, so what waits now was already told.
 pub fn run(app: &AppHandle, after_update: bool) {
     let shown = Shown::default();
     let (on_click, kept) = (app.clone(), shown.clone());
