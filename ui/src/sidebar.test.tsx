@@ -42,11 +42,19 @@ test("the open chat's More is hidden until the pointer is on its row", async () 
     .toBe(1);
 });
 
-test("the keyboard shows a row's More as it reaches it", async () => {
+// Focus is set by hand, not with Tab: WebKit's Tab passes over every button unless the Mac is set to visit them,
+// so a Tab there says nothing about this row.
+test('focus in a row shows its More, which takes focus though it had no room', async () => {
   await sidebar();
-  await page.getByRole('button', { name: 'Made-up open chat', exact: true }).click();
-  await userEvent.unhover(page.getByRole('button', { name: 'Made-up open chat', exact: true }));
-  await userEvent.keyboard('{Tab}');
+  const row = page.getByRole('button', { name: 'Made-up open chat', exact: true });
+  // The pointer rests where the test before left it.
+  await userEvent.unhover(row);
+  (row.element() as HTMLElement).focus();
+  await expect.poll(() => opacity('Made-up open chat'), { message: 'its More, focus on the row' }).toBe(1);
+
+  (row.element() as HTMLElement).blur();
+  await expect.poll(() => opacity('Made-up open chat'), { message: 'its More, focus gone' }).toBe(0);
+  (more('Made-up open chat').element() as HTMLElement).focus();
   await expect.element(more('Made-up open chat')).toHaveFocus();
-  expect(opacity('Made-up open chat'), 'its More, focused by the keyboard').toBe(1);
+  expect(opacity('Made-up open chat'), 'its More, focused').toBe(1);
 });
