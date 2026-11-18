@@ -136,26 +136,20 @@ export function askOf(
   return state.tasks.find((t) => t.given_in === answers && t.ask)?.ask;
 }
 
-/** A thread's fold line: who replied, how many, the newest reply's time, and whether it is open. */
-export function foldOf(topic: string, replies: ThreadMessageLike[], open: boolean): Fold {
-  const faces = new Map<string, string>();
-  let last: string | undefined;
-  for (const r of replies) {
-    const own = (r.metadata?.custom ?? {}) as Custom;
-    const by = own.said?.agent ?? own.by;
-    const name = own.said?.from ?? own.agent;
-    if (by && name && !faces.has(by)) faces.set(by, name);
-    if (own.gathr && !faces.has('gathr')) faces.set('gathr', 'Gathr');
-    if (r.role === 'user' && !faces.has('you')) faces.set('you', 'You');
-    last = own.said?.time ?? own.time ?? last;
-  }
-  return {
-    topic,
-    open,
-    count: replies.length,
-    faces: [...faces].map(([agent, name]) => ({ agent, name })),
-    last,
-  };
+/**
+ * The row under a main message: how many replies its thread has and whether it is open, with the main message's
+ * thumbs-up; none when it has neither.
+ */
+export function foldOf(
+  topic: string,
+  main: ThreadMessageLike,
+  count: number,
+  open: boolean,
+): Fold | undefined {
+  const own = (main.metadata?.custom ?? {}) as Custom;
+  const agreed = own.agreed ?? own.said?.agreed;
+  if (!count && !agreed?.length) return undefined;
+  return { topic, open, count, ...(agreed?.length && { agreed, like: own.like ?? own.said?.like }) };
 }
 
 /**

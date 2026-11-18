@@ -311,8 +311,11 @@ the ask's thread, its steps saying "gave 3 tasks".
 An ask's result is the lead's own block, at the bottom, opening with a plain quote of the ask's first line (the
 quote style below): a press on it scrolls up to the ask and holds it there, as a search hit does.
 
-Under a main message with replies, one fold line, the same open or folded: a chevron (turned down when open), the
-faces of who replied at 18px, "1 reply" or "4 replies", and the newest reply's time, 13px muted. A press folds or
+Under a main message with replies, one fold line, 13px muted: a chevron (turned down when open) and, folded, "1
+reply" or "4 replies"; open, "Collapse replies". No faces and no time (the owner's words: "I want just '3
+replies'", "Collapse replies like in Zoom"). The main message's thumbs-up sits on the same row, after the fold
+line; with no replies the row holds the thumbs-up alone, at the bubble's left edge. A reply's thumbs-up stays
+under its own words. A press folds or
 opens the thread; the line stays where it was, and a thread opened at the chat's foot scrolls up to show above the
 box. A thread starts open; when the chat is opened, one whose main message is handled starts folded (a task done or
 cancelled, a decided version, an answered question, an ask with nothing open, every turn of it over and no approval

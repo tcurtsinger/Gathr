@@ -4,7 +4,7 @@
 import { expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
-import type { Message } from '../api';
+import type { Message, Turn } from '../api';
 import { chat, View } from './recorded';
 import { apply, type ChatState } from './state';
 
@@ -183,17 +183,72 @@ test('a handled thread starts folded; a new reply never opens it, and the person
   expect(fold().getAttribute('aria-expanded')).toBe('true');
 });
 
-test("a line of Gathr's shows Gathr's own mark on the fold line, never a made-up agent's face", async () => {
-  const state = chat('askDone');
-  const more = apply(state, {
-    type: 'message',
-    chat: 'c',
-    message: line('n1', 't:2', 'Made-up later note', '2026-11-18T21:00:00Z'),
-  });
-  await render(<View state={more} />);
+test('the fold line says how many replies and nothing more; open, it says Collapse replies', async () => {
+  await render(<View state={longThread(1)} />);
   const fold = () => foldOf(mainWith('Add the tags table')) as HTMLButtonElement;
-  await expect.poll(() => fold()?.textContent).toContain('2 replies');
-  expect(fold().querySelectorAll('.face-gathr').length).toBe(1);
+  await expect.poll(() => fold()?.textContent).toBe('2 replies');
+  expect(fold().querySelector('.face, time')).toBeNull();
+  await fold().click();
+  await expect.poll(() => fold().textContent).toBe('Collapse replies');
+  expect(fold().getAttribute('aria-expanded')).toBe('true');
+  await fold().click();
+  await expect.poll(() => fold().textContent).toBe('2 replies');
+});
+
+/** A thumbs-up from the chat's second member on a message. */
+const liked = (state: ChatState, message: string): ChatState => ({
+  ...state,
+  reactions: [{ message, agent: state.members[1].agent, time: '2026-11-18T21:00:00Z' }],
+});
+
+test("a main message's thumbs-up sits on its fold line's row, after the replies button", async () => {
+  const state = chat('askAtWork');
+  await render(<View state={liked(state, state.plans[0].versions[0].message as string)} />);
+  await expect.poll(() => document.querySelector('.fold .react')).not.toBeNull();
+  const main = mainWith('version 1');
+  const row = main.nextElementSibling as HTMLElement;
+  expect(main.querySelector('.reacts')).toBeNull();
+  const line = (row.querySelector('.fold-line') as HTMLElement).getBoundingClientRect();
+  const react = (row.querySelector('.react') as HTMLElement).getBoundingClientRect();
+  expect(react.left).toBeGreaterThan(line.right);
+  // One row: their middles are level.
+  expect(Math.abs((line.top + line.bottom) / 2 - (react.top + react.bottom) / 2)).toBeLessThan(2);
+});
+
+test('a main message with a thumbs-up and no replies shows it with no replies button', async () => {
+  // A turn of the lead's that nothing ties: a main message with no thread.
+  const state = chat('askDone');
+  const lead = state.members[0].agent;
+  const lone = {
+    id: 'lone',
+    agent: lead,
+    status: 'done',
+    why: null,
+    ref: 'lone',
+    position: 99,
+    topic: 'b:lone',
+  };
+  const words: Message = {
+    id: 'lone-words',
+    turn: 'lone',
+    time: '2026-11-18T22:00:00Z',
+    role: 'assistant',
+    kind: 'text',
+    body: 'Made-up lone words',
+  };
+  const more = {
+    ...state,
+    turns: { ...state.turns, lone: lone as Turn },
+    messages: [...state.messages, words],
+  };
+  await render(<View state={liked(more, 'lone-words')} />);
+  await expect.element(page.getByText('Made-up lone words')).toBeVisible();
+  const main = mainWith('Made-up lone words');
+  const row = main.nextElementSibling as HTMLElement;
+  expect(row.matches('.fold')).toBe(true);
+  expect(row.querySelector('.react')).not.toBeNull();
+  expect(row.querySelector('.fold-line')).toBeNull();
+  expect(main.querySelector('.reacts')).toBeNull();
 });
 
 test('a thread whose turn failed is not handled: it opens with Retry and its reference in view', async () => {

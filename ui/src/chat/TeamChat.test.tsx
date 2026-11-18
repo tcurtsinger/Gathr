@@ -129,9 +129,9 @@ test('a reply between agents reads in the thread of what it answers, and the thr
   // The turn that only answered has no message of its own: its step is on the answer's name line.
   expect(document.querySelectorAll('.said')).toHaveLength(4);
 
-  const line = screen.getByRole('button', { name: /2 replies/ });
-  await line.click();
+  await screen.getByRole('button', { name: 'Collapse replies' }).click();
   await expect.element(screen.getByText('Made-up answer')).not.toBeInTheDocument();
+  const line = screen.getByRole('button', { name: '2 replies' });
   expect(line.element().getAttribute('aria-expanded')).toBe('false');
   await line.click();
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
@@ -189,12 +189,14 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
     reactions: [given('found', 'gone', 0), given('found', 'c', 1), given('q', 'a', 2), given('u', 'c', 3)],
   };
   const screen = await render(<View state={before} />);
-  const finding = screen.getByText('Made-up finding').element().closest('.said') as HTMLElement;
+  // The member's finding is a main message: its thumbs-up is on the row under it, with its fold line (0075).
+  const said = screen.getByText('Made-up finding').element().closest('.said') as HTMLElement;
+  const finding = said.nextElementSibling as HTMLElement;
   const mark = page.elementLocator(finding).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' });
   await expect.element(mark).toBeVisible();
   // The emoji and the count; the names are hidden until asked for.
   expect([...mark.element().children].slice(0, 2).map((c) => c.textContent)).toEqual(['👍', '1']);
-  // Under the member's words and its question; none under the person's own.
+  // For the member's words and its question; none for the person's own.
   expect(document.querySelectorAll('.react')).toHaveLength(2);
   const who = finding.querySelector('.react-who') as HTMLElement;
   expect(getComputedStyle(who).display).toBe('none');

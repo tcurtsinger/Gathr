@@ -51,13 +51,16 @@ export type Place = {
   result?: { ask: string; quote: string };
 };
 
-/** A thread's fold line: who replied, how many, the newest reply's time, and whether it is open. */
+/**
+ * The row under a main message: its thread's fold line (how many replies, and whether it is open), and the main
+ * message's thumbs-up on the same row. With no replies it holds the thumbs-up alone.
+ */
 export interface Fold {
   topic: string;
   open: boolean;
   count: number;
-  faces: { agent: string; name: string }[];
-  last?: string;
+  agreed?: string[];
+  like?: Like;
 }
 
 /** A task the lead hands out, as its main message: from the task's record, as the Tasks view reads it. */

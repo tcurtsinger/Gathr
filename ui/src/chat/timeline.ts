@@ -202,10 +202,10 @@ export function drawn(
     // A turn that ended needing the person (Retry, Continue, Sign in) keeps its thread from being handled.
     const done = settled && ![main, ...replyItems].some(needsYou);
     if (done) handled.add(t.topic);
-    if (!drawnReplies.length) return;
     const open = view ? (view.open.get(t.topic) ?? !(view.start ?? handled).has(t.topic)) : !done;
+    const line = foldOf(t.topic, main, replyItems.length, replyItems.length > 0 && open);
+    if (!line) return;
     all.push(...replyItems);
-    const line = foldOf(t.topic, replyItems, open);
     items.push(
       kept(cache, `fold-${t.topic}`, JSON.stringify(line), () => ({
         id: `fold-${t.topic}`,

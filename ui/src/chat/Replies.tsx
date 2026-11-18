@@ -201,7 +201,10 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
           ))}
         </Bubble>
       )}
-      {!!agreed?.length && <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />}
+      {/* A main message's thumbs-up is on the row under it, with its fold line (Talk.tsx). */}
+      {!!agreed?.length && !(own.topic && !small) && (
+        <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />
+      )}
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}

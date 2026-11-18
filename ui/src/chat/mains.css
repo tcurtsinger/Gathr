@@ -47,6 +47,23 @@
 .thread-messages > .fold::before {
   top: 0;
 }
+/* One row: the fold line, then the main message's thumbs-up. With no replies the thumbs-up alone, at the bubble's
+   left edge, with no rule. */
+.thread-messages > .fold {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+}
+.fold > .reacts {
+  margin-top: 0;
+}
+.thread-messages > .fold[data-bare] {
+  padding-left: 0;
+}
+.thread-messages > .fold[data-bare]::before {
+  content: none;
+}
 .fold-line,
 .earlier-button {
   display: inline-flex;
@@ -66,18 +83,6 @@
 .fold-line:hover,
 .earlier-button:hover {
   color: var(--foreground);
-}
-.fold-line time {
-  font-variant-numeric: tabular-nums;
-}
-.fold-line time::before {
-  content: "·";
-  padding-right: 6px;
-}
-@supports (content: "·" / "") {
-  .fold-line time::before {
-    content: "·" / "";
-  }
 }
 .fold-chevron {
   width: 14px;

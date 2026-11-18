@@ -1,6 +1,5 @@
 import { MessagePrimitive } from '@assistant-ui/react';
 import { ChevronRight } from 'lucide-react';
-import { FaceStack } from '../components/Face';
 import { MessageActions } from '../components/MessageActions';
 import type { Custom, Fold } from './messages';
 import { liking, parts } from './Replies';
@@ -9,17 +8,28 @@ import { AgentFace, Bubble, NameLine, Reactions, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import { useActions } from './Thread';
 import { WorkRow } from './TurnParts';
-import { clock } from './team';
 import type { Said as Message } from './threads';
 
 /**
- * A thread's one line under its main message (0075), the same open or folded: the arrow, who replied, how many, and
- * the newest reply's time. A press folds or opens it; the line stays where it was, so nothing above it moves, and what
- * opens at the foot of the chat scrolls up to show above the message box.
+ * The one row under a main message (0075): the thread's fold line, then the main message's thumbs-up. Folded, the
+ * line says how many replies; open, "Collapse replies" (the owner's words). A press folds or opens the thread; the
+ * line stays where it was, so nothing above it moves, and what opens at the foot of the chat scrolls up to show above
+ * the message box. A main message with a thumbs-up and no replies has the thumbs-up alone.
  */
 export function FoldLine({ fold }: { fold: Fold }) {
   const actions = useActions();
-  const { count, faces, last, open, topic } = fold;
+  const { agreed, count, open, topic } = fold;
+  const like = liking(fold.like, actions);
+  const replies = count === 1 ? '1 reply' : `${count} replies`;
+  const thumbs = !!agreed?.length && (
+    <Reactions names={agreed} mine={like?.given} onToggle={like?.onToggle} />
+  );
+  if (!count)
+    return (
+      <MessagePrimitive.Root className="fold" data-thread-item="" data-bare="">
+        {thumbs}
+      </MessagePrimitive.Root>
+    );
   return (
     <MessagePrimitive.Root className="fold" data-thread-item="" data-open={open || undefined}>
       <button
@@ -42,10 +52,9 @@ export function FoldLine({ fold }: { fold: Fold }) {
         }}
       >
         <ChevronRight className="fold-chevron" aria-hidden="true" />
-        <FaceStack agents={faces.map(({ agent, name }) => ({ agent, name }))} />
-        <span>{count === 1 ? '1 reply' : `${count} replies`}</span>
-        {last && <time dateTime={last}>{clock(last)}</time>}
+        {open ? 'Collapse replies' : replies}
       </button>
+      {thumbs}
     </MessagePrimitive.Root>
   );
 }
@@ -139,7 +148,10 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       <Bubble quote={m.quote} mention={m.to} actions={like && <MessageActions like={like} />}>
         <MessagePrimitive.Parts components={parts} />
       </Bubble>
-      {m.agreed.length > 0 && <Reactions names={m.agreed} mine={like?.given} onToggle={like?.onToggle} />}
+      {/* A main message's thumbs-up is on the row under it, with its fold line. */}
+      {m.agreed.length > 0 && !(own.topic && !own.reply) && (
+        <Reactions names={m.agreed} mine={like?.given} onToggle={like?.onToggle} />
+      )}
     </Said>
   );
 }
