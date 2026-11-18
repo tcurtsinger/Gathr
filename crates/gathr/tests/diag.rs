@@ -138,8 +138,9 @@ fn seed_makes_a_five_agent_team_chat_whose_rounds_link_up() {
     }
     let query = |sql: &str| gathr(&dir.0, &["diag", "query", sql]).1["rows"].clone();
     let team = query(
-        "SELECT chat_id, group_concat(role) AS roles, count(*) AS n FROM chat_members
-         GROUP BY chat_id HAVING n = 5 ORDER BY chat_id",
+        "SELECT m.chat_id, group_concat(m.role) AS roles, count(*) AS n FROM chat_members m
+         JOIN chats c ON c.id = m.chat_id WHERE c.title = 'Seed: team of five'
+         GROUP BY m.chat_id HAVING n = 5 ORDER BY m.chat_id",
     );
     assert_eq!(team.as_array().unwrap().len(), 2, "{team}");
     for chat in team.as_array().unwrap() {

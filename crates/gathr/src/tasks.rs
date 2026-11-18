@@ -178,6 +178,9 @@ pub struct Task {
     /// Said only where a chat's tasks are listed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub round: Option<String>,
+    /// The main message it sits under (0075). Said only where a chat's tasks are listed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topic: Option<String>,
     /// The pair a look last judged its review for, "<commit reviewed>:<head>": `outdated` is that verdict.
     #[serde(skip)]
     pub judged: Option<String>,
@@ -698,6 +701,7 @@ pub fn list(conn: &Connection, chat: &str) -> Result<Vec<Task>, Error> {
         .map(|n| read(conn, n))
         .collect::<Result<_, _>>()?;
     hear::rounds(conn, chat, &mut listed)?;
+    crate::topics::on_tasks(conn, chat, &mut listed)?;
     Ok(listed)
 }
 

@@ -98,7 +98,8 @@ pub fn noted(tx: &Transaction, ask: &str, moved: &[i64]) -> Result<(), Error> {
         true => last,
         false => format!("{} and {last}", whats.join(", ")),
     };
-    crate::store::say(tx, &chat, &format!("{what} {tail}"))?;
+    let about = format!("m:{ask}");
+    crate::store::say_about(tx, &chat, &format!("{what} {tail}"), Some(&about))?;
     Ok(())
 }
 

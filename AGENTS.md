@@ -115,6 +115,7 @@ Each part has its own doc. Read the one your task touches before you start, and 
   - `diag waiting --chat <id>`: what the chat waits on, each line with who can end it and since when.
   - `diag query "<sql>"`: read-only SQL, up to 1,000 rows. Use the `event_log` view: it shows `attrs` as JSON, a readable `time` and each row's `ref`.
   - `diag words --since 7d`: turns by the words that opened them, each kind's no-tool turns, refused reports and missing reports.
+  - `diag threads --chat <id>`: each turn, task and line's main message, and the fact that tied it or why none did.
   - `diag turn <ref> --raw`: the turns behind a reference, with every engine frame in and out of each, redacted.
   - `diag bundle`: health, a day's failures, recent events and engine frames (no bodies) in one file under `<data>/bundles`.
   - `diag health` also shows each account's sign-in state, the messages held on the chats' account, and each chat that works or needs the person.

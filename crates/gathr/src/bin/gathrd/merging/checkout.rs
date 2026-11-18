@@ -43,7 +43,11 @@ pub async fn update(
         gathr::ids::reference(&by.trace)
     );
     let chat = by.chat.clone();
-    let said = crate::landing::db(chats, move |c| gathr::store::say(c, &chat, &line)).await;
+    let said = crate::landing::db(chats, move |c| {
+        let about = gathr::topics::record::about_pr(c, &chat, pr)?;
+        gathr::store::say_about(c, &chat, &line, about.as_deref())
+    })
+    .await;
     let event = event.error(kind).attr("why", why);
     let event = match said {
         Ok(message) => {

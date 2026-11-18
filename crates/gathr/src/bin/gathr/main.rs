@@ -33,7 +33,8 @@ enum Command {
     Diag(Diag),
     /// Starts the service if it isn't running, and prints a link that signs a browser in once.
     Open,
-    /// Adds made-up chats: 500 messages, 50 tool calls in a turn, a 20,000-word answer.
+    /// Adds made-up chats: 500 messages, 50 tool calls in a turn, a 20,000-word answer, a team at
+    /// work of 2,000 messages.
     Seed,
     /// Starts the service on a data folder and port; Ctrl+C stops it and everything it started.
     Dev {
@@ -88,6 +89,11 @@ enum Diag {
         /// How far back: 24h, 7d, 30d.
         #[arg(long, default_value = "7d")]
         since: String,
+    },
+    /// Where each turn, task and line of a chat belongs, and the recorded fact that tied it.
+    Threads {
+        #[arg(long)]
+        chat: String,
     },
 }
 
@@ -163,6 +169,7 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
         Diag::Words { since } => {
             diag::words(&conn, schema, ids::now_us() - diag::parse_since(&since)?)
         }
+        Diag::Threads { chat } => diag::threads(&conn, &chat, schema),
     }
 }
 

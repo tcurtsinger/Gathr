@@ -478,3 +478,52 @@ fn the_leads_stale_notice_is_the_kept_samples() {
     samples::same("stale: several tasks, several days", &told.text);
     assert_eq!(samples::opened(&conn, &told.turn), kept);
 }
+
+/// The person's message in its own turn, starting an ask (0061): the turn's id and the ask's.
+fn asked(conn: &Connection, turn: &str, said: &str) -> String {
+    let opened = gathr::words::Opened::Person;
+    gathr::store::add_turn(conn, "c", turn, T, (Some("lead"), None, None), opened).unwrap();
+    let message = gathr::store::add_person_message(conn, "c", turn, said, None).unwrap();
+    message["id"].as_str().unwrap().to_string()
+}
+
+/// A task given in `turn`, of that turn's ask, left as `idle_task` leaves one.
+fn idle_task_of(conn: &mut Connection, turn: &str, moved: i64) -> i64 {
+    let n = idle_task(conn, &[], moved);
+    conn.execute(
+        "UPDATE tasks SET given_in = ?2 WHERE number = ?1",
+        params![n, turn],
+    )
+    .unwrap();
+    gathr::asks::inherit(conn, n).unwrap();
+    n
+}
+
+/// 0075, question 2 of its plan: the lead's turn on stale tasks serves their ask when they are all
+/// of one, and sits in its thread; on tasks of two asks it serves none.
+#[test]
+fn the_leads_stale_turn_serves_the_ask_its_tasks_are_of() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    let ask = asked(&conn, "asked", "Fix the build");
+    idle_task_of(&mut conn, "asked", DAY);
+    idle_task_of(&mut conn, "asked", DAY);
+    let swept = sweep(&mut conn, 4 * DAY + 1, &[]);
+    let told = &swept.starts[0].turn;
+    let topics = gathr::topics::Topics::of_chat(&conn, "c").unwrap();
+    assert_eq!(topics.turn(told).map(|t| t.key), Some(format!("m:{ask}")));
+
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    // The first ask is over before the second is sent, so the second doesn't join it.
+    asked(&conn, "first", "Fix the build");
+    conn.execute("UPDATE turns SET status = 'done' WHERE id = 'first'", [])
+        .unwrap();
+    asked(&conn, "second", "Add tags");
+    idle_task_of(&mut conn, "first", DAY);
+    idle_task_of(&mut conn, "second", DAY);
+    let swept = sweep(&mut conn, 4 * DAY + 1, &[]);
+    let told = &swept.starts[0].turn;
+    let topics = gathr::topics::Topics::of_chat(&conn, "c").unwrap();
+    assert_eq!(topics.turn(told).map(|t| t.key), Some(format!("b:{told}")));
+}

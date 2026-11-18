@@ -97,6 +97,22 @@ fn a_review_left_with_an_unasked_note_holds_its_pr_and_a_clean_one_lands_it() {
     assert_eq!(room.task(1).get("by_gathr"), None, "the lead's task");
     let review = room.task(2);
     assert_eq!(review["state"], "blocked", "{review}");
+    // 0075: the review and the fix Gathr gave after it sit in the work's thread, with their turns.
+    assert_eq!(
+        [&review["topic"], &fix["topic"]],
+        ["t:1", "t:1"],
+        "{review} {fix}"
+    );
+    let history = room
+        .service
+        .call("GET", &format!("/api/chats/{}", room.chat))
+        .json();
+    let on = history["turns"].as_array().unwrap().iter();
+    let on: Vec<&Value> = on.filter(|t| t["task"] == 2 || t["task"] == 3).collect();
+    assert!(
+        !on.is_empty() && on.iter().all(|t| t["topic"] == "t:1"),
+        "{history}"
+    );
     assert_eq!(
         review["notes"],
         json!([{ "kind": "unasked", "file": "feature.txt", "says": NOTE }]),

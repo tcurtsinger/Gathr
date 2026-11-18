@@ -148,6 +148,18 @@ fn a_message_to_an_idle_member_shows_and_wakes_it_once_answering_the_senders_tur
     );
     assert_eq!(room.delivered(), ["queued"]);
     room.told_once(&anns[0], &shown[0]["id"]);
+    // 0075: Ann's turn sits where the lead's message does, under the person's message.
+    let history = room.history();
+    let asked = history["messages"].as_array().unwrap().iter();
+    let mut asked = asked
+        .filter(|m| m["role"] == "user")
+        .map(|m| m["id"].clone());
+    let asked = format!("m:{}", asked.next_back().unwrap().as_str().unwrap());
+    let topics: Vec<Value> = [&room.turns_of(&room.lead)[0], &room.turns_of(&room.ann)[0]]
+        .iter()
+        .map(|t| t["topic"].clone())
+        .collect();
+    assert_eq!(topics, [json!(asked), json!(asked)], "{history}");
 }
 
 #[test]

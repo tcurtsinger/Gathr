@@ -269,6 +269,9 @@ pub fn tell(
         )?),
         None => None,
     };
+    if let Some(start) = &start {
+        crate::topics::record::landing(&tx, at, &start.turn)?;
+    }
     let event = Event::point("gathr.land.told").trace(trace).ok();
     let event = event.chat(&review.chat).attr("pr", review.pr);
     let event = event.attr("head", head).attr("why", why);

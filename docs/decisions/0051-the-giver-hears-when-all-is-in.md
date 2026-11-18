@@ -81,6 +81,12 @@ one needs its giver now.
 
 ## Changes
 
+- 2026-11-18, the result of an ask ([0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)): the
+  chat's Supervisor's hear-back on no task of its own that Gathr queues once, with it, no task of its ask with an
+  owner is open and no version of its plan waits, is the ask's result. Gathr records the ask on the turn as it is
+  queued (`turns.result_of`, migration 0055), so the turn is the result from its first word. A hear-back after
+  which the lead hands out more work is still one; an ask that ends another way (its last task cancelled, nothing
+  for the lead to do) has none. Asks closed before have none.
 - 2026-11-18, how an end is told, from the UI pass's chat-lines mock-up (the owner's picks of 2026-11-17, groups
   "Stopped, held and failed", "How a task ended", "Everything else" and "Lines that go away"). The person reads an end
   on the message it belongs to, never as a line of its own:

@@ -152,6 +152,13 @@ fn a_stuck_chat_is_noticed_and_its_dead_time_recorded() {
         (&wakes[0]["turn"], &Value::Null),
         "the wake is the lead's turn, on no task: {history}"
     );
+    // 0075: what it names is of no ask, so the wake ties to nothing; the line to the person is a
+    // main message of its own.
+    let wake = woken[0]["id"].as_str().unwrap();
+    assert_eq!(woken[0]["topic"], format!("b:{wake}"), "{history}");
+    let told = &said(&history, STUCK)[0];
+    let line = told["id"].as_str().unwrap();
+    assert_eq!(told["topic"], format!("m:{line}"), "{history}");
     assert_eq!(
         needs(&service, &chat),
         json!(true),
@@ -288,6 +295,16 @@ fn a_silent_turn_shows_and_its_lead_is_told_once() {
     assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
 
     common::silent_turn_shows_and_its_lead_is_told_once(&service, &data.0, &chat, &lead);
+    // 0075 (question 2): the telling serves the ask Ann's silent turn is of, and sits in its thread.
+    let told = rows(&data.0, "SELECT id FROM turns WHERE opened_by = 'silent'");
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let mut asked = history["messages"].as_array().unwrap().iter();
+    let asked = asked.find(|m| m["role"] == "user").unwrap()["id"]
+        .as_str()
+        .unwrap();
+    let turns = history["turns"].as_array().unwrap();
+    let telling = turns.iter().find(|t| t["id"] == told[0]["id"]).unwrap();
+    assert_eq!(telling["topic"], format!("m:{asked}"), "{history}");
     std::fs::write(data.0.join("go"), "").unwrap();
 }
 

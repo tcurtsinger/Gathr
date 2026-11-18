@@ -86,8 +86,10 @@ async fn history(
     known(&s, &t, &chat).await?;
     let (approvals, streaming) = s.chats.open(&chat).await;
     let (id, pauses, data) = (chat.clone(), s.chats.pauses(), s.data.path().to_path_buf());
+    let trace = t.0.clone();
     let Json(mut history) = db(&s, &t, "Chat failed", move |conn| {
         let mut history = store::history(conn, &id)?;
+        gathr::topics::on_history(conn, &id, &mut history, &trace)?;
         gathr::pauses::with_run(conn, &pauses, &id, &mut history)?;
         crate::team::with_folders(conn, &data, &id, &mut history)?;
         gathr::context::on_members(conn, &id, &mut history)?;

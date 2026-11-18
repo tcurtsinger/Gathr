@@ -1,10 +1,11 @@
 //! Made-up test data (docs/first-slice.md): a chat of 500 messages, a turn with 50 tool calls
-//! and a 20,000-word answer, with their events, a five-agent team chat (F8b), and
-//! questions for the person across two chats (F9). Nothing here
-//! comes from a real conversation.
+//! and a 20,000-word answer, with their events, a five-agent team chat (F8b),
+//! questions for the person across two chats (F9), and a team at work of 2,000 messages under
+//! some 50 main messages (0075). Nothing here comes from a real conversation.
 
 mod asks;
 mod team;
+mod threads;
 
 use rusqlite::{Connection, params};
 use serde_json::json;
@@ -55,7 +56,7 @@ pub struct Seeded {
     pub events: u32,
 }
 
-/// Adds the five chats in one transaction, and the files of the person's tasks under `files`.
+/// Adds the seven chats in one transaction, and the files of the person's tasks under `files`.
 /// Each run adds a new set.
 pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Error> {
     let tx = conn.transaction()?;
@@ -71,6 +72,7 @@ pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Er
     s.long_answer_chat()?;
     s.team_chat()?;
     s.asks()?;
+    s.threads_chat()?;
     let made = s.made;
     tx.commit()?;
     Ok(made)
