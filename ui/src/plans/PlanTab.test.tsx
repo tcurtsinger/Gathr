@@ -1,8 +1,9 @@
-// The plan's tab (0062 H5.3, H5.4), read from GET /api/plans/{plan}: the check with its Findings, Answers and
-// Questions, parts that open one at a time with their marks, and Approve, Send back and Drop at its foot.
+// The plan's tab (0062 H5.3, H5.4, the plan-tab mock-up, New), read from GET /api/plans/{plan}: the check with its
+// Findings, Answers and Questions, each part a Tasks row that opens to its brief, the tasks they became once
+// approved, and Drop, Send back and Approve at its foot. Made-up team and plan.
 import { afterEach, expect, test, vi } from 'vitest';
 import { render } from 'vitest-browser-react';
-import type { Plan, PlanPart, PlanSummary, PlanVersion } from '../api';
+import type { Plan, PlanPart, PlanSummary, PlanVersion, Task } from '../api';
 import type { LiveEvent } from '../live';
 import { PlanTab } from './PlanTab';
 
@@ -89,8 +90,17 @@ function serve(shown: Plan, answer?: { status: number; body: unknown }) {
   return posted;
 }
 
-const tab = (shownVersion = 2) => (
-  <PlanTab chat="c" plan={3} version={shownVersion} name={name} onVersion={() => {}} onReference={() => {}} />
+const tab = (shownVersion = 2, more: { tasks?: Task[]; onOpenTask?: (task: number) => void } = {}) => (
+  <PlanTab
+    chat="c"
+    plan={3}
+    version={shownVersion}
+    name={name}
+    tasks={more.tasks ?? []}
+    onOpenTask={more.onOpenTask ?? (() => {})}
+    onVersion={() => {}}
+    onReference={() => {}}
+  />
 );
 
 /** In the workspace at its narrowest, 360px (DESIGN.md Layout), as a container like the workspace's own. */
@@ -108,74 +118,79 @@ const narrow = (shown: React.ReactNode) => (
   </div>
 );
 
-/** What doesn't fit in the foot: a part past its edge, two parts over each other, a clipped label, a scroll. */
+/** What doesn't fit in the foot: a button past its edge, two buttons over each other, a clipped label. */
 function footMisfits() {
-  const pager = document.querySelector('.tasks-pager') as HTMLElement;
-  const box = pager.getBoundingClientRect();
-  const parts = [...pager.querySelectorAll('button, [role="status"]')] as HTMLElement[];
-  const at = parts.map((p) => {
+  const foot = document.querySelector('footer') as HTMLElement;
+  const box = foot.getBoundingClientRect();
+  const at = ([...foot.querySelectorAll('button, textarea')] as HTMLElement[]).map((p) => {
     const b = p.getBoundingClientRect();
+    const what = p.textContent || p.getAttribute('aria-label');
     return {
-      what: p.textContent || p.getAttribute('role'),
+      what,
       left: Math.round(b.left),
       right: Math.round(b.right),
+      top: Math.round(b.top),
+      clipped: p.scrollWidth > p.clientWidth + 1,
     };
   });
   const wrong = at
     .filter((p) => p.left < box.left - 0.5 || p.right > box.right + 0.5)
     .map((p) => `${p.what} past the edge`);
   for (let i = 1; i < at.length; i++)
-    if (at[i].left < at[i - 1].right) wrong.push(`${at[i].what} over ${at[i - 1].what}`);
-  for (const p of parts) if (p.scrollWidth > p.clientWidth + 1) wrong.push(`${p.textContent} clipped`);
-  if (pager.scrollWidth > pager.clientWidth + 1) wrong.push('the foot scrolls sideways');
-  return {
-    wrong,
-    measured: JSON.stringify({ pager: [Math.round(box.left), Math.round(box.right)], parts: at }),
-  };
+    if (at[i].top === at[i - 1].top && at[i].left < at[i - 1].right)
+      wrong.push(`${at[i].what} over ${at[i - 1].what}`);
+  for (const p of at) if (p.clipped) wrong.push(`${p.what} clipped`);
+  if (foot.scrollWidth > foot.clientWidth + 1) wrong.push('the foot scrolls sideways');
+  return { wrong, measured: JSON.stringify({ foot: [Math.round(box.left), Math.round(box.right)], at }) };
 }
 
-/** A part's brief as the open part shows it: each label and its words, in order. */
+/** A brief as the open part shows it: each label and its words, in order. */
 const rows = (dl: Element | null) => [...(dl?.children ?? [])].map((e) => e.textContent).join(' | ');
+/** Each part's line, in order: "Part 2·Bo·After 1, #41". */
+const lines = () => [...document.querySelectorAll('.task-row-line')].map((l) => l.textContent);
 
-test('a waiting plan shows its version, title, the ask, its check and every part, in order', async () => {
+test('a waiting plan shows its version, title, its state, the ask, its check and every part, in order', async () => {
   serve(plan());
   const screen = await render(tab());
   const page = screen.getByRole('region', { name: 'Plan' });
   await expect.element(page.getByRole('heading', { name: 'Tags on notes' })).toBeVisible();
   const words = page.element().textContent ?? '';
   const order = [
-    'Plan · version 2',
+    'Version 2',
     'Tags on notes',
-    'You asked',
+    'Mira',
+    'Waiting',
+    'Asked',
     'Add tags to notes',
     'Check',
     '3 findings from Bo',
-    '9 parts',
+    'Parts9',
   ];
   const at = order.map((w) => words.indexOf(w));
-  expect(at.every((x) => x >= 0)).toBe(true);
+  expect(
+    at.every((x) => x >= 0),
+    JSON.stringify(at),
+  ).toBe(true);
   expect(at).toEqual([...at].sort((a, b) => a - b));
   expect(page.getByRole('listitem').elements()).toHaveLength(9);
+  expect(lines().slice(0, 3)).toEqual(['Part 1·Ann', 'Part 2·Bo·After 1, #41', 'Part 3·Ann']);
   const second = page.getByRole('listitem').nth(1);
-  await second.getByRole('button', { name: 'Made-up part 2' }).click();
-  await expect.element(second.getByText('Bo', { exact: true })).toBeVisible();
+  await second.getByRole('button').click();
   expect(rows(second.element().querySelector('dl'))).toBe(
     'Why | Why 2 | Done when | Done 2 | Proof | Proof 2 | Where | room/tags-2 | Size | src/tags2.rs, about 20 lines' +
-      ' | After | part 1, #41',
+      ' | After | Part 1, #41',
   );
 });
 
-test('a click opens one part to its fields and closes the one open', async () => {
+test('a click opens one part to its brief and closes the one open', async () => {
   serve(plan());
   const screen = await render(tab());
   const [second, third] = [1, 2].map((i) => screen.getByRole('listitem').nth(i));
   await expect.element(second.getByText('Why 2')).not.toBeInTheDocument();
-  await second.getByRole('button', { name: 'Made-up part 2' }).click();
+  await second.getByRole('button').click();
   await expect.element(second.getByText('Why 2')).toBeVisible();
-  await expect
-    .element(second.getByRole('button', { name: 'Made-up part 2' }))
-    .toHaveAttribute('aria-expanded', 'true');
-  await third.getByRole('button', { name: 'Made-up part 3' }).click();
+  await expect.element(second.getByRole('button')).toHaveAttribute('aria-expanded', 'true');
+  await third.getByRole('button').click();
   await expect.element(third.getByText('Why 3')).toBeVisible();
   await expect.element(second.getByText('Why 2')).not.toBeInTheDocument();
 });
@@ -183,15 +198,68 @@ test('a click opens one part to its fields and closes the one open', async () =>
 test('choosing another version closes the open part', async () => {
   serve(plan());
   const screen = await render(tab(2));
-  await screen.getByRole('button', { name: 'Made-up part 2' }).click();
+  await screen.getByRole('listitem').nth(1).getByRole('button').click();
   await expect.element(screen.getByText('Why 2')).toBeVisible();
   await screen.rerender(tab(1));
-  await expect.element(screen.getByText('Plan · version 1')).toBeVisible();
+  await expect.element(screen.getByText('Version 1')).toBeVisible();
   expect(screen.getByRole('button', { expanded: true }).elements()).toHaveLength(0);
 });
 
-test("Check gains the version's Findings, the Answers to the version before's, and the ask's Questions", async () => {
-  const before = version(1, { decided: 'sent_back' });
+/** The tab's scroller, scrolled to `top` (measured back, so a page too short to scroll fails here). */
+function scrolledTo(top: number) {
+  const scroller = document.querySelector('.tasks-scroll') as HTMLElement;
+  scroller.scrollTop = top;
+  expect(scroller.scrollTop, 'the page scrolls at 700px').toBe(top);
+  return scroller;
+}
+
+test('another version opens at its top', async () => {
+  serve(plan());
+  const screen = await render(narrow(tab(2)));
+  await expect.element(screen.getByRole('heading', { name: 'Tags on notes' })).toBeVisible();
+  const scroller = scrolledTo(240);
+  await screen.rerender(narrow(tab(1)));
+  await expect.element(screen.getByText('Replaced', { exact: true })).toBeVisible();
+  await expect.poll(() => scroller.scrollTop).toBe(0);
+});
+
+test('a check that ends while the person reads keeps their place', async () => {
+  const checking = version(2, {
+    sent: null,
+    check: {
+      ...(version(2).check as NonNullable<PlanVersion['check']>),
+      state: 'working',
+      outcome: null,
+      notes: [],
+    },
+  });
+  const first = version(1, { decided: 'sent_back' });
+  serve(plan({ state: 'checking', versions: [first, checking] }));
+  const screen = await render(narrow(tab()));
+  await expect.element(screen.getByText('Checking', { exact: true })).toBeVisible();
+  const scroller = scrolledTo(100);
+  serve(plan({ versions: [first, { ...checking, sent: '2026-11-15T09:10:00.000Z' }] }));
+  const waiting = { id: 3, state: 'waiting' } as PlanSummary;
+  for (const on of live) on({ type: 'tasks', chat: 'c', tasks: [], waits: [], asks: [], plans: [waiting] });
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
+  expect(scroller.scrollTop).toBe(100);
+});
+
+test("the person's own Send back, from a scrolled tab, opens it at its top", async () => {
+  serve(plan());
+  const screen = await render(narrow(tab()));
+  await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
+  await screen.getByRole('button', { name: 'Send back' }).click();
+  await screen.getByRole('textbox', { name: 'What to change' }).fill('Split part 2');
+  const scroller = scrolledTo(240);
+  serve(plan({ state: 'revising' }));
+  await screen.getByRole('button', { name: 'Send back' }).click();
+  await expect.element(screen.getByText('Revising', { exact: true })).toBeVisible();
+  await expect.poll(() => scroller.scrollTop).toBe(0);
+});
+
+test("Check gains the version's Findings, the Answers to the version before's, the ask's Questions and Sent back", async () => {
+  const before = version(1, { decided: 'sent_back', words: 'Split the table first' });
   const now = version(2, {
     answers: [
       { note: 1, changed: true, why: 'Moved the table' },
@@ -215,9 +283,11 @@ test("Check gains the version's Findings, the Answers to the version before's, a
   serve(plan({ versions: [before, now], questions }));
   const screen = await render(tab());
   await expect.element(screen.getByText('1 finding from Bo')).toBeVisible();
-  const fields = screen.getByRole('region', { name: 'Plan' }).element().querySelector('dl.task-fields');
-  expect(rows(fields)).toBe(
+  const fields = () => screen.getByRole('region', { name: 'Plan' }).element().querySelector('dl.task-fields');
+  expect(rows(fields())).toBe(
     [
+      'Asked',
+      'Add tags to notes',
       'Check',
       '1 finding from Bo',
       'Findings',
@@ -230,6 +300,9 @@ test("Check gains the version's Findings, the Answers to the version before's, a
       'Any colours?Open',
     ].join(' | '),
   );
+  await screen.rerender(tab(1));
+  await expect.element(screen.getByText('Version 1')).toBeVisible();
+  expect(rows(fields())).toContain('Sent back | Split the table first');
 });
 
 test("Changed lists each caught turn's agent and its files", async () => {
@@ -267,7 +340,7 @@ test('a plan with nothing caught has no Changed', async () => {
   expect(screen.getByText('Changed', { exact: true }).elements()).toHaveLength(0);
 });
 
-test('the parts carry Changed, New and Removed against the version before, and an open part its Was', async () => {
+test("Changed, New and Removed are words on the part's line, against the version before", async () => {
   const older = Array.from({ length: 3 }, (_, i) => part(i + 1));
   const newer = [
     part(1),
@@ -275,26 +348,81 @@ test('the parts carry Changed, New and Removed against the version before, and a
     { ...part(3), what: 'Made-up part 3, split' },
   ];
   serve(
-    plan({
-      versions: [version(1, { decided: 'sent_back', parts: older }), version(2, { parts: newer })],
-    }),
+    plan({ versions: [version(1, { decided: 'sent_back', parts: older }), version(2, { parts: newer })] }),
   );
   const screen = await render(tab());
-  const items = screen.getByRole('listitem');
-  await expect
-    .element(items.nth(0).getByRole('button', { name: 'Made-up part 1', exact: true }))
-    .toBeVisible();
-  await expect.element(items.nth(1).getByRole('button', { name: 'Made-up part 2 Changed' })).toBeVisible();
-  await expect.element(items.nth(2).getByRole('button', { name: 'Made-up part 3, split New' })).toBeVisible();
-  await expect.element(items.nth(3)).toHaveTextContent('Removed Made-up part 3');
-  await items.nth(1).getByRole('button', { name: 'Made-up part 2 Changed' }).click();
-  expect(rows(items.nth(1).element().querySelector('dl'))).toContain(
-    'Done when | Done 2, with tests | Was | Done 2 | Proof',
+  await expect.element(screen.getByRole('heading', { name: 'Tags on notes' })).toBeVisible();
+  expect(lines()).toEqual(['Part 1·Ann', 'Part 2·Bo·After 1, #41·Changed', 'Part 3·Ann·New', 'Ann·Removed']);
+  expect(screen.getByRole('listitem').nth(3).element().querySelector('s')?.textContent).toBe(
+    'Made-up part 3',
   );
   // The first version has none before it, so no marks.
   await screen.rerender(tab(1));
-  await expect.element(screen.getByRole('button', { name: 'Made-up part 2', exact: true })).toBeVisible();
-  expect(screen.getByText('Removed').elements()).toHaveLength(0);
+  await expect.element(screen.getByText('Version 1')).toBeVisible();
+  expect(lines()).toEqual(['Part 1·Ann', 'Part 2·Bo·After 1, #41', 'Part 3·Ann']);
+});
+
+test('a Was sits under the field it belongs to, a changed owner has its Owner row, and a part that went is named', async () => {
+  const older = [part(1), part(2), part(3), { ...part(4), after: [3] }];
+  const newer = [
+    part(1),
+    { ...part(2), owner: 'ann', done: 'Done 2, with tests' },
+    { ...part(3), what: 'Made-up part 3, split' },
+    { ...part(4), after: [3] },
+  ];
+  serve(
+    plan({ versions: [version(1, { decided: 'sent_back', parts: older }), version(2, { parts: newer })] }),
+  );
+  const screen = await render(tab());
+  const [second, fourth] = [1, 3].map((i) => screen.getByRole('listitem').nth(i));
+  await second.getByRole('button').click();
+  expect(rows(second.element().querySelector('dl'))).toBe(
+    'Owner | AnnWas: Bo | Why | Why 2 | Done when | Done 2, with testsWas: Done 2 | Proof | Proof 2 | Where | room/tags-2' +
+      ' | Size | src/tags2.rs, about 20 lines | After | Part 1, #41',
+  );
+  // Each Was is in its field's words, under them and in their column.
+  for (const was of second.element().querySelectorAll('.plan-was')) {
+    const dd = was.closest('dd') as HTMLElement;
+    const words = dd.firstChild as HTMLElement;
+    const [w, b] = [was.getBoundingClientRect(), words.getBoundingClientRect()];
+    expect(dd.previousElementSibling?.tagName, was.textContent ?? '').toBe('DT');
+    expect(Math.round(w.top - b.bottom), `${was.textContent} below its words`).toBeGreaterThanOrEqual(0);
+    expect(Math.round(w.left - dd.getBoundingClientRect().left), `${was.textContent} in its column`).toBe(0);
+  }
+  await fourth.getByRole('button').click();
+  expect(rows(fourth.element().querySelector('dl'))).toContain('After | Part 3Was: Made-up part 3, removed');
+});
+
+const task = (number: number, owner: string, state: Task['state'], what: string): Task => ({
+  number,
+  chat: 'c',
+  giver: 'mira',
+  owner,
+  given_in: 't1',
+  kind: 'work',
+  what,
+  state,
+  reason: null,
+  after: [],
+  created_us: 0,
+});
+
+test('once approved, each part is its task’s row, which opens the task, and the tab has no foot', async () => {
+  const handed = version(2, {
+    decided: 'approved',
+    parts: [{ ...part(1), task: 41 }, { ...part(2), task: 42 }, part(3)],
+  });
+  const first = version(1, { decided: 'sent_back', parts: [part(1), part(2), part(3)] });
+  serve(plan({ state: 'approved', versions: [first, handed] }));
+  const tasks = [task(41, 'ann', 'done', 'Made-up part 1'), task(42, 'bo', 'working', 'Made-up part 2')];
+  const opened: number[] = [];
+  const screen = await render(tab(2, { tasks, onOpenTask: (n) => opened.push(n) }));
+  await expect.element(screen.getByText('Approved', { exact: true })).toBeVisible();
+  await screen.getByRole('listitem').nth(1).getByRole('button').click();
+  expect(opened).toEqual([42]);
+  // A part with no task keeps its part row.
+  expect(lines()).toEqual(['#41·Ann', '#42·Bo·Working', 'Part 3·Ann']);
+  expect(document.querySelector('footer')).toBeNull();
 });
 
 test("the tab's dot follows whether the plan waits on the person", async () => {
@@ -306,6 +434,8 @@ test("the tab's dot follows whether the plan waits on the person", async () => {
       plan={3}
       version={2}
       name={name}
+      tasks={[]}
+      onOpenTask={() => {}}
       onVersion={() => {}}
       onReference={() => {}}
       onWaits={waits}
@@ -325,7 +455,7 @@ test('Approve sends the version shown', async () => {
   await expect.poll(() => posted).toEqual([{ path: '/api/plans/3/approve', body: { version: 2 } }]);
 });
 
-test("Send back asks what to change, stays off while it's empty, sends the words; Cancel puts the buttons back", async () => {
+test("Send back opens the answer form's field, stays off while it's empty, sends the words; Cancel puts the buttons back", async () => {
   const posted = serve(plan());
   const screen = await render(narrow(tab()));
   await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
@@ -333,8 +463,9 @@ test("Send back asks what to change, stays off while it's empty, sends the words
   const fits = () => expect(footMisfits().wrong, footMisfits().measured).toEqual([]);
   fits();
   await screen.getByRole('button', { name: 'Send back' }).click();
-  const field = screen.getByRole('textbox', { name: /What to change/ });
-  await expect.element(field).toBeVisible();
+  const field = screen.getByRole('textbox', { name: 'What to change' });
+  await expect.element(field).toHaveFocus();
+  await expect.element(field).toHaveAttribute('placeholder', 'What to change');
   await expect.element(screen.getByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
   fits();
   const send = screen.getByRole('button', { name: 'Send back' });
@@ -343,7 +474,7 @@ test("Send back asks what to change, stays off while it's empty, sends the words
   await expect.element(field).not.toBeInTheDocument();
   await expect.element(screen.getByRole('button', { name: 'Approve' })).toBeVisible();
   await screen.getByRole('button', { name: 'Send back' }).click();
-  await screen.getByRole('textbox', { name: /What to change/ }).fill('Split part 2');
+  await screen.getByRole('textbox', { name: 'What to change' }).fill('Split part 2');
   await expect.element(send).toBeEnabled();
   await send.click();
   await expect
@@ -351,14 +482,29 @@ test("Send back asks what to change, stays off while it's empty, sends the words
     .toEqual([{ path: '/api/plans/3/send-back', body: { version: 2, words: 'Split part 2' } }]);
 });
 
-test('a refused Approve shows why with its reference', async () => {
+test('a refused Approve says Not approved, why and its reference in the foot', async () => {
   const refusal = { error: 'Approve failed', why: 'Version 2 is already approved.', ref: 'made-up-ref' };
   serve(plan(), { status: 409, body: refusal });
-  const screen = await render(tab());
+  const refs: string[] = [];
+  const screen = await render(
+    <PlanTab
+      chat="c"
+      plan={3}
+      version={2}
+      name={name}
+      tasks={[]}
+      onOpenTask={() => {}}
+      onVersion={() => {}}
+      onReference={(r) => refs.push(r)}
+    />,
+  );
   await screen.getByRole('button', { name: 'Approve' }).click();
-  await expect.element(screen.getByText('Approve failed')).toBeVisible();
-  await expect.element(screen.getByText('Version 2 is already approved.')).toBeVisible();
-  await expect.element(screen.getByRole('button', { name: 'Reference made-up-ref' })).toBeVisible();
+  await expect.element(screen.getByText('Not approved')).toBeVisible();
+  expect(document.querySelector('footer')?.textContent).toContain(
+    'Not approved·Version 2 is already approved.made-up-ref',
+  );
+  await screen.getByRole('button', { name: 'made-up-ref' }).click();
+  expect(refs).toEqual(['made-up-ref']);
 });
 
 test('a refused Approve reads the plan again, and the buttons follow the plan it returns', async () => {
@@ -402,11 +548,10 @@ test('a version being checked says Checking, with Drop and no Send back or Appro
   await expect.element(screen.getByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
 });
 
-test("an older version says Replaced, with none of the foot's buttons", async () => {
+test('an older version says Replaced, with no foot', async () => {
   serve(plan());
   const screen = await render(tab(1));
-  await expect.element(screen.getByText('Plan · version 1')).toBeVisible();
+  await expect.element(screen.getByText('Version 1')).toBeVisible();
   await expect.element(screen.getByText('Replaced')).toBeVisible();
-  for (const label of ['Drop', 'Send back', 'Approve'])
-    await expect.element(screen.getByRole('button', { name: label })).not.toBeInTheDocument();
+  expect(document.querySelector('footer')).toBeNull();
 });

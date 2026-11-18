@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { type Agent, api, type Chat, type Failure, type Named, type Project } from './api';
+import { type Agent, api, type Chat, type Failure, type Named, type Project, type Task } from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
@@ -251,8 +251,14 @@ export function App() {
     setTabs((all) => ({ ...all, [c]: { ...tabsOf(c), ...change(tabsOf(c)) } }));
   const name = (agent: string | null) =>
     [...agents, ...removed].find((a) => a.id === agent)?.name ?? 'An agent';
+  // A task opened from the chat or the plan's tab: the panel's Tasks, at that task.
+  const openTask = (of: string, task: number) => {
+    setOpened((all) => ({ ...all, [of]: task }));
+    person.setOpen(of, true);
+    setTab(of, () => ({ selected: 'tasks' }));
+  };
   // The plan's tab at the version shown; the newest when the plan has no such version yet.
-  const planTab = (of: string, plan: Tabs['plan']) =>
+  const planTab = (of: string, plan: Tabs['plan'], tasks: Task[]) =>
     plan && {
       version: plan.version,
       waits: plan.waits,
@@ -263,6 +269,8 @@ export function App() {
           plan={plan.id}
           version={plan.version}
           name={name}
+          tasks={tasks}
+          onOpenTask={(task) => openTask(of, task)}
           onVersion={(version) => setTab(of, () => ({ plan: { ...plan, version } }))}
           onWaits={(waits) => setTab(of, (t) => ({ plan: t.plan && { ...t.plan, waits } }))}
           onReference={openReference}
@@ -385,11 +393,7 @@ export function App() {
           onRestore={() => restore(chat)}
           restoreFailure={restoreFailure?.chat === chat.id ? restoreFailure.failure : undefined}
           onReference={openReference}
-          onOpenTask={(task) => {
-            setOpened((all) => ({ ...all, [chat.id]: task }));
-            person.setOpen(chat.id, true);
-            setTab(chat.id, () => ({ selected: 'tasks' }));
-          }}
+          onOpenTask={(task) => openTask(chat.id, task)}
           agentOpen={agentOpen(paneOpen ? tabsOf(chat.id) : undefined)}
           onOpenAgent={(agent) => {
             // Drawn at once, so the keyboard can follow to the agent's tab.
@@ -420,7 +424,7 @@ export function App() {
                     selected: t.selected === 'agent' ? 'tasks' : t.selected,
                   }))
                 }
-                plan={planTab(chat.id, tabsOf(chat.id).plan)}
+                plan={planTab(chat.id, tabsOf(chat.id).plan, work.tasks)}
                 waiting={chatTasks.length > 0}
                 files={tabsOf(chat.id).files}
                 selected={tabsOf(chat.id).selected}

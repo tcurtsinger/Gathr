@@ -529,28 +529,33 @@ A plan's version is the lead's own block in the timeline: the speaker header, th
 button with the clipboard icon, "Plan · version 2" and "9 parts" in muted small type, then the
 thumbs-up names under it, the same as under a reply. Text the lead writes after the plan reads
 after the chip, in a block of its own. The chip opens the plan's tab, after the agent's tab, labelled
-"Plan v2" with a close button. The tab reads top to bottom as the page of a task does, in the same
-classes: a refusal in the shared failure notice, "Plan · version 2" (and the versions as links
-`v1 · v2`, the one shown as text), the title, the lead's name, the time and one state word when it
-isn't waiting on you (Checking, Revising, Approved, Dropped, or Replaced on an older version), a
-quote of what you asked ("You asked", muted), the plan's text, one field, Check ("Bo agrees", "3
-findings from Bo", "Bo is checking", "Bo didn't finish"), then "9 parts": an ordered list, each
-part whole, its number and what, the owner and what it comes after muted, and Why, Done when,
-Proof, Where and Size as text lines. After Send back, the shared inline form with one required
-multiline field, "What to change". The foot has three cells: Drop (ghost) at the left on the newest
-version while the plan is open, "Saving" in the middle while a request runs, and at the right, on
-the newest version once it has reached you, Send back (outline) and Approve; after Send back,
-Cancel (ghost) and Send back, disabled until the field has words. No sentence explains a button.
-The foot's buttons fit at the workspace's narrowest, 360px, in both states. The Check field also lists the version's Findings (a suggestion is left out) in a task's
-note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
-("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", and Changed, one row for each turn of the ask in which Gathr caught a change, "Ann: src/notes.rs, src/tags.rs", shown only when there is one. Each
-part is a line that opens to its brief, one at a time and none at first: Why, Done when, Proof,
-Where, Size and After, in the classes of a task's fields. Against the version before, a part
-carries a mark in the attention colour at the end of its line, Changed or New, matched by what it
-says, so a part moved in order is not changed; a Changed part's open brief shows Was under each
-field that differs, in muted struck-through type; a part that went is a muted line after the parts,
-Removed, its words struck through. Version 1 has no marks. The tab carries the attention mark
-while the plan waits on you, as Tasks does.
+"Plan v2" with a close button. The tab reads top to bottom as a task's page does, in the same classes:
+"Version 2" at the top left and, when there is more than one, the versions at the right, `v1 · v2`, muted
+and underlined, the one shown plain; the title; one line with the lead's 16px face and name, the time and
+the plan's state word (Checking, Waiting in the attention colour, Revising, Approved, Dropped, or
+Replaced on an older version); the plan's text; then its fields: Asked, Check ("Bo agrees", "3 findings
+from Bo", "Bo is checking", "Bo didn't finish"), the version's Findings (a suggestion is left out) in a
+task's note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
+("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", Sent back with the
+person's words on a version they sent back, and Changed, one row for each turn of the ask in which Gathr
+caught a change, "Ann: src/notes.rs, src/tags.rs", shown only when there is one. Then "Parts 9", the
+Tasks list's muted heading and count, and each part as the one task row: the owner's plain face, its
+what, and one line "Part 2 · Ann · After 1", with Changed or New at its end in the words' colour, against
+the version before and matched by what it says, so a part moved in order is not changed. A part that went
+is an ended row after the parts, its what struck through, "Ann · Removed". Version 1 has no marks. A part
+opens in place, one at a time and none at first: its row and its brief on one tint, the brief in a task's
+fields (Why, Done when, Proof, Where, Size, After); a changed field keeps its old words under its new
+ones, muted, "Was: ...", a changed owner has an Owner row, and After's Was names a part that went by its
+what. Once approved, a part that became a task is that task's row, as in Tasks ("#24 · Bo · Blocked"),
+and opens it. The tab opens at its top on another version and after the person's own
+Send back, Approve or Drop; a state that changes from elsewhere (a check that ends) keeps their place. The foot shows only when something in it acts, at a task foot's 64px: Drop
+(outline) at the left on the newest version while the plan is open, and at the right, on the newest
+version once it has reached you, Send back (outline) and Approve. Send back opens the answer form's field
+over the buttons, "What to change" as its placeholder, with Cancel and Send back, which is off until the
+field has words; Enter sends, as in the answer form. A refusal sits over the buttons as one sentence at
+the right, as the chat says one: "Not approved" ("Not sent back", "Not dropped"), why, and its reference.
+No sentence explains a button. The foot fits the workspace at its narrowest, 360px, in both states. The
+tab carries the attention mark while the plan waits on you, as Tasks does.
 
 ### Human tasks
 

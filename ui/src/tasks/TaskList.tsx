@@ -47,6 +47,48 @@ function whoOf(task: Task) {
 }
 
 interface RowProps {
+  /** Its plain face; none in an agent's own tab. */
+  face?: ReactNode;
+  what: ReactNode;
+  /** Done: a tick after its what. */
+  done?: boolean;
+  line: ReactNode[];
+  ended?: boolean;
+  task?: number;
+  /** Opens it, or opens it in place (`expanded`); a row with nothing to open isn't a button. */
+  onClick?: () => void;
+  expanded?: boolean;
+}
+
+/** The one row of a list of tasks: a plain face, its what, and one line ("#24 · Bo · Blocked", a plan's "Part 2 · Ann"). */
+export function Row({ face, what, done, line, ended, task, onClick, expanded }: RowProps) {
+  const look = {
+    className: 'task-row',
+    'data-task': task,
+    'data-ended': ended || undefined,
+    'data-bare': !face || undefined,
+  };
+  const inside = (
+    <>
+      {face}
+      <span className="task-row-text">
+        <span className="task-row-what">
+          <span>{what}</span>
+          {done && <Check aria-hidden="true" />}
+        </span>
+        <Line className="task-row-line" pieces={line} />
+      </span>
+    </>
+  );
+  if (!onClick) return <div {...look}>{inside}</div>;
+  return (
+    <button type="button" {...look} aria-expanded={expanded} onClick={onClick}>
+      {inside}
+    </button>
+  );
+}
+
+interface TaskRowProps {
   task: Task;
   /** The chat's tasks: a waiting task names those it comes after that aren't done. */
   tasks: Task[];
@@ -56,41 +98,32 @@ interface RowProps {
   onOpen: (task: number) => void;
 }
 
-/** One task in a list (the Tasks tab, an agent's tab): a plain face, its what, and "#24 · Bo · Blocked". */
-export function TaskRow({ task, tasks, name, bare, onOpen }: RowProps) {
+/** One task in a list (the Tasks tab, an agent's tab, an approved plan's parts). */
+export function TaskRow({ task, tasks, name, bare, onOpen }: TaskRowProps) {
   const who = whoOf(task);
   const label = task.kind === 'person' ? asker(task, name) : name(task.owner);
   return (
-    <button
-      type="button"
-      className="task-row"
-      data-task={task.number}
-      data-ended={ended(task) || undefined}
-      data-bare={bare || undefined}
+    <Row
+      face={
+        !bare && (who ? <Face agent={{ id: who, name: name(who) }} size={24} /> : <GathrFace size={24} />)
+      }
+      what={task.what}
+      done={task.state === 'done'}
+      ended={ended(task)}
+      task={task.number}
       onClick={() => onOpen(task.number)}
-    >
-      {!bare && (who ? <Face agent={{ id: who, name: name(who) }} size={24} /> : <GathrFace size={24} />)}
-      <span className="task-row-text">
-        <span className="task-row-what">
-          <span>{task.what}</span>
-          {task.state === 'done' && <Check aria-hidden="true" />}
-        </span>
-        <Line
-          className="task-row-line"
-          pieces={[
-            `#${task.number}`,
-            !bare && label,
-            task.look_into && 'Look into',
-            task.state !== 'done' && <TaskState key="state" task={task} tasks={tasks} />,
-          ]}
-        />
-      </span>
-    </button>
+      line={[
+        `#${task.number}`,
+        !bare && label,
+        task.look_into && 'Look into',
+        task.state !== 'done' && <TaskState key="state" task={task} tasks={tasks} />,
+      ]}
+    />
   );
 }
 
 /** Rows in a list; each opens its task. */
-export function TaskRows(props: Omit<RowProps, 'task'> & { shown: Task[] }) {
+export function TaskRows(props: Omit<TaskRowProps, 'task'> & { shown: Task[] }) {
   const { shown, ...row } = props;
   return (
     <ul className="task-rows">
@@ -104,7 +137,7 @@ export function TaskRows(props: Omit<RowProps, 'task'> & { shown: Task[] }) {
 }
 
 /** The chat's tasks in three groups, For you, Open and Closed, each under a muted heading with its count. */
-export function TaskList({ tasks, name, onOpen }: Omit<RowProps, 'task' | 'bare'>) {
+export function TaskList({ tasks, name, onOpen }: Omit<TaskRowProps, 'task' | 'bare'>) {
   return (
     <div className="task-list">
       {grouped(tasks).map((g) => (

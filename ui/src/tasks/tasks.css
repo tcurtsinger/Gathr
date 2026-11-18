@@ -71,27 +71,6 @@
   padding: 0 24px;
   border-top: 1px solid var(--border);
 }
-/* The plan's tab's foot: three cells. */
-.tasks-pager {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  max-width: 600px;
-  height: 64px;
-  margin-inline: auto;
-  font-size: 12px;
-}
-.tasks-pager > span:nth-child(2) {
-  text-align: center;
-  color: var(--muted-foreground);
-}
-.tasks-pager > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
 /* A task's foot: only what acts on it, at the right. */
 .task-foot {
   display: flex;
@@ -106,10 +85,6 @@
   }
   .tasks-footer {
     padding: 0 20px;
-  }
-  .tasks-pager {
-    grid-template-columns: auto 1fr auto;
-    gap: 6px;
   }
 }
 .tasks-empty {

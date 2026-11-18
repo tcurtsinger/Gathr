@@ -114,37 +114,47 @@ export function Question({ task, draft, onDraft, name, onSend, onReference }: Pr
               onSend={() => send(draft)}
             />
           )}
-          {refusal && (
-            <p className="question-refused">
-              <span className="bad">Not sent</span>
-              <span aria-hidden="true">·</span>
-              <span>{refusal.why}</span>
-              {refusal.ref && (
-                <button
-                  type="button"
-                  className="question-ref"
-                  onClick={() => onReference(refusal.ref as string)}
-                >
-                  {refusal.ref}
-                </button>
-              )}
-            </p>
-          )}
+          {refusal && <Refused word="Not sent" refusal={refusal} onReference={onReference} />}
         </>
       )}
     </div>
   );
 }
 
-/** The block's one field: its notes, its answer in words, or the Discuss message, growing with what is typed. */
-function Field(props: {
+/** What the service refused, in place: "Not sent", why, and its reference. */
+export function Refused(props: {
+  word: string;
+  refusal: Pick<Refusal, 'why' | 'ref'>;
+  onReference: (ref: string) => void;
+}) {
+  const { word, refusal, onReference } = props;
+  return (
+    <p className="question-refused">
+      <span className="bad">{word}</span>
+      <span aria-hidden="true">·</span>
+      <span>{refusal.why}</span>
+      {refusal.ref && (
+        <button type="button" className="question-ref" onClick={() => onReference(refusal.ref as string)}>
+          {refusal.ref}
+        </button>
+      )}
+    </p>
+  );
+}
+
+/**
+ * The one field for words to the room (the question block's notes, answer or Discuss message, the plan's Send
+ * back), growing with what is typed; Enter sends. `arrow: false` leaves its send to buttons beside it.
+ */
+export function Field(props: {
   place: string;
   value: string;
   onType: (text: string) => void;
   ready: boolean;
   onSend: () => void;
+  arrow?: boolean;
 }) {
-  const { place, value, onType, ready, onSend } = props;
+  const { place, value, onType, ready, onSend, arrow = true } = props;
   const box = useRef<HTMLTextAreaElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: it grows with what it holds
   useLayoutEffect(() => {
@@ -173,9 +183,11 @@ function Field(props: {
         onChange={(e) => onType(e.target.value)}
         onKeyDown={keys}
       />
-      <button type="submit" className="question-send" aria-label="Send" disabled={!ready}>
-        <ArrowUp className="question-send-icon" aria-hidden="true" />
-      </button>
+      {arrow && (
+        <button type="submit" className="question-send" aria-label="Send" disabled={!ready}>
+          <ArrowUp className="question-send-icon" aria-hidden="true" />
+        </button>
+      )}
     </form>
   );
 }
