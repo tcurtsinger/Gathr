@@ -205,8 +205,8 @@ Parts: 2.4, 10.3, 10.7
 - **Given** a project chat with a lead, a builder and a reviewer, and a work task #1 on a repair ask, with the
   builder's turn running
 - **When** the builder reports #1 done naming PR #5, whose head adds 1,240 lines
-- **Then** Gathr asks the person once, in the builder's turn: "Gathr asked you: #5 adds 1,240 lines, over a Fix's line
-  of 1,000: let it go on?", with the numbers and the largest files, and the builder is told its review waits for the
+- **Then** Gathr asks the person once, as its own message after the builder's: "#5 adds 1,240 lines, over a Fix's line
+  of 1,000: let it go on?" with its two choices, answered there or in Tasks, with the numbers and the largest files, and the builder is told its review waits for the
   answer. No review task exists, and #1 is held as `done, waiting on #<question> (the person), #5 to merge`. Reporting
   done again asks nothing more
 - **When** the person picks "Send it back"

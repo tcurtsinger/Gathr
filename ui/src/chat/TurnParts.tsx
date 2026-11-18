@@ -186,7 +186,7 @@ export function Events({
  * One line, cut with … when long; a click shows it whole, with what more there is (ux-issues 27) and
  * its task, which opens in the Tasks tab (room task 70), or an ask's sizes (0061).
  */
-function Event({
+export function Event({
   event,
   onOpenTask,
   onOpenPlan,

@@ -186,6 +186,55 @@
 .said[data-you] .bubble {
   background: color-mix(in oklab, var(--attention) 22%, var(--background));
 }
+/* Gathr's own message (0073, the chat-lines mock-up's voice A): an outlined bubble, one step quieter than an agent's. */
+.said[data-gathr] .bubble {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: color-mix(in oklab, var(--foreground) 88%, var(--background));
+  font-size: 14.5px;
+}
+.gathr-says {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.gathr-says + .gathr-says {
+  margin-top: 8px;
+}
+.gathr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.gathr-list li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.gathr-list svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--muted-foreground);
+}
+.gathr-list code {
+  font-size: 12.5px;
+}
+.gathr-list[data-tasks] {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+/* A question in its asker's bubble (0073): its choices want room, whatever the words above them. */
+.bubble > .question[data-open] {
+  min-width: min(400px, 100%);
+}
+.bubble > .question:first-child {
+  margin-top: 0;
+}
+
 /* The person's words as they typed them. */
 .bubble-plain {
   white-space: pre-wrap;

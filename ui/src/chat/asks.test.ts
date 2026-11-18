@@ -115,7 +115,7 @@ test("a sized ask's line sits after the lead's turn that sized it, and reads its
     asks: [ask('m1', { size: 'repair', by: 'mira', sized_in: 'hb' })],
   });
   const items = view(state);
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1', 'asked-hb']);
+  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1']);
   expect(line(items, 'size-m1')).toEqual([{ kind: 'fix', who: 'Mira:', text: 'Fix', ask: 'm1' }]);
 
   const resized = chat({
@@ -123,7 +123,7 @@ test("a sized ask's line sits after the lead's turn that sized it, and reads its
     asks: [ask('m1', { size: 'new', by: 'person', sized_in: 'hb' })],
   });
   const again = view(resized);
-  expect(ids(again)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1', 'asked-hb']);
+  expect(ids(again)).toEqual(['m1', 'a-ask', 'g1', 'a-hb', 'size-m1']);
   expect(line(again, 'size-m1')).toEqual([{ kind: 'plan', who: 'You:', text: 'Plan', ask: 'm1' }]);
 });
 
@@ -224,10 +224,10 @@ test("an unsized ask with a task reads Plan after its message's turn", () => {
   );
   expect(ids(into)).toEqual(['m0', 'a-lead', 'm2', 'a-lead-1', 'size-m2']);
 
-  // A question to the person is a task of the ask too; the line comes before the questions.
+  // A question to the person is a task of the ask too; it sits in the block that asked it (0073).
   const question = task(3, { kind: 'person', owner: null, ask: 'm1', what: 'Which export?' });
   const asked = view(chat({ tasks: [question], asks: [ask('m1')] }));
-  expect(ids(asked)).toEqual(['m1', 'a-ask', 'size-m1', 'asked-ask', 'g1', 'a-hb']);
+  expect(ids(asked)).toEqual(['m1', 'a-ask', 'size-m1', 'g1', 'a-hb']);
   expect(line(asked, 'size-m1')).toEqual([{ kind: 'plan', text: 'Plan', ask: 'm1' }]);
 });
 

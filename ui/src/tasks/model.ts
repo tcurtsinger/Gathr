@@ -81,6 +81,22 @@ export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   return { task: task.number, pick: draft.values, ...notes };
 }
 
+/** The person's answer as their message reads: the pick, yes or no, or done, then their words. */
+export function answerWords(task: Task): string[] {
+  const a = task.answer;
+  if (task.state !== 'done' || !a) return [];
+  const picked = a.pick?.length
+    ? a.pick.join(', ')
+    : a.yes != null
+      ? a.yes
+        ? 'Yes'
+        : 'No'
+      : a.done
+        ? 'Done'
+        : '';
+  return [picked, a.text ?? ''].filter(Boolean);
+}
+
 const said = { done: 'Done', left: 'Left', blocked: 'Blocked' };
 
 /** What a task's owner last reported, in a line, or that it has reported nothing (0047). */

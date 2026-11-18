@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { asked } from './ApprovalDock';
+import { Asked } from './Asked';
 import type { Custom, TurnNotice } from './messages';
 import { AgentFace, Bubble, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
@@ -28,7 +29,7 @@ export function UserMessage() {
       you
       bare={unsent?.text === ''}
       face={<YouSaid />}
-      line={<NameLine name="You" pieces={[<When key="t" time={own.tick} />]} />}
+      line={<NameLine name="You" pieces={[<When key="t" time={own.tick ?? own.time} />]} />}
     >
       {/* A failed Stop or Pause sent no text: only its notice shows, with nothing to resend. */}
       {unsent?.text !== '' && (
@@ -71,10 +72,11 @@ export function AssistantMessage() {
  * just started shows on the status line, not as an empty message.
  */
 function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
-  const { agent, by, role, on, done, work, notice, approvals, agreed, plan } = own;
+  const { agent, by, role, on, done, work, notice, approvals, agreed, plan, asked } = own;
   const actions = useActions();
   const [open, setOpen] = useStepsOpen(work);
-  if (!text && !work && !plan && !approvals?.length && !notice && !agreed?.length) return null;
+  const words = text || !!plan || !!asked?.length;
+  if (!words && !work && !approvals?.length && !notice && !agreed?.length) return null;
   const named = !!agent && (own.head || !!work);
   // Steps need their line even before the agent's name is known.
   const lined = named || !!work;
@@ -83,16 +85,9 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
       root
       agent={by}
       // With no words, the steps are all the block has: they stay shown.
-      keep={!!work && (work.running || !!work.failed || (!text && !plan))}
+      keep={!!work && (work.running || !!work.failed || !words)}
       // Nothing under the name line: the face sits beside it.
-      bare={
-        !text &&
-        !plan &&
-        !notice &&
-        !approvals?.length &&
-        !agreed?.length &&
-        !(work && (open || work.running))
-      }
+      bare={!words && !notice && !approvals?.length && !agreed?.length && !(work && (open || work.running))}
       face={
         named && (
           <AgentFace
@@ -123,7 +118,7 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
       {work && (open || work.running) && (
         <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
       )}
-      {(text || plan) && (
+      {words && (
         <Bubble>
           <MessagePrimitive.Parts components={parts} />
           {plan && (
@@ -133,6 +128,9 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
               onOpen={() => actions.openPlan?.(plan.plan, plan.version)}
             />
           )}
+          {asked?.map((n) => (
+            <Asked key={n} task={n} />
+          ))}
         </Bubble>
       )}
       {!!agreed?.length && <Reactions names={agreed} />}

@@ -63,8 +63,12 @@ export function planLine(m: Message, state: ChatState, crew: Team): EventLine | 
         plan: { id: plan.id, version: v.n },
       });
       if (v.check_line === m.id) {
-        const text = checked(v, m, state, crew);
-        return text === null ? null : line(text, plan.title);
+        const said = checked(v, m, state, crew);
+        if (said === null) return null;
+        if (!v.sent) return line(said, plan.title);
+        // The version reached the person before its check ended: Gathr says so in a sentence of its own (0073).
+        const text = `Plan v${v.n} came to you before ${said} finished checking it.`;
+        return { kind: 'version', text, more: plan.title, plan: { id: plan.id, version: v.n } };
       }
       if (v.decided_line !== m.id) continue;
       // The send-back's message holds the person's words between its first line and its last.
@@ -78,8 +82,8 @@ export function planLine(m: Message, state: ChatState, crew: Team): EventLine | 
 
 /**
  * How the check ended when its line was said: a version that didn't reach the person has findings; one that
- * did was agreed only by a report made by then, as a check that ran late can agree after Gathr sent it on.
- * Agreed, it has no words: null.
+ * did was agreed only by a report made by then, as a check that ran late can agree after Gathr sent it on,
+ * else it is the checker's, who hadn't finished. Agreed, it has no words: null.
  */
 function checked(v: PlanVersionSummary, line: Message, state: ChatState, crew: Team): string | null {
   const check = state.tasks.findLast((t) => t.checks === v.id);
@@ -87,7 +91,7 @@ function checked(v: PlanVersionSummary, line: Message, state: ChatState, crew: T
   if (!v.sent) return counted(check?.notes?.filter((n) => n.kind !== 'suggestion').length ?? 0, 'finding');
   const at = check?.report?.at_us;
   const agreed = check?.state === 'done' && (at == null || at <= (Date.parse(line.time) + 1) * 1000);
-  return agreed ? null : `${by} didn't finish`;
+  return agreed ? null : by;
 }
 
 /** Who agreed with a version by checking it, as its check line said (0062): their thumbs-up on it (0072). */

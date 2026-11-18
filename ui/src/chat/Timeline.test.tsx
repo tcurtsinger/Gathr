@@ -220,8 +220,8 @@ test('an event line opens in place to what more there is, and its task opens fro
   const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} />);
   const line = screen.getByRole('button', { name: 'Made-up Member completed: Made-up task 7' });
   await expect.element(line).toBeVisible();
-  // No "Gathr" speaker: the line is the whole of it.
-  expect(screen.getByText('Gathr', { exact: true }).query()).toBeNull();
+  // Gathr says it, as a speaker of its own (0073).
+  await expect.element(screen.getByText('Gathr', { exact: true })).toBeVisible();
   expect(screen.getByText('Task #7. Made-up outcome').query()).toBeNull();
 
   await line.click();
@@ -230,7 +230,7 @@ test('an event line opens in place to what more there is, and its task opens fro
   expect(opened).toEqual([7]);
 });
 
-test('two event lines that read the same open one at a time, each to its own question', async () => {
+test('two answers that read the same are each the person’s own message, under the question each answers', async () => {
   const errors = vi.spyOn(console, 'error');
   const asked = {
     owner: null,
@@ -238,31 +238,31 @@ test('two event lines that read the same open one at a time, each to its own que
     state: 'done' as const,
     reason: 'Done',
     heard_in: 'h',
+    form: 'done' as const,
   };
+  const at = (s: number) => Date.parse('2026-11-08T09:00:00Z') * 1000 + s * 1_000_000;
   const state: ChatState = {
     ...empty,
     members,
     turns: { lead: turn('lead', 'a', 0), h: turn('h', 'a', 1, { answers: 'lead' }) },
     tasks: [
-      task(5, { ...asked, what: 'Made-up first question' }),
-      task(6, { ...asked, what: 'Made-up second one' }),
+      task(5, { ...asked, what: 'Made-up first question', answer: { done: true, at: at(1) } }),
+      task(6, { ...asked, what: 'Made-up second one', answer: { done: true, at: at(2) } }),
     ],
     messages: [
-      said('g', 'h', 'The person answered: made-up', { role: 'gathr' }),
-      said('m', 'h', 'Made-up thanks'),
+      said('m', 'lead', 'Made-up asks'),
+      said('g', 'h', 'The person answered: made-up', { role: 'gathr', time: '2026-11-08T09:00:03Z' }),
+      said('t', 'h', 'Made-up thanks', { time: '2026-11-08T09:00:03Z' }),
     ],
   };
   const screen = await render(<View state={state} />);
-  const lines = screen.getByRole('button', { name: 'You answered Made-up Lead: Done' });
-  await expect.element(lines.nth(1)).toBeVisible();
-  await lines.nth(1).click();
-  await expect.element(screen.getByText('Question #6: Made-up second one')).toBeVisible();
-  expect(screen.getByText('Question #5: Made-up first question').query()).toBeNull();
-  // React names lines it can't tell apart.
+  await expect.element(screen.getByText('Made-up thanks')).toBeVisible();
+  expect(screen.getByText('Done', { exact: true }).all()).toHaveLength(2);
+  expect(screen.getByText('The person answered: made-up').query()).toBeNull();
+  // React names messages it can't tell apart.
   expect(errors.mock.calls.filter(([said]) => String(said).includes('same key'))).toEqual([]);
   errors.mockRestore();
 });
-
 test('a member’s name line stays one line however long its task is, cut with its time in view', async () => {
   const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
   const state: ChatState = {

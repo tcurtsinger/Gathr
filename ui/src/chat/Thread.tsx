@@ -8,9 +8,11 @@ import {
 import { ArrowDown } from 'lucide-react';
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef } from 'react';
 import { IconButton } from '../components/IconButton';
+import { type Questions, QuestionsContext } from './Asked';
 import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
 import { useFound, useLatest } from './found';
+import { GathrMessage } from './Gathr';
 import type { SendFailure } from './messages';
 import { useOlder } from './older';
 import { AssistantMessage, custom, UserMessage } from './Replies';
@@ -57,6 +59,8 @@ interface Props {
   target?: Target;
   /** The target is drawn and centred. */
   onTarget?: () => void;
+  /** What its questions are answered with, in place (0073). */
+  questions?: Questions;
 }
 
 /**
@@ -99,41 +103,43 @@ export function Thread(props: Props) {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={stable}>
-        <FoundContext value={found.text}>
-          <ThreadPrimitive.Root className="thread">
-            <ThreadPrimitive.Viewport
-              ref={viewport}
-              className="thread-viewport"
-              scrollToBottomOnRunStart={!found.held}
-              onScroll={() => {
-                onScroll();
-                found.onScroll();
-              }}
-            >
-              <div className="thread-column" data-empty={empty || undefined}>
-                {header}
-                {empty && <h2 className="welcome">What are we working on?</h2>}
-                <div className="thread-messages">
-                  <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+        <QuestionsContext value={props.questions ?? null}>
+          <FoundContext value={found.text}>
+            <ThreadPrimitive.Root className="thread">
+              <ThreadPrimitive.Viewport
+                ref={viewport}
+                className="thread-viewport"
+                scrollToBottomOnRunStart={!found.held}
+                onScroll={() => {
+                  onScroll();
+                  found.onScroll();
+                }}
+              >
+                <div className="thread-column" data-empty={empty || undefined}>
+                  {header}
+                  {empty && <h2 className="welcome">What are we working on?</h2>}
+                  <div className="thread-messages">
+                    <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                  </div>
+                  {after}
+                  <ThreadPrimitive.ViewportFooter className="thread-footer">
+                    <ThreadPrimitive.ScrollToBottom asChild>
+                      <IconButton
+                        aria-label="Scroll to bottom"
+                        variant="outline"
+                        className="thread-bottom bg-background"
+                      >
+                        <ArrowDown />
+                      </IconButton>
+                    </ThreadPrimitive.ScrollToBottom>
+                    {children}
+                  </ThreadPrimitive.ViewportFooter>
                 </div>
-                {after}
-                <ThreadPrimitive.ViewportFooter className="thread-footer">
-                  <ThreadPrimitive.ScrollToBottom asChild>
-                    <IconButton
-                      aria-label="Scroll to bottom"
-                      variant="outline"
-                      className="thread-bottom bg-background"
-                    >
-                      <ArrowDown />
-                    </IconButton>
-                  </ThreadPrimitive.ScrollToBottom>
-                  {children}
-                </ThreadPrimitive.ViewportFooter>
-              </div>
-            </ThreadPrimitive.Viewport>
-            <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
-          </ThreadPrimitive.Root>
-        </FoundContext>
+              </ThreadPrimitive.Viewport>
+              <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
+            </ThreadPrimitive.Root>
+          </FoundContext>
+        </QuestionsContext>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );
@@ -187,12 +193,14 @@ function ThreadMessage() {
   return role === 'user' ? <UserMessage /> : role === 'system' ? <SystemItem /> : <AssistantMessage />;
 }
 
-/** Gathr's notes that belong to no turn's row. */
+/** What Gathr says, as Gathr's message; a size's lines, as they were (0061). */
 function SystemItem() {
   const actions = useActions();
+  const own = useAuiState(custom);
+  if (own.gathr) return <GathrMessage />;
   return (
     <Events
-      events={useAuiState(custom).events ?? []}
+      events={own.events ?? []}
       onOpenTask={actions.openTask}
       onOpenPlan={actions.openPlan}
       onReference={actions.reference}

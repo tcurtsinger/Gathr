@@ -2,7 +2,7 @@ import { Fragment } from 'react';
 import type { Member, Task } from '../api';
 import { began, roleName } from '../chat/team';
 import { Face, GathrFace, YouFace } from '../components/Face';
-import { asker, type Draft, gathrs, type Refusal } from './model';
+import { answerWords, asker, type Draft, gathrs, type Refusal } from './model';
 import { Question } from './Question';
 import { asQuestion } from './rows';
 import { Top } from './TaskView';
@@ -22,22 +22,8 @@ interface Props {
 
 /** What the person sent, as their message reads: a Discuss's words, or the answer. */
 function sent(task: Task): string[] {
-  const a = task.answer as
-    | { pick?: string[] | null; yes?: boolean | null; done?: boolean | null; text?: string | null }
-    | null
-    | undefined;
   if (task.state === 'held') return [task.answer?.discussed?.at(-1)?.text ?? ''].filter(Boolean);
-  if (task.state !== 'done' || !a) return [];
-  const picked = a.pick?.length
-    ? a.pick.join(', ')
-    : a.yes != null
-      ? a.yes
-        ? 'Yes'
-        : 'No'
-      : a.done
-        ? 'Done'
-        : '';
-  return [picked, a.text ?? ''].filter(Boolean);
+  return answerWords(task);
 }
 
 /**

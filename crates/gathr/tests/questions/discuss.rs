@@ -48,11 +48,13 @@ fn discuss_takes_the_question_off_the_list_and_reaches_the_lead_only() {
          for Ann (#3), who keeps waiting.\n#4 is off the person's list until this turn ends. Reply to them here. To \
          change the question, ask a new one with ask_person: it takes #4's place."
     );
-    let discussed = &task(&conn, q).answer.unwrap()["discussed"];
+    let mut discussed = task(&conn, q).answer.unwrap()["discussed"].clone();
     let turn = mira[0].turn.as_str();
+    // When it was sent (0073); person_tasks.rs checks its value.
+    assert!(discussed[0]["at"].take().is_i64(), "{discussed}");
     assert_eq!(
         discussed,
-        &json!([{ "text": "Does it retry by itself?", "turn": turn }])
+        json!([{ "at": null, "text": "Does it retry by itself?", "turn": turn }])
     );
     let attrs = json!({ "gathr.discuss.how": "asked", "gathr.turn.id": turn });
     assert_eq!(

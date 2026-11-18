@@ -16,6 +16,7 @@ export function Said({
   agent,
   small,
   you,
+  gathr,
   keep,
   bare,
   root,
@@ -28,6 +29,8 @@ export function Said({
   /** In a thread: a smaller face and words. */
   small?: boolean;
   you?: boolean;
+  /** Gathr says it (0073): its bubble is outlined. */
+  gathr?: boolean;
   /** Its steps stay on its name line: a failed step, or an agent still working. */
   keep?: boolean;
   /** It has no words yet: its face sits beside its name line. */
@@ -40,6 +43,7 @@ export function Said({
     'data-agent': agent,
     'data-small': small || undefined,
     'data-you': you || undefined,
+    'data-gathr': gathr || undefined,
     'data-keep': keep || undefined,
     'data-bare': bare || undefined,
   };
