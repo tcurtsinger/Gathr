@@ -231,7 +231,9 @@ impl<S: Source> Topics<S> {
             );
         }
         // A send-back's turn answers the turn that wrote the version, which may be the ask's: it sits with the version.
-        if let Some(version) = f.sent_back(t) {
+        // Asked only of a turn a send-back opened, or an old one that doesn't say what opened it.
+        let may = matches!(t.opened_by.as_deref(), None | Some("sent_back"));
+        if let Some(version) = may.then(|| f.sent_back(t)).flatten() {
             return Topic::tied(
                 format!("m:{version}"),
                 "sent_back",

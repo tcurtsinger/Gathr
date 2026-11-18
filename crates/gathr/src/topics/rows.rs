@@ -167,9 +167,6 @@ impl Source for Rows<'_> {
     }
 
     fn sent_back(&self, turn: &Turn) -> Option<String> {
-        if !matches!(turn.opened_by.as_deref(), None | Some("sent_back")) {
-            return None;
-        }
         let opening = turn.opening.as_ref()?;
         let sql = "SELECT v.message_id FROM plan_versions v JOIN plans p ON p.id = v.plan_id
                    WHERE p.chat_id = ?1 AND v.decided_line = ?2";
