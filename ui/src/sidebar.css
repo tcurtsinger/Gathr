@@ -79,39 +79,19 @@
 :is(.project-chats, .archive-group) .chat-link {
   padding-left: 34px;
 }
-/* One mark for a chat with something going on (0040): the shared attention dot (base.css) once it needs the
-   person, grey while agents only work. It sits 8px after the title, which is cut before it (C65). */
-.chat-dot {
-  position: relative;
+/* A chat's most pressing mark (0071), only for Needs you, Can't run and Working: the faces' own mark at 9px,
+   still, 8px after the title, which is cut before it (C65). */
+.chat-mark {
+  display: inline-grid;
+  flex: none;
+  --mark: 9px;
+  --behind: var(--frame);
 }
-.chat-dot:not([data-needs]) {
-  background: color-mix(in oklab, var(--foreground) 55%, transparent);
+.chatrow:hover .chat-mark {
+  --behind: color-mix(in oklab, var(--foreground) 5%, var(--frame));
 }
-/* It breathes: a ring grows out of it and fades, every two seconds. Reduced motion keeps the dot, still. */
-.chat-dot::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: inherit;
-  animation: chat-dot-pulse 2s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
-}
-@keyframes chat-dot-pulse {
-  from {
-    transform: scale(1);
-    opacity: 0.55;
-  }
-  70%,
-  to {
-    transform: scale(2.8);
-    opacity: 0;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .chat-dot::after {
-    opacity: 0;
-    animation: none;
-  }
+.chatrow[data-current] .chat-mark {
+  --behind: color-mix(in oklab, var(--foreground) 6%, var(--frame));
 }
 .sidebar :is(.chat-link, .project-row .navbutton):hover {
   background: transparent;

@@ -3,17 +3,20 @@
 import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
+import type { Chat } from './api';
 import { Sidebar } from './Sidebar';
 
 const none = () => {};
 
-async function sidebar() {
+async function sidebar(
+  chats: Chat[] = [
+    { id: 'c1', title: 'Made-up open chat' },
+    { id: 'c2', title: 'Made-up other chat' },
+  ],
+) {
   await render(
     <Sidebar
-      chats={[
-        { id: 'c1', title: 'Made-up open chat' },
-        { id: 'c2', title: 'Made-up other chat' },
-      ]}
+      chats={chats}
       archived={[]}
       projects={[]}
       selected="c1"
@@ -57,4 +60,19 @@ test('focus in a row shows its More, which takes focus though it had no room', a
   (more('Made-up open chat').element() as HTMLElement).focus();
   await expect.element(more('Made-up open chat')).toHaveFocus();
   expect(opacity('Made-up open chat'), 'its More, focused').toBe(1);
+});
+
+// 0071: a chat's row shows its most pressing mark of three, as the service works it out, and says it.
+test('a chat’s row shows Needs you, Can’t run or Working, and nothing for the rest', async () => {
+  await sidebar([
+    { id: 'c1', title: 'Made-up asking', mark: 'needs_you', needs: true },
+    { id: 'c2', title: 'Made-up stuck', mark: 'cant_run', needs: true },
+    { id: 'c3', title: 'Made-up busy', mark: 'working', working: true },
+    { id: 'c4', title: 'Made-up quiet', mark: null },
+  ]);
+  const marks = [...document.querySelectorAll('.chat-link')].map((row) => {
+    const mark = row.querySelector('[role="img"]');
+    return `${mark?.querySelector('.mark')?.getAttribute('data-state') ?? '-'} ${mark?.getAttribute('aria-label') ?? ''}`;
+  });
+  expect(marks).toEqual(['needs Needs you', 'cant Can’t run', 'working Working', '- ']);
 });

@@ -4,6 +4,7 @@ import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Member, Message, Task, Turn, Wait, Waiting } from '../api';
+import { MarksContext, useChatMarks } from './faceMarks';
 import { activity, glances } from './glance';
 import { toThread } from './messages';
 import { Summary } from './Summary';
@@ -71,53 +72,55 @@ function Shown({
 }) {
   const [open, setOpen] = useState(false);
   const pauses = { pauses: [], usage: [] };
-  const doing = activity(toThread(state, [], [], new Map()).items);
+  const items = toThread(state, [], [], new Map()).items;
+  const team = glances(state, activity(items), waiting);
+  const marks = useChatMarks(team, items, false);
   return (
-    <header style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
-      <button type="button">Made-up neighbour</button>
-      <Summary
-        state={state}
-        team={glances(state, doing, waiting)}
-        open={open}
-        onOpen={setOpen}
-        pauses={pauses}
-        onPause={() => {}}
-        onOpenAgent={(agent) => opened.push(agent)}
-      />
-    </header>
+    <MarksContext value={marks}>
+      <header style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+        <button type="button">Made-up neighbour</button>
+        <Summary
+          state={state}
+          team={team}
+          open={open}
+          onOpen={setOpen}
+          pauses={pauses}
+          onPause={() => {}}
+          onOpenAgent={(agent) => opened.push(agent)}
+        />
+      </header>
+    </MarksContext>
   );
 }
 
-const stack = () =>
+/** The roster's faces in order, each with its mark: "b:working". */
+const roster = () =>
   [...document.querySelectorAll('.summary-button .face')].map(
-    (i) => `${i.getAttribute('data-agent')}${i.hasAttribute('data-busy') ? ' ring' : ''}`,
+    (f) => `${f.getAttribute('data-agent')}:${f.querySelector('.mark')?.getAttribute('data-state') ?? '-'}`,
   );
-const dots = () => document.querySelectorAll('.summary-button [data-needs]').length;
 
-test('the button names who needs the person and who works, and stacks their faces: workers ringed, the dot once', async () => {
+test('the button names who needs the person and who works, and shows every agent in the chat’s order with its mark', async () => {
   const idle: ChatState = { ...empty, members: trio };
   const screen = await render(<Shown state={idle} />);
-  // Nobody at work: the plain icon, so the button is never empty.
   await expect.element(screen.getByRole('button', { name: 'Summary', exact: true })).toBeVisible();
-  expect(stack()).toEqual([]);
-  expect(document.querySelector('.summary-button svg')).not.toBeNull();
+  expect(roster()).toEqual(['a:free', 'b:free', 'c:free']);
 
   const working = { ...idle, turns: turns(turn('t1', 'b')) };
   await screen.rerender(<Shown state={working} />);
   await expect
     .element(screen.getByRole('button', { name: 'Summary: Made-up Member working', exact: true }))
     .toBeVisible();
-  expect([stack(), dots()]).toEqual([['b ring'], 0]);
+  expect(roster()).toEqual(['a:free', 'b:working', 'c:free']);
 
-  // An approval is asked inside a running turn: that agent needs the person, and has no ring.
+  // An approval is asked inside a running turn: that agent needs the person.
   const needs = { ...idle, turns: turns(turn('t3', 'c')), approvals: [approval('t3')] };
   await screen.rerender(<Shown state={needs} />);
   await expect
     .element(screen.getByRole('button', { name: 'Summary: Made-up Third needs you', exact: true }))
     .toBeVisible();
-  expect([stack(), dots()]).toEqual([['c'], 1]);
+  expect(roster()).toEqual(['a:free', 'b:free', 'c:needs']);
 
-  // Both: whoever needs the person sits last, and a question to the person counts as an approval does.
+  // Both: the order stays the chat's, and a question to the person counts as an approval does.
   const both: ChatState = {
     ...idle,
     turns: turns(turn('t1', 'a'), turn('t2', 'b'), turn('t3', 'c', { status: 'done' })),
@@ -126,10 +129,10 @@ test('the button names who needs the person and who works, and stacks their face
   await screen.rerender(<Shown state={both} />);
   const name = 'Summary: Made-up Third needs you, Made-up Lead and Made-up Member working';
   await expect.element(screen.getByRole('button', { name, exact: true })).toBeVisible();
-  expect([stack(), dots()]).toEqual([['a ring', 'b ring', 'c'], 1]);
+  expect(roster()).toEqual(['a:working', 'b:working', 'c:needs']);
 });
 
-test('five agents at work still fit the button as one compact stack', async () => {
+test('five agents fit the button apart, so no face covers another’s mark', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -139,11 +142,10 @@ test('five agents at work still fit the button as one compact stack', async () =
   const name = 'Summary: Made-up Lead, Made-up Member, Made-up Third, Kit and Lane working';
   const button = screen.getByRole('button', { name, exact: true });
   await expect.element(button).toBeVisible();
-  expect(stack()).toEqual(['a ring', 'b ring', 'c ring', 'd ring', 'e ring']);
-  // Five 20px faces overlapped by 4px, and the button's 8px each side.
-  expect(button.element().getBoundingClientRect().width).toBe(20 + 4 * 16 + 16);
+  expect(roster()).toEqual(['a:working', 'b:working', 'c:working', 'd:working', 'e:working']);
+  // Five 20px faces 6px apart, and the button's 8px each side.
+  expect(button.element().getBoundingClientRect().width).toBe(5 * 20 + 4 * 6 + 16);
 });
-
 test('the plan lists the current round: each step, who has it, who waits on the person, and how many are done', async () => {
   const state: ChatState = {
     ...empty,
@@ -214,6 +216,9 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     name: 'Made-up',
     state,
     words,
+    what: null,
+    task: null,
+    since_us: null,
     on: [],
     until_us: null,
   });
@@ -221,8 +226,8 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     lines: [],
     agents: [
       stands('a', 'waiting', 'Waiting for Made-up Member'),
-      stands('d', 'free', 'Ready'),
-      stands('e', 'free', 'Ready'),
+      stands('d', 'free', 'Free'),
+      stands('e', 'free', 'Free'),
     ],
   };
   const screen = await render(<Shown state={state} waiting={waiting} />);
@@ -238,8 +243,8 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     ['Made-up Third', 'Needs your approval'],
     ['Made-up Member', 'Running a command', '1/21 of 2 tasks done'],
     ['Made-up Lead', 'Waiting for Made-up Member'],
-    ['Kit', 'Ready'],
-    ['Lane', 'Ready', '1/11 of 1 task done'],
+    ['Kit', 'Free'],
+    ['Lane', 'Free', '1/11 of 1 task done'],
   ]);
   // "1/2" is for the eye; a screen reader is told "1 of 2 tasks done", not a half.
   const count = document.querySelectorAll('.agent-count')[1];
@@ -247,7 +252,7 @@ test('the team is one line each: what it is doing and its tasks done, in order o
   await expect
     .element(summary.getByRole('button', { name: 'Made-up Member Running a command 1 of 2 tasks done' }))
     .toBeVisible();
-  expect(document.querySelectorAll('.summary .face[data-busy]')).toHaveLength(1);
+  expect(document.querySelectorAll('.summary .face .mark[data-state="working"]')).toHaveLength(1);
 });
 
 test('the button opens and closes it; Escape closes it and gives focus back; so does a press outside', async () => {

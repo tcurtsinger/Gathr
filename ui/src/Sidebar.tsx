@@ -2,7 +2,9 @@ import { Folder, FolderOpen, Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
+import { FROM_SERVICE, WORD } from './components/marks';
 import { ResizeHandle } from './components/ResizeHandle';
+import { StateMark } from './components/StateMark';
 import './sidebar.css';
 
 interface Props {
@@ -39,13 +41,10 @@ export function Sidebar(props: Props) {
         onClick={() => onSelect(c.id)}
       >
         <span>{c.title}</span>
-        {(c.needs || c.working) && (
-          <i
-            className="attention chat-dot"
-            role="img"
-            data-needs={c.needs || undefined}
-            aria-label={c.needs ? 'Needs you' : 'Agents working'}
-          />
+        {c.mark && (
+          <span className="chat-mark" role="img" aria-label={WORD[FROM_SERVICE[c.mark]]}>
+            <StateMark state={FROM_SERVICE[c.mark]} size={9} />
+          </span>
         )}
       </button>
       <ChatMenu

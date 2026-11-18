@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import type { Member, Standing, Task, Turn, Waiting } from '../api';
-import { glances } from './glance';
+import type { Mark } from '../components/marks';
+import { glances, markOf } from './glance';
 import { type ChatState, empty } from './state';
 import { began, clock } from './team';
 
@@ -35,6 +36,9 @@ const stands = (agent: string, more: Partial<Standing> = {}): Standing => ({
   name: 'Made-up',
   state: 'waiting',
   words: 'Waiting',
+  what: null,
+  task: null,
+  since_us: null,
   on: [],
   until_us: null,
   ...more,
@@ -42,6 +46,28 @@ const stands = (agent: string, more: Partial<Standing> = {}): Standing => ({
 const said = (...agents: Standing[]): Waiting => ({ lines: [], agents });
 const doing = (state: ChatState, waiting?: Waiting) =>
   Object.fromEntries(glances(state, new Map(), waiting).map((g) => [g.member.agent, g.doing]));
+
+test('a face shows the most pressing of what the chat as it streams says and what the service answered', () => {
+  // [what the chat says, the service's state, the mark shown]
+  const table: [Parameters<typeof markOf>[0], Mark | undefined, Mark][] = [
+    [{}, undefined, 'free'],
+    [{ owed: true }, undefined, 'waiting'],
+    [{ owed: true }, 'free', 'waiting'],
+    [{}, 'working', 'free'],
+    [{}, 'needs', 'needs'],
+    [{}, 'cant', 'cant'],
+    [{}, 'stopped', 'stopped'],
+    [{ owed: true }, 'blocked', 'blocked'],
+    [{ owed: true }, 'waiting', 'waiting'],
+    [{ working: true }, 'stopped', 'working'],
+    [{ working: true }, 'cant', 'working'],
+    [{ working: true }, 'needs', 'needs'],
+    [{ needs: true }, 'cant', 'needs'],
+    [{ needs: true, working: true }, 'free', 'needs'],
+  ];
+  const shown = table.map(([local, service]) => markOf(local, service));
+  expect(shown).toEqual(table.map(([, , mark]) => mark));
+});
 
 test('an agent that is not working says what the service says it waits for: held, out of usage, or for whom', () => {
   // The lead has a queued turn, the member an open task, the third nothing.
@@ -52,18 +78,18 @@ test('an agent that is not working says what the service says it waits for: held
     tasks: [task(1, 'b')],
   };
   // Until the answer comes, only whether anything is its to do.
-  expect(doing(state)).toEqual({ a: 'Waiting', b: 'Waiting', c: 'Ready' });
+  expect(doing(state)).toEqual({ a: 'Waiting', b: 'Waiting', c: 'Free' });
 
   const until = Date.now() + 3_600_000;
   const held = said(
     stands('a', { words: 'Held' }),
     stands('b', { words: 'Usage limit', until_us: until * 1000 }),
-    stands('c', { state: 'free', words: 'Ready' }),
+    stands('c', { state: 'free', words: 'Free' }),
   );
   expect(doing(state, held)).toEqual({
     a: 'Held',
     b: `Usage limit until ${clock(new Date(until).toISOString())}`,
-    c: 'Ready',
+    c: 'Free',
   });
 
   // Whom and what it waits for is one phrase in Summary; its panel adds since when.
@@ -103,11 +129,11 @@ test('an agent whose glance reads as before keeps its object, so its panel is no
     turns: { t: turn('t', 'b', 'running') },
     tasks: [task(1, 'c', { state: 'done' })],
   };
-  const first = glances(state, new Map([['b', 'Reading a file']]));
+  const first = glances(state, new Map([['b', { label: 'Reading a file' }]]));
   // The member moves on to a command; nothing about the others changed, though the state is a new object.
   const next = glances(
     { ...state, partial: { t: 'made-up' } },
-    new Map([['b', 'Running a command']]),
+    new Map([['b', { label: 'Running a command' }]]),
     undefined,
     first,
   );

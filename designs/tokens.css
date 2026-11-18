@@ -36,6 +36,8 @@
 	--radius: 0.5rem;
 	--scrollbar-thumb: #777774;
 	--attention: #60a5fa;
+	/* Free's mark (0071): green means Free only. */
+	--free: oklch(0.74 0.17 148);
 	--backdrop: #00000088;
 	--radius-control: 8px;
 	--radius-floating: 16px;
@@ -76,4 +78,5 @@ html.light {
 	--ring: transparent;
 	--scrollbar-thumb: #85857f;
 	--attention: #1d4ed8;
+	--free: oklch(0.54 0.15 148);
 }

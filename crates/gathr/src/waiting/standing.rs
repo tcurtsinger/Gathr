@@ -110,7 +110,7 @@ pub(super) fn standings(
         let state = needs_you(live, open, &plans, id, &running)
             .or_else(|| cant_run(&own, last.as_ref()))
             .or_else(|| working(&running))
-            .or_else(|| stopped(pauses, chat, id, last.as_ref()))
+            .or_else(|| stopped(pauses, chat, id, last.as_ref(), !own.is_empty()))
             .or_else(|| blocked(open, id));
         let state = match state {
             Some(state) => state,
@@ -189,13 +189,14 @@ fn working(running: &[&&Turn]) -> Option<Now> {
 }
 
 /// The person stopped the chat or paused it or the agent, a restart cut its last turn, or the
-/// person stopped that turn.
-fn stopped(pauses: &[Pause], chat: &str, id: &str, last: Option<&Last>) -> Option<Now> {
+/// person stopped that turn. A pause holds a turn of its to come (`held`), or it has none.
+fn stopped(pauses: &[Pause], chat: &str, id: &str, last: Option<&Last>, held: bool) -> Option<Now> {
     if let Some(p) = pauses::holding(pauses, chat, None).filter(|p| p.stopped) {
         return Some(now("stopped", "Stopped", Some(p.since_us)));
     }
     if let Some(p) = pauses::holding(pauses, chat, Some(id)) {
-        return Some(now("stopped", "Paused", Some(p.since_us)).what("Paused"));
+        let words = if held { "Held" } else { "Paused" };
+        return Some(now("stopped", words, Some(p.since_us)).what("Paused"));
     }
     let last = last?;
     let cut = last.status == "failed" && last.why.as_deref() == Some(crate::store::CUT_BY_RESTART);

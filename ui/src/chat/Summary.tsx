@@ -18,25 +18,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { PauseScope, Pauses } from '../api';
-import { Face, FaceStack } from '../components/Face';
+import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
+import { useMarks } from './faceMarks';
 import { counts, type Glance, headline } from './glance';
 import { agentPause, type PauseAction } from './pauses';
 import { currentRound, type Round, type StepState } from './plan';
 import type { ChatState } from './state';
 import './summary.css';
-
-/** Shown while nobody works or needs the person, so the button is never empty: two agents, each with a line. */
-function SummaryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <circle cx="6" cy="6.5" r="2.5" />
-      <path d="M12 6.5h8" strokeLinecap="round" />
-      <circle cx="6" cy="17.5" r="2.5" />
-      <path d="M12 17.5h8" strokeLinecap="round" />
-    </svg>
-  );
-}
 
 interface Props {
   state: ChatState;
@@ -55,21 +44,18 @@ interface Props {
 }
 
 /**
- * The team at a glance (DESIGN.md "Summary", 0038). Its button in the chat header is the overlapped
- * faces of whoever works, each with a turning ring, then whoever needs the person, with one dot on the
- * stack. It opens a popover: the Supervisor's current round as Plan, then every agent on one line. A step
- * or an agent opens that agent's panel. Escape or a press outside closes it.
+ * The team at a glance (DESIGN.md "Summary", 0038). Its button in the top line is every agent of the chat in the
+ * chat's order, apart, each with its state's mark (0071). It opens a popover: the Supervisor's current round as
+ * Plan, then every agent on one line. A step or an agent opens that agent's panel. Escape or a press outside closes
+ * it.
  */
 export function Summary(props: Props) {
   const { state, team, open, onOpen, from, onOwnButton, pauses, onPause, onOpenAgent } = props;
   const round = useMemo(() => currentRound(state), [state]);
   const said = headline(team);
   const label = said ? `Summary: ${said}` : 'Summary';
-  // Whoever works first, each with its ring; whoever needs the person last, with none.
-  const stack = team
-    .filter((g) => g.standing === 'working' || g.standing === 'needs')
-    .sort((a, b) => Number(a.standing === 'needs') - Number(b.standing === 'needs'))
-    .map((g) => ({ agent: g.member.agent, name: g.member.name, busy: g.standing === 'working' }));
+  const marks = useMarks();
+  const shown = (agent: string) => (marks?.archived ? undefined : marks?.turning.get(agent));
   const needs = new Set(team.filter((g) => g.standing === 'needs').map((g) => g.member.agent));
   // Opening an agent moves the keyboard to its panel: closing must not bring it back to the button.
   const went = useRef(false);
@@ -82,7 +68,11 @@ export function Summary(props: Props) {
     <Popover.Root open={open} onOpenChange={onOpen}>
       <Popover.Trigger asChild>
         <IconButton aria-label={label} className="head-button summary-button" onClick={onOwnButton}>
-          {stack.length ? <FaceStack agents={stack} needs={needs.size > 0} /> : <SummaryIcon />}
+          <span className="roster">
+            {state.members.map((m) => (
+              <Face key={m.agent} agent={{ id: m.agent, name: m.name }} size={20} mark={shown(m.agent)} />
+            ))}
+          </span>
         </IconButton>
       </Popover.Trigger>
       <Popover.Anchor asChild>
@@ -131,7 +121,7 @@ export function Summary(props: Props) {
                 <Face
                   agent={{ id: g.member.agent, name: g.member.name }}
                   size={24}
-                  busy={g.standing === 'working'}
+                  mark={marks?.archived ? undefined : { state: g.standing }}
                 />
                 <span className="agent-name">{g.member.name}</span>
                 <span className="agent-doing" data-standing={g.standing}>

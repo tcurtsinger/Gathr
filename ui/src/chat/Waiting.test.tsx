@@ -62,7 +62,17 @@ const members = [
 ];
 const history = { chat: 'c', messages: [], turns: [], approvals: [], members };
 const agents: Standing[] = [
-  { agent: 'b', name: 'Made-up Member', state: 'working', words: 'Working', on: [], until_us: null },
+  {
+    agent: 'b',
+    name: 'Made-up Member',
+    state: 'working',
+    words: 'Working',
+    what: null,
+    task: null,
+    since_us: null,
+    on: [],
+    until_us: null,
+  },
 ];
 
 // What the service answers now; a test changes it as the service would, then says so live.

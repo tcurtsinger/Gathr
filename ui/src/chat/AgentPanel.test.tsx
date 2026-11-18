@@ -213,7 +213,7 @@ test('a working agent: when it began, its task, its running row opened, its earl
   await openFromSummary(/^Made-up Member/);
   await expect.element(panel.getByRole('heading', { name: 'Made-up Member', exact: true })).toBeVisible();
   expect(who().textContent).toContain(`Member · Working since ${clock(began)}`);
-  expect(who().querySelector('.face[data-busy]')).not.toBeNull();
+  expect(who().querySelector('.face .mark[data-state="working"]')).not.toBeNull();
 
   const current = panel.getByRole('region', { name: 'Task', exact: true });
   await expect.element(current).toHaveTextContent('TaskMade-up task 7From Made-up Lead · Open task');
@@ -274,22 +274,22 @@ test('a waiting agent says who it waits for and since when; with no task of its 
   await expect
     .poll(() => who().textContent)
     .toContain(`Supervisor · Waiting for Made-up Member since 09:42 and Made-up Third since ${day}`);
-  expect(who().querySelector('.face[data-busy]')).toBeNull();
+  expect(who().querySelector('.face .mark')?.getAttribute('data-state')).toBe('waiting');
   expect(texts('heading')).toEqual(['Made-up Lead', 'Earlier in this chat']);
   await expect.element(panel.getByText('Made-up plan from the lead')).toBeVisible();
 });
 
-test('an idle agent is Ready, with its earlier blocks and tasks; one with nothing in the chat says so', async () => {
+test('an idle agent is Free, with its earlier blocks and tasks; one with nothing in the chat says so', async () => {
   service();
   await render(<Chat />);
   await openFromSummary(/^Made-up Third/);
-  await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
+  await expect.poll(() => who().textContent).toContain('Reviewer · Free');
   expect(texts('heading')).toEqual(['Made-up Third', 'Earlier in this chat', 'Tasks in this chat']);
   expect(texts('listitem')).toEqual(['doneMade-up task 8']);
 
   // Another agent takes the panel's place.
   await openFromSummary(/^Kit/);
-  await expect.poll(() => who().textContent).toContain('Member · Ready');
+  await expect.poll(() => who().textContent).toContain('Member · Free');
   expect(texts('heading')).toEqual(['Kit']);
   await expect.element(panel.getByText('Nothing in this chat yet')).toBeVisible();
 });
@@ -352,7 +352,7 @@ test('Message is left out where it can’t be sent: an archived chat, an agent t
   service();
   const screen = await render(<Chat known={agents.filter((a) => a.id !== 'd')} />);
   await openFromSummary(/^Kit/);
-  await expect.poll(() => who().textContent).toContain('Member · Ready');
+  await expect.poll(() => who().textContent).toContain('Member · Free');
   expect(panel.getByRole('button', { name: /^Message/ }).query()).toBeNull();
   await openFromSummary(/^Made-up Third/);
   await expect.element(panel.getByRole('button', { name: 'Message Made-up Third' })).toBeVisible();
@@ -387,7 +387,7 @@ test("an agent's context shows in its panel, from the engine's fill and window; 
     measured,
   ).toEqual([]);
   await openFromSummary(/^Made-up Third/);
-  await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
+  await expect.poll(() => who().textContent).toContain('Reviewer · Free');
   expect(panel.getByRole('button', { name: 'Context usage' }).query()).toBeNull();
 });
 
@@ -450,7 +450,7 @@ test('a token streamed into the chat draws the workspace no more', async () => {
   service();
   await render(<Chat />);
   await openFromSummary(/^Made-up Third/);
-  await expect.poll(() => who().textContent).toContain('Reviewer · Ready');
+  await expect.poll(() => who().textContent).toContain('Reviewer · Free');
   const before = counts.drawn;
   for (const text of ['Made-up ', 'streamed ', 'words'])
     for (const listener of live) listener({ type: 'delta', chat: 'c', turn: 'now', text });

@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import type { PlanSummary } from '../api';
 import { Face, type FaceOf } from '../components/Face';
 import { counted } from '../plans/plans';
+import { useMarks } from './faceMarks';
 import { type Approval, unanswered } from './state';
 
 /** What an approval asks to run: the tool as the person knows it, and its command when it has one. */
@@ -35,6 +36,7 @@ interface Props {
  * brings it back.
  */
 export function ApprovalDock({ approvals, plans, asker, lead, onShow, onAnswer, onOpenPlan }: Props) {
+  const marks = useMarks();
   const waiting = approvals.filter(unanswered);
   const planned = plans.filter((p) => p.state === 'waiting');
   const count = waiting.length + planned.length;
@@ -46,7 +48,7 @@ export function ApprovalDock({ approvals, plans, asker, lead, onShow, onAnswer, 
     const agent = lead(plan.lead);
     return (
       <section className="needs-dock" aria-label="Needs you">
-        <Face agent={agent} size={24} />
+        <Face agent={agent} size={24} mark={marks?.still.get(agent.id)} />
         <div className="needs-text">
           <small>Needs you · 1 of {count}</small>
           <div>
@@ -63,7 +65,7 @@ export function ApprovalDock({ approvals, plans, asker, lead, onShow, onAnswer, 
   const { tool, command } = asked(a);
   return (
     <section className="needs-dock" aria-label="Needs you">
-      <Face agent={agent} size={24} />
+      <Face agent={agent} size={24} mark={marks?.still.get(agent.id)} />
       <div className="needs-text">
         <small>Needs you · 1 of {count}</small>
         <div>
