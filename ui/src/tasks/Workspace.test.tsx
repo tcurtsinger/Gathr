@@ -13,7 +13,6 @@ test('when the open agent has left the chat its tab goes, and Tasks shows in its
       onSelect={none}
       onCloseFile={none}
       onCloseAgent={none}
-      onClose={none}
       tasks="Made-up tasks"
     />
   );

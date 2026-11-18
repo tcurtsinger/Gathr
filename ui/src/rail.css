@@ -1,0 +1,55 @@
+/* The rail (0070): 44 wide on the shell, icons only. Home sits on the word mark's line (both centre 26 under
+   the top line); Update and Settings at the foot, 12 above the window's edge (6 of it the shell's margin). */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px 0 6px;
+}
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+.rail-mark,
+.rail-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+}
+.rail-mark {
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  color: var(--foreground);
+}
+.rail :is(.rail-mark, .rail-button) svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.75;
+}
+.rail-update {
+  color: var(--attention);
+}
+.rail .rail-update svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2;
+}
+.rail .rail-updating svg {
+  animation: rail-spin 0.9s linear infinite;
+}
+@keyframes rail-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail .rail-updating svg {
+    animation: none;
+  }
+}

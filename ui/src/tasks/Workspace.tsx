@@ -14,10 +14,11 @@ export interface FileTab {
 
 export const fileId = (f: FileTab) => `${f.task}/${f.index}`;
 
-/** DESIGN.md Layout: beside the chat it leaves the chat 360px, as workspace.css. */
+/** DESIGN.md Layout: beside the chat it leaves the chat 360px, as workspace.css: the room from the sidebar to the frame's end. */
 function widest() {
-  const nav = document.querySelector('.sidebar')?.getBoundingClientRect().width ?? 0;
-  return Math.max(360, innerWidth - nav - 360);
+  const nav = document.querySelector('.sidebar')?.getBoundingClientRect().right ?? 0;
+  const end = document.querySelector('.workspace')?.getBoundingClientRect().right ?? innerWidth;
+  return Math.max(360, end - nav - 360);
 }
 
 interface Props {
@@ -33,7 +34,6 @@ interface Props {
   onSelect: (id: string) => void;
   onCloseFile: (id: string) => void;
   onCloseAgent: () => void;
-  onClose: () => void;
   tasks: ReactNode;
 }
 
@@ -43,7 +43,7 @@ interface Props {
  * The prototype's other tabs come with their features.
  */
 export function Workspace(props: Props) {
-  const { waiting, files, agent, plan, onSelect, onCloseFile, onCloseAgent, onClose, tasks } = props;
+  const { waiting, files, agent, plan, onSelect, onCloseFile, onCloseAgent, tasks } = props;
   // An agent that left the chat takes its tab with it.
   const selected = props.selected === 'agent' && !agent ? 'tasks' : props.selected;
   const ids = ['tasks', ...(agent ? ['agent'] : []), ...(plan ? ['plan'] : []), ...files.map(fileId)];
@@ -108,14 +108,6 @@ export function Workspace(props: Props) {
             )}
           {files.map((f) => tab(fileId(f), f.name, <FileText aria-hidden="true" />))}
         </div>
-        <IconButton
-          aria-label="Close sidebar"
-          aria-expanded={true}
-          className="head-button workspace-toggle"
-          onClick={onClose}
-        >
-          <PanelRight />
-        </IconButton>
       </div>
       <section
         id="workspace-view-tasks"
@@ -165,17 +157,18 @@ export function Workspace(props: Props) {
   );
 }
 
-/** The chat header's opener; its dot says a question waits on the person in this chat. */
-export function WorkspaceOpener({ waiting, onOpen }: { waiting: boolean; onOpen: () => void }) {
+/** The panel's button in the top line, open or closed; closed, its dot says a question waits on the person. */
+export function WorkspaceToggle(props: { open: boolean; waiting: boolean; onToggle: () => void }) {
+  const { open, waiting, onToggle } = props;
   return (
     <IconButton
-      aria-label="Open sidebar"
-      aria-expanded={false}
+      aria-label={open ? 'Close sidebar' : 'Open sidebar'}
+      aria-expanded={open}
       className="head-button workspace-toggle"
-      onClick={onOpen}
+      onClick={onToggle}
     >
       <PanelRight />
-      {waiting && <i className="attention" />}
+      {waiting && !open && <i className="attention" />}
     </IconButton>
   );
 }

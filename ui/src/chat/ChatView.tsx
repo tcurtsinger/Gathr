@@ -56,9 +56,9 @@ interface Props {
   onNewProject: () => void;
   /** Sends a new chat's first message: the service makes the chat then. */
   onStart: (text: string, agent?: string) => void;
-  /** At the header's end: the workspace's opener. */
+  /** At the top line's end: the panel's button. */
   headerEnd?: ReactNode;
-  /** Under the header, whatever is scrolled to: the app's latest failure. */
+  /** At the chat's top, whatever is scrolled to: the app's latest failure. */
   notice?: ReactNode;
   /** Every pause, and what the person can do to one (the app keeps them for every chat). */
   pauses: Pauses;
@@ -241,45 +241,46 @@ export function ChatView(props: Props) {
 
   return (
     <>
+      {/* The window's top line (0070), on the shell above the frame: the app's grid puts it there. */}
+      <header className="topline">
+        <div className="topline-title">
+          <h1>{chat.title}</h1>
+          {!fresh && (
+            <ChatMenu
+              pause={{
+                state: run.state,
+                all: run.scope?.scope === 'app',
+                onPause: () => act('pause', thisChat),
+                onResume: () => act('resume', run.scope ?? thisChat),
+              }}
+              archived={archived}
+              onArchive={props.onArchive}
+              onRestore={onRestore}
+              onDelete={props.onDelete}
+              className="head-button"
+              align="start"
+            />
+          )}
+          {archived && <small className="topline-state">Archived</small>}
+        </div>
+        <div className="topline-actions">
+          {team && (
+            <Summary
+              state={state}
+              team={crew}
+              open={summary.open}
+              onOpen={(open) => setSummary((s) => ({ ...s, open }))}
+              onOwnButton={() => setSummary((s) => ({ open: s.open }))}
+              from={summary.from}
+              pauses={pauses}
+              onPause={act}
+              onOpenAgent={actions.openAgent}
+            />
+          )}
+          {headerEnd}
+        </div>
+      </header>
       <main className="chat" aria-label={chat.title}>
-        <header className="topbar">
-          <div className="topbar-title">
-            <h1>{chat.title}</h1>
-            {!fresh && (
-              <ChatMenu
-                pause={{
-                  state: run.state,
-                  all: run.scope?.scope === 'app',
-                  onPause: () => act('pause', thisChat),
-                  onResume: () => act('resume', run.scope ?? thisChat),
-                }}
-                archived={archived}
-                onArchive={props.onArchive}
-                onRestore={onRestore}
-                onDelete={props.onDelete}
-                className="head-button"
-                align="start"
-              />
-            )}
-            {archived && <small className="topbar-state">Archived</small>}
-          </div>
-          <div className="topbar-actions">
-            {team && (
-              <Summary
-                state={state}
-                team={crew}
-                open={summary.open}
-                onOpen={(open) => setSummary((s) => ({ ...s, open }))}
-                onOwnButton={() => setSummary((s) => ({ open: s.open }))}
-                from={summary.from}
-                pauses={pauses}
-                onPause={act}
-                onOpenAgent={actions.openAgent}
-              />
-            )}
-            {headerEnd}
-          </div>
-        </header>
         {props.notice}
         <div className="chat-body">
           <Thread

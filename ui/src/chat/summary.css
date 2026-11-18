@@ -1,4 +1,4 @@
-/* Summary (DESIGN.md "Summary", 0038): the stack in the chat header and its popover. */
+/* Summary (DESIGN.md "Summary", 0038): the stack in the top line and its popover. */
 /* With faces it widens to hold them, at the header buttons' height. */
 .head-button.summary-button:has(.face-stack) {
   width: auto;
@@ -10,7 +10,7 @@
   color: var(--foreground);
 }
 .summary-button .face-stack {
-  --behind: var(--frame);
+  --behind: var(--shell);
 }
 .summary-anchor {
   position: absolute;

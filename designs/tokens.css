@@ -1,6 +1,7 @@
 /* Semantic values. Dark is the desktop default; .light selects light.
-   Three surfaces: frame (navigation, top bar, workspace), background (the chat), card. In dark the chat
-   is darkest and the frame lighter (0068); in light the chat is white. */
+   Four surfaces: shell (the window's own: the rail and the top line, around the frame, 0070), frame
+   (navigation, workspace), background (the chat), card. In dark the shell is lightest and the chat darkest
+   (0068); in light the chat is white. */
 @font-face {
 	font-family: "Hanken Grotesk Variable";
 	src: url("./fonts/hanken-grotesk-latin-wght-normal.woff2") format("woff2");
@@ -11,6 +12,8 @@
 :root {
 	color-scheme: dark;
 	--font-sans: "Hanken Grotesk Variable", "Hanken Grotesk", ui-sans-serif, sans-serif;
+	--shell: #2c2c2c;
+	--shell-edge: oklch(0.985 0.002 106 / 7%);
 	--frame: #232323;
 	--background: #1b1b1b;
 	--foreground: oklch(0.95 0.002 106);
@@ -54,6 +57,8 @@
 }
 html.light {
 	color-scheme: light;
+	--shell: oklch(0.925 0.004 106);
+	--shell-edge: oklch(0.145 0.006 106 / 7%);
 	--frame: oklch(0.965 0.003 106);
 	--background: #fff;
 	--foreground: oklch(0.145 0.006 106);

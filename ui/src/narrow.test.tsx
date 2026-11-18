@@ -93,10 +93,23 @@ function expectBeside(at: ReturnType<typeof columns>) {
   expect(sidebar.width, `the sidebar, of ${JSON.stringify(at)}`).toBeGreaterThanOrEqual(190);
 }
 
-test.each([1000, 960])('at %i wide the open panel sits beside the chat, which keeps 360', async (w) => {
-  await page.viewport(w, 700);
+// The frame page's widths (0070): the frame is the window less the rail (44) and the shell's margin (6). The
+// chat keeps 360 at 1000 and 960, the sidebar giving way.
+test.each([
+  [1440, 900, { sidebar: 246, chat: 686, panel: 458 }],
+  [1200, 760, { sidebar: 246, chat: 542, panel: 362 }],
+  [1000, 700, { sidebar: 230, chat: 360, panel: 360 }],
+  [960, 600, { sidebar: 190, chat: 360, panel: 360 }],
+])('at %i x %i the frame holds sidebar, chat and panel at the frame page widths', async (w, h, expected) => {
+  await page.viewport(w, h);
   await openPanel();
-  expectBeside(columns());
+  const at = columns();
+  const drawn = { sidebar: at.sidebar?.width, chat: at.chat?.width, panel: at.panel?.width };
+  expect(drawn, JSON.stringify(at)).toEqual(expected);
+  expect([at.sidebar?.left, at.panel?.right], `the rail before the frame, the margin after it`).toEqual([
+    44,
+    w - 6,
+  ]);
 });
 
 test('a width the person dragged gives way in a narrow window and comes back when it is wide again', async () => {

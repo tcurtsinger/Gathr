@@ -54,7 +54,7 @@ test('deleting the open chat asks first, then opens the next chat in the sidebar
   await page.getByRole('button', { name: 'Made-up b', exact: true }).click();
   await expect.element(heading('Made-up b')).toBeInTheDocument();
 
-  await page.getByRole('main').getByRole('button', { name: 'More', exact: true }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'More', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete Made-up b?' });
   await expect.element(confirm.getByRole('button', { name: 'Cancel' })).toHaveFocus();
@@ -84,6 +84,8 @@ test('the open chat deleted in another window gives way to its neighbour, as a D
 test('a refused Archive keeps the question open with its reference; Cancel gives focus back to the menu', async () => {
   service([chat('a')], [], (path) => (path.endsWith('/archive') ? refusal('Archive failed') : undefined));
   await render(<App />);
+  // A row's More shows while the pointer is on the row.
+  await page.getByRole('button', { name: 'Made-up a', exact: true }).hover();
   await page.getByRole('button', { name: 'More for Made-up a' }).click();
   await page.getByRole('menuitem', { name: 'Archive' }).click();
   const confirm = page.getByRole('dialog', { name: 'Archive Made-up a?' });
@@ -106,6 +108,7 @@ test('an archived chat reads only until Restore; a refused Restore says why on i
   const archive = page.getByRole('button', { name: /^Archived/ });
   await expect.element(archive).toHaveAttribute('aria-expanded', 'false');
   await archive.click();
+  await page.getByRole('button', { name: 'Made-up z', exact: true }).hover();
   await page.getByRole('button', { name: 'More for Made-up z' }).click();
   await page.getByRole('menuitem', { name: 'Restore' }).click();
 

@@ -1,8 +1,7 @@
-import { CircleArrowUp, Folder, FolderOpen, Plus, Settings } from 'lucide-react';
+import { Folder, FolderOpen, Plus } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import type { Chat, Project } from './api';
 import { ChatMenu } from './chat/ChatMenu';
-import { IconButton } from './components/IconButton';
 import { ResizeHandle } from './components/ResizeHandle';
 import './sidebar.css';
 
@@ -15,9 +14,6 @@ interface Props {
   onSelect: (chat: string) => void;
   /** A new chat, in the project given. */
   onNew: (project?: string) => void;
-  onSettings: (opener: HTMLElement) => void;
-  /** Gathr's own update (0032): the version ready to install, or that it's installing now. */
-  update?: { ready: string | null; updating: boolean; asking: boolean; onUpdate: () => void };
   /** Settings > Projects, at this project. */
   onProjectSettings: (project: string, opener: HTMLElement | null) => void;
   onDeleteProject: (project: Project, opener: HTMLElement | null) => void;
@@ -29,7 +25,7 @@ interface Props {
 }
 
 export function Sidebar(props: Props) {
-  const { chats, archived, projects, selected, onSelect, onNew, onSettings, actions, update } = props;
+  const { chats, archived, projects, selected, onSelect, onNew, actions } = props;
   // Projects start open, Archived folded; the person's fold of one holds while the window is open.
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -54,7 +50,7 @@ export function Sidebar(props: Props) {
       </button>
       <ChatMenu
         label={`More for ${c.title}`}
-        className="row-more"
+        className="row-icon row-more"
         archived={!!c.archived}
         onArchive={(opener) => props.onArchive(c, opener)}
         onRestore={() => props.onRestore(c)}
@@ -103,7 +99,7 @@ export function Sidebar(props: Props) {
                     </button>
                     <button
                       type="button"
-                      className="navbutton project-new"
+                      className="row-icon"
                       aria-label={`New chat in ${p.name}`}
                       onClick={() => onNew(p.id)}
                     >
@@ -111,7 +107,7 @@ export function Sidebar(props: Props) {
                     </button>
                     <ChatMenu
                       label={`More for ${p.name}`}
-                      className="row-more"
+                      className="row-icon row-more"
                       onProjectSettings={(opener) => props.onProjectSettings(p.id, opener)}
                       onDelete={(opener) => props.onDeleteProject(p, opener)}
                     />
@@ -149,27 +145,6 @@ export function Sidebar(props: Props) {
           {archiveOpen &&
             (archived.length ? archived.map(row) : <p className="sidebar-empty">No archived chats</p>)}
         </section>
-      </div>
-      <div className="sidebar-foot">
-        <button type="button" className="navbutton" onClick={(e) => onSettings(e.currentTarget)}>
-          <Settings aria-hidden="true" />
-          Settings
-        </button>
-        {update?.ready && (
-          <IconButton
-            aria-label={`Update to ${update.ready}`}
-            className="sidebar-update"
-            disabled={update.asking}
-            onClick={update.onUpdate}
-          >
-            <CircleArrowUp aria-hidden="true" />
-          </IconButton>
-        )}
-        {update?.updating && (
-          <span className="sidebar-updating" role="status">
-            Updating Gathr
-          </span>
-        )}
       </div>
       <ResizeHandle label="Resize navigation" side="right" name="--sidebar-width" min={190} max={() => 400} />
     </nav>

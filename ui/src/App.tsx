@@ -12,6 +12,7 @@ import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
 import { NewProject } from './NewProject';
 import { PlanTab } from './plans/PlanTab';
+import { Rail } from './Rail';
 import { report, timeToPaint } from './report';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
@@ -19,7 +20,7 @@ import { type Page, SettingsPanel, type SettingsTarget } from './settings/Settin
 import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
 import { usePersonTasks } from './tasks/usePersonTasks';
-import { type FileTab, fileId, Workspace, WorkspaceOpener } from './tasks/Workspace';
+import { type FileTab, fileId, Workspace, WorkspaceToggle } from './tasks/Workspace';
 import { readyVersion, useAppUpdate } from './update';
 import './app.css';
 
@@ -298,6 +299,15 @@ export function App() {
 
   const app = (
     <div className="app">
+      <Rail
+        onSettings={(opener) => openSettings('engines', undefined, opener)}
+        update={{
+          ready: readyVersion(appUpdate.app),
+          updating: appUpdate.app?.state === 'updating',
+          asking: appUpdate.asking,
+          onUpdate: appUpdate.update,
+        }}
+      />
       <Sidebar
         chats={chats}
         archived={archived}
@@ -308,13 +318,6 @@ export function App() {
         selected={selected}
         onSelect={choose}
         onNew={newChat}
-        onSettings={(opener) => openSettings('engines', undefined, opener)}
-        update={{
-          ready: readyVersion(appUpdate.app),
-          updating: appUpdate.app?.state === 'updating',
-          asking: appUpdate.asking,
-          onUpdate: appUpdate.update,
-        }}
         onDeleteProject={askDelete}
         onProjectSettings={(project, opener) =>
           setSettings({
@@ -424,7 +427,6 @@ export function App() {
                     selected: t.selected === id ? 'tasks' : t.selected,
                   }))
                 }
-                onClose={() => person.setOpen(chat.id, false)}
                 tasks={
                   <TasksTab
                     key={chat.id}
@@ -461,9 +463,12 @@ export function App() {
             )
           }
           headerEnd={
-            chat.id &&
-            !paneOpen && (
-              <WorkspaceOpener waiting={chatTasks.length > 0} onOpen={() => person.setOpen(chat.id, true)} />
+            chat.id && (
+              <WorkspaceToggle
+                open={paneOpen}
+                waiting={chatTasks.length > 0}
+                onToggle={() => person.setOpen(chat.id, !paneOpen)}
+              />
             )
           }
         />

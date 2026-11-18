@@ -1,13 +1,57 @@
-/* Navigation is 246px until resized (--sidebar-width), from 190 to 400px; 190px below 760px. */
+/*
+ * The window (0070): the shell around a rounded frame. The rail (44) at the left and the top line (40) above sit
+ * on the shell; the frame holds navigation, the chat and the workspace, with 6px of shell on its right and
+ * below. Navigation is 246px until resized (--sidebar-width), from 190 to 400px; 190px below 760px.
+ */
 .app {
+  --rail: 44px;
+  --inset: 6px;
   --nav: clamp(190px, var(--sidebar-width, 246px), 400px);
+  /* The frame's room beside navigation, which the chat and the workspace share. */
+  --room: calc(100vw - var(--rail) - var(--inset) - var(--nav));
   display: grid;
-  grid-template-columns: var(--nav) minmax(0, 1fr) auto;
+  grid-template-columns: var(--rail) var(--nav) minmax(0, 1fr) auto;
+  grid-template-rows: 40px minmax(0, 1fr);
   height: 100dvh;
+  padding: 0 var(--inset) var(--inset) 0;
+  background: var(--shell);
 }
 /* With the workspace open, navigation gives way to leave the chat and the workspace 360px each (DESIGN.md Layout). */
 .app:has(> .workspace) {
-  --nav: clamp(190px, min(var(--sidebar-width, 246px), 100vw - 720px), 400px);
+  --nav: clamp(190px, min(var(--sidebar-width, 246px), 100vw - var(--rail) - var(--inset) - 720px), 400px);
+}
+.app > .rail {
+  grid-area: 2 / 1;
+}
+.app > .topline {
+  grid-area: 1 / 3 / 2 / -1;
+}
+/* The frame's ring, round its four corners; each column rounds its own outer corners. */
+.app::before {
+  content: "";
+  grid-area: 2 / 2 / 3 / -1;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px var(--shell-edge);
+  pointer-events: none;
+}
+.app > .sidebar {
+  grid-area: 2 / 2;
+  border-radius: 12px 0 0 12px;
+}
+.app > .chat {
+  grid-area: 2 / 3;
+  overflow: clip;
+}
+.app > .workspace {
+  grid-area: 2 / 4;
+}
+.app > .chat:not(:has(~ .workspace)),
+.app > .workspace,
+.app > .workspace > .workspace-view {
+  border-radius: 0 12px 12px 0;
+}
+.app > .workspace > .workspace-view {
+  border-top-right-radius: 0;
 }
 .app > .chat .empty {
   margin: auto;
@@ -18,19 +62,19 @@
   margin: 24px auto;
   padding: 0 16px;
 }
-/* Over an open chat: under its header, at the chat's reading width, the thread scrolling below. */
-.topbar + .app-failure {
+/* Over an open chat: at its top, at the chat's reading width, the thread scrolling below. */
+.topline ~ .chat > .app-failure {
   flex-shrink: 0;
 }
-.topbar + .app-failure .notice {
+.topline ~ .chat > .app-failure .notice {
   margin: 0;
 }
-/* The header's icon buttons (chat header, workspace Close), on IconButton: DESIGN.md "Header". */
+/* The top line's icon buttons (More, Summary, the panel's), on IconButton: DESIGN.md "Header". */
 .head-button {
   position: relative;
   flex: none;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 8px;
 }
@@ -42,7 +86,7 @@
 .head-button .lucide-ellipsis circle {
   r: 1.4px;
 }
-/* Pressed: Close while the workspace is open. */
+/* Pressed while the workspace is open. */
 .head-button.workspace-toggle[aria-expanded="true"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
