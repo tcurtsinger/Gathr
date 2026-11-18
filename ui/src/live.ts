@@ -24,8 +24,8 @@ export type LiveEvent =
   | { type: 'delta'; chat: string; turn: string; text: string; at?: number }
   | { type: 'message'; chat: string; message: Message }
   | { type: 'tool'; chat: string; message: string; body: ToolBody | ThinkingBody }
-  // An agent's new thumbs-up; a repeat sends nothing.
-  | { type: 'reaction'; chat: string; reaction: Reaction }
+  // A new thumbs-up, an agent's or the person's like; a repeat sends nothing. `removed`: the person took theirs back.
+  | { type: 'reaction'; chat: string; reaction: Reaction; removed?: boolean }
   // `agent`: the agent the turn was sent to, null for none.
   | {
       type: 'turn';

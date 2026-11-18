@@ -9,7 +9,8 @@ export interface Ending {
   word?: string;
   /** The word in the danger colour. */
   bad?: boolean;
-  act?: 'continue' | 'retry' | 'sign-in';
+  /** eference: its reference alone, with nothing to press (a failed turn a like opened, 0057). */
+  act?: 'continue' | 'retry' | 'sign-in' | 'reference';
 }
 
 // Gathr stopped it for a reason of its own: a word for why, and nothing for the person to carry on.

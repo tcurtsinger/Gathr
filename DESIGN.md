@@ -207,8 +207,16 @@ Streamdown is the rendering reference, pending integration approval. Keep user
 messages plain text; render agent Markdown, lists, headings, quotes, code, tables,
 sources, files and tool results. Wide code and tables scroll inside the reply.
 Raw HTML policy, link behavior and Diagnostics references stay governed by Gathr.
-Tools are collapsed where they happened. MessageActions serve hover and keyboard
-focus. Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
+Tools are collapsed where they happened. MessageActions (`ui/src/components/MessageActions.tsx`, one for every
+message) is a small row on the bubble's top right corner, shown while the message is pointed at or holds keyboard
+focus (by opacity, as the steps are, so Tab reaches it), in a thread too: a popover-coloured box with a 1px border,
+10px corners and a soft shadow, holding 24px icon buttons with 15px icons, muted until pointed at. Its lower edge
+stays in the bubble's top padding, so it never covers a word of the first line; over a short bubble it may cover the
+end of the name line while it shows. Today it holds the person's like, a thumbs-up named "Like" (pressed: the
+attention blue); Reply joins it later. An agent's words, a message between agents, a bubble holding a waiting
+question with the asker's pick, and a plan version waiting for the person offer it; the person's own message, Gathr's
+lines and question, a bubble holding a waiting question with no pick, and words still streaming offer none (0057 C4).
+Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
 ### Team messages: one timeline
@@ -286,8 +294,12 @@ its own: its steps are on its first message's name line. Gathr's copy of a messa
 is never shown.
 
 A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box.
-Pointing at it or focusing it shows who gave it, as their names, one a line, in a small popover above it:
-names, never help. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
+Pointing at it or focusing it shows who gave it, as their names on one line beside the count, in a small box as tall
+as the count, so it covers no message; with no room beside it (a narrow column, a thread) it wraps under the count, in
+the flow, and what follows moves down rather than being covered. Names, never help, and never a target (the pointer
+passes through it). The person's own like counts in it: "You"
+first in the names, and the count in the attention blue on a 16% tint at 600. Where the person can like, the count
+is a toggle (`aria-pressed`): a click gives theirs or takes it back. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
 its own (0062); a question stays a reply.
 
 What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time

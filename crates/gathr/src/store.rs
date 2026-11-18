@@ -333,6 +333,31 @@ pub fn add_person_message(
     insert_message(conn, chat, turn, ("user", "text"), body, now_us(), picks)
 }
 
+/// Gathr's line telling an agent the person liked its message `liked` (0057), in `turn`: never drawn,
+/// as a copy isn't, and a turn it opens serves the ask the liked message served.
+pub fn add_like_line(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    body: &str,
+    liked: &str,
+) -> Result<Value, Error> {
+    let ts = now_us();
+    let id = ulid(ts);
+    conn.prepare_cached(
+        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, copy_of)
+         VALUES (?1, ?2, ?3, ?4, 'gathr', 'text', ?5, ?6)",
+    )?
+    .execute(params![id, chat, turn, ts, body, liked])?;
+    conn.prepare_cached(
+        "UPDATE turns SET ask_id = (SELECT o.ask_id FROM messages s JOIN turns o ON o.id = s.turn_id
+             WHERE s.id = ?2)
+         WHERE id = ?1 AND ask_id IS NULL",
+    )?
+    .execute(params![turn, liked])?;
+    message(conn, &id)
+}
+
 fn insert_message(
     conn: &Connection,
     chat: &str,
@@ -532,10 +557,11 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
         [],
     )?;
+    // A like is the person's too (0057): a pause never holds the turn it opened.
     let mut stmt = conn.prepare(&format!(
         "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.task, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
-                 ORDER BY ts LIMIT 1) = 'user'
+                 ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IS 'liked'
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     ))?;
     let rows = stmt.query_map([], |r| {

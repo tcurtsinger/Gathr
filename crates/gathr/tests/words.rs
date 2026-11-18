@@ -120,6 +120,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "0cb35e37d095928928ad396191fdd7c8eff8a4c00e1a333cd1c5b57d3bb95354",
     ),
+    (
+        "liked",
+        1,
+        "ed00c98abadfd2812437dd5e5472d022166eca2cbe6015318ad2e072f96a8469",
+    ),
 ];
 
 /// Every file that asserts samples.
@@ -136,6 +141,7 @@ const SOURCES: &[&str] = &[
     include_str!("hold/give.rs"),
     include_str!("hold/wait.rs"),
     include_str!("roles.rs"),
+    include_str!("likes.rs"),
 ];
 
 /// The lowercase hex SHA-256 of a kind's sample texts, in order, each followed by a NUL byte.

@@ -26,6 +26,7 @@ mod ended;
 mod given;
 mod hold;
 mod holds;
+mod liked;
 mod message;
 mod opening;
 mod process;
@@ -340,6 +341,15 @@ impl Task {
             } => {
                 let _ = reply.send(self.send(chat, (text, picks), agent, trace).await);
             }
+            Cmd::Like {
+                chat,
+                liked,
+                line,
+                trace,
+                reply,
+            } => {
+                let _ = reply.send(self.like(chat, liked, line, trace).await);
+            }
             Cmd::Stop { chat, reply } => {
                 let _ = reply.send(self.stop(&chat).await);
             }
@@ -432,18 +442,9 @@ impl Task {
     ) -> Result<Value, Failed> {
         // A reply kept unsaved goes in first, before the message that follows it.
         self.save_unsaved().await;
-        // Only into the same chat's turn: a message in another chat waits for the agent.
-        let steered = self
-            .turn
-            .as_ref()
-            .filter(|t| !t.stopping && t.ids.chat == chat && t.ids.agent == agent)
-            .filter(|t| !self.compactions.contains(&t.ids.turn))
-            // An update is about to stop that turn: the message waits as a turn of its own (0032).
-            .filter(|_| self.chats.updating().is_none());
-        if let Some(running) = steered {
+        if let Some(ids) = self.steerable(&chat, agent.as_deref()) {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
-            let ids = running.ids.clone();
             // Never sent on to the engine unsaved: its answer would answer a message nobody has.
             let message = self.db_person_message(&ids, &text, picks).await;
             let message = message.map_err(|why| self.fail_send(&ids, why))?;

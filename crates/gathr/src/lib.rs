@@ -32,6 +32,7 @@ pub mod http;
 pub mod ids;
 pub mod landings;
 pub mod launch;
+pub mod likes;
 pub mod notice;
 pub mod pauses;
 pub mod picks;

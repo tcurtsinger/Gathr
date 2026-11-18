@@ -36,6 +36,8 @@ export interface Actions {
   openAgent: (agent: string) => void;
   /** Opens a plan's tab in the workspace at a version (0062). */
   openPlan?: (plan: number, version: number) => void;
+  /** Gives the person's like on a message, answering the waiting questions it holds, or takes it back (0057). */
+  like?: (message: string, questions: number[], give: boolean) => void;
 }
 
 const ActionsContext = createContext<Actions | null>(null);
@@ -162,6 +164,7 @@ export function useStable(actions: Actions): Actions {
       openTask: (task) => latest.current.openTask(task),
       openAgent: (agent) => latest.current.openAgent(agent),
       openPlan: (plan, version) => latest.current.openPlan?.(plan, version),
+      like: (message, questions, give) => latest.current.like?.(message, questions, give),
     }),
     [],
   );
