@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-17: the `remove` mock-up, cases 1 to 9, option A in each of its three choices, and the confirm's wording). Date: 2026-11-17.
 
-Built: partly. Proof: `crates/gathr/tests/delete.rs`, `ui/src/deleting.test.ts`, `ui/src/deletes.test.tsx`, `ui/src/settings/Agents.test.tsx`, `ui/src/settings/Projects.test.tsx`. Not built: a removed agent's face with no mark and its card saying Removed (a later window change).
+Built: yes. Proof: `crates/gathr/tests/delete.rs`, `ui/src/deleting.test.ts`, `ui/src/deletes.test.tsx`, `ui/src/settings/Agents.test.tsx`, `ui/src/settings/Projects.test.tsx`, `ui/src/chat/marks.test.tsx` (a removed agent's face has no mark and its card says Removed, [0071](0071-an-agents-state-is-one-mark.md)).
 
 Amends [0034](0034-agent-folder.md) (what Gathr removes) and [0028](0028-team-chats.md) (an agent in a chat is no longer refused). Serves promise 7 of [the charter](../charter.md#the-promises), part 7 of [the truth map](../truth-map.md): nothing Gathr made is left behind that nobody can find, and nothing the person keeps is lost.
 

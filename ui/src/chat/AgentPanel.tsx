@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import type { Member, Task } from '../api';
 import { Face } from '../components/Face';
 import { ChatMenu } from './ChatMenu';
+import { useMarks } from './faceMarks';
 import type { Work } from './fold';
 import type { Glance } from './glance';
 import type { Custom } from './messages';
@@ -100,6 +101,7 @@ interface Props {
 export const AgentPanel = memo(function AgentPanel(props: Props) {
   const { glance, tasks, members, now, earlier, actions, onMessage, onCompact, compaction } = props;
   const { member, standing } = glance;
+  const mark = useMarks()?.still.get(member.agent);
   const mine = tasks
     .filter((t) => t.owner === member.agent && t.state !== 'cancelled')
     .sort((a, b) => a.number - b.number);
@@ -112,7 +114,7 @@ export const AgentPanel = memo(function AgentPanel(props: Props) {
   return (
     <div className="agent-panel">
       <header className="agent-who">
-        <Face agent={{ id: member.agent, name: member.name }} size={36} busy={standing === 'working'} />
+        <Face agent={{ id: member.agent, name: member.name }} size={36} mark={mark} />
         <div>
           <h2>{member.name}</h2>
           <p>

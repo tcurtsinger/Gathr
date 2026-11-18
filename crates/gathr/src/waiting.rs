@@ -14,6 +14,7 @@ use crate::team::Role;
 use crate::waits;
 use crate::{Error, changes};
 
+mod standing;
 pub(crate) mod words;
 
 pub use words::text;
@@ -116,18 +117,21 @@ pub struct On {
     pub since_us: i64,
 }
 
-/// Where one agent of the chat stands.
+/// Where one agent of the chat stands: the one state its face shows (0071).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Standing {
     pub agent: String,
     pub name: String,
-    /// `needs_you`, `working`, `waiting` or `free`.
+    /// The most pressing that holds: `needs_you`, `cant_run`, `working`, `stopped`, `blocked`,
+    /// `waiting` or `free`.
     pub state: &'static str,
     /// In a phrase: "Waiting for CI on #157", "Held", "Usage limit".
     pub words: String,
-    /// The task its running turn works on.
+    /// What, in a word or two, for the face's card: "Approval", "Signed out", "Gathr restarted".
+    pub what: Option<String>,
+    /// The task it is on: its running turn's, its blocked task, the turn that failed or stopped.
     pub task: Option<i64>,
-    /// Working: since when.
+    /// Since when it has been in this state.
     pub since_us: Option<i64>,
     /// Waiting: for whom or what, each with since when.
     pub on: Vec<On>,
@@ -247,7 +251,8 @@ pub fn answer(conn: &Connection, chat: &str, live: &Live, now_us: i64) -> Result
             l.since_us.unwrap_or(i64::MAX),
         )
     });
-    let agents = standings(conn, chat, live, (&pauses, &turns, &open, &waiting), now_us)?;
+    let saved = (&pauses[..], &turns[..], &open[..], &waiting[..]);
+    let agents = standing::standings(conn, chat, live, saved, now_us)?;
     Ok(Answer { lines, agents })
 }
 
@@ -691,143 +696,4 @@ fn reviewed(conn: &Connection, chat: &str, pr: i64) -> Result<bool, Error> {
         params![chat, pr],
         |r| r.get(0),
     )?)
-}
-
-type Saved<'a> = (&'a [Pause], &'a [Turn], &'a [Open], &'a [waits::Wait]);
-
-/// Where each agent of the chat stands: who needs the person, who works, who waits and for what,
-/// and who is free.
-fn standings(
-    conn: &Connection,
-    chat: &str,
-    live: &Live,
-    (pauses, turns, open, waiting): Saved,
-    now_us: i64,
-) -> Result<Vec<Standing>, Error> {
-    let mut all = Vec::new();
-    for m in crate::team::members(conn, chat)? {
-        let id = m.agent.as_str();
-        let own: Vec<&Turn> = turns
-            .iter()
-            .filter(|t| t.agent.as_deref() == Some(id))
-            .collect();
-        let running: Vec<&&Turn> = own.iter().filter(|t| t.status == "running").collect();
-        let task = running.iter().find_map(|t| t.task);
-        let mut stand = Standing {
-            agent: m.agent.clone(),
-            name: m.name.clone(),
-            state: "waiting",
-            words: String::new(),
-            task,
-            since_us: None,
-            on: Vec::new(),
-            until_us: None,
-        };
-        // A discussed question is held, off the person's list: it doesn't need them.
-        let asked = open
-            .iter()
-            .any(|o| o.kind == "person" && o.giver.as_deref() == Some(id) && o.state == "ready");
-        let mine = open
-            .iter()
-            .any(|o| o.owner.as_deref() == Some(id) && o.under_way());
-        // A turn to come, queued or waiting for a sign-in.
-        let queued = own.iter().any(|t| t.status != "running");
-        let sign_in = own.iter().any(|t| t.status == "waiting_sign_in");
-        let usage = usage_until(conn, id, now_us)?;
-        let on = waits_for(conn, id, open, waiting)?;
-        let held = |words: &str| ("waiting", words.to_string());
-        let (state, words) = if running.iter().any(|t| live.approvals.contains_key(&t.id)) {
-            ("needs_you", "Needs your approval".to_string())
-        } else if asked {
-            ("needs_you", "Asked you a question".to_string())
-        } else if !running.is_empty() {
-            stand.since_us = running.iter().map(|t| t.created).min();
-            ("working", "Working".to_string())
-        } else if sign_in {
-            held("Waiting for you to sign in")
-        } else if usage.is_some() {
-            stand.until_us = usage;
-            held("Usage limit")
-        } else if pauses::holding(pauses, chat, None).is_some_and(|p| p.stopped) {
-            held("Stopped")
-        } else if pauses::holding(pauses, chat, Some(id)).is_some() {
-            held(if mine || queued { "Held" } else { "Paused" })
-        } else if !on.is_empty() {
-            let names: Vec<&str> = on.iter().map(|o| o.what.as_str()).collect();
-            stand.on = on.clone();
-            held(&format!("Waiting for {}", words::list(&names)))
-        } else if mine || queued {
-            held("Waiting")
-        } else {
-            ("free", "Ready".to_string())
-        };
-        stand.state = state;
-        stand.words = words;
-        all.push(stand);
-    }
-    Ok(all)
-}
-
-/// When the agent's account is back, while it is out of usage.
-fn usage_until(conn: &Connection, agent: &str, now_us: i64) -> Result<Option<i64>, Error> {
-    let found = conn.query_row(
-        "SELECT h.until_ts FROM agents a JOIN usage_holds h ON h.account_id = a.account_id WHERE a.id = ?1",
-        [agent],
-        |r| r.get::<_, i64>(0),
-    );
-    match found {
-        // Held turns start a little after the reset: a hold that has just passed still holds.
-        Ok(until) if until + pauses::AFTER_RESET_US > now_us => Ok(Some(until)),
-        Ok(_) | Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(e.into()),
-    }
-}
-
-/// Whom and what an agent waits for, each from when its earliest wait on it began: the agents its
-/// waits name, the owners of what its own tasks come after and of the tasks it gave, then its
-/// other waits by name.
-fn waits_for(
-    conn: &Connection,
-    agent: &str,
-    open: &[Open],
-    waiting: &[waits::Wait],
-) -> Result<Vec<On>, Error> {
-    let (mut agents, mut other): (Vec<On>, Vec<On>) = (Vec::new(), Vec::new());
-    let add = |list: &mut Vec<On>, what: String, since_us: i64| match list
-        .iter_mut()
-        .find(|o| o.what == what)
-    {
-        Some(found) => found.since_us = found.since_us.min(since_us),
-        None => list.push(On { what, since_us }),
-    };
-    for w in waiting.iter().filter(|w| w.agent == agent) {
-        let name = tasks::wait_name(conn, &w.kind, w.target.as_deref(), w.parts.len() as i64)?;
-        match w.kind.as_str() {
-            "agent" => add(&mut agents, name, w.created_ts),
-            _ => add(&mut other, name, w.created_ts),
-        }
-    }
-    let name = |owner: Option<&str>| match owner {
-        Some(owner) => tasks::name_of(conn, owner),
-        None => Ok("you".to_string()),
-    };
-    for t in open
-        .iter()
-        .filter(|o| o.owner.as_deref() == Some(agent) && o.under_way())
-    {
-        for b in open
-            .iter()
-            .filter(|b| t.after.contains(&b.number) && b.under_way())
-        {
-            add(&mut agents, name(b.owner.as_deref())?, t.created);
-        }
-    }
-    for t in open
-        .iter()
-        .filter(|o| o.giver.as_deref() == Some(agent) && o.under_way())
-    {
-        add(&mut agents, name(t.owner.as_deref())?, t.created);
-    }
-    agents.extend(other);
-    Ok(agents)
 }

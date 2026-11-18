@@ -349,13 +349,19 @@ export interface WaitingLine {
   silent_us: number | null;
 }
 
-/** Where one agent of the chat stands, as the service works it out (0050). */
+/** Where one agent of the chat stands, as the service works it out (0050): the one state its face shows (0071). */
 export interface Standing {
   agent: string;
   name: string;
-  state: 'needs_you' | 'working' | 'waiting' | 'free';
+  state: 'needs_you' | 'cant_run' | 'working' | 'stopped' | 'blocked' | 'waiting' | 'free';
   /** In a phrase: "Waiting for CI on #157", "Held", "Usage limit". */
   words: string;
+  /** What, in a word or two, for the face's card: "Approval", "Signed out", "Gathr restarted". */
+  what: string | null;
+  /** The task it is on: its running turn's, its blocked task, the turn that failed or stopped. */
+  task: number | null;
+  /** Since when it has been in this state (µs). */
+  since_us: number | null;
   /** Waiting: for whom or what, each with since when (µs). */
   on: { what: string; since_us: number }[];
   /** Out of usage: when it resets (µs). */
@@ -425,7 +431,11 @@ export interface Chat {
   working?: boolean;
   /** It waits on the person: an approval, a question to them, or a sign-in. */
   needs?: boolean;
+  /** The most pressing of its agents' marks its row shows (0071): none while nothing of those three holds. */
+  mark?: ChatMark | null;
 }
+
+export type ChatMark = 'needs_you' | 'cant_run' | 'working';
 
 /** A chat whose title holds the query (0035). `time` is its last activity. */
 export interface ChatHit {

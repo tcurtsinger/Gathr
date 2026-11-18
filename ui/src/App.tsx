@@ -62,9 +62,9 @@ export function App() {
   const [found, setFound] = useState<{ chat: string; message?: string; at: number } | null>(null);
 
   // A chat's state told while a list loads may be newer than that list: it is put back on top of it.
-  const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs'>>[]>([]);
+  const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs' | 'mark'>>[]>([]);
   const loadChats = useCallback(() => {
-    const told = new Map<string, Pick<Chat, 'working' | 'needs'>>();
+    const told = new Map<string, Pick<Chat, 'working' | 'needs' | 'mark'>>();
     loading.current.push(told);
     const done = () => {
       loading.current = loading.current.filter((t) => t !== told);
@@ -78,7 +78,7 @@ export function App() {
     () =>
       listen((event) => {
         if (event.type !== 'chat_state') return;
-        const state = { working: event.working, needs: event.needs };
+        const state = { working: event.working, needs: event.needs, mark: event.mark ?? null };
         for (const told of loading.current) told.set(event.chat, state);
         setChats((list) => list.map((c) => (c.id === event.chat ? { ...c, ...state } : c)));
       }),

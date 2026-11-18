@@ -21,6 +21,7 @@ import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Face } from '../components/Face';
 import { counted } from '../plans/plans';
+import { useMark } from './faceMarks';
 import type { Step, Work } from './fold';
 import type { Custom, EventLine } from './messages';
 import { SizeChoice } from './Size';
@@ -38,6 +39,7 @@ export function Speaker({
   name,
   detail,
   time,
+  message,
   onOpen,
 }: {
   /** The agent's id, for its face. */
@@ -45,10 +47,12 @@ export function Speaker({
   name: string;
   detail?: string;
   time?: string;
+  /** The message it heads: on the agent's latest, its Working mark turns (0071). */
+  message?: string;
   /** In a team chat: its face opens the agent's panel. */
   onOpen?: () => void;
 }) {
-  const face = <Face agent={{ id: agent ?? '', name }} size={24} />;
+  const face = <Face agent={{ id: agent ?? '', name }} size={24} mark={useMark(agent, name, message)} />;
   return (
     <header className="speaker">
       <span className="speaker-who">
@@ -193,6 +197,7 @@ export function Exchange({
             name={m.from ?? 'An agent'}
             detail={m.to && `to ${m.to}`}
             time={m.time}
+            message={m.id}
             onOpen={by ? () => onOpenAgent(by) : undefined}
           />
           <div className="reply-body">{text(index)}</div>

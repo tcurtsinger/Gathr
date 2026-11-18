@@ -47,14 +47,17 @@ function waitingOf({ pauses }: Pauses) {
     agent,
     state,
     words,
+    what: null,
+    task: null,
+    since_us: null,
     on: [],
     until_us: null,
   });
   return {
     lines: [],
     agents: [
-      stands('a', 'waiting', held('a') ? 'Held' : 'Waiting'),
-      held('b') ? stands('b', 'waiting', 'Paused') : stands('b', 'free', 'Ready'),
+      held('a') ? stands('a', 'stopped', 'Held') : stands('a', 'waiting', 'Waiting'),
+      held('b') ? stands('b', 'stopped', 'Paused') : stands('b', 'free', 'Free'),
     ],
   };
 }
@@ -152,7 +155,7 @@ test('an agent paused from Summary pauses that agent alone, and can be resumed t
   });
   const screen = await render(<Chat />);
   await screen.getByRole('button', { name: 'Summary' }).click();
-  await expect.element(member).toHaveTextContent('Made-up MemberReady');
+  await expect.element(member).toHaveTextContent('Made-up MemberFree');
   await pause('Made-up Member');
   await expect.poll(() => posted.length).toBe(1);
   await expect.element(member).toHaveTextContent('Made-up MemberPaused');

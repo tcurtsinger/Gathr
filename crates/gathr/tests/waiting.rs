@@ -114,7 +114,7 @@ fn one_answer_names_each_agent_with_its_task_and_whether_it_works_waits_or_is_fr
             ("Lead", "waiting", "Waiting for Ann and Bo", None),
             ("Ann", "working", "Working", Some(first)),
             ("Bo", "waiting", "Waiting for Ann", None),
-            ("Cy", "free", "Ready", None),
+            ("Cy", "free", "Free", None),
         ]
     );
     let lead = &said.agents[0];
@@ -460,10 +460,7 @@ fn a_turn_behind_a_sign_in_waits_on_the_person_and_nothing_moves_while_the_servi
         "{behind:?}"
     );
     let ann = said.agents.iter().find(|a| a.name == "Ann").unwrap();
-    assert_eq!(
-        (ann.state, ann.words.as_str()),
-        ("waiting", "Waiting for you to sign in")
-    );
+    assert_eq!((ann.state, ann.words.as_str()), ("cant_run", "Signed out"));
     assert_eq!(line(&said, "wait", "Bo waits for CI").moves, Moves::Itself);
 
     let stopped = answer(&conn, &Live::default());
@@ -575,6 +572,144 @@ fn a_cancelled_tasks_queued_turn_is_not_listed_as_queued() {
     let said = answer(&conn, &live);
     let on_it: Vec<&Line> = said.lines.iter().filter(|l| l.task == Some(task)).collect();
     assert!(on_it.is_empty(), "nothing on #{task}: {on_it:#?}");
+}
+
+/// An agent's state as its face shows it (0071): the state, what in a word, and since when.
+fn stand<'a>(said: &'a Answer, name: &str) -> (&'a str, Option<&'a str>, Option<i64>) {
+    let found = said.agents.iter().find(|a| a.name == name);
+    let a = found.unwrap_or_else(|| panic!("no {name} in {:#?}", said.agents));
+    (a.state, a.what.as_deref(), a.since_us)
+}
+
+fn at(conn: &Connection, sql: &str) {
+    conn.execute(sql, []).unwrap();
+}
+
+/// 0071: an agent can't run while its last turn failed and nobody retried it, or while its account
+/// is signed out; a retry queued after the failure ends it. Every state says since when.
+#[test]
+fn a_failed_turn_not_retried_or_a_sign_in_reads_cant_run() {
+    let dir = TempDir::new();
+    let conn = team(&dir);
+    turn(&conn, "earlier", "ann", None, "done");
+    turn(&conn, "broke", "ann", None, "failed");
+    at(&conn, "UPDATE turns SET ended_ts = 70 WHERE id = 'broke'");
+    turn(&conn, "signing", "bo", None, "waiting_sign_in");
+    at(
+        &conn,
+        "UPDATE turns SET created_ts = 80 WHERE id = 'signing'",
+    );
+
+    let said = answer(&conn, &service());
+    assert_eq!(stand(&said, "Ann"), ("cant_run", Some("Failed"), Some(70)));
+    assert_eq!(
+        stand(&said, "Bo"),
+        ("cant_run", Some("Signed out"), Some(80))
+    );
+    assert_eq!(
+        stand(&said, "Cy"),
+        ("free", None, Some(1)),
+        "free since it joined"
+    );
+
+    turn(&conn, "again", "ann", None, "queued");
+    let said = answer(&conn, &service());
+    let (state, _, since) = stand(&said, "Ann");
+    assert_eq!(state, "waiting", "a retry is queued: {:#?}", said.agents);
+    assert!(since.is_some(), "{:#?}", said.agents);
+}
+
+/// 0071: an agent is stopped while the person stopped its turn, while a pause holds it, or after a
+/// restart cut its turn. A turn Gathr stopped itself (its task cancelled) doesn't stop the agent.
+#[test]
+fn a_stopped_turn_a_pause_or_a_restart_reads_stopped() {
+    let dir = TempDir::new();
+    let conn = team(&dir);
+    turn(&conn, "halted", "ann", None, "stopped");
+    at(&conn, "UPDATE turns SET ended_ts = 50 WHERE id = 'halted'");
+    turn(&conn, "cut", "cy", None, "running");
+    gathr::store::take_over(&conn).unwrap();
+    at(&conn, "UPDATE turns SET ended_ts = 60 WHERE id = 'cut'");
+    turn(&conn, "dropped", "lead", None, "stopped");
+    at(
+        &conn,
+        "UPDATE turns SET stop_why = 'its task was cancelled' WHERE id = 'dropped'",
+    );
+    gathr::pauses::pause(&conn, "agent", "bo", false, T).unwrap();
+    let since = |conn: &Connection, scope: &str| {
+        let pauses = gathr::pauses::list(conn).unwrap();
+        pauses.iter().find(|p| p.scope == scope).unwrap().since_us
+    };
+
+    let said = answer(&conn, &service());
+    assert_eq!(stand(&said, "Ann"), ("stopped", None, Some(50)));
+    let bo = since(&conn, "agent");
+    assert_eq!(stand(&said, "Bo"), ("stopped", Some("Paused"), Some(bo)));
+    assert_eq!(
+        stand(&said, "Cy"),
+        ("stopped", Some("Gathr restarted"), Some(60))
+    );
+    assert_eq!(stand(&said, "Lead").0, "free", "{:#?}", said.agents);
+
+    // The person's Stop on the chat: every agent is stopped, the lead since the stop.
+    gathr::pauses::pause(&conn, "chat", "c", true, T).unwrap();
+    let said = answer(&conn, &service());
+    let states: Vec<&str> = said.agents.iter().map(|a| a.state).collect();
+    assert_eq!(states, ["stopped"; 4]);
+    let chat = since(&conn, "chat");
+    assert_eq!(stand(&said, "Lead"), ("stopped", None, Some(chat)));
+}
+
+/// 0071: the owner of a blocked task is blocked, since the task was; a turn it runs still shows.
+#[test]
+fn a_blocked_tasks_owner_reads_blocked() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    turn(&conn, "giving", "lead", None, "done");
+    let task = give(&mut conn, "bo", &[], "giving");
+    conn.execute("DELETE FROM turns WHERE task = ?1", [task])
+        .unwrap();
+    conn.execute(
+        "UPDATE tasks SET state = 'blocked', reason = 'left: the schema', updated_ts = 90 WHERE number = ?1",
+        [task],
+    )
+    .unwrap();
+
+    let said = answer(&conn, &service());
+    assert_eq!(stand(&said, "Bo"), ("blocked", None, Some(90)));
+    let bo = said.agents.iter().find(|a| a.name == "Bo").unwrap();
+    assert_eq!(bo.task, Some(task));
+
+    turn(&conn, "other", "bo", None, "running");
+    assert_eq!(stand(&answer(&conn, &service()), "Bo").0, "working");
+}
+
+/// 0071: a plan sent to the person makes its lead need them, since it was sent, until decided.
+#[test]
+fn a_plan_waiting_for_the_person_makes_its_lead_need_them() {
+    let dir = TempDir::new();
+    let conn = team(&dir);
+    conn.execute_batch(
+        "INSERT INTO asks (id, chat_id, size) VALUES ('m1', 'c', 'new');
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, ask_id, agent_id)
+             VALUES ('t', 'c', 'x', 'done', 1, 'm1', 'lead');
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body)
+             VALUES ('m1', 'c', 't', 1, 'user', 'text', 'Add tags'),
+                    ('v1', 'c', 't', 2, 'assistant', 'text', 'Plan: Tags');
+         INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'm1', 'lead', 2);
+         INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, sent_ts)
+             VALUES (1, 1, 1, 'v1', 't', 'Tags', 'Add tags', 2, 33);",
+    )
+    .unwrap();
+
+    let said = answer(&conn, &service());
+    assert_eq!(stand(&said, "Lead"), ("needs_you", Some("Plan"), Some(33)));
+
+    at(
+        &conn,
+        "UPDATE plan_versions SET decided = 'approved', decided_ts = 40",
+    );
+    assert_eq!(stand(&answer(&conn, &service()), "Lead").0, "free");
 }
 
 /// The answer in words, as the `waiting` tool and `gathr diag waiting --text` give it.

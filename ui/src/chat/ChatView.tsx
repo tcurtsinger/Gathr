@@ -14,12 +14,14 @@ import {
   type Project,
 } from '../api';
 import { Composer } from '../components/Composer';
+import { FaceCards } from '../components/FaceCard';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
 import { AgentPicker, type Recipient } from './AgentPicker';
 import { ApprovalDock } from './ApprovalDock';
 import { ChatMenu } from './ChatMenu';
+import { MarksContext, useChatMarks } from './faceMarks';
 import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
@@ -127,6 +129,7 @@ export function ChatView(props: Props) {
   const silent = waiting?.lines.some((l) => l.silent_us);
   const crew = glances(state, activity(timeline.items), waiting, before.current);
   before.current = crew;
+  const marks = useChatMarks(crew, timeline.items, archived);
   // Summary, and what last opened or closed it when that wasn't its own button: focus goes back there.
   const [summary, setSummary] = useState<{ open: boolean; from?: HTMLElement }>({ open: false });
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
@@ -240,153 +243,157 @@ export function ChatView(props: Props) {
   };
 
   return (
-    <>
-      {/* The window's top line (0070), on the shell above the frame: the app's grid puts it there. */}
-      <header className="topline">
-        <div className="topline-title">
-          <h1>{chat.title}</h1>
-          {!fresh && (
-            <ChatMenu
-              pause={{
-                state: run.state,
-                all: run.scope?.scope === 'app',
-                onPause: () => act('pause', thisChat),
-                onResume: () => act('resume', run.scope ?? thisChat),
-              }}
-              archived={archived}
-              onArchive={props.onArchive}
-              onRestore={onRestore}
-              onDelete={props.onDelete}
-              className="head-button"
-              align="start"
-            />
-          )}
-          {archived && <small className="topline-state">Archived</small>}
-        </div>
-        <div className="topline-actions">
-          {team && (
-            <Summary
-              state={state}
-              team={crew}
-              open={summary.open}
-              onOpen={(open) => setSummary((s) => ({ ...s, open }))}
-              onOwnButton={() => setSummary((s) => ({ open: s.open }))}
-              from={summary.from}
-              pauses={pauses}
-              onPause={act}
-              onOpenAgent={actions.openAgent}
-            />
-          )}
-          {headerEnd}
-        </div>
-      </header>
-      <main className="chat" aria-label={chat.title}>
-        {props.notice}
-        <div className="chat-body">
-          <Thread
-            messages={timeline.items}
-            running={!!turn}
-            actions={actions}
-            target={target}
-            onTarget={props.onFound}
-            empty={loaded && state.messages.length === 0 && failed.length === 0}
-            after={
-              !archived && (
-                <>
-                  <RunLine run={run} members={state.members} />
-                  {run.state === 'running' && !silent && (
-                    <Working
-                      state={state}
-                      summary={summary.open}
-                      onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
-                    />
-                  )}
-                  {/* In Working's place while none runs, or one that runs makes no progress: what the
-                      chat waits on. A queued turn that hasn't started is one of the things it says. */}
-                  {run.state === 'running' && (silent || !working(state)) && (
-                    <WaitingLine waiting={waiting} />
-                  )}
-                </>
-              )
-            }
-            header={
-              loadFailure && (
-                <FailureNotice
-                  failure={loadFailure}
-                  onReference={actions.reference}
-                  action={
-                    <Button type="button" variant="outline" onClick={reload}>
-                      Retry
-                    </Button>
-                  }
-                />
-              )
-            }
-          >
-            {fresh && (
-              <label className="project-pick">
-                <Folder aria-hidden="true" />
-                <select
-                  aria-label="Project"
-                  value={chat.project ?? ''}
-                  onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
-                >
-                  <option value="">No project</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                  <option value="new">New project</option>
-                </select>
-              </label>
+    <MarksContext value={marks}>
+      <FaceCards>
+        {/* The window's top line (0070), on the shell above the frame: the app's grid puts it there. */}
+        <header className="topline">
+          <div className="topline-title">
+            <h1>{chat.title}</h1>
+            {!fresh && (
+              <ChatMenu
+                pause={{
+                  state: run.state,
+                  all: run.scope?.scope === 'app',
+                  onPause: () => act('pause', thisChat),
+                  onResume: () => act('resume', run.scope ?? thisChat),
+                }}
+                archived={archived}
+                onArchive={props.onArchive}
+                onRestore={onRestore}
+                onDelete={props.onDelete}
+                className="head-button"
+                align="start"
+              />
             )}
-            {archived ? (
-              <>
-                {restoreFailure && <FailureNotice failure={restoreFailure} onReference={actions.reference} />}
-                <div className="archived-line">
-                  Archived
-                  <Button size="sm" variant="outline" onClick={onRestore}>
-                    Restore
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <ApprovalDock
-                  approvals={state.approvals}
-                  plans={state.plans}
-                  asker={(t) => member(state.turns[t]?.agent ?? '')}
-                  lead={member}
-                  onShow={(a) => show(a.request)}
-                  onAnswer={approve}
-                  onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}
-                />
-                <Composer
-                  draft={draft}
-                  onDraft={onDraft}
-                  onSend={sendDraft}
-                  onStop={turn ? () => act('stop', thisChat) : undefined}
-                  inputRef={input}
-                  tools={
-                    agent && (
-                      <AgentPicker
-                        agents={recipients}
-                        selected={agent}
-                        onSelect={setPicked}
-                        onEdit={() => onEditAgent(agent)}
+            {archived && <small className="topline-state">Archived</small>}
+          </div>
+          <div className="topline-actions">
+            {team && (
+              <Summary
+                state={state}
+                team={crew}
+                open={summary.open}
+                onOpen={(open) => setSummary((s) => ({ ...s, open }))}
+                onOwnButton={() => setSummary((s) => ({ open: s.open }))}
+                from={summary.from}
+                pauses={pauses}
+                onPause={act}
+                onOpenAgent={actions.openAgent}
+              />
+            )}
+            {headerEnd}
+          </div>
+        </header>
+        <main className="chat" aria-label={chat.title}>
+          {props.notice}
+          <div className="chat-body">
+            <Thread
+              messages={timeline.items}
+              running={!!turn}
+              actions={actions}
+              target={target}
+              onTarget={props.onFound}
+              empty={loaded && state.messages.length === 0 && failed.length === 0}
+              after={
+                !archived && (
+                  <>
+                    <RunLine run={run} members={state.members} />
+                    {run.state === 'running' && !silent && (
+                      <Working
+                        state={state}
+                        summary={summary.open}
+                        onOpen={team ? (from) => setSummary((s) => ({ open: !s.open, from })) : undefined}
                       />
-                    )
-                  }
-                />
-              </>
-            )}
-          </Thread>
-        </div>
-      </main>
-      {beside}
-      {panel()}
-    </>
+                    )}
+                    {/* In Working's place while none runs, or one that runs makes no progress: what the
+                      chat waits on. A queued turn that hasn't started is one of the things it says. */}
+                    {run.state === 'running' && (silent || !working(state)) && (
+                      <WaitingLine waiting={waiting} />
+                    )}
+                  </>
+                )
+              }
+              header={
+                loadFailure && (
+                  <FailureNotice
+                    failure={loadFailure}
+                    onReference={actions.reference}
+                    action={
+                      <Button type="button" variant="outline" onClick={reload}>
+                        Retry
+                      </Button>
+                    }
+                  />
+                )
+              }
+            >
+              {fresh && (
+                <label className="project-pick">
+                  <Folder aria-hidden="true" />
+                  <select
+                    aria-label="Project"
+                    value={chat.project ?? ''}
+                    onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
+                  >
+                    <option value="">No project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                    <option value="new">New project</option>
+                  </select>
+                </label>
+              )}
+              {archived ? (
+                <>
+                  {restoreFailure && (
+                    <FailureNotice failure={restoreFailure} onReference={actions.reference} />
+                  )}
+                  <div className="archived-line">
+                    Archived
+                    <Button size="sm" variant="outline" onClick={onRestore}>
+                      Restore
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ApprovalDock
+                    approvals={state.approvals}
+                    plans={state.plans}
+                    asker={(t) => member(state.turns[t]?.agent ?? '')}
+                    lead={member}
+                    onShow={(a) => show(a.request)}
+                    onAnswer={approve}
+                    onOpenPlan={(plan, version) => props.onOpenPlan?.(plan, version)}
+                  />
+                  <Composer
+                    draft={draft}
+                    onDraft={onDraft}
+                    onSend={sendDraft}
+                    onStop={turn ? () => act('stop', thisChat) : undefined}
+                    inputRef={input}
+                    tools={
+                      agent && (
+                        <AgentPicker
+                          agents={recipients}
+                          selected={agent}
+                          onSelect={setPicked}
+                          onEdit={() => onEditAgent(agent)}
+                        />
+                      )
+                    }
+                  />
+                </>
+              )}
+            </Thread>
+          </div>
+        </main>
+        {beside}
+        {panel()}
+      </FaceCards>
+    </MarksContext>
   );
 }
 

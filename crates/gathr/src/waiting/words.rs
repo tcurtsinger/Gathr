@@ -84,6 +84,9 @@ pub fn text(answer: &Answer, now_us: i64) -> String {
                 "needs_you" => format!("{} needs you ({})", a.name, a.words),
                 "working" => format!("{} is working{task}", a.name),
                 "free" => format!("{} is free", a.name),
+                "cant_run" => format!("{} can't run ({})", a.name, a.words),
+                "stopped" => format!("{} is stopped ({})", a.name, a.words),
+                "blocked" => format!("{} is blocked ({})", a.name, a.words),
                 _ => format!("{} is waiting ({})", a.name, a.words),
             }
         })

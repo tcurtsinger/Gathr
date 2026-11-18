@@ -245,6 +245,7 @@ const parts = { Text: TextPart };
 function AssistantMessage() {
   const own = useAuiState(custom);
   const { agent, by, role, on, work, notice, approvals, agreed, plan } = own;
+  const id = useAuiState((s) => s.message.id);
   const actions = useActions();
   if (own.exchange)
     return (
@@ -267,6 +268,7 @@ function AssistantMessage() {
           name={agent}
           detail={on ? `on ${on}` : role && roleName[role]}
           time={own.time}
+          message={id}
           // Only a team chat has a panel to open: its agents have roles.
           onOpen={by && role ? () => actions.openAgent(by) : undefined}
         />

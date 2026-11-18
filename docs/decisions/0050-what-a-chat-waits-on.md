@@ -18,6 +18,8 @@ Serves promise 6 of [the charter](../charter.md#the-promises): the room explains
   background command; each PR Gathr may land, as its last look left it ([0049](0049-gathr-lands-pull-requests.md));
   each task no turn is on, with what it waits for or that nothing is on it; and Gathr's own update.
 - **Then where each agent stands:** needs you, working, waiting (for whom or what, since when) or free.
+  [0071](0071-an-agents-state-is-one-mark.md) makes it one of seven, the face's mark: needs you, can't run,
+  working, stopped, blocked, waiting or free, each with what and since when.
 - **A task's reason and its lines come from one list of its holds** (`tasks::holds`), so the two never say
   different things. The reason's words don't change: other code reads them.
 - **What only the service knows is said by the queues.** Five reasons a queued turn waits live only in its

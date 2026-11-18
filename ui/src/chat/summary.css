@@ -1,16 +1,28 @@
-/* Summary (DESIGN.md "Summary", 0038): the stack in the top line and its popover. */
-/* With faces it widens to hold them, at the header buttons' height. */
-.head-button.summary-button:has(.face-stack) {
+/* Summary (DESIGN.md "Summary", 0038): the roster in the top line and its popover. */
+/* The roster (0071): every agent at 20, 6px apart so no face covers another's mark, at the header buttons' height. */
+.head-button.summary-button {
   width: auto;
   padding: 0 8px;
+}
+.roster {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  --behind: var(--shell);
 }
 /* Pressed while Summary is open, as Close is while the workspace is. */
 .head-button.summary-button[aria-expanded="true"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
-.summary-button .face-stack {
-  --behind: var(--shell);
+.summary-button[aria-expanded="true"] .roster {
+  --behind: color-mix(in oklab, var(--foreground) 9%, var(--shell));
+}
+.summary-button:hover .roster {
+  --behind: color-mix(in oklab, var(--foreground) 6%, var(--shell));
+}
+.summary-team {
+  --behind: var(--popover);
 }
 .summary-anchor {
   position: absolute;
@@ -180,4 +192,9 @@ button.plan-step:hover,
 }
 .summary-foot > button {
   color: var(--muted-foreground);
+}
+/* The faces' own drawings and marks, not the header buttons' 17px icons. */
+.head-button .roster svg {
+  width: 100%;
+  height: 100%;
 }

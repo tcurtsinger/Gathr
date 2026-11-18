@@ -629,3 +629,46 @@ fn two_agents_turns_in_one_chat_ending_together_end_its_working_once() {
     until_state(&service, &chat, (false, false));
     assert_eq!(changes(&service, &mut live, &chat), WORKED);
 }
+
+/// 0071: a chat's row in the list carries its most pressing mark of three, as the sidebar draws it:
+/// `needs_you`, `cant_run` or `working`. A signed-out agent still makes the chat need the person for
+/// a notice, but its row says it can't run.
+#[test]
+fn a_chats_row_carries_its_most_pressing_mark() {
+    let data = TempDir::new();
+    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+             ('ann', 'Ann', 'ann', 'acc', 1), ('bo', 'Bo', 'bo', 'acc', 1);
+         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
+         INSERT INTO chat_members VALUES ('c', 'ann', 'supervisor', 1), ('c', 'bo', 'member', 1);",
+    )
+    .unwrap();
+    let row = |conn: &rusqlite::Connection| {
+        let chats = gathr::store::chats(conn, false).unwrap();
+        let state = gathr::store::chat_state(conn, "c").unwrap().unwrap();
+        (chats[0]["mark"].clone(), json!(state.mark), state.needs)
+    };
+    let turn = |id: &str, agent: &str, status: &str, at: i64| {
+        let add = "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id)
+                   VALUES (?1, 'c', 'x', ?2, ?3, ?4)";
+        conn.execute(add, rusqlite::params![id, status, at, agent])
+            .unwrap();
+    };
+    assert_eq!(row(&conn), (Value::Null, Value::Null, false));
+    turn("a1", "ann", "running", 2);
+    assert_eq!(row(&conn), (json!("working"), json!("working"), false));
+    turn("b1", "bo", "failed", 3);
+    assert_eq!(row(&conn), (json!("cant_run"), json!("cant_run"), false));
+    conn.execute_batch(
+        "INSERT INTO tasks (chat_id, giver, kind, what, state, created_ts, updated_ts)
+         VALUES ('c', 'ann', 'person', 'Pick a colour', 'ready', 5, 5)",
+    )
+    .unwrap();
+    assert_eq!(row(&conn), (json!("needs_you"), json!("needs_you"), true));
+    conn.execute_batch("DELETE FROM tasks; UPDATE turns SET status = 'done' WHERE id = 'b1';")
+        .unwrap();
+    turn("b2", "bo", "waiting_sign_in", 4);
+    assert_eq!(row(&conn), (json!("cant_run"), json!("cant_run"), true));
+}

@@ -1,7 +1,7 @@
 // Chats and projects made outside this window (the round: a project and chat made through the API
 // while the window was open). The service is the edge: fetch answers as it would.
 import { afterEach, expect, test, vi } from 'vitest';
-import { cdp, page, server } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { App } from './App';
 import type { Chat, PersonTask, Project } from './api';
@@ -185,33 +185,32 @@ const openChat: Chat = { id: 'c0', title: 'Made-up open chat', project: null };
 const tell = (event: LiveEvent) => {
   for (const on of live) on(event);
 };
-/** The sidebar row of the chat that isn't open, and its dot by name. */
+/** The sidebar row of the chat that isn't open, and its mark by name (0071). */
 const otherRow = () =>
   page.getByRole('navigation', { name: 'Chats' }).getByRole('button', { name: /^Made-up other chat/ });
 const dot = (name: string) => otherRow().getByRole('img', { name });
 
-test('a chat that is not open shows a dot while it works, the attention dot once it needs the person', async () => {
+test('a chat that is not open shows Working while it works, Needs you once it needs the person', async () => {
   made.chats = [openChat, other];
   service();
   await render(<App />);
   await expect.element(otherRow()).toBeVisible();
-  expect(document.querySelector('.chat-dot')).toBeNull();
+  expect(document.querySelector('.chat-mark')).toBeNull();
 
-  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false });
-  await expect.element(dot('Agents working')).toBeVisible();
-  expect(dot('Agents working').element().hasAttribute('data-needs')).toBe(false);
+  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false, mark: 'working' });
+  await expect.element(dot('Working')).toBeVisible();
 
-  // Blue wins: one dot, and it says the person is needed.
-  tell({ type: 'chat_state', chat: 'c1', working: true, needs: true });
-  await expect.element(dot('Needs you')).toHaveAttribute('data-needs');
-  expect(document.querySelectorAll('.chat-dot').length).toBe(1);
+  // The most pressing wins: one mark, and it says the person is needed.
+  tell({ type: 'chat_state', chat: 'c1', working: true, needs: true, mark: 'needs_you' });
+  await expect.element(dot('Needs you')).toBeVisible();
+  expect(document.querySelectorAll('.chat-mark').length).toBe(1);
 
-  tell({ type: 'chat_state', chat: 'c1', working: false, needs: false });
+  tell({ type: 'chat_state', chat: 'c1', working: false, needs: false, mark: null });
   await expect.element(dot('Needs you')).not.toBeInTheDocument();
-  expect(document.querySelector('.chat-dot')).toBeNull();
+  expect(document.querySelector('.chat-mark')).toBeNull();
 });
 
-test('the dot sits 8px after the cut title, never on it, and leaves More where it is (C65)', async () => {
+test('the mark sits 8px after the cut title, never on it, and leaves More where it is (C65)', async () => {
   made.chats = [
     openChat,
     { ...other, title: 'Made-up other chat with a title too long for its row in the sidebar' },
@@ -225,12 +224,12 @@ test('the dot sits 8px after the cut title, never on it, and leaves More where i
     return [box(row.querySelector('.chat-link span')), box(row.querySelector('.row-more'))];
   };
   const before = boxes();
-  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false });
-  await expect.element(dot('Agents working')).toBeVisible();
+  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false, mark: 'working' });
+  await expect.element(dot('Working')).toBeVisible();
   const [title, more] = boxes();
-  expect(more, 'More, before and after the dot').toEqual(before[1]);
-  const at = dot('Agents working').element().getBoundingClientRect();
-  expect(Math.round(at.left - title.right), 'the gap from the cut title to the dot').toBe(8);
+  expect(more, 'More, before and after the mark').toEqual(before[1]);
+  const at = dot('Working').element().getBoundingClientRect();
+  expect(Math.round(at.left - title.right), 'the gap from the cut title to the mark').toBe(8);
   expect(at.right).toBeLessThanOrEqual(otherRow().element().getBoundingClientRect().right);
 });
 
@@ -240,7 +239,7 @@ test('a reload after missed events shows each chat as the service has it', async
   await render(<App />);
   await expect.element(otherRow()).toBeVisible();
 
-  made.chats = [openChat, { ...other, working: true, needs: true }];
+  made.chats = [openChat, { ...other, working: true, needs: true, mark: 'needs_you' }];
   tell({ type: 'lagged' });
   await expect.element(dot('Needs you')).toBeVisible();
 });
@@ -259,49 +258,26 @@ test('a state told while the list loads is kept when the older list lands', asyn
   // the open chat anew: once that shows, the list has landed.
   made.chats = [{ ...openChat, title: 'Made-up renamed chat' }, other];
   tell({ type: 'lagged' });
-  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false });
-  await expect.element(dot('Agents working')).toBeVisible();
+  tell({ type: 'chat_state', chat: 'c1', working: true, needs: false, mark: 'working' });
+  await expect.element(dot('Working')).toBeVisible();
   release();
   const sidebar = page.getByRole('navigation', { name: 'Chats' });
   await expect
     .element(sidebar.getByRole('button', { name: 'Made-up renamed chat', exact: true }))
     .toBeVisible();
-  await expect.element(dot('Agents working')).toBeVisible();
+  await expect.element(dot('Working')).toBeVisible();
 });
 
-test('a chat archived while it worked has no dot in Archived', async () => {
-  made.chats = [openChat, { ...other, working: true }];
+test('a chat archived while it worked has no mark in Archived', async () => {
+  made.chats = [openChat, { ...other, working: true, mark: 'working' }];
   service();
   await render(<App />);
-  await expect.element(dot('Agents working')).toBeVisible();
+  await expect.element(dot('Working')).toBeVisible();
 
   made.chats = [openChat];
   made.archived = [{ ...other, archived: '2026-11-11T00:00:00Z' }];
   tell({ type: 'chat', chat: 'c1', change: 'archived' });
   await page.getByRole('button', { name: /^Archived/ }).click();
   await expect.element(otherRow()).toBeVisible();
-  expect(document.querySelector('.chat-dot')).toBeNull();
-});
-
-// Reduced motion is the browser's setting, and the tests run with it on: only Chromium lets a test
-// switch it (WebKit runs the rest).
-test.runIf(server.browser === 'chromium')('reduced motion keeps the dot and stops its ring', async () => {
-  made.chats = [openChat, { ...other, working: true }];
-  service();
-  await render(<App />);
-  await expect.element(dot('Agents working')).toBeVisible();
-  const ring = () => getComputedStyle(dot('Agents working').element(), '::after');
-  const motion = (value: string) =>
-    cdp().send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value }] });
-  await motion('no-preference');
-  try {
-    expect(ring().animationName).toBe('chat-dot-pulse');
-    await motion('reduce');
-    expect(ring().animationName).toBe('none');
-    expect(ring().opacity).toBe('0');
-    await expect.element(dot('Agents working')).toBeVisible();
-  } finally {
-    // Back to what the tests run with: clearing the override would leave the system's own setting.
-    await motion('reduce');
-  }
+  expect(document.querySelector('.chat-mark')).toBeNull();
 });

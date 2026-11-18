@@ -489,6 +489,10 @@ Parts: 6.1
 - **Then** one answer from the service names each agent with its task and whether it is working,
   waiting or free, a free agent included. An agent with an approval waiting and a turn running
   reads as needing the person. The window shows the same answer
+- **And** an agent whose last turn failed and wasn't retried, or that waits for a sign-in, reads can't run; one the
+  person stopped or paused, or whose turn a restart cut, reads stopped; one whose task is blocked reads blocked; a lead
+  whose plan waits on the person needs them; each says since when. Every face of each agent in the chat carries that
+  one state's mark, and pointing at a face, or focusing its button, says the state, what and since when
 
 ### 6b. Gathr can say what the room is waiting on
 
