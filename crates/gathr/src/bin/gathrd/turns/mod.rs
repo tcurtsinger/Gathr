@@ -334,10 +334,11 @@ impl Task {
                 chat,
                 text,
                 agent,
+                picks,
                 trace,
                 reply,
             } => {
-                let _ = reply.send(self.send(chat, text, agent, trace).await);
+                let _ = reply.send(self.send(chat, (text, picks), agent, trace).await);
             }
             Cmd::Stop { chat, reply } => {
                 let _ = reply.send(self.stop(&chat).await);
@@ -425,7 +426,7 @@ impl Task {
     async fn send(
         &mut self,
         chat: String,
-        text: String,
+        (text, picks): (String, Option<String>),
         agent: Option<String>,
         trace: String,
     ) -> Result<Value, Failed> {
@@ -444,7 +445,7 @@ impl Task {
             // says so (`Frame::Read`), as Esc-free typing does in its terminal.
             let ids = running.ids.clone();
             // Never sent on to the engine unsaved: its answer would answer a message nobody has.
-            let message = self.db_message(&ids, "user", "text", &text).await;
+            let message = self.db_person_message(&ids, &text, picks).await;
             let message = message.map_err(|why| self.fail_send(&ids, why))?;
             if let Err(e) = self.write_user(&text, Some(&ids.turn)).await {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
@@ -478,7 +479,8 @@ impl Task {
             let of = (row.agent.as_deref(), row.task, row.answers.as_deref());
             let opened = gathr::words::Opened::Person;
             store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, opened)?;
-            let message = store::add_message(&tx, &row.chat, &row.turn, "user", "text", &text)?;
+            let picks = picks.as_deref();
+            let message = store::add_person_message(&tx, &row.chat, &row.turn, &text, picks)?;
             tx.commit()?;
             Ok::<_, gathr::Error>(message)
         });

@@ -125,6 +125,8 @@ fn still_streaming(history: &Value, streaming: Vec<Value>) -> Vec<Value> {
 struct NewMessage {
     text: String,
     agent: Option<String>,
+    #[serde(default)]
+    picks: Vec<gathr::picks::Pick>,
 }
 
 async fn send(
@@ -145,6 +147,7 @@ async fn send(
     if let Some(agent) = &body.agent {
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
+    let picks = picked(&s, &t, &body.text, body.picks).await?;
     let id = chat.clone();
     let _ = db(&s, &t, "Send failed", move |conn| {
         gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
@@ -157,6 +160,7 @@ async fn send(
         chat,
         text: body.text,
         agent,
+        picks,
         trace: t.0.clone(),
         reply,
     };
@@ -173,6 +177,43 @@ async fn send(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",
             "the chat's task ended",
+            &t.0,
+        )),
+    }
+}
+
+/// The names picked in `text`, as kept: each fits the text and is a known agent's. Picks route nothing:
+/// the message goes to `agent` alone.
+async fn picked(
+    s: &State,
+    t: &Trace,
+    text: &str,
+    picks: Vec<gathr::picks::Pick>,
+) -> Result<Option<String>, Fail> {
+    let refuse = |why: &str| fail(StatusCode::BAD_REQUEST, "Send failed", why, &t.0);
+    let agents: Vec<String> = picks.iter().map(|p| p.agent.clone()).collect();
+    let kept = gathr::picks::kept(text, picks).map_err(refuse)?;
+    let known = s.writer.call(move |conn| {
+        for agent in &agents {
+            if gathr::agents::get(conn, agent)?.is_none() {
+                return Ok(false);
+            }
+        }
+        Ok::<_, gathr::Error>(true)
+    });
+    match known.await {
+        Some(Ok(true)) => Ok(kept),
+        Some(Ok(false)) => Err(refuse("a picked name's agent isn't known")),
+        Some(Err(e)) => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Send failed",
+            &e.to_string(),
+            &t.0,
+        )),
+        None => Err(fail(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Send failed",
+            "the database didn't answer",
             &t.0,
         )),
     }

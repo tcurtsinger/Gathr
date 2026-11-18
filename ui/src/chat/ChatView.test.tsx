@@ -131,7 +131,7 @@ function Open({ id = 'c', project: p, draft = '', started = [] }: Shown) {
         projects={[project]}
         onProject={() => {}}
         onNewProject={() => {}}
-        onStart={(text, agent) => started.push({ text, agent })}
+        onStart={(text, agent, picks) => started.push({ text, agent, picks })}
         pauses={{ pauses: [], usage: [] }}
         onPause={async () => {}}
       />
@@ -192,7 +192,11 @@ test('a name picked from the list is blue, By Send says To it, and its id is sen
   await expect.element(sign('To Made-up B')).toBeVisible();
   expect(blue()).toEqual(['@Made-up B']);
   await userEvent.keyboard('{Enter}');
-  await expect.poll(() => sent).toEqual([{ text: 'Thanks, @Made-up B can you look', agent: 'b' }]);
+  await expect
+    .poll(() => sent)
+    .toEqual([
+      { text: 'Thanks, @Made-up B can you look', agent: 'b', picks: [{ at: 8, len: 10, agent: 'b' }] },
+    ]);
   vi.unstubAllGlobals();
 });
 
@@ -263,7 +267,9 @@ test('in a chat with no project, picking an agent not in it sends its id, so it 
   await userEvent.keyboard('{ArrowUp}{ArrowUp}{Enter}please help');
   await expect.element(sign('Made-up C joins')).toBeVisible();
   await userEvent.keyboard('{Enter}');
-  await expect.poll(() => sent).toEqual([{ text: '@Made-up C please help', agent: 'c' }]);
+  await expect
+    .poll(() => sent)
+    .toEqual([{ text: '@Made-up C please help', agent: 'c', picks: [{ at: 0, len: 10, agent: 'c' }] }]);
   vi.unstubAllGlobals();
 });
 
@@ -274,7 +280,9 @@ test('a new chat’s first message goes to the agent picked in it, and By Send s
   await userEvent.keyboard('what is left?');
   await expect.element(sign('To Made-up C')).toBeVisible();
   await userEvent.keyboard('{Enter}');
-  expect(started).toEqual([{ text: '@Made-up C what is left?', agent: 'c' }]);
+  expect(started).toEqual([
+    { text: '@Made-up C what is left?', agent: 'c', picks: [{ at: 0, len: 10, agent: 'c' }] },
+  ]);
 });
 
 test('Retry sends a failed turn to the agent it was sent to', async () => {
@@ -309,7 +317,9 @@ test('Continue under a member’s stopped turn puts its @Name in the box, so it 
   await expect.element(input()).toHaveValue('@Made-up B Continue');
   await expect.element(sign('To Made-up B')).toBeVisible();
   await userEvent.keyboard('{Enter}');
-  await expect.poll(() => sent).toEqual([{ text: '@Made-up B Continue', agent: 'b' }]);
+  await expect
+    .poll(() => sent)
+    .toEqual([{ text: '@Made-up B Continue', agent: 'b', picks: [{ at: 0, len: 10, agent: 'b' }] }]);
   vi.unstubAllGlobals();
 });
 

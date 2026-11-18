@@ -1,5 +1,6 @@
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { Picked } from './mention';
+import './picked.css';
 
 interface Props {
   text: string;
