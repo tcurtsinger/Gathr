@@ -17,7 +17,7 @@ Amends [0068](0068-the-windows-colours.md), which left the shell's colour to thi
 
 ## Why
 
-The owner's ask (2026-11-17), with pictures of the ChatGPT desktop app: a curved shell around the menu, a thin bar at the left with Home now and the settings cog and update icon at its foot, and room there for what comes later. One top line ends the two bars of header the chat and the panel each had.
+The owner's ask (2026-11-17): a curved shell around the menu, a thin bar at the left with Home now and the settings cog and update icon at its foot, and room there for what comes later. One top line ends the two bars of header the chat and the panel each had.
 
 ## Turned down
 
