@@ -4,7 +4,7 @@ import type { Spot, Timeline } from './messages';
 /**
  * Which threads are open while the chat is open (0075). A thread whose main message was handled when the chat opened
  * starts folded, every other open; nothing folds or opens by itself after that, not even for a new reply. The person's
- * own fold or open holds until the chat closes. A search hit or an approval shown from the dock opens its thread,
+ * own fold or open holds until the chat closes. A search hit or an approval the status line goes to opens its thread,
  * and its earlier replies, once.
  */
 export function useFolds() {

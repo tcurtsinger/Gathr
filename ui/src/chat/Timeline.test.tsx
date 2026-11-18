@@ -1,5 +1,5 @@
 // The one timeline as the person uses it (0037): a turn's steps, Gathr's event lines, a long name line and the
-// approvals docked above the composer. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
+// what the status line goes to when an approval waits. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { server, userEvent } from 'vitest/browser';
@@ -257,9 +257,7 @@ test('a member’s name line stays one line however long its task is, cut with i
   );
 });
 
-test('waiting approvals dock above the composer: the oldest and how many, with Show, Deny and Allow', async () => {
-  const posted: { path: string; allow: boolean }[] = [];
-  const settle: ((answer: Response) => void)[] = [];
+test('waiting approvals: the line says who needs you, and a press goes to the oldest where it was asked', async () => {
   const history = {
     chat: 'c',
     members,
@@ -275,12 +273,7 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
       { turn: 't2', request_id: 'q2', tool: 'Write' },
     ],
   };
-  vi.stubGlobal('fetch', (path: string, init?: RequestInit) => {
-    if (init?.method === 'POST' && path.includes('/approvals/')) {
-      posted.push({ path, allow: JSON.parse(String(init.body)).allow });
-      // Answered when the test says: until then the answer is in flight.
-      return new Promise<Response>((answer) => settle.push(answer));
-    }
+  vi.stubGlobal('fetch', (path: string) => {
     const body = path.endsWith('/tasks') ? { tasks: [], waits: [] } : path === '/api/pauses' ? {} : history;
     return Promise.resolve(new Response(JSON.stringify(body)));
   });
@@ -304,37 +297,14 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
       />
     </div>,
   );
-  const dock = screen.getByRole('region', { name: 'Needs you' });
-  await expect.element(dock).toBeVisible();
-  expect(dock.element().textContent).toContain('Needs you · 1 of 2');
-  expect(dock.element().textContent).toContain('Made-up Member wants to run made-up --first');
+  // Said once, on the line: no panel repeats it above the message box.
+  const line = screen.getByRole('button', { name: 'Made-up Lead and Made-up Member need you' });
+  await expect.element(line).toBeVisible();
+  expect(document.querySelector('[aria-label="Needs you"]')).toBeNull();
 
-  // Show: the card where the member asked comes into view, with the keyboard on it.
+  // The card where the member asked, the oldest, comes into view with the keyboard on it.
   const card = screen.getByRole('group', { name: 'Allow Bash?' });
-  await dock.getByRole('button', { name: 'Show' }).click();
+  await line.click();
   await expect.element(card).toHaveFocus();
   await expect.element(card).toBeInViewport();
-
-  await dock.getByRole('button', { name: 'Deny' }).click();
-  // The one being sent has left the dock; the next is the lead's, which names its tool.
-  await expect.poll(() => dock.element().textContent).toContain('Needs you · 1 of 1');
-  expect(dock.element().textContent).toContain('Made-up Lead wants to run Write');
-
-  // The service refuses the first answer: it is back in the dock, the oldest again, to answer once more.
-  settle[0](
-    new Response(JSON.stringify({ error: 'Answer failed', why: 'made-up reason', ref: 'r1' }), {
-      status: 500,
-    }),
-  );
-  await expect.poll(() => dock.element().textContent).toContain('Needs you · 1 of 2');
-  expect(dock.element().textContent).toContain('made-up --first');
-  await dock.getByRole('button', { name: 'Allow' }).click();
-  await expect.poll(() => dock.element().textContent).toContain('Made-up Lead wants to run Write');
-  await dock.getByRole('button', { name: 'Allow' }).click();
-  await expect.element(dock).not.toBeInTheDocument();
-  expect(posted).toEqual([
-    { path: '/api/chats/c/approvals/q1', allow: false },
-    { path: '/api/chats/c/approvals/q1', allow: true },
-    { path: '/api/chats/c/approvals/q2', allow: true },
-  ]);
 });

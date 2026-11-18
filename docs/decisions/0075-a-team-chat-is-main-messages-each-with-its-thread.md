@@ -81,7 +81,7 @@ Settled while building, each the smaller choice:
   hiding a reply that holds an approval waiting, a failed step or a running turn.
 - **Folding never happens under the person's eyes:** a thread whose main message is handled when the chat is opened
   starts folded, every other open, and nothing folds or opens by itself while it is open; the person's own fold holds
-  until the chat closes. A search hit and the approval dock open the thread they lead to.
+  until the chat closes. A search hit and the status line's "needs you" open the thread they lead to.
 - **A chat of one agent is one timeline,** as before; so is what a chat said before it became a team.
 - **The words are as wide as the message box,** the faces hang left of that width (the owner's rule): a reply's smaller
   face and the thread's rule sit inside it, its words still end at the box's right edge. Where the pane leaves no room

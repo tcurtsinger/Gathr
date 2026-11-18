@@ -36,7 +36,10 @@ Drawn as bubbles since [0072](0072-the-chat-reads-like-a-team-chat.md): the time
   are never drawn: the brief of a member's own task, because the member's block is headed by the task
   and the giver's row lists it, and Gathr's copy of an agent's message.
 - **Approvals** keep their card where the agent asked, and also dock above the composer: the oldest one
-  waiting, how many wait, and Show, Deny and Allow.
+  waiting, how many wait, and Show, Deny and Allow. **Changed 2026-11-18, the owner:** the dock said what
+  the status line under it already said ("Mira needs you"), and of the two the owner kept the line. The dock
+  is gone; "needs you" on the line is a button that goes to the oldest approval's card, else the plan
+  waiting, else the question. Turned down: keeping the dock and dropping the name from the line.
 - **"Working"** stays after the latest message while any turn runs: who is at work, and for how long.
 
 ## Why
