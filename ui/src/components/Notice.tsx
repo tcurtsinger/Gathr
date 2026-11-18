@@ -18,19 +18,24 @@ export function Notice({ title, danger, reference, links, action }: Props) {
   return (
     <div className={danger ? 'notice danger' : 'notice'} role={danger ? 'alert' : 'status'}>
       <span>{title}</span>
-      {reference && (
-        <button
-          type="button"
-          className="ref"
-          onClick={() => reference.open(reference.ref)}
-          aria-label={`Reference ${reference.ref}`}
-        >
-          {reference.ref}
-        </button>
-      )}
+      {reference && <Reference reference={reference.ref} onOpen={reference.open} />}
       {links}
       {action && <span className="notice-action">{action}</span>}
     </div>
+  );
+}
+
+/** An error's reference, which opens it in Diagnostics. */
+export function Reference({ reference, onOpen }: { reference: string; onOpen: (ref: string) => void }) {
+  return (
+    <button
+      type="button"
+      className="ref"
+      onClick={() => onOpen(reference)}
+      aria-label={`Reference ${reference}`}
+    >
+      {reference}
+    </button>
   );
 }
 

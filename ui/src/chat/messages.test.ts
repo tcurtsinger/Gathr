@@ -292,7 +292,7 @@ test('messages between agents are a thread under the block they were sent from, 
   expect(find('answer-1')).toEqual({ id: 'ask-1', text: 'Yes, 30 seconds.', nth: 0 });
 });
 
-test('Gathr’s notes are its own messages: a task heard back and a wake-up, each with its time', () => {
+test('Gathr’s notes are its own messages, each with its time; what a task’s end told is not drawn, read or not', () => {
   const state = round();
   state.turns.back = { ...turn('back', 'mira', { answers: 'ask' }), position: 5 };
   state.turns.woke = { ...turn('woke', 'mira'), position: 7 };
@@ -303,22 +303,20 @@ test('Gathr’s notes are its own messages: a task heard back and a wake-up, eac
       'The task you gave is settled:\n- #1 Rowan, Task 1: done: Approved at head 9a41c07\nRead.',
     ),
     said('back', 'assistant', 'Rowan is done'),
+    // One that can't be read whole (task 7 is not the chat's) isn't drawn either.
+    said(
+      'back',
+      'gathr',
+      'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #7 Sol, Task 7: done\nRead.',
+    ),
+    { ...said('none', 'gathr', 'A task is done:\n- #1 Rowan, Task 1: done'), turn: null },
     said('woke', 'gathr', 'Your wait on CI on #12 ended'),
     said('woke', 'assistant', 'CI passed'),
   );
   const { items } = view(state);
-  expect(events(items)).toEqual([
-    {
-      kind: 'task',
-      who: 'Rowan completed:',
-      text: 'Task 1',
-      more: 'Task #1. Approved at head 9a41c07',
-      task: 1,
-    },
-    { kind: 'note', text: 'Your wait on CI on #12 ended' },
-  ]);
-  // Each sits where it happened, before the reply it woke.
-  expect(ids(items).slice(-4)).toEqual(['back-gathr', 'a-back', 'woke-gathr', 'a-woke']);
+  expect(events(items)).toEqual([{ kind: 'note', text: 'Your wait on CI on #12 ended' }]);
+  // It sits where it happened, before the reply it woke.
+  expect(ids(items).slice(-3)).toEqual(['a-back', 'woke-gathr', 'a-woke']);
   const woke = state.messages.at(-2) as Message;
   expect(custom(items.at(-2)).time).toBe(woke.time);
   expect(items.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
@@ -367,71 +365,6 @@ function heardBack(state: ChatState, id: string, body: string, position: number)
   state.turns[id] = { ...turn(id, 'mira', { answers: 'ask' }), position };
   state.messages.push(said(id, 'gathr', body), said(id, 'assistant', 'Noted'));
 }
-
-test('a hear-back reads as its own lines say, not as the task stands now', () => {
-  const state = round();
-  // Task 1 came back blocked, then done; task 2 is held on its merge. All are done by now.
-  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(12, 'lane', 'ask')];
-  heardBack(
-    state,
-    'b1',
-    'Where the task you gave stands:\n- #1 Rowan, Task 1: blocked: needs the key\nRead replies.',
-    5,
-  );
-  heardBack(
-    state,
-    'b2',
-    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #2 Kit, Task 2: held: see #12 for the merge\nRead.',
-    6,
-  );
-  heardBack(state, 'b3', 'The task you gave is settled:\n- #12 Lane, Task 12: failed\nRead replies.', 7);
-  expect(lines(state)).toEqual([
-    ['Rowan is blocked:', 'Task 1', 'Task #1. needs the key'],
-    ['Rowan completed:', 'Task 1', 'Task #1'],
-    // A number in a reason is not a task the hear-back reports.
-    ['Kit finished, waiting to merge:', 'Task 2', 'Task #2. see #12 for the merge'],
-    // #12, not #1.
-    ['Lane failed:', 'Task 12', 'Task #12'],
-  ]);
-});
-
-test('5e: a task that ended done is a line when it ends, and the hear-back after it does not say it again', () => {
-  const state = round();
-  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask', { state: 'cancelled' })];
-  // Gathr says it in no turn, as Rowan's task ends; the note runs over two lines.
-  const line: Message = {
-    ...said('none', 'gathr', 'A task is done:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested'),
-    turn: null,
-  };
-  state.messages.push(line);
-  expect(lines(state)).toEqual([['Rowan completed:', 'Task 1', 'Task #1. Cursor fixed\nand tested']]);
-
-  // The round's hear-back names both: only what wasn't said shows.
-  heardBack(
-    state,
-    'b1',
-    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested\n' +
-      '- #2 Kit, Task 2: cancelled: not needed\nRead replies.',
-    5,
-  );
-  expect(lines(state)).toEqual([
-    ['Rowan completed:', 'Task 1', 'Task #1. Cursor fixed\nand tested'],
-    ['Kit cancelled:', 'Task 2', 'Task #2. not needed'],
-  ]);
-
-  // A hear-back with nothing left to say isn't drawn; one from before Gathr said such lines still is.
-  heardBack(
-    state,
-    'b2',
-    'The task you gave is settled:\n- #1 Rowan, Task 1: done: Cursor fixed\nand tested\nRead.',
-    6,
-  );
-  expect(lines(state)).toHaveLength(2);
-  const before = round();
-  before.tasks = [task(1, 'rowan', 'ask')];
-  heardBack(before, 'b1', 'The task you gave is settled:\n- #1 Rowan, Task 1: done\nRead replies.', 5);
-  expect(lines(before)).toEqual([['Rowan completed:', 'Task 1', 'Task #1']]);
-});
 
 test('what Gathr says that is not a hear-back is drawn in its own words, never replaced or dropped', () => {
   const state = round();
@@ -497,7 +430,7 @@ test('a block that did not change is the same object on the next draw; a changed
   expect(custom(next.at(-1)).work?.steps.at(-1)).toMatchObject({ state: 'ok' });
 });
 
-test('a turn with only a notice has its block after the message that began it; one still waiting has none', () => {
+test('a turn with only its ending has its block after the message that began it; one still waiting has none', () => {
   const state = round();
   state.turns.bad = { ...turn('bad', 'mira', { status: 'failed' }), position: 5 };
   state.turns.queued = turn('queued', 'mira', { status: 'queued', held: 'pause' });
@@ -509,58 +442,25 @@ test('a turn with only a notice has its block after the message that began it; o
   );
   const { items } = view(state);
   expect(ids(items).slice(-5)).toEqual(['bad-user', 'a-bad', 'queued-user', 'cut-user', 'a-cut']);
-  expect(custom(byId(items, 'a-bad')).notice).toMatchObject({ replied: false });
+  expect(custom(byId(items, 'a-bad')).ending).toMatchObject({ word: 'Failed', act: 'retry' });
   expect(text(byId(items, 'a-cut'))).toBe('');
 });
 
-test('a stopped turn says it carried on once its carry-on runs, never while that waits or was stopped', () => {
+test('a stopped turn offers Continue until its carry-on runs, also while that waits or was stopped', () => {
   const state = round();
   state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped' }), position: 5 };
   state.turns.next = turn('next', 'lane', { status: 'queued', held: 'pause', answers: 'cut' });
   state.messages.push(said('cut', 'user', '@Lane'), said('next', 'gathr', 'Stop now ended your turn.'));
-  const notice = () => custom(byId(view(state).items, 'a-cut')).notice;
-  expect(notice()).toMatchObject({ carried: false });
+  const ending = () => custom(byId(view(state).items, 'a-cut')).ending;
+  expect(ending()).toMatchObject({ act: 'continue' });
 
   // Stopped before it ever started (its task cancelled while it waited): nothing carried on.
   state.turns.next = { ...state.turns.next, status: 'stopped', held: null, position: 6 };
-  expect(notice()).toMatchObject({ carried: false });
+  expect(ending()).toMatchObject({ act: 'continue' });
 
+  // The carry-on is the next message: the stopped one keeps nothing.
   state.turns.next = { ...state.turns.next, status: 'running' };
-  expect(notice()).toMatchObject({ carried: true });
-});
-
-test('a hear-back whose reason runs over lines keeps the reason whole, even a bullet that names a task', () => {
-  const state = round();
-  state.tasks = [task(1, 'rowan', 'ask'), task(2, 'kit', 'ask'), task(142, 'lane', 'ask')];
-  const body = [
-    'The 2 tasks you gave are settled:',
-    '- #1 Rowan, Task 1: blocked: ',
-    'Two things are in the way:',
-    '- #142 has to merge first',
-    '- #2 is not it either',
-    '- #2 Kit, the second, Task 2: done: merged',
-    'Read replies with read_chat, then continue.',
-  ].join('\n');
-  heardBack(state, 'b1', body, 5);
-  expect(lines(state)).toEqual([
-    [
-      'Rowan is blocked:',
-      'Task 1',
-      // The first reason line was empty; bullets that name a task, one of them reported below, are the reason's.
-      'Task #1. Two things are in the way:\n- #142 has to merge first\n- #2 is not it either',
-    ],
-    // The owner's name had ", " in it when Gathr wrote the line.
-    ['Kit completed:', 'Task 2', 'Task #2. merged'],
-  ]);
-});
-
-test('a hear-back that cannot be read whole is drawn in its own words', () => {
-  const state = round();
-  // Task 7 is not among the chat's tasks, so its line cannot be told apart.
-  const body =
-    'The 2 tasks you gave are settled:\n- #1 Rowan, Task 1: done\n- #7 Sol, Task 7: done\nRead replies.';
-  heardBack(state, 'b1', body, 5);
-  expect(lines(state)).toEqual([[body]]);
+  expect(ending()).toBeUndefined();
 });
 
 test('a message that failed to send is drawn again when its failure changes, and kept when it does not', () => {

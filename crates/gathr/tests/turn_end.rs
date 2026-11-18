@@ -1,12 +1,12 @@
 //! What ends a turn (G167): a turn ends on its own `result`, never on the result Claude Code sends
 //! for a notice about a background command, and a turn that ends with nothing said and no tool run
-//! never settles its task.
+//! never settles its task. A restart that cuts a turn stops it: it never fails it.
 
 mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{TempDir, TestService, recording};
+use common::{TempDir, TestService, gathr, held_recording, recording};
 use serde_json::{Value, json};
 
 /// `signed_in`'s rows, as the recording has them.
@@ -88,4 +88,32 @@ fn a_turn_that_ends_with_nothing_said_fails() {
     let why = turn["why"].as_str().unwrap_or_default();
     assert!(why.contains("no reply"), "{history}");
     assert!(turn["ref"].is_string(), "{history}");
+}
+
+/// A turn a restart cut didn't fail: its message reached the agent, which can carry on. It reads stopped, cut by
+/// the restart (`end`), and its reference leads to the cut.
+#[test]
+fn a_turn_a_restart_cut_reads_stopped_not_failed() {
+    let data = TempDir::new();
+    let held = held_recording(&data.0, "signed_in");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &held)]);
+    service.signed_in(&data.0);
+    let chat = service.new_chat();
+    let path = format!("/api/chats/{chat}/messages");
+    let sent = service.send("POST", &path, json!({ "text": "Say hi" }));
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    service.wait_for(&chat, 10, "the turn to run", |h| {
+        h["turns"][0]["status"] == "running"
+    });
+    service.stop();
+
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &held)]);
+    let history = service.call("GET", &format!("/api/chats/{chat}")).json();
+    let turn = &history["turns"][0];
+    let ended = (turn["status"].as_str(), turn["end"].as_str());
+    assert_eq!(ended, (Some("stopped"), Some("restart")), "{history}");
+    let reference = turn["ref"].as_str().unwrap();
+    let (ok, traced) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(ok, "{traced}");
+    assert!(traced.to_string().contains("gathr.turn.cut"), "{traced}");
 }

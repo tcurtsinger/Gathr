@@ -2,6 +2,7 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import { Check } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Face, type FaceSize, YouFace } from '../components/Face';
+import { Reference } from '../components/Notice';
 import { useMark } from './faceMarks';
 import { clock, list } from './team';
 import './said.css';
@@ -91,7 +92,7 @@ export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small 
 
 /**
  * The name line: the name, then every other piece in one size and colour with "·" between (the role, the time, the
- * task and its tick), and `end` after them: the steps.
+ * task and its tick, how the task or the turn ended), and `end` after them: the steps.
  */
 export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNode[]; end?: ReactNode }) {
   // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
@@ -117,6 +118,34 @@ export const OnTask = ({ what, done }: { what: string; done?: boolean }) => (
     {done && <Check role="img" aria-label="Done" />}
   </span>
 );
+
+/** How its turn ended, a word on the name line (0051): "Gathr restarted", "Needs plan"; `bad` in the danger colour. */
+export const EndWord = ({ word, bad }: { word: string; bad?: boolean }) => (
+  <span className="name-line-end" data-bad={bad || undefined}>
+    {word}
+  </span>
+);
+
+/** What the person can do about how a message ended, under its bubble: why, its reference, then the button. */
+export function EndRow({
+  why,
+  reference,
+  onReference,
+  children,
+}: {
+  why?: string | null;
+  reference?: string | null;
+  onReference?: (ref: string) => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="said-end">
+      {why && <span>{why}</span>}
+      {reference && onReference && <Reference reference={reference} onOpen={onReference} />}
+      {children}
+    </div>
+  );
+}
 
 /** The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. */
 export function Bubble({

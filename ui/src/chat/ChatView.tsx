@@ -192,8 +192,11 @@ export function ChatView(props: Props) {
       onUnsent((list) => list.filter((x) => x.id !== f.id));
       onStart(f.text, f.agent);
     },
-    carryOn: () => {
-      onDraft('Continue', []);
+    // To the agent whose turn stopped: a member by its @Name, the lead as a message with no name goes.
+    carryOn: (agent) => {
+      const who = members.find((m) => m.agent === agent && m.role !== 'supervisor');
+      if (who) onDraft(`@${who.name} Continue`, [{ at: 0, id: who.agent, name: who.name }]);
+      else onDraft('Continue', []);
       input.current?.focus();
     },
     approve,

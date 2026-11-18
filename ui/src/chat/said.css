@@ -111,6 +111,48 @@
   flex: none;
   margin-left: 4px;
 }
+/* How the turn or its task ended, always shown, in the words' colour; Failed and Not sent in the danger colour. */
+.name-line-meta > .name-line-end,
+.name-line-meta > .outcome {
+  color: var(--foreground);
+}
+.name-line-meta > .name-line-end[data-bad],
+.name-line-meta > .outcome[data-out="failed"] {
+  color: var(--destructive);
+}
+
+/* What the person can do about how it ended, under the bubble: why, the reference, the button. */
+.said-main > .said-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: flex-start;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.said-end [data-slot="button"] {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.said-end .ref {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+/* A step Gathr refused reads so in the danger colour, as its cross does. */
+.work-step.refused > [data-slot="collapsible-trigger"] > span:first-of-type {
+  color: var(--destructive);
+}
 
 /* A turn's steps on its name line: shown while the message is pointed at or has focus, and always for a failed
    step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */

@@ -1,0 +1,13 @@
+.outcome {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.outcome[data-out="failed"] {
+  color: var(--destructive);
+}
+.outcome > svg {
+  width: 12px;
+  height: 12px;
+  translate: 0 0.5px;
+}

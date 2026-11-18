@@ -197,39 +197,6 @@ test('a running turn shows its steps on its name line and what the agent is doin
   expect(document.querySelector('.bubble')).toBeNull();
 });
 
-test('an event line opens in place to what more there is, and its task opens from there', async () => {
-  const state: ChatState = {
-    ...empty,
-    members,
-    turns: { lead: turn('lead', 'a', 0), back: turn('back', 'a', 1, { answers: 'lead' }) },
-    tasks: [task(7, {})],
-    messages: [
-      said('m1', 'lead', 'Made-up hand-off'),
-      said(
-        'g',
-        'back',
-        'The task you gave is settled:\n- #7 Made-up Member, Made-up task 7: done: Made-up outcome',
-        {
-          role: 'gathr',
-        },
-      ),
-      said('m2', 'back', 'Made-up wrap-up'),
-    ],
-  };
-  const opened: number[] = [];
-  const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} />);
-  const line = screen.getByRole('button', { name: 'Made-up Member completed: Made-up task 7' });
-  await expect.element(line).toBeVisible();
-  // Gathr says it, as a speaker of its own (0073).
-  await expect.element(screen.getByText('Gathr', { exact: true })).toBeVisible();
-  expect(screen.getByText('Task #7. Made-up outcome').query()).toBeNull();
-
-  await line.click();
-  await expect.element(screen.getByText('Task #7. Made-up outcome')).toBeVisible();
-  await screen.getByRole('button', { name: 'Open task' }).click();
-  expect(opened).toEqual([7]);
-});
-
 test('two answers that read the same are each the person’s own message, under the question each answers', async () => {
   const errors = vi.spyOn(console, 'error');
   const asked = {
@@ -369,25 +336,4 @@ test('waiting approvals dock above the composer: the oldest and how many, with S
     { path: '/api/chats/c/approvals/q1', allow: true },
     { path: '/api/chats/c/approvals/q2', allow: true },
   ]);
-});
-
-test('a hear-back says a task was left, or that nobody reported, in those words', async () => {
-  const back = [
-    'The 2 tasks you gave are settled:',
-    '- #7 Made-up Member, Made-up task 7: left: the made-up half remains',
-    '- #8 Made-up Member, Made-up task 8: no report: two turns ended without one',
-    'Read replies with read_chat, then continue. This turn is on your task #3: end it with finish_task.',
-  ];
-  const state: ChatState = {
-    ...empty,
-    members,
-    turns: { lead: turn('lead', 'a', 0), back: turn('back', 'a', 1, { answers: 'lead' }) },
-    tasks: [task(7, {}), task(8, {})],
-    messages: [said('m1', 'lead', 'Made-up hand-off'), said('g', 'back', back.join('\n'), { role: 'gathr' })],
-  };
-  const screen = await render(<View state={state} actions={{ openTask: () => {} }} />);
-  const left = screen.getByRole('button', { name: 'Made-up Member left it unfinished: Made-up task 7' });
-  await expect.element(left).toBeVisible();
-  const silent = screen.getByRole('button', { name: 'Made-up Member gave no report: Made-up task 8' });
-  await expect.element(silent).toBeVisible();
 });

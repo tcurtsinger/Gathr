@@ -60,6 +60,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0050_change_lines.sql"),
     include_str!("../migrations/0051_removed_agents.sql"),
     include_str!("../migrations/0052_agent_faces.sql"),
+    include_str!("../migrations/0053_cut_turns_stopped.sql"),
 ];
 
 /// The schema version this build writes.
@@ -708,6 +709,35 @@ mod tests {
         };
         let tried = ["#7FB5A8", "#7fb5a8", "#7FB5A", "7FB5A8F", "#7FB5AG"].map(set);
         assert_eq!(tried, [true, false, false, false, false]);
+    }
+
+    /// 0053: a turn a restart cut before reads stopped, as one cut now does; a turn that failed stays failed.
+    #[test]
+    fn a_turn_a_restart_cut_before_0053_reads_stopped() {
+        let path = temp_db("cut");
+        let conn = Connection::open(&path).unwrap();
+        for sql in &MIGRATIONS[..52] {
+            conn.execute_batch(sql).unwrap();
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 52;
+             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
+             INSERT INTO turns (id, chat_id, trace_id, status, why, created_ts) VALUES
+                 ('cut', 'c', 'a', 'failed', 'the service stopped during this turn', 1),
+                 ('broke', 'c', 'b', 'failed', 'the engine exited', 2);",
+        )
+        .unwrap();
+        drop(conn);
+        let conn = open(&path).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT id || ' ' || status FROM turns ORDER BY created_ts")
+            .unwrap();
+        let rows: Vec<String> = stmt
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(rows, ["cut stopped", "broke failed"]);
     }
 
     #[test]

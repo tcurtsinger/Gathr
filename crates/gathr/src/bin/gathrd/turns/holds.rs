@@ -173,7 +173,7 @@ impl Task {
     /// back; after one ran, it ends and a carry-on waits instead, so nothing runs twice (F10).
     /// Answers whether it handled the end.
     pub(super) async fn limited_end(&mut self, ids: &Ids, tools_started: u32) -> bool {
-        let why = "the account is out of usage";
+        let why = gathr::ends::OUT_OF_USAGE;
         if tools_started == 0 {
             let text = self.text_of(&ids.turn).await;
             let queued = super::Queued {

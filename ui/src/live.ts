@@ -13,6 +13,7 @@ import type {
   Task,
   ThinkingBody,
   ToolBody,
+  TurnEnd,
   TurnStatus,
   Wait,
 } from './api';
@@ -33,6 +34,7 @@ export type LiveEvent =
       status: TurnStatus;
       agent: string | null;
       why?: string | null;
+      end?: TurnEnd | null;
       ref?: string;
       task?: number | null;
       answers?: string | null;

@@ -53,7 +53,7 @@ pub fn set(
         tx.execute(
             "UPDATE turns SET stop_why = ?2
              WHERE task = ?1 AND status IN ('queued', 'waiting_sign_in', 'running')",
-            params![task, format!("its task #{task} was cancelled: {why}")],
+            params![task, crate::ends::cancelled(task, why)],
         )?;
     }
     if state == State::Done && was.as_deref() != Some("done") {

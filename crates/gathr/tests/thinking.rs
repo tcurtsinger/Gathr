@@ -268,7 +268,9 @@ fn a_restart_stops_the_steps_a_dead_service_left_running() {
 
     let service = TestService::start_with(&data.0, &env);
     let history = service.call("GET", &format!("/api/chats/{chat}")).json();
-    assert_eq!(history["turns"][0]["status"], "failed", "{history}");
+    // Cut by the restart: stopped, not failed (0051).
+    let cut = (&history["turns"][0]["status"], &history["turns"][0]["end"]);
+    assert_eq!(cut, (&json!("stopped"), &json!("restart")), "{history}");
     let messages = history["messages"].as_array().unwrap().iter();
     let steps: Vec<&Value> = messages
         .filter(|m| m["kind"] != "text")

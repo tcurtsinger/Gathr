@@ -131,7 +131,7 @@ pub(super) fn standings(
                 let words = format!("Waiting for {}", words::list(&names));
                 now("waiting", &words, since).what(&words::list(&names))
             }
-            None => match owed(open, id, &own) {
+            None => match downloading(&own).or_else(|| owed(open, id, &own)) {
                 Some(owed) => owed,
                 None => {
                     let ended = last.as_ref().and_then(|l| l.ended);
@@ -173,17 +173,13 @@ fn needs_you(
     Some(now("needs_you", "A plan for you", Some(sent)).what("Plan"))
 }
 
-/// Its account is signed out, or its last turn failed and nobody retried it. A turn a restart cut
-/// reads failed too, but the agent can run: it was stopped.
+/// Its account is signed out, or its last turn failed and nobody retried it.
 fn cant_run(own: &[&Turn], last: Option<&Last>) -> Option<Now> {
     if let Some(t) = own.iter().find(|t| t.status == "waiting_sign_in") {
         let signed_out = now("cant_run", "Signed out", Some(t.created));
         return Some(signed_out.what("Signed out").task(t.task));
     }
     let last = last.filter(|l| l.status == "failed")?;
-    if last.why.as_deref() == Some(crate::store::CUT_BY_RESTART) {
-        return None;
-    }
     let failed = now("cant_run", "Its last turn failed", last.ended);
     Some(failed.what("Failed").task(last.task))
 }
@@ -204,8 +200,7 @@ fn stopped(pauses: &[Pause], chat: &str, id: &str, last: Option<&Last>, held: bo
         return Some(now("stopped", words, Some(p.since_us)).what("Paused"));
     }
     let last = last?;
-    let cut = last.status == "failed" && last.why.as_deref() == Some(crate::store::CUT_BY_RESTART);
-    if cut {
+    if crate::ends::word(&last.status, last.why.as_deref()) == Some("restart") {
         let restarted = now("stopped", "Gathr restarted", last.ended);
         return Some(restarted.what("Gathr restarted").task(last.task));
     }
@@ -220,6 +215,27 @@ fn blocked(open: &[Open], id: &str) -> Option<Now> {
         .min_by_key(|o| o.updated)?;
     let words = format!("#{} is blocked", task.number);
     Some(now("blocked", &words, Some(task.updated)).task(Some(task.number)))
+}
+
+/// A turn of its waits for its engine's download: what the card says, as the chat draws no line for it.
+fn downloading(own: &[&Turn]) -> Option<Now> {
+    let held = own
+        .iter()
+        .find(|t| matches!(t.held.as_deref(), Some("claude" | "codex")))?;
+    let engine = if held.held.as_deref() == Some("codex") {
+        "Codex"
+    } else {
+        "Claude Code"
+    };
+    let what = format!("{engine} download");
+    Some(
+        now(
+            "waiting",
+            &format!("Waiting for the {what}"),
+            Some(held.created),
+        )
+        .what(&what),
+    )
 }
 
 /// Work of its own to come, a turn queued or a task under way, that nothing above explains.

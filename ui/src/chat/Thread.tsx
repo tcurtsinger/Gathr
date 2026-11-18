@@ -28,7 +28,8 @@ export interface Actions {
   retry: (turn: string) => void;
   /** Sends a message again that failed before any turn began. */
   resend: (failed: SendFailure) => void;
-  carryOn: () => void;
+  /** Puts Continue in the message box, to the agent whose turn stopped. */
+  carryOn: (agent?: string) => void;
   approve: (request: string, allow: boolean) => void;
   openTask: (task: number) => void;
   /** Opens an agent's panel in the workspace. */
@@ -156,7 +157,7 @@ export function useStable(actions: Actions): Actions {
       signIn: () => latest.current.signIn(),
       retry: (turn) => latest.current.retry(turn),
       resend: (failed) => latest.current.resend(failed),
-      carryOn: () => latest.current.carryOn(),
+      carryOn: (agent) => latest.current.carryOn(agent),
       approve: (request, allow) => latest.current.approve(request, allow),
       openTask: (task) => latest.current.openTask(task),
       openAgent: (agent) => latest.current.openAgent(agent),
@@ -198,12 +199,5 @@ function SystemItem() {
   const actions = useActions();
   const own = useAuiState(custom);
   if (own.gathr) return <GathrMessage />;
-  return (
-    <Events
-      events={own.events ?? []}
-      onOpenTask={actions.openTask}
-      onOpenPlan={actions.openPlan}
-      onReference={actions.reference}
-    />
-  );
+  return <Events events={own.events ?? []} onOpenPlan={actions.openPlan} onReference={actions.reference} />;
 }

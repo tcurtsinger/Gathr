@@ -3,11 +3,13 @@ import { useContext, useEffect, useRef } from 'react';
 import { ApprovalCard } from '@/components/assistant-ui/elements/approval-card';
 import { Button } from '@/components/ui/button';
 import { MarkdownText } from '../components/Markdown';
-import { FailureNotice, Notice } from '../components/Notice';
+import { FailureNotice } from '../components/Notice';
+import { Outcome } from '../components/Outcome';
 import { asked } from './ApprovalDock';
 import { Asked } from './Asked';
-import type { Custom, TurnNotice } from './messages';
-import { AgentFace, Bubble, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
+import type { Ending } from './ends';
+import type { Custom } from './messages';
+import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, Reactions, Said, When, YouSaid } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import type { Approval } from './state';
 import { Talk } from './Talk';
@@ -18,40 +20,50 @@ import { roleName } from './team';
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
 
-/** The person's own words, beside their face, in the blue-tinted bubble (0072). */
+/** The person's own words, beside their face, in the blue-tinted bubble (0072); one not sent says so, with Retry. */
 export function UserMessage() {
   const own = useAuiState(custom);
   const { unsent } = own;
   const actions = useActions();
+  // A failed Stop or Pause sent no text: only its notice shows, with nothing to resend.
+  const stop = unsent?.text === '';
+  const failure = unsent?.failure;
   return (
     <Said
       root
       you
-      bare={unsent?.text === ''}
+      bare={stop}
       face={<YouSaid />}
-      line={<NameLine name="You" pieces={[<When key="t" time={own.tick ?? own.time} />]} />}
+      line={
+        <NameLine
+          name="You"
+          pieces={[
+            <When key="t" time={own.tick ?? own.time} />,
+            unsent && !stop && <EndWord key="e" word="Not sent" bad />,
+          ]}
+        />
+      }
     >
-      {/* A failed Stop or Pause sent no text: only its notice shows, with nothing to resend. */}
-      {unsent?.text !== '' && (
+      {!stop && (
         <Bubble>
           <div className="bubble-plain">
             <MessagePrimitive.Parts />
           </div>
         </Bubble>
       )}
-      {unsent && (
+      {unsent && stop && (
         <FailureNotice
           failure={unsent.failure}
           onReference={actions.reference}
           links={<DiagnosticsLink open={() => actions.diagnostics()} />}
-          action={
-            unsent.text && (
-              <Button type="button" variant="outline" onClick={() => actions.resend(unsent)}>
-                Retry
-              </Button>
-            )
-          }
         />
+      )}
+      {unsent && failure && !stop && (
+        <EndRow why={failure.why ?? failure.error} reference={failure.ref} onReference={actions.reference}>
+          <Button type="button" variant="outline" onClick={() => actions.resend(unsent)}>
+            Retry
+          </Button>
+        </EndRow>
       )}
     </Said>
   );
@@ -67,27 +79,30 @@ export function AssistantMessage() {
 }
 
 /**
- * A block of an agent's turn: its face and name line (with its steps), its words in a bubble with its plan's chip,
- * thumbs-ups, then its approvals and how it ended. A block with nothing to show draws nothing: a turn that has
- * just started shows on the status line, not as an empty message.
+ * A block of an agent's turn: its face and name line (with how its task or turn ended, and its steps), its words in a
+ * bubble with its plan's chip, thumbs-ups, then its approvals and what the person can do about how it ended. A block
+ * with nothing to show draws nothing: a turn that has just started shows on the status line, not as an empty message.
  */
 function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
-  const { agent, by, role, on, done, work, notice, approvals, agreed, plan, asked } = own;
+  const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked } = own;
   const actions = useActions();
   const [open, setOpen] = useStepsOpen(work);
   const words = text || !!plan || !!asked?.length;
-  if (!words && !work && !approvals?.length && !notice && !agreed?.length) return null;
-  const named = !!agent && (own.head || !!work);
-  // Steps need their line even before the agent's name is known.
-  const lined = named || !!work;
+  if (!words && !work && !approvals?.length && !ending && !out && !agreed?.length) return null;
+  // How it ended says who: a block of its own is named.
+  const named = !!agent && (own.head || !!work || !!ending?.word || !!out || !!done);
+  // Steps, and how it ended, need their line even before the agent's name is known.
+  const lined = named || !!work || !!ending?.word;
   return (
     <Said
       root
       agent={by}
       // With no words, the steps are all the block has: they stay shown.
-      keep={!!work && (work.running || !!work.failed || !words)}
+      keep={!!work && (work.running || !!work.failed || !!work.refused || !words)}
       // Nothing under the name line: the face sits beside it.
-      bare={!words && !notice && !approvals?.length && !agreed?.length && !(work && (open || work.running))}
+      bare={
+        !words && !ending?.act && !approvals?.length && !agreed?.length && !(work && (open || work.running))
+      }
       face={
         named && (
           <AgentFace
@@ -108,6 +123,8 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
               role === 'supervisor' && roleName.supervisor,
               <When key="t" time={own.time} />,
               on && <OnTask key="on" what={on} done={done} />,
+              out && <Outcome key="out" out={out} />,
+              ending?.word && <EndWord key="end" word={ending.word} bad={ending.bad} />,
             ]}
             end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
           />
@@ -137,7 +154,7 @@ function Reply({ own, id, text }: { own: Custom; id: string; text: boolean }) {
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
-      {notice && <ReplyNotice notice={notice} actions={actions} />}
+      {ending?.act && <EndActs ending={ending} agent={by} actions={actions} />}
     </Said>
   );
 }
@@ -197,53 +214,21 @@ function AskApproval({
   );
 }
 
-function ReplyNotice({ notice, actions }: { notice: TurnNotice; actions: Actions }) {
-  const { turn } = notice;
-  if (turn.status === 'stopped') {
-    // Its carry-on has started: Continue would only ask for the same work again.
-    if (notice.carried) return <Notice title="Stopped, then carried on" />;
-    return (
-      <Notice
-        title="Stopped"
-        action={
-          <Button type="button" variant="outline" onClick={actions.carryOn}>
-            Continue
-          </Button>
-        }
-      />
-    );
-  }
-  if (turn.held === 'claude' || turn.held === 'codex') {
-    return (
-      <Notice
-        title={turn.why ?? (turn.held === 'codex' ? 'Codex is downloading' : 'Claude Code is downloading')}
-      />
-    );
-  }
-  if (turn.status === 'waiting_sign_in') {
-    return (
-      <Notice
-        title="Waiting for sign-in"
-        action={
-          <Button type="button" variant="outline" onClick={actions.signIn}>
-            Sign in
-          </Button>
-        }
-      />
-    );
-  }
+/** Under the bubble, what the person can do about how the turn ended: Continue, Retry with its reference, or Sign in. */
+function EndActs({ ending, agent, actions }: { ending: Ending; agent?: string; actions: Actions }) {
+  const { turn, act } = ending;
+  const [label, onClick] =
+    act === 'retry'
+      ? ['Retry', () => actions.retry(turn.id)]
+      : act === 'sign-in'
+        ? ['Sign in', actions.signIn]
+        : ['Continue', () => actions.carryOn(agent)];
   return (
-    <Notice
-      danger
-      title={notice.replied ? 'Reply failed' : 'Send failed'}
-      reference={{ ref: turn.ref, open: () => actions.diagnostics(turn.id) }}
-      links={<DiagnosticsLink open={() => actions.diagnostics(turn.id)} />}
-      action={
-        <Button type="button" variant="outline" onClick={() => actions.retry(turn.id)}>
-          Retry
-        </Button>
-      }
-    />
+    <EndRow reference={act === 'retry' ? turn.ref : null} onReference={() => actions.diagnostics(turn.id)}>
+      <Button type="button" variant="outline" onClick={onClick}>
+        {label}
+      </Button>
+    </EndRow>
   );
 }
 

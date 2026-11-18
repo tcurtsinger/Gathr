@@ -655,8 +655,7 @@ pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
     }
     person::links::recover(&tx, &trace)?;
     for turn in &giving {
-        let why = Some("the service stopped during this turn");
-        crate::store::set_turn(&tx, turn, "failed", why)?;
+        crate::store::cut(&tx, turn)?;
         hear::hear_backs(&tx, turn, &trace)?;
     }
     tx.commit()?;
