@@ -394,6 +394,13 @@ fn only_the_lead_asks_the_person_and_each_answer_is_taken_or_refused_with_a_refe
     );
 
     // One Send: the person's own is answered, the lead's request is refused with a reference.
+    // Ann's turn is marked running after her engine starts, so after her token: that write sends
+    // the person's list too, and must be out before the socket opens (macOS CI at bd225aa).
+    team.service
+        .wait_for(&team.chat, 20, "the lead's and Ann's turns to run", |h| {
+            let turns = h["turns"].as_array().cloned().unwrap_or_default();
+            turns.iter().filter(|t| t["status"] == "running").count() == 2
+        });
     let mut live = team.service.live();
     let answers =
         json!({ "answers": [{ "task": 1, "pick": ["Long"] }, { "task": 3, "text": "yes" }] });
