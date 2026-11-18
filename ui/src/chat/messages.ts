@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Message, Named, Role, Task, ThinkingBody, ToolBody, Turn } from '../api';
+import type { Failure, Message, Named, PickedName, Role, Task, ThinkingBody, ToolBody, Turn } from '../api';
 import type { Out } from '../components/Outcome';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, askSizes, changed, fixed } from './asks';
@@ -18,6 +18,8 @@ export interface SendFailure {
   text: string;
   /** The agent it was for, so a resend goes to the same one. */
   agent?: string;
+  /** The names picked in it, sent again with it. */
+  picks?: PickedName[];
   failure: Failure;
 }
 
@@ -66,6 +68,8 @@ export type Custom = {
   settled?: boolean;
   /** The ask's size, on the person's message that started it (0061). */
   size?: AskSize;
+  /** The person's message: the names they picked from the "@" list, drawn blue. */
+  picks?: PickedName[];
   /** Who gave its text a thumbs-up, in the order given. */
   agreed?: string[];
   events?: EventLine[];
@@ -206,9 +210,10 @@ export function toThread(state: ChatState, agents: Named[], unsent: SendFailure[
       continue;
     }
     if (g.kind === 'person') {
-      const size = sizes.get(g.msgs[0].id);
+      const m = g.msgs[0];
+      const size = sizes.get(m.id);
       add(
-        kept(cache, g.key, `${g.msgs[0].body}|${JSON.stringify(size)}`, () => toUser(g.msgs[0], size)),
+        kept(cache, g.key, `${m.body}|${JSON.stringify([size, m.picks])}`, () => toUser(m, size)),
         [g],
       );
       speaker = undefined;
@@ -593,7 +598,7 @@ function toUser(m: Message, size?: AskSize): ThreadMessageLike {
     id: m.id,
     role: 'user',
     content: [{ type: 'text', text: m.body as string }],
-    metadata: { custom: { tick: m.time, size } satisfies Custom },
+    metadata: { custom: { tick: m.time, size, picks: m.picks ?? undefined } satisfies Custom },
   };
 }
 
@@ -606,6 +611,6 @@ function settledTask(state: ChatState, numbered: Map<number, Task>, g: Group): b
 }
 
 function failed(f: SendFailure): ThreadMessageLike {
-  const custom: Custom = { unsent: f };
+  const custom: Custom = { unsent: f, picks: f.picks };
   return { id: `f-${f.id}`, role: 'user', content: [{ type: 'text', text: f.text }], metadata: { custom } };
 }

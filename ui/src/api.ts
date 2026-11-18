@@ -43,6 +43,15 @@ export interface Message {
   to?: string | null;
   /** What Gathr told the member in its turn: the message it carries, already shown as the sender's. */
   copy_of?: string | null;
+  /** The person's message: the names they picked from the "@" list, drawn blue. None from before they were kept. */
+  picks?: PickedName[] | null;
+}
+
+/** A name picked from the "@" list in the text: where its `@Name` starts and how long it is, in UTF-16 units. */
+export interface PickedName {
+  at: number;
+  len: number;
+  agent: string;
 }
 
 /**
@@ -694,8 +703,12 @@ export const api = {
       '/api/person-tasks/answer',
       { answers },
     ),
-  send: (chat: string, text: string, agent?: string) =>
-    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, { text, agent }),
+  send: (chat: string, text: string, agent?: string, picks?: PickedName[]) =>
+    call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, {
+      text,
+      agent,
+      picks: picks?.length ? picks : undefined,
+    }),
   /** Compacts the agent's conversation in the chat: a turn of its own, queued behind any it has under way. */
   compact: (chat: string, agent: string) =>
     call<{ turn: string; status: TurnStatus; ref: string }>(

@@ -309,6 +309,7 @@ fn an_open_task_that_ran_keeps_its_owners_session_after_the_migration() {
          DROP INDEX turns_by_ask; DROP INDEX tasks_by_ask; ALTER TABLE turns DROP COLUMN ask_id;
          ALTER TABLE tasks DROP COLUMN ask_id; DROP TABLE asks; ALTER TABLE tasks DROP COLUMN look_into;
          DROP TABLE held_turns; ALTER TABLE changes DROP COLUMN size; ALTER TABLE changes DROP COLUMN line_of;
+         ALTER TABLE messages DROP COLUMN picks;
          PRAGMA user_version = 41;",
     )
     .unwrap();

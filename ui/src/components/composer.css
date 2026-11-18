@@ -76,9 +76,6 @@
   overflow-wrap: break-word;
   pointer-events: none;
 }
-::highlight(composer-mention) {
-  color: var(--attention);
-}
 .composer-input.named {
   position: relative;
   color: transparent;

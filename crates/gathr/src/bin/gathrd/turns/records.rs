@@ -30,13 +30,37 @@ impl Task {
         began: Option<i64>,
     ) -> Result<Value, String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
+        let add = move |tx: &rusqlite::Transaction| match began {
+            Some(began) => store::add_message_at(tx, &chat, &turn, role, kind, &body, began),
+            None => store::add_message(tx, &chat, &turn, role, kind, &body),
+        };
+        self.db_save(ids, role, add).await
+    }
+
+    /// The person's message sent into a running turn, with the names they picked (`picks::kept`).
+    pub(super) async fn db_person_message(
+        &self,
+        ids: &Ids,
+        body: &str,
+        picks: Option<String>,
+    ) -> Result<Value, String> {
+        let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
+        let add = move |tx: &rusqlite::Transaction| {
+            store::add_person_message(tx, &chat, &turn, &body, picks.as_deref())
+        };
+        self.db_save(ids, "user", add).await
+    }
+
+    async fn db_save(
+        &self,
+        ids: &Ids,
+        role: &'static str,
+        add: impl FnOnce(&rusqlite::Transaction) -> Result<Value, gathr::Error> + Send + 'static,
+    ) -> Result<Value, String> {
         // One write: a person's message and the ask it starts or joins (0061).
         let add = move |conn: &mut rusqlite::Connection| {
             let tx = conn.transaction()?;
-            let added = match began {
-                Some(began) => store::add_message_at(&tx, &chat, &turn, role, kind, &body, began),
-                None => store::add_message(&tx, &chat, &turn, role, kind, &body),
-            }?;
+            let added = add(&tx)?;
             tx.commit()?;
             Ok::<_, gathr::Error>(added)
         };

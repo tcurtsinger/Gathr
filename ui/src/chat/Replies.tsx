@@ -6,6 +6,7 @@ import type { Failure } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { Outcome } from '../components/Outcome';
+import { PickedText } from '../components/PickedText';
 import { asked } from './ApprovalDock';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
@@ -54,7 +55,7 @@ export function UserMessage() {
       {!stop && (
         <Bubble>
           <div className="bubble-plain">
-            <MessagePrimitive.Parts />
+            <MessagePrimitive.Parts components={personParts} />
           </div>
         </Bubble>
       )}
@@ -78,6 +79,11 @@ export function UserMessage() {
 }
 
 export const parts = { Text: TextPart };
+
+function PersonText({ text }: { text: string }) {
+  return <PickedText text={text} picks={useAuiState(custom).picks} />;
+}
+const personParts = { Text: PersonText };
 
 export function AssistantMessage() {
   const own = useAuiState(custom);

@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { type Agent, api, type Chat, type Failure, type Named, type Project, type Task } from './api';
+import {
+  type Agent,
+  api,
+  type Chat,
+  type Failure,
+  type Named,
+  type PickedName,
+  type Project,
+  type Task,
+} from './api';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { usePauses } from './chat/pauses';
@@ -164,8 +173,8 @@ export function App() {
   }, []);
   const keep = (chat: string, f: SendFailure) =>
     setUnsent((u) => ({ ...u, [chat]: [...(u[chat] ?? []), f] }));
-  const start = (text: string, agent?: string) => {
-    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, failure: e });
+  const start = (text: string, agent?: string, picks?: PickedName[]) => {
+    const failed = (e: Failure) => ({ id: crypto.randomUUID(), text, agent, picks, failure: e });
     const draft = fresh;
     api.createChat(draft?.project).then(
       (made) => {
@@ -176,7 +185,7 @@ export function App() {
           setFresh(null);
           setSelected(made.id);
         }
-        api.send(made.id, text, agent).then(
+        api.send(made.id, text, agent, picks).then(
           () => loadChats().then(setChats, setFailure),
           (e: Failure) => keep(made.id, failed(e)),
         );

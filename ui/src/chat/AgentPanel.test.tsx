@@ -320,8 +320,9 @@ test('Message names the agent first in the message box and puts the keyboard the
   await expect.element(input).toHaveFocus();
   await expect.element(input).toHaveValue('@Made-up Third ');
   await userEvent.keyboard('Made-up note{Enter}');
-  // The name the button puts in counts as picked: its id is sent.
-  await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note', agent: 'c' }]);
+  // The name the button puts in counts as picked: its id is sent, and its place to draw it blue.
+  const picks = [{ at: 0, len: 14, agent: 'c' }];
+  await expect.poll(() => sent).toEqual([{ text: '@Made-up Third Made-up note', agent: 'c', picks }]);
 });
 
 test('an agent’s initial in the timeline opens its panel', async () => {
