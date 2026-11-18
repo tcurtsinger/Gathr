@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { FaceStack } from '../components/Face';
 import { parts, Reply } from './Replies';
+import { revealOpened } from './reveal';
 import { AgentFace, Bubble, NameLine, Reactions, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import { useActions } from './Thread';
@@ -41,7 +42,16 @@ export function Talk({
   const who = [...new Map(said.flatMap((m) => (m.agent ? [[m.agent, m.from ?? '']] : []))).entries()];
   return (
     <MessagePrimitive.Root className="talk" data-thread="" data-open={open || undefined}>
-      <button type="button" className="talk-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button
+        type="button"
+        className="talk-toggle"
+        aria-expanded={open}
+        onClick={(e) => {
+          setOpen(!open);
+          const thread = e.currentTarget.closest('.talk');
+          if (!open && thread) revealOpened(e.currentTarget, thread);
+        }}
+      >
         <ChevronRight className="talk-chevron" aria-hidden="true" />
         {open ? (
           'Hide'
