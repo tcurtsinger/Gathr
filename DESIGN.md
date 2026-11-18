@@ -223,7 +223,8 @@ their answers, Gathr's own question and a removed agent's message offer none.
 
 The thread box (0076, `#replybox` A) is the same Composer, placed by `chat/ThreadBox.tsx` as an item after the
 thread's last reply shown, inside the thread's rule where its replies sit: one row, 18px corners, 14.5px words, the
-"To Ann" sign, a 24px cross named "Close" and a 28px Send, the field still growing with what is typed. Its field is
+"To Ann" sign, a 24px cross named "Close" and a 28px Send, the field still growing with what is typed; where the
+field would get less than 200px (the 360 column), the sign, the cross and Send go under it, at its right. Its field is
 named "Reply" and so is its hint. Focus goes into it when Reply opens it; Escape (after an open @ list) or the cross
 closes it and focus goes back to that Reply. It has no Stop. One at a time: Reply elsewhere moves it, and each
 thread keeps its own draft. On a thread's fold line, Reply is a plain 13px muted word after the thumbs-up, shown by
