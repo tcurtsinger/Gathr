@@ -86,6 +86,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             info: Mutex::new(None),
             failed: AtomicBool::new(false),
         })
+        .manage(update::Updates::default())
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
@@ -106,9 +107,10 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             let window = window(app.handle(), url, "Gathr", webview_data)?;
             tray(app.handle())?;
             // Started at login (`gathr::platform::login`), or after an update made while hidden:
-            // in the tray, its window ready to show.
-            let after_update = update::take_restart_hidden(app.handle());
-            let hidden = after_update || std::env::args().any(|a| a == "--hidden");
+            // in the tray, its window ready to show. After an update, as it was before.
+            let restarted = update::restarted(app.state::<Service>().data.path());
+            let at_login = std::env::args().any(|a| a == "--hidden");
+            let hidden = restarted.unwrap_or(at_login);
             if !hidden {
                 window.show()?;
             }
@@ -118,7 +120,7 @@ fn installed(mut context: Context<Wry>, data: DataDir, opened: Instant) {
             }
             update::run(app.handle());
             follow::run(app.handle());
-            notify::run(app.handle(), after_update);
+            notify::run(app.handle(), restarted.is_some());
             Ok(())
         })
         .build(context)
@@ -247,17 +249,12 @@ fn tray(app: &AppHandle) -> tauri::Result<()> {
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &pause, &resume, &quit])?;
     app.manage(PauseItems { pause, resume });
-    update::manage(app, menu.clone())?;
     show_paused(app);
     let mut builder = TrayIconBuilder::new()
         .tooltip("Gathr")
         .menu(&menu)
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "update" => {
-                let app = app.clone();
-                std::thread::spawn(move || update::install(&app, "tray"));
-            }
             "open" => reopen(app, "tray", None),
             "pause" => pause_all(app, true),
             "resume" => pause_all(app, false),

@@ -115,5 +115,5 @@ fn sign_in(app: &AppHandle, info: ServiceInfo, event: &str, mut attrs: serde_jso
         loaded.err().map(|e| e.to_string()),
     );
     // The window's update comes from the same release as the service's.
-    update::check_now(app);
+    update::signed_in(app);
 }
