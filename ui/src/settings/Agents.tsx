@@ -132,6 +132,7 @@ type Fields = {
   face_seed?: string;
   gender: Gender | null;
   skin: number | null;
+  background: string | null;
 };
 
 const modes: [Approvals, string, string][] = [
@@ -160,8 +161,9 @@ function AgentForm(props: FormProps) {
     approvals: 'auto',
     gender: null,
     skin: null,
+    background: null,
   };
-  const { name, account, model, effort, approvals, face_seed, gender, skin }: Fields = {
+  const { name, account, model, effort, approvals, face_seed, gender, skin, background }: Fields = {
     ...(agent ?? blank),
     ...edits,
   };
@@ -188,6 +190,7 @@ function AgentForm(props: FormProps) {
     ...(seed !== (agent?.face_seed ?? name.trim()) && { face_seed: seed }),
     ...(gender !== (agent?.gender ?? null) && { gender }),
     ...(skin !== (agent?.skin ?? null) && { skin }),
+    ...(background !== (agent?.background ?? null) && { background }),
   };
   const draft = { name: name.trim(), account, model: model ?? null, effort, approvals, ...face };
   const changed =
@@ -250,6 +253,7 @@ function AgentForm(props: FormProps) {
         seed={seed}
         gender={gender}
         skin={skin}
+        background={background}
         onChange={edit}
       />
       <label className="agent-field">

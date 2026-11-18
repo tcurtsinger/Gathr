@@ -100,7 +100,7 @@ test('a removed agent’s old words still say who wrote them', async () => {
   service({
     projects: [],
     chats: [chat('c')],
-    removed: [{ id: 'bo', name: 'Bo', face_seed: 'Bo', gender: null, skin: null }],
+    removed: [{ id: 'bo', name: 'Bo', face_seed: 'Bo', gender: null, skin: null, background: null }],
     history: {
       chat: 'c',
       members: [],

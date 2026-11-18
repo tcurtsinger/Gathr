@@ -478,14 +478,16 @@ export interface Agent {
   gender: Gender | null;
   /** Skin tone 1 to 6; null until the person sets it. */
   skin: number | null;
+  /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
+  background: string | null;
 }
 
 /** An agent as Settings saves it: a face field is sent only when it changed. */
-export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin'> &
-  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin'>>;
+export type AgentDraft = Omit<Agent, 'id' | 'face_seed' | 'gender' | 'skin' | 'background'> &
+  Partial<Pick<Agent, 'face_seed' | 'gender' | 'skin' | 'background'>>;
 
 /** A removed agent: its old messages still say who wrote them, with its face (0069, 0074). */
-export type Named = Pick<Agent, 'id' | 'name' | 'face_seed' | 'gender' | 'skin'>;
+export type Named = Pick<Agent, 'id' | 'name' | 'face_seed' | 'gender' | 'skin' | 'background'>;
 
 export type Approvals = 'ask' | 'edits' | 'auto' | 'full';
 

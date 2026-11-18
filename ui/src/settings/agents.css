@@ -62,19 +62,23 @@
   color: var(--muted);
   opacity: 1;
 }
-/* Face: the face and Shuffle; Skin tone: six swatches, the chosen one ringed (0074). */
+/* Face: the face and Shuffle; Skin tone and Background: swatches, the chosen one ringed (0074). Background's last
+   swatch is + for any colour: dashed with a plus, or the colour picked there. */
 .face-pick {
   display: flex;
   align-items: center;
   gap: 14px;
 }
-.skin-tones {
+.swatches {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  height: 34px;
+  padding: 4px 0;
 }
-.skin-tones .skin-tone {
+.swatches .swatch {
+  display: grid;
+  place-items: center;
   width: 26px;
   height: 26px;
   min-height: 0;
@@ -83,9 +87,23 @@
   border-radius: 50%;
   box-shadow: inset 0 0 0 1px #0003;
 }
-.skin-tones .skin-tone[aria-pressed="true"] {
+.swatches .swatch[aria-pressed="true"] {
   outline: 2px solid var(--foreground);
   outline-offset: 2px;
+}
+.swatches .swatch-custom {
+  box-shadow: inset 0 0 0 1.5px var(--muted-foreground);
+}
+.swatches .swatch-custom:not([style]) {
+  background: transparent;
+  box-shadow: none;
+  border: 1.5px dashed var(--muted-foreground);
+}
+.swatch-custom svg {
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+  stroke-width: 2;
 }
 .agent-chosen {
   margin: 0;

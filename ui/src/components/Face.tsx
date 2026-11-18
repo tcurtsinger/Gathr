@@ -1,9 +1,10 @@
 import { createContext, memo, useContext, useMemo } from 'react';
+import { drawnOn } from '../faces/backgrounds';
 import { Drawing } from '../faces/Drawing';
-import { faceOptions, type Gender, hash } from '../faces/options';
+import { faceOptions, type Gender } from '../faces/options';
 import './face.css';
 
-/** What a face is drawn from: the agent's id gives its colour; its seed, gender and skin tone when known. */
+/** What a face is drawn from: its seed, gender, skin tone and background when known. */
 export interface FaceOf {
   id: string;
   name: string;
@@ -11,6 +12,8 @@ export interface FaceOf {
   face_seed?: string;
   gender?: Gender | null;
   skin?: number | null;
+  /** #RRGGBB as the person picked it; none is a grey. */
+  background?: string | null;
 }
 
 /** Every agent the window knows, removed ones too, by id: a place that knows only the id draws the saved face. */
@@ -18,9 +21,6 @@ export const KnownFaces = createContext<ReadonlyMap<string, FaceOf>>(new Map());
 
 /** 56 in Settings > Agents' form; the others wherever an agent shows. */
 export type FaceSize = 56 | 36 | 28 | 24 | 20 | 16;
-
-/** The agent's colour, one of five, from its id: there is no setting for it (0074). */
-export const hueOf = (id: string) => (hash(id, 'hue') % 5) + 1;
 
 interface Props {
   agent: FaceOf;
@@ -32,50 +32,42 @@ interface Props {
 }
 
 /**
- * An agent's face (0074): its drawing on a pale tint of its colour, the same everywhere. Fields given here win
+ * An agent's face (0074): its drawing on the background the person picked, the same everywhere. Fields given here win
  * (a form's unsaved face); otherwise the face the window knows for the id.
  */
 export function Face({ agent, size, busy, label }: Props) {
   const known = useContext(KnownFaces).get(agent.id);
   const shown = agent.face_seed === undefined && known ? known : agent;
-  return (
-    <Drawn
-      seed={shown.face_seed ?? shown.name}
-      gender={shown.gender ?? null}
-      skin={shown.skin ?? null}
-      id={agent.id}
-      size={size}
-      busy={busy}
-      label={label}
-    />
-  );
-}
-
-/** Drawn again only when what it is drawn from changes: a streamed token or a new message never redraws one. */
-const Drawn = memo(function Drawn(props: {
-  id: string;
-  seed: string;
-  gender: Gender | null;
-  skin: number | null;
-  size: FaceSize;
-  busy?: boolean;
-  label?: string;
-}) {
-  const { id, seed, gender, skin, size, busy, label } = props;
-  const options = useMemo(() => faceOptions(seed, { gender, skin }), [seed, gender, skin]);
   const named = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true };
   return (
     <span
       className="face"
-      data-agent={id}
+      data-agent={agent.id}
       data-size={size}
-      data-hue={hueOf(id)}
       data-busy={busy || undefined}
+      style={{ background: drawnOn(shown.background) }}
       {...named}
     >
-      <Drawing options={options} />
+      <Drawn seed={shown.face_seed ?? shown.name} gender={shown.gender ?? null} skin={shown.skin ?? null} />
     </span>
   );
+}
+
+/**
+ * Drawn again only when what it is drawn from changes: a streamed token, a new message or a background dragged in
+ * the picker never redraws one.
+ */
+const Drawn = memo(function Drawn({
+  seed,
+  gender,
+  skin,
+}: {
+  seed: string;
+  gender: Gender | null;
+  skin: number | null;
+}) {
+  const options = useMemo(() => faceOptions(seed, { gender, skin }), [seed, gender, skin]);
+  return <Drawing options={options} />;
 });
 
 /** Faces overlapped into one compact element, in the order given, each cut out of the surface behind it. */

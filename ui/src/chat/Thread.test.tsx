@@ -201,6 +201,7 @@ test("a reply shows its agent's name once the agents arrive, and the new one aft
     face_seed: 'Made-up',
     gender: null,
     skin: null,
+    background: null,
   };
   const screen = await render(<View state={state} />);
   await expect.element(screen.getByText('Done.')).toBeVisible();

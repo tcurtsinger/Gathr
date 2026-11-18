@@ -41,6 +41,7 @@ const agents: Agent[] = members.map((m) => ({
   face_seed: 'Made-up',
   gender: null,
   skin: null,
+  background: null,
 }));
 const today = (h: number, m: number) => {
   const d = new Date();

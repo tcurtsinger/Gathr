@@ -1,19 +1,5 @@
-/* An agent's face (0074): its drawing on a pale tint of its colour, at 36, 28, 24, 20 or 16, and 56 in its form.
-   The five colours are the faces mock-up's, each deeper in light; the tint is 30% of the colour in white. */
-:root {
-  --face-hue-1: oklch(0.72 0.13 15);
-  --face-hue-2: oklch(0.74 0.12 155);
-  --face-hue-3: oklch(0.79 0.12 75);
-  --face-hue-4: oklch(0.72 0.12 305);
-  --face-hue-5: oklch(0.72 0.12 250);
-}
-html.light {
-  --face-hue-1: oklch(0.56 0.16 15);
-  --face-hue-2: oklch(0.53 0.12 155);
-  --face-hue-3: oklch(0.56 0.12 65);
-  --face-hue-4: oklch(0.53 0.15 305);
-  --face-hue-5: oklch(0.52 0.15 255);
-}
+/* An agent's face (0074): its drawing on the background the person picked (Face sets it), at 36, 28, 24, 20 or 16,
+   and 56 in its form. */
 .face {
   position: relative;
   display: block;
@@ -21,22 +7,6 @@ html.light {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: color-mix(in oklab, var(--face-hue) 30%, #fff);
-}
-.face[data-hue="1"] {
-  --face-hue: var(--face-hue-1);
-}
-.face[data-hue="2"] {
-  --face-hue: var(--face-hue-2);
-}
-.face[data-hue="3"] {
-  --face-hue: var(--face-hue-3);
-}
-.face[data-hue="4"] {
-  --face-hue: var(--face-hue-4);
-}
-.face[data-hue="5"] {
-  --face-hue: var(--face-hue-5);
 }
 .face > svg {
   display: block;

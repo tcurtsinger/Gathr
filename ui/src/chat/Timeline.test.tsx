@@ -27,6 +27,7 @@ const agents: Agent[] = members.map((m) => ({
   face_seed: 'Made-up',
   gender: null,
   skin: null,
+  background: null,
 }));
 const turn = (id: string, agent: string, position: number, more: Partial<Turn> = {}): Turn => ({
   id,

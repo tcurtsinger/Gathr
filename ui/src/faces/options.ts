@@ -43,7 +43,7 @@ export interface FaceOptions {
 }
 
 /** A 32-bit hash of the seed for one option: FNV-1a, then a finaliser, so near seeds land far apart. */
-export function hash(seed: string, key: string): number {
+function hash(seed: string, key: string): number {
   let h = 0x811c9dc5;
   for (const ch of `${key}\u0000${seed}`) h = Math.imul(h ^ (ch.codePointAt(0) ?? 0), 0x01000193);
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
