@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use sha2::{Digest, Sha256};
+
 use crate::app::Copies;
 use crate::crash_log::CrashLog;
 use crate::data::{DataDir, ServiceInfo};
@@ -252,6 +254,19 @@ pub fn folder_key(data: &Path, default: &Path) -> Option<String> {
     Some(format!(".data-{:016x}", hasher.finish()))
 }
 
+/// The Mac's webview store for a data folder: WKWebView takes a store's identifier, not a folder.
+/// SHA-256 rather than `folder_key`'s hasher, whose output may change with Rust: a store whose
+/// identifier changed with an update would be left behind, outside the folder. Marked as a UUID of
+/// RFC 9562's version 8, made by the application.
+pub fn webview_store(data: &Path) -> [u8; 16] {
+    let hash = Sha256::digest(identity(data).as_bytes());
+    let mut id = [0; 16];
+    id.copy_from_slice(&hash[..16]);
+    id[6] = (id[6] & 0x0f) | 0x80;
+    id[8] = (id[8] & 0x3f) | 0x80;
+    id
+}
+
 /// A folder as the file system knows it: links and `..` resolved, and case ignored, as Windows'
 /// and macOS's file systems do by default. A folder that doesn't exist yet is only made absolute,
 /// so the caller creates it first.
@@ -308,6 +323,21 @@ mod tests {
             folder.display(),
             dotted.display()
         );
+    }
+
+    /// The Mac's webview store for a test folder: one per folder, and the same after an update, so
+    /// an update never strands the folder's old store.
+    #[test]
+    fn each_data_folder_keeps_one_webview_store_across_builds() {
+        let hex = |id: [u8; 16]| id.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        let (folder, known) = match cfg!(windows) {
+            true => (r"C:\Gathr-None\Data-A", "3f5cf840e1c48dadb3a96ee05824d3f2"),
+            false => ("/Gathr-None/Data-A", "efe65a670cf885bca71349e5ab0afe0f"),
+        };
+        let a = super::webview_store(Path::new(folder));
+        assert_eq!(hex(a), known, "{folder}'s store changed with the build");
+        let b = super::webview_store(&Path::new(folder).with_file_name("Data-B"));
+        assert_ne!(a, b, "two folders share a store");
     }
 
     /// The window names a service stuck in its hand-over, and only the one holding the folder.
