@@ -55,7 +55,9 @@ light-grey frame and cards and a border dark enough to see. Each step differs
 from the next in both themes. `tokens.css` records both themes. Foreground carries text and primary
 actions. `muted-foreground` is metadata; `muted-surface` is a background.
 `border` separates regions; `input` bounds inputs; `ring` is transparent.
-Blue is attention, links and active work, not an agent palette.
+Blue is attention, links and active work, not an agent palette. `free` (dark `oklch(0.74 0.17 148)`,
+light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
+([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)).
 Errors combine destructive text, a tinted surface, an icon and a reference.
 
 The prototype calls its neutral surface tokens `muted` and `accent`. Existing
@@ -300,14 +302,10 @@ Only its ticks take the pointer.
 Summary holds what the plan bar and a status bar would say, so neither exists
 ([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
 
-Its button in the top line carries no words. It is the overlapped 20px faces (4px overlap, each
-cut out of the shell with a 2px edge) of every agent with a running turn, each with an attention ring
-turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
-person (a waiting approval, or an open question it asked the person) sits last in the stack with no
-ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
-Five agents are one 100px button. With nobody working or needed, the button shows Summary's plain icon.
-Its accessible name says the same in words: "Summary: Vale needs you, Juno and Pia working",
-or "Summary".
+Its button in the top line carries no words. It is the roster: every agent of the chat at 20px, in the
+chat's order, 6px apart so no face covers another's mark, each with its state's mark (see **State marks**
+below); a Working mark turns here. Five agents are one 140px button. Its accessible name says who needs the
+person and who works: "Summary: Vale needs you, Juno and Pia working", or "Summary".
 
 The button, and the Working line after the latest message, open a 348px popover under the top line.
 Escape closes it and returns focus to whichever of the two was last used to open or close it; a press
@@ -321,13 +319,14 @@ outside closes it. Top to bottom:
   attention spinner at work, an empty circle for not started, a square-minus for blocked, a danger
   circle-exclamation for failed, a square for stopped. A done row is muted.
 - **Team**, with "2 working · 1 needs you" at the heading's right, a part omitted when it is zero.
-  One line for each agent: its 24px face (ringed while it works), its name, what it is doing in one
+  One line for each agent: its 24px face with its mark, still, its name, what it is doing in one
   13px phrase, and its tasks in this chat as done/total (read out as "1 of 2 tasks done", "1 of 1 task done"), cancelled ones left out and
   nothing when it has none. The phrase is the running turn's activity as its row in the timeline labels it (Running a
   command); "Needs your approval" or "Asked you a question" in the attention colour; "Waiting for
-  Juno", a wait on CI or a PR by name, Held, Paused, Stopped or a usage limit with its end; else Ready.
+  Juno", a wait on CI or a PR by name, Held, Paused, Stopped, Signed out, Its last turn failed, "#24 is blocked"
+  or a usage limit with its end; else Free, the mark's word.
   No role, no start time and no chevron: those are in the agent's panel. Order: who needs the person,
-  who works, who waits, who is ready, the Supervisor first among equals.
+  then the marks' order (can't run, works, stopped, blocked, waits, free), the Supervisor first among equals.
 - **Pause or resume**, at the foot: a menu with Pause or Resume for each agent alone.
 
 A step or an agent's row is a button that closes Summary and opens that agent's panel, and the
@@ -343,6 +342,26 @@ stopped stay their own states and never count done. All steps, counts, working a
 and timing come from service tasks, turns, waits and approvals. Missing records never become
 inferred state. Reduced motion stops spinners and rings.
 
+### State marks
+
+An agent's state is one mark on its face ([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)), the
+same on every face of it in a chat: the most pressing that holds of Needs you (a blue dot), Can't run (a red
+disc with !), Working (a three-quarter blue ring), Stopped (a grey disc with a square; a plain square at 24 and
+under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's hand) and Free (a plain green
+dot). It sits at the face's top right, 1px over its edge: 12px at 36, 10px at 28, 9px at 24, 8px at 20, cut
+out of the surface behind it by a ring of that surface's colour (2px at 36 and 28, 1.5px below), so it reads on
+any background a face is drawn on. Faces of 24px and up carry it, and the top line's at 20; 16px faces (the
+panel's tab) and Settings' faces don't. A Working mark turns once in 1.6s on the top line and on the agent's
+latest message only; elsewhere, and under reduced motion, it is still.
+
+Pointing at a face, or focusing the button that holds it, shows its card above it: a 10px-radius popover
+surface, the name at 13.5px/600 (and Supervisor after it, muted), then the mark at 10px and the state's word,
+what and since when: "Can't run · Failed · Show cook times · 1m", "Working · Show cook times · 4 steps · 38s".
+Free says only "Free". It is information, the one hover that shows something in the window besides who
+reacted. An archived chat shows no marks; an agent no longer in the chat has none, is off the top line, and
+its card says Removed. A chat's sidebar row shows its most pressing of Needs you, Can't run and Working as the
+same mark at 9px, still, 8px after its cut title.
+
 ### Agent panel
 
 An agent opens beside the chat as a workspace tab, after Tasks: its 16px face and name, with a
@@ -355,9 +374,9 @@ this chat yet".
 Its face in the timeline is a button the face's size, which takes the hover tint. An agent that has
 left the chat keeps its words, and its steps in Plan, but has nothing to open.
 
-- **Header:** the 36px face (ringed while it works), the name at 20px/600, and under it the role
+- **Header:** the 36px face with its mark, still, the name at 20px/600, and under it the role
   and state in 13px muted: "Member · Working since 16:06" with Working in the attention colour, "Reviewer
-  · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Ready". Start times
+  · Needs your approval", "Supervisor · Waiting for Juno since 09:42", "Member · Free". Start times
   live here. At the right, the context bar once the engine has reported it, and "Message Juno", which
   picks that agent as the composer's recipient and focuses the composer. An archived chat, or an agent that can't be sent to, has no Message.
 - **Task:** the task its running turn works on, else its first open one: the title, "From Orin" and
@@ -377,12 +396,10 @@ on a Mac) still opens it. Settings and Update are on the rail. Rows are 30px; th
 36px, 8px under the frame's top. A chat's row and a project's row are each one 7px-rounded box that greys
 as a whole on hover; their + and More are 24px icons inside it with no box of their own, shown only on
 hover, keyboard focus or while the menu is open, the open chat's row too (C70, C71). A chat with
-something going on carries one 6px dot 8px after its title, which is cut before it (0040, C65): 55% foreground while a turn of it runs, the attention colour once it needs
-the person, which wins when both hold. A ring grows out of the dot to 2.8 times
-its size and fades, every 2 seconds; reduced motion keeps the dot and drops the
-ring. The dot never moves More. Its name is "Agents working" or
-"Needs you". An agent that only waits, a queued turn and a paused chat with
-nothing running carry no dot. Archived uses Lucide Archive when collapsed and the same icon with its lid
+something going on carries one 9px mark 8px after its title, which is cut before it (0040, C65, 0071): the
+faces' own Needs you, Can't run or Working mark, the most pressing of the three, still. The mark never moves
+More. Its name is the mark's word. An agent that only waits, a queued turn and a paused chat with nothing
+running carry no mark. Archived uses Lucide Archive when collapsed and the same icon with its lid
 lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
 hinge (2px 8px), translate it up 1.5px, over 160ms ease-out.
 Search and the pending human Tasks list share a contextual flyout, at most
