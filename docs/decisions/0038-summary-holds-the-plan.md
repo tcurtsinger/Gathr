@@ -65,3 +65,8 @@ Amended by [0074](0074-an-agents-face.md): every initial here is now the agent's
 
 The registry's AgentPlan and SubagentList files are removed, as no screen uses them; TodoList stays, in the
 agent's panel. The conversation map, thinking, tool arguments and the sidebar's dots are later slices.
+
+## Changes
+
+- 2026-11-17: the Working line is gone ([0050](0050-what-a-chat-waits-on.md)'s status line). Summary opens from its
+  button; the status line's list opens an agent's tab as Summary's rows do.

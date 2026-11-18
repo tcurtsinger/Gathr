@@ -277,13 +277,31 @@ waiting, the dock shows the oldest plan: the lead's face, "Needs you · 1 of 1",
 Tags on notes · 9 parts" and one button, Open, which opens the plan's tab at its newest version.
 The count is approvals and plans waiting on you; a plan still being checked isn't one.
 
-Working appears after the latest message while any turn runs: an attention spinner, Working,
-overlapping 20px faces for agents with running turns, and the time since the longest-running
-of those turns began, in whole minutes (12m), redrawn once a minute. The time is hidden
-from screen readers, so the status reads only Working and who. Never show a queued or pending task as a working agent.
-In a chat with more than one agent the line is a button that opens Summary, and closes it when pressed again;
-it says it opens a dialog and whether it is open, and who is working is announced from beside it, not by a live
-region around the button.
+### Status line
+
+One quiet line just above the message box says how the team stands
+([0050](docs/decisions/0050-what-a-chat-waits-on.md)), from each agent's state
+([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)). It always has its 28px slot, so nothing above or
+below it moves when it comes or goes; the thread's last message ends 6px above it, and its words start where the
+box's do. One font for every part, 12.5px/20px at 450, muted; who needs you is in the attention colour, who can't
+run in the destructive one. Pointed at or open, it takes the raised tint as a 24px pill.
+
+- **Its words**, in the marks' order: who needs you or can't run is named, up to two, and three or more are
+  counted ("Mira needs you", "Mira and Bo need you"). The rest name one or two agents in all and count from three,
+  "agents" and the verb once: "Ann is working, Bo is blocked", "3 agents are working", "2 agents are working, 1
+  waiting". What a wait is on is said only when the line waits alone and every wait is on one thing: "Rev is
+  waiting on PR #18 checks". A PR's waits read "PR #18 checks", "PR #18 to merge". Never "he" or "she", a time, a
+  step, a task's title, Free or Gathr. Nothing when everyone is free. A team holds at most five, so nothing folds.
+- **Three dots** end it while an agent works: 4px, 3px apart, at 28% of the text colour, with a light that passes
+  along them once per turn of the Working ring (1.6s) and rests; still, at 50%, under reduced motion. Without
+  them, nothing runs.
+- **Pressed**, it opens a 340px popover above it, 6px off, with a row for each agent that isn't free, the most
+  pressing first: its 24px face, its name at 14px, then its state in the mark's shape at 12px and its word, what
+  and how long, as its face's card says it, at 12.5px muted ("Needs you · Question · 1m", "Working · Fix the
+  review of PR #18 · 1m 12s"); Needs you in the attention colour, Can't run in the destructive one. Seconds count
+  under a minute, each second. A silent turn's row says "silent 12m" for how long it has made no progress. A row
+  opens that agent's tab in the panel, and the keyboard follows. Escape closes it and gives focus back to the line.
+  Who and what the line says is announced from beside it, not by a live region around the button.
 
 ### Conversation map
 
@@ -320,8 +338,7 @@ chat's order, 6px apart so no face covers another's mark, each with its state's 
 below); a Working mark turns here. Five agents are one 140px button. Its accessible name says who needs the
 person and who works: "Summary: Vale needs you, Juno and Pia working", or "Summary".
 
-The button, and the Working line after the latest message, open a 348px popover under the top line.
-Escape closes it and returns focus to whichever of the two was last used to open or close it; a press
+The button opens a 348px popover under the top line. Escape closes it and returns focus to the button; a press
 outside closes it. Top to bottom:
 
 - **Plan**, when the Supervisor has a round. The heading's right holds one 12px segment for each step
@@ -380,7 +397,7 @@ same mark at 9px, still, 8px after its cut title.
 An agent opens beside the chat as a workspace tab, after Tasks: its 16px face and name, with a
 close button. One agent at a time: opening another replaces it. While another tab shows, the panel
 keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
-Summary, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
+Summary, a row of the status line's list, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
 this chat yet".
 

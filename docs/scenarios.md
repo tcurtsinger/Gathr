@@ -503,7 +503,8 @@ Parts: 6.2
   review, one on a background command, and one turn is queued behind an update of Gathr
 - **When** the person, or an agent, asks what the room is waiting on
 - **Then** one answer lists every hold by name: what it is, who can end it, and how long it has
-  waited. The window shows the same answer, and changes without a reload when the last hold ends
+  waited. The window's status line says each agent's state from the same answer, a wait on one thing by
+  name, and changes without a reload; it says nothing once the last hold ends
 
 ### 6c. Gathr notices a quiet room before the person does
 
@@ -529,8 +530,8 @@ Parts: 6.3
 - **Given** a builder's turn on a task has made no progress for ten minutes, or twenty while a tool
   is open, on either engine
 - **When** Gathr looks
-- **Then** the chat shows that turn as silent, with for how long, at its foot and in the list of what
-  it waits on, and its lead is told once for that turn. The turn is never stopped, and reads as
+- **Then** the chat shows that turn as silent, with for how long, in its agent's row of the status
+  line's list, and its lead is told once for that turn. The turn is never stopped, and reads as
   working again once it makes progress. A turn that waits for an approval is never silent, however
   late the answer comes. A lead's own silent turn wakes nobody: if nothing else moves, the person is
   told at 5 minutes

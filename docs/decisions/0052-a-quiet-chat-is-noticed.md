@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec; the 5 minutes and "only when new" are the owner's answers). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/quiet.rs`, `crates/gathr/tests/quiet_room.rs`, `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/codex_recovery.rs`, `ui/src/chat/Waiting.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/quiet.rs`, `crates/gathr/tests/quiet_room.rs`, `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/codex_recovery.rs`, `ui/src/chat/StatusLine.test.tsx`.
 
 Amended by [0063](0063-building-waits-for-a-new-asks-plan.md): a task waiting for its plan is a `plan_wait` line that follows its plan: it wakes nobody, and isn't stale-cancelled while its ask has an open plan.
 
@@ -159,3 +159,7 @@ against the code.
   going silent or moving again.
 - [The scenarios](../scenarios.md): 6c and 6d are reworded and 6h is new. "How long a quiet room is left" is
   settled: 5 minutes.
+- 2026-11-17, the status line ([0050](0050-what-a-chat-waits-on.md)'s change): the window's foot no longer reads
+  "Working: Cass silent 12m". The line says Cass is working, as the turn still runs, and Cass's row in the list it
+  opens says "Working · <what> · silent 12m". Gathr's line in the chat, the lead's telling and the chat's blue dot
+  are unchanged.
