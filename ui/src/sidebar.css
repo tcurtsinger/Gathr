@@ -1,10 +1,10 @@
-/* Navigation (DESIGN.md: 246px, on the frame). */
+/* Navigation (DESIGN.md: 246px, on the frame), tightened (0070): the word mark on the rail's Home line, rows 30. */
 .sidebar {
   position: relative;
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 12px 8px;
+  padding: 8px 8px 12px;
   background: var(--frame);
   border-right: 1px solid var(--border);
 }
@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  height: 42px;
+  height: 36px;
   padding: 0 8px;
 }
 .brand strong {
@@ -36,7 +36,7 @@
   margin-top: 5px;
 }
 .sidebar-actions {
-  padding: 14px 0 24px;
+  padding: 6px 0 10px;
 }
 .sidebar .navbutton,
 .sidebar .chat-link {
@@ -44,16 +44,26 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 34px;
+  height: 30px;
   min-height: 0;
   padding: 0 8px;
   font-size: 14px;
   text-align: left;
 }
-.sidebar :is(.navbutton, .chatrow):hover {
+.sidebar :is(.navbutton, .chatrow, .project-row):hover {
   background: color-mix(in oklab, var(--foreground) 5%, transparent);
 }
-/* A chat's row: its link and, on hover, keyboard focus or while it's open, its More (archive-stale/v1). */
+/* A project's row: one rounded box that greys as a whole. */
+.project-row {
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+}
+.project-row .navbutton {
+  flex: 1;
+  min-width: 0;
+}
+/* A chat's row: its link, then its More only on hover, keyboard focus or while its menu is open (C70). */
 .sidebar .chatrow {
   display: flex;
   align-items: center;
@@ -62,15 +72,17 @@
 .sidebar .chat-link {
   position: relative;
   flex: 1;
+  gap: 8px;
   min-width: 0;
+  padding-right: 10px;
+}
+:is(.project-chats, .archive-group) .chat-link {
+  padding-left: 34px;
 }
 /* One mark for a chat with something going on (0040): the shared attention dot (base.css) once it needs the
-   person, grey while agents only work. It sits in the link's right padding, out of the flow, so the title
-   and More stay where they are. */
+   person, grey while agents only work. It sits 8px after the title, which is cut before it (C65). */
 .chat-dot {
-  position: absolute;
-  top: calc(50% - 3px);
-  right: 1px;
+  position: relative;
 }
 .chat-dot:not([data-needs]) {
   background: color-mix(in oklab, var(--foreground) 55%, transparent);
@@ -101,22 +113,46 @@
     animation: none;
   }
 }
-.sidebar .chat-link:hover {
+.sidebar :is(.chat-link, .project-row .navbutton):hover {
   background: transparent;
 }
-.sidebar .row-more {
+/* A row's + and More: icons inside the row with no box of their own (C71), taking no room until shown. */
+.sidebar .row-icon {
+  display: grid;
   flex: none;
-  width: 30px;
-  height: 30px;
+  place-items: center;
+  width: 0;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0;
+  background: none;
+  color: var(--muted-foreground);
   opacity: 0;
 }
-.chatrow:is(:hover, :focus-within, [data-current]) .row-more,
-.project-row:is(:hover, :focus-within) .row-more,
-.row-more[data-state="open"] {
+.sidebar .row-icon:hover,
+.sidebar .row-icon[data-state="open"] {
+  background: none;
+  color: var(--foreground);
+}
+.row-icon svg {
+  width: 16px;
+  height: 16px;
+}
+:is(.chatrow, .project-row):is(:hover, :focus-within, :has(.row-icon[data-state="open"])) .row-icon {
+  width: 24px;
   opacity: 1;
 }
+:is(.chatrow, .project-row):is(:hover, :focus-within, :has(.row-icon[data-state="open"]))
+  .row-icon:last-child {
+  margin-right: 5px;
+}
+.sidebar .chatrow:is(:hover, :focus-within, :has(.row-icon[data-state="open"])) .chat-link {
+  padding-right: 4px;
+}
 .archive-group {
-  margin-top: 24px;
+  margin-top: 12px;
 }
 /* The open lid lifts past the top of the viewBox. */
 .archive-icon {
@@ -164,7 +200,7 @@
 }
 .chatlist h2 {
   margin: 0;
-  padding: 12px 8px 6px;
+  padding: 10px 8px 6px;
   color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
@@ -172,9 +208,9 @@
 .chatlist section + section {
   margin-top: 12px;
 }
-.project-row {
-  display: flex;
-  align-items: center;
+/* A small gap before a project after open chats. */
+.chatlist section > div:has(.chatrow) + div {
+  margin-top: 6px;
 }
 .project-row .navbutton span {
   flex: 1;
@@ -182,40 +218,4 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-.sidebar .project-new {
-  width: 34px;
-  flex: none;
-  justify-content: center;
-  padding: 0;
-  opacity: 0;
-}
-.project-row:hover .project-new,
-.sidebar .project-new:focus-visible {
-  opacity: 1;
-}
-:is(.project-chats, .archive-group) .chat-link {
-  padding-left: 34px;
-}
-.sidebar-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 9px;
-  padding-top: 9px;
-  border-top: 1px solid var(--border);
-}
-.sidebar-foot .navbutton {
-  flex: 1;
-  min-width: 0;
-}
-/* Gathr's own update (0032): the icon while one is ready, the quiet line while it installs. */
-.sidebar-update {
-  flex: none;
-  color: var(--accent);
-}
-.sidebar-updating {
-  flex: none;
-  color: var(--muted);
-  font-size: 13px;
 }

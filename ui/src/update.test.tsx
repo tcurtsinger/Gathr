@@ -50,9 +50,9 @@ function service(app: AppState) {
     return json(path.startsWith('/api/chats') ? [] : {});
   });
 }
-const update = () => page.getByRole('button', { name: 'Update to 9.9.9' });
+const update = () => page.getByRole('button', { name: 'Update', exact: true });
 
-test('the Update icon shows only while a release is ready, and one click sends Update once', async () => {
+test("the rail's Update shows only while a release is ready, and one click sends Update once", async () => {
   service(standing('idle'));
   await render(<App />);
   await expect.element(page.getByRole('button', { name: 'Settings' })).toBeVisible();
@@ -60,7 +60,7 @@ test('the Update icon shows only while a release is ready, and one click sends U
 
   tell({ type: 'app', ...standing('ready', '9.9.9') });
   await update().click();
-  await expect.element(page.getByText('Updating Gathr')).toBeVisible();
+  await expect.element(page.getByRole('status', { name: 'Updating' })).toBeVisible();
   await expect.element(update()).not.toBeInTheDocument();
   expect(made.sent).toEqual([{ install: true }]);
 });

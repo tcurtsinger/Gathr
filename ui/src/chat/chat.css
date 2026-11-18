@@ -3,44 +3,53 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  background: var(--background);
 }
-/* 46px, so it lines up with the workspace's tabstrip (DESIGN.md). */
-.topbar {
+/* The top line (0070): on the shell from the sidebar's edge to the frame's end, the chat's title and More,
+   then the faces and the panel's button. */
+.topline {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
-  height: 46px;
-  flex-shrink: 0;
-  padding: 0 8px 0 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--frame);
+  min-width: 0;
+  padding: 0 8px 0 20px;
+}
+/* A short divider where the sidebar ends: left -1px puts it on the sidebar's border, its last pixel. */
+.topline::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: -1px;
+  width: 1px;
+  background: var(--border);
 }
 /* The title, then More 4px after it: the title truncates, More stays. */
-.topbar-title {
+.topline-title {
   display: flex;
   flex: 1;
   align-items: center;
   gap: 4px;
   min-width: 0;
 }
-.topbar h1 {
+.topline h1 {
   min-width: 0;
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.topbar-state {
+.topline-state {
   flex: none;
   margin-left: 4px;
   color: var(--muted-foreground);
   font-size: 13px;
 }
-/* View controls only: Summary, sidebar, 4px apart. */
-.topbar-actions {
+/* View controls only: Summary, the panel's button, 4px apart. */
+.topline-actions {
   display: flex;
   flex: none;
   align-items: center;

@@ -211,7 +211,7 @@ test('a chat that is not open shows a dot while it works, the attention dot once
   expect(document.querySelector('.chat-dot')).toBeNull();
 });
 
-test('the dot leaves the title and More where they are', async () => {
+test('the dot sits 8px after the cut title, never on it, and leaves More where it is (C65)', async () => {
   made.chats = [
     openChat,
     { ...other, title: 'Made-up other chat with a title too long for its row in the sidebar' },
@@ -227,11 +227,11 @@ test('the dot leaves the title and More where they are', async () => {
   const before = boxes();
   tell({ type: 'chat_state', chat: 'c1', working: true, needs: false });
   await expect.element(dot('Agents working')).toBeVisible();
-  expect(boxes()).toEqual(before);
-  const [title, more] = before;
+  const [title, more] = boxes();
+  expect(more, 'More, before and after the dot').toEqual(before[1]);
   const at = dot('Agents working').element().getBoundingClientRect();
-  expect(at.left).toBeGreaterThanOrEqual(title.right);
-  expect(at.right).toBeLessThanOrEqual(more.left);
+  expect(Math.round(at.left - title.right), 'the gap from the cut title to the dot').toBe(8);
+  expect(at.right).toBeLessThanOrEqual(otherRow().element().getBoundingClientRect().right);
 });
 
 test('a reload after missed events shows each chat as the service has it', async () => {

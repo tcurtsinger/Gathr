@@ -6,7 +6,7 @@ import './flyout.css';
 
 interface Props {
   title: string;
-  /** The sidebar button's content: its icon, name and count or key. */
+  /** The sidebar button's content: its icon, name and count. */
   trigger: ReactNode;
   open: boolean;
   onOpenChange: (open: boolean) => void;

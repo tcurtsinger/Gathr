@@ -1,26 +1,27 @@
 /*
  * The chat's workspace pane (the prototype's WorkspacePane), always beside the chat, never over it: 40% of
- * the room beside navigation until it's resized (--workspace-width), never under 360px, and leaving the
- * chat 360px. Only the drawn width gives way; the width the person set comes back when there's room.
+ * the frame's room beside navigation (--room, app.css) until it's resized (--workspace-width), never under
+ * 360px, and leaving the chat 360px. Only the drawn width gives way; the width the person set comes back
+ * when there's room.
  */
 .workspace {
-  --workspace-size: max(360px, var(--workspace-width, clamp(360px, calc((100vw - var(--nav)) * 0.4), 760px)));
+  --workspace-size: max(360px, var(--workspace-width, clamp(360px, calc(var(--room) * 0.4), 760px)));
   container: workspace / inline-size;
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(var(--workspace-size), max(360px, calc(100vw - var(--nav) - 360px)));
+  width: min(var(--workspace-size), max(360px, calc(var(--room) - 360px)));
   min-height: 0;
   border-left: 1px solid var(--border);
   background: var(--frame);
 }
+/* The tabs in a row of their own at the panel's top (0070); the panel's button is in the top line. */
 .workspace-tabs {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 3px;
-  height: 46px;
-  padding: 6px 8px;
+  height: 38px;
+  padding: 4px 8px;
   border-bottom: 1px solid var(--border);
 }
 .workspace-tablist {
@@ -37,7 +38,7 @@
   flex: none;
   align-items: center;
   max-width: 180px;
-  height: 30px;
+  height: 28px;
   border: 1px solid transparent;
   border-radius: 7px;
   color: var(--muted-foreground);

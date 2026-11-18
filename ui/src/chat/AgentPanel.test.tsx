@@ -11,6 +11,7 @@ import { ChatView } from './ChatView';
 import { toThread } from './messages';
 import { apply, fromHistory } from './state';
 import { clock } from './team';
+import '../app.css';
 
 const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
 vi.mock('../live', () => ({
@@ -146,13 +147,16 @@ interface Shown {
   width?: number;
 }
 
-/** The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. */
+/**
+ * The chat with a stand-in for the app's workspace: the open agent's panel, in the place the chat is given. In the
+ * app's grid, so the top line sits above the chat as in the window.
+ */
 function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown) {
   const [agent, setAgent] = useState<string>();
   const [shown, setShown] = useState(true);
   const [draft, setDraft] = useState('');
   return (
-    <div style={{ height: 760, display: 'flex' }}>
+    <div className="app" style={{ height: 760 }}>
       <ChatView
         chat={{ id: 'c', title: 'Made-up chat', archived: archived ? '2026-11-08T09:00:00Z' : null }}
         agents={known}
@@ -173,7 +177,7 @@ function Chat({ openedTasks = [], archived, known = agents, width = 440 }: Shown
         agentOpen={agent === undefined ? undefined : { agent, shown }}
         onOpenAgent={setAgent}
         workspace={(open) => (
-          <aside aria-label="Made-up workspace" style={{ width }}>
+          <aside aria-label="Made-up workspace" className="workspace" style={{ width }}>
             <Counted />
             <button type="button" onClick={() => setShown((s) => !s)}>
               Made-up other tab

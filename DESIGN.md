@@ -42,8 +42,10 @@ tokens and static component anatomy, not replacement runtime components.
 
 ## Colors
 
-Surfaces take three steps. `frame` is navigation, the top bar and the workspace.
-`background` is the chat. `card` is what stands on the chat: an approval, a
+Surfaces take four steps. `shell` is the window's own surface, under the rail and the top line and
+around the frame ([0070](docs/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
+frame in light, with `shell-edge` (7% foreground) as the frame's 1px ring. `frame` is navigation and the
+workspace. `background` is the chat. `card` is what stands on the chat: an approval, a
 notice. In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
@@ -89,19 +91,28 @@ Summary are history.
 ## Layout
 
 - The window is at least 960 x 600; nothing is designed below that.
+- The window's shell (0070): a 44px rail at the left and a 40px top line above, both on `shell`,
+  around one frame that holds navigation, the chat and the workspace. The frame is rounded 12px at
+  every corner, ringed 1px in `shell-edge`, with 6px of shell on its right and below. The system's
+  own title bar still sits above the top line; nothing in the page draws window buttons or leaves room
+  for them.
+- The rail: Home at the top, a mark of where you are (the window has one place, so it is not a button),
+  drawn as current (32px, 8px radius, foreground 9%), its centre on the word mark's line. At the foot,
+  6px apart: Update, in the attention colour, only while a release is ready (a turning loader, muted,
+  while it installs), above the Settings cog. Icons 18px at 1.75 stroke; Update 20px at 2.
 - Navigation starts at 246px, resizes from 190 to 400px, and uses 190px below 760px (a browser
   only). With the workspace open in a narrow window it gives way to leave the chat and the
-  workspace 360px each, never under 190px: 240px at 960.
-- Chat header and workspace tabstrip align at 46px. The prototype's 40px preview
-  strip is fixture chrome, not a Gathr requirement.
-- Header: the title, then More 4px after it in the same group; the title truncates
-  with an ellipsis and More stays visible. The right holds view controls only:
-  Summary, then Open sidebar. These and the workspace's Close share one
-  icon-button style: 30px, 8px radius, 4px apart, 17px Lucide icons at 1.75 stroke
-  (Summary's own icon too; More's dots radius 1.4). Summary's button widens to hold
-  its stack of faces, 8px each side, at the same height. Pressed (Close while
-  the workspace is open): foreground 9% background, foreground icon,
-  12% on hover.
+  workspace 360px each, never under 190px. Widths in the frame (the window less 50px), sidebar /
+  chat / workspace: 246 / 686 / 458 at 1440, 246 / 542 / 362 at 1200, 230 / 360 / 360 at 1000 and
+  190 / 360 / 360 at 960.
+- The top line, from the sidebar's edge: a short divider on that edge (12px in from top and bottom),
+  20px, the title, then More 4px after it in the same group; the title truncates with an ellipsis and
+  More stays visible. The right holds view controls only: Summary, then the workspace's button, open or
+  closed, 8px from the frame's end. These share one icon-button style: 28px, 8px radius, 4px apart,
+  17px Lucide icons at 1.75 stroke (Summary's own icon too; More's dots radius 1.4). Summary's button
+  widens to hold its stack of faces, 8px each side, at the same height. Pressed (the workspace's button
+  while it is open): foreground 9% background, foreground icon, 12% on hover. The chat has no header of
+  its own: the thread starts at the frame's top.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
   the normal 16px root size (0037). Composer shares that content width. New chat centres
   its heading, optional project notch and composer.
@@ -109,7 +120,7 @@ Summary are history.
   Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
   chat at least 360px: when the window narrows, the workspace gives way first, down to
   360px, then navigation. Only the drawn widths give way; widths the person dragged come
-  back when the window widens. Close stays at its far right.
+  back when the window widens. Its tabs sit in a 38px row of their own at its top, tabs 28px high.
 - A document's adjacent file tree starts at 240px, resizes from 160 to 480px and
   leaves at least 200px for the reader. Reader padding is 24px, 20px narrow, or
   16px around highlighted source.
@@ -124,7 +135,7 @@ controls; they do not create a second mobile product.
 ## Elevation
 
 Flat chat and navigation. Floating popovers use a tonal surface and a soft shadow.
-Summary anchors 8px below and 8px inside the chat header corner, independently of
+Summary anchors 8px below and 8px inside the top line's right end, independently of
 workspace width. Its width is 348px, padding 8px, radius 16px and maximum height
 560px bounded by the viewport. Navigation flyouts have no dimmed backdrop.
 Blocking Settings uses the shared backdrop. Layers must not clip focused controls.
@@ -289,8 +300,8 @@ Only its ticks take the pointer.
 Summary holds what the plan bar and a status bar would say, so neither exists
 ([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
 
-Its button in the chat header carries no words. It is the overlapped 20px faces (4px overlap, each
-cut out of the header with a 2px edge) of every agent with a running turn, each with an attention ring
+Its button in the top line carries no words. It is the overlapped 20px faces (4px overlap, each
+cut out of the shell with a 2px edge) of every agent with a running turn, each with an attention ring
 turning around it once in 0.9s; reduced motion keeps the ring and stops it. An agent that needs the
 person (a waiting approval, or an open question it asked the person) sits last in the stack with no
 ring, and one 6px attention dot (the same dot a sidebar row carries) sits on the stack's top right corner, however many need the person.
@@ -298,7 +309,7 @@ Five agents are one 100px button. With nobody working or needed, the button show
 Its accessible name says the same in words: "Summary: Vale needs you, Juno and Pia working",
 or "Summary".
 
-The button, and the Working line after the latest message, open a 348px popover under the header.
+The button, and the Working line after the latest message, open a 348px popover under the top line.
 Escape closes it and returns focus to whichever of the two was last used to open or close it; a press
 outside closes it. Top to bottom:
 
@@ -361,12 +372,15 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
 
 ### Navigation and workspace
 
-New, Search and Tasks sit above projects and their chats. Settings stays bottom
-left. A chat with something going on carries one 6px dot at the end of its title
-(0040): 55% foreground while a turn of it runs, the attention colour once it needs
+New, Search and Tasks sit above projects and their chats; Search shows no key words, and Ctrl K (Cmd K
+on a Mac) still opens it. Settings and Update are on the rail. Rows are 30px; the word mark's block
+36px, 8px under the frame's top. A chat's row and a project's row are each one 7px-rounded box that greys
+as a whole on hover; their + and More are 24px icons inside it with no box of their own, shown only on
+hover, keyboard focus or while the menu is open, the open chat's row too (C70, C71). A chat with
+something going on carries one 6px dot 8px after its title, which is cut before it (0040, C65): 55% foreground while a turn of it runs, the attention colour once it needs
 the person, which wins when both hold. A ring grows out of the dot to 2.8 times
 its size and fades, every 2 seconds; reduced motion keeps the dot and drops the
-ring. The dot never moves the title or More. Its name is "Agents working" or
+ring. The dot never moves More. Its name is "Agents working" or
 "Needs you". An agent that only waits, a queued turn and a paused chat with
 nothing running carry no dot. Archived uses Lucide Archive when collapsed and the same icon with its lid
 lifted when expanded, never ArchiveX. Rotate the lid -14 degrees about its left
@@ -458,13 +472,13 @@ Lifecycle/history policy and persistence are service work, not prototype rules.
 The selected archive location is a folded Archived group after the active chats
 in the sidebar. It starts closed, shows a count, keeps its fold while the window
 is open and shares the chat-list scroll region. Archived rows use 34px left padding;
-More appears on hover, keyboard focus and the current chat. Restore returns a
+More appears on hover and keyboard focus. Restore returns a
 chat to its original project or Chats without restarting cancelled work.
 The separate Archived button and flyout are retired. See
 [the selected reference](designs/archive-stale/v3.html), a refinement of v1;
 v1 and v2 remain unchanged as the compared proposals.
 
-Header More keeps Pause/Resume/Restart first, then Archive, then Delete after a
+The top line's More keeps Pause/Resume/Restart first, then Archive, then Delete after a
 separator. Row menus use the same shared menu. An archived chat offers Restore
 and Delete; its composer becomes a quiet Archived line with Restore. Deleting
 the current chat selects its next sidebar neighbour, then its previous one,
@@ -577,7 +591,7 @@ header Diagnostics action. The prototype's component gallery is a reference tool
 
 ### Recovery, focus and motion
 
-App-level failures appear under the chat header in the shared Notice, with the reason, reference and Dismiss.
+App-level failures appear at the top of the chat in the shared Notice, with the reason, reference and Dismiss.
 
 Stopped, waiting for sign-in and failed-send notices stay at their affected reply
 per 0023. Preserve partial text and drafts. Neutral for stopped/waiting; destructive

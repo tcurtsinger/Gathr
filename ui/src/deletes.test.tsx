@@ -81,6 +81,7 @@ test('a project’s Delete says what goes, deletes it with its chats, and the op
   await page.getByRole('button', { name: 'Made-up a', exact: true }).click();
   await expect.element(heading('Made-up a')).toBeInTheDocument();
 
+  await page.getByRole('button', { name: 'Pantry', exact: true }).hover();
   await page.getByRole('button', { name: 'More for Pantry' }).click();
   await page.getByRole('menuitem', { name: 'Delete' }).click();
   const confirm = page.getByRole('dialog', { name: 'Delete Pantry?' });
