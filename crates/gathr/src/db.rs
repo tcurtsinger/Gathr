@@ -693,14 +693,21 @@ mod tests {
         drop(conn);
         let conn = open(&path).unwrap();
         let sql = "SELECT id || ' ' || face_seed || ' ' || coalesce(gender, '-') || ' ' || coalesce(skin, '-')
-                   FROM agents ORDER BY id";
+                   || ' ' || coalesce(background, '-') FROM agents ORDER BY id";
         let mut stmt = conn.prepare(sql).unwrap();
         let rows: Vec<String> = stmt
             .query_map([], |r| r.get(0))
             .unwrap()
             .map(Result::unwrap)
             .collect();
-        assert_eq!(rows, ["ann Ann - -", "mira Mira - -"]);
+        assert_eq!(rows, ["ann Ann - - -", "mira Mira - - -"]);
+        // A background is #RRGGBB in upper case or nothing, whatever wrote it.
+        let set = |value: &str| {
+            let sql = "UPDATE agents SET background = ?1 WHERE id = 'mira'";
+            conn.execute(sql, [value]).is_ok()
+        };
+        let tried = ["#7FB5A8", "#7fb5a8", "#7FB5A", "7FB5A8F", "#7FB5AG"].map(set);
+        assert_eq!(tried, [true, false, false, false, false]);
     }
 
     #[test]

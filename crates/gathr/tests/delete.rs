@@ -437,7 +437,7 @@ fn a_deleted_agent_leaves_every_team_its_open_tasks_are_cancelled_and_its_words_
     assert!(by_ann, "{history}");
     assert_eq!(
         agents(&r.service)["removed"],
-        json!([{ "id": r.ann, "name": "Ann", "face_seed": "Ann", "gender": null, "skin": null }])
+        json!([{ "id": r.ann, "name": "Ann", "face_seed": "Ann", "gender": null, "skin": null, "background": null }])
     );
 }
 
@@ -548,7 +548,7 @@ fn a_removed_agents_name_is_free_and_it_is_in_no_list() {
     assert_eq!(shown, [(&json!(new), &json!("ann"))], "{listed}");
     assert_eq!(
         listed["removed"],
-        json!([{ "id": old, "name": "Ann", "face_seed": "Ann", "gender": null, "skin": null }])
+        json!([{ "id": old, "name": "Ann", "face_seed": "Ann", "gender": null, "skin": null, "background": null }])
     );
     let path = format!("/api/agents/{old}");
     assert_eq!(

@@ -25,6 +25,8 @@ pub struct Agent {
     pub gender: Option<String>,
     /// Skin tone 1 to 6 once the person sets it; until then the seed picks.
     pub skin: Option<i64>,
+    /// The background the person picked, `#RRGGBB`; until then a grey.
+    pub background: Option<String>,
 }
 
 /// What the agent may do without asking (0029). Gathr asks before a push or a write outside the
@@ -74,6 +76,8 @@ pub struct Change {
     pub face_seed: Option<String>,
     pub gender: Option<Option<String>>,
     pub skin: Option<Option<i64>>,
+    /// `#rrggbb` in either case: kept in upper case.
+    pub background: Option<Option<String>>,
 }
 
 impl Agent {
@@ -93,6 +97,8 @@ impl Agent {
         next.face_seed = change.face_seed.unwrap_or(next.face_seed);
         next.gender = change.gender.unwrap_or(next.gender);
         next.skin = change.skin.unwrap_or(next.skin);
+        let background = change.background.map(|b| b.map(|b| b.to_ascii_uppercase()));
+        next.background = background.unwrap_or(next.background);
         next
     }
 }
@@ -113,6 +119,7 @@ pub enum Refused {
     Seed,
     Gender,
     Skin,
+    Background,
 }
 
 impl Refused {
@@ -129,6 +136,7 @@ impl Refused {
             Refused::Seed => "the face seed is blank",
             Refused::Gender => "Choose Man or Woman",
             Refused::Skin => "Choose a skin tone from 1 to 6",
+            Refused::Background => "Choose a background as #RRGGBB",
             Refused::Pushes => {
                 "Full approvals decide which pushes ask, which only the person changes"
             }
@@ -141,8 +149,8 @@ pub type Saved = Result<Result<Agent, Refused>, Error>;
 /// The agents that aren't removed (0069): a removed one is in no list and refused everywhere. A row written
 /// without a face seed (by hand, or by a test) is drawn from its name.
 const COLUMNS: &str =
-    "SELECT id, name, account_id, model, effort, approvals, coalesce(face_seed, name), gender, skin
-                       FROM agents WHERE removed_ts IS NULL";
+    "SELECT id, name, account_id, model, effort, approvals, coalesce(face_seed, name), gender, skin,
+                         background FROM agents WHERE removed_ts IS NULL";
 
 fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
     Ok(Agent {
@@ -155,6 +163,7 @@ fn row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Agent> {
         face_seed: r.get(6)?,
         gender: r.get(7)?,
         skin: r.get(8)?,
+        background: r.get(9)?,
     })
 }
 
@@ -200,8 +209,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
     };
     let added = conn.execute(
         "INSERT INTO agents (id, name, name_key, account_id, model, effort, approvals, created_ts,
-                             face_seed, gender, skin)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                             face_seed, gender, skin, background)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         params![
             agent.id,
             name,
@@ -213,7 +222,8 @@ pub fn add(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> Save
             ids::now_us(),
             agent.face_seed,
             agent.gender,
-            agent.skin
+            agent.skin,
+            agent.background
         ],
     );
     saved(added.map(|_| Agent { name, ..agent }))
@@ -253,7 +263,8 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
     };
     let updated = conn.execute(
         "UPDATE agents SET name = ?2, name_key = ?3, account_id = ?4, model = ?5, effort = ?6,
-         approvals = ?7, face_seed = ?8, gender = ?9, skin = ?10 WHERE id = ?1 AND removed_ts IS NULL",
+         approvals = ?7, face_seed = ?8, gender = ?9, skin = ?10,
+         background = ?11 WHERE id = ?1 AND removed_ts IS NULL",
         params![
             agent.id,
             name,
@@ -264,7 +275,8 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
             agent.approvals.as_str(),
             agent.face_seed,
             agent.gender,
-            agent.skin
+            agent.skin,
+            agent.background
         ],
     );
     match saved(updated)? {
@@ -296,12 +308,14 @@ pub struct Removed {
     pub face_seed: String,
     pub gender: Option<String>,
     pub skin: Option<i64>,
+    pub background: Option<String>,
 }
 
 /// The removed agents, oldest first.
 pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
     let mut statement = conn.prepare(
-        "SELECT id, name, coalesce(face_seed, name), gender, skin FROM agents WHERE removed_ts IS NOT NULL
+        "SELECT id, name, coalesce(face_seed, name), gender, skin, background FROM agents
+         WHERE removed_ts IS NOT NULL
          ORDER BY created_ts, id",
     )?;
     let rows = statement.query_map([], |r| {
@@ -311,6 +325,7 @@ pub fn removed(conn: &Connection) -> Result<Vec<Removed>, Error> {
             face_seed: r.get(2)?,
             gender: r.get(3)?,
             skin: r.get(4)?,
+            background: r.get(5)?,
         })
     })?;
     Ok(rows.collect::<Result<_, _>>()?)
@@ -348,6 +363,13 @@ fn checked(
     if agent.skin.is_some_and(|s| !(1..=6).contains(&s)) {
         return Ok(Err(Refused::Skin));
     }
+    if agent
+        .background
+        .as_deref()
+        .is_some_and(|b| !is_background(b))
+    {
+        return Ok(Err(Refused::Background));
+    }
     if removing.contains(&agent.account) {
         return Ok(Err(Refused::Removing));
     }
@@ -355,6 +377,13 @@ fn checked(
         return Ok(Err(Refused::NoAccount));
     }
     Ok(Ok(name))
+}
+
+/// `#RRGGBB`, upper case: what the database's check holds too.
+fn is_background(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let hex = |c: &u8| c.is_ascii_digit() || (b'A'..=b'F').contains(c);
+    bytes.len() == 7 && bytes[0] == b'#' && bytes[1..].iter().all(hex)
 }
 
 fn saved<T>(done: rusqlite::Result<T>) -> Result<Result<T, Refused>, Error> {
@@ -384,6 +413,7 @@ mod tests {
             face_seed: name.into(),
             gender: None,
             skin: None,
+            background: None,
         }
     }
 
