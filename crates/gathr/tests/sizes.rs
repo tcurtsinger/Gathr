@@ -140,7 +140,16 @@ fn asks_follow_ups_and_fixed_through_the_runner(engine: &str) {
     let said = call.map(|e| e["attrs"]["why"].as_str().unwrap_or_default());
     assert!(ok && said == Some(why), "{trace}");
 
-    send(&service, &chat, "@Ann also check the import");
+    // To Ann as the window sends it: her id, picked from its list (a name in the text is only text).
+    let agents = service.call("GET", "/api/agents").json();
+    let to_ann = agents["agents"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|a| a["name"] == "Ann");
+    let body = json!({ "text": "@Ann also check the import", "agent": to_ann.unwrap()["id"] });
+    let sent = service.send("POST", &format!("/api/chats/{chat}/messages"), body);
+    assert_eq!(sent.status, 200, "{}", sent.body);
     assert_eq!(
         asks(&service, &chat).len(),
         1,

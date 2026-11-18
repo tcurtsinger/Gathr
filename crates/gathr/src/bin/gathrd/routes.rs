@@ -150,7 +150,7 @@ async fn send(
         gathr::archive::refuse_archived(conn, &id).map(|()| Value::Null)
     })
     .await?;
-    let agent = addressee(&s, &t, &chat, body.agent, &body.text).await?;
+    let agent = addressee(&s, &t, &chat, body.agent).await?;
     let (reply, answer) = oneshot::channel();
     let task = s.chats.task(&chat, agent.as_deref());
     let command = Cmd::Send {
@@ -392,12 +392,11 @@ async fn addressee(
     t: &Trace,
     chat: &str,
     sent_to: Option<String>,
-    text: &str,
 ) -> Result<Option<String>, Fail> {
-    let (id, text) = (chat.to_string(), text.to_string());
+    let id = chat.to_string();
     let routed = s
         .writer
-        .call(move |conn| gathr::team::route(conn, &id, sent_to.as_deref(), &text))
+        .call(move |conn| gathr::team::route(conn, &id, sent_to.as_deref()))
         .await;
     let routed = match routed {
         Some(Ok(routed)) => routed,

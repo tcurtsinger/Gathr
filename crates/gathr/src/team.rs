@@ -138,7 +138,6 @@ pub fn route(
     conn: &mut Connection,
     chat: &str,
     sent_to: Option<&str>,
-    text: &str,
 ) -> Result<Result<Routed, &'static str>, Error> {
     use rusqlite::OptionalExtension;
     let team = members(conn, chat)?;
@@ -149,7 +148,7 @@ pub fn route(
     )?;
     let joins = sent_to.filter(|agent| plain && !team.iter().any(|m| m.agent == *agent));
     let Some(agent) = joins else {
-        let agent = addressee(&team, sent_to, text);
+        let agent = addressee(&team, sent_to);
         return Ok(agent.map(|agent| Routed {
             agent,
             joined: None,
@@ -192,13 +191,10 @@ pub fn route(
 }
 
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one
-/// of them; else the first agent its text names with `@Name`; else the Supervisor, or the only
-/// agent. A chat with no agents keeps what it was sent to.
-pub fn addressee(
-    team: &[Member],
-    sent_to: Option<&str>,
-    text: &str,
-) -> Result<Option<String>, &'static str> {
+/// of them; else the Supervisor, or the only agent. A chat with no agents keeps what it was sent
+/// to. The text is never read for names: a name counts only when picked from the window's list,
+/// which sends its agent (C24), so `bob@ann.com` names nobody.
+pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String>, &'static str> {
     if team.is_empty() {
         return Ok(sent_to.map(String::from));
     }
@@ -208,10 +204,9 @@ pub fn addressee(
             false => Err("the agent isn't in this chat"),
         };
     }
-    let named = first_named(team, text);
     let lead = team.iter().find(|m| m.role == Role::Supervisor);
     let only = (team.len() == 1).then(|| &team[0]);
-    Ok(named.or(lead).or(only).map(|m| m.agent.clone()))
+    Ok(lead.or(only).map(|m| m.agent.clone()))
 }
 
 /// The member called `name`, ignoring case, matched as the person's `@Name` is.
