@@ -140,13 +140,18 @@ export function YouFace({ size }: { size: FaceSize }) {
   );
 }
 
-/** Faces overlapped into one compact element, in the order given, each cut out of the surface behind it. */
+/**
+ * Faces overlapped into one compact element, in the order given, each cut out of the surface behind it. `gathr` and
+ * `you` aren't agents: each has its own mark.
+ */
 export function FaceStack({ agents }: { agents: { agent: string; name: string }[] }) {
   return (
     <span className="face-stack" aria-hidden="true">
-      {agents.map((a) => (
-        <Face key={a.agent} agent={{ id: a.agent, name: a.name }} size={20} />
-      ))}
+      {agents.map((a) => {
+        if (a.agent === 'gathr') return <GathrFace key="gathr" size={20} />;
+        if (a.agent === 'you') return <YouFace key="you" size={20} />;
+        return <Face key={a.agent} agent={{ id: a.agent, name: a.name }} size={20} />;
+      })}
     </span>
   );
 }

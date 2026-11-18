@@ -183,6 +183,19 @@ test('a handled thread starts folded; a new reply never opens it, and the person
   expect(fold().getAttribute('aria-expanded')).toBe('true');
 });
 
+test("a line of Gathr's shows Gathr's own mark on the fold line, never a made-up agent's face", async () => {
+  const state = chat('askDone');
+  const more = apply(state, {
+    type: 'message',
+    chat: 'c',
+    message: line('n1', 't:2', 'Made-up later note', '2026-11-18T21:00:00Z'),
+  });
+  await render(<View state={more} />);
+  const fold = () => foldOf(mainWith('Add the tags table')) as HTMLButtonElement;
+  await expect.poll(() => fold()?.textContent).toContain('2 replies');
+  expect(fold().querySelectorAll('.face-gathr').length).toBe(1);
+});
+
 test('a thread whose turn failed is not handled: it opens with Retry and its reference in view', async () => {
   const state = chat('askDone');
   const ann = Object.values(state.turns).find((t) => t.topic === 't:2')?.id as string;
