@@ -188,23 +188,8 @@ fn dev_window_failing_stops_the_service() {
 #[test]
 fn dev_window_runs_vite_from_the_ui_folder_it_starts_in() {
     let dir = TempDir::new();
-    let vite = dir.0.join("ui/node_modules/vite/bin");
-    std::fs::create_dir_all(&vite).unwrap();
-    std::fs::write(
-        vite.join("vite.js"),
-        "require('fs').writeFileSync('../vite-ran', process.cwd());\n\
-         require('net').createServer().listen(+process.env.GATHR_UI_PORT, '127.0.0.1');\n",
-    )
-    .unwrap();
-    // Not from port 0: macOS hands those out in order, so another test's service can hold port + 10,
-    // and the UI's port would answer before this Vite ran. Below every system's ephemeral range,
-    // with both ports free when picked.
-    let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
-    let start = 20_000 + (std::process::id() % 10_000) as u16;
-    let port = (start..30_000)
-        .find(|&p| free(p) && free(p + 10))
-        .expect("no free pair of ports");
-    let (_, said) = dev_window_without_app(&dir, port);
+    stand_in_vite(&dir);
+    let (_, said) = dev_window_without_app(&dir, free_ports());
     let ran = std::fs::read_to_string(dir.0.join("vite-ran"))
         .unwrap_or_else(|_| panic!("the UI's dev server never ran: {said}"));
     // Canonical on both sides: macOS's temp folder is behind a link.
@@ -215,9 +200,75 @@ fn dev_window_runs_vite_from_the_ui_folder_it_starts_in() {
     );
 }
 
+/// A dev window keeps its webview's data in the dev data folder, as the installed app does for a
+/// test folder, so it never shares the installed Gathr's: `gathr dev` names the folder to
+/// `gathr-app`, here a stand-in that records its arguments.
+#[test]
+fn dev_window_is_given_its_data_folder() {
+    let dir = TempDir::new();
+    stand_in_vite(&dir);
+    let (mut dev, data) = dev_window(&dir, free_ports());
+    let app = dir
+        .0
+        .join("bin")
+        .join(format!("gathr-app{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(common::fake_gh(), app).unwrap();
+    let mut dev = dev.env("GATHR_FAKE_GH", dir.0.join("app")).spawn().unwrap();
+    let args: Vec<String> = common::until(30, "gathr dev to start gathr-app", || {
+        let calls = std::fs::read_to_string(dir.0.join("app.calls")).ok()?;
+        serde_json::from_str(calls.lines().next()?).ok()
+    });
+    let info = ServiceInfo::read(&DataDir::new(&data)).unwrap();
+    http::call(info.port, &info.token, "POST", "/api/shutdown").unwrap();
+    let status = dev.wait().unwrap();
+    assert!(status.success(), "gathr dev exited {status}");
+    let given = args.iter().skip_while(|a| *a != "--data").nth(1);
+    assert_eq!(
+        given.map(|folder| std::fs::canonicalize(folder).unwrap()),
+        Some(std::fs::canonicalize(&data).unwrap()),
+        "gathr-app started with {args:?}"
+    );
+}
+
+/// A stand-in for the UI's dev server in `dir/ui`: it notes the folder it ran in and listens.
+fn stand_in_vite(dir: &TempDir) {
+    let vite = dir.0.join("ui/node_modules/vite/bin");
+    std::fs::create_dir_all(&vite).unwrap();
+    std::fs::write(
+        vite.join("vite.js"),
+        "require('fs').writeFileSync('../vite-ran', process.cwd());\n\
+         require('net').createServer().listen(+process.env.GATHR_UI_PORT, '127.0.0.1');\n",
+    )
+    .unwrap();
+}
+
+/// A port free with the one 10 above it, for the UI's. Not from port 0: macOS hands those out in
+/// order, so another test's service can hold port + 10, and the UI's port would answer before this
+/// Vite ran. Below every system's ephemeral range, with both ports free when picked.
+fn free_ports() -> u16 {
+    let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
+    let start = 20_000 + (std::process::id() % 10_000) as u16;
+    (start..30_000)
+        .find(|&p| free(p) && free(p + 10))
+        .expect("no free pair of ports")
+}
+
 /// Runs a copy of `gathr dev --window` from `dir`, where no `gathr-app` sits beside it, so it
 /// fails once the UI's dev server is up. Answers the data folder and what it wrote to stderr.
 fn dev_window_without_app(dir: &TempDir, port: u16) -> (std::path::PathBuf, String) {
+    let (mut dev, data) = dev_window(dir, port);
+    let status = dev.status().unwrap();
+    let said = std::fs::read_to_string(dir.0.join("dev.err")).unwrap();
+    assert!(
+        !status.success(),
+        "gathr dev started a window with no gathr-app"
+    );
+    (data, said)
+}
+
+/// `gathr dev --window` from a copy of `gathr` and `gathrd` in `dir/bin`, run from `dir` on the data
+/// folder `dir/data`, which it answers with the command.
+fn dev_window(dir: &TempDir, port: u16) -> (std::process::Command, std::path::PathBuf) {
     let bin = dir.0.join("bin");
     std::fs::create_dir(&bin).unwrap();
     for exe in [env!("CARGO_BIN_EXE_gathr"), env!("CARGO_BIN_EXE_gathrd")] {
@@ -225,30 +276,22 @@ fn dev_window_without_app(dir: &TempDir, port: u16) -> (std::path::PathBuf, Stri
         std::fs::copy(exe, bin.join(exe.file_name().unwrap())).unwrap();
     }
     let data = dir.0.join("data");
+    let mut dev =
+        std::process::Command::new(bin.join(format!("gathr{}", std::env::consts::EXE_SUFFIX)));
+    dev.args([
+        "--data",
+        data.to_str().unwrap(),
+        "dev",
+        "--port",
+        &port.to_string(),
+        "--window",
+    ])
+    .env_remove("CARGO")
+    .current_dir(&dir.0)
     // To a file, not a pipe: a service left running would hold a pipe open, and the test hang.
-    let log = dir.0.join("dev.log");
-    let status =
-        std::process::Command::new(bin.join(format!("gathr{}", std::env::consts::EXE_SUFFIX)))
-            .args([
-                "--data",
-                data.to_str().unwrap(),
-                "dev",
-                "--port",
-                &port.to_string(),
-                "--window",
-            ])
-            .env_remove("CARGO")
-            .current_dir(&dir.0)
-            .stdout(std::fs::File::create(&log).unwrap())
-            .stderr(std::fs::File::create(dir.0.join("dev.err")).unwrap())
-            .status()
-            .unwrap();
-    let said = std::fs::read_to_string(dir.0.join("dev.err")).unwrap();
-    assert!(
-        !status.success(),
-        "gathr dev started a window with no gathr-app"
-    );
-    (data, said)
+    .stdout(std::fs::File::create(dir.0.join("dev.log")).unwrap())
+    .stderr(std::fs::File::create(dir.0.join("dev.err")).unwrap());
+    (dev, data)
 }
 
 /// With all its runtime threads on one CPU, the default HTTP/1 connection's watch for a client
