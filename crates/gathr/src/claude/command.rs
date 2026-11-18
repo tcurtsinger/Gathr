@@ -303,6 +303,14 @@ const VERSION_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 /// (with the version, when one was read). Blocks until it exits or `VERSION_WAIT` passes; the
 /// service calls it off its async threads.
 pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
+    match read_version(program) {
+        Ok(answer) => usable(&answer),
+        Err(why) => (None, Err(why)),
+    }
+}
+
+/// What `<program> --version` printed, or why it wasn't read.
+fn read_version(program: &Path) -> Result<String, String> {
     let mut command = std::process::Command::new(program);
     command
         .arg("--version")
@@ -311,11 +319,10 @@ pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
         .stderr(std::process::Stdio::null());
     crate::platform::no_window(&mut command);
     let unread = |e: String| {
-        let why = format!(
+        Err(format!(
             "Claude Code's version wasn't read from {}: {e}",
             program.display()
-        );
-        (None, Err(why))
+        ))
     };
     let mut child = match command.spawn() {
         Ok(child) => child,
@@ -346,10 +353,42 @@ pub fn version(program: &Path) -> (Option<String>, Result<(), String>) {
         }
     }
     let left = deadline.saturating_duration_since(std::time::Instant::now());
-    match rx.recv_timeout(left) {
-        Ok(answer) => usable(&answer),
-        Err(_) => timed_out(),
+    rx.recv_timeout(left).or_else(|_| timed_out())
+}
+
+/// An engine file as it is now: its path, size and modified time.
+type Stamp = (PathBuf, u64, std::time::SystemTime);
+
+/// The versions read, each by the file it was read from, for the life of the service.
+static READ: std::sync::Mutex<Vec<(Stamp, String)>> = std::sync::Mutex::new(Vec::new());
+
+/// [`version`], asked once per engine file: the same file, unchanged, answers as it did without
+/// being started. Only an answer is kept, a too old one too; a read that failed is asked again.
+pub fn known_version(program: &Path) -> (Option<String>, Result<(), String>) {
+    let stamp = std::fs::metadata(program)
+        .and_then(|m| Ok((program.to_path_buf(), m.len(), m.modified()?)))
+        .ok();
+    let read = || READ.lock().unwrap_or_else(|e| e.into_inner());
+    let known = stamp.as_ref().and_then(|now| {
+        read()
+            .iter()
+            .find(|(s, _)| s == now)
+            .map(|(_, a)| a.clone())
+    });
+    if let Some(answer) = known {
+        return usable(&answer);
     }
+    let answer = match read_version(program) {
+        Ok(answer) => answer,
+        Err(why) => return (None, Err(why)),
+    };
+    let found = usable(&answer);
+    if let (Some(stamp), Some(_)) = (stamp, &found.0) {
+        let mut read = read();
+        read.retain(|(s, _)| s.0 != stamp.0);
+        read.push((stamp, answer));
+    }
+    found
 }
 
 /// `2.1.318 (Claude Code)` is fine; an older one, or one that can't be read, isn't.
