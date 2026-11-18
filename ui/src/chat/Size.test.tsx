@@ -147,6 +147,19 @@ test('choosing the other size asks the service and closes; the pressed one asks 
   await expect.element(screen.getByRole('group', { name: 'Size' })).not.toBeInTheDocument();
 });
 
+test('a press on a choice takes no focus from the choices, so its click lands', async () => {
+  // WebKit gives a pressed button no focus: the pressed choice lost it to nothing, the choices closed on that, and
+  // the click that followed chose nothing.
+  const screen = await render(<View state={sized()} />);
+  await screen.getByRole('button', { name: 'Size: Fix, by Mira' }).click();
+  const plan = screen.getByRole('button', { name: 'Plan it with me first.' });
+  await expect.element(plan).toBeVisible();
+  const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+  plan.element().dispatchEvent(press);
+  expect(press.defaultPrevented).toBe(true);
+  await expect.element(screen.getByRole('button', { name: 'Just fix it.' })).toHaveFocus();
+});
+
 test('a refused size shows why under the message, with its reference', async () => {
   const refusal = { error: 'Size failed', why: 'chat c is archived', ref: '01REFSIZE' };
   service(() => new Response(JSON.stringify(refusal), { status: 409 }));

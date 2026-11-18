@@ -74,6 +74,9 @@ export function SizeWord({ size, onFailure }: { size: AskSize; onFailure: (failu
           aria-label="Size"
           onKeyDown={keys}
           onBlur={left}
+          // A press moves no focus: WebKit gives a pressed button none, so the choice that had it would lose it to
+          // nothing and the choices would close before the click.
+          onMouseDown={(e) => e.preventDefault()}
           options={SIZES}
           value={[size.size]}
           onValueChange={([next]) => choose(next)}
