@@ -827,3 +827,20 @@ pub fn hook_at(port: u16, path: &str, token: &str, tool: &str, input: Value) -> 
     ];
     http::post(port, path, &headers, &body.to_string()).unwrap()
 }
+
+/// 0075: the topics history gives (the chat read once) and those a live event gives (each turn's or
+/// task's own chain, one row at a time) are the same, for every turn and task of the chat.
+pub fn topics_agree(data: &Path, chat: &str) {
+    let conn = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
+    let whole = gathr::topics::Topics::of_chat(&conn, chat).unwrap();
+    let rows = gathr::topics::Topics::on_demand(&conn, chat);
+    let all = whole.all();
+    assert!(!all.turns.is_empty(), "no turns in chat {chat}");
+    for (id, topic) in &all.turns {
+        assert_eq!(rows.turn(id).as_ref(), Some(topic), "turn {id}");
+    }
+    for (n, topic) in &all.tasks {
+        assert_eq!(rows.task(*n).as_ref(), Some(topic), "task #{n}");
+    }
+    rows.src.read().unwrap();
+}

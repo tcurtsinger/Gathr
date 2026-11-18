@@ -159,6 +159,7 @@ fn a_stuck_chat_is_noticed_and_its_dead_time_recorded() {
     let told = &said(&history, STUCK)[0];
     let line = told["id"].as_str().unwrap();
     assert_eq!(told["topic"], format!("m:{line}"), "{history}");
+    common::topics_agree(&data.0, &chat);
     assert_eq!(
         needs(&service, &chat),
         json!(true),
@@ -305,6 +306,7 @@ fn a_silent_turn_shows_and_its_lead_is_told_once() {
     let turns = history["turns"].as_array().unwrap();
     let telling = turns.iter().find(|t| t["id"] == told[0]["id"]).unwrap();
     assert_eq!(telling["topic"], format!("m:{asked}"), "{history}");
+    common::topics_agree(&data.0, &chat);
     std::fs::write(data.0.join("go"), "").unwrap();
 }
 

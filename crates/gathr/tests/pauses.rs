@@ -167,6 +167,7 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     let topics = [&history["turns"][0]["topic"], &history["turns"][1]["topic"]];
     let want = json!(format!("m:{asked}"));
     assert_eq!(topics, [&want, &want], "{history}");
+    common::topics_agree(&data.0, &chat);
     pause(&service, "/api/pauses/resume", &chat);
     let history = service.wait_for(&chat, 20, "the carry-on after Restart", |h| {
         h["turns"][1]["status"] == "done"
@@ -365,6 +366,7 @@ fn the_turn_claude_code_starts_when_a_background_command_ends_is_kept() {
     let first = &history["turns"][0]["topic"];
     assert!(first.is_string(), "{history}");
     assert_eq!(&history["turns"][1]["topic"], first, "{history}");
+    common::topics_agree(&data.0, &chat);
     let last = history["messages"].as_array().unwrap().last().unwrap()["body"].clone();
     assert!(
         last.as_str().unwrap().starts_with("The first ping"),

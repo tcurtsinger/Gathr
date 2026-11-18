@@ -20,7 +20,7 @@ pub fn threads(conn: &Connection, chat: &str, schema: i64) -> Result<Value, Erro
         lines,
     } = topics.all();
     let opened = |id: &str| {
-        let at = topics.facts.at.get(id).map(|&i| &topics.facts.turns[i]);
+        let at = topics.src.at.get(id).map(|&i| &topics.src.turns[i]);
         at.and_then(|t| t.opened_by.clone())
     };
     let row = |kind: &str, id: Value, t: &Topic| {
@@ -62,7 +62,7 @@ pub fn threads(conn: &Connection, chat: &str, schema: i64) -> Result<Value, Erro
     let mut answer = json!({
         "chat": chat,
         "schema": schema,
-        "steps": topics.facts.steps,
+        "steps": topics.src.steps,
         "counts": counts,
         "turns": shown_turns,
         "tasks": shown_tasks,

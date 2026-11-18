@@ -209,6 +209,7 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
         listed["asks"][0]["open"], false,
         "the ask is done: {listed}"
     );
+    common::topics_agree(&data.0, &chat);
 }
 
 /// Scenario 6e: a part a member gives from its own task sits in that task's thread, with the turns
@@ -250,6 +251,7 @@ fn a_part_a_member_gives_from_its_task_sits_in_that_task() {
     let mut sent = std::iter::from_fn(|| Some(common::next_live(&mut live)));
     let queued = sent.find(|u| u["type"] == "turn" && u["turn"] == part_turn.as_str());
     assert_eq!(queued.unwrap()["topic"], "t:1");
+    common::topics_agree(&data.0, &chat);
 }
 
 /// Question 2 of the plan behind 0075: a quiet room wakes its lead on work that is all of one ask,
@@ -302,6 +304,7 @@ fn a_quiet_rooms_wake_on_one_asks_work_sits_in_that_ask() {
         json!(format!("m:{ask}")),
         "{history}"
     );
+    common::topics_agree(&data.0, &chat);
 }
 
 /// A chat from before 0055, its turns from before `opened_by` and asks: the upgrade keeps every
@@ -337,6 +340,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
              ('m6', 'c', 'lone', 40, 'gathr', 'text', 'No progress in 3 days');
          ALTER TABLE turns DROP COLUMN result_of; ALTER TABLE landings DROP COLUMN turn;
          ALTER TABLE messages DROP COLUMN about;
+                 DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
          PRAGMA user_version = 54;",
     )
     .unwrap();
@@ -377,6 +381,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
     );
     let listed = listed(&service, "c");
     assert_eq!(task_topic(&listed, 1), json!("t:1"), "{listed}");
+    common::topics_agree(&data.0, "c");
 }
 
 fn rows_of(conn: &rusqlite::Connection, sql: &str) -> Vec<String> {
@@ -440,6 +445,7 @@ fn a_turn_whose_answers_is_gone_ties_to_nothing_and_is_found_from_the_historys_r
         "{threads}"
     );
     assert_eq!(threads["counts"]["broken"], 1, "{}", threads["in_words"]);
+    common::topics_agree(&data.0, &chat);
     for fact in [
         "handed_out",
         "parent",

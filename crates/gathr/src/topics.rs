@@ -8,6 +8,7 @@
 
 mod load;
 pub mod record;
+mod rows;
 #[cfg(test)]
 mod tests;
 
@@ -20,7 +21,8 @@ use serde_json::Value;
 
 use crate::Error;
 use crate::event::Event;
-pub use load::{Facts, Line, TOPICS_SCHEMA};
+pub use load::{Facts, Line, Source, TOPICS_SCHEMA};
+pub use rows::Rows;
 
 /// The most links followed from one turn or task: past it, the chain ends there (never seen).
 pub const LONGEST: usize = 32;
@@ -75,14 +77,14 @@ enum Found {
 }
 
 /// A chat's topics, worked out once each, as asked for.
-pub struct Topics {
-    pub facts: Facts,
+pub struct Topics<S = Facts> {
+    pub src: S,
     turns: RefCell<HashMap<String, Topic>>,
     tasks: RefCell<HashMap<i64, Topic>>,
     visiting: RefCell<HashSet<String>>,
 }
 
-impl Topics {
+impl Topics<Facts> {
     pub fn of_chat(conn: &Connection, chat: &str) -> Result<Topics, Error> {
         Self::at_schema(conn, chat, crate::db::SCHEMA_VERSION)
     }
@@ -90,13 +92,27 @@ impl Topics {
     /// From a database at `schema`, as `gathr diag` opens one it doesn't upgrade.
     pub fn at_schema(conn: &Connection, chat: &str, schema: i64) -> Result<Topics, Error> {
         Ok(Topics {
-            facts: Facts::load(conn, chat, schema)?,
+            src: Facts::load(conn, chat, schema)?,
             turns: RefCell::default(),
             tasks: RefCell::default(),
             visiting: RefCell::default(),
         })
     }
+}
 
+impl<'c> Topics<Rows<'c>> {
+    /// Read one row at a time as a chain asks for it: what a live event uses.
+    pub fn on_demand(conn: &'c Connection, chat: &str) -> Topics<Rows<'c>> {
+        Topics {
+            src: Rows::new(conn, chat),
+            turns: RefCell::default(),
+            tasks: RefCell::default(),
+            visiting: RefCell::default(),
+        }
+    }
+}
+
+impl<S: Source> Topics<S> {
     pub fn turn(&self, id: &str) -> Option<Topic> {
         match self.follow_turn(id, 0) {
             Found::Topic(topic) => Some(topic),
@@ -110,10 +126,12 @@ impl Topics {
             Found::Missing | Found::Loops => None,
         }
     }
+}
 
+impl Topics<Facts> {
     /// A line Gathr said in no turn.
     pub fn line(&self, line: &Line) -> Topic {
-        let f = &self.facts;
+        let f = &self.src;
         let own = format!("m:{}", line.id);
         if let Some(about) = &line.about {
             if about == "main" {
@@ -168,12 +186,14 @@ impl Topics {
         }
         Topic::alone(own, "a line with nothing recorded about it".into())
     }
+}
 
+impl<S: Source> Topics<S> {
     fn follow_turn(&self, id: &str, depth: usize) -> Found {
         if let Some(known) = self.turns.borrow().get(id) {
             return Found::Topic(known.clone());
         }
-        let Some(&i) = self.facts.at.get(id) else {
+        let Some(t) = self.src.turn(id) else {
             return Found::Missing;
         };
         if !self.visiting.borrow_mut().insert(id.to_string()) {
@@ -184,7 +204,7 @@ impl Topics {
                 format!("b:{id}"),
                 format!("a chain of more than {LONGEST} links"),
             ),
-            false => self.turn_of(&self.facts.turns[i], depth),
+            false => self.turn_of(&t, depth),
         };
         self.visiting.borrow_mut().remove(id);
         self.turns
@@ -194,7 +214,7 @@ impl Topics {
     }
 
     fn turn_of(&self, t: &load::Turn, depth: usize) -> Topic {
-        let (f, own, next) = (&self.facts, format!("b:{}", t.id), depth + 1);
+        let (f, own, next) = (&self.src, format!("b:{}", t.id), depth + 1);
         if let Some(ask) = &t.result_of {
             return Topic::tied(
                 format!("r:{}", t.id),
@@ -210,14 +230,14 @@ impl Topics {
                 "opened by the person's message".into(),
             );
         }
-        if let Some(q) = f.heard.get(&t.id) {
+        if let Some(q) = f.heard(t) {
             return Topic::tied(
                 format!("t:{q}"),
                 "heard",
                 format!("heard the person's word on #{q}"),
             );
         }
-        if let Some(&pr) = f.landings.get(&t.id) {
+        if let Some(pr) = f.landing(t) {
             return match f.pr_task(pr, None) {
                 Some(n) => {
                     let why = format!("PR #{pr} Gathr couldn't land, of #{n}");
@@ -285,7 +305,7 @@ impl Topics {
         if let Some(known) = self.tasks.borrow().get(&number) {
             return Found::Topic(known.clone());
         }
-        let Some(t) = self.facts.tasks.get(&number) else {
+        let Some(t) = self.src.task(number) else {
             return Found::Missing;
         };
         let visit = format!("#{number}");
@@ -297,7 +317,7 @@ impl Topics {
                 format!("t:{number}"),
                 format!("a chain of more than {LONGEST} links"),
             ),
-            false => self.task_of(number, t, depth),
+            false => self.task_of(number, &t, depth),
         };
         self.visiting.borrow_mut().remove(&visit);
         self.tasks.borrow_mut().insert(number, topic.clone());
@@ -310,7 +330,7 @@ impl Topics {
             return Topic::tied(own, "question", "a question to the person".into());
         }
         if let Some(v) = t.checks {
-            return match self.facts.versions.get(&v) {
+            return match self.src.version(v) {
                 Some(message) => Topic::tied(
                     format!("m:{message}"),
                     "version",
@@ -331,7 +351,7 @@ impl Topics {
         }
         // A review given by hand names its PR, not its work: it sits where the PR was built.
         let built =
-            t.pr.and_then(|pr| Some((pr, self.facts.pr_task(pr, Some(number))?)));
+            t.pr.and_then(|pr| Some((pr, self.src.pr_task(pr, Some(number))?)));
         if let (true, Some((pr, n))) = (t.kind == "review", built) {
             let why = format!("reviews PR #{pr}, of #{n}");
             return self.via(
@@ -342,10 +362,7 @@ impl Topics {
                 format!("task #{n}"),
             );
         }
-        let lead = t
-            .giver
-            .as_ref()
-            .is_none_or(|g| self.facts.leads.contains(g));
+        let lead = t.giver.as_ref().is_none_or(|g| self.src.is_lead(g));
         if t.kind == "work" && t.owner.is_some() && lead {
             let why = match t.giver {
                 Some(_) => "handed out by the lead",
@@ -383,10 +400,12 @@ impl Topics {
             }
         }
     }
+}
 
+impl Topics<Facts> {
     /// Every turn's, task's and line's topic, in the chat's order.
     pub fn all(&self) -> All {
-        let f = &self.facts;
+        let f = &self.src;
         let turns = f
             .turns
             .iter()
@@ -450,20 +469,32 @@ pub fn on_history(
     Ok(())
 }
 
-/// Each listed task's topic.
+/// Each listed task's topic, followed one row at a time: the list goes out live after every change.
 pub fn on_tasks(
     conn: &Connection,
     chat: &str,
     tasks: &mut [crate::tasks::Task],
 ) -> Result<(), Error> {
-    let topics = Topics::of_chat(conn, chat)?;
+    let topics = Topics::on_demand(conn, chat);
     for t in tasks {
         t.topic = topics.task(t.number).map(|topic| topic.key);
     }
-    Ok(())
+    topics.src.read()
 }
 
-/// One turn's topic, for the live socket: none for a turn that isn't the chat's.
+/// One turn's topic, for the live socket, from its own chain: none for a turn that isn't the chat's.
 pub fn of_turn(conn: &Connection, chat: &str, turn: &str) -> Result<Option<String>, Error> {
-    Ok(Topics::of_chat(conn, chat)?.turn(turn).map(|t| t.key))
+    Ok(of_turn_counted(conn, chat, turn)?.0)
+}
+
+/// `of_turn`, with the steps SQLite took to work it out.
+pub fn of_turn_counted(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+) -> Result<(Option<String>, i64), Error> {
+    let topics = Topics::on_demand(conn, chat);
+    let topic = topics.turn(turn).map(|t| t.key);
+    topics.src.read()?;
+    Ok((topic, topics.src.steps()))
 }

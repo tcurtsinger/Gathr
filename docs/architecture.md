@@ -42,8 +42,8 @@ only of what is new to them
 ([0050](decisions/0050-what-a-chat-waits-on.md), [0052](decisions/0052-a-quiet-chat-is-noticed.md)).
 A plan is a record with versions that Gathr has checked before the person sees it, and Approve makes its tasks ([0062](decisions/0062-a-plan-is-checked-and-approve-hands-it-out.md)); building waits until a new ask's plan is approved ([0063](decisions/0063-building-waits-for-a-new-asks-plan.md)): one rule, read where it is acted on, refuses a held turn's building gives, its worktree writes and its pushes, and a task not started waits for its plan; there is no plan mode, and side jobs are not built yet.
 The service says what every turn, task and line said in no turn is about: the main message it sits under, worked
-out in one module (`crates/gathr/src/topics.rs`) from a chat's records read once, sent with history, the tasks list
-and the live `turn` event, and shown by `gathr diag threads`
+out in one module (`crates/gathr/src/topics.rs`) from a chat's records read once for history and `gathr diag
+threads`, and from one turn's or task's own chain, row by row, for the tasks list and the live `turn` event
 ([0075](decisions/0075-a-team-chat-is-main-messages-each-with-its-thread.md)); the window draws threads from it next.
 [0005](decisions/0005-mcp-server.md), [0010](decisions/0010-coordination-as-state.md),
 [0013](decisions/0013-one-chat-model.md), [0028](decisions/0028-team-chats.md).

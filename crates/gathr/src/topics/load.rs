@@ -9,6 +9,7 @@ use crate::Error;
 /// The schema whose columns name a result, a landing's turn and a line's subject (migration 0055).
 pub const TOPICS_SCHEMA: i64 = 55;
 
+#[derive(Clone)]
 pub struct Turn {
     pub id: String,
     pub agent: Option<String>,
@@ -23,6 +24,7 @@ pub struct Turn {
     pub before: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct Opening {
     pub id: String,
     pub role: String,
@@ -30,6 +32,7 @@ pub struct Opening {
     pub copy_of: Option<(String, Option<String>)>,
 }
 
+#[derive(Clone)]
 pub struct Task {
     pub kind: String,
     pub giver: Option<String>,
@@ -43,6 +46,22 @@ pub struct Task {
 pub struct Line {
     pub id: String,
     pub about: Option<String>,
+}
+
+/// What the rule reads, wherever it comes from: the whole chat read once (`Facts`, for history and
+/// `gathr diag`) or one row at a time (`Rows`, for a live event).
+pub trait Source {
+    fn turn(&self, id: &str) -> Option<Turn>;
+    fn task(&self, number: i64) -> Option<Task>;
+    /// The person's question whose answer or Discuss the turn heard, the lowest-numbered.
+    fn heard(&self, turn: &Turn) -> Option<i64>;
+    /// The PR Gathr couldn't land that the turn was queued for.
+    fn landing(&self, turn: &Turn) -> Option<i64>;
+    /// The task a PR was built in: the lowest-numbered of the chat's tasks on it but `not`.
+    fn pr_task(&self, pr: i64, not: Option<i64>) -> Option<i64>;
+    /// A plan version's message.
+    fn version(&self, id: i64) -> Option<String>;
+    fn is_lead(&self, agent: &str) -> bool;
 }
 
 /// One message the person or Gathr put in the chat: its id, turn, role, copy and what it's about.
@@ -245,13 +264,36 @@ impl Facts {
         }
         Ok(())
     }
+}
 
-    /// The task a PR was built in: the lowest-numbered of the chat's tasks on it but `not`.
-    pub fn pr_task(&self, pr: i64, not: Option<i64>) -> Option<i64> {
-        let on = self
-            .tasks
-            .iter()
-            .filter(|(n, t)| t.pr == Some(pr) && Some(**n) != not);
+impl Source for Facts {
+    fn turn(&self, id: &str) -> Option<Turn> {
+        self.at.get(id).map(|&i| self.turns[i].clone())
+    }
+
+    fn task(&self, number: i64) -> Option<Task> {
+        self.tasks.get(&number).cloned()
+    }
+
+    fn heard(&self, turn: &Turn) -> Option<i64> {
+        self.heard.get(&turn.id).copied()
+    }
+
+    fn landing(&self, turn: &Turn) -> Option<i64> {
+        self.landings.get(&turn.id).copied()
+    }
+
+    fn pr_task(&self, pr: i64, not: Option<i64>) -> Option<i64> {
+        let on = self.tasks.iter();
+        let on = on.filter(|(n, t)| t.pr == Some(pr) && Some(**n) != not);
         on.map(|(n, _)| *n).min()
+    }
+
+    fn version(&self, id: i64) -> Option<String> {
+        self.versions.get(&id).cloned()
+    }
+
+    fn is_lead(&self, agent: &str) -> bool {
+        self.leads.contains(agent)
     }
 }

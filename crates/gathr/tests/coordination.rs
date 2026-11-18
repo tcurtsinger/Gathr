@@ -498,6 +498,7 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
         [&want, &want],
         "{history}"
     );
+    common::topics_agree(&data.0, &chat);
     let woken = history["messages"]
         .as_array()
         .unwrap()

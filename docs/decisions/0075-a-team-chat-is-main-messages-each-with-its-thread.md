@@ -14,7 +14,10 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
   Everything else is a reply in the thread of the main message it serves.
 - **The service works out what everything is about, in one place** (`crates/gathr/src/topics.rs`). It reads a
   chat's turns, tasks, plan versions, asks, landings and lines once, one query a table by the chat's own indexes,
-  and follows the links in memory: never a query for each row (0073's lesson). Each answer is a key: `t:<task>`
+  and follows the links in memory: never a query for each row (0073's lesson). A live event's topic (the `turn`
+  event, the tasks list) uses the same rule fed one row at a time instead: it follows only that turn's or task's
+  own chain, each link by an index, so its cost doesn't grow with the chat, on the busiest path. One resolver,
+  two sources of its facts (`topics/load.rs`, `topics/rows.rs`). Each answer is a key: `t:<task>`
   (a task or question), `m:<message>` (the person's message, a plan version, a main line of Gathr's), `r:<turn>`
   (a result) or `b:<turn>` (a turn tied to nothing).
 - **A task's topic,** from its own row, in order: a question is its own; a plan check sits with the version it
@@ -32,7 +35,8 @@ Amends [0051](0051-the-giver-hears-when-all-is-in.md) (the hear-back that closes
 - **Three facts are recorded where they happen,** as nothing kept them before. Migration 0055 adds them by `ADD
   COLUMN`: `turns.result_of`, the ask whose closing hear-back the turn is (0051, below); `landings.turn`, the
   reviewer's turn Gathr queued for a PR it can't land; `messages.about`, what a line in no turn is about
-  (`t:<task>`, `m:<message>`, or `main`).
+  (`t:<task>`, `m:<message>`, or `main`). It adds three partial indexes for the live reads too, a turn's first
+  message of the person's or Gathr's, the question a turn heard, a PR's tasks: no row is rewritten.
 - **The lead's turn on the room as a whole serves the ask of what it names** when that is one ask: a quiet room's
   wake, a member's silent turn told, stale tasks told. Its `ask_id` is set, so it sits in that ask's thread;
   naming work of several asks, or of none, it stays its own.

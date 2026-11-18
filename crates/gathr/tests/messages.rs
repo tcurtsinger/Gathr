@@ -160,6 +160,7 @@ fn a_message_to_an_idle_member_shows_and_wakes_it_once_answering_the_senders_tur
         .map(|t| t["topic"].clone())
         .collect();
     assert_eq!(topics, [json!(asked), json!(asked)], "{history}");
+    common::topics_agree(&data.0, &room.chat);
 }
 
 #[test]

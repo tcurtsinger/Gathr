@@ -240,6 +240,7 @@ fn a_members_question_reaches_the_person_in_the_leads_words_and_its_answer_reach
     };
     let found = [topic(&json!(lead_turn)), topic(&heard[0]["id"])];
     assert_eq!(found, [json!("t:1"), json!("t:3")], "{history}");
+    common::topics_agree(&room.data, &room.chat);
 }
 
 #[test]
@@ -297,6 +298,7 @@ fn discuss_reaches_the_lead_only_and_the_question_comes_back() {
     let turns = history["turns"].as_array().unwrap();
     let found = turns.iter().find(|t| t["id"] == replying.as_str());
     assert_eq!(found.unwrap()["topic"], "t:3", "{history}");
+    common::topics_agree(&room.data, &room.chat);
     room.release(&[&replying]);
     until(20, "the question back on the list", || {
         (room.listed()[0]["number"] == 3).then_some(())

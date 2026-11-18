@@ -1,9 +1,8 @@
 use rusqlite::params;
 
-/// The steps SQLite takes to read the topics of a team chat of `rounds` rounds: the person's
-/// message, the lead's three tasks each with a turn of nine messages, a done line for each, and a
-/// hear-back. Every one of them is tied, and none is tied to nothing.
-fn steps(rounds: i64) -> i64 {
+/// A team chat of `rounds` rounds: the person's message, the lead's three tasks each with a turn of
+/// nine messages, a done line for each, and a hear-back. 32 messages a round.
+fn team_chat(rounds: i64) -> (rusqlite::Connection, std::path::PathBuf) {
     let path = std::env::temp_dir().join(format!("gathr-topics-{}.db", crate::ids::uuid()));
     let conn = crate::db::open(&path).unwrap();
     conn.execute_batch(
@@ -26,17 +25,20 @@ fn steps(rounds: i64) -> i64 {
         .unwrap();
         ts
     };
-    let turn = |id: &str, (agent, task, answers): (&str, Option<i64>, Option<&str>)| {
+    // Each turn says what opened it, as every turn the service starts now does.
+    let turn = |id: &str,
+                (agent, task, answers): (&str, Option<i64>, Option<&str>),
+                opened: &str| {
         conn.execute(
-            "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers)
-             VALUES (?1, 'c', 'x', 'done', 0, ?2, ?3, ?4)",
-            params![id, agent, task, answers],
+            "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers, opened_by)
+             VALUES (?1, 'c', 'x', 'done', 0, ?2, ?3, ?4, ?5)",
+            params![id, agent, task, answers, opened],
         )
         .unwrap();
     };
     for round in 0..rounds {
         let asked = format!("asked{round}");
-        turn(&asked, ("lead", None, None));
+        turn(&asked, ("lead", None, None), "person");
         message(Some(&asked), "user", None);
         for k in 1..=3 {
             let n = round * 3 + k;
@@ -48,7 +50,7 @@ fn steps(rounds: i64) -> i64 {
             )
             .unwrap();
             let work = format!("work{n}");
-            turn(&work, ("ann", Some(n), Some(&asked)));
+            turn(&work, ("ann", Some(n), Some(&asked)), "brief");
             message(Some(&work), "gathr", None);
             for _ in 0..8 {
                 message(Some(&work), "assistant", None);
@@ -56,9 +58,22 @@ fn steps(rounds: i64) -> i64 {
             message(None, "gathr", Some(format!("t:{n}")));
         }
         let back = format!("back{round}");
-        turn(&back, ("lead", None, Some(&asked)));
+        turn(&back, ("lead", None, Some(&asked)), "hear_back");
         message(Some(&back), "gathr", None);
     }
+    (conn, path)
+}
+
+fn remove(path: &std::path::Path) {
+    for end in ["", "-wal", "-shm"] {
+        let _ = std::fs::remove_file(format!("{}{end}", path.display()));
+    }
+}
+
+/// The steps SQLite takes to read the topics of a team chat of `rounds` rounds. Every turn, task and
+/// line is tied, and none is tied to nothing.
+fn steps(rounds: i64) -> i64 {
+    let (conn, path) = team_chat(rounds);
     let topics = super::Topics::of_chat(&conn, "c").unwrap();
     let all = topics.all();
     let tied = all.turns.iter().map(|(_, t)| t);
@@ -67,13 +82,47 @@ fn steps(rounds: i64) -> i64 {
         tied.chain(all.lines.iter().map(|(_, t)| t))
             .all(|t| !t.alone)
     );
-    let steps = topics.facts.steps;
+    let steps = topics.src.steps;
     drop(topics);
     drop(conn);
-    for end in ["", "-wal", "-shm"] {
-        let _ = std::fs::remove_file(format!("{}{end}", path.display()));
-    }
+    remove(&path);
     steps
+}
+
+/// The live event's topic of the last round's member turn and hear-back, and the steps each took.
+fn live(rounds: i64) -> Vec<(Option<String>, i64)> {
+    let (conn, path) = team_chat(rounds);
+    let last = rounds - 1;
+    let turns = [format!("work{}", last * 3 + 3), format!("back{last}")];
+    let found = turns
+        .iter()
+        .map(|turn| super::of_turn_counted(&conn, "c", turn).unwrap());
+    let found = found.collect();
+    drop(conn);
+    remove(&path);
+    found
+}
+
+/// A live `turn` event's topic follows that turn's own chain, never the whole chat: on the busiest
+/// path, a chat ten times as long costs the same.
+#[test]
+fn a_live_turns_topic_costs_the_same_in_a_chat_ten_times_as_long() {
+    let (small, large) = (live(6), live(60));
+    let topics =
+        |found: &[(Option<String>, i64)]| found.iter().map(|f| f.0.clone()).collect::<Vec<_>>();
+    assert_eq!(topics(&small), [Some("t:18".into()), Some("m:m161".into())]);
+    assert_eq!(
+        topics(&large),
+        [Some("t:180".into()), Some("m:m1889".into())]
+    );
+    for (s, l) in small.iter().zip(&large) {
+        assert!(
+            l.1 <= s.1 + s.1 / 5,
+            "{} steps in 192 messages, {} in 1,920",
+            s.1,
+            l.1
+        );
+    }
 }
 
 /// One read per table, never a query per row (0073's lesson): twice the chat is about twice the
