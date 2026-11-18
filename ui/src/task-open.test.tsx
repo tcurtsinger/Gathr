@@ -113,7 +113,7 @@ test("an agent in Summary opens as a workspace tab, and its task opens from ther
   await expect.element(tab).toHaveFocus();
   const panel = page.getByRole('tabpanel', { name: 'Made-up Sol' });
   await expect.element(panel.getByRole('heading', { name: 'Made-up Sol', exact: true })).toBeVisible();
-  await panel.getByRole('button', { name: 'Verify the reconnect repair' }).click();
+  await panel.getByRole('button', { name: /^Verify the reconnect repair/ }).click();
 
   const opened = page.getByRole('region', { name: 'Task #82' });
   await expect.element(opened.getByRole('heading', { name: 'Checks passed' })).toBeVisible();
@@ -121,7 +121,7 @@ test("an agent in Summary opens as a workspace tab, and its task opens from ther
   // While Tasks is the tab shown, the agent's panel stays as it was, out of sight.
   const kept = document.querySelector('.agent-slot .agent-panel') as HTMLElement;
   expect(kept.closest('[role="tabpanel"]')?.hasAttribute('hidden')).toBe(true);
-  await opened.getByRole('button', { name: 'Back' }).click();
+  await opened.getByRole('button', { name: 'Tasks' }).click();
   await expect.element(opened).not.toBeInTheDocument();
 
   // The agent's tab is still there beside Tasks; another agent takes it over, and it closes.
