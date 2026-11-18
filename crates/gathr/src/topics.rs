@@ -230,6 +230,16 @@ impl<S: Source> Topics<S> {
                 "opened by the person's message".into(),
             );
         }
+        // A send-back's turn answers the turn that wrote the version, which may be the ask's: it sits with the version.
+        // Asked only of a turn a send-back opened, or an old one that doesn't say what opened it.
+        let may = matches!(t.opened_by.as_deref(), None | Some("sent_back"));
+        if let Some(version) = may.then(|| f.sent_back(t)).flatten() {
+            return Topic::tied(
+                format!("m:{version}"),
+                "sent_back",
+                format!("opened by the send-back of plan version {version}"),
+            );
+        }
         if let Some(q) = f.heard(t) {
             return Topic::tied(
                 format!("t:{q}"),
@@ -480,6 +490,22 @@ pub fn on_tasks(
         t.topic = topics.task(t.number).map(|topic| topic.key);
     }
     topics.src.read()
+}
+
+/// The topics of lines said in no turn, for the live socket: the chat read once, as history reads
+/// it, unlike a turn's or task's own chain. Lines are a few a task: about 7 ms at 10,000 messages.
+pub fn of_lines(
+    conn: &Connection,
+    chat: &str,
+    ids: &[&str],
+) -> Result<HashMap<String, String>, Error> {
+    let topics = Topics::of_chat(conn, chat)?;
+    let lines = topics
+        .src
+        .lines
+        .iter()
+        .filter(|l| ids.contains(&l.id.as_str()));
+    Ok(lines.map(|l| (l.id.clone(), topics.line(l).key)).collect())
 }
 
 /// One turn's topic, for the live socket, from its own chain: none for a turn that isn't the chat's.

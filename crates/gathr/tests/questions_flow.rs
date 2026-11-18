@@ -303,6 +303,7 @@ fn discuss_reaches_the_lead_only_and_the_question_comes_back() {
     until(20, "the question back on the list", || {
         (room.listed()[0]["number"] == 3).then_some(())
     });
+    common::record_ui(&room.service, &room.chat, "question-discussed");
 
     room.answer(json!([{ "task": 3, "discuss": true, "text": "And if it can't?" }]));
     // The lead's reply runs: its question is asked in that turn.

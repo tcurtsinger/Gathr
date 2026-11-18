@@ -1,5 +1,6 @@
-// A review's turn reads under the pull request it reviews (0072): a thread under the builder's message, with the fix
-// that came of it, open while anything in it is open and folded once all of it is settled.
+// A review's turn, and the fix that came of it, read in the thread of the work task whose PR it reviews (0072, 0075):
+// each with its own name line, open while anything in it is open, and folded when the chat is opened again once all
+// of it is settled; never by itself while the person looks.
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
@@ -7,32 +8,20 @@ import { render } from 'vitest-browser-react';
 import type { TaskState } from '../api';
 import { blocksOf, noneKept } from './AgentPanel';
 import { activity } from './glance';
-import { agents, members, said, task, turn, view } from './madeUp';
+import { agents, members, opened, said, task, turn, view } from './madeUp';
 import { toThread } from './messages';
+import { View as Chat, noActions } from './recorded';
 import { type ChatState, empty } from './state';
-import { type Actions, Thread } from './Thread';
-
-const none = () => {};
-const actions: Actions = {
-  openTask: none,
-  openAgent: none,
-  diagnostics: none,
-  reference: none,
-  signIn: none,
-  retry: none,
-  resend: none,
-  carryOn: none,
-  approve: none,
-};
+import { Thread } from './Thread';
 
 function View({ state }: { state: ChatState }) {
   const cache = useRef(new Map());
   return (
     <div style={{ height: 900, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, [], cache.current).items}
+        messages={toThread(state, agents, [], cache.current, opened).items}
         running={false}
-        actions={actions}
+        actions={noActions}
         empty={false}
       />
     </div>
@@ -41,34 +30,37 @@ function View({ state }: { state: ChatState }) {
 
 /**
  * Rowan builds task 1 and opens PR #18; the person asks Mira something else; Sol reviews the PR (task 2) and Rowan
- * fixes what the review found (task 3, Gathr's fix on the same PR). `review` and `fix` are those tasks' states.
+ * fixes what the review found (task 3, Gathr's fix on the same PR). `review` and `fix` are those tasks' states. Each
+ * turn is about what the service says it is: the review and the fix about task 1, whose PR they are on.
  */
 function reviewed(review: TaskState, fix: TaskState): ChatState {
-  const turns = [
-    turn('ask', 'mira'),
-    turn('build', 'rowan', { task: 1, answers: 'ask' }),
-    turn('later', 'mira'),
-    turn('review', 'sol', { task: 2 }),
-    turn('fix', 'rowan', { task: 3 }),
+  const messages = [
+    said('ask', 'user', 'Parse recipe pages'),
+    said('ask', 'assistant', 'Rowan, over to you'),
+    said('build', 'gathr', 'Task #1 from Mira: Parse recipe pages'),
+    said('build', 'assistant', 'The parser is in. PR #18 is open'),
+    said('later', 'user', 'And the dark theme?'),
+    said('later', 'assistant', 'Next, once the parser lands'),
+    said('review', 'gathr', 'Task #2 from Mira: Review PR #18'),
+    said('review', 'assistant', 'One problem: redirects reach private addresses'),
+    said('fix', 'gathr', 'Task #3 from Sol: Fix the review of #18'),
+    said('fix', 'assistant', 'Fixed, with a test for each'),
   ];
+  const turns = [
+    turn('ask', 'mira', { topic: `m:${messages[0].id}` }),
+    turn('build', 'rowan', { task: 1, answers: 'ask', topic: 't:1' }),
+    turn('later', 'mira', { topic: `m:${messages[4].id}` }),
+    turn('review', 'sol', { task: 2, topic: 't:1' }),
+    turn('fix', 'rowan', { task: 3, topic: 't:1' }),
+  ];
+  const given = Date.parse(messages[1].time) * 1000;
   return {
     ...empty,
     members,
     turns: Object.fromEntries(turns.map((t, position) => [t.id, { ...t, position }])),
-    messages: [
-      said('ask', 'user', 'Parse recipe pages'),
-      said('ask', 'assistant', 'Rowan, over to you'),
-      said('build', 'gathr', 'Task #1 from Mira: Parse recipe pages'),
-      said('build', 'assistant', 'The parser is in. PR #18 is open'),
-      said('later', 'user', 'And the dark theme?'),
-      said('later', 'assistant', 'Next, once the parser lands'),
-      said('review', 'gathr', 'Task #2 from Mira: Review PR #18'),
-      said('review', 'assistant', 'One problem: redirects reach private addresses'),
-      said('fix', 'gathr', 'Task #3 from Sol: Fix the review of #18'),
-      said('fix', 'assistant', 'Fixed, with a test for each'),
-    ],
+    messages,
     tasks: [
-      task(1, 'rowan', 'ask', { what: 'Parse recipe pages', pr: 18 }),
+      task(1, 'rowan', 'ask', { what: 'Parse recipe pages', pr: 18, created_us: given, state: 'held' }),
       task(2, 'sol', 'build', { kind: 'review', what: 'Review PR #18', pr: 18, state: review }),
       task(3, 'rowan', 'review', {
         giver: 'sol',
@@ -89,15 +81,13 @@ const order = (...words: string[]) =>
       (el, i, all) => i === 0 || all[i - 1].compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
 
-test('a review and its fix read under the PR’s message, open while the review blocks', async () => {
-  const screen = await render(<View state={reviewed('blocked', 'working')} />);
-  const thread = screen.getByRole('region', { name: 'Replies' });
-  await expect.element(thread).toBeVisible();
-  expect(thread.element().textContent).toContain('One problem: redirects reach private addresses');
-  expect(thread.element().textContent).toContain('Fixed, with a test for each');
-  // Under the builder's message, before what the person said in between.
+test("a review and its fix read in the work task's thread, after its build, never on the main line", async () => {
+  await render(<View state={reviewed('blocked', 'working')} />);
+  await expect.element(page.getByText('Fixed, with a test for each', { exact: true })).toBeVisible();
+  // In the thread of the task they are about, before what the person said after it was handed out.
   expect(
     order(
+      'Rowan, over to you',
       'The parser is in. PR #18 is open',
       'One problem: redirects reach private addresses',
       'Fixed, with a test for each',
@@ -105,36 +95,37 @@ test('a review and its fix read under the PR’s message, open while the review 
     ),
   ).toBe(true);
   // Each keeps its own name line: who, and the task it worked on.
-  const named = [...thread.element().querySelectorAll('.name-line')].map((l) => l.textContent);
-  expect(named).toHaveLength(2);
-  expect(named[0]).toContain('Sol');
-  expect(named[0]).toContain('on Review PR #18');
-  expect(named[1]).toContain('Rowan');
-  expect(named[1]).toContain('on Fix the review of #18');
-  await expect.element(screen.getByRole('button', { name: 'Hide' })).toBeVisible();
+  const named = [...document.querySelectorAll('.said[data-reply] .name-line')].map((l) => l.textContent);
+  expect(named.find((l) => l?.includes('Sol'))).toContain('on Review PR #18');
+  expect(named.findLast((l) => l?.includes('Rowan'))).toContain('on Fix the review of #18');
+  const review = page.getByText('One problem: redirects reach private addresses').element();
+  expect(review.closest('.said')?.hasAttribute('data-reply')).toBe(true);
 });
 
-test('once the review and its fix are settled the thread folds, and opens again on a click', async () => {
-  const screen = await render(<View state={reviewed('blocked', 'working')} />);
+test('once settled it stays as it is while the chat is open, and starts folded when the chat is opened again', async () => {
+  const screen = await render(<Chat state={reviewed('blocked', 'working')} />);
   await expect.element(page.getByText('Fixed, with a test for each', { exact: true })).toBeVisible();
-  // Settled live: it folds by itself.
-  await screen.rerender(<View state={reviewed('done', 'done')} />);
-  const shut = screen.getByRole('button', { name: '2 replies' });
+  // Settled live: it never folds under the person's eyes.
+  const done = reviewed('done', 'done');
+  done.tasks[0] = { ...done.tasks[0], state: 'done' };
+  await screen.rerender(<Chat state={done} />);
+  await expect.element(page.getByText('Fixed, with a test for each', { exact: true })).toBeVisible();
+
+  // Opened again: settled already, it starts folded, and a press opens it.
+  await screen.unmount();
+  await render(<Chat state={done} />);
+  const shut = page.getByRole('button', { name: /3 replies/ });
   await expect.element(shut).toBeVisible();
+  expect(shut.element().getAttribute('aria-expanded')).toBe('false');
   await expect
     .element(page.getByText('Fixed, with a test for each', { exact: true }))
     .not.toBeInTheDocument();
   await shut.click();
   await expect.element(page.getByText('Fixed, with a test for each', { exact: true })).toBeVisible();
-
-  // Opened after a reload: settled already, it starts folded.
-  await screen.unmount();
-  const again = await render(<View state={reviewed('done', 'done')} />);
-  await expect.element(again.getByRole('button', { name: '2 replies' })).toBeVisible();
 });
 
-test('in a thread under its PR, a review is still its reviewer’s: on its panel, and as its running row', () => {
-  const done = view(reviewed('done', 'done')).items;
+test('in a folded thread, a review is still its reviewer’s: on its panel, and as its running row', () => {
+  const done = view(reviewed('done', 'done')).all;
   const sols = blocksOf(done, 'sol', noneKept()).earlier;
   expect(sols.flatMap((b) => ((b.content ?? []) as readonly { text?: string }[]).map((p) => p.text))).toEqual(
     ['One problem: redirects reach private addresses'],
@@ -147,7 +138,7 @@ test('in a thread under its PR, a review is still its reviewer’s: on its panel
     kind: 'tool',
     body: { tool: 'Read', status: 'running' },
   });
-  const items = view(running).items;
-  expect(blocksOf(items, 'sol', noneKept()).now?.running).toBe(true);
-  expect(activity(items).has('sol')).toBe(true);
+  const all = view(running).all;
+  expect(blocksOf(all, 'sol', noneKept()).now?.running).toBe(true);
+  expect(activity(all).has('sol')).toBe(true);
 });

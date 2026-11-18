@@ -2,9 +2,7 @@ import { Check } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
 import type { Task } from '../api';
 import { Face, GathrFace } from '../components/Face';
-import { WORD } from '../components/marks';
-import { Outcome } from '../components/Outcome';
-import { StateMark } from '../components/StateMark';
+import { StateWord } from '../components/StateWord';
 import { asker, gathrs } from './model';
 import { ended, grouped, said } from './rows';
 import './task-list.css';
@@ -12,17 +10,10 @@ import './task-list.css';
 /** A task's state on its line, in the line's colour: Failed red, a question waiting on you blue (0071's shapes). */
 export function TaskState({ task, tasks }: { task: Task; tasks: Task[] }) {
   const s = said(task, tasks);
+  // A row says Done with the tick after its what, and a question waiting on you as a word alone.
   if ('done' in s) return null;
   if ('you' in s) return <span className="task-state you">Waiting</span>;
-  if ('word' in s) return <span className="task-state">{s.word}</span>;
-  if ('mark' in s)
-    return (
-      <span className="task-state">
-        <StateMark state={s.mark} size={12} />
-        {WORD[s.mark]}
-      </span>
-    );
-  return <Outcome out={s.icon} className="task-state" />;
+  return <StateWord said={s} className="task-state" />;
 }
 
 /** One quiet line, "·" between its pieces: the same pieces in the same order wherever it is drawn. */

@@ -178,8 +178,8 @@ export function activity(items: ThreadMessageLike[]): Activity {
   const doing: Activity = new Map();
   for (const item of items) {
     const own = (item.metadata?.custom ?? {}) as Custom;
-    // A thread under a PR holds whole blocks.
-    for (const { by, work } of [own, ...(own.thread ?? []).flatMap((m) => m.block ?? [])])
+    // A message between agents carries the steps of the turn that only sent it.
+    for (const { by, work } of [own, ...(own.said ? [{ by: own.said.by, work: own.said.work }] : [])])
       if (by && work?.running)
         doing.set(by, {
           label: work.label,

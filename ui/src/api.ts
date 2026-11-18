@@ -45,6 +45,8 @@ export interface Message {
   copy_of?: string | null;
   /** The person's message: the names they picked from the "@" list, drawn blue. None from before they were kept. */
   picks?: PickedName[] | null;
+  /** A line Gathr said in no turn: the main message it sits under (0075). */
+  topic?: string | null;
 }
 
 /** A name picked from the "@" list in the text: where its `@Name` starts and how long it is, in UTF-16 units. */
@@ -78,6 +80,8 @@ export interface Turn {
   answers?: string | null;
   /** Queued but held by a pause, usage, an app update or its first engine download. */
   held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
+  /** The main message it sits under (0075): `t:<task>`, `m:<message>`, `r:<turn>` (a result), `b:<turn>` (its own). */
+  topic?: string | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -208,6 +212,8 @@ export interface Task {
   choices?: PersonTask['choices'];
   files?: PersonTask['files'];
   request?: number | null;
+  /** The main message it sits under (0075). */
+  topic?: string | null;
 }
 
 /** The lead's plan for an ask (0062): its state is read from its newest version and that version's check. */
@@ -295,6 +301,8 @@ export interface Ask {
   sized_in: string | null;
   /** Gathr held something of it: a building give, a write or a push refused. */
   held: boolean;
+  /** It has open work: Working, else Done (0075). */
+  open?: boolean;
 }
 
 export type TaskField = 'what' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';
@@ -575,6 +583,8 @@ export interface History {
   streaming?: { turn: string; agent: string | null; text: string }[];
   /** Agents' thumbs-ups, oldest first. */
   reactions?: Reaction[];
+  /** When its second agent joined: what came before reads as a chat of one (0075). */
+  team_since?: string | null;
 }
 
 /**

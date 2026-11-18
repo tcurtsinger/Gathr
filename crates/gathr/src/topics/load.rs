@@ -61,6 +61,8 @@ pub trait Source {
     fn pr_task(&self, pr: i64, not: Option<i64>) -> Option<i64>;
     /// A plan version's message.
     fn version(&self, id: i64) -> Option<String>;
+    /// The version a send-back queued the turn for: the one whose decided line opened it.
+    fn sent_back(&self, turn: &Turn) -> Option<String>;
     fn is_lead(&self, agent: &str) -> bool;
 }
 
@@ -291,6 +293,11 @@ impl Source for Facts {
 
     fn version(&self, id: i64) -> Option<String> {
         self.versions.get(&id).cloned()
+    }
+
+    fn sent_back(&self, turn: &Turn) -> Option<String> {
+        let opening = turn.opening.as_ref()?;
+        self.version_lines.get(&opening.id).cloned()
     }
 
     fn is_lead(&self, agent: &str) -> bool {

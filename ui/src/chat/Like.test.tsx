@@ -6,6 +6,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, PlanSummary, Task, Turn } from '../api';
+import { opened } from './madeUp';
 import { toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -140,7 +141,7 @@ function View(props: {
   return (
     <div style={{ height: 1400, width, display: 'flex' }}>
       <Thread
-        messages={toThread(state, [...agents, ...extra], [], cache.current).items}
+        messages={toThread(state, [...agents, ...extra], [], cache.current, opened).items}
         running={false}
         actions={actions}
         empty={false}
@@ -161,6 +162,10 @@ function message(words: string) {
   const button = row?.querySelector('button') as HTMLButtonElement | undefined;
   return { said, row, button };
 }
+
+/** A message's thumbs-up: under a reply's words; a main message's, on the row under it (0075). */
+const thumbs = (said: Element) =>
+  (said.querySelector('.reacts') ?? said.nextElementSibling?.querySelector('.reacts')) as HTMLElement;
 
 test('the row shows while its message is pointed at or holds focus, and not otherwise', async () => {
   const screen = await render(
@@ -200,7 +205,7 @@ test('the button and the count give the like and take it back, and the names say
   await userEvent.click(button);
   expect(like).toHaveBeenLastCalledWith('m-short', [], true);
   // The agent's thumbs-up: the person's press joins it.
-  const count = () => message('Done.').said.querySelector('.react') as HTMLButtonElement;
+  const count = () => thumbs(message('Done.').said).querySelector('.react') as HTMLButtonElement;
   expect(count().getAttribute('aria-pressed')).toBe('false');
   await userEvent.click(count());
   expect(like).toHaveBeenLastCalledWith('m-short', [], true);
@@ -332,10 +337,11 @@ for (const width of [1440, 360]) {
     await expect.element(screen.getByText('Done.')).toBeVisible();
     for (const words of ['Done.', LONG, 'Made-up question in a thread']) {
       const said = message(words).said;
-      const count = said.querySelector('.react') as HTMLElement;
+      const row = thumbs(said);
+      const count = row.querySelector('.react') as HTMLElement;
       count.scrollIntoView({ block: 'center' });
       await userEvent.hover(count);
-      const who = said.querySelector('.react-who') as HTMLElement;
+      const who = row.querySelector('.react-who') as HTMLElement;
       await expect.poll(() => getComputedStyle(who).display).not.toBe('none');
       expect(who.textContent).toMatch(/^You/);
       const box = who.getBoundingClientRect();

@@ -1,4 +1,4 @@
-import type { Group } from './messages';
+import type { Group } from './groups';
 import type { ChatState } from './state';
 
 /**

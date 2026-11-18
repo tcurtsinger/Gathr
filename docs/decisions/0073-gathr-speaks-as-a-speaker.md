@@ -48,3 +48,9 @@ Amends [0037](0037-one-timeline.md) and [0072](0072-the-chat-reads-like-a-team-c
 - **The agent's panel** shows an agent's earlier blocks without their questions.
 - **An answer and what it started are saved in the same millisecond,** and a message's time is to the millisecond: the window places the answer before anything saved in that millisecond.
 - **Not run:** macOS and WebKit, and a real engine (the proof answers with no engine signed in, so the lead's turn waits for sign-in).
+
+## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
+
+- The person's answer and each Discuss sit in the question's thread, under the block that asked it, whenever they
+  were sent, with the lead's turns that heard them. This reverses what was turned down here: the answer right under
+  the question whenever it was sent. The question keeps its Discuss switch in the chat until Reply replaces it.

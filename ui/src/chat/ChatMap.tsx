@@ -79,7 +79,10 @@ export const ChatMap = memo(function ChatMap({ ticks, viewport, onJump }: Props)
     const read = () => {
       frame = 0;
       const most = Math.floor(Math.min(el.clientHeight / 2, LONGEST) / APART);
-      const fits = column.offsetLeft >= BESIDE;
+      // Beside the faces, which hang left of the column's words (0075).
+      const style = getComputedStyle(column);
+      const words = column.offsetLeft + Number.parseFloat(style.paddingLeft);
+      const fits = words - (Number.parseFloat(style.getPropertyValue('--gutter')) || 0) >= BESIDE;
       setBox((b) => (b.most === most && b.fits === fits ? b : { most, fits }));
 
       if (!fits || places.size < 3) return;

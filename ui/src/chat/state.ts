@@ -29,6 +29,8 @@ export interface ChatState {
   /** Gathr's lines for held turns' caught changes, by message id, oldest first (0063). */
   caught: string[];
   reactions: Reaction[];
+  /** When it became a team: earlier messages read as a chat of one (0075). */
+  teamSince?: string;
 }
 
 export const empty: ChatState = {
@@ -69,6 +71,7 @@ export function fromHistory(history: History, work?: Work): ChatState {
     plans: work?.plans ?? [],
     caught: work?.caught ?? [],
     reactions: history.reactions ?? [],
+    teamSince: history.team_since ?? undefined,
   };
 }
 
@@ -101,7 +104,11 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
     case 'message': {
       const m = event.message;
       const at = state.messages.findIndex((x) => x.id === m.id);
-      const messages = at < 0 ? [...state.messages, m] : state.messages.with(at, m);
+      // A line can go out twice, once with its topic: the topic stays.
+      const messages =
+        at < 0
+          ? [...state.messages, m]
+          : state.messages.with(at, { ...m, topic: m.topic ?? state.messages[at].topic });
       // A saved text message is the text that was streaming; the stream starts over after it.
       const saved = m.role === 'assistant' && m.kind === 'text' && m.turn;
       const partial = saved ? without(state.partial, m.turn as string) : state.partial;
@@ -125,6 +132,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         task: event.task ?? before?.task,
         answers: event.answers ?? before?.answers,
         held: event.held,
+        topic: event.topic ?? before?.topic,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
@@ -154,8 +162,13 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         plans: event.plans ?? [],
         caught: event.caught ?? [],
       };
-    case 'members':
-      return { ...state, members: event.members };
+    case 'members': {
+      // A second agent joining makes it a team from now on (0075).
+      // A new chat's team is there before its first message, so all of it is the team's.
+      const joined = state.members.length < 2 && event.members.length > 1 && state.messages.length > 0;
+      const teamSince = joined ? new Date().toISOString() : state.teamSince;
+      return { ...state, members: event.members, teamSince };
+    }
     case 'context':
       return {
         ...state,

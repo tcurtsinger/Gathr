@@ -63,16 +63,17 @@ const task: Task = {
   created_us: 0,
 };
 
-test("the person's messages and the lead's replies to them get ticks; nothing else does", () => {
+test("in a team chat the person's messages and each ask's result get ticks; nothing else does (0075)", () => {
   const round = state(
     [
-      turn('ask', 'mira'),
-      turn('rowan', 'rowan', { task: 1, answers: 'ask' }),
-      // Woken by Rowan's message: team work, not a reply to the person.
-      turn('woke', 'mira', { answers: 'rowan' }),
-      // The hear-back: the lead reports to the person.
-      turn('back', 'mira', { answers: 'ask' }),
-      turn('direct', 'rowan'),
+      // What each turn is about, as the service names it.
+      turn('ask', 'mira', { topic: 'm:u1' }),
+      turn('rowan', 'rowan', { task: 1, answers: 'ask', topic: 't:1' }),
+      // Woken by Rowan's message: team work in the task's thread.
+      turn('woke', 'mira', { answers: 'rowan', topic: 't:1' }),
+      // The hear-back that closes the ask: its result, at the bottom.
+      turn('back', 'mira', { answers: 'ask', topic: 'r:back' }),
+      turn('direct', 'rowan', { topic: 'm:u2' }),
     ],
     [
       said('u1', 'ask', 'user', 'Fix the reconnect'),
@@ -87,16 +88,28 @@ test("the person's messages and the lead's replies to them get ticks; nothing el
       said('u2', 'direct', 'user', '@Rowan which branch was it?'),
       said('r3', 'direct', 'assistant', 'The reconnect one'),
     ],
-    { members: team, tasks: [task] },
+    {
+      members: team,
+      tasks: [task],
+      asks: [
+        {
+          id: 'u1',
+          title: 'Fix the reconnect',
+          size: null,
+          by: null,
+          sized_in: null,
+          held: false,
+          open: false,
+        },
+      ],
+    },
   );
   expect(ticks(round).map(brief)).toEqual([
     'you You: Fix the reconnect',
-    'lead Mira: Rowan, over to you',
     'lead Mira: The cursor is fixed',
     'you You: @Rowan which branch was it?',
   ]);
 });
-
 test('plain text keeps what is in angle brackets, as the chat shows it', () => {
   expect(plain('Returns Vec<String> or Option<T>')).toBe('Returns Vec<String> or Option<T>');
   expect(plain('run it with --data <folder>, if a<b and c>d')).toBe(
@@ -107,43 +120,35 @@ test('plain text keeps what is in angle brackets, as the chat shows it', () => {
   expect(plain('| A | B |\r\n|---|---|\r\n| 1 | 2 |\r\n\r\n---\r\nEnd')).toBe('A B 1 2 End');
 });
 
-test("in a team chat only the Supervisor's replies are short ticks, and a turn has none until it ends", () => {
+test("in a chat of one the agent's replies are short ticks, and a turn has none until it ends", () => {
   const chat = state(
-    [
-      turn('a', 'mira'),
-      // An agent that left the chat, and a turn sent to no agent: neither is the lead.
-      turn('b', 'gone'),
-      turn('c', null),
-      turn('d', 'mira', { status: 'running' }),
-    ],
+    [turn('a', 'mira'), turn('d', 'mira', { status: 'running' })],
     [
       said('u1', 'a', 'user', 'Made-up ask'),
       said('a1', 'a', 'assistant', 'From the lead'),
-      said('u2', 'b', 'user', 'Another'),
-      said('b1', 'b', 'assistant', 'From one who left'),
-      said('u3', 'c', 'user', 'A third'),
-      said('c1', 'c', 'assistant', 'From nobody'),
       said('u4', 'd', 'user', 'A fourth'),
       said('d1', 'd', 'assistant', 'Still working'),
     ],
-    { members: team },
   );
-  const running = [
-    'you You: Made-up ask',
-    'lead Mira: From the lead',
-    'you You: Another',
-    'you You: A third',
-  ];
-  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
+  const running = ['you You: Made-up ask', 'lead Mira: From the lead'];
+  const named = (s: ChatState) =>
+    ticksOf(
+      toThread(
+        s,
+        [{ id: 'mira', name: 'Mira', face_seed: 'x', gender: null, skin: null, background: null }],
+        [],
+        new Map(),
+      ).items,
+    );
+  expect(named(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
   // Its words so far are not its reply: streamed text adds no tick either.
-  expect(ticks({ ...chat, partial: { d: 'More' } }).map(brief)).toEqual([...running, 'you You: A fourth']);
+  expect(named({ ...chat, partial: { d: 'More' } }).map(brief)).toEqual([...running, 'you You: A fourth']);
   // Waiting for sign-in, it runs again later under the same id: still not its last words.
   chat.turns.d = { ...chat.turns.d, status: 'waiting_sign_in' };
-  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
+  expect(named(chat).map(brief)).toEqual([...running, 'you You: A fourth']);
   chat.turns.d = { ...chat.turns.d, status: 'done' };
-  expect(ticks(chat).map(brief)).toEqual([...running, 'you You: A fourth', 'lead Mira: Still working']);
+  expect(named(chat).map(brief)).toEqual([...running, 'you You: A fourth', 'lead Mira: Still working']);
 });
-
 test("in a chat with one agent its replies are the short ticks, one for each turn's last words", () => {
   const solo = state(
     [turn('a', 'mira'), turn('b', 'mira'), turn('c', 'mira')],

@@ -64,3 +64,9 @@ Drawn as bubbles since [0072](0072-the-chat-reads-like-a-team-chat.md): the time
 What a step ran is kept since [0041](0041-what-a-step-ran.md), and that the agent thought since
 [0042](0042-thinking.md). Summary, the plan bar, the agent
 panel, the conversation map and the sidebar's dots are later slices of the same redesign.
+
+## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
+
+- A team chat is main messages in time order, each with its thread. The one timeline stands for a chat of one agent
+  and for what a chat said before it became a team. Inside a thread a turn's blocks keep their order by position, and
+  the person's message sent into a running turn still splits it.

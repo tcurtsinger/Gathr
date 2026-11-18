@@ -8,6 +8,7 @@ import type { Agent, Message, Task } from '../api';
 import { asQuestion } from '../tasks/rows';
 import { TasksTab } from '../tasks/TasksTab';
 import { usePersonTasks } from '../tasks/usePersonTasks';
+import { opened } from './madeUp';
 import { toThread } from './messages';
 import { type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -75,7 +76,7 @@ function Room({ state }: { state: ChatState }) {
     <>
       <section aria-label="Chat" style={{ height: 420, display: 'flex' }}>
         <Thread
-          messages={toThread(state, agents, [], cache.current).items}
+          messages={toThread(state, agents, [], cache.current, opened).items}
           running={false}
           actions={actions}
           empty={false}

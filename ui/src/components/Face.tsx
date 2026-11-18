@@ -139,14 +139,3 @@ export function YouFace({ size }: { size: FaceSize }) {
     </span>
   );
 }
-
-/** Faces overlapped into one compact element, in the order given, each cut out of the surface behind it. */
-export function FaceStack({ agents }: { agents: { agent: string; name: string }[] }) {
-  return (
-    <span className="face-stack" aria-hidden="true">
-      {agents.map((a) => (
-        <Face key={a.agent} agent={{ id: a.agent, name: a.name }} size={20} />
-      ))}
-    </span>
-  );
-}

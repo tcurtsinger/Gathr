@@ -103,6 +103,7 @@ fn a_review_left_with_an_unasked_note_holds_its_pr_and_a_clean_one_lands_it() {
         ["t:1", "t:1"],
         "{review} {fix}"
     );
+    common::record_ui(&room.service, &room.chat, "review-and-fix");
     common::topics_agree(&data.0, &room.chat);
     let history = room
         .service

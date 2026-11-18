@@ -582,9 +582,24 @@ Parts: 6.4, 6.5
 - **Given** a team chat
 - **When** a builder sends the reviewer a message, and the reviewer answers it
 - **Then** the reviewer gets the message. The chat shows it as the builder's, opening with the
-  reviewer's @Name, in a thread under what the builder was writing, and the reviewer's answer under it
-  in the same thread, even when the person wrote something in between. The person reads both without
-  opening anything, and can fold the thread
+  reviewer's @Name, in the thread of the main message the builder's work is about, and the reviewer's
+  answer after it in the same thread, even when the person wrote something in between. A review and the
+  fix after it read in the thread of the work task whose PR they are on, never on the main line. The
+  person reads them under one fold line, and can fold the thread
+
+### 6k. The chat says what each main message waits on
+
+Parts: 6.9
+
+- **Given** a team chat where the person asked for something, the lead's plan was approved and its
+  parts handed out, one done, one at work, and a question waits on the person
+- **When** the person opens the chat
+- **Then** the main line reads the ask, the plan, each task and the question in the order they were
+  put, each with its state at the right of its name line: the ask Working, the plan Approved, the
+  tasks as the Tasks list says them, the question Needs you in blue. The done task's thread is
+  folded, the one at work open; nothing folds by itself while the chat is open. Once all is in, the
+  lead's result is at the bottom, quoting the ask, and the ask's Done leads to it. A chat of one agent
+  reads as one timeline, with no state and no fold line
 
 ### 6f. Agreeing is a reaction, never a message
 

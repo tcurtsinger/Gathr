@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, ToolBody, Turn } from '../api';
+import { useFolds } from './folds';
 import { toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -53,8 +54,12 @@ const tool = (id: string, turnId: string, name: string, more: Partial<ToolBody> 
 
 function View({ state }: { state: ChatState }) {
   const cache = useRef(new Map());
+  // Every thread starts open here; a press on its fold line folds it, as in the chat.
+  const threads = useFolds();
   const none = () => {};
   const actions: Actions = {
+    fold: threads.fold,
+    earlier: threads.earlier,
     openTask: none,
     openAgent: none,
     diagnostics: none,
@@ -68,7 +73,7 @@ function View({ state }: { state: ChatState }) {
   return (
     <div style={{ height: 900, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, [], cache.current).items}
+        messages={toThread(state, agents, [], cache.current, { ...threads.folds, start: new Set() }).items}
         running={false}
         actions={actions}
         empty={false}
@@ -93,10 +98,12 @@ function talk(): ChatState {
   return {
     ...empty,
     members,
+    // What each turn is about, as the service names it: the member's turn nothing ties is its own main message, and the
+    // turn its message opened sits with it.
     turns: {
-      work: turn('work', 'b', 0),
-      you: turn('you', 'a', 1),
-      told: turn('told', 'a', 2, { answers: 'work' }),
+      work: turn('work', 'b', 0, { topic: 'b:work' }),
+      you: turn('you', 'a', 1, { topic: 'm:u' }),
+      told: turn('told', 'a', 2, { answers: 'work', topic: 'b:work' }),
     },
     messages: [
       said('found', 'work', 'Made-up finding'),
@@ -109,24 +116,24 @@ function talk(): ChatState {
   };
 }
 
-test('a reply between agents shows under the message it answers, and the thread folds', async () => {
+test('a reply between agents reads in the thread of what it answers, and the thread folds', async () => {
   const screen = await render(<View state={talk()} />);
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
   // Under the member's message and the question, before what the person wrote in between.
   expect(order('Made-up finding', 'Made-up question', 'Made-up answer', 'Made-up words of the person')).toBe(
     true,
   );
-  const thread = screen.getByRole('region', { name: 'Replies' });
-  expect(thread.element().textContent).toContain('Made-up question');
-  expect(thread.element().textContent).toContain('Made-up answer');
+  const replies = [...document.querySelectorAll('.said[data-reply]')].map((r) => r.textContent).join(' ');
+  expect(replies).toContain('Made-up question');
+  expect(replies).toContain('Made-up answer');
   // The turn that only answered has no message of its own: its step is on the answer's name line.
   expect(document.querySelectorAll('.said')).toHaveLength(4);
 
-  await screen.getByRole('button', { name: 'Hide' }).click();
+  await screen.getByRole('button', { name: 'Collapse replies' }).click();
   await expect.element(screen.getByText('Made-up answer')).not.toBeInTheDocument();
-  const shut = screen.getByRole('button', { name: '2 replies' });
-  await expect.element(shut).toBeVisible();
-  await shut.click();
+  const line = screen.getByRole('button', { name: '2 replies' });
+  expect(line.element().getAttribute('aria-expanded')).toBe('false');
+  await line.click();
   await expect.element(screen.getByText('Made-up answer')).toBeVisible();
 });
 
@@ -182,12 +189,14 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
     reactions: [given('found', 'gone', 0), given('found', 'c', 1), given('q', 'a', 2), given('u', 'c', 3)],
   };
   const screen = await render(<View state={before} />);
-  const finding = screen.getByText('Made-up finding').element().closest('.said') as HTMLElement;
+  // The member's finding is a main message: its thumbs-up is on the row under it, with its fold line (0075).
+  const said = screen.getByText('Made-up finding').element().closest('.said') as HTMLElement;
+  const finding = said.nextElementSibling as HTMLElement;
   const mark = page.elementLocator(finding).getByRole('button', { name: 'Thumbs-up from Made-up Reviewer' });
   await expect.element(mark).toBeVisible();
   // The emoji and the count; the names are hidden until asked for.
   expect([...mark.element().children].slice(0, 2).map((c) => c.textContent)).toEqual(['👍', '1']);
-  // Under the member's words and its question; none under the person's own.
+  // For the member's words and its question; none for the person's own.
   expect(document.querySelectorAll('.react')).toHaveLength(2);
   const who = finding.querySelector('.react-who') as HTMLElement;
   expect(getComputedStyle(who).display).toBe('none');

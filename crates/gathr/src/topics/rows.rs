@@ -166,6 +166,13 @@ impl Source for Rows<'_> {
         self.one(sql, [id], |r| r.get(0))
     }
 
+    fn sent_back(&self, turn: &Turn) -> Option<String> {
+        let opening = turn.opening.as_ref()?;
+        let sql = "SELECT v.message_id FROM plan_versions v JOIN plans p ON p.id = v.plan_id
+                   WHERE p.chat_id = ?1 AND v.decided_line = ?2";
+        self.one(sql, params![self.chat, opening.id], |r| r.get(0))
+    }
+
     fn is_lead(&self, agent: &str) -> bool {
         let sql = "SELECT 1 FROM chat_members WHERE chat_id = ?1 AND agent_id = ?2 AND role = 'supervisor'";
         self.one(sql, params![self.chat, agent], |r| r.get::<_, i64>(0))

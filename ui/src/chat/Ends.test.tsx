@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Failure, type Message, type Turn } from '../api';
-import { agents, round, said, task, tool, turn } from './madeUp';
+import { agents, opened, round, said, task, tool, turn } from './madeUp';
 import { type SendFailure, toThread } from './messages';
 import type { ChatState } from './state';
 import { type Actions, Thread } from './Thread';
@@ -35,7 +35,7 @@ function View({
   return (
     <div style={{ height: 900, display: 'flex' }}>
       <Thread
-        messages={toThread(state, agents, unsent, cache.current).items}
+        messages={toThread(state, agents, unsent, cache.current, opened).items}
         running={false}
         actions={all}
         empty={false}
@@ -51,6 +51,11 @@ const lines = () =>
       .map((p) => p.textContent)
       .join(' | '),
   );
+/** The members' turns as the ask's, not their own tasks'. */
+function inTheAsk(state: ChatState): ChatState {
+  for (const id of ['rowan', 'kit']) state.turns[id] = { ...state.turns[id], topic: state.turns.ask.topic };
+  return state;
+}
 const button = (name: string) => page.getByRole('button', { name, exact: true });
 /** The danger colour as the page computes it. */
 function danger() {
@@ -62,9 +67,12 @@ function danger() {
   return color;
 }
 
-/** Rowan's turn on task 1, ended as `more` says, with the words it had said by then. */
+/**
+ * Rowan's turn on task 1, ended as `more` says, with the words it had said by then. The members' turns read in the
+ * ask's thread here, where a member's message names its task, as it does in any thread but its task's own (0075).
+ */
 function ended(more: Partial<Turn>, words = true): ChatState {
-  const state = round();
+  const state = inTheAsk(round());
   state.tasks = [task(1, 'rowan', 'ask', { state: 'working' }), task(2, 'kit', 'ask')];
   state.turns.rowan = { ...state.turns.rowan, ...more };
   if (!words) state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
@@ -81,7 +89,7 @@ test('a turn a restart cut reads "Gathr restarted" on its name line, with Contin
 });
 
 test('a turn Gathr ended says why in a word and offers no Continue: it does not read as the person’s stop', async () => {
-  const state = round();
+  const state = inTheAsk(round());
   // Rev's check of a plan the person approved meanwhile, and Kit's queued task held for its plan.
   state.turns.kit = {
     ...state.turns.kit,
@@ -99,9 +107,13 @@ test('a turn Gathr ended says why in a word and offers no Continue: it does not 
   );
   const screen = await render(<View state={state} />);
   await expect.element(screen.getByText('Needs plan', { exact: true })).toBeVisible();
-  expect(lines().slice(-2)).toEqual(['Rowan | on Task 1 | Not needed', 'Kit | on Task 2 | Needs plan']);
+  expect(lines().filter((l) => /^(Rowan|Kit)/.test(l))).toEqual([
+    'Rowan | on Task 1 | Not needed',
+    'Kit | on Task 2 | Needs plan',
+  ]);
   expect(button('Continue').elements()).toHaveLength(0);
-  expect(document.body.textContent).not.toMatch(/Stopped|Cancelled/);
+  // The turns' own words: the task's message says the task was cancelled, at its right (0075).
+  expect(lines().join(' ')).not.toMatch(/Stopped|Cancelled/);
 });
 
 test('the person’s stop is the face’s mark, with no word: Continue stays under it until its carry-on runs', async () => {
@@ -203,19 +215,21 @@ test('a task cancelled under its member’s turn says Cancelled on that turn’s
   );
   state.tasks[0] = { ...state.tasks[0], state: 'cancelled' };
   await render(<View state={state} />);
-  await expect.element(page.getByText('Cancelled', { exact: true })).toBeVisible();
-  expect(lines()).toContain('Rowan | on Task 1 | Cancelled');
+  await expect.poll(lines).toContain('Rowan | on Task 1 | Cancelled');
   expect(button('Continue').elements()).toHaveLength(0);
 });
 
 /** Rowan works on task 1 in two turns with the lead's words between them; the task ends `state`. */
 function twice(state: string): ChatState {
-  const chat = round();
+  const chat = inTheAsk(round());
   chat.tasks = [
     task(1, 'rowan', 'ask', { state: state as never }),
     task(2, 'kit', 'ask', { state: 'working' }),
   ];
-  chat.turns.fixup = { ...turn('fixup', 'rowan', { task: 1, answers: 'mid' }), position: 9 };
+  chat.turns.fixup = {
+    ...turn('fixup', 'rowan', { task: 1, answers: 'mid', topic: chat.turns.ask.topic }),
+    position: 9,
+  };
   chat.messages.push(
     said('mid', 'assistant', 'Rowan, one more thing'),
     said('fixup', 'assistant', 'Fixed that too'),
@@ -236,8 +250,8 @@ test('how a task ended sits on its member’s last message: a tick for done, Can
     ['failed', 'Failed'],
   ]) {
     await screen.rerender(<View state={twice(state)} />);
-    await expect.element(page.getByText(word, { exact: true })).toBeVisible();
-    expect(page.getByText(word, { exact: true }).elements()).toHaveLength(1);
+    // Once on the turns, on the last: the task's own message says it too, as its state (0075).
+    await expect.poll(() => lines().filter((l) => l.endsWith(word))).toHaveLength(1);
     expect(
       lines()
         .filter((l) => l.startsWith('Rowan'))
@@ -295,7 +309,9 @@ test('a refused step reads Refused, and the steps on the name line count it as r
   await expect.element(steps).toBeInTheDocument();
   expect(steps.element().textContent).toMatch(/1 refused/);
   expect(steps.element().textContent).not.toMatch(/failed/);
-  await userEvent.click(steps);
+  // By keyboard: the pointer on a short bubble raises its like row over the steps (found, not this test's subject).
+  (steps.element() as HTMLButtonElement).focus();
+  await userEvent.keyboard('{Enter}');
   await expect.element(page.getByText('Refused', { exact: true })).toBeVisible();
   expect(document.body.textContent).not.toMatch(/Gave a task/);
 });

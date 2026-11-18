@@ -143,18 +143,6 @@
   }
 }
 
-/* Overlapped, each cut out of the surface behind it (--behind, the chat's own by default). */
-.face-stack {
-  position: relative;
-  display: flex;
-}
-.face-stack > .face {
-  box-shadow: 0 0 0 2px var(--behind, var(--background));
-}
-.face-stack > .face + .face {
-  margin-left: -4px;
-}
-
 /* A face's card (0071): its name, then its state in the mark's shape and word, what and since when. */
 .face-card {
   z-index: 50;

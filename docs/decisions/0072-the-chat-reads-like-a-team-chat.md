@@ -35,3 +35,10 @@ Amends [0037](0037-one-timeline.md): the one timeline stands, drawn as bubbles. 
 ## What this leaves
 
 Gathr speaking as itself, and questions answered in the chat, how a turn or a task ended, and an ask's size on the ask stay as 0037 and their own decisions draw them, inside the new bubbles, until their own changes. In the person's sent message, each name they picked from the `@` list stays blue, as it was in the message box (the owner, 2026-11-18: "The name of the agent the message went to stays blue in your sent message, as the mock-up drew it. A name you only typed, without picking it, stays plain."). The picks are kept with the message ([0028](0028-team-chats.md)) and only those spans are blue, in the box's colour; a name only typed stays plain, and so does every name in a message saved before picks were kept. A picked agent renamed or removed since keeps its blue on the name as it was sent.
+
+## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
+
+- Talk between agents and the work on a PR no longer hang under the block they were sent from or under the PR's
+  message: each message is an item of its own in the thread of the main message it is about, under one fold line.
+  The bubble, the name line, the @Name and the quote stand. A thread folds when the chat is opened, never by itself
+  while the person looks.

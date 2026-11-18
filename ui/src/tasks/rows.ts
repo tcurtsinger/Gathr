@@ -1,17 +1,21 @@
-import type { PersonTask, Task } from '../api';
+import type { PersonTask, PlanSummary, PlanVersionSummary, Task } from '../api';
+import { inWords } from '../chat/statusWords';
 import type { Mark } from '../components/marks';
 
-/** A task's state on its line (a row, a task's view), in the chat's words. */
+/**
+ * A task's state on its line (a row, a task's view), in the chat's words; the same for a main message in the chat
+ * (0075), so the chat, the Tasks list and the status line never disagree.
+ */
 export type Said =
-  /** A question waits on the person: "Waiting", in the attention colour. */
-  | { you: true }
-  /** A state the marks draw, in the mark's shape, still. */
-  | { mark: Extract<Mark, 'working' | 'stopped' | 'blocked' | 'waiting'> }
+  /** It waits on the person, in the attention colour: "Waiting" on a row, "Needs you" in the chat. */
+  | { you: true; word?: string }
+  /** A state the marks draw, in the mark's shape, still; waiting says on what when it is one thing. */
+  | { mark: Extract<Mark, 'working' | 'stopped' | 'blocked' | 'waiting'>; on?: string }
   /** An ending with the chat's icon; failed in the danger colour. */
   | { icon: 'merge' | 'failed' | 'cancelled' }
   | { word: string }
-  /** Done: no word, a tick after its what. */
-  | { done: true };
+  /** Done: a tick; a row says no word, the chat says Done (or Answered, Approved). */
+  | { done: true; word?: string };
 
 const ENDED = new Set<Task['state']>(['done', 'cancelled', 'failed', 'stopped']);
 
@@ -41,13 +45,46 @@ export function said(t: Task, tasks: Task[]): Said {
       return { icon: t.state };
     case 'ready':
       return { word: 'Not started' };
-    case 'held':
-      return merging(t) ? { icon: 'merge' } : { mark: 'waiting' };
+    case 'held': {
+      if (merging(t)) return { icon: 'merge' };
+      // On what, as the status line says it, when it is one thing.
+      const on = t.waiting_on?.length === 1 ? inWords(t.waiting_on[0]) : undefined;
+      return on ? { mark: 'waiting', on } : { mark: 'waiting' };
+    }
   }
   // Waiting: for the tasks it comes after that aren't done, else for something else.
   const before = t.after.filter((n) => tasks.find((o) => o.number === n)?.state !== 'done');
   return before.length ? { word: `After ${before.map((n) => `#${n}`).join(', ')}` } : { mark: 'waiting' };
 }
+
+/** A task's or a question's state as its main message in the chat says it (0075): `said`, with Done in words. */
+export function mainSaid(t: Task, tasks: Task[]): Said {
+  const s = said(t, tasks);
+  if (t.kind === 'person' && 'done' in s) return { done: true, word: 'Answered' };
+  if (t.kind === 'person' && 'you' in s) return { you: true, word: 'Needs you' };
+  return 'done' in s ? { done: true, word: 'Done' } : s;
+}
+
+/** A version of the lead's plan as its main message says it: the newest by its plan's state, an older by how it ended. */
+export function versionSaid(plan: PlanSummary, version: PlanVersionSummary): Said | undefined {
+  if (version.decided === 'approved') return { done: true, word: 'Approved' };
+  if (version.decided === 'sent_back') return { word: 'Sent back' };
+  if (version.decided === 'dropped') return { word: 'Dropped' };
+  if (plan.versions.at(-1)?.id !== version.id) return undefined;
+  switch (plan.state) {
+    case 'checking':
+      return { word: 'Checking' };
+    case 'waiting':
+      return { you: true, word: 'Needs you' };
+    case 'revising':
+      return { mark: 'working' };
+    default:
+      return undefined;
+  }
+}
+
+/** The person's message as its main message says it: Working while anything it started is open, else Done. */
+export const openSaid = (open: boolean): Said => (open ? { mark: 'working' } : { done: true, word: 'Done' });
 
 /** The chat's tasks as the Tasks tab lists them: questions for the person, what is open, what is over. */
 export function grouped(tasks: Task[]): { title: string; tasks: Task[] }[] {
