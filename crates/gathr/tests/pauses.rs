@@ -159,6 +159,15 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     samples::same("carry_on: Stop now", said);
     let kept = (json!("carry_on"), json!(gathr::words::CARRY_ON));
     assert_eq!(common::opened(&data.0, &history["turns"][1]["id"]), kept);
+    // 0075: the carry-on sits where the turn it carries on was, under the person's message.
+    let mut asked = history["messages"].as_array().unwrap().iter();
+    let asked = asked.find(|m| m["role"] == "user").unwrap()["id"]
+        .as_str()
+        .unwrap();
+    let topics = [&history["turns"][0]["topic"], &history["turns"][1]["topic"]];
+    let want = json!(format!("m:{asked}"));
+    assert_eq!(topics, [&want, &want], "{history}");
+    common::topics_agree(&data.0, &chat);
     pause(&service, "/api/pauses/resume", &chat);
     let history = service.wait_for(&chat, 20, "the carry-on after Restart", |h| {
         h["turns"][1]["status"] == "done"
@@ -353,6 +362,11 @@ fn the_turn_claude_code_starts_when_a_background_command_ends_is_kept() {
     );
     let engine = common::opened(&data.0, &history["turns"][1]["id"]);
     assert_eq!(engine, (json!("engine"), Value::Null), "{history}");
+    // 0075: the engine's own turn sits where the turn that started its command was.
+    let first = &history["turns"][0]["topic"];
+    assert!(first.is_string(), "{history}");
+    assert_eq!(&history["turns"][1]["topic"], first, "{history}");
+    common::topics_agree(&data.0, &chat);
     let last = history["messages"].as_array().unwrap().last().unwrap()["body"].clone();
     assert!(
         last.as_str().unwrap().starts_with("The first ping"),

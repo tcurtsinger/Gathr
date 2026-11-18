@@ -138,6 +138,7 @@ pub fn read(conn: &Connection, task: i64) -> Result<Task, Error> {
                 waiting_on: Vec::new(),
                 in_passing: r.get(29)?,
                 round: None,
+                topic: None,
                 judged: r.get(30)?,
                 signed_off: r.get(31)?,
                 notes: Vec::new(),

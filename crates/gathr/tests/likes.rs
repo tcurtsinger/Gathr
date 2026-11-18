@@ -202,6 +202,12 @@ fn a_like_is_kept_once_reaches_an_idle_agent_once_and_is_taken_back() {
         person, 0,
         "no message of the person's in the woken turn: {shown}"
     );
+    // 0075: the turn the like opened sits where the liked message does.
+    let turns = shown["turns"].as_array().unwrap();
+    let topic = |id: &str| turns.iter().find(|t| t["id"] == id).unwrap()["topic"].clone();
+    assert!(topic(&turn).is_string(), "{shown}");
+    assert_eq!(topic(&woken), topic(&turn), "{shown}");
+    common::topics_agree(&data.0, &chat);
 
     // Given twice: one mark, one delivery.
     let again = like(&service, &chat, &message, json!({}));

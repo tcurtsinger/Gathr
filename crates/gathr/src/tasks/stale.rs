@@ -208,7 +208,10 @@ fn tell_lead(
     } else {
         text.push('.');
     }
-    Start::queue(tx, (chat, &lead.agent), (None, None), Opened::Stale, text).map(Some)
+    let start = Start::queue(tx, (chat, &lead.agent), (None, None), Opened::Stale, text)?;
+    let of: Vec<_> = marked.iter().map(|n| (Some(*n), None)).collect();
+    crate::topics::record::serve_one_ask(tx, &start.turn, &of)?;
+    Ok(Some(start))
 }
 
 /// An agent's stale task, for the person's list: the person's own are among their open tasks.

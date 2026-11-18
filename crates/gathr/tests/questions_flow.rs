@@ -226,6 +226,21 @@ fn a_members_question_reaches_the_person_in_the_leads_words_and_its_answer_reach
         .map(|r| r["opened_by"].clone())
         .collect();
     assert_eq!(opened, ["hear_back", "answered"], "Ann's turn comes first");
+
+    // 0075: the lead's turn on Ann's request sits in her task's thread, and its turn that heard the
+    // answer in the question's.
+    let heard = rows(
+        &room.data,
+        "SELECT id FROM turns WHERE opened_by = 'answered'",
+    );
+    let history = room.history();
+    let topic = |turn: &Value| {
+        let turns = history["turns"].as_array().unwrap();
+        turns.iter().find(|t| t["id"] == *turn).unwrap()["topic"].clone()
+    };
+    let found = [topic(&json!(lead_turn)), topic(&heard[0]["id"])];
+    assert_eq!(found, [json!("t:1"), json!("t:3")], "{history}");
+    common::topics_agree(&room.data, &room.chat);
 }
 
 #[test]
@@ -278,6 +293,12 @@ fn discuss_reaches_the_lead_only_and_the_question_comes_back() {
     let history = room.said("the lead's turn", asks);
     assert_eq!(ann_turns(&history), before, "no message to Ann");
     let replying = room.running_on(2, 2);
+    // 0075: the lead's turn that heard the Discuss sits in the question's thread.
+    let history = room.history();
+    let turns = history["turns"].as_array().unwrap();
+    let found = turns.iter().find(|t| t["id"] == replying.as_str());
+    assert_eq!(found.unwrap()["topic"], "t:3", "{history}");
+    common::topics_agree(&room.data, &room.chat);
     room.release(&[&replying]);
     until(20, "the question back on the list", || {
         (room.listed()[0]["number"] == 3).then_some(())

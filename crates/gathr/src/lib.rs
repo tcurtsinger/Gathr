@@ -54,6 +54,7 @@ pub mod tasks;
 pub mod team;
 pub mod text;
 pub mod timeline;
+pub mod topics;
 pub mod waiting;
 pub mod waits;
 pub mod words;

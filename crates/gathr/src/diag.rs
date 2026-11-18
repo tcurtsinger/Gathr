@@ -9,6 +9,10 @@ use crate::crash_log::CrashLog;
 use crate::data::{DataDir, ServiceInfo};
 use crate::{Error, db, http};
 
+mod threads;
+
+pub use threads::threads;
+
 /// The most rows `query` returns.
 pub const QUERY_CAP: usize = 1000;
 /// The schema from which turns record the words that opened them (migration 0043).

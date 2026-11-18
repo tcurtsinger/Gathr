@@ -86,7 +86,8 @@ pub(super) fn rounds(conn: &Connection, chat: &str, tasks: &mut [Task]) -> Resul
 pub(super) fn done_line(conn: &Connection, task: i64) -> Result<(), Error> {
     let t = read(conn, task)?;
     if let Some(text) = done_words(conn, &t)? {
-        crate::store::say(conn, &t.chat, &text)?;
+        let about = format!("t:{task}");
+        crate::store::say_about(conn, &t.chat, &text, Some(&about))?;
     }
     Ok(())
 }
@@ -271,6 +272,7 @@ pub fn hear_backs(tx: &Transaction, turn: &str, trace: &str) -> Result<Vec<Start
     if own.is_none() {
         let sql = "UPDATE turns SET ask_id = COALESCE((SELECT ask_id FROM tasks WHERE number = ?2), ask_id) WHERE id = ?1";
         tx.execute(sql, params![start.turn, newest])?;
+        crate::topics::record::result(tx, &chat, &giver, &start.turn)?;
     }
     Ok(vec![start])
 }

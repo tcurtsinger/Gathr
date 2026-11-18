@@ -288,12 +288,22 @@ pub fn add_message(
 
 /// What Gathr says in a chat in no turn (0051): a line the person reads, which starts nothing.
 pub fn say(conn: &Connection, chat: &str, body: &str) -> Result<Value, Error> {
+    say_about(conn, chat, body, None)
+}
+
+/// `say`, with what the line is about (0075): `t:<task>`, `m:<message>`, or `main`.
+pub fn say_about(
+    conn: &Connection,
+    chat: &str,
+    body: &str,
+    about: Option<&str>,
+) -> Result<Value, Error> {
     let ts = now_us();
     let id = ulid(ts);
     conn.prepare_cached(
-        "INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4)",
+        "INSERT INTO messages (id, chat_id, ts, role, kind, body, about) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4, ?5)",
     )?
-    .execute(params![id, chat, ts, body])?;
+    .execute(params![id, chat, ts, body, about])?;
     message(conn, &id)
 }
 

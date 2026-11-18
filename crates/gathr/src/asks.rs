@@ -27,6 +27,8 @@ pub struct Ask {
     pub sized_in: Option<String>,
     /// Gathr refused or caught something of it (0063): an unsized ask's line shows from then.
     pub held: bool,
+    /// It has open work (`OPEN`): Working, else Done (0075).
+    pub open: bool,
 }
 
 /// An ask has open work while an agent's task of it isn't done or cancelled, a turn of it is
@@ -41,8 +43,13 @@ pub(crate) const OPEN: &str =
          AND (v.decided IS NULL OR v.decided = 'sent_back')
          AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
 
-const ASK: &str = "SELECT a.id, m.body, a.size, a.sized_by, a.sized_in, a.held_ts IS NOT NULL
-                   FROM asks a LEFT JOIN messages m ON m.id = a.id";
+/// An ask's columns, with whether it has open work.
+fn ask_sql() -> String {
+    format!(
+        "SELECT a.id, m.body, a.size, a.sized_by, a.sized_in, a.held_ts IS NOT NULL, {OPEN}
+         FROM asks a LEFT JOIN messages m ON m.id = a.id"
+    )
+}
 
 fn refused(why: impl Into<String>) -> Error {
     Error::Refused(why.into())
@@ -480,17 +487,18 @@ fn row(r: &rusqlite::Row) -> rusqlite::Result<Ask> {
         by: r.get(3)?,
         sized_in: r.get(4)?,
         held: r.get(5)?,
+        open: r.get(6)?,
     })
 }
 
 fn read(conn: &Connection, ask: &str) -> Result<Ask, Error> {
-    let sql = format!("{ASK} WHERE a.id = ?1");
+    let sql = format!("{} WHERE a.id = ?1", ask_sql());
     Ok(conn.prepare_cached(&sql)?.query_row([ask], row)?)
 }
 
 /// The chat's asks, oldest first.
 pub fn in_chat(conn: &Connection, chat: &str) -> Result<Vec<Ask>, Error> {
-    let sql = format!("{ASK} WHERE a.chat_id = ?1 ORDER BY a.rowid");
+    let sql = format!("{} WHERE a.chat_id = ?1 ORDER BY a.rowid", ask_sql());
     let mut stmt = conn.prepare_cached(&sql)?;
     let rows = stmt.query_map([chat], row)?;
     Ok(rows.collect::<Result<_, _>>()?)

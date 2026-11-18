@@ -257,6 +257,8 @@ pub fn check(
         let named: Vec<&Line> = all.iter().copied().filter(named).collect();
         let text = words::wake(&named, &all, &answer.agents, now_us);
         let start = Start::queue(&tx, (chat, &lead.agent), (None, None), Opened::Wake, text)?;
+        let of: Vec<_> = named.iter().map(|l| (l.task, l.turn.as_deref())).collect();
+        crate::topics::record::serve_one_ask(&tx, &start.turn, &of)?;
         let event = Event::point("gathr.quiet.woke").trace(trace).chat(chat);
         let event = event.ok().attr("gen_ai.agent.id", lead.agent.clone());
         event.attr("turn", start.turn.clone()).insert(&tx)?;
@@ -273,7 +275,8 @@ pub fn check(
             kept.total_us = None;
         } else if *kept.total_us.get_or_insert(0) >= times.tell_after_us {
             let line = words::stuck(&new_first(&not_moving, untold), &answer.agents, now_us);
-            crate::store::say(&tx, chat, &line)?;
+            // It needs the person: a main message of its own (0075).
+            crate::store::say_about(&tx, chat, &line, Some("main"))?;
             let event = Event::point("gathr.quiet.told").trace(trace).chat(chat);
             event.ok().attr("stuck_us", kept.total_us).insert(&tx)?;
             kept.told = Some(now_us);
@@ -325,6 +328,12 @@ pub fn silent_turn(
     let name = crate::tasks::name_of(&tx, agent)?;
     let text = words::silent(&name, task, quiet_ms);
     let start = Start::queue(&tx, (chat, &lead.agent), (None, None), Opened::Silent, text)?;
+    // The silent turn is the one on this trace.
+    let silent: Option<String> = tx
+        .prepare_cached("SELECT id FROM turns WHERE trace_id = ?1 AND chat_id = ?2")?
+        .query_row([trace, chat], |r| r.get(0))
+        .optional()?;
+    crate::topics::record::serve_one_ask(&tx, &start.turn, &[(task, silent.as_deref())])?;
     let event = Event::point("gathr.turn.silent_told").trace(trace);
     let event = event.chat(chat).ok().attr("gen_ai.agent.id", agent);
     let event = event.attr("lead", lead.agent).attr("quiet_ms", quiet_ms);

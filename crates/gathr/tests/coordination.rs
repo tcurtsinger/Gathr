@@ -494,6 +494,18 @@ fn a_wait_outlasts_a_restart_and_wakes_its_agent_where_it_left_it() {
         turns[1]["answers"], turns[0]["id"],
         "the wake-up's thread: {history}"
     );
+    // 0075: the turn the wait woke sits where the turn that set it was, under the person's message.
+    let mut asked = history["messages"].as_array().unwrap().iter();
+    let asked = asked.find(|m| m["role"] == "user").unwrap()["id"]
+        .as_str()
+        .unwrap();
+    let want = json!(format!("m:{asked}"));
+    assert_eq!(
+        [&turns[0]["topic"], &turns[1]["topic"]],
+        [&want, &want],
+        "{history}"
+    );
+    common::topics_agree(&data.0, &chat);
     let woken = history["messages"]
         .as_array()
         .unwrap()

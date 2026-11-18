@@ -224,7 +224,7 @@ mod tests {
         let states = Arc::new(crate::chat_state::States::new(live.clone()));
         conn.execute_batch(
             "INSERT INTO chats (id, title, created_ts) VALUES ('c1', 'Made up', 0);
-             ALTER TABLE turns RENAME COLUMN status TO status_gone;
+             ALTER TABLE quiet RENAME TO quiet_gone;
              INSERT INTO tasks (chat_id, owner, kind, what, state, created_ts, updated_ts)
              VALUES ('c1', 'a', 'work', 'x', 'ready', 0, 0);",
         )
@@ -246,7 +246,7 @@ mod tests {
         assert_eq!(row["error_type"], "sqlite", "{rows}");
         assert!(row["ref"].is_string(), "no reference: {rows}");
         let why = row["attrs"]["why"].as_str().unwrap_or_default();
-        assert!(why.contains("no such column"), "{rows}");
+        assert!(why.contains("no such table"), "{rows}");
         drop(conn);
         let _ = std::fs::remove_dir_all(&dir);
     }

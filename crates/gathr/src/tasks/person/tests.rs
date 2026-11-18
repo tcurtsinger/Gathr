@@ -41,6 +41,7 @@ fn task(form: Form, labels: &[&str]) -> Task {
         look_into: false,
         by_gathr: false,
         round: None,
+        topic: None,
         judged: None,
         notes: Vec::new(),
         done: None,

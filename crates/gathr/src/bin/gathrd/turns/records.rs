@@ -197,12 +197,18 @@ impl Task {
     /// Sends a turn's change live with when it was made and its place once started, read from
     /// its row, so a window following live shows and orders it as a reload would (0028).
     pub(super) async fn publish_turn(&self, ids: &Ids, mut update: Value) {
-        let turn = ids.turn.clone();
-        let place = self.chats.writer.call(move |c| store::turn_place(c, &turn));
+        let (turn, chat) = (ids.turn.clone(), ids.chat.clone());
+        let place = self.chats.writer.call(move |c| {
+            let (position, created) = store::turn_place(c, &turn)?;
+            let topic = gathr::topics::of_turn(c, &chat, &turn)?;
+            Ok::<_, gathr::Error>((position, created, topic))
+        });
         match place.await {
-            Some(Ok((position, created))) => {
+            Some(Ok((position, created, topic))) => {
                 update["position"] = json!(position);
                 update["created"] = json!(created);
+                // What it is about (0075): read when its status goes out, never per streamed word.
+                update["topic"] = json!(topic);
             }
             Some(Err(e)) => {
                 let event = Event::point("gathr.turn.status").trace(&ids.trace);

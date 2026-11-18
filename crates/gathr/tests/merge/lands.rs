@@ -269,6 +269,9 @@ fn a_pr_that_cant_land_wakes_its_reviewer_once_for_that_head() {
     assert_eq!(common::opened(&room.data, &woken[0]["id"]), kept);
     assert_eq!(woken[0]["agent"], room.vale.as_str(), "{chat}");
     assert!(woken[0]["task"].is_null(), "woken on a task: {chat}");
+    // 0075: on no task, but in the thread of the PR's task (#1, its review here).
+    assert_eq!(woken[0]["topic"], "t:1", "{chat}");
+    common::topics_agree(&room.data, &room.chat);
     room.looked();
     assert_eq!(room.told().len(), 1, "told again at a later look");
     assert_eq!(room.main(), room.base, "landed over a CI failure");
