@@ -21,7 +21,6 @@ export function Said({
   small,
   you,
   gathr,
-  keep,
   bare,
   root,
   reply,
@@ -36,9 +35,7 @@ export function Said({
   you?: boolean;
   /** Gathr says it (0073): its bubble is outlined. */
   gathr?: boolean;
-  /** Its steps stay on its name line: a failed step, or an agent still working. */
-  keep?: boolean;
-  /** It has no words yet: its face sits beside its name line. */
+  /** Nothing under its name line (a failed Stop): its face sits beside it. */
   bare?: boolean;
   root?: boolean;
   reply?: boolean;
@@ -50,7 +47,6 @@ export function Said({
     'data-small': small || undefined,
     'data-you': you || undefined,
     'data-gathr': gathr || undefined,
-    'data-keep': keep || undefined,
     'data-bare': bare || undefined,
     'data-reply': reply || undefined,
   };
@@ -98,18 +94,14 @@ export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small 
 
 /**
  * The name line (the owner's call of 2026-11-18): the name, then the time and New with "·" between, and the person's
- * ask's size on their own message. In the agent's panel the task it worked on and its tick follow, and `end` after
- * them: the steps.
+ * ask's size on their own message. In the agent's panel the task it worked on and its tick follow.
  */
-export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNode[]; end?: ReactNode }) {
+export function NameLine({ name, pieces }: { name: string; pieces: ReactNode[] }) {
   // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
   return (
     <div className="name-line">
       <span className="name-line-name">{name}</span>
-      <span className="name-line-meta">
-        {pieces}
-        {end}
-      </span>
+      <span className="name-line-meta">{pieces}</span>
     </div>
   );
 }
@@ -153,17 +145,20 @@ export function EndRow({
 }
 
 /**
- * The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to. `foot` is the row under
- * it (`Foot`): bubble and row share one box as wide as the wider of them, so the row's buttons end at the bubble's
- * right edge, or after the row's own content when the bubble is narrower (said.css).
+ * The words, in a bubble: what it answers first, plainly, or the blue @Name of whom it is to; `lead` before both (the
+ * steps a message between agents came after). `foot` is the row under it (`Foot`): bubble and row share one box as
+ * wide as the wider of them, so the row's buttons end at the bubble's right edge, or after the row's own content when
+ * the bubble is narrower (said.css).
  */
 export function Bubble({
+  lead,
   quote,
   onQuote,
   mention,
   foot,
   children,
 }: {
+  lead?: ReactNode;
   quote?: string;
   /** The quote leads to what it quotes: an ask's result to its ask. */
   onQuote?: () => void;
@@ -173,6 +168,7 @@ export function Bubble({
 }) {
   const bubble = (
     <div className="bubble">
+      {lead}
       {quote &&
         (onQuote ? (
           <button type="button" className="bubble-quote" onClick={onQuote}>

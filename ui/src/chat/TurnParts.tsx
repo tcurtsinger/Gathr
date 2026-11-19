@@ -18,32 +18,23 @@ import '../plans/plans.css';
 export const FoundContext = createContext<string | undefined>(undefined);
 
 /**
- * What a turn did before its message (0037), as assistant-ui's Run activity (the owner's call, 2026-11-12):
- * closed, how long it worked and how much it did, or "Working" with its latest step under it while it runs;
- * open, each tool step as a Tool call, which opens to what it ran and what came back (0044), and Gathr's own
- * lines between them: what it wrote mid-work, its thoughts, the tasks it gave.
+ * Steps as one row, assistant-ui's Run activity (the owner's calls, 2026-11-12 and 2026-11-19): in a bubble, a run of
+ * steps between words, closed to what it did ("Read 2 files, ran 1 command"); in the agent's panel's Now, a running
+ * turn's steps. While it runs it says "Working", shimmering, its latest step under it; open, each tool step is a Tool
+ * call, which opens to what it ran and what came back (0044), and Gathr's own lines sit between them: its thoughts,
+ * the tasks it gave, and in the panel what it wrote mid-work.
  */
 export function WorkRow({
   work,
   onOpenTask,
   startOpen = false,
-  open: given,
-  onOpenChange,
 }: {
   work: Work;
   onOpenTask: (task: number) => void;
   /** Its steps show from the start, as in the agent's panel. */
   startOpen?: boolean;
-  /**
-   * Opened from elsewhere: a message's name line holds the button (0072), and the row is only its steps, with no
-   * button of its own.
-   */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
 }) {
-  const [own, setOwn] = useState(startOpen);
-  const open = given ?? own;
-  const setOpen = onOpenChange ?? setOwn;
+  const [open, setOpen] = useState(startOpen);
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
     id: step.id,
     kind: 'say' in step ? 'commentary' : 'tool',
@@ -58,7 +49,8 @@ export function WorkRow({
   }));
   return (
     <RunActivity
-      className={given === undefined ? 'work' : 'work steps-only'}
+      // Closed, only "Working" and the latest step show: those shimmer, never a list of steps opened.
+      className={work.running && !open ? 'work shimmer motion-reduce:animate-none' : 'work'}
       status={work.running ? 'running' : 'complete'}
       statusLabel={work.running ? 'Working' : work.label}
       durationLabel={

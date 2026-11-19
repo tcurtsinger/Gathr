@@ -43,7 +43,7 @@ const said = (
 
 /**
  * A team chat: the person's ask with the lead's answer under it; the lead's short "Yes." with Ann's long reply under it
- * and Ann's thumbs-up on it; and Ann's long message with steps (the agent's panel's).
+ * and Ann's thumbs-up on it; and Ann's long message with a step, its line above the words in the bubble.
  */
 function state(): ChatState {
   return {
@@ -104,7 +104,7 @@ async function drawn(width: number) {
       ...document.querySelectorAll(
         `.thread-messages > .said${reply ? '[data-reply]' : ':not([data-reply])'}`,
       ),
-    ].find((m) => m.querySelector('.bubble')?.textContent?.startsWith(words)) as HTMLElement;
+    ].find((m) => m.querySelector('.bubble .markdown')?.textContent?.startsWith(words)) as HTMLElement;
   return { message };
 }
 

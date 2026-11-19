@@ -58,3 +58,17 @@ Of the small words: only "New" stays. Of a working agent's live line before it h
   face's mark says the agent works; the panel lists it. A block with an approval, a question or Retry, Continue or
   Sign in under it still shows, with its name and time.
 - Proof: `ui/src/chat/nameLine.test.tsx`, `ui/src/chat/AgentPanel.test.tsx`, `ui/src/chat/seen.test.tsx`.
+
+## Changed, 2026-11-19
+
+The owner's call after using it: "Like Claude's app", and it stays after the turn ends. A working agent showed nothing until
+its final words, and words it wrote mid-turn streamed in and then vanished when its next tool call came. Now a turn
+reads in the agent's one bubble, in order: every piece of words where it was written, drawn as the message's text
+is, and each run of steps between them folded to one quiet line that says what it did, counted by kind ("Read 2
+files, ran 1 command"), and opens to its steps. While a run is going its line is the working line ("Working",
+shimmering, the time, its latest step under it). The bubble shows from the moment the turn runs, the working line
+alone before any word or step. When the turn ends nothing moves: the last run's line turns into its finished words.
+This reverses the change of 2026-11-18 above for every block with words or steps or a running turn: only a block
+with none of these and nothing to act on draws nothing. The agent's panel draws a block the same way (its name
+line keeps the task); its Now keeps the running turn's whole row. Proof: `ui/src/chat/turn.test.tsx`,
+`ui/src/chat/nameLine.test.tsx`, `ui/src/chat/marks.test.tsx`.

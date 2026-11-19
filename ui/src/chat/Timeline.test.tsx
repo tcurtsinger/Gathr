@@ -1,6 +1,6 @@
-// The one timeline as the person uses it (0037): a turn's steps in the agent's panel, Gathr's event lines, a long name
-// line there and the
-// what a needs-you row in Summary goes to when an approval waits. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
+// The one timeline as the person uses it (0037): a turn's runs of steps, Gathr's event lines, a long name line in the
+// agent's panel, and what a needs-you row in Summary goes to when an approval waits. Talk between agents and
+// thumbs-ups are in TeamChat.test.tsx (0072); how a turn's words and runs read is in turn.test.tsx.
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { page, server, userEvent } from 'vitest/browser';
@@ -66,7 +66,7 @@ const task = (number: number, more: Partial<Task>): Task => ({
   ...more,
 });
 
-/** The chat; with `panel`, its blocks as the agent's panel draws them, steps on their name lines (`InPanel`). */
+/** The chat; with `panel`, its blocks as the agent's panel draws them (`InPanel`). */
 function View({ state, actions, panel }: { state: ChatState; actions?: Partial<Actions>; panel?: boolean }) {
   const cache = useRef(new Map());
   const none = () => {};
@@ -91,7 +91,7 @@ function View({ state, actions, panel }: { state: ChatState; actions?: Partial<A
   );
 }
 
-test('in the agent’s panel a turn’s steps open from its name line, with what it wrote between them, and a task it gave opens', async () => {
+test('in the agent’s panel a turn reads as in the chat: its words between its runs, each run opening to its steps, a task it gave opening', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -108,15 +108,17 @@ test('in the agent’s panel a turn’s steps open from its name line, with what
   const opened: number[] = [];
   const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} panel />);
   await expect.element(screen.getByText('Made-up final answer')).toBeVisible();
-  // Folded: the remark and the steps aren't drawn.
-  expect(screen.getByText('Made-up remark mid-work').query()).toBeNull();
-
-  await screen.getByRole('button', { name: '3 steps · gave 1 task · 27s · 1 failed' }).click();
-  // Each tool step is assistant-ui's Tool call; what it wrote between them and the task it gave are Gathr's lines.
   await expect.element(screen.getByText('Made-up remark mid-work')).toBeVisible();
-  expect(screen.getByRole('listitem').elements()).toHaveLength(4);
+  // Closed, each run is one line: no step is drawn.
+  expect(screen.getByRole('listitem').elements()).toHaveLength(0);
+
+  await screen.getByRole('button', { name: 'Read 1 file, ran 1 command' }).click();
+  // Each tool step is assistant-ui's Tool call.
+  expect(screen.getByRole('listitem').elements()).toHaveLength(2);
   await expect.element(screen.getByRole('button', { name: /Read a file/ })).toBeVisible();
   await expect.element(screen.getByRole('img', { name: 'Failed' })).toBeVisible();
+  // The task it gave is Gathr's line, in the run after the remark.
+  await screen.getByRole('button', { name: 'Gave 1 task' }).click();
   await screen.getByRole('button', { name: '#7 Made-up task 7' }).click();
   expect(opened).toEqual([7]);
 });
@@ -139,7 +141,7 @@ test('a step’s chip says what it ran, cut to the column; the step opens to it 
       <View state={state} panel />
     </div>,
   );
-  await screen.getByRole('button', { name: '3 steps · 48s' }).click();
+  await screen.getByRole('button', { name: 'Ran 2 commands, read 1 file' }).click();
   await expect.element(screen.getByRole('listitem').nth(2)).toBeVisible();
   const list = document.querySelector('.work ol') as HTMLElement;
   const chip = screen.getByText(long).element() as HTMLElement;
@@ -170,7 +172,7 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
       <View state={state} panel />
     </div>,
   );
-  const row = screen.getByRole('button', { name: '1 step' });
+  const row = screen.getByRole('button', { name: 'Ran 1 command' });
   await row.click();
   const step = screen.getByRole('button', { name: new RegExp(`^Ran.*${long.slice(0, 20)}`) });
   await expect.element(step).toBeVisible();

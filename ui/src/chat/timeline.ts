@@ -105,8 +105,8 @@ export function drawn(
         const work = worked.get(g);
         const turn = work?.turn ? state.turns[work.turn] : undefined;
         const running = !!work?.last && turn?.status === 'running';
-        const did = work && fold(work.msgs, '', running, gave, work.bound ? turn?.created : undefined).work;
-        return talkBlock(cache, g, state, crew, { spoken, work: did, place });
+        const did = work && fold(work.msgs, '', running, gave, work.bound ? turn?.created : undefined);
+        return talkBlock(cache, g, state, crew, { spoken, did, place });
       }
       case 'gathr': {
         const lines = heardIn.has(g.turn ?? '') ? [] : heard(g, state, crew);

@@ -3,7 +3,7 @@ import type { Message, ThinkingBody, ToolBody, Turn } from '../api';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, changed, fixed } from './asks';
 import { ending } from './ends';
-import { fold, type Given } from './fold';
+import { fold, type Given, type Piece, type Work } from './fold';
 import type { Group } from './groups';
 import { blockLike, likeOpened, PERSON, saidLike, versionLike } from './likes';
 import type { Cache, Custom, EventLine, Place, SendFailure } from './messages';
@@ -26,8 +26,9 @@ export interface Heading {
 }
 
 /**
- * A block of an agent's turn: what it did folds into a row, its last text is the message (0037). One that didn't
- * change is the same object as on the draw before (`cache`), so the thread can tell which blocks to draw again.
+ * A block of an agent's turn: its words where it wrote them, each run of steps between them one line (the owner's call
+ * of 2026-11-19). One that didn't change is the same object as on the draw before (`cache`), so the thread can tell
+ * which blocks to draw again.
  */
 export function block(
   cache: Cache,
@@ -62,8 +63,8 @@ export function block(
     : toPerson
       ? (group.msgs.findLast((m) => m.kind === 'text')?.time ?? turn?.created ?? '')
       : undefined;
-  // Only the shown text's: an earlier text folds into the row, and its thumbs-up would sit under words
-  // the giver didn't agree with.
+  // Only the last text's: the like sits under the bubble, after the block's final words, and an earlier text's
+  // thumbs-up would read as given to those.
   const last = group.msgs.at(-1);
   const like = blockLike(state, group.msgs, asked ?? [], !!partial);
   const agreed = !partial && last && (last.kind === 'text' || like) ? agreedBy(state, crew, last.id) : [];
@@ -73,7 +74,9 @@ export function block(
   const seat = crew.seated(turn?.agent);
   const who = `${agent}|${role}|${seat}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
-  const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
+  // The last block's line works while its turn runs, so the turn's state is part of what it is made from.
+  const status = group.last ? turn?.status : '';
+  const sig = `${parts}|${partial.length}|${status}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -115,15 +118,14 @@ function endingOf(group: Group, state: ChatState) {
 }
 
 /**
- * A turn's block the chat draws nothing for (the owner's call of 2026-11-18): no words yet, or only steps, and nothing
- * the person can act on (an approval, a question it asked, what to do about how its turn ended). The agent's panel
- * still lists it, with its steps.
+ * A turn's block the chat draws nothing for: no words, no steps, its turn not running, and nothing the person can act
+ * on (an approval, a question it asked, what to do about how its turn ended); a turn Gathr dropped before it ran.
  */
 export function mute(group: Group, state: ChatState, asked: number[] | undefined): boolean {
   if (group.kind !== 'reply' || asked?.length) return false;
+  if (group.msgs.some((m) => m.kind !== 'text' || m.body)) return false;
   const id = group.turn;
-  const last = group.msgs.at(-1);
-  if ((last?.kind === 'text' && last.body) || (group.last && id && state.partial[id])) return false;
+  if (group.last && id && (state.partial[id] || state.turns[id]?.status === 'running')) return false;
   if (group.last && id && state.approvals.some((a) => a.turn === id)) return false;
   return !endingOf(group, state);
 }
@@ -137,13 +139,13 @@ function toReply(
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
-  const { work, text } = fold(group.msgs, partial, status === 'running', gave, began);
+  const { work, words, pieces } = fold(group.msgs, partial, status === 'running', gave, began);
   if (work) custom.work = work;
-  if (text) custom.text = true;
+  if (pieces.length) custom.pieces = pieces;
   return {
     id: group.key,
     role: 'assistant',
-    content: text ? [{ type: 'text', text }] : [],
+    content: words.map((text) => ({ type: 'text', text })),
     status:
       status === 'running' || (status === 'queued' && !(turn && engineWait(turn)))
         ? { type: 'running' }
@@ -333,7 +335,11 @@ export function talkBlock(
   group: Group,
   state: ChatState,
   crew: Team,
-  { spoken, work, place }: { spoken: Map<string, Spoken>; work?: Said['work']; place: Place },
+  {
+    spoken,
+    did,
+    place,
+  }: { spoken: Map<string, Spoken>; did?: { work?: Work; pieces: Piece[] }; place: Place },
 ): ThreadMessageLike {
   const m = group.msgs[0];
   const agent = state.turns[m.turn ?? '']?.agent ?? undefined;
@@ -348,7 +354,8 @@ export function talkBlock(
     time: m.time,
     agreed: agreedBy(state, crew, m.id),
     like: saidLike(state, m.id),
-    ...(work && { work }),
+    ...(did?.work && { work: did.work }),
+    ...(!!did?.pieces.length && { pieces: did.pieces }),
   };
   return kept(cache, group.key, JSON.stringify([said, text, place]), () => ({
     id: group.key,

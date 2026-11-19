@@ -9,8 +9,7 @@
 .said-face {
   padding-top: 25px;
 }
-/* A message with no words in the agent's panel (an agent at work, a turn that only ran steps): its face beside its name
-   line. */
+/* A message with nothing under its name line (a failed Stop): its face beside the line. */
 .said[data-bare] {
   align-items: center;
 }
@@ -116,20 +115,14 @@
  * "·" between the pieces, 6px each side; its text is no part of what a screen reader says. Safari before 17.4 doesn't
  * know the alternative text and would drop the whole declaration, so it keeps the plain dot.
  */
-.name-line-meta > * + *::before,
-.steps-piece::before {
+.name-line-meta > * + *::before {
   content: "·";
   padding: 0 6px;
 }
 @supports (content: "·" / "") {
-  .name-line-meta > * + *::before,
-  .steps-piece::before {
+  .name-line-meta > * + *::before {
     content: "·" / "";
   }
-}
-/* The steps button holds its own pieces, each with its "·". */
-.name-line-meta > .steps-button::before {
-  content: none;
 }
 .name-line-meta svg {
   width: 12px;
@@ -183,62 +176,6 @@
 /* A step Gathr refused reads so in the danger colour, as its cross does. */
 .work-step.refused > [data-slot="collapsible-trigger"] > span:first-of-type {
   color: var(--destructive);
-}
-
-/* A turn's steps on its name line in the agent's panel: shown while the message is pointed at or has keyboard focus,
-   and always for a failed step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */
-.steps-button {
-  display: flex;
-  flex: none;
-  align-items: center;
-  min-height: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  opacity: 0;
-  cursor: pointer;
-}
-.said:hover .steps-button,
-.said:has(:focus-visible) .steps-button,
-.said[data-keep] .steps-button,
-.steps-button[aria-expanded="true"] {
-  opacity: 1;
-}
-.steps-button:hover {
-  color: var(--foreground);
-}
-.steps-piece {
-  display: flex;
-  align-items: center;
-}
-.steps-failed {
-  color: var(--destructive);
-}
-.name-line-meta .steps-chevron {
-  margin-left: 4px;
-}
-.steps-button[aria-expanded="true"] .steps-chevron {
-  rotate: 90deg;
-}
-/* The steps open under the name line, with no button of their own: the name line holds it. */
-.work.steps-only > [data-slot="collapsible"] > [data-slot="collapsible-trigger"],
-.work.steps-only > p {
-  display: none;
-}
-.work.steps-only {
-  gap: 0;
-}
-.work.steps-only [data-slot="collapsible-content"] > ol {
-  margin-bottom: 4px;
-  padding-top: 4px;
-}
-/* A running turn's latest step, under its name line while the steps are closed. */
-.work.steps-only > [data-slot="collapsible"] > p {
-  padding-left: 0;
-  font-size: 13px;
 }
 
 /* The words: a soft bubble that lifts off the page; the person's own tinted blue (the owner's word, 0072). */

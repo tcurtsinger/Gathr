@@ -1,12 +1,9 @@
 import { MessagePrimitive } from '@assistant-ui/react';
-import { useContext, useState } from 'react';
 import { afterDraw, Foot } from './Foot';
 import type { Custom } from './messages';
-import { parts } from './Replies';
+import { Pieces, parts } from './Replies';
 import { AgentFace, Bubble, NameLine, NewWord, Said, When } from './Said';
-import { InPanel, StepsButton } from './Steps';
 import { useActions } from './Thread';
-import { WorkRow } from './TurnParts';
 import type { Said as Message } from './threads';
 
 /** "Show N earlier replies" above a long thread's newest; pressed, they show and focus goes to the first of them. */
@@ -38,13 +35,11 @@ export function Earlier({ earlier }: { earlier: NonNullable<Custom['earlier']> }
 }
 
 /**
- * A message between agents (0072), an item of its own: in a thread, smaller, with the @Name of whom it is to. In the
- * agent's panel it carries the steps of a turn that only sent it.
+ * A message between agents (0072), an item of its own: in a thread, smaller, with the @Name of whom it is to. A turn
+ * that only sent it has its runs of steps as lines above its words, as a turn's block has.
  */
 export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
   const actions = useActions();
-  const work = useContext(InPanel) ? m.work : undefined;
-  const [open, setOpen] = useState(false);
   const name = m.from ?? 'An agent';
   const { by } = m;
   const small = own.reply;
@@ -54,7 +49,6 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       reply={small}
       agent={m.agent}
       small={small}
-      keep={!!work && (work.running || !!work.failed)}
       face={
         <AgentFace
           agent={m.agent}
@@ -71,14 +65,11 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
             <When key="t" time={m.time} />,
             small && <NewWord key="new" topic={own.topic} time={own.time} />,
           ]}
-          end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
         />
       }
     >
-      {work && (open || work.running) && (
-        <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
-      )}
       <Bubble
+        lead={m.pieces && <Pieces pieces={m.pieces} onOpenTask={actions.openTask} />}
         quote={m.quote}
         mention={m.to}
         foot={<Foot fold={own.thread} agreed={m.agreed} like={m.like} answer={own.answer} />}

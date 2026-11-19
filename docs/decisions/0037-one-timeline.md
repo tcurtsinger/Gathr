@@ -85,3 +85,17 @@ turn did, and what the agent is doing now, are no longer in the chat: the agent'
 ([0072](0072-the-chat-reads-like-a-team-chat.md)'s change). This turns over the "Turned down" above that the timeline
 has to stand alone: a turn's steps are read in the panel. A chat of one agent has its agent's panel too, since it
 keeps its list ([0028](0028-team-chats.md)'s change of the same day). A member's task is no longer named on its blocks.
+
+## Changed, 2026-11-19
+
+The owner's call after using it: "Like Claude's app", and it stays after the turn ends. A working agent showed nothing until
+its final words, and words it wrote mid-turn streamed in and then vanished when its next tool call came. Now a turn
+reads in the agent's one bubble, in order: every piece of words where it was written, drawn as the message's text
+is, and each run of steps between them folded to one quiet line that says what it did, counted by kind ("Read 2
+files, ran 1 command"), and opens to its steps. While a run is going its line is the working line ("Working",
+shimmering, the time, its latest step under it). The bubble shows from the moment the turn runs, the working line
+alone before any word or step. When the turn ends nothing moves: the last run's line turns into its finished words.
+This reverses the change of 2026-11-18 above for every block with words or steps or a running turn: only a block
+with none of these and nothing to act on draws nothing. The agent's panel draws a block the same way (its name
+line keeps the task); its Now keeps the running turn's whole row. Proof: `ui/src/chat/turn.test.tsx`,
+`ui/src/chat/nameLine.test.tsx`, `ui/src/chat/marks.test.tsx`.

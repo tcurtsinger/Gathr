@@ -65,14 +65,16 @@ function cancelled(): ChatState {
   return state;
 }
 
-test('a reply that worked on a task, ran steps with one failed and ended cancelled shows only its name and time', async () => {
+test('a reply that worked on a task, ran steps with one failed and ended cancelled names only itself and the time', async () => {
   await render(<View state={cancelled()} />);
   await expect.element(page.getByText('Cursor fixed')).toBeVisible();
   const rowan = blockOf('rowan') as Element;
   expect(rowan.querySelector('.name-line-name')?.textContent).toBe('Rowan');
   expect(pieces(rowan.querySelector('.name-line') as Element)).toEqual(['time']);
-  // No steps in the chat, opened or closed.
-  expect(document.querySelectorAll('.thread-messages .steps-button, .thread-messages .work')).toHaveLength(0);
+  // Its steps are one line in its bubble, above its words (the owner's call of 2026-11-19), not on its name line.
+  expect([...rowan.querySelectorAll('.bubble > .work button')].map((w) => w.textContent?.trim())).toEqual([
+    'Read 1 file, ran 1 command',
+  ]);
 });
 
 test('a main message says no state, mark or PR; the lead is not called Supervisor; a result does not say Result', async () => {
@@ -94,7 +96,7 @@ test('a main message says no state, mark or PR; the lead is not called Superviso
   }
 });
 
-test('a working turn with no words draws nothing and counts nowhere; its words show as they come', async () => {
+test('a working turn with no words is a reply in its thread from its first step; its words show as they come', async () => {
   const state = inTheAsk(round());
   state.turns.rowan = { ...state.turns.rowan, status: 'running' };
   state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
@@ -105,18 +107,19 @@ test('a working turn with no words draws nothing and counts nowhere; its words s
     return { t, fold: custom(t.items.find((i) => i.id === state.messages[0].id)).thread };
   };
   const before = main(state);
-  expect(before.t.all.map((i) => i.id)).not.toContain('a-rowan');
-  expect(before.t.items.map((i) => i.id)).not.toContain('a-rowan');
-  // Mira's words and Kit's: Rowan's turn is not a reply yet.
-  expect(before.fold).toMatchObject({ topic: ask, count: 2 });
-  expect(before.t.find('rowan-run')?.id).not.toBe('a-rowan');
+  expect(before.t.items.map((i) => i.id)).toContain('a-rowan');
+  // Mira's words, Kit's and Rowan's at work.
+  expect(before.fold).toMatchObject({ topic: ask, count: 3 });
+  expect(before.t.find('rowan-run')?.id).toBe('a-rowan');
 
   const screen = await render(<View state={state} />);
   await expect.element(page.getByText('Checked')).toBeVisible();
-  expect(blockOf('rowan')).toBeNull();
-  expect(document.body.textContent).not.toMatch(/Running a command|Working/);
+  const working = blockOf('rowan')?.querySelector('.bubble > .work');
+  expect(working?.querySelector('button')?.textContent).toMatch(/^Working/);
+  // Its latest step, under the working line.
+  expect(working?.querySelector('[data-slot="collapsible"] > p')?.textContent).toBe('Running a command');
 
-  // Its first words: the reply shows in its place, and counts.
+  // Its first words: in its bubble, after its working line, on the same name line.
   const streaming = { ...state, partial: { rowan: 'Looking at the cursor' } };
   await screen.rerender(<View state={streaming} />);
   await expect.element(page.getByText('Looking at the cursor')).toBeVisible();
@@ -124,13 +127,22 @@ test('a working turn with no words draws nothing and counts nowhere; its words s
   expect(main(streaming).fold?.count).toBe(3);
 });
 
-test('an ended turn that only ran steps draws nothing, and its thread has no reply for it', () => {
+test('an ended turn that only ran steps keeps its line as a reply; a turn dropped before it ran draws nothing', () => {
   const state = inTheAsk(round());
   state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
   state.messages.push(tool('rowan', 'rowan-read', 'Read'), tool('rowan', 'rowan-edit', 'Edit'));
   const t = toThread(state, agents, [], new Map(), opened);
-  expect(t.all.map((i) => i.id)).not.toContain('a-rowan');
-  expect(custom(t.items.find((i) => i.id === state.messages[0].id)).thread?.count).toBe(2);
+  const pieces = custom(t.items.find((i) => i.id === 'a-rowan')).pieces;
+  expect(pieces?.map((p) => ('run' in p ? p.run.label : p.words))).toEqual(['Read 1 file, edited 1 file']);
+  expect(custom(t.items.find((i) => i.id === state.messages[0].id)).thread?.count).toBe(3);
+
+  // Stopped by Gathr for a reason of its own before it wrote or ran anything: nothing to show, nothing to act on.
+  state.messages = state.messages.filter((m) => m.turn !== 'rowan' || m.role !== 'assistant');
+  state.turns.rowan = { ...state.turns.rowan, status: 'stopped', end: 'cancelled' };
+  const dropped = toThread(state, agents, [], new Map(), opened);
+  expect(dropped.every.map((i) => i.id)).toContain('a-rowan');
+  expect(dropped.all.map((i) => i.id)).not.toContain('a-rowan');
+  expect(custom(dropped.items.find((i) => i.id === state.messages[0].id)).thread?.count).toBe(2);
 });
 
 test('a turn with no words still shows what the person can act on: Retry with why it ended, an approval, a question', async () => {
