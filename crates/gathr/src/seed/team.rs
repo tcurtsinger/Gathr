@@ -216,7 +216,6 @@ impl Seeder<'_> {
                 g.number, TEAM[g.who].0, g.what
             ));
         }
-        lines.push("Read replies with read_chat, then continue.".into());
         self.message(&turn, "gathr", "text", &lines.join("\n"))?;
         let words = 50 + self.next() % 150;
         self.answer(&turn, words as usize)

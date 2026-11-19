@@ -370,11 +370,45 @@ fn a_task_that_ends_done_is_a_line_in_the_chat_and_trouble_is_not() {
         "blocked isn't an end: {:?}",
         lines(&conn)
     );
-    // Reported done after all, from another turn: now it ended.
-    finish(&mut conn, "bo", b, Finish::Done, &note("fixed in #9")).unwrap();
+    // Reported done after all, from another turn: now it ended. Its note is its reason, said once.
+    finish(&mut conn, "bo", b, Finish::Done, &note("left: manual test")).unwrap();
     let said = lines(&conn);
     assert_eq!(said.len(), 2, "{said:?}");
-    assert!(said[1].contains(&format!("#{b} Bo")), "{}", said[1]);
+    let line = format!("- #{b} Bo, Fix the build: done: left: manual test");
+    assert!(said[1].ends_with(&line), "{}", said[1]);
+}
+
+/// A hear-back and the done line name the task's PR and what to look at, so its giver needn't fetch
+/// them, and the hear-back sends nobody to read_chat: lines that came cut say so themselves.
+#[test]
+fn a_hear_back_names_the_tasks_pr_and_what_to_look_at() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    lead_turn(&conn, "lead-turn", None);
+    let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
+    let id = begin(&mut conn, a);
+    // "#19 merged" opens with the note "#19": the note is still the owner's, and still said.
+    let said = Said {
+        note: Some("#19"),
+        pr: Some(19),
+        file: Some("src/build.rs"),
+        ..Said::default()
+    };
+    finish(&mut conn, "ann", a, Finish::Done, &said).unwrap();
+    gathr::store::set_turn(&conn, &id, "done", None).unwrap();
+    tasks::ended(&mut conn, a, Outcome::Ok, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, a, "MERGED", None, None, T).unwrap();
+
+    let line =
+        format!("- #{a} Ann, Fix the build: done: #19 merged; #19 (PR #19, look at src/build.rs)");
+    let done = lines(&conn);
+    assert_eq!(done, [format!("A task is done:\n{line}")]);
+    let back = to_lead(&starts);
+    assert_eq!(back.len(), 1, "{starts:?}");
+    assert_eq!(
+        back[0].text,
+        format!("The task you gave is settled:\n{line}")
+    );
 }
 
 /// G158: what a lead hands on after the person's answer is a new round, as after their message.
