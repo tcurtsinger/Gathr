@@ -98,3 +98,22 @@ test('a working row’s copy for screen readers has no glyph for its shimmer to 
   await expect.element(status).toHaveTextContent('Working');
   expect(getComputedStyle(status.element()).fontSize).toBe('0px');
 });
+
+// Seen in use, 2026-11-19: while an agent worked, the chat had a sideways scroll bar. The shimmer's highlight is a
+// box that travels past the row's right edge, and what it reaches counted as the chat's width.
+test('a working row’s shimmer adds no width to what holds it', async () => {
+  const working: Work = { running: true, label: 'Working', notes: [], steps: finished.steps.slice(0, 1) };
+  // The highlight held at the end of its travel, where it reaches furthest.
+  const held = document.createElement('style');
+  held.textContent = '.work.shimmer::before{animation:none!important;translate:var(--_travel) 0!important}';
+  document.head.append(held);
+  await render(
+    <div data-testid="holds" style={{ width: 420, overflow: 'auto' }}>
+      <WorkRow work={working} onOpenTask={() => {}} />
+    </div>,
+  );
+  const holds = page.getByTestId('holds').element();
+  await expect.element(page.getByRole('button', { name: /^Working/ })).toBeVisible();
+  expect(holds.scrollWidth).toBe(holds.clientWidth);
+  held.remove();
+});
