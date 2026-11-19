@@ -568,7 +568,7 @@ pub const ASK: &str = "(SELECT group_concat(body, char(10) || char(10) ORDER BY 
 
 /// A turn that was running when the service stopped: a restart cut it. It stops, never fails: its message reached
 /// the agent, which can carry on. Its reference leads to the cut.
-pub fn cut(conn: &Connection, turn: &str) -> Result<(), Error> {
+fn cut(conn: &Connection, turn: &str) -> Result<(), Error> {
     let (chat, trace): (String, String) = conn.query_row(
         "SELECT chat_id, trace_id FROM turns WHERE id = ?1",
         [turn],
@@ -582,10 +582,9 @@ pub fn cut(conn: &Connection, turn: &str) -> Result<(), Error> {
     Ok(())
 }
 
-/// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
-/// a message another agent sent before it started joined it. Turns that were running then are cut
-/// (`cut`), and the steps they left running are stopped.
-pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
+/// At a start: every turn still running was cut off by the stop (`cut`), and the steps it left
+/// running are stopped.
+pub fn cut_running(conn: &Connection) -> Result<(), Error> {
     // By chat first: `messages` has no index on its turn. A thought's time isn't known, so it
     // gets none. `json_valid` first: a body that isn't JSON would fail the statement, and with
     // it every turn's recovery.
@@ -604,6 +603,13 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     for turn in running {
         cut(conn, &turn)?;
     }
+    Ok(())
+}
+
+/// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
+/// a message another agent sent before it started joined it. The turns that were running then were
+/// cut first, in `tasks::recover`.
+pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     // An update held these until the service before stopped: nothing holds them now (0032).
     conn.execute(
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",

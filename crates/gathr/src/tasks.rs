@@ -19,6 +19,7 @@ pub mod person;
 pub(crate) mod plan_wait;
 mod prs;
 pub(crate) mod records;
+mod recover;
 mod report;
 pub(crate) mod review;
 pub mod stale;
@@ -33,6 +34,7 @@ pub use hear::done_words;
 pub use held::{Hold, background_changed, holds};
 pub use notes::{Note, NoteKind, NoteSaid};
 pub use prs::{Seen, pr_looked, with_prs};
+pub use recover::recover;
 pub(crate) use report::finish_in;
 pub use report::{Finish, Report, Said, Took, finish};
 
@@ -610,59 +612,6 @@ pub fn restart(
     )?;
     tx.commit()?;
     Ok(starts)
-}
-
-/// The service started: tasks whose turn was cut off by the stop are `stopped`, with why, for a
-/// restart that carries on (0010). Their dependants stay `waiting`. A cut-off turn that gave tasks
-/// ends here, so its giver's hear-back is queued for the start to take over.
-pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
-    let tx = conn.transaction()?;
-    let working: Vec<i64> = {
-        // A task with a carry-on waiting (a queued turn that answers a turn on the same task)
-        // carries on in it: it isn't stopped (0032).
-        let mut stmt = tx.prepare(
-            "SELECT number FROM tasks WHERE state = 'working' AND NOT EXISTS
-             (SELECT 1 FROM turns u JOIN turns was ON was.id = u.answers
-              WHERE u.task = tasks.number AND u.status = 'queued' AND was.task = tasks.number)",
-        )?;
-        let rows = stmt.query_map([], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    let giving: Vec<String> = {
-        let mut stmt = tx.prepare(
-            "SELECT DISTINCT u.id FROM turns u JOIN tasks t ON t.given_in = u.id
-             WHERE u.status = 'running'",
-        )?;
-        let rows = stmt.query_map([], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    let trace = crate::ids::trace_id();
-    for &task in &working {
-        let why = "Gathr stopped during its turn";
-        set(&tx, task, State::Stopped, Some(why), &trace)?;
-    }
-    // Background commands ended with their engines: a task held only on one carries on.
-    crate::background::clear(&tx)?;
-    let holding: Vec<i64> = {
-        // A discussed question has no turn to start: the sweep brings it back.
-        let mut stmt =
-            tx.prepare("SELECT number FROM tasks WHERE state = 'held' AND kind != 'person'")?;
-        let rows = stmt.query_map([], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    for task in holding {
-        if held::open_on(&tx, task)?.is_empty() {
-            let carry = "Gathr stopped and ended your background command";
-            ready(&tx, task, Some(carry))?;
-        }
-    }
-    person::links::recover(&tx, &trace)?;
-    for turn in &giving {
-        crate::store::cut(&tx, turn)?;
-        hear::hear_backs(&tx, turn, &trace)?;
-    }
-    tx.commit()?;
-    Ok(working.len())
 }
 
 /// The engine in `chat` for `agent` exited: its background commands ended with it, so they're

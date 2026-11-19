@@ -60,7 +60,9 @@ ended (G194); the person would rather choose when.
 - **A task under way carries on, and nobody is told it stopped.** A turn an update stopped ends `stopped` without
   settling its task, and a start leaves a `working` task that has a turn waiting on it: the task is never `stopped`,
   what its owner had reported stays, and its giver hears back once, when it ends. Stop now is unchanged: there the
-  person stopped the work, and its carry-on waits for Restart.
+  person stopped the work, and its carry-on waits for Restart. Any other restart now does the same (0010): a turn
+  still running at the next start, by Quit or a crash, gets its carry-on then (`gathr::carry::restarted`), and one
+  an update saved before it is kept, never doubled.
 - **The hand-over can't hang** (0.1.38 to 0.1.39 did, 2026-11-10): the stopped service waits at most 5 s for its
   runtime's blocking work, then leaves it to end with the process. On Windows, reading an engine's output is blocking
   work, and an engine killed at shutdown can leave children holding that pipe (a Codex engine did), so the wait never
