@@ -47,6 +47,19 @@ export function marks(parts: PlanPart[], before: PlanPart[]) {
 /** "1 part", "9 parts". */
 export const counted = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+/** The newest version's state, in a word. */
+export const WORD: Record<PlanSummary['state'], string> = {
+  checking: 'Checking',
+  waiting: 'Waiting',
+  revising: 'Revising',
+  approved: 'Approved',
+  dropped: 'Dropped',
+};
+
+/** Where a version stands, in a word, as the plan's tab and the version's chip say it: an older one is Replaced. */
+export const versionWord = (plan: { state: PlanSummary['state']; versions: { n: number }[] }, n: number) =>
+  n === Math.max(...plan.versions.map((v) => v.n)) ? WORD[plan.state] : 'Replaced';
+
 /**
  * Gathr's line for a plan (0062 H5.2), found by the message that says it, never by its words: a version's
  * check line, or the person's word on it (Approve's and Drop's lines, the send-back's turn). A check that agrees
@@ -74,7 +87,8 @@ export function planLine(m: Message, state: ChatState, crew: Team): EventLine | 
       // The send-back's message holds the person's words between its first line and its last.
       if (v.decided === 'sent_back')
         return line('Sent back', (m.body as string).split('\n').slice(1, -1).join('\n'));
-      return line(v.decided === 'approved' ? 'Approved' : 'Dropped', plan.title);
+      // Approved or dropped: the version's chip in its bubble says so (the owner's call of 2026-11-19).
+      return null;
     }
   }
   return undefined;

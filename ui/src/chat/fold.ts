@@ -25,7 +25,8 @@ export type Step =
 export interface Chip {
   plan: number;
   version: number;
-  parts: number;
+  /** Where the version stands, in a word: "Waiting", "Approved", "Replaced" (`versionWord`). */
+  state: string;
 }
 
 /**
@@ -222,9 +223,9 @@ const isStep = (m: Message, gave: Map<string, Given>) =>
 
 /**
  * What a block's bubble draws (0082, the owner's "Inside the steps"): its message, the words it wrote after its last
- * step (else, once it has ended, its last words), with its plan chips where they came; every other piece of words is
- * narration, drawn in the line at the foot in order with the steps. While the turn runs, the words being written show
- * as words until a step follows them; a running turn with nothing yet has the working line alone.
+ * step (else its last words), then its plan chips; every other piece of words is narration, drawn in the line at the
+ * foot in order with the steps. While the turn runs, its newest words show as words until newer ones come; a running
+ * turn with nothing yet has the working line alone.
  */
 function piecesOf(
   msgs: Message[],
@@ -238,16 +239,20 @@ function piecesOf(
   const said = (m: Message) => m.kind === 'text' && !!m.body && !chips?.has(m.id);
   const after = all.findLastIndex((m) => isStep(m, gave)) + 1;
   const message = new Set(all.slice(after).filter(said));
-  if (!message.size && !streaming && !running) {
+  // With nothing after its last step, its last words are what it shows: its message once it has ended, and while it
+  // works what it last said it was doing, read as words (the owner's call of 2026-11-19), never inside the working line.
+  if (!message.size && !streaming) {
     const last = all.findLast(said);
     if (last) message.add(last);
   }
   const words: string[] = [];
   const pieces: Piece[] = [];
+  // A plan's chip ends the message, above the steps line (the owner's call of 2026-11-19).
+  const plans: Piece[] = [];
   const steps: Step[] = [];
   for (const m of all) {
     const chip = chips?.get(m.id);
-    if (chip) pieces.push({ id: m.id, plan: chip });
+    if (chip) plans.push({ id: m.id, plan: chip });
     else if (message.has(m)) {
       pieces.push({ id: m.id, words: words.length });
       words.push(m.body as string);
@@ -257,6 +262,7 @@ function piecesOf(
     pieces.push({ id: 'streaming', words: words.length });
     words.push(streaming);
   }
+  pieces.push(...plans);
   const tools = all.filter((m) => m.kind !== 'text');
   if (steps.length) return { words, pieces, line: lineOf(tools, steps, running, gave, since) };
   const working = { steps, running, label: 'Working', notes: [], since };
