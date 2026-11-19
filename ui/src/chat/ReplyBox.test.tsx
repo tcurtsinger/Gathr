@@ -197,6 +197,8 @@ async function replyOn(words: string) {
   const button = row.querySelector<HTMLElement>('.message-actions [aria-label="Reply"]');
   expect(button, `Reply on "${words}"`).not.toBeNull();
   await userEvent.click(button as HTMLElement);
+  // The box takes focus as it is drawn: keys typed before that go nowhere.
+  await expect.element(page.getByRole('textbox', { name: 'Reply' })).toHaveFocus();
   return button as HTMLElement;
 }
 const box = () => page.getByRole('textbox', { name: 'Reply' });
@@ -218,13 +220,15 @@ test('Reply opens the box at the thread’s foot with focus in it; Escape and th
   expect(foot).toBe(words + 1);
   await userEvent.keyboard('{Escape}');
   await expect.element(box()).not.toBeInTheDocument();
-  expect(document.activeElement).toBe(reply);
+  // Focus goes back a frame after the box has gone.
+  await expect.poll(() => document.activeElement).toBe(reply);
 
   await userEvent.click(reply);
   await expect.element(box()).toHaveFocus();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect.element(box()).not.toBeInTheDocument();
-  expect(document.activeElement).toBe(reply);
+  // Focus goes back a frame after the box has gone.
+  await expect.poll(() => document.activeElement).toBe(reply);
 });
 
 test('one box at a time, each thread keeps its own draft, and the main box still sends a main message', async () => {
