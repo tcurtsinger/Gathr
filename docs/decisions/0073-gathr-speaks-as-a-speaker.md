@@ -54,3 +54,9 @@ Amends [0037](0037-one-timeline.md) and [0072](0072-the-chat-reads-like-a-team-c
 - The person's answer and each Discuss sit in the question's thread, under the block that asked it, whenever they
   were sent, with the lead's turns that heard them. This reverses what was turned down here: the answer right under
   the question whenever it was sent. The question keeps its Discuss switch in the chat until Reply replaces it.
+
+## Amended by [0078](0078-said-to-you-is-main-one-bubble-per-turn.md)
+
+- Gathr's words that open a turn and draw something (a wait's result, a wake-up, a silent turn or stale tasks told, a
+  carry-on, a landing hand-off, Sent back) are the quote at the top of that turn's bubble, up to three lines; Gathr
+  draws no message for them until the turn has no bubble to quote them in.

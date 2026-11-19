@@ -8,7 +8,7 @@ export interface Group {
   key: string;
   turn: string | null;
   msgs: Message[];
-  kind: 'person' | 'gathr' | 'reply' | 'to' | 'version' | 'question' | 'said';
+  kind: 'person' | 'gathr' | 'reply' | 'to' | 'question' | 'said';
   /** Where its first message is among the chat's saved ones; one with none yet sits after its turn's latest. */
   at: number;
   /** It opens its turn: the message that started it, or its first reply. */
@@ -28,9 +28,9 @@ export const hasEnding = (t: Turn) => ended.has(t.status);
 
 /**
  * The chat's saved messages as blocks, in saved order (0037). A turn is one block where it began: its words and the
- * runs of steps between them, and a later reply of the turn lands in that block, so turns streaming at
- * once never interleave. Only a person's message sent into a running turn, or Gathr's copy of one, splits it, one block
- * before and one after.
+ * runs of steps between them, a plan version it wrote among them (0078), and a later reply of the turn lands in that
+ * block, so turns streaming at once never interleave. Only a person's message sent into a running turn, or Gathr's copy
+ * of one, splits it, one block before and one after.
  * Each message to an agent is a block of its own. A block keeps one id from its first streamed text to its saved
  * messages, so nothing remounts when a stream ends.
  */
@@ -47,7 +47,6 @@ export function grouped(state: ChatState): Group[] {
   const open = new Map<string, Group>();
   // Each turn's latest saved message, of any kind.
   const latest = new Map<string, number>();
-  const versions = new Set(state.plans.flatMap((p) => p.versions.map((v) => v.message)));
   const persons = new Set(state.messages.filter((m) => m.role === 'user').map((m) => m.id));
   state.messages.forEach((m, at) => {
     const bound = !!m.turn && !latest.has(m.turn);
@@ -60,10 +59,6 @@ export function grouped(state: ChatState): Group[] {
       if (!m.copy_of) groups.push({ ...one, key: m.id, kind: 'gathr', bound });
       // Gathr's copy of the person's message splits the turn it entered as theirs does (0028); it draws nothing.
       else if (m.turn && persons.has(m.copy_of)) open.delete(m.turn);
-    } else if (versions.has(m.id)) {
-      // The lead's text after the plan call starts a new block after the chip, never above it.
-      groups.push({ ...one, key: m.id, kind: 'version', bound });
-      if (m.turn) open.delete(m.turn);
     } else if (m.to) {
       groups.push({ ...one, key: m.id, kind: 'to', bound: false, root: open.get(m.turn ?? '') });
     } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);

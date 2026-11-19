@@ -112,17 +112,18 @@ function NewLine() {
 
 /**
  * A block of an agent's turn: its face and name line (the name, the time, New), then in one bubble its words where it
- * wrote them and each run of steps between them as one line (`Pieces`), its plan's chip and questions, thumbs-ups,
- * then its approvals and what the person can do about how it ended. An ask's result quotes the ask (0075). A reply sits
- * in its thread, smaller. In the agent's panel its name line also says the task it worked on.
+ * wrote them, each run of steps between them as one line and its plan's chip where it wrote the plan (`Pieces`), its
+ * questions, thumbs-ups, then its approvals and what the person can do about how it ended. An ask's result quotes the
+ * ask (0075); a turn Gathr's words opened quotes them (0078). A reply sits in its thread, smaller. In the agent's panel
+ * its name line also says the task it worked on.
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, seat, on, done, ending, approvals, agreed, plan, asked, result, pieces } = own;
+  const { agent, by, seat, on, done, ending, approvals, agreed, asked, result, opened, pieces } = own;
   const actions = useActions();
   const jump = useJump();
   const panel = useContext(InPanel);
   const small = own.reply;
-  const words = !!pieces || !!plan || !!asked?.length;
+  const words = !!pieces || !!asked?.length;
   if (!words && !approvals?.length && !ending) return null;
   // With no bubble, what it holds says who it is from.
   const named = !!agent && (own.head || !words);
@@ -159,18 +160,12 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
     >
       {words && (
         <Bubble
-          quote={result?.quote}
+          quote={result?.quote ?? opened}
           onQuote={result && (() => jump(result.ask))}
+          quoteLines={result ? undefined : 3}
           foot={<Foot fold={own.thread} agreed={agreed} like={own.like} answer={own.answer} />}
         >
-          {pieces && <Pieces pieces={pieces} onOpenTask={actions.openTask} />}
-          {plan && (
-            <PlanChip
-              version={plan.version}
-              parts={plan.parts}
-              onOpen={() => actions.openPlan?.(plan.plan, plan.version)}
-            />
-          )}
+          {pieces && <Pieces pieces={pieces} actions={actions} />}
           {asked?.map((n) => (
             <Asked key={n} task={n} />
           ))}
@@ -186,17 +181,26 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
 
 /**
  * A turn's pieces in its bubble, in the order they came (the owner's call of 2026-11-19): each text drawn as a
- * message's text is, and each run of steps between them as one quiet line that opens to its steps.
+ * message's text is, each run of steps between them as one quiet line that opens to its steps, and a plan version's
+ * chip, which opens the plan's tab there (0078).
  */
-export function Pieces({ pieces, onOpenTask }: { pieces: Piece[]; onOpenTask: (task: number) => void }) {
-  return pieces.map((p) =>
-    'run' in p ? (
-      <WorkRow key={p.id} work={p.run} onOpenTask={onOpenTask} />
-    ) : (
-      // By its place, not its message: text still streaming keeps its node once saved.
-      <MessagePrimitive.PartByIndex key={`words-${p.words}`} index={p.words} components={parts} />
-    ),
-  );
+export function Pieces({ pieces, actions }: { pieces: Piece[]; actions: Actions }) {
+  return pieces.map((p) => {
+    if ('run' in p) return <WorkRow key={p.id} work={p.run} onOpenTask={actions.openTask} />;
+    if ('plan' in p) {
+      const { plan, version, parts } = p.plan;
+      return (
+        <PlanChip
+          key={p.id}
+          version={version}
+          parts={parts}
+          onOpen={() => actions.openPlan?.(plan, version)}
+        />
+      );
+    }
+    // By its place, not its message: text still streaming keeps its node once saved.
+    return <MessagePrimitive.PartByIndex key={`words-${p.words}`} index={p.words} components={parts} />;
+  });
 }
 
 /** The person's like on a message, as its corner row and its count press it (0057). */

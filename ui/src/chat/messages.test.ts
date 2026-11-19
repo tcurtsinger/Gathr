@@ -37,9 +37,19 @@ test('a chat of one agent is one list in order: the person, then each turn where
 
 test('a team chat is its main messages in time order, each with its thread; a member is headed by its task', () => {
   const { items, all } = view(round());
-  // The tasks the lead handed out are main messages, at the time they were given; a done task's thread starts folded.
-  // Each fold line is in the row under its main message (0076), no item of its own.
-  expect(ids(items)).toEqual(['ask-user', 'task-1', 'task-2', 'a-kit', 'mid-user', 'direct-user']);
+  // The lead's answer is a main message under the ask (0078); the tasks it handed out are main messages, at the time
+  // they were given; a done task's thread starts folded. Each fold line is in the row under its main message (0076).
+  expect(ids(items)).toEqual([
+    'ask-user',
+    'a-ask',
+    'task-1',
+    'task-2',
+    'a-kit',
+    'mid-user',
+    'a-mid',
+    'direct-user',
+    'a-direct',
+  ]);
   expect(ids(all)).toEqual([
     'ask-user',
     'a-ask',
@@ -334,10 +344,9 @@ test('messages between agents sit in the thread of what they are about, a reply 
   expect(find('answer-1')).toEqual({ id: 'answer-1', text: 'Yes, 30 seconds.', nth: 0 });
 });
 
-test('Gathr’s notes are its own messages, each with its time; what a task’s end told is not drawn, read or not', () => {
+test('Gathr’s words that open a turn are its bubble’s quote; what a task’s end told is not drawn, read or not', () => {
   const state = round();
-  const ask = `m:${state.messages[0].id}`;
-  state.turns.back = { ...turn('back', 'mira', { answers: 'ask', topic: ask }), position: 5 };
+  state.turns.back = { ...turn('back', 'mira', { answers: 'ask', topic: 'b:back' }), position: 5 };
   // A wake nothing ties: a main message of its own, opened by Gathr's words.
   state.turns.woke = { ...turn('woke', 'mira', { topic: 'b:woke' }), position: 7 };
   state.messages.push(
@@ -358,13 +367,12 @@ test('Gathr’s notes are its own messages, each with its time; what a task’s 
     said('woke', 'assistant', 'CI passed'),
   );
   const { all } = view(state);
-  expect(events(all)).toEqual([{ kind: 'note', text: 'Your wait on CI on #12 ended' }]);
-  // It is the wake's main message, and the reply it woke is in its thread.
-  expect(ids(all).slice(-2)).toEqual(['woke-gathr', 'a-woke']);
-  expect(custom(all.at(-1)).reply).toBe(true);
-  const woke = state.messages.at(-2) as Message;
-  expect(custom(all.at(-2)).time).toBe(woke.time);
-  expect(all.filter((m) => custom(m).events).every((m) => m.role === 'system')).toBe(true);
+  // No message of Gathr's: the wake's words open the lead's bubble, a main message (0078).
+  expect(events(all)).toEqual([]);
+  expect(ids(all).slice(-1)).toEqual(['a-woke']);
+  expect(custom(all.at(-1))).toMatchObject({ opened: 'Your wait on CI on #12 ended', topic: 'b:woke' });
+  expect(custom(all.at(-1)).reply).toBeUndefined();
+  expect(custom(byId(all, 'a-back')).opened).toBeUndefined();
 });
 test('a speaker is named when it changes, not on each of its blocks in a row', () => {
   const state = round();
@@ -405,14 +413,15 @@ test('a search hit opens at its message: the text in its block, or the block for
 
 const lines = (state: ChatState) =>
   events(view(state).all).map((e) => [e.who, e.text, e.more].filter(Boolean));
-/** Mira hears back in a turn that answers `ask`, with these words from Gathr; it is about the person's ask. */
+/** Mira hears back in a turn that answers `ask`, with these words from Gathr: said to the person (0078). */
 function heardBack(state: ChatState, id: string, body: string, position: number) {
-  const topic = `m:${state.messages[0].id}`;
-  state.turns[id] = { ...turn(id, 'mira', { answers: 'ask', topic }), position };
+  state.turns[id] = { ...turn(id, 'mira', { answers: 'ask', topic: `b:${id}` }), position };
   state.messages.push(said(id, 'gathr', body), said(id, 'assistant', 'Noted'));
 }
 
-test('what Gathr says that is not a hear-back is drawn in its own words, never replaced or dropped', () => {
+const quotes = (state: ChatState) => view(state).all.flatMap((m) => custom(m).opened ?? []);
+
+test('what Gathr says that is not a hear-back is quoted in its own words, never replaced or dropped', () => {
   const state = round();
   state.tasks.push(task(54, 'kit', 'ask', { what: 'Open the PR' }));
   // A wait's result names a number that is also a task the answered turn gave.
@@ -425,18 +434,13 @@ test('what Gathr says that is not a hear-back is drawn in its own words, never r
   state.turns.redo = { ...turn('redo', 'kit', { task: 2, answers: 'ask', topic: 't:2' }), position: 7 };
   state.messages.push(said('redo', 'gathr', 'Task #2 from Mira: Task 2\nContinue from here: half done.'));
   state.messages.push(said('redo', 'assistant', 'Done now'));
-  expect(lines(state)).toEqual([[woke], [usage]]);
-  // Each in its thread, where it happened: the wake's words before the reply they woke.
-  const all = ids(view(state).all);
-  expect(all.slice(all.indexOf('woke-gathr'), all.indexOf('woke-gathr') + 2)).toEqual([
-    'woke-gathr',
-    'a-woke',
-  ]);
-  expect(all.slice(all.indexOf('again-gathr'), all.indexOf('again-gathr') + 3)).toEqual([
-    'again-gathr',
-    'a-again',
-    'a-redo',
-  ]);
+  // Each at the top of the bubble its words opened, where it happened; no line of Gathr's of its own (0078).
+  expect(lines(state)).toEqual([]);
+  expect(quotes(state)).toEqual([usage, woke]);
+  const all = view(state).all;
+  expect(custom(byId(all, 'a-woke'))).toMatchObject({ opened: woke, topic: 'b:woke' });
+  expect(custom(byId(all, 'a-again'))).toMatchObject({ opened: usage, topic: 't:2', reply: true });
+  expect(custom(byId(all, 'a-redo')).opened).toBeUndefined();
 });
 
 test('a hit on a task brief opens at the task’s message; in a chat of one, at the turn that gave the task', () => {
@@ -484,14 +488,16 @@ test('a block that did not change is the same object on the next draw; a changed
 
 test('a turn with only its ending has its block after the message that began it; one still waiting has none', () => {
   const state = round();
-  state.turns.bad = { ...turn('bad', 'mira', { status: 'failed' }), position: 5 };
-  state.turns.queued = turn('queued', 'mira', { status: 'queued', held: 'pause' });
-  state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped' }), position: 6 };
   state.messages.push(
     said('bad', 'user', 'Try this'),
     said('queued', 'user', 'And this'),
     said('cut', 'user', '@Lane'),
   );
+  // Each turn is made when the person's message that opens it is sent.
+  const sent = (id: string) => state.messages.find((m) => m.turn === id)?.time;
+  state.turns.bad = { ...turn('bad', 'mira', { status: 'failed', created: sent('bad') }), position: 5 };
+  state.turns.queued = turn('queued', 'mira', { status: 'queued', held: 'pause', created: sent('queued') });
+  state.turns.cut = { ...turn('cut', 'lane', { status: 'stopped', created: sent('cut') }), position: 6 };
   const { items } = view(alone(state));
   expect(ids(items).slice(-5)).toEqual(['bad-user', 'a-bad', 'queued-user', 'cut-user', 'a-cut']);
   expect(custom(byId(items, 'a-bad')).ending).toMatchObject({ act: 'retry' });

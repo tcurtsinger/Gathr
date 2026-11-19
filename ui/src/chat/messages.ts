@@ -116,8 +116,8 @@ export type Custom = Place & {
   /** The person's like it offers, or holds (0057). */
   like?: Like;
   events?: EventLine[];
-  /** A version of the lead's plan: its chip opens the plan's tab (0062). */
-  plan?: { plan: number; version: number; parts: number };
+  /** Gathr's words that opened its turn, quoted at the top of its bubble (0078). */
+  opened?: string;
   /** The person's questions asked in it, by task, each answered in place (0073). */
   asked?: number[];
   /** Gathr says it, as a speaker of its own (0073). */
@@ -193,8 +193,8 @@ export const briefOf = (t: Task, owner?: string): Brief => ({
 });
 
 /**
- * Gathr's chat as assistant-ui messages. A chat of one agent reads as one timeline (0037); a team chat as main
- * messages in time order, each with its thread (0075), from the moment it became a team.
+ * Gathr's chat as assistant-ui messages: main messages in time order, each with its thread (0075), by one rule for
+ * every chat (0078), so a chat of one agent reads as one timeline (0037).
  */
 export function toThread(
   state: ChatState,

@@ -21,11 +21,19 @@ export type Step =
       result?: string;
     };
 
+/** A version of the lead's plan, as its chip in the bubble opens it (0062). */
+export interface Chip {
+  plan: number;
+  version: number;
+  parts: number;
+}
+
 /**
  * A piece of a turn's block in the chat, in the order it came (the owner's call of 2026-11-19): words it wrote, by
- * their place among the message's text parts, or a run of steps between words, drawn as one line.
+ * their place among the message's text parts, a run of steps between words, drawn as one line, or the chip of a plan
+ * version it wrote, where it wrote it (0078).
  */
-export type Piece = { id: string; words: number } | { id: string; run: Work };
+export type Piece = { id: string; words: number } | { id: string; run: Work } | { id: string; plan: Chip };
 
 /** What a turn did, as one row: a run of its steps in the chat, all of them in the agent's panel (0037). */
 export interface Work {
@@ -156,7 +164,7 @@ export interface Given {
  * A block of a turn, folded. `pieces` are what the chat draws: each text it wrote (`words`, text still streaming last),
  * and each run of steps between them as one line. `work` is the agent panel's row: everything before the block's last
  * text, mid-work words as steps; a block that only wrote once has none. `gave` holds the task each give_task call made;
- * `began` is when the turn did, if the block is its first.
+ * `began` is when the turn did, if the block is its first; `chips` the plan versions it wrote, by message.
  */
 export function fold(
   msgs: Message[],
@@ -164,15 +172,18 @@ export function fold(
   running: boolean,
   gave: Map<string, Given>,
   began?: string,
+  chips?: Map<string, Chip>,
 ): { work?: Work; words: string[]; pieces: Piece[] } {
   const times = [began, ...msgs.map((m) => m.time)]
     .map((t) => Date.parse(t ?? ''))
     .filter((t) => !Number.isNaN(t));
   const since = times.length ? Math.min(...times) : undefined;
-  const laid = piecesOf(msgs, streaming, running, gave, since);
-  const last = msgs.at(-1);
+  const laid = piecesOf(msgs, streaming, running, gave, since, chips);
+  // A version's message is its chip, never words or a step.
+  const said = chips?.size ? msgs.filter((m) => !chips.has(m.id)) : msgs;
+  const last = said.at(-1);
   const text = streaming || (last?.kind === 'text' ? (last.body as string) : undefined);
-  const before = streaming || !text ? msgs : msgs.slice(0, -1);
+  const before = streaming || !text ? said : said.slice(0, -1);
   const all = joined(before);
   const steps = all.flatMap((m) => stepOf(m, gave));
   if (steps.length === 0) return laid;
@@ -207,6 +218,7 @@ function piecesOf(
   running: boolean,
   gave: Map<string, Given>,
   since?: number,
+  chips?: Map<string, Chip>,
 ) {
   const words: string[] = [];
   const pieces: Piece[] = [];
@@ -222,8 +234,12 @@ function piecesOf(
     words.push(text);
   };
   for (const m of joined(msgs)) {
+    const chip = chips?.get(m.id);
     if (m.kind !== 'text') run.push(m);
-    else if (m.body) say(m.id, m.body as string);
+    else if (chip) {
+      close(false);
+      pieces.push({ id: m.id, plan: chip });
+    } else if (m.body) say(m.id, m.body as string);
   }
   if (streaming) say('streaming', streaming);
   close(running);

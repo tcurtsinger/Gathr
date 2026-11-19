@@ -185,9 +185,10 @@ test('a question a split turn asked shows once, in the block it was asked in', (
   state.tasks.push(task(9, 'kit', 'kit', { owner: null, giver: 'kit', kind: 'person', what: 'Ship it?' }));
   state.messages.push(said('kit', 'user', '@Kit one thing'), said('kit', 'assistant', 'Kept'));
   const { all: items } = view(state);
-  // The block that asked it is the question's main message; the person's message is one too, with what came after.
+  // The block that asked it is the question's main message; the person's message is one too, and what came after it
+  // is a main message of its own (0078).
   expect(ids(items).slice(-3)).toEqual(['a-kit', 'kit-user', 'a-kit-1']);
-  expect(custom(byId(items, 'a-kit-1'))).toMatchObject({ reply: true });
+  expect(custom(byId(items, 'a-kit-1')).reply).toBeUndefined();
   expect(items.map((m) => custom(m).asked).filter(Boolean)).toEqual([[9]]);
   expect(custom(byId(items, 'a-kit')).asked).toEqual([9]);
 });

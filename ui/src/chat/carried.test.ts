@@ -1,5 +1,6 @@
 // Gathr's copy of the person's message to several agents (0028) entering an agent's running turn: the copy draws
-// nothing, but the turn splits there, and what the agent says after it sits in the message's thread. Made-up words.
+// nothing, but the turn splits there, and what the agent says after it is a main message of its own (0078). Made-up
+// words.
 import { expect, test } from 'vitest';
 import type { Message, Turn } from '../api';
 import { type Group, grouped } from './groups';
@@ -32,7 +33,7 @@ const said = (
   ...more,
 });
 
-test('a copy of the person’s message splits the running turn it entered: what follows sits in its thread', () => {
+test('a copy of the person’s message splits the running turn it entered: what follows is a main message', () => {
   // As history orders it: Bo's running turn (placed first) with its words before and after the copy, then the lead's.
   const state: ChatState = {
     ...empty,
@@ -41,8 +42,8 @@ test('a copy of the person’s message splits the running turn it entered: what 
       { agent: 'b', name: 'Bo', role: 'member' },
     ],
     turns: {
-      r: turn('r', 'b', 1, { status: 'running', topic: 'm:q0' }),
-      t1: turn('t1', 'a', 2, { topic: 'm:p' }),
+      r: turn('r', 'b', 1, { status: 'running', topic: 'b:r' }),
+      t1: turn('t1', 'a', 2, { topic: 'b:t1' }),
     },
     messages: [
       said('q0', 'r', 1, 'Made-up earlier ask', { role: 'user' }),
@@ -56,7 +57,7 @@ test('a copy of the person’s message splits the running turn it entered: what 
   const groups = grouped(state);
   const topics = topicsOf(groups, state, new Map(), new Map());
   const of = (id: string) => topics.get(groups.find((g) => g.msgs.some((m) => m.id === id)) as Group);
-  expect([of('w1'), of('w2'), of('l1')]).toEqual(['m:q0', 'm:p', 'm:p']);
+  expect([of('w1'), of('w2'), of('l1')]).toEqual(['b:r', 'b:r:p', 'b:t1']);
   // The copy itself is no block.
   expect(groups.some((g) => g.msgs.some((m) => m.id === 'k'))).toBe(false);
 });

@@ -85,3 +85,6 @@ person left off". The truth map keeps it as 6.10, beside the chat's other ways o
   cuts messages off, nor the "replied" line, as statuses are said in more than one place. In its place the New pill:
   a count of everything not seen, centred above the box, a press going to the oldest. The line named only the newest
   reply out of view; the pill counts main messages too, and goes oldest first.
+- 2026-11-19, [0078](0078-said-to-you-is-main-one-bubble-per-turn.md): a thread with no mark of its own is seen up to the main line's mark, not from nothing: the
+  rule names threads anew (the lead's answers, a check under the version's turn), and what they held before the person
+  last looked isn't new. Proof: `ui/src/chat/reads.test.ts`.

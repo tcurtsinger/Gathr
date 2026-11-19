@@ -88,6 +88,12 @@ fn is_thread(conn: &Connection, chat: &str, topic: &str) -> Result<bool, Error> 
         _ => return Ok(false),
     };
     let key = topic.split_once(':').map_or("", |(_, k)| k);
+    // The window's own thread for what a turn said after the person's message entered it (0078):
+    // `b:<turn>:<message>`, kept as its turn's.
+    let key = match topic.starts_with("b:") {
+        true => key.split_once(':').map_or(key, |(turn, _)| turn),
+        false => key,
+    };
     Ok(conn
         .prepare_cached(sql)?
         .query_row([chat, key], |_| Ok(()))

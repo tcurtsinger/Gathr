@@ -92,6 +92,27 @@ fn marks_and_folds_are_kept_and_read_back_after_a_restart() {
     assert_eq!(marks(&again, &chat), expected, "after a restart");
 }
 
+/// 0078: what a turn says after the person's message entered it is a thread of the window's own,
+/// `b:<turn>:<message>`; its marks are kept as any thread's, and one of a turn that isn't the chat's
+/// is refused.
+#[test]
+fn a_mark_on_the_part_of_a_turn_after_the_persons_message_is_kept() {
+    let data = TempDir::new();
+    let (service, chat, _) = team(&data.0, &common::recording("signed_in"), &[]);
+    let (message, turn) = say(&service, &chat, "Plan the made-up shopping list");
+    let part = format!("b:{turn}:{message}");
+    let put = mark(
+        &service,
+        &chat,
+        json!([{ "topic": part, "seen_us": 1_500 }]),
+    );
+    assert_eq!(put.status, 200, "{}", put.body);
+    let kept = json!({ "topic": part, "seen_us": 1_500, "folded": null });
+    assert_eq!(marks(&service, &chat), [kept]);
+    let gone = json!([{ "topic": format!("b:gone:{message}"), "seen_us": 1 }]);
+    assert_eq!(mark(&service, &chat, gone).status, 409);
+}
+
 #[test]
 fn a_mark_goes_live_to_the_other_windows_and_never_moves_back() {
     let data = TempDir::new();

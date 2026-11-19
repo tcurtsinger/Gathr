@@ -154,6 +154,7 @@ export function Bubble({
   lead,
   quote,
   onQuote,
+  quoteLines,
   mention,
   foot,
   children,
@@ -162,6 +163,8 @@ export function Bubble({
   quote?: string;
   /** The quote leads to what it quotes: an ask's result to its ask. */
   onQuote?: () => void;
+  /** The quote may take up to this many lines: Gathr's words that opened the turn (0078). */
+  quoteLines?: number;
   mention?: string;
   foot?: ReactNode;
   children?: ReactNode;
@@ -175,7 +178,9 @@ export function Bubble({
             {quote}
           </button>
         ) : (
-          <div className="bubble-quote">{quote}</div>
+          <div className="bubble-quote" data-lines={quoteLines}>
+            {quote}
+          </div>
         ))}
       {mention && <span className="mention">@{mention}</span>}
       {children}

@@ -2,7 +2,7 @@
 // once a second, with the newest mark of each thread; a mark never moves back, and a chat with no marks is seen up to
 // when it first opened.
 import { afterEach, expect, test, vi } from 'vitest';
-import { Reads, WRITE_MS } from './reads';
+import { isNew, Reads, WRITE_MS } from './reads';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -52,6 +52,23 @@ test('a mark older than the one kept moves nothing and writes nothing', async ()
   await vi.advanceTimersByTimeAsync(WRITE_MS);
   expect(sent).toEqual([]);
   expect(reads.seen('t:1')).toBe(9);
+});
+
+test("in a chat with marks, a thread with none is seen up to the main line's mark, and New counts from there", () => {
+  const reads = new Reads('c');
+  reads.take(
+    [
+      { topic: '', seen_us: 5_000_000, folded: null },
+      { topic: 't:1', seen_us: 2_000_000, folded: null },
+    ],
+    () => 0,
+  );
+  // A thread an update named anew (0078): what it held before the main line's mark is seen.
+  expect(reads.seen('b:new')).toBe(5_000);
+  expect(reads.seen('t:1')).toBe(2_000);
+  expect(reads.unseen('b:new', [4_000, 5_000, 6_000])).toBe(1);
+  const left = reads.now.left;
+  expect([4_000, 6_000].map((t) => isNew(left, 'b:new', t))).toEqual([false, true]);
 });
 
 test('a chat with no marks is seen up to when it first opened, and keeps each of its threads so', async () => {

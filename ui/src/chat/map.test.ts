@@ -67,13 +67,14 @@ test("in a team chat the person's messages and each ask's result get ticks; noth
   const round = state(
     [
       // What each turn is about, as the service names it.
-      turn('ask', 'mira', { topic: 'm:u1' }),
+      // The lead's answer to the person: a main message of its own (0078), with no tick in a team.
+      turn('ask', 'mira', { topic: 'b:ask' }),
       turn('rowan', 'rowan', { task: 1, answers: 'ask', topic: 't:1' }),
       // Woken by Rowan's message: team work in the task's thread.
       turn('woke', 'mira', { answers: 'rowan', topic: 't:1' }),
       // The hear-back that closes the ask: its result, at the bottom.
-      turn('back', 'mira', { answers: 'ask', topic: 'r:back' }),
-      turn('direct', 'rowan', { topic: 'm:u2' }),
+      turn('back', 'mira', { answers: 'ask', topic: 'r:back', result_of: 'u1' }),
+      turn('direct', 'rowan', { topic: 'b:direct' }),
     ],
     [
       said('u1', 'ask', 'user', 'Fix the reconnect'),

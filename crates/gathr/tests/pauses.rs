@@ -159,14 +159,10 @@ fn stop_now_ends_the_turn_and_its_carry_on_waits_for_restart() {
     samples::same("carry_on: Stop now", said);
     let kept = (json!("carry_on"), json!(gathr::words::CARRY_ON));
     assert_eq!(common::opened(&data.0, &history["turns"][1]["id"]), kept);
-    // 0075: the carry-on sits where the turn it carries on was, under the person's message.
-    let mut asked = history["messages"].as_array().unwrap().iter();
-    let asked = asked.find(|m| m["role"] == "user").unwrap()["id"]
-        .as_str()
-        .unwrap();
+    // 0078: the lead's carry-on is a main message of its own, as the answer it carries on is.
     let topics = [&history["turns"][0]["topic"], &history["turns"][1]["topic"]];
-    let want = json!(format!("m:{asked}"));
-    assert_eq!(topics, [&want, &want], "{history}");
+    let own = |i: usize| json!(format!("b:{}", history["turns"][i]["id"].as_str().unwrap()));
+    assert_eq!(topics, [&own(0), &own(1)], "{history}");
     common::topics_agree(&data.0, &chat);
     pause(&service, "/api/pauses/resume", &chat);
     let history = service.wait_for(&chat, 20, "the carry-on after Restart", |h| {

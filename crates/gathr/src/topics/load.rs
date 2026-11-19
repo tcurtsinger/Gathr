@@ -141,10 +141,10 @@ pub trait Source {
     fn landing(&self, turn: &Turn) -> Option<i64>;
     /// The task a PR was built in: the lowest-numbered of the chat's tasks on it but `not`.
     fn pr_task(&self, pr: i64, not: Option<i64>) -> Option<i64>;
-    /// A plan version's message.
+    /// The turn that wrote a plan version.
     fn version(&self, id: i64) -> Option<String>;
-    /// The version a send-back queued the turn for: the one whose decided line opened it.
-    fn sent_back(&self, turn: &Turn) -> Option<String>;
+    /// The lowest plan version the turn wrote, by its number.
+    fn wrote(&self, turn: &Turn) -> Option<i64>;
     fn is_lead(&self, agent: &str) -> bool;
 }
 
@@ -170,8 +170,10 @@ pub struct Facts {
     pub tasks: HashMap<i64, Task>,
     /// The person's question each turn heard an answer or a Discuss to, the lowest first.
     pub heard: HashMap<String, i64>,
-    /// Each plan version's message, and the lines said about a version: its message.
+    /// The turn that wrote each plan version, the lowest version each such turn wrote, and the lines
+    /// said about a version: the turn that wrote it.
     pub versions: HashMap<i64, String>,
+    pub wrote: HashMap<String, i64>,
     pub version_lines: HashMap<String, String>,
     pub leads: HashSet<String>,
     pub asks: HashSet<String>,
@@ -196,17 +198,19 @@ impl Facts {
         f.load_turns(conn, chat, recorded)?;
         f.load_messages(conn, chat, schema)?;
         f.load_tasks(conn, chat)?;
-        let sql = "SELECT v.id, v.message_id, v.check_line, v.decided_line
+        let sql = "SELECT v.id, v.n, v.turn_id, v.check_line, v.decided_line
                    FROM plan_versions v JOIN plans p ON p.id = v.plan_id WHERE p.chat_id = ?1";
-        let versions: Vec<(i64, String, Option<String>, Option<String>)> =
-            f.read(conn, sql, chat, |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
-            })?;
-        for (version, message, check, decided) in versions {
+        type Version = (i64, i64, String, Option<String>, Option<String>);
+        let versions: Vec<Version> = f.read(conn, sql, chat, |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        })?;
+        for (version, n, turn, check, decided) in versions {
             for line in [check, decided].into_iter().flatten() {
-                f.version_lines.insert(line, message.clone());
+                f.version_lines.insert(line, turn.clone());
             }
-            f.versions.insert(version, message);
+            let lowest = f.wrote.entry(turn.clone()).or_insert(n);
+            *lowest = (*lowest).min(n);
+            f.versions.insert(version, turn);
         }
         let sql = "SELECT agent_id FROM chat_members WHERE chat_id = ?1 AND role = 'supervisor'";
         f.leads = f.read(conn, sql, chat, |r| r.get(0))?.into_iter().collect();
@@ -387,9 +391,8 @@ impl Source for Facts {
         self.versions.get(&id).cloned()
     }
 
-    fn sent_back(&self, turn: &Turn) -> Option<String> {
-        let opening = turn.opening.as_ref()?;
-        self.version_lines.get(&opening.id).cloned()
+    fn wrote(&self, turn: &Turn) -> Option<i64> {
+        self.wrote.get(&turn.id).copied()
     }
 
     fn is_lead(&self, agent: &str) -> bool {

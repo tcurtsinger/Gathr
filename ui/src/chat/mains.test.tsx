@@ -32,13 +32,148 @@ const line = (id: string, topic: string, body: string, time: string): Message =>
   topic,
 });
 
-test('the main line reads the ask, its plan and the tasks handed out, in order', async () => {
+/** The main messages drawn, top to bottom. */
+const mainEls = () => [
+  ...document.querySelectorAll<HTMLElement>('.thread-messages > .said:not([data-reply])'),
+];
+
+test("the lead's answer is a main message right under yours, its plan chip in its bubble with its words", async () => {
   await render(<View state={chat('askAtWork')} />);
   await expect.element(page.getByText('Add the tags table')).toBeVisible();
+  // Your ask, the lead's answer, and the two tasks it handed out: no main message is a chip alone (0078).
   expect(mains()).toEqual(['You', 'Lead', 'Lead', 'Lead']);
-  // The plan was decided when the chat opened: its thread starts folded. The ask is still at work: open.
-  expect(foldOf(mainWith('version 1'))?.getAttribute('aria-expanded')).toBe('false');
-  expect(foldOf(mainWith('Add tags to notes'))?.getAttribute('aria-expanded')).toBe('true');
+  const [ask, answer] = mainEls();
+  expect(ask.textContent).toContain('Add tags to notes');
+  expect(foldOf(ask)).toBeNull();
+  const bubble = answer.querySelector('.bubble') as HTMLElement;
+  const chip = bubble.querySelector('.plan-chip') as HTMLElement;
+  expect(document.querySelectorAll('.plan-chip')).toHaveLength(1);
+  // The chip stands where the plan was written: before the words the lead wrote after it.
+  const words = [...bubble.querySelectorAll('p')].find((p) => p.textContent === 'Hi!') as HTMLElement;
+  expect(chip.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+test("the plan's check and Gathr's lines on it read in the thread of the lead's bubble, by keyboard too", async () => {
+  await render(<View state={chat('askAtWork')} />);
+  await expect.element(page.getByText('Add the tags table')).toBeVisible();
+  const answer = mainEls()[1];
+  // The plan was decided when the chat opened: its thread starts folded.
+  const fold = foldOf(answer) as HTMLButtonElement;
+  expect(fold.getAttribute('aria-expanded')).toBe('false');
+  fold.focus();
+  await userEvent.keyboard('{Enter}');
+  await expect
+    .poll(() => replies().map((r) => r.querySelector('.name-line-name')?.textContent))
+    .toContain('Rev');
+  const rev = replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Rev') as Element;
+  const approved = replies().find((r) => r.textContent?.includes('Approved')) as Element;
+  for (const reply of [rev, approved])
+    expect(answer.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // Before the next main message: in this thread.
+  const next = mainEls()[2];
+  expect(approved.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+/** The lead's turn `id`, opened by Gathr's `opening` words if any, and answering with `words`, at minute `at`. */
+/** `s` seconds after the chat's last message: what is added to a recorded chat comes after it. */
+function later(state: ChatState, s: number) {
+  return new Date(Date.parse(state.messages.at(-1)?.time ?? '') + s * 1000).toISOString();
+}
+
+function leadTurn(
+  state: ChatState,
+  id: string,
+  opening: string | null,
+  words: string,
+  at: number,
+): ChatState {
+  const lead = state.members[0].agent;
+  const turn = { id, agent: lead, status: 'done', why: null, ref: id, position: 90 + at, topic: `b:${id}` };
+  const said = (n: number, role: Message['role'], body: string): Message => ({
+    id: `${id}-${n}`,
+    turn: id,
+    time: later(state, at * 60 + n),
+    role,
+    kind: 'text',
+    body,
+  });
+  return {
+    ...state,
+    turns: { ...state.turns, [id]: turn as Turn },
+    messages: [
+      ...state.messages,
+      ...(opening ? [said(1, 'gathr', opening)] : []),
+      said(2, 'assistant', words),
+    ],
+  };
+}
+
+test("a wait's result opens the lead's bubble as its quote, with no message of Gathr's for it", async () => {
+  const state = leadTurn(
+    chat('askDone'),
+    'waited',
+    'Made-up: your wait ended, the build is green',
+    'Made-up go on',
+    1,
+  );
+  await render(<View state={state} />);
+  await expect.element(page.getByText('Made-up go on')).toBeVisible();
+  const bubble = mainWith('Made-up go on');
+  // The lead's own message (after its result, by the same speaker, so not named again).
+  expect(bubble.getAttribute('data-agent')).toBe(state.members[0].agent);
+  expect(bubble.querySelector('.bubble-quote')?.textContent).toBe(
+    'Made-up: your wait ended, the build is green',
+  );
+  const gathrs = [...document.querySelectorAll('.said[data-gathr]')];
+  expect(gathrs.some((g) => g.textContent?.includes('your wait ended'))).toBe(false);
+});
+
+test("your message into the lead's running turn: what it says after is a main message of its own", async () => {
+  const base = chat('askDone');
+  const lead = base.members[0].agent;
+  const busy = {
+    id: 'busy',
+    agent: lead,
+    status: 'running',
+    why: null,
+    ref: 'busy',
+    position: 99,
+    topic: 'b:busy',
+  };
+  const said = (id: string, role: Message['role'], body: string, s: number): Message => ({
+    id,
+    turn: 'busy',
+    time: later(base, s),
+    role,
+    kind: 'text',
+    body,
+  });
+  const state = {
+    ...base,
+    turns: { ...base.turns, busy: busy as Turn },
+    messages: [
+      ...base.messages,
+      said('b1', 'user', 'Made-up first ask', 1),
+      said('b2', 'assistant', 'Made-up start', 2),
+      said('b3', 'user', 'Made-up second word', 3),
+      said('b4', 'assistant', 'Made-up after it', 4),
+    ],
+  };
+  await render(<View state={state} />);
+  await expect.element(page.getByText('Made-up after it')).toBeVisible();
+  const last = mainEls().slice(-4);
+  expect(last.map((m) => m.querySelector('.bubble')?.textContent)).toEqual([
+    'Made-up first ask',
+    'Made-up start',
+    'Made-up second word',
+    'Made-up after it',
+  ]);
+  expect(last.map((m) => m.querySelector('.name-line-name')?.textContent)).toEqual([
+    'You',
+    'Lead',
+    'You',
+    'Lead',
+  ]);
 });
 
 test("a task's message opens More to its brief by keyboard too, and its title opens the task", async () => {
@@ -59,7 +194,8 @@ test("a task's message opens More to its brief by keyboard too, and its title op
 test("a review and the fix after it read in the work task's thread, never on the main line", async () => {
   await render(<View state={chat('reviewAndFix')} />);
   await expect.element(page.getByText('Add the feature')).toBeVisible();
-  expect(mains()).toEqual(['You', 'Lead']);
+  // The person's ask, the lead's answer to it (0078), and the task it handed out.
+  expect(mains()).toEqual(['You', 'Lead', 'Lead']);
   const vale = replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Vale');
   expect(vale).toBeDefined();
   // After the task's own message: in its thread.
@@ -188,7 +324,7 @@ test('a main message with a thumbs-up and no replies shows it with no replies bu
   const words: Message = {
     id: 'lone-words',
     turn: 'lone',
-    time: '2026-11-18T22:00:00Z',
+    time: later(state, 1),
     role: 'assistant',
     kind: 'text',
     body: 'Made-up lone words',
@@ -219,39 +355,59 @@ test('a thread whose turn failed is not handled: it opens with Retry and its ref
 
 test('nothing folds by itself while the chat is open: a thread handled since stays as it was', async () => {
   const screen = await render(<View state={chat('askAtWork')} />);
-  const fold = () => foldOf(mainWith('Add tags to notes')) as HTMLButtonElement;
+  // Ann is at work on the task: its thread starts open.
+  const fold = () => foldOf(mainWith('Add the tags table')) as HTMLButtonElement;
   await expect.poll(() => fold()?.getAttribute('aria-expanded')).toBe('true');
-  // The same chat once all is in: the ask is done, its thread handled.
+  // The same chat once all is in: the task is done, its thread handled.
   await screen.rerender(<View state={chat('askDone')} />);
   // Its result, said once all is in, is drawn.
   await expect.poll(() => document.querySelector('.bubble-quote')?.textContent).toBe('Add tags to notes');
   expect(fold().getAttribute('aria-expanded')).toBe('true');
 });
 
-test('a chat of one agent is one timeline: no fold line', async () => {
-  const state = chat('askDone');
-  await render(<View state={{ ...state, members: state.members.slice(0, 1) }} />);
-  await expect.element(page.getByText('Add tags to notes', { exact: true })).toBeVisible();
-  expect(document.querySelectorAll('.fold-line, [data-reply]')).toHaveLength(0);
+test('a chat of one reads as one timeline by the same rule; a reply to an older answer makes its thread', async () => {
+  await render(<View state={chat('chatOfOne')} />);
+  await expect.element(page.getByText('And the map legend?')).toBeVisible();
+  // Each answer a main message under the message it answers; one fold line, on the answer replied to.
+  expect(mains()).toEqual(['You', 'Mira', 'You', 'Mira']);
+  const [, first, , second] = mainEls();
+  expect(document.querySelectorAll('.fold-line')).toHaveLength(1);
+  expect(foldOf(first)?.textContent).toMatch(/2 replies|Collapse replies/);
+  expect(foldOf(second)).toBeNull();
+  if (foldOf(first)?.getAttribute('aria-expanded') === 'false')
+    await (foldOf(first) as HTMLButtonElement).click();
+  await expect.element(page.getByText('Does it pass the old mill?')).toBeVisible();
+  const reply = replies().find((r) => r.textContent?.includes('Does it pass the old mill?')) as Element;
+  expect(first.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(reply.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-test('what came before the chat became a team stays one timeline; threads begin after', async () => {
-  const state = chat('askDone');
-  // The second agent joined after the ask and the lead's first turn.
-  const since = state.messages.find((m) => m.body === 'Hi!' && m.turn === state.messages[0].turn)
-    ?.time as string;
-  await render(<View state={{ ...state, teamSince: new Date(Date.parse(since) + 1).toISOString() }} />);
-  await expect.element(page.getByText('Add the tags table')).toBeVisible();
-  expect(foldOf(mainWith('Add tags to notes'))).toBeNull();
-  expect(foldOf(mainWith('Add the tags table'))).not.toBeNull();
+test('a main message right after the same speaker’s main message is not named again', async () => {
+  const base = chat('askDone');
+  const nudge: Message = {
+    id: 'nudge',
+    turn: 'one',
+    time: later(base, 59),
+    role: 'user',
+    kind: 'text',
+    body: 'Made-up nudge',
+  };
+  const asked = leadTurn({ ...base, messages: [...base.messages, nudge] }, 'one', null, 'Made-up one', 1);
+  const twice = leadTurn(asked, 'two', 'Made-up: a wait ended', 'Made-up two', 2);
+  await render(<View state={twice} />);
+  await expect.element(page.getByText('Made-up two')).toBeVisible();
+  expect(mainWith('Made-up one').querySelector('.name-line-name')?.textContent).toBe('Lead');
+  expect(mainWith('Made-up two').querySelector('.name-line-name')).toBeNull();
 });
 
 test('an old chat, tied by task and answers alone, reads as main messages with threads', async () => {
   await render(<View state={chat('oldChat')} />);
   await expect.element(page.getByText('Sort the gravel bars', { exact: true })).toBeVisible();
-  // The person's message, the task handed out, and the turn nothing ties, its own main message. Its times are a few
-  // microseconds apart, closer than a message's time says, so only which ones are main is checked.
-  expect(mains().sort()).toEqual(['Gathr', 'Mira', 'You']);
+  // The person's message, the lead's answer to it, the task handed out, and the lead's two later turns with Gathr's
+  // words and none of their own (0078): each its own main message, Gathr's words as its line, as they have no bubble
+  // to quote them in. Its times are a few microseconds apart, closer than a message's time says, so only which ones
+  // are main is checked.
+  expect(mains().sort()).toEqual(['Gathr', 'Gathr', 'Mira', 'Mira', 'You']);
   // The task is done: its thread starts folded.
   await (foldOf(mainWith('@Rowan')) as HTMLButtonElement).click();
   await expect.element(page.getByText('Sorted, herons first')).toBeVisible();
