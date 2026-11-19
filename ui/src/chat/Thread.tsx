@@ -81,7 +81,7 @@ interface Props {
   questions?: Questions;
   /** The box open for a reply in a thread (0076). */
   box?: Box;
-  /** Where the person left off (0077): what is seen as it shows, and what the fold lines and the foot line read. */
+  /** Where the person left off (0077): what is seen as it shows, and what the fold lines and the New pill read. */
   reads?: Reads;
 }
 

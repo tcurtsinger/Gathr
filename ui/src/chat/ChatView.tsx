@@ -35,17 +35,16 @@ import { asQuestion } from '../tasks/rows';
 import { AgentPanel, blocksOf, type Kept, noneKept } from './AgentPanel';
 import type { Questions } from './Asked';
 import { ChatMenu } from './ChatMenu';
-import { FootLine } from './FootLine';
 import { MarksContext, useChatMarks } from './faceMarks';
 import { useFolds } from './folds';
 import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
+import { NewPill } from './NewPill';
 import { type PauseAction, type Run, runOf } from './pauses';
-import { useReads } from './reads';
+import { type Fresh, useReads } from './reads';
 import { addressed, nameable, unnamed } from './recipient';
 import { type Opened, useReplying } from './replying';
-import { StatusLine } from './StatusLine';
 import { Summary } from './Summary';
 import { running, unanswered } from './state';
 import { type Actions, Thread, useStable } from './Thread';
@@ -218,26 +217,23 @@ export function ChatView(props: Props) {
   const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   threads.open(hit);
-  // What the status line went to, until a search hit is opened after it.
+  // What the pill or Summary went to, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
   /** Shows the block that holds what is needed, opening the thread it waits in, as a search hit does. */
-  const show = (holds: (own: Custom) => boolean, card?: string) => {
-    const item = timeline.all.find((m) => holds((m.metadata?.custom ?? {}) as Custom));
+  const show = (holds: (own: Custom, id: string) => boolean, card?: string) => {
+    const item = timeline.all.find((m) => holds((m.metadata?.custom ?? {}) as Custom, m.id as string));
     if (!item) return;
     const topic = (item.metadata?.custom as Custom | undefined)?.topic;
     if (topic && !timeline.items.includes(item)) threads.reveal(topic);
     setShown({ id: item.id as string, card, at: performance.now() });
   };
-  /** The line at the foot goes to its reply: opened where it waits, centred, and seen. */
-  const goTo = (id: string, topic: string, time: string) => {
-    const item = timeline.all.find((m) => m.id === id);
-    if (!item) return;
-    if (!timeline.items.includes(item)) threads.reveal(topic);
-    reads.see(topic, Date.parse(time));
-    setShown({ id, at: performance.now() });
+  /** The New pill goes to the oldest block not seen: opened where it waits, centred, and seen. */
+  const goTo = ({ id, mark, t }: Fresh) => {
+    reads.see(mark, t);
+    show((_, at) => at === id);
   };
   // What the person is needed for, the oldest first: an approval where it was asked, else the plan waiting, else
-  // the question. "needs you" on the status line goes there; with none of them here, the line only opens its list.
+  // the question. A needs-you agent's row in Summary goes there; with none of them here, it opens the agent.
   const approval = state.approvals.find(unanswered);
   const plan = state.plans.find((p) => p.state === 'waiting');
   const question = state.tasks
@@ -249,6 +245,7 @@ export function ChatView(props: Props) {
       show((own) => !!own.approvals?.some((a) => a.request === approval.request), approval.request);
     else if (plan && newest) props.onOpenPlan?.(plan.id, newest.n);
     else if (question) show((own) => !!own.asked?.includes(question.number));
+    return !!(approval || (plan && newest) || question);
   };
 
   useFirstTokenReport(state.partial);
@@ -429,6 +426,8 @@ export function ChatView(props: Props) {
                 pauses={pauses}
                 onPause={act}
                 onOpenAgent={actions.openAgent}
+                waiting={waiting}
+                onNeeds={toNeed}
               />
             )}
             {headerEnd}
@@ -494,15 +493,8 @@ export function ChatView(props: Props) {
                 </>
               ) : (
                 <>
-                  {!fresh && <FootLine onGo={goTo} />}
-                  {!fresh && (
-                    <StatusLine
-                      crew={crew}
-                      waiting={waiting}
-                      onOpenAgent={actions.openAgent}
-                      onNeeds={approval || plan || question ? toNeed : undefined}
-                    />
-                  )}
+                  {!fresh && <NewPill onGo={goTo} />}
+
                   <Composer
                     draft={draft}
                     picks={picks}

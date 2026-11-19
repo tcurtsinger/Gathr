@@ -87,6 +87,7 @@ function Shown({
           pauses={pauses}
           onPause={() => {}}
           onOpenAgent={(agent) => opened.push(agent)}
+          waiting={waiting}
         />
       </header>
     </MarksContext>
@@ -255,6 +256,59 @@ test('the team is one line each: what it is doing and its tasks done, in order o
     .element(summary.getByRole('button', { name: 'Made-up Member Running a command 1 of 2 tasks done' }))
     .toBeVisible();
   expect(document.querySelectorAll('.summary .face .mark[data-state="working"]')).toHaveLength(1);
+});
+
+const rowsNow = () =>
+  [...document.querySelectorAll('.agent-row')].map((row) =>
+    [...row.children].map((part) => part.textContent).filter(Boolean),
+  );
+const MINUTE = 60_000_000;
+
+test('Gathr has a row of its own after the agents while it waits on something, and it opens nothing', async () => {
+  const waiting: Waiting = {
+    lines: [],
+    agents: [],
+    gathr: [
+      {
+        kind: 'pr',
+        state: 'waiting',
+        what: 'CI on #18',
+        name: null,
+        since_us: Date.now() * 1000 - 4 * MINUTE,
+        failing: false,
+      },
+    ],
+  };
+  const screen = await render(<Shown state={{ ...empty, members: trio }} waiting={waiting} />);
+  await screen.getByRole('button', { name: /^Summary/ }).click();
+  await expect.poll(() => rowsNow().at(-1)).toEqual(['Gathr', 'Waiting · PR #18 checks', '4m']);
+  expect(rowsNow()).toHaveLength(4);
+  const gathr = [...document.querySelectorAll('.agent-row')].at(-1) as HTMLElement;
+  expect(gathr.tagName).toBe('DIV');
+  expect(gathr.querySelector('.face-gathr')).not.toBeNull();
+
+  // Nothing of Gathr's going: no row.
+  await screen.rerender(<Shown state={{ ...empty, members: trio }} waiting={{ ...waiting, gathr: [] }} />);
+  await expect.poll(() => rowsNow()).toHaveLength(3);
+});
+
+test('a silent agent’s row says for how long it has made no progress', async () => {
+  const state: ChatState = { ...empty, members: trio, turns: turns(turn('t2', 'b')) };
+  const line = {
+    kind: 'turn',
+    what: 'Made-up turn',
+    agent: 'b',
+    task: null,
+    since_us: null,
+    moves: 'itself' as const,
+    seen: null,
+    looked_us: null,
+    error: null,
+    silent_us: Date.now() * 1000 - 5 * MINUTE,
+  };
+  const screen = await render(<Shown state={state} waiting={{ lines: [line], agents: [], gathr: [] }} />);
+  await screen.getByRole('button', { name: /^Summary/ }).click();
+  await expect.poll(() => rowsNow()[0]).toEqual(['Made-up Member', 'Working · silent 5m']);
 });
 
 test('the button opens and closes it; Escape closes it and gives focus back; so does a press outside', async () => {

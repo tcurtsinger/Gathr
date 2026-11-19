@@ -39,7 +39,10 @@ Drawn as bubbles since [0072](0072-the-chat-reads-like-a-team-chat.md): the time
   waiting, how many wait, and Show, Deny and Allow. **Changed 2026-11-18, the owner:** the dock said what
   the status line under it already said ("Mira needs you"), and of the two the owner kept the line. The dock
   is gone; "needs you" on the line is a button that goes to the oldest approval's card, else the plan
-  waiting, else the question. Turned down: keeping the dock and dropping the name from the line.
+  waiting, else the question. Turned down: keeping the dock and dropping the name from the line. **Changed again
+  2026-11-18, after the owner's look:** the line goes too ("Why do we need statuses in multiple places"). Who needs
+  you is the mark on the agent's face and its row in Summary, which goes to the oldest approval's card, else the plan
+  waiting, else the question ([0050](0050-what-a-chat-waits-on.md)'s change).
 - **"Working"** stays after the latest message while any turn runs: who is at work, and for how long.
 
 ## Why

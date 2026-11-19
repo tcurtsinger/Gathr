@@ -70,3 +70,8 @@ agent's panel. The conversation map, thinking, tool arguments and the sidebar's 
 
 - 2026-11-17: the Working line is gone ([0050](0050-what-a-chat-waits-on.md)'s status line). Summary opens from its
   button; the status line's list opens an agent's tab as Summary's rows do.
+- 2026-11-18, the status line goes ([0050](0050-what-a-chat-waits-on.md)'s change, the owner's call after their look:
+  "We have the states on the agent pics, and the status panel"). Summary takes what only the line's list said: a
+  row for each of Gathr's own waits after the agents' (Gathr's face, its card's words, opening nothing) and a silent
+  turn's "silent 12m" on its agent's row. A needs-you agent's row goes to what is needed (an approval's card, else
+  the plan waiting, else the question) and closes Summary; with none of them in the chat it opens the agent.

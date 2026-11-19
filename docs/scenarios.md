@@ -531,8 +531,8 @@ Parts: 6.2
   review, one on a background command, and one turn is queued behind an update of Gathr
 - **When** the person, or an agent, asks what the room is waiting on
 - **Then** one answer lists every hold by name: what it is, who can end it, and how long it has
-  waited. The window's status line says each agent's state from the same answer, a wait on one thing by
-  name, and changes without a reload; it says nothing once the last hold ends
+  waited. In the window each agent's face and its row in Summary say its state from the same answer, a wait
+  by name, and change without a reload; once the last hold ends every agent reads Free
 
 ### 6c. Gathr notices a quiet room before the person does
 
@@ -635,13 +635,13 @@ Parts: 6.10
   said at 10:05, three replies in Bo's thread after 09:58 and Ann's reply at 10:08 far up the chat
 - **When** the person opens the chat
 - **Then** a New line sits above the lead's 10:05 message and nowhere else; Bo's thread stays folded and its line
-  says "3 new replies" in blue; the line above the status line names Ann's reply, with her face, its first words and
-  10:08. Opened, Bo's thread shows each of the three saying New, and folded again it says "4 replies". A press on
-  the line at the foot opens Ann's thread at her reply, and the line goes
+  says "3 new replies" in blue; the pill just above the message box says "4 New" (Bo's three and Ann's; the lead's
+  message is seen as it shows). Opened, Bo's thread shows each of the three saying New, and folded again it says
+  "4 replies". Each press on the pill goes to the oldest not seen, opening its thread, and the count drops by one
 - **Given** the same chat open, the person at its foot
 - **When** an answer arrives at the foot, in view, and another far up, out of view
-- **Then** the one in view is seen at once and named nowhere; the one out of view is named at the foot. With the
-  window in the back, nothing is seen until it is in front again
+- **Then** the one in view is seen at once and the pill never shows for it; the one out of view makes the pill say
+  "1 New". With the window in the back, nothing is seen until it is in front again
 - **Given** the person's marks and folds kept by the service
 - **When** the window reloads, the service restarts, or the person's other window shows the same chat
 - **Then** the same marks and folds show; a handled thread they have seen all of opens folded, one with a reply not

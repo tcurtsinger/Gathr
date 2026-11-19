@@ -1,4 +1,4 @@
-/* The one timeline (DESIGN.md: 42rem including 16px padding, so text runs 40rem; the composer at its width). */
+/* The one timeline (DESIGN.md: 42rem including 16px padding, so text runs 40rem; the message box a little wider). */
 .thread {
   position: relative;
   display: flex;
@@ -40,13 +40,18 @@
   display: flex;
   flex-direction: column;
   gap: 20px;
-  /* The status line's slot under it (DESIGN.md "Status line"). */
+  /* Room between the last message and the message box. */
   margin-bottom: 6px;
 }
 .thread-messages:empty {
   display: none;
 }
+/*
+ * The message box and the strip under it, nothing above it: the chat scrolls behind the box and is cut at its top edge
+ * (the owner's call of 2026-11-18). `--box` is the box's width; in a chat it is wider than the column (mains.css).
+ */
 .thread-footer {
+  --box: 100%;
   position: sticky;
   bottom: 0;
   /* Over the faces' marks of the messages scrolling under it. */
@@ -57,6 +62,9 @@
   gap: 8px;
   padding-bottom: 20px;
   background: var(--background);
+}
+.thread-footer > .composer {
+  width: var(--box);
 }
 /* Pushes the footer to the foot of a short chat. Not a margin on the footer: the runtime reads that as part of the
    footer's height (Thread.tsx). */
@@ -70,38 +78,28 @@
   display: none;
 }
 /*
- * Canvas fades where more of the chat lies past the top edge or behind the composer (DESIGN.md).
- * Both sit inside the scroller's content, so they never cover the scroll bar.
+ * The canvas fades where more of the chat lies past the top edge (DESIGN.md). It sits inside the scroller's content, so
+ * it never covers the scroll bar. None above the message box: the chat is cut at its edge.
  */
-.thread-column::before,
-.thread-footer::before {
-  content: "";
-  pointer-events: none;
-  opacity: 0;
-}
 .thread-column::before {
+  content: "";
   position: sticky;
   top: 0;
   z-index: 1;
   height: 32px;
   margin: -24px 0 -8px;
   background: linear-gradient(to bottom, var(--background), transparent);
+  pointer-events: none;
+  opacity: 0;
 }
-.thread-footer::before {
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  right: 0;
-  height: 48px;
-  background: linear-gradient(to top, var(--background), transparent);
-}
-.thread-viewport[data-fade-above] .thread-column::before,
-.thread-viewport[data-fade-below] .thread-footer::before {
+.thread-viewport[data-fade-above] .thread-column::before {
   opacity: 1;
 }
+/* To the chat's foot: just above the box, at its right end, over the messages. */
 .thread-bottom {
   position: absolute;
-  top: -48px;
+  right: calc((100% - var(--box)) / 2);
+  bottom: calc(100% + 8px);
   z-index: 1;
   border-radius: 9999px;
 }
@@ -112,6 +110,38 @@
 }
 .thread-bottom:disabled {
   visibility: hidden;
+}
+/* Where the person left off (0077): how many blocks aren't seen, centred just above the box, over the messages. */
+.new-pill {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px 0 7px;
+  translate: -50% 0;
+  border: 1px solid color-mix(in oklab, var(--attention) 50%, transparent);
+  border-radius: 9999px;
+  background: var(--popover);
+  color: var(--foreground);
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.new-pill:hover {
+  background: var(--raised);
+}
+.new-pill > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--attention);
 }
 /* A search hit opened here: a short attention tint (DESIGN.md "Navigation and workspace"). */
 [data-search-hit] {

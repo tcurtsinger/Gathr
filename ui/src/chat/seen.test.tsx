@@ -1,6 +1,6 @@
 // Where the person left off (0077), in the chat as the window draws it, the service at the edge: fetch answers as it
 // would, keeping the marks it is sent, and the live socket is a stand-in. The New line, the blue counts, each reply's
-// New, the line at the foot, the folds, and what a chat with no marks opens as. Pointer and keyboard.
+// New, the New pill above the message box, the folds, and what a chat with no marks opens as. Pointer and keyboard.
 import './renderWatch';
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -11,7 +11,6 @@ import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
 import { WRITE_MS } from './reads';
 import { watchRenders } from './renderWatch';
-import { clock } from './team';
 import '../app.css';
 
 const live = vi.hoisted(() => new Set<(event: LiveEvent) => void>());
@@ -248,7 +247,16 @@ const replyWith = (text: string) =>
     el.textContent?.includes(text),
   ) as HTMLElement | undefined;
 const foldOf = (main: Element | undefined) => main?.querySelector<HTMLButtonElement>('.said-foot .fold-line');
-const footLine = () => document.querySelector<HTMLButtonElement>('.foot-line');
+const pill = () => document.querySelector<HTMLButtonElement>('.new-pill');
+/** Which way the pill's arrow points. */
+const arrow = () => {
+  const svg = pill()?.querySelector('svg');
+  return svg?.classList.contains('lucide-arrow-up')
+    ? 'up'
+    : svg?.classList.contains('lucide-arrow-down')
+      ? 'down'
+      : '';
+};
 /** The newest mark sent for a thread, in µs. */
 const sentFor = (puts: Read[][], topic: string) =>
   Math.max(0, ...puts.flat().flatMap((r) => (r.topic === topic && r.seen_us ? [r.seen_us] : [])));
@@ -333,7 +341,7 @@ test('opened, a long thread shows every reply said while the person was away, no
   expect(document.body.textContent).not.toContain('earlier repl');
 });
 
-test('a reply arriving out of view is named at the foot; a click goes there, opens its thread, and the line goes', async () => {
+test('a reply arriving out of view shows 1 New; a press opens its folded thread at it, and the pill goes', async () => {
   const day = morning(['ann3']);
   // All seen, and Ann's thread folded by the person.
   const reads = left().map((r) => ({
@@ -344,7 +352,7 @@ test('a reply arriving out of view is named at the foot; a click goes there, ope
   const { puts } = service(day, reads);
   await render(<Chat />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
-  expect(footLine()).toBeNull();
+  expect(pill()).toBeNull();
 
   const ann = turn('ann3', 'ann', 't:2', at(10, 8), { task: 2 });
   send({
@@ -359,19 +367,93 @@ test('a reply arriving out of view is named at the foot; a click goes there, ope
     position: ann.position,
   });
   send({ type: 'message', chat: 'c', message: words('w-ann3', 'ann3', ANN_NEW, at(10, 8)) });
-  await expect.poll(() => footLine()?.textContent).toContain(`Ann replied: ${ANN_NEW}`);
-  expect(footLine()?.textContent).toContain(clock(at(10, 8)));
+  await expect.poll(() => pill()?.textContent).toBe('1 New');
+  expect(pill()?.getAttribute('aria-label')).toBe('1 new message. Go to it');
+  // Its thread's main message is near the top of the chat, above the view.
+  expect(arrow()).toBe('up');
   // Ann's thread stays folded: a new reply never opens it.
   expect(foldOf(mainWith('Add up ingredients'))?.textContent).toBe('1 new reply');
 
-  await (footLine() as HTMLButtonElement).click();
+  await (pill() as HTMLButtonElement).click();
   await expect.poll(() => foldOf(mainWith('Add up ingredients'))?.getAttribute('aria-expanded')).toBe('true');
   await expect.poll(() => replyWith(ANN_NEW)?.hasAttribute('data-search-hit')).toBe(true);
-  await expect.poll(() => footLine()).toBeNull();
+  await expect.poll(() => pill()).toBeNull();
   await written(() => sentFor(puts, 't:2')).toBeGreaterThanOrEqual(us(at(10, 8)));
 });
 
-test('a reply arriving in view is seen at once and named nowhere', async () => {
+test('three unseen blocks in three threads read 3 New; each press goes to the oldest, and the count drops', async () => {
+  // Unseen: the answer to side ask 0 (09:41:30) and to side ask 4 (09:45:30), each far from the other, and Mira's
+  // word in Bo's folded thread (10:03). Mira's word at the foot is in view, so seen as the chat opens.
+  const reads = left().map((r) => {
+    if (r.topic === 't:2') return { ...r, seen_us: us(at(10, 8)) };
+    if (r.topic === 't:3') return { ...r, seen_us: us(at(10, 2)) };
+    if (r.topic === 'm:u-f0' || r.topic === 'm:u-f4') return { ...r, seen_us: us(at(9, 40)) };
+    return r;
+  });
+  const { puts } = service(morning(), reads);
+  await render(<Chat />);
+  await expect.poll(() => pill()?.textContent).toBe('3 New');
+  expect(pill()?.getAttribute('aria-label')).toBe('3 new messages. Go to the oldest');
+  expect(arrow()).toBe('up');
+
+  await (pill() as HTMLButtonElement).click();
+  await expect.poll(() => replyWith('Made-up answer 0')?.hasAttribute('data-search-hit')).toBe(true);
+  await expect.poll(() => pill()?.textContent).toBe('2 New');
+  // Side ask 4's answer is below what the view shows once it has moved to side ask 0.
+  await expect.poll(arrow).toBe('down');
+
+  await (pill() as HTMLButtonElement).click();
+  await expect.poll(() => replyWith('Made-up answer 4')?.hasAttribute('data-search-hit')).toBe(true);
+  await expect.poll(() => pill()?.textContent).toBe('1 New');
+  await expect.poll(arrow).toBe('up');
+
+  // The last is in Bo's folded thread: the press opens it.
+  await (pill() as HTMLButtonElement).click();
+  await expect
+    .poll(() => foldOf(mainWith('Shopping list screen'))?.getAttribute('aria-expanded'))
+    .toBe('true');
+  await expect
+    .poll(() => replyWith('Rev, PR 22 is yours to review.')?.hasAttribute('data-search-hit'))
+    .toBe(true);
+  await expect.poll(() => pill()).toBeNull();
+  await written(() => sentFor(puts, 't:3')).toBeGreaterThanOrEqual(us(at(10, 3)));
+});
+
+test('an unseen main message counts, and a press goes to it and marks it seen', async () => {
+  // The window in the back: Mira's word at the foot shows but isn't seen.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+  const reads = left().map((r) => {
+    if (r.topic === 't:2') return { ...r, seen_us: us(at(10, 8)) };
+    if (r.topic === 't:3') return { ...r, seen_us: us(at(10, 3)) };
+    return r;
+  });
+  const { puts } = service(morning(), reads);
+  await render(<Chat />);
+  await expect.poll(() => pill()?.textContent).toBe('1 New');
+  await (pill() as HTMLButtonElement).click();
+  await expect
+    .poll(() => mainWith('Bo’s screen lists ingredients')?.hasAttribute('data-search-hit'))
+    .toBe(true);
+  await expect.poll(() => pill()).toBeNull();
+  await written(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 5)));
+});
+
+test('above 99 the pill reads 99+ New', async () => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+  const day = morning();
+  // A hundred more answers in side ask 9's thread from 10:20, each a second apart, none seen.
+  for (let i = 0; i < 100; i++) {
+    const id = `more${i}`;
+    const time = at(10, 20 + Math.floor(i / 60), i % 60);
+    day.turns.push(turn(id, 'mira', 'm:u-f9', time));
+    day.messages.push(words(`w-${id}`, id, `Made-up more ${i}`, time));
+  }
+  service(day, left());
+  await render(<Chat />);
+  await expect.poll(() => pill()?.textContent).toBe('99+ New');
+});
+
+test('a reply arriving in view is seen at once and never shows a pill', async () => {
   // Mira is still at work on her word at the foot: its thread is open.
   const day = morning(['ann3'], ['wake']);
   const { puts } = service(
@@ -380,6 +462,12 @@ test('a reply arriving in view is seen at once and named nowhere', async () => {
   );
   await render(<Chat />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
+  // Any pill drawn at all, for however short a time.
+  let shown = 0;
+  const watch = new MutationObserver(() => {
+    if (pill()) shown += 1;
+  });
+  watch.observe(document.body, { childList: true, subtree: true, characterData: true });
   // Bo answers under Mira's word, at the foot of the chat, where the person is.
   send({
     type: 'turn',
@@ -398,7 +486,8 @@ test('a reply arriving in view is seen at once and named nowhere', async () => {
   });
   await expect.element(page.getByText('Recipe order is on purpose.')).toBeVisible();
   await written(() => sentFor(puts, 'b:wake')).toBeGreaterThanOrEqual(us(at(10, 9)));
-  expect(footLine()).toBeNull();
+  watch.disconnect();
+  expect(shown).toBe(0);
 });
 
 test('nothing is seen while the window is in the back; brought to the front, what shows is', async () => {
@@ -406,8 +495,9 @@ test('nothing is seen while the window is in the back; brought to the front, wha
   const { puts } = service(morning(), left());
   await render(<Chat />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
-  // The line at the foot names what is new, wherever it is, while nothing is seen.
-  await expect.poll(() => footLine()?.textContent).toContain('Ann replied');
+  // The pill counts what is new, wherever it is, while nothing is seen: Mira's word at the foot, Bo's three folded
+  // replies and Ann's newest.
+  await expect.poll(() => pill()?.textContent).toBe('5 New');
   await new Promise((r) => setTimeout(r, 1200));
   expect(sentFor(puts, '')).toBe(0);
 
@@ -448,17 +538,18 @@ test('a window opened in the back and first brought to the front shows what came
     .toContain('A made-up late word.');
 });
 
-test('marks from another window come live: the blue count and the line at the foot follow them', async () => {
+test('marks from another window come live: the blue count and the pill follow them', async () => {
   service(morning(), left());
   await render(<Chat />);
-  await expect.poll(() => footLine()?.textContent).toContain('Ann replied');
+  // Bo's three folded replies and Ann's newest; Mira's word at the foot is seen as it shows.
+  await expect.poll(() => pill()?.textContent).toBe('4 New');
   await expect.poll(() => foldOf(mainWith('Shopping list screen'))?.textContent).toBe('3 new replies');
   const seen: Read[] = [
     { topic: 't:2', seen_us: us(at(10, 8)), folded: null },
     { topic: 't:3', seen_us: us(at(10, 3)), folded: true },
   ];
   send({ type: 'reads', chat: 'c', reads: seen });
-  await expect.poll(() => footLine()).toBeNull();
+  await expect.poll(() => pill()).toBeNull();
   await expect.poll(() => foldOf(mainWith('Shopping list screen'))?.textContent).toBe('4 replies');
 });
 
@@ -517,7 +608,7 @@ test('a chat with no marks opens with nothing new and its handled threads folded
   await written(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 8)));
   expect(document.querySelector('.new-line')).toBeNull();
   expect(document.querySelector('.name-line-new')).toBeNull();
-  expect(footLine()).toBeNull();
+  expect(pill()).toBeNull();
   expect(foldOf(mainWith('Made-up side ask 3'))?.getAttribute('aria-expanded')).toBe('false');
   expect(foldOf(mainWith('Tidy units in old recipes'))?.getAttribute('aria-expanded')).toBe('false');
   // Every thread there is kept as seen up to now.

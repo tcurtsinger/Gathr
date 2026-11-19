@@ -233,7 +233,7 @@ const made = (n: number): Message[] =>
     body: `Made-up message ${i}`,
   }));
 
-test('the chat fades only at an edge with more of it beyond', async () => {
+test('the chat fades at its top only with more of it above, and never over the message box', async () => {
   const fades = () => ['above', 'below'].filter((e) => viewport.hasAttribute(`data-fade-${e}`)).join(' ');
   const screen = await render(<View state={{ ...empty, messages: made(1) }} />);
   const viewport = document.querySelector('.thread-viewport') as HTMLElement;
@@ -248,9 +248,12 @@ test('the chat fades only at an edge with more of it beyond', async () => {
   // The wheel, as a person scrolls: it stops assistant-ui following the bottom. A scrollTop jump didn't
   // on WebKit, where the newly drawn messages' resize came before the scroll and it followed back down.
   await userEvent.wheel(viewport, { delta: { y: -600 } });
-  await expect.poll(fades).toBe('above below');
+  await expect
+    .poll(() => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop)
+    .toBeGreaterThan(100);
+  expect(fades()).toBe('above');
   await userEvent.wheel(viewport, { delta: { y: -100_000 } });
-  await expect.poll(fades).toBe('below');
+  await expect.poll(fades).toBe('');
 });
 
 test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {

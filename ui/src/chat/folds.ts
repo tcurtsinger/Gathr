@@ -6,7 +6,7 @@ import type { Reads } from './reads';
  * Which threads are open (0075, 0077). When the chat opens, a thread whose main message is handled and whose replies
  * the person has all seen starts folded, every other open; nothing folds or opens by itself after that, not even for a
  * new reply. The person's own fold or open is kept by the service (`reads`) and wins, in every window and after a
- * reload. A search hit, an approval the status line goes to, or the line at the foot opens its thread, and its earlier
+ * reload. A search hit, an approval Summary goes to, or the New pill opens its thread, and its earlier
  * replies, for as long as the chat is open.
  */
 export function useFolds(reads?: Reads) {

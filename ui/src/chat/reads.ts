@@ -9,9 +9,15 @@ import type { Custom, Timeline } from './messages';
 export const WRITE_MS = 1000;
 
 /**
+ * How long a block drawn out of view waits before the New pill counts it: the chat follows its foot a moment after a
+ * block arrives there, later under load, and one arriving in view is seen in that time, so it never shows in the pill.
+ */
+export const SETTLE_MS = 300;
+
+/**
  * What the person had seen when they came back to the chat (0077): the New line and each reply's New are drawn from it,
  * so they hold while the person reads. Taken when the chat opens and when the window comes back to the front; what
- * arrives after that is newer than `at`, and the line at the foot points to it instead.
+ * arrives after that is newer than `at`, and only the New pill counts it.
  */
 export interface Left {
   marks: Map<string, number>;
@@ -33,13 +39,26 @@ interface Seen {
   item: ThreadMessageLike;
 }
 
+/**
+ * What the New pill says (0077, the owner's call of 2026-11-18): how many blocks of others' aren't seen yet, and the
+ * oldest of them, by its mark's thread ('' for the main line) and time; `up` when its place is above the middle of what shows.
+ */
+export interface Fresh {
+  count: number;
+  id: string;
+  mark: string;
+  t: number;
+  up: boolean;
+}
+
+const NOTHING: Fresh = { count: 0, id: '', mark: '', t: 0, up: false };
 const own = (m: ThreadMessageLike) => (m.metadata?.custom ?? {}) as Custom;
 const noop = () => () => {};
 
 /**
  * One chat's marks (0077), kept by the service: per thread, the newest message the person has seen there, and their own
  * fold. Seeing moves a mark here at once, with no redraw of the chat; the service is written at most once a second.
- * Folds and fold lines, the line at the foot and each reply's New read it through `ReadsContext`.
+ * Folds and fold lines, the New pill and each reply's New read it through `ReadsContext`.
  */
 export class Reads {
   private marks = new Map<string, number>();
@@ -52,8 +71,12 @@ export class Reads {
    * folds kept for them.
    */
   now: { left?: Left; folds: Map<string, boolean> } = { folds: new Map() };
-  /** Drawn items with any part in view, by id: the line at the foot names none of them. */
+  /** Drawn items with any part in view, by id: the pill's arrow points past them. */
   private shown = new Set<string>();
+  /** When each block was first measured, in ms; those the chat held at the first measure, never. */
+  private arrived: Map<string, number> | undefined;
+  /** When the newest of them was, until a measure SETTLE_MS after it has counted it. */
+  private latest: number | undefined;
   private loaded = false;
   private taken: Read[] | undefined;
   private base = 0;
@@ -66,7 +89,7 @@ export class Reads {
   private last = 0;
   private marked = new Set<() => void>();
   private changes = 0;
-  private footFor: { of?: Timeline; at: number; id: string } = { at: -1, id: '' };
+  private freshFor: { of?: Timeline; at: number; fresh: Fresh } = { at: -1, fresh: NOTHING };
   private drawn = new Set<() => void>();
   /** A fold from another window: the open thread this window holds for it gives way. */
   onFold?: (topic: string) => void;
@@ -110,7 +133,10 @@ export class Reads {
     this.tell(this.drawn);
   }
 
-  /** What shows now, and which of it is seen: half of it in view, with the window in front. Told once, whatever moved. */
+  /**
+   * What shows now, and which of it is seen: half of it in view, with the window in front. Told once, whatever moved.
+   * True when a block came since the last measure: what shows is to be measured again after SETTLE_MS.
+   */
   view(ids: Set<string>, seen: string[]) {
     const info = this.items();
     let moved = false;
@@ -120,7 +146,21 @@ export class Reads {
     }
     const same = ids.size === this.shown.size && [...ids].every((id) => this.shown.has(id));
     if (!same) this.shown = ids;
-    if (moved || !same) this.tell(this.marked);
+    const first = !this.arrived;
+    const arrived = this.arrived ?? new Map<string, number>();
+    this.arrived = arrived;
+    const now = performance.now();
+    let grown = false;
+    for (const id of info.keys()) {
+      if (arrived.has(id)) continue;
+      arrived.set(id, first ? Number.NEGATIVE_INFINITY : now);
+      grown = !first;
+    }
+    if (grown) this.latest = now;
+    const due = !grown && this.latest !== undefined && now - this.latest >= SETTLE_MS;
+    if (due) this.latest = undefined;
+    if (moved || !same || first || grown || due) this.tell(this.marked);
+    return grown;
   }
 
   /** Seen up to `t` in a thread: a mark never moves back. */
@@ -172,38 +212,44 @@ export class Reads {
   };
 
   /**
-   * The newest reply of someone else's not seen, with words, whose place isn't in view: its own block, or its thread's
-   * main message while the thread is folded. '' for none.
+   * Every block of someone else's not seen yet, main messages and replies, folded or not, by the marks the blue counts
+   * read; and the oldest of them. Nothing before what shows was first measured.
    */
-  foot = () => {
+  fresh = (): Fresh => {
     const timeline = this.timeline;
-    if (!timeline) return '';
+    if (!timeline || !this.arrived) return NOTHING;
     // Asked by each draw and each change: worked out again only when the marks, the view or the chat changed.
-    if (this.footFor.of === timeline && this.footFor.at === this.changes) return this.footFor.id;
-    const id = this.newestUnseen(timeline);
-    this.footFor = { of: timeline, at: this.changes, id };
-    return id;
+    if (this.freshFor.of === timeline && this.freshFor.at === this.changes) return this.freshFor.fresh;
+    const fresh = this.freshOf(timeline, this.arrived);
+    this.freshFor = { of: timeline, at: this.changes, fresh };
+    return fresh;
   };
 
-  private newestUnseen(timeline: Timeline) {
-    const drawn = new Set(timeline.items.map((m) => m.id));
-    const mainOf = new Map<string, string>();
-    for (const m of timeline.items) {
+  private freshOf(timeline: Timeline, arrived: Map<string, number>): Fresh {
+    const order = new Map(timeline.items.map((m, i) => [m.id as string, i]));
+    const now = performance.now();
+    let count = 0;
+    let oldest: Seen | undefined;
+    for (const [id, s] of this.items()) {
+      if (s.mine || !(s.t > this.seen(s.reply ? s.topic : ''))) continue;
+      if (order.has(id) && !((arrived.get(id) ?? now) <= now - SETTLE_MS)) continue;
+      count += 1;
+      if (!oldest || s.t < oldest.t) oldest = s;
+    }
+    if (!oldest) return NOTHING;
+    const { topic, reply, t, item } = oldest;
+    const id = item.id as string;
+    // A block not drawn (a folded thread's, or behind its earlier replies) is where its thread's main message is.
+    const main = timeline.items.findIndex((m) => {
       const o = own(m);
-      if (o.topic && !o.reply && !o.earlier && !o.box) mainOf.set(o.topic, m.id as string);
-    }
-    let best: Seen | undefined;
-    for (const s of this.items().values()) {
-      if (!s.reply || s.mine || !(s.t > this.seen(s.topic)) || (best && s.t < best.t)) continue;
-      if (!s.item.content?.length) continue;
-      const place = drawn.has(s.item.id) ? s.item.id : mainOf.get(s.topic);
-      if (place && this.shown.has(place as string)) continue;
-      best = s;
-    }
-    return (best?.item.id as string | undefined) ?? '';
+      return o.topic === topic && !o.reply && !o.earlier && !o.box;
+    });
+    const place = order.get(id) ?? main;
+    // Up when it is above the middle of what shows: above the view, or in its upper half.
+    const shown = [...this.shown].flatMap((s) => order.get(s) ?? []).sort((a, b) => a - b);
+    const middle = shown[Math.floor(shown.length / 2)] ?? Number.NEGATIVE_INFINITY;
+    return { count, id, mark: reply ? topic : '', t, up: place < middle };
   }
-
-  item = (id: string) => this.items().get(id)?.item;
 
   subscribe = (fn: () => void) => {
     this.marked.add(fn);

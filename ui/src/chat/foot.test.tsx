@@ -97,12 +97,10 @@ function atTheFoot(steps = 3): ChatState {
   };
 }
 
-/** How far below the message box's top edge, and its fade over the chat while it shows, an element's bottom sits. */
+/** How far below the message box's top edge an element's bottom sits. */
 function belowTheBox(el: Element) {
   const footer = document.querySelector('.thread-footer') as HTMLElement;
-  const fades = document.querySelector('.thread-viewport')?.hasAttribute('data-fade-below');
-  const fade = fades ? Number.parseFloat(getComputedStyle(footer, '::before').height) : 0;
-  return Math.round(el.getBoundingClientRect().bottom - (footer.getBoundingClientRect().top - fade));
+  return Math.round(el.getBoundingClientRect().bottom - footer.getBoundingClientRect().top);
 }
 
 async function atBottom() {

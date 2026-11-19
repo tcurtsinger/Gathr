@@ -81,7 +81,8 @@ Settled while building, each the smaller choice:
   hiding a reply that holds an approval waiting, a failed step or a running turn.
 - **Folding never happens under the person's eyes:** a thread whose main message is handled when the chat is opened
   starts folded, every other open, and nothing folds or opens by itself while it is open; the person's own fold holds
-  until the chat closes. A search hit and the status line's "needs you" open the thread they lead to.
+  until the chat closes. A search hit and the status line's "needs you" open the thread they lead to (since
+  2026-11-18 a needs-you row in Summary and the New pill, below).
 - **A chat of one agent is one timeline,** as before; so is what a chat said before it became a team.
 - **The words are as wide as the message box,** the faces hang left of that width (the owner's rule): a reply's smaller
   face and the thread's rule sit inside it, its words still end at the box's right edge. Where the pane leaves no room
@@ -113,3 +114,11 @@ recorded would show. One answer serves the chat, the Tasks views and `gathr diag
   folds kept across a reload): later steps. Until then a fold lasts while the chat is open.
 - One topic per turn: a lead's turn that answers the person, hands out tasks and messages an agent sits in one
   thread. Only the person's message entering a turn splits it.
+
+## Changes
+
+- 2026-11-18, the owner's look at the test window: the status line and the line at the foot go ([0050](0050-what-a-chat-waits-on.md),
+  [0077](0077-where-you-left-off.md)). A search hit, a needs-you row in Summary and the New pill open the thread they
+  lead to. The message box is wider than the words and the faces; the words stay as wide as the column. A thread's rule
+  is drawn once: each item's piece reaches up to where the item above ends, never over it (a piece drawn twice read
+  thicker in the dark theme, where the border is see-through).

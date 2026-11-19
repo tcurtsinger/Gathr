@@ -80,7 +80,7 @@
   text-align: left;
 }
 button.plan-step:hover,
-.agent-row:hover {
+button.agent-row:hover {
   background: var(--hover-tint);
 }
 .plan-step {

@@ -1,5 +1,5 @@
 import { type RefObject, useEffect } from 'react';
-import type { Reads } from './reads';
+import { type Reads, SETTLE_MS } from './reads';
 
 /** The window is in front: what shows in it is seen. */
 const front = () => document.visibilityState === 'visible' && document.hasFocus();
@@ -16,6 +16,7 @@ export function useSeen(viewport: RefObject<HTMLElement | null>, reads: Reads | 
     if (!reads || !el || !list) return;
     const near = new Set<Element>();
     let frame = 0;
+    let settle = 0;
     const measure = () => {
       frame = 0;
       const view = el.getBoundingClientRect();
@@ -36,7 +37,11 @@ export function useSeen(viewport: RefObject<HTMLElement | null>, reads: Reads | 
         shown.add(id);
         if (inFront && showing >= Math.min(box.height, bottom - top) / 2) seen.push(id);
       }
-      reads.view(shown, seen);
+      // A block came: measured again once the chat has followed its foot to it.
+      if (reads.view(shown, seen)) {
+        clearTimeout(settle);
+        settle = window.setTimeout(look, SETTLE_MS);
+      }
     };
     const look = () => {
       frame ||= requestAnimationFrame(measure);
@@ -68,6 +73,7 @@ export function useSeen(viewport: RefObject<HTMLElement | null>, reads: Reads | 
     document.addEventListener('visibilitychange', look);
     return () => {
       cancelAnimationFrame(frame);
+      clearTimeout(settle);
       reach.disconnect();
       added.disconnect();
       grown.disconnect();

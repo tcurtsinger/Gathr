@@ -1,4 +1,4 @@
-// An agent's panel as the person reaches it (0038): from Summary, the status line or an initial in the
+// An agent's panel as the person reaches it (0038): from Summary or an initial in the
 // timeline. The service is the edge: fetch answers as it would.
 import { useState } from 'react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';

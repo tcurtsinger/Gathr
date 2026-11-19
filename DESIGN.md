@@ -131,8 +131,8 @@ Summary are history.
   while it is open): foreground 9% background, foreground icon, 12% on hover. The chat has no header of
   its own: the thread starts at the frame's top.
 - Thread column is 42rem including 16px inner padding, leaving 640px (40rem) of text at
-  the normal 16px root size (0037). Composer shares that content width. New chat centres
-  its heading, optional project notch and composer.
+  the normal 16px root size (0037). In a chat the message box is wider (see **The chat's foot**); a new chat's box
+  keeps the column's content width, and a new chat centres its heading, optional project notch and composer.
 - Workspace starts at 40% of available width, initially clamped to 360 to 760px.
   Resize minimum is 360px. It always sits beside the chat, never over it, and leaves the
   chat at least 360px: when the window narrows, the workspace gives way first, down to
@@ -242,8 +242,8 @@ field would get less than 200px (the 360 column), the sign, the cross and Send g
 named "Reply" and so is its hint. Focus goes into it when Reply opens it; Escape (after an open @ list) or the cross
 closes it and focus goes back to that Reply. It has no Stop. One at a time: Reply elsewhere moves it, and each
 thread keeps its own draft.
-Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
-pass pointer input through and leave the scrollbar clear.
+A scroll-aware canvas fade appears only while more of the chat lies above its top edge, passes pointer input through and
+leaves the scrollbar clear. There is none above the message box: the chat is cut at the box's top edge.
 
 ### Team messages: main messages and threads
 
@@ -263,11 +263,11 @@ turns, so replies streaming at once never interleave and a later reply lands in 
 person's message sent into a running turn splits that turn: one block before it, one after, and what the turn says
 after it is about that message.
 
-**The words are as wide as the message box** (the owner's rule): a main message's bubble starts at the box's left
-edge and a full one ends at its right edge; its face hangs in a 48px gutter left of that width. Where the pane
-leaves no room beside the column for the gutter (a narrow pane, the 360 column beside the side panel), the column's
-left padding makes it and the box moves in with the words, so the two stay the same width at every size. The
-conversation map shows only where it fits left of the faces.
+**The words are as wide as the column** (the owner's rule): a main message's bubble starts at the column's left edge
+and a full one ends at its right edge; its face hangs in a 48px gutter left of that width. Where the pane leaves no
+room beside the column for the gutter (a narrow pane, the 360 column beside the side panel), the column's left padding
+makes it. The message box is wider than both (**The chat's foot**). The conversation map shows only where it fits
+left of the faces.
 Every message stands in a bubble beside its author's face, everyone on the left, as a team chat
 reads ([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
 the face 36px, 12px from the bubble, level with the bubble's top under the name line; the person's own
@@ -350,8 +350,8 @@ window. Each reply is an item of the chat's own, 13px in from the main message's
 border line at the edge joins the thread's items, 14px apart, faces at 28px, names at 14px, words at 14.5px, and its
 words still end at the box's right edge. Threads never nest. An open thread of more than three replies shows its
 newest three under "Show 4 earlier replies" (13px muted); a reply that holds an approval waiting, a failed step or a
-running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit, or the
-status line's "needs you", opens the thread, and its earlier replies, to show what it leads to.
+running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit, the New pill, or a
+needs-you agent's row in Summary opens the thread, and its earlier replies, to show what it leads to.
 
 Where the person left off (0077), all in the attention blue, as it is theirs to read. Seen is half of a message in
 view, between the chat's top and the box, while the window is in front. When they come back (the chat opened, or the
@@ -359,11 +359,12 @@ window back in front), a New line sits above the first main message said since t
 65% of the blue across the column, and "New" at its right, 12px at 600. In an open thread, each reply said since
 says "New" on its name line, after the time, at 550. Both stay while the person reads, and go when they next come
 back. A folded thread's line says how many replies they haven't seen instead of its count, "1 new reply" or "2 new
-replies", at 550; plain again once none is; no faces and no time, as always. Above the status line, the line at the
-foot names the newest reply not seen whose place is out of view: a pill as wide as its words, a 1px border at 50% of
-the blue, the popover's surface, a 20px face, "Ann replied:" and its first words in 13px cut with an ellipsis, the time
-muted, and an up arrow in blue. A press goes there, opening its thread, and the line goes once nothing is left to
-name. It never says what the status line says, and it keeps to the column's width at 360.
+replies", at 550; plain again once none is; no faces and no time, as always. Just above the message box, the New pill
+counts every block of someone else's not seen yet, main messages and replies, folded or not (the owner's call of
+2026-11-18, in place of the line at the foot): "1 New", "2 New", "99+ New" above 99, with an up or down arrow in
+the blue by where the oldest of them is (**The chat's foot**). A press goes to the oldest, opening its thread and its
+earlier replies, centred and tinted as a search hit is, and marks it seen, so the count drops; seeing by scrolling
+drops it too. A block that arrives in view is seen before it could be counted, so the pill never flashes for it.
 
 Messages agents write to each other sit in the thread of what the writer's work is about; a reply sits where the
 message it answers sits (the one Gathr carried into its turn from the agent it writes to). A message to an agent
@@ -422,51 +423,35 @@ face and the word alone.
 
 Work on a pull request reads in the thread of the task whose PR it is: a review's turns and the fix Gathr gave after it,
 each whole, with its name line, its task and its tick (0075).
-An approval keeps its card where the agent asked, with Deny and Allow. What waits on you is said once,
-on the status line ("Mira needs you"), and nowhere else above the composer (the owner, shown the panel that
-said it a second time: "Keep the line"). "needs you" is a button of its own on the line: a press goes to
-what is needed, the oldest first: an approval's card where it was asked, scrolled to and focused; else
-the plan waiting, opened in its tab at its newest version; else the question's message. The rest of the
-line opens its list as before. With nothing of the three in the chat, the line is one button.
+An approval keeps its card where the agent asked, with Deny and Allow. Who needs you is said by the mark on its
+face and in Summary, and by nothing above the message box (the owner, 2026-11-18: "Why do we need statuses in
+multiple places"). In Summary, a needs-you agent's row goes to what is needed, the oldest first: an approval's card
+where it was asked, scrolled to and focused; else the plan waiting, opened in its tab at its newest version; else
+the question's message. With nothing of the three in the chat, the row opens the agent as every row does.
 
-### Status line
+### The chat's foot
 
-One quiet line just above the message box says how the team stands
-([0050](docs/decisions/0050-what-a-chat-waits-on.md)), from each agent's state
-([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)). It always has its 28px slot, so nothing above or
-below it moves when it comes or goes; the thread's last message ends 6px above it, and its words start where the
-box's do. One font for every part, 12.5px/20px at 450, muted; who needs you is in the attention colour, who can't
-run in the destructive one. Pointed at or open, it takes the raised tint as a 24px pill.
+The foot of a chat is the message box alone (the owner's call of 2026-11-18, after the status line and the line at
+the foot: "Why do we need statuses in multiple places. We have the states on the agent pics, and the status panel").
+Nothing opaque sits above the box and nothing fades there: the chat scrolls behind the box and is cut exactly at its
+top edge. Beside and under it nothing of the chat shows: the strip under the box (20px) and the space beside it are
+the canvas.
 
-- **Its words**, in the marks' order: who needs you or can't run is named, up to two, and three or more are
-  counted ("Mira needs you", "Mira and Bo need you"). The rest name one or two agents in all and count from three,
-  "agents" and the verb once: "Ann is working, Bo is blocked", "3 agents are working", "2 agents are working, 1
-  waiting". What a wait is on is said only when the line waits alone and every wait is on one thing: "Rev is
-  waiting on PR #18 checks". A PR's waits read "PR #18 checks", "PR #18 to merge", "PR #18 to land". Never "he" or
-  "she", a time, a step, a task's title or Free. Nothing when nobody, agent or Gathr, has anything going. A team
-  holds at most five, so nothing folds.
-- **Gathr is said like an agent, last** (the owner's pick, 2026-11-18): its update, a PR it lands and a command
-  an agent's ended turn left running are Gathr's, in the most pressing of their states, by the same rule: "Gathr is
-  waiting on PR #18 to land" when every agent is free, "Ann and Gathr are working". Gathr is never counted as an
-  agent: beside a count it is said after it, "2 agents and Gathr are working", "Mina needs you, 1 agent and Gathr
-  are working, 2 waiting", and alone in its state, "3 agents are working, Gathr is waiting".
-- **Three dots** end it while an agent works: 4px, 3px apart, at 28% of the text colour, with a light that passes
-  along them once per turn of the Working ring (1.6s) and rests; still, at 50%, under reduced motion. Without
-  them, nothing runs.
-- **Pressed**, it opens a 340px popover above it, 6px off, with a row for each agent that isn't free, the most
-  pressing first: its 24px face, its name at 14px, then its state in the mark's shape at 12px and its word, what
-  and how long, as its face's card says it, at 12.5px muted ("Needs you · Question · 1m", "Working · Fix the
-  review of PR #18 · 1m 12s"); Needs you in the attention colour, Can't run in the destructive one. Seconds count
-  under a minute, each second. A row never loses its time: a what too long for the row is cut with an ellipsis, and
-  the time stays at its end. A silent turn's row says "silent 12m" for how long it has made no progress. A wait
-  whose looks keep failing says "Can't read" after what it waits on, in the foreground colour, a shade brighter
-  than the rest, no colour of its own (the owner's pick, 2026-11-18): "Waiting · PR #18 checks · Can't read · 1h
-  4m", and its face's card says the same. Why it fails isn't in the list. Gathr's rows come after the agents', in
-  the same row with Gathr's 24px three-dot face: "Working · Update to 0.1.240", "Waiting · PR #18 to land · 4m",
-  "Working · Ann: Run the test suite · 12m" (a command, with the agent that left it). An agent's row opens that
-  agent's tab in the panel, and the keyboard follows; Gathr's rows open nothing and take no focus. Escape closes it and gives focus back to the line.
-  Who and what the line says is announced from beside it, not by a live region around the button.
+- **The box is wider than every message and face:** its left edge 8px left of the main messages' faces, its right
+  edge as far past the words' right edge, centred as the column is: 752px when there is room (640 + 2 × 56). Where
+  the pane is narrower (the window near 1,000 wide, the 360 column), it takes the width there is, 16px in from each
+  side, and never scrolls sideways. Messages keep their width and place. A new chat's box and the thread box keep
+  their widths.
+- **The New pill**, centred just above the box, floating over the messages and keeping no room of its own, while
+  anything is unseen (where the person left off, above): an up or down arrow in the attention blue, then "1 New" or
+  "2 New", 12.5px at 550, on the popover's surface with a 1px border at 50% of the blue, 24px high, as high as the
+  arrow to the foot. Its accessible name says what it does: "2 new messages. Go to the oldest".
+- **The arrow to the foot**, a round 24px outline button with a down arrow, sits just above the box at its right end,
+  its right edge in line with the box's, over the messages; hidden at the foot.
+- The quiet run line ("You paused") after the last message is the chat's content, not the foot's.
 
+How the team stands is said by the marks on the agents' faces (**State marks**) and in Summary, the status panel:
+Summary lists Gathr's own waits and a silent turn, and a needs-you row goes to what is needed.
 ### Conversation map
 
 The registry's ConversationMap as published ([0039](docs/decisions/0039-conversation-map.md)): a 24px rail
@@ -521,10 +506,18 @@ outside closes it. Top to bottom:
   or a usage limit with its end; else Free, the mark's word.
   No role, no start time and no chevron: those are in the agent's panel. Order: who needs the person,
   then the marks' order (can't run, works, stopped, blocked, waits, free), the Supervisor first among equals.
+  A silent turn's row adds for how long it has made no progress: "Working · silent 12m". After the agents, while
+  Gathr has anything of its own going (its update, a PR it lands, a command an agent's ended turn left running),
+  one row for each, with Gathr's 24px three-dot face, "Gathr", its card's words, "Waiting · PR #18 to land",
+  "Working · Ann: Run the test suite", "Can't read" after what a failing wait is on, and how long at the row's end,
+  where an agent's tasks are ("4m"), so a long what is cut and never the time. Its rows open nothing and take no
+  focus. Times count each second while Summary is open.
 - **Pause or resume**, at the foot: a menu with Pause or Resume for each agent alone.
 
 A step or an agent's row is a button that closes Summary and opens that agent's panel, and the
-keyboard follows to the panel's tab.
+keyboard follows to the panel's tab. The row of an agent that needs the person goes to what it needs them for
+(an approval's card where it was asked, else the plan waiting, else the question) and closes Summary;
+with none of them in the chat it opens the agent.
 
 A round is what the service says it is on each task (`round`, 0051): the Supervisor's turn the
 person's message or answer began, with every task given since in answer to it, nested tasks
@@ -561,7 +554,7 @@ same mark at 9px, still, 8px after its cut title.
 An agent opens beside the chat as a workspace tab, after Tasks: its 16px face and name, with a
 close button. One agent at a time: opening another replaces it. While another tab shows, the panel
 keeps its scroll position and its opened rows, and is not drawn again until it shows. It opens from a step or a row in
-Summary, a row of the status line's list, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
+Summary, and from an agent's face in the timeline. 20px 24px 32px padding, 24px between sections, each under a 13px muted
 heading; a section with nothing in it is left out, and an agent with nothing at all reads "Nothing in
 this chat yet".
 

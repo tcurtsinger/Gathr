@@ -127,7 +127,7 @@ function NewLine() {
 /**
  * A block of an agent's turn: its face and name line (with how its task or turn ended, and its steps), its words in a
  * bubble with its plan's chip, thumbs-ups, then its approvals and what the person can do about how it ended. A block
- * with nothing to show draws nothing: a turn that has just started shows on the status line, not as an empty message.
+ * with nothing to show draws nothing: a turn that has just started shows as its agent's Working mark, not as an empty message.
  * A main message says its state at its name line's right; an ask's result quotes the ask (0075). A reply sits in its
  * thread, smaller.
  */

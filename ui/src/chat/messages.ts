@@ -152,7 +152,7 @@ export type Custom = Place & {
 export interface Timeline {
   /** What is drawn: main messages, fold lines and the replies of open threads. */
   items: ThreadMessageLike[];
-  /** Every block, folded or not, in the same order: what the agent's panel, the marks and the status line read. */
+  /** Every block, folded or not, in the same order: what the agent's panel, the marks and the New pill read. */
   all: ThreadMessageLike[];
   find: (message: string) => Spot | undefined;
   /** The threads whose main message is handled and all seen (0077): those start folded when the chat opens. */

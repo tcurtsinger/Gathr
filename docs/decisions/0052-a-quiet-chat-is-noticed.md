@@ -163,3 +163,5 @@ against the code.
   "Working: Cass silent 12m". The line says Cass is working, as the turn still runs, and Cass's row in the list it
   opens says "Working · <what> · silent 12m". Gathr's line in the chat, the lead's telling and the chat's blue dot
   are unchanged.
+- 2026-11-18, the status line goes ([0050](0050-what-a-chat-waits-on.md)'s change, the owner's call after their look):
+  a silent turn's "silent 12m" is on its agent's row in Summary's Team, after what the agent is doing.

@@ -1,8 +1,8 @@
 // The one timeline as the person uses it (0037): a turn's steps, Gathr's event lines, a long name line and the
-// what the status line goes to when an approval waits. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
+// what a needs-you row in Summary goes to when an approval waits. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
-import { server, userEvent } from 'vitest/browser';
+import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, Task, ToolBody, Turn } from '../api';
 import { ChatView } from './ChatView';
@@ -257,7 +257,7 @@ test('a member’s name line stays one line however long its task is, cut with i
   );
 });
 
-test('waiting approvals: the line says who needs you, and a press goes to the oldest where it was asked', async () => {
+test('waiting approvals: Summary says who needs you, and a press on the row goes to the oldest where it was asked', async () => {
   const history = {
     chat: 'c',
     members,
@@ -297,14 +297,19 @@ test('waiting approvals: the line says who needs you, and a press goes to the ol
       />
     </div>,
   );
-  // Said once, on the line: no panel repeats it above the message box.
-  const line = screen.getByRole('button', { name: 'Made-up Lead and Made-up Member need you' });
-  await expect.element(line).toBeVisible();
+  // Said by the faces' marks and Summary: nothing above the message box says it.
+  const summary = screen.getByRole('button', { name: 'Summary: Made-up Lead and Made-up Member need you' });
+  await expect.element(summary).toBeVisible();
   expect(document.querySelector('[aria-label="Needs you"]')).toBeNull();
+  expect(document.querySelector('.thread-footer')?.textContent).not.toContain('need');
 
   // The card where the member asked, the oldest, comes into view with the keyboard on it.
   const card = screen.getByRole('group', { name: 'Allow Bash?' });
-  await line.click();
+  await summary.click();
+  await page
+    .getByRole('dialog', { name: 'Summary' })
+    .getByRole('button', { name: /^Made-up Member / })
+    .click();
   await expect.element(card).toHaveFocus();
   await expect.element(card).toBeInViewport();
 });
