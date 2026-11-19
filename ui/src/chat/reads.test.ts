@@ -22,7 +22,7 @@ test('a burst of marks is one write, and the next waits for the second to pass',
   vi.useFakeTimers();
   const sent = writes();
   const reads = new Reads('c');
-  reads.take([{ topic: '', seen_us: 1_000, folded: null }], 0);
+  reads.take([{ topic: '', seen_us: 1_000, folded: null }], () => 0);
   for (let t = 2; t < 200; t++) reads.see('t:1', t);
   reads.see('', 5);
   reads.fold('t:1', true);
@@ -46,7 +46,7 @@ test('a mark older than the one kept moves nothing and writes nothing', async ()
   vi.useFakeTimers();
   const sent = writes();
   const reads = new Reads('c');
-  reads.take([{ topic: 't:1', seen_us: 9_000, folded: null }], 0);
+  reads.take([{ topic: 't:1', seen_us: 9_000, folded: null }], () => 0);
   reads.see('t:1', 8);
   reads.apply([{ topic: 't:1', seen_us: 7_000, folded: null }]);
   await vi.advanceTimersByTimeAsync(WRITE_MS);
@@ -58,10 +58,10 @@ test('a chat with no marks is seen up to when it first opened, and keeps each of
   vi.useFakeTimers({ now: 50_000 });
   const sent = writes();
   const reads = new Reads('c');
-  reads.take([], 60_000);
+  reads.take([], () => 60_000);
   expect(reads.seen('t:7')).toBe(60_000);
-  reads.baseline(['t:7', 'm:x']);
-  reads.baseline(['t:8']);
+  reads.baseline(() => ['t:7', 'm:x']);
+  reads.baseline(() => ['t:8']);
   await vi.advanceTimersByTimeAsync(0);
   expect(sent).toEqual([
     [

@@ -399,6 +399,38 @@ test('nothing is seen while the window is in the back; brought to the front, wha
   await expect.poll(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 5)));
 });
 
+test('a window opened in the back and first brought to the front shows what came meanwhile as New', async () => {
+  // As Gathr opened at login, hidden: the window has never been in front, so it has never left it either.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+  service(
+    morning(),
+    left().map((r) => ({ ...r, seen_us: us(at(10, 9)) })),
+  );
+  await render(<Chat />);
+  await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
+  expect(document.querySelector('.new-line')).toBeNull();
+  const now = new Date().toISOString();
+  send({
+    type: 'turn',
+    chat: 'c',
+    turn: 'late',
+    status: 'done',
+    agent: 'mira',
+    created: now,
+    topic: 'b:late',
+    position: 91,
+  });
+  send({ type: 'message', chat: 'c', message: words('w-late', 'late', 'A made-up late word.', now) });
+  await expect.element(page.getByText('A made-up late word.')).toBeVisible();
+  expect(document.querySelector('.new-line')).toBeNull();
+
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  window.dispatchEvent(new FocusEvent('focus'));
+  await expect
+    .poll(() => document.querySelector('.new-line')?.nextElementSibling?.textContent)
+    .toContain('A made-up late word.');
+});
+
 test('marks from another window come live: the blue count and the line at the foot follow them', async () => {
   service(morning(), left());
   await render(<Chat />);

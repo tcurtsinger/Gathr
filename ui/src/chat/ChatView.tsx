@@ -140,7 +140,7 @@ export function ChatView(props: Props) {
   } = useChat(chat.id, unsent, onUnsent);
   // Where the person left off (0077): read with the history, before the chat is drawn from it.
   const reads = useReads(chat.id);
-  if (loaded && rows) reads.take(rows, lastSaid(state));
+  if (loaded && rows) reads.take(rows, () => lastSaid(state));
   const drawnFrom = useSyncExternalStore(reads.subscribeDrawn, () => reads.now);
   const turn = running(state);
   const run = runOf(pauses, chat.id);
@@ -179,7 +179,7 @@ export function ChatView(props: Props) {
     [state, named, failed, open, folds.earlier, start, replying, drawnFrom.left, reads],
   );
   reads.timeline = timeline;
-  if (loaded) reads.baseline(timeline.all.flatMap((m) => (m.metadata?.custom as Custom)?.topic ?? []));
+  if (loaded) reads.baseline(() => timeline.all.flatMap((m) => (m.metadata?.custom as Custom)?.topic ?? []));
   threads.settle(timeline, loaded);
   const { answers } = props;
   const chatTasks = state.tasks;

@@ -77,7 +77,7 @@ export class Reads {
   seen = (topic: string) => this.marks.get(topic) ?? this.floor;
 
   /** The chat's marks as its history read them. A chat with none yet is seen up to now (an old chat is not new). */
-  take(rows: Read[], newest: number) {
+  take(rows: Read[], newest: () => number) {
     if (rows === this.taken) return;
     this.taken = rows;
     if (this.loaded) return this.apply(rows);
@@ -87,16 +87,16 @@ export class Reads {
       if (r.folded !== null) this.folds.set(r.topic, r.folded);
     }
     this.now = { ...this.now, folds: new Map(this.folds) };
-    this.base = Math.max(Date.now(), newest);
+    this.base = Math.max(Date.now(), newest());
     this.floor = rows.length ? 0 : this.base;
     this.arrive();
   }
 
   /** The first open of a chat with no marks: every thread there is kept as seen up to then. */
-  baseline(topics: Iterable<string>) {
+  baseline(topics: () => Iterable<string>) {
     if (this.floor === 0 || !this.loaded || this.based) return;
     this.based = true;
-    for (const topic of ['', ...topics]) {
+    for (const topic of ['', ...topics()]) {
       if (this.marks.has(topic)) continue;
       this.marks.set(topic, this.base);
       this.queue(topic, { seen_us: this.base * 1000 });
@@ -277,7 +277,8 @@ export function useReads(chat: string): Reads {
     const stop = listen((e) => {
       if (e.type === 'reads' && e.chat === chat) reads.apply(e.reads);
     });
-    let away = false;
+    // A window opened in the back (Gathr at login, hidden) has been away from the start.
+    let away = !document.hasFocus();
     const blur = () => {
       away = true;
     };
