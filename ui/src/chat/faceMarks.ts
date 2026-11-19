@@ -61,7 +61,7 @@ function build(crew: Glance[], latest: Map<string, string>, archived: boolean): 
     const { agent, name, role } = g.member;
     const card = {
       name,
-      role: role === 'supervisor' && crew.length > 1 ? roleName[role] : undefined,
+      role: role === 'supervisor' ? roleName[role] : undefined,
       state: g.standing,
       about: g.about,
       since: g.since,

@@ -132,7 +132,7 @@ function NewLine() {
  * thread, smaller.
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, role, on, done, out, work, ending, approvals, agreed, plan, asked, result } = own;
+  const { agent, by, role, seat, on, done, out, work, ending, approvals, agreed, plan, asked, result } = own;
   const actions = useActions();
   const jump = useJump();
   const [open, setOpen] = useStepsOpen(work);
@@ -162,8 +162,8 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
             name={agent}
             message={id}
             size={small ? 28 : 36}
-            // Only a team chat has a panel to open: its agents have roles.
-            onOpen={by && role ? () => actions.openAgent(by) : undefined}
+            // An agent of the chat has a panel to open; one that left it has none.
+            onOpen={by && seat ? () => actions.openAgent(by) : undefined}
           />
         )
       }

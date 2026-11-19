@@ -13,6 +13,8 @@ export interface Team {
   name: (agent: string | null | undefined) => string | undefined;
   /** The agent's role, shown only in a chat with more than one agent. */
   role: (agent: string | null | undefined) => Role | undefined;
+  /** Whether the agent is one of the chat's, however many it has. */
+  seated: (agent: string | null | undefined) => boolean;
 }
 
 export function team(state: ChatState, names: Map<string, string>): Team {
@@ -56,6 +58,7 @@ export function team(state: ChatState, names: Map<string, string>): Team {
     name: (agent) =>
       agent ? (names.get(agent) ?? state.members.find((m) => m.agent === agent)?.name) : undefined,
     role: (agent) => (agent && state.members.length > 1 ? roles.get(agent) : undefined),
+    seated: (agent) => !!agent && roles.has(agent),
   };
 }
 
