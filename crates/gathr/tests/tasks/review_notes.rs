@@ -440,7 +440,7 @@ fn a_done_reviews_suggestions_are_its_reason_and_start_no_turn() {
     let reason =
         "looks good\nSuggestion: src/x.rs: Name it plainly\nSuggestion: Split the file later";
     assert_eq!(state(&conn, review), (State::Done, Some(reason.into())));
-    let line = format!("A task is done:\n- #{review} Bo, Review the page: done: {reason}");
+    let line = format!("A task is done:\n- #{review} Bo, Review the page: done: {reason} (PR #7)");
     let said: i64 = conn
         .query_row(
             "SELECT count(*) FROM messages WHERE role = 'gathr' AND body = ?1",

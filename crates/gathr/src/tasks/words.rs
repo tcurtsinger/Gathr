@@ -133,10 +133,11 @@ pub fn ask(t: &Task) -> String {
 }
 
 /// The first line of what Gathr says in the chat when a task ends done (0051); its second is the
-/// task's `line`. The window reads both (`ui/src/chat/hearback.ts`).
+/// task's `line`. The window hides both by this first line (`TOLD` in `ui/src/chat/blocks.ts`).
 pub const DONE: &str = "A task is done:";
 
-/// A task as a hear-back names it: "- #<number> <owner>, <what>: <how>".
+/// A task as a hear-back names it: "- #<number> <owner>, <what>: <how> (PR #<pr>, look at <see>)",
+/// the PR and the look-at when it has them.
 pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
     let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
     let how = match (t.state, &t.reason) {
@@ -147,7 +148,17 @@ pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
         (state, None) => state.as_str().to_string(),
     };
     let owner = owner_name(conn, t.owner.as_deref())?;
-    Ok(format!("- #{} {owner}, {}: {how}", t.number, t.what))
+    let see = t.report.as_ref().and_then(|r| r.see.as_ref());
+    let pr = t.pr.map(|pr| format!("PR #{pr}"));
+    let facts: Vec<String> = [pr, see.map(|s| format!("look at {s}"))]
+        .into_iter()
+        .flatten()
+        .collect();
+    let facts = match facts.is_empty() {
+        true => String::new(),
+        false => format!(" ({})", facts.join(", ")),
+    };
+    Ok(format!("- #{} {owner}, {}: {how}{facts}", t.number, t.what))
 }
 
 /// What became of each task the giver hasn't heard of, on the giver's `own` task when it has one
@@ -164,14 +175,11 @@ pub fn hear_back(conn: &Connection, settled: &[Task], own: Option<i64>) -> Resul
     for t in settled {
         lines.push(line(conn, t)?);
     }
-    // One closing line: the window reads a hear-back's lines (`ui/src/chat/hearback.ts`).
-    let mut close = "Read replies with read_chat, then continue.".to_string();
     if let Some(own) = own {
-        close.push_str(&format!(
-            " This turn is on your task #{own}: end it with finish_task."
+        lines.push(format!(
+            "This turn is on your task #{own}: end it with finish_task."
         ));
     }
-    lines.push(close);
     Ok(lines.join("\n"))
 }
 

@@ -139,8 +139,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "hear_back",
         "hear_back: one settled, done",
         "The task you gave is settled:\n\
-         - #1 Ann, Fix the build: done\n\
-         Read replies with read_chat, then continue.",
+         - #1 Ann, Fix the build: done (look at notes.md)",
     ),
     (
         "hear_back",
@@ -148,14 +147,14 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "The 2 tasks you gave are settled:\n\
          - #2 Ann, Fix the build: done: see the change\n\
          - #3 Bo, Fix the build: cancelled: not needed\n\
-         Read replies with read_chat, then continue. This turn is on your task #1: end it with finish_task.",
+         This turn is on your task #1: end it with finish_task.",
     ),
     (
         "hear_back",
         "hear_back: one stands",
         "Where the task you gave stands:\n\
-         - #2 Ann, Fix the note: held: done, waiting on #90 to merge\n\
-         Read replies with read_chat, then continue. This turn is on your task #1: end it with finish_task.",
+         - #2 Ann, Fix the note: held: done, waiting on #90 to merge (PR #90)\n\
+         This turn is on your task #1: end it with finish_task.",
     ),
     (
         "answered",

@@ -377,6 +377,37 @@ fn a_task_that_ends_done_is_a_line_in_the_chat_and_trouble_is_not() {
     assert!(said[1].contains(&format!("#{b} Bo")), "{}", said[1]);
 }
 
+/// A hear-back and the done line name the task's PR and what to look at, so its giver needn't fetch
+/// them, and the hear-back sends nobody to read_chat: lines that came cut say so themselves.
+#[test]
+fn a_hear_back_names_the_tasks_pr_and_what_to_look_at() {
+    let dir = TempDir::new();
+    let mut conn = team(&dir);
+    lead_turn(&conn, "lead-turn", None);
+    let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
+    let id = begin(&mut conn, a);
+    let said = Said {
+        note: Some("the build is green"),
+        pr: Some(9),
+        file: Some("src/build.rs"),
+        ..Said::default()
+    };
+    finish(&mut conn, "ann", a, Finish::Done, &said).unwrap();
+    gathr::store::set_turn(&conn, &id, "done", None).unwrap();
+    tasks::ended(&mut conn, a, Outcome::Ok, T).unwrap();
+    let starts = tasks::pr_looked(&mut conn, a, "MERGED", None, None, T).unwrap();
+
+    let line = format!("- #{a} Ann, Fix the build: done: #9 merged (PR #9, look at src/build.rs)");
+    let done = lines(&conn);
+    assert_eq!(done, [format!("A task is done:\n{line}")]);
+    let back = to_lead(&starts);
+    assert_eq!(back.len(), 1, "{starts:?}");
+    assert_eq!(
+        back[0].text,
+        format!("The task you gave is settled:\n{line}")
+    );
+}
+
 /// G158: what a lead hands on after the person's answer is a new round, as after their message.
 #[test]
 fn the_persons_answer_begins_a_new_round() {
