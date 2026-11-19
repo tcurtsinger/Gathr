@@ -48,22 +48,17 @@ export function WorkRow({
   startOpen?: boolean;
 }) {
   const [open, setOpen] = useState(startOpen);
-  // The line a running row shows under "Working": what the agent last said it was doing, as SerenityOS's card shows its
-  // latest words while it works (0082); with nothing said yet, its latest step as it reads now.
-  const said = work.running && work.steps.some((step) => 'say' in step);
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
     id: step.id,
     kind: 'say' in step ? 'commentary' : 'tool',
+    // The line a running row shows under "Working": its latest step, as it reads now. What the agent last said it was
+    // doing reads as words in the bubble above it, never in this line (the owner's call of 2026-11-19).
     label:
       'say' in step
-        ? said
-          ? step.say
-          : ''
-        : said
-          ? ''
-          : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
-              .filter(Boolean)
-              .join(' '),
+        ? ''
+        : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
+            .filter(Boolean)
+            .join(' '),
     content: <StepEntry step={step} onOpenTask={onOpenTask} />,
   }));
   return (

@@ -268,8 +268,8 @@ test('a running turn’s row says what the agent is doing now; text streaming co
   const running = custom(byId(view(state).every, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Running a command', notes: ['2 steps'] });
   expect(running?.steps[0]).toEqual({ id: expect.any(String), say: 'Checked' });
-  // Its words before a step are narration, in the working line (0082).
-  expect(text(byId(view(state).every, 'a-kit'))).toBe('');
+  // While it works, what it last said reads as words above the working line (the owner's call of 2026-11-19).
+  expect(text(byId(view(state).every, 'a-kit'))).toBe('Checked');
 
   // The command ended and it writes: the row stays, the words being written show as its message.
   state.messages[state.messages.length - 1] = tool('kit', 'k2', 'Shell');
