@@ -43,6 +43,8 @@ export type LiveEvent =
       answers?: string | null;
       held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
       created?: string;
+      /** When it ended, on its end (0082). */
+      ended?: string | null;
       position?: number | null;
       topic?: string | null;
       result_of?: string | null;

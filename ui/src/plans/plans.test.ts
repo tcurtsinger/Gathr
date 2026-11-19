@@ -170,9 +170,11 @@ const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const text = (m: ThreadMessageLike | undefined) =>
   ((m?.content ?? []) as readonly { text?: string }[]).map((p) => p.text).join(' | ');
 
-/** What a block's bubble draws, in order: words, a run of steps, a plan's chip. */
-const kinds = (m: ThreadMessageLike | undefined) =>
-  custom(m).pieces?.map((p) => ('run' in p ? 'run' : 'plan' in p ? `plan v${p.plan.version}` : 'words'));
+/** What a block's bubble draws, in order: its message's words, a plan's chip, and its steps line at the foot (0082). */
+const kinds = (m: ThreadMessageLike | undefined) => [
+  ...(custom(m).pieces?.map((p) => ('plan' in p ? `plan v${p.plan.version}` : 'words')) ?? []),
+  ...(custom(m).line ? ['line'] : []),
+];
 
 test("a version is a chip in the bubble of the turn that wrote it, where it wrote it, with the bubble's thumbs-ups", () => {
   const items = view(planned());
@@ -189,12 +191,13 @@ test("a version is a chip in the bubble of the turn that wrote it, where it wrot
   expect(text(second)).toBe('');
 });
 
-test("the lead's words before and after the plan call stay in its one bubble, a main message", () => {
+test("the lead's words before the plan call are narration in its steps line; its chip and its message stay in its bubble", () => {
   const items = view(planned());
   const first = items.find((m) => m.id === 'a-ask');
   expect(ids(items)).not.toContain('a-ask-1');
-  expect(kinds(first)).toEqual(['words', 'run', 'plan v1', 'words']);
-  expect(text(first)).toBe('Reading the notes code first. | Bo checks it next.');
+  expect(kinds(first)).toEqual(['plan v1', 'words', 'line']);
+  expect(text(first)).toBe('Bo checks it next.');
+  expect(custom(first).line?.steps[0]).toMatchObject({ say: 'Reading the notes code first.' });
   expect(custom(first)).toMatchObject({ head: true, topic: 'b:ask' });
   expect(custom(first).reply).toBeUndefined();
 });

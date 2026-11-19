@@ -239,11 +239,12 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          built or changed, check that part by running it and using it: reading the diff alone isn't a check, and \
          \"it works\" with no proof is a claim without evidence.\n\
          The person asked: Why is the list slow?\n\
-         Mira's answer, message <id>:\n\
+         Mira's answer:\n\
          The list reads every note's tags one by one.\n\
-         If it holds up, give message <id> a thumbs-up with react and write nothing. If something in it is wrong, \
-         missing or claimed without evidence, say what in a few lines with your evidence, quoting the line you answer \
-         as \"> Mira: their words\". If there's nothing to check, such as small talk, write nothing.",
+         If it holds up, call react with message \"answer\" and end your turn: that thumbs-up is your whole check, \
+         so write nothing, not even what you checked. If something in it is wrong, missing or claimed without \
+         evidence, say what in a few lines with your evidence, quoting the line you answer as \"> Mira: their words\". \
+         If there's nothing to check, such as small talk, write nothing.",
     ),
     (
         "check",
@@ -252,7 +253,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          or missing (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that \
          proves nothing) and what the ask doesn't need, with file and line.\n\
          The person asked: Add tags to notes\n\
-         The plan, message <id>:\n\
+         The plan:\n\
          Plan: Tags on notes (version 1, 1 part)\n\
          Let notes carry tags, shown in the list and used to filter.\n\
          \n\
@@ -262,14 +263,14 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Proof: tests/tags.rs passes\n\
          Where: the project's worktree, on a new branch\n\
          Size: src/tags.rs, about 60 lines\n\
-         If it holds up, give message <id> a thumbs-up with react and write nothing. If something in it is wrong, \
-         missing or claimed without evidence, say what in a few lines with your evidence, quoting the line you answer \
-         as \"> Mira: their words\".",
+         If it holds up, call react with message \"answer\" and end your turn: that thumbs-up is your whole check, \
+         so write nothing, not even what you checked. If something in it is wrong, missing or claimed without \
+         evidence, say what in a few lines with your evidence, quoting the line you answer as \"> Mira: their words\".",
     ),
     (
         "last_word",
         "last_word: an answer",
-        "Ann and Bo questioned your answer, message <id>:\n\
+        "Ann and Bo questioned your answer:\n\
          Ann: > Mira: Done: tags show in the list.\n\
          \n\
          The list shows them, the filter doesn't.\n\
@@ -281,7 +282,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
     (
         "last_word",
         "last_word: a plan",
-        "Bo questioned your answer, message <id>:\n\
+        "Bo questioned your answer:\n\
          Bo: > Mira: 1. Add the tags table (Ann)\n\
          \n\
          Ann has no index on the note column.\n\

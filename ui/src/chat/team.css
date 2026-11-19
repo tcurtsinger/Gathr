@@ -22,6 +22,16 @@
 .work > [data-slot="collapsible"] > p {
   font-size: 13px;
 }
+/* A turn's line at its bubble's foot (0082), under its message; while it runs, what the agent last said it was doing
+   stays one line under "Working", cut with an ellipsis. */
+.bubble > * + .work {
+  margin-top: 4px;
+}
+.bubble > .work > [data-slot="collapsible"] > p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .work [data-slot="tool-call"] {
   max-width: none;
 }

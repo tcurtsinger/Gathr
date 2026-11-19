@@ -2,6 +2,7 @@
 // them: the threads, their folds, and the message box under them.
 import { type ReactNode, useMemo, useRef } from 'react';
 import type { History, Named } from '../api';
+import { MentionsContext } from '../components/Markdown';
 import { useFolds } from './folds';
 import { toThread } from './messages';
 import askAtWork from './recorded/ask-at-work.json';
@@ -75,17 +76,20 @@ export function View({
   // biome-ignore lint/correctness/useExhaustiveDependencies: placed once, as the chat places a hit when it loads
   const hit = useMemo(() => found && { ...timeline.find(found), at: 1 }, [found]);
   threads.open(hit || undefined);
+  const names = useMemo(() => state.members.map((m) => m.name), [state.members]);
   return (
-    <div style={{ height: 900, width, display: 'flex' }}>
-      <Thread
-        messages={timeline.items}
-        running={false}
-        actions={{ ...noActions, fold: threads.fold, earlier: threads.earlier, ...actions }}
-        empty={false}
-        target={hit || undefined}
-      >
-        {children}
-      </Thread>
-    </div>
+    <MentionsContext value={names}>
+      <div style={{ height: 900, width, display: 'flex' }}>
+        <Thread
+          messages={timeline.items}
+          running={false}
+          actions={{ ...noActions, fold: threads.fold, earlier: threads.earlier, ...actions }}
+          empty={false}
+          target={hit || undefined}
+        >
+          {children}
+        </Thread>
+      </div>
+    </MentionsContext>
   );
 }

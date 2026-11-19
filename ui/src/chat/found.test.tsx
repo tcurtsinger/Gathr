@@ -147,10 +147,11 @@ test("a member's hit opens at its message in the one timeline", async () => {
   expect(hit.textContent).toBe('Made-up finding 12');
 });
 
-test('a hit on what a turn wrote mid-work opens at those words, in their place in its block', async () => {
+// What a turn wrote mid-work is narration in its steps line (0082): a hit on it opens at its turn's block, whole.
+test('a hit on what a turn wrote mid-work opens at its block', async () => {
   const { hit } = await openAt(team, 'r12');
-  expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
-  expect(hit.textContent).toBe('Made-up start 12');
+  expect(hit.getAttribute('data-message-id')).toBe('a-w12');
+  expect(hit.querySelector('.bubble .markdown')?.textContent).toBe('Made-up finding 12');
 });
 test("the chat's title, after a hit in it, opens at its latest message", async () => {
   const { viewport, reopen, onFound } = await openAt(long, 'a100');

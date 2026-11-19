@@ -1,9 +1,10 @@
 import { MessagePrimitive } from '@assistant-ui/react';
 import { afterDraw, Foot } from './Foot';
 import type { Custom } from './messages';
-import { Pieces, parts } from './Replies';
+import { parts } from './Replies';
 import { AgentFace, Bubble, NameLine, NewWord, Said, When } from './Said';
 import { useActions } from './Thread';
+import { WorkRow } from './TurnParts';
 import type { Said as Message } from './threads';
 
 /** "Show N earlier replies" above a long thread's newest; pressed, they show and focus goes to the first of them. */
@@ -36,7 +37,7 @@ export function Earlier({ earlier }: { earlier: NonNullable<Custom['earlier']> }
 
 /**
  * A message between agents (0072), an item of its own: in a thread, smaller, with the @Name of whom it is to. A turn
- * that only sent it has its runs of steps as lines above its words, as a turn's block has.
+ * that only sent it has its steps as the line at its bubble's foot, as a turn's block has (0082).
  */
 export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
   const actions = useActions();
@@ -61,6 +62,7 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       line={
         <NameLine
           name={name}
+          title={m.title}
           pieces={[
             <When key="t" time={m.time} />,
             small && <NewWord key="new" topic={own.topic} time={own.time} />,
@@ -69,12 +71,12 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       }
     >
       <Bubble
-        lead={m.pieces && <Pieces pieces={m.pieces} actions={actions} />}
         quote={m.quote}
         mention={m.to}
         foot={<Foot fold={own.thread} agreed={m.agreed} like={m.like} answer={own.answer} />}
       >
         <MessagePrimitive.Parts components={parts} />
+        {m.line && <WorkRow work={m.line} onOpenTask={actions.openTask} />}
       </Bubble>
     </Said>
   );

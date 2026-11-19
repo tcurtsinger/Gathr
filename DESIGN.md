@@ -276,33 +276,42 @@ Every message stands in a bubble beside its author's face, everyone on the left,
 reads ([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
 the face 36px, 12px from the bubble, level with the bubble's top under the name line; the person's own
 face is "Y" on the accent surface. The bubble fits its words up to the column: the foreground at 8% over
-the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 8px 13px padding, 15px
-words at 450 and 1.45, paragraphs and what sits between them 10px apart, list items 3px, inline code
-0.88em on a 6% tint, a code block on the chat's own surface. A bubble with a table takes the column, so
-the table fills it as before.
+the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 8px 13px padding. Its words take
+SerenityOS's proportions in Gathr's palette (0082): 15.5px at 400 and 1.65 (a reply in a thread 15px), bold at 600,
+paragraphs and what sits between them 10px apart; a heading of any level a section label, semibold, 1.0625em, 16px
+clear above it, never a page title; a bullet its own 0.4em dot, the text 10px after it, each level in by 1.1rem; a
+number in the muted colour, 8px before its text; list items 3px apart; inline code a chip, 0.84em on a 7% tint with
+4px corners; a quote a 2px rule at a quarter of the text's colour, its words upright at 70%; a code block on the
+chat's own surface, its code 13px at 1.625; a table 13px, cells 10px by 6px, its header row tinted and semibold; an
+@Name of the chat's agents in the accent blue. A bubble with a table takes the column, so the table fills it as before.
 
-**A turn reads as Claude's app reads it** (the owner's call of 2026-11-19, reversing 2026-11-18's "a turn with no
-words draws nothing"): in the agent's one bubble, in the order they came, every piece of words it wrote, drawn as the
-message's Markdown, and between them each run of steps (tool calls, thoughts, tasks it gave) folded to one quiet line,
-14px muted with a chevron: assistant-ui's Run activity. Closed and finished, the line says what the run did, counted
-by kind, short: "Read 2 files, ran 1 command", "Ran 3 commands", "Edited 1 file", "Gave 2 tasks", at most three kinds
-and then "and 2 more"; a tool of no counted kind is a plain "2 steps", a thought is not counted, and a run of only a
-thought reads as the thought does, "Thought for 9s" (the counted kinds are `COUNTED` in `ui/src/chat/fold.ts`). A
-press or Enter opens it to its steps, each as the panel draws it (below). While a run is going its line is the
-working line: "Working · 1m 04s", shimmering, its latest step under it ("Running a command"). The bubble shows from
-the moment the turn runs, before any word or step, holding the working line alone; a turn only queued behind
-another draws nothing. Words never move into a line and never leave the chat: when the turn ends nothing moves, the
-last run's line turns into its finished words, and the final words are the last piece. A message between agents
-from a turn that only sent it has that turn's runs as lines above its words. A block with no words, no steps, no
+**A turn reads as SerenityOS's card reads it** ([0082](docs/decisions/0082-a-message-reads-as-serenityos-card.md),
+the owner's "Inside the steps", reversing 2026-11-19's every piece in order): in the agent's one bubble, its message,
+the words it wrote after its last step (a thumbs-up, finishing its task and choosing where to post are no step; a
+finished turn that wrote nothing after its last step has its last words as its message), drawn as Markdown, with a
+plan version's chip where it was written, a question and a findings chip as below, and at the bubble's foot one quiet
+line for everything else the turn did, 14px muted with a chevron: assistant-ui's Run activity. Closed and finished,
+the line says what the turn did, counted by kind, short: "Read 2 files, ran 1 command", "Ran 3 commands", "Edited 1
+file", "Gave 2 tasks", at most three kinds and then "and 2 more"; a tool of no counted kind is a plain "2 steps", a
+thought, a thumbs-up and finishing a task are not counted, and a line of only a thought reads as the thought does,
+"Thought for 9s" (the counted kinds are `COUNTED` in `ui/src/chat/fold.ts`). A press or Enter opens it to each step,
+as the panel draws it (below), and the words written between them (narration) in order, 13px muted. While the turn
+runs the line is the working line: "Working · 1m 04s", shimmering, and under it what the agent last said it was
+doing, one line cut with an ellipsis, or its latest step ("Running a command") while it has said nothing. The bubble
+shows from the moment the turn runs, before any word or step, holding the working line alone, and never blanks: the
+words being written show as words, and fold into the line once a step follows them. A turn only queued behind
+another draws nothing. A message between agents from a turn that only sent it has that turn's line at its foot. A block with no words, no steps, no
 running turn and nothing to act on (a turn Gathr dropped before it ran) draws nothing and counts nowhere. A block
 with no bubble but with an approval or Retry, Continue or Sign in under it shows, named, with the time. When
 anything other than a bubble follows the name line (a notice, an approval), the face sits level with it as with a
 bubble, 5px under the name line.
 
-Above the bubble, one name line, 20px: the name at 15px/650, 8px, then the time, 12.5px at 450, muted, tabular
-figures, and on a reply said while the person was away "New" (below), with "·" between them 6px each side. Nothing
-else (the owner, 2026-11-18: "It's all just added noise"): no role, no task, no state, no steps and no word for how a
-turn or its task ended. The person's own message ends with its ask's size (below). Under the bubble, 13px muted, what
+Above the bubble, one name line, 20px: the name at 15px/650, 8px, then in a team its title, 12.5px at 500 muted
+(Gathr keeps no title of an agent's own, so "Lead" or "Reviewer", nothing for a member, 0082), then the time, 12.5px
+at 450, muted, tabular figures, on a reply said while the person was away "New" (below), and once its turn is done a
+12px tick and how long it took, "14s", "4m 12s" (from when the turn was made to when it ended), with "·" between them
+6px each side. Nothing else (the owner, 2026-11-18: "It's all just added noise"): no task, no state, no steps and no
+word for how a turn or its task ended. The person's own message ends with its ask's size (below). Under the bubble, 13px muted, what
 can be done about how a turn ended: why a send failed, the reference (12px mono, dotted underline, opening
 Diagnostics) and one outline button 26px high, Continue (after the person's stop or a restart, until its carry-on
 starts), Retry or Sign in (0051). A block that follows its speaker's in the same turn has no face or name line and
@@ -379,8 +388,8 @@ message it answers sits (the one Gathr carried into its turn from the agent it w
 opens with the agent's @Name in the accent blue at the words' weight, no underline, unless it quotes what it
 answers: when something came between the two, the answered words lead the bubble plainly, one line cut with an
 ellipsis, 13px muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no
-block of its own: its runs of steps are lines at the top of its first message's bubble, the working line while it
-runs. Gathr's copy of a message in
+block of its own: its steps are the line at the foot of its first message's bubble, the working line while it
+runs (0082). Gathr's copy of a message in
 the receiver's turn
 is never shown.
 A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box: an agent's, or

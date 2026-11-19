@@ -129,7 +129,8 @@ fn a_round_wakes_each_free_member_who_took_no_part_once_the_lead_has_answered() 
         "Bo and Cy, free and no part of it; not Ann, Dee or Mira"
     );
     samples::same("check: an answer", &text_of(&conn, &starts[0]));
-    assert!(starts[0].text.contains(&answer), "{}", starts[0].text);
+    // The answer is named `answer`, never by its id, which agents copied into their words (0082).
+    assert!(!starts[0].text.contains(&answer), "{}", starts[0].text);
     assert_eq!(
         samples::opened(&conn, &starts[0].turn),
         (Some("check".into()), Some(gathr::words::CHECK))
@@ -205,9 +206,17 @@ fn a_thumbs_up_and_silence_wake_nobody() {
     );
 }
 
-/// Words wake the lead once, with each member's words, for its last word; then the round ends.
+/// A step of `turn`'s: a call of `tool` that ended well.
+fn step(conn: &Connection, turn: &str, tool: &str) {
+    let body = json!({ "tool": tool, "status": "ok" }).to_string();
+    gathr::store::add_message(conn, "c", turn, "assistant", "tool", &body).unwrap();
+}
+
+/// Words wake the lead once, with each member's message, for its last word; then the round ends. A
+/// member's message is what it wrote after its last step (0082): its words before a step are
+/// narration, and a call of Gathr's that only places or reports (`post`) is no step.
 #[test]
-fn words_wake_the_lead_once_with_each_members_words() {
+fn words_wake_the_lead_once_with_each_members_message() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
     says(&conn, "T", "Done: tags show in the list.");
@@ -219,6 +228,9 @@ fn words_wake_the_lead_once_with_each_members_words() {
         &ann,
         "> Mira: Done: tags show in the list.\n\nThe list shows them, the filter doesn't.",
     );
+    step(&conn, &ann, "mcp__gathr__post");
+    says(&conn, &bo, "I'll read the tests first.");
+    step(&conn, &bo, "Bash");
     says(&conn, &bo, "No test covers a note with no tags.");
     set_status(&conn, &ann, "done");
     set_status(&conn, &bo, "done");
@@ -237,6 +249,27 @@ fn words_wake_the_lead_once_with_each_members_words() {
     set_status(&conn, &woken[0].turn, "done");
     assert_eq!(settle(&mut conn), []);
     assert_eq!(counted(&conn), [round(2, 0, 2, 0, true)]);
+}
+
+/// A check that wrote nothing after its last step: its last words are its message.
+#[test]
+fn a_check_with_no_words_after_its_last_step_is_heard_by_its_last_words() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let (ann, bo) = (starts[0].turn.clone(), starts[1].turn.clone());
+    says(&conn, &ann, "First, the list.");
+    step(&conn, &ann, "Bash");
+    says(&conn, &ann, "The filter ignores tags.");
+    step(&conn, &ann, "Read");
+    set_status(&conn, &ann, "done");
+    set_status(&conn, &bo, "done");
+    let woken = settle(&mut conn);
+    let told = &woken[0].text;
+    assert!(told.contains("Ann: The filter ignores tags.\n"), "{told}");
+    assert!(!told.contains("First, the list."), "{told}");
 }
 
 /// A plan reaches the person only once its round and the lead's last word have ended; a version the

@@ -523,14 +523,30 @@ pub fn set_turn(
 }
 
 /// A turn's place in its chat (none until it starts), when it was made, the ask it is the result
-/// of and the words that opened it, as history shows them.
-pub type TurnPlace = (Option<i64>, String, Option<String>, Option<String>);
+/// of, the words that opened it and when it ended, as history shows them.
+pub type TurnPlace = (
+    Option<i64>,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
 
 /// A turn's `TurnPlace`.
 pub fn turn_place(conn: &Connection, id: &str) -> Result<TurnPlace, Error> {
-    let sql = "SELECT position, created_ts, result_of, opened_by FROM turns WHERE id = ?1";
-    let row =
-        |r: &rusqlite::Row<'_>| Ok((r.get(0)?, crate::ids::utc(r.get(1)?), r.get(2)?, r.get(3)?));
+    let sql =
+        "SELECT position, created_ts, result_of, opened_by, ended_ts FROM turns WHERE id = ?1";
+    let row = |r: &rusqlite::Row<'_>| {
+        let ended: Option<i64> = r.get(4)?;
+        let created = crate::ids::utc(r.get(1)?);
+        Ok((
+            r.get(0)?,
+            created,
+            r.get(2)?,
+            r.get(3)?,
+            ended.map(crate::ids::utc),
+        ))
+    };
     Ok(conn.prepare_cached(sql)?.query_row([id], row)?)
 }
 

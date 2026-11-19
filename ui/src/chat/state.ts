@@ -125,6 +125,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         ref: event.ref ?? before?.ref ?? '',
         agent: event.agent,
         created: event.created ?? before?.created,
+        ended: event.ended ?? before?.ended,
         position: event.position ?? before?.position,
         task: event.task ?? before?.task,
         answers: event.answers ?? before?.answers,

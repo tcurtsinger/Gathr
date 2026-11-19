@@ -73,6 +73,66 @@ pub fn checks(conn: &Connection, turn: &str, message: &str) -> Result<bool, Erro
         .query_row([turn, message], |r| r.get(0))?)
 }
 
+/// The answer a check turn checks, which `react` takes as `answer` (0082).
+pub fn answer_of(conn: &Connection, turn: &str) -> Result<String, Error> {
+    let sql = "SELECT c.answer FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
+               WHERE u.id = ?1 AND u.opened_by = 'check' AND c.answer IS NOT NULL ORDER BY c.id DESC LIMIT 1";
+    conn.prepare_cached(sql)?
+        .query_row([turn], |r| r.get(0))
+        .optional()?
+        .ok_or_else(|| {
+            Error::Refused(
+                "only a check has an answer to agree with: give the message's id.".into(),
+            )
+        })
+}
+
+/// Gathr's calls that only report or place: words followed by nothing else are still the message.
+const NOT_A_STEP: [&str; 3] = [
+    "mcp__gathr__react",
+    "mcp__gathr__finish_task",
+    "mcp__gathr__post",
+];
+
+/// A turn's message, as the window draws it (0082, `ui/src/chat/fold.ts`): the words it wrote after
+/// its last step, else its last words. Words before a later step are narration, which no agent hears.
+fn message_of(tx: &Transaction, turn: &str) -> Result<Option<String>, Error> {
+    let mut stmt = tx.prepare_cached(
+        "SELECT kind, body FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND to_agent IS NULL
+         ORDER BY ts, rowid",
+    )?;
+    let rows = stmt.query_map([turn], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    let mut said: Vec<String> = Vec::new();
+    let mut last = None;
+    for row in rows {
+        let (kind, body) = row?;
+        let fields = || serde_json::from_str::<serde_json::Value>(&body).unwrap_or_default();
+        let step = match kind.as_str() {
+            "text" if !body.trim().is_empty() => {
+                said.push(body.trim().to_string());
+                false
+            }
+            "tool" => !NOT_A_STEP.contains(&fields()["tool"].as_str().unwrap_or_default()),
+            // A thought under a second isn't drawn, so it is no step either.
+            "thinking" => {
+                let f = fields();
+                f["status"] == "running" || f["duration_ms"].as_i64().unwrap_or(0) >= 1000
+            }
+            _ => false,
+        };
+        if step {
+            last = said.pop().or(last);
+            said.clear();
+        }
+    }
+    Ok(match said.is_empty() {
+        true => last,
+        false => Some(said.join("\n\n")),
+    })
+}
+
 fn under_way(tx: &Transaction, chat: &str) -> Result<Vec<Round>, Error> {
     let mut stmt = tx.prepare_cached(
         "SELECT id, asked, answer, answer_turn, last_word FROM open_checks
@@ -223,7 +283,7 @@ struct Counts {
     asked: usize,
     agreed: usize,
     silent: usize,
-    /// Each member who wrote words and gave no thumbs-up, with its words.
+    /// Each member who wrote words and gave no thumbs-up, with its message.
     objected: Vec<(String, String)>,
 }
 
@@ -233,11 +293,10 @@ fn advance(tx: &Transaction, chat: &str, round: &Round, trace: &str) -> Result<V
     let sql = format!(
         "SELECT u.agent_id, u.status IN {BUSY},
                 EXISTS (SELECT 1 FROM reactions r WHERE r.message_id = ?3 AND r.agent_id = u.agent_id),
-                (SELECT group_concat(trim(m.body), char(10, 10)) FROM messages m
-                 WHERE m.turn_id = u.id AND m.role = 'assistant' AND m.kind = 'text' AND trim(m.body) != '')
+                u.id
          FROM turns u WHERE u.chat_id = ?1 AND u.opened_by = 'check' AND u.answers = ?2 ORDER BY u.rowid"
     );
-    type Row = (String, bool, bool, Option<String>);
+    type Row = (String, bool, bool, String);
     let checks: Vec<Row> = {
         let mut stmt = tx.prepare_cached(&sql)?;
         let rows = stmt.query_map(params![chat, round.answer_turn, round.answer], |r| {
@@ -252,8 +311,8 @@ fn advance(tx: &Transaction, chat: &str, round: &Round, trace: &str) -> Result<V
         asked: checks.len(),
         ..Counts::default()
     };
-    for (agent, _, agreed, said) in checks {
-        match (agreed, said) {
+    for (agent, _, agreed, turn) in checks {
+        match (agreed, message_of(tx, &turn)?) {
             (true, _) => counts.agreed += 1,
             (false, Some(said)) => counts.objected.push((agent, said)),
             (false, None) => counts.silent += 1,

@@ -91,7 +91,7 @@ function View({ state, actions, panel }: { state: ChatState; actions?: Partial<A
   );
 }
 
-test('in the agent’s panel a turn reads as in the chat: its words between its runs, each run opening to its steps, a task it gave opening', async () => {
+test('in the agent’s panel a turn reads as in the chat: its message, one line opening to its steps and narration, a task it gave opening', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -108,17 +108,16 @@ test('in the agent’s panel a turn reads as in the chat: its words between its 
   const opened: number[] = [];
   const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} panel />);
   await expect.element(screen.getByText('Made-up final answer')).toBeVisible();
-  await expect.element(screen.getByText('Made-up remark mid-work')).toBeVisible();
-  // Closed, each run is one line: no step is drawn.
+  // Closed, its steps and narration are one line (0082): no step is drawn, nor the remark.
   expect(screen.getByRole('listitem').elements()).toHaveLength(0);
+  expect(screen.getByText('Made-up remark mid-work').query()).toBeNull();
 
-  await screen.getByRole('button', { name: 'Read 1 file, ran 1 command' }).click();
-  // Each tool step is assistant-ui's Tool call.
-  expect(screen.getByRole('listitem').elements()).toHaveLength(2);
+  await screen.getByRole('button', { name: 'Read 1 file, ran 1 command, gave 1 task' }).click();
+  // Each tool step is assistant-ui's Tool call; the remark and the task it gave are Gathr's lines between them.
+  expect(screen.getByRole('listitem').elements()).toHaveLength(4);
   await expect.element(screen.getByRole('button', { name: /Read a file/ })).toBeVisible();
   await expect.element(screen.getByRole('img', { name: 'Failed' })).toBeVisible();
-  // The task it gave is Gathr's line, in the run after the remark.
-  await screen.getByRole('button', { name: 'Gave 1 task' }).click();
+  await expect.element(screen.getByText('Made-up remark mid-work')).toBeVisible();
   await screen.getByRole('button', { name: '#7 Made-up task 7' }).click();
   expect(opened).toEqual([7]);
 });

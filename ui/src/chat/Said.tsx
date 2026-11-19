@@ -93,18 +93,28 @@ export function AgentFace({
 export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small ? 28 : 36} />;
 
 /**
- * The name line (the owner's call of 2026-11-18): the name, then the time and New with "·" between, and the person's
- * ask's size on their own message. In the agent's panel the task it worked on and its tick follow.
+ * The name line (the owner's calls of 2026-11-18 and 2026-11-19, as SerenityOS's card reads): the name, its title in
+ * grey ("Lead"), then the time and New with "·" between, how long a finished turn took, and the person's ask's size on
+ * their own message. In the agent's panel the task it worked on and its tick follow.
  */
-export function NameLine({ name, pieces }: { name: string; pieces: ReactNode[] }) {
+export function NameLine({ name, title, pieces }: { name: string; title?: string; pieces: ReactNode[] }) {
   // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
   return (
     <div className="name-line">
       <span className="name-line-name">{name}</span>
+      {title && <span className="name-line-title">{title}</span>}
       <span className="name-line-meta">{pieces}</span>
     </div>
   );
 }
+
+/** How long a finished turn took, with SerenityOS's tick: "14s". */
+export const Took = ({ took }: { took: string }) => (
+  <span className="name-line-took">
+    <Check aria-hidden="true" />
+    {took}
+  </span>
+);
 
 /** When it was said, as the clock reads. */
 export const When = ({ time }: { time?: string }) =>

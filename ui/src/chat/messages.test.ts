@@ -118,10 +118,10 @@ test('turns streaming at once never interleave, and a late reply lands in its ow
     'a-rowan',
     'a-kit',
   ]);
-  // Each block keeps every text its turn wrote, in order.
+  // Each block draws its turn's message: what it wrote after its last step (0082).
   expect(text(byId(items, 'a-ask'))).toBe('Rowan and Kit, over to you | Both are on it');
-  expect(text(byId(items, 'a-rowan'))).toBe('Cursor fixed | Rowan again');
-  expect(text(byId(items, 'a-kit'))).toBe('Checked | Kit again');
+  expect(text(byId(items, 'a-rowan'))).toBe('Rowan again');
+  expect(text(byId(items, 'a-kit'))).toBe('Kit again');
 });
 
 test('a turn waiting to start stays where its message was sent, and what comes after it keeps its place', () => {
@@ -146,7 +146,7 @@ test("a person's message sent into a running turn splits that turn's block where
   expect(text(items.at(-1))).toBe('Kept | Still checking');
 });
 
-test('a finished turn folds what it did into the panel’s row, and the chat keeps every text', () => {
+test('a finished turn folds what it did into the panel’s row, and the chat draws its message', () => {
   const state = round();
   const t0 = Date.UTC(2026, 10, 8, 10, 0, 0);
   const iso = (s: number) => new Date(t0 + s * 1000).toISOString();
@@ -166,7 +166,7 @@ test('a finished turn folds what it did into the panel’s row, and the chat kee
     { ...said('lead', 'assistant', 'Two things are left.'), time: iso(109) },
   );
   const block = byId(view(state).all, 'a-lead');
-  expect(text(block)).toBe('Two tasks are stale. | Two things are left.');
+  expect(text(block)).toBe('Two things are left.');
   const work = custom(block).work;
   expect(work).toMatchObject({
     running: false,
@@ -268,14 +268,15 @@ test('a running turn’s row says what the agent is doing now; text streaming co
   const running = custom(byId(view(state).every, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Running a command', notes: ['2 steps'] });
   expect(running?.steps[0]).toEqual({ id: expect.any(String), say: 'Checked' });
-  expect(text(byId(view(state).every, 'a-kit'))).toBe('Checked');
+  // Its words before a step are narration, in the working line (0082).
+  expect(text(byId(view(state).every, 'a-kit'))).toBe('');
 
-  // The command ended and it writes: the row stays, the words show after what it wrote before.
+  // The command ended and it writes: the row stays, the words being written show as its message.
   state.messages[state.messages.length - 1] = tool('kit', 'k2', 'Shell');
   state.partial = { kit: 'All 360 pass' };
   const block = byId(view(state).every, 'a-kit');
   expect(custom(block).work).toMatchObject({ running: true, label: 'Working', notes: ['2 steps'] });
-  expect(text(block)).toBe('Checked | All 360 pass');
+  expect(text(block)).toBe('All 360 pass');
 });
 
 test('a turn that only wrote once has no row', () => {

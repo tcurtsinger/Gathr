@@ -181,6 +181,24 @@ cargo clippy --workspace" }),
     }
 }
 
+/// A turn's end goes out live with when it ended, as history has it: the window's name line says how
+/// long the turn took from them (0082).
+#[test]
+fn a_turns_end_goes_out_live_with_when_it_ended() {
+    let data = TempDir::new();
+    let (service, account) = service(&data.0, "claude", "steps_claude");
+    let (history, heard) = one_turn(&service, &account);
+    let turn = &history["turns"][0];
+    let done = heard.last().unwrap();
+    assert_eq!(
+        (&done["type"], &done["status"]),
+        (&json!("turn"), &json!("done")),
+        "{heard:?}"
+    );
+    assert!(turn["ended"].is_string(), "{turn}");
+    assert_eq!(done["ended"], turn["ended"], "{done}");
+}
+
 /// What a step showed while it ran stays when its turn is cut off: the engine exits with a Read
 /// still open, and the stopped step keeps its path.
 #[test]
