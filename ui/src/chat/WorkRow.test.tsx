@@ -88,3 +88,13 @@ test('a running row says Working, with its latest step under it', async () => {
   await expect.element(page.getByRole('button', { name: /^Working/ })).toBeVisible();
   await expect.element(page.getByText('Running cargo build')).toBeVisible();
 });
+
+// Seen in use, 2026-11-19: the row's shimmer showed a second, smaller "Working" at its corner, the copy assistant-ui
+// keeps for screen readers, which a text mask shows whatever clips it.
+test('a working row’s copy for screen readers has no glyph for its shimmer to show', async () => {
+  const working: Work = { running: true, label: 'Working', notes: [], steps: finished.steps.slice(0, 1) };
+  const screen = await render(<WorkRow work={working} onOpenTask={() => {}} />);
+  const status = screen.getByRole('status');
+  await expect.element(status).toHaveTextContent('Working');
+  expect(getComputedStyle(status.element()).fontSize).toBe('0px');
+});

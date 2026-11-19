@@ -8,6 +8,12 @@
   min-width: 0;
   font-size: 14px;
 }
+/* The shimmer is a text mask over the whole row, and a mask shows every glyph in it whatever clips it: the copy of
+   the label assistant-ui keeps at the row's corner for screen readers showed through as a second, smaller "Working".
+   With no size it has no glyph, and is still read. */
+.work.shimmer > [role="status"] {
+  font-size: 0;
+}
 .work [data-slot="collapsible-content"] > ol {
   gap: 4px;
   /* A step's chip is cut to the column, never the column widened to the chip. */
