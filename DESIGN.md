@@ -290,9 +290,10 @@ turn or its task ended. The person's own message ends with its ask's size (below
 can be done about how a turn ended: why a send failed, the reference (12px mono, dotted underline, opening
 Diagnostics) and one outline button 26px high, Continue (after the person's stop or a restart, until its carry-on
 starts), Retry or Sign in (0051). A block that follows its speaker's in the same turn has no face or name line and
-lines up with the one above, unless it has no words. The face opens the agent's panel in a team chat.
+lines up with the one above, unless it has no words. The face opens the agent's panel while the agent is in the chat, in a chat of
+one too (0028's list kept for one); its card names the Supervisor there as in a team.
 
-A chat of one agent has no panel, so there a turn's steps are not shown. In the agent's panel (**Agent panel**), the
+A chat of one agent has its agent's panel as a team has (0028), so its steps are read there too. In the agent's panel (**Agent panel**), the
 same name line also says, for a member or reviewer, "on" the task its turn
 works on, cut with an ellipsis (not in that task's own thread), and a 12px tick on its last message once that task is
 done; then the turn's steps end the line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
@@ -369,13 +370,15 @@ ellipsis, 13px muted, after a 3px border line, no name. A turn that wrote no wor
 block of its own: in the agent's panel its steps are on its first message's name line. Gathr's copy of a message in
 the receiver's turn
 is never shown.
-A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box.
+A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box: an agent's, or
+the person's own, which agents can agree with too (0057 C5).
 Pointing at it or focusing it shows who gave it, as their names on one line beside the count, in a small box as tall
 as the count, so it covers no message; with no room beside it (a narrow column, a thread) it wraps under the count, in
 the flow, and what follows moves down rather than being covered. Names, never help, and never a target (the pointer
 passes through it). The person's own like counts in it: "You"
 first in the names, and the count in the attention blue on a 16% tint at 600. Where the person can like, the count
-is a toggle (`aria-pressed`): a click gives theirs or takes it back. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
+is a toggle (`aria-pressed`): a click gives theirs or takes it back. On the person's own message it is no toggle, and
+there is no Like. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
 its own (0062); a question stays a reply.
 
 What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time
@@ -476,7 +479,8 @@ Only its ticks take the pointer.
 ### Summary
 
 Summary holds what the plan bar and a status bar would say, so neither exists
-([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
+([0038](docs/decisions/0038-summary-holds-the-plan.md)). Every chat that has an agent has it, a chat of one too: its
+button is that one face, its Team that agent's row and Gathr's.
 
 Its button in the top line carries no words. It is the roster: every agent of the chat at 20px, in the
 chat's order, 6px apart so no face covers another's mark, each with its state's mark (see **State marks**

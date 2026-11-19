@@ -75,3 +75,9 @@ agent's panel. The conversation map, thinking, tool arguments and the sidebar's 
   row for each of Gathr's own waits after the agents' (Gathr's face, its card's words, opening nothing) and a silent
   turn's "silent 12m" on its agent's row. A needs-you agent's row goes to what is needed (an approval's card, else
   the plan waiting, else the question) and closes Summary; with none of them in the chat it opens the agent.
+- 2026-11-18, every chat with an agent has Summary (the owner: "One agent chat should be the exact same as a
+  multi-agent chat"; they picked the panels and the gaps, not threads or plans). "A chat with more than one agent has
+  it" above becomes every chat that has an agent ([0028](0028-team-chats.md)'s list kept for one): the button with
+  one face, Team with that agent's row and Gathr's rows, Pause or resume, and Round only when there is one. The
+  agent's panel opens from its row and from its face on a message, as in a team. The face's card names the
+  Supervisor in a chat of one too; the name line above its messages doesn't, for now: that line is redesigned apart.

@@ -83,5 +83,5 @@ The owner's look at the name line: "The steps can stay inside the agent's detail
 the bubble." Of a working agent's live line ("Running a command") before it has said anything: "Remove it". What a
 turn did, and what the agent is doing now, are no longer in the chat: the agent's panel shows them
 ([0072](0072-the-chat-reads-like-a-team-chat.md)'s change). This turns over the "Turned down" above that the timeline
-has to stand alone: a turn's steps are read in the panel. A chat of one agent has no panel, so there a turn's
-steps are not shown at all. A member's task is no longer named on its blocks.
+has to stand alone: a turn's steps are read in the panel. A chat of one agent has its agent's panel too, since it
+keeps its list ([0028](0028-team-chats.md)'s change of the same day). A member's task is no longer named on its blocks.

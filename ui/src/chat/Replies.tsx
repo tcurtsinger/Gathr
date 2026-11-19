@@ -55,7 +55,8 @@ export function UserMessage() {
       }
     >
       {!stop && (
-        <Bubble foot={<Foot fold={own.thread} answer={own.answer} />}>
+        // Agents' thumbs-ups, never the person's own like: no `like`, so no Like and no toggle (0057 C5).
+        <Bubble foot={<Foot fold={own.thread} agreed={own.agreed} answer={own.answer} />}>
           <div className="bubble-plain">
             <MessagePrimitive.Parts components={personParts} />
           </div>
@@ -115,7 +116,7 @@ function NewLine() {
  * ends with its steps; the chat draws nothing for a block with no words and nothing to act on (timeline.ts).
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, role, on, done, ending, approvals, agreed, plan, asked, result } = own;
+  const { agent, by, seat, on, done, ending, approvals, agreed, plan, asked, result } = own;
   const actions = useActions();
   const jump = useJump();
   const panel = useContext(InPanel);
@@ -145,8 +146,8 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
             name={agent}
             message={id}
             size={small ? 28 : 36}
-            // Only a team chat has a panel to open: its agents have roles.
-            onOpen={by && role ? () => actions.openAgent(by) : undefined}
+            // An agent of the chat has a panel to open; one that left it has none.
+            onOpen={by && seat ? () => actions.openAgent(by) : undefined}
           />
         )
       }

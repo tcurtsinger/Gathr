@@ -304,6 +304,10 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   expect(getComputedStyle(fold).color).toBe(attention());
 
   fold.focus();
+  // Focus moves the view up to the line. The chat learns it has left its foot from the scroll's own event, a frame
+  // later; a press before that opened the thread while the chat still followed its foot, and the view went back down
+  // (seen in WebKit under load, twice). A person presses a frame or more after the view moves.
+  await expect.poll(() => document.querySelector<HTMLButtonElement>('.thread-bottom')?.disabled).toBe(false);
   await userEvent.keyboard('{Enter}');
   await expect.poll(() => foldOf(bo())?.textContent).toBe('Collapse replies');
   const said = [
@@ -404,7 +408,8 @@ test('a reply arriving out of view shows 1 New; a press opens its folded thread 
   await expect.poll(() => pill()?.textContent).toBe('1 New');
   expect(pill()?.getAttribute('aria-label')).toBe('1 new message. Go to it');
   // Its thread's main message is near the top of the chat, above the view.
-  expect(arrow()).toBe('up');
+  // The arrow follows what the view shows, measured a frame after the pill is drawn.
+  await expect.poll(arrow).toBe('up');
   // Ann's thread stays folded: a new reply never opens it.
   expect(foldOf(mainWith('Add up ingredients'))?.textContent).toBe('1 new reply');
 
@@ -428,7 +433,8 @@ test('three unseen blocks in three threads read 3 New; each press goes to the ol
   await render(<Chat />);
   await expect.poll(() => pill()?.textContent).toBe('3 New');
   expect(pill()?.getAttribute('aria-label')).toBe('3 new messages. Go to the oldest');
-  expect(arrow()).toBe('up');
+  // The arrow follows what the view shows, measured a frame after the pill is drawn.
+  await expect.poll(arrow).toBe('up');
 
   await (pill() as HTMLButtonElement).click();
   await expect.poll(() => replyWith('Made-up answer 0')?.hasAttribute('data-search-hit')).toBe(true);

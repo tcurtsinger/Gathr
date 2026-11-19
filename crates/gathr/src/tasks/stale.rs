@@ -161,13 +161,17 @@ pub fn sweep(
     Ok(swept)
 }
 
-/// One turn for the chat's Supervisor (members list it first) naming what went stale.
+/// One turn for the chat's Supervisor (members list it first) naming what went stale; none in a chat
+/// of one with no project, as before it kept a list (0028).
 fn tell_lead(
     tx: &Transaction,
     chat: &str,
     marked: &[i64],
     days: Days,
 ) -> Result<Option<Start>, Error> {
+    if crate::team::alone(tx, chat)? {
+        return Ok(None);
+    }
     let Some(lead) = crate::team::members(tx, chat)?.into_iter().next() else {
         return Ok(None);
     };

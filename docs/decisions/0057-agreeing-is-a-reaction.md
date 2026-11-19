@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-14: Stage 3's spec, the two narrowings and the look). Date: 2026-11-14.
 
-Built: yes. Proof: `crates/gathr/tests/messages.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/Timeline.test.tsx`, `ui/src/chat/state.test.ts`; the person's like (C4): `crates/gathr/tests/likes.rs`, `crates/gathr/tests/likes/acts.rs`, `ui/src/chat/Like.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/messages.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/tools.rs`, `ui/src/chat/Timeline.test.tsx`, `ui/src/chat/state.test.ts`; the person's like (C4): `crates/gathr/tests/likes.rs`, `crates/gathr/tests/likes/acts.rs`, `ui/src/chat/Like.test.tsx`; agents' thumbs-ups on the person's messages (C5): `crates/gathr/tests/reactions.rs`, `ui/src/chat/personLiked.test.tsx`.
 
 Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.md). Serves promise 6 of [the charter](../charter.md#the-promises), part 6.6 of [the truth map](../truth-map.md): an agent that only agrees posts no message and starts no turn. Stage 3's part C.
 
@@ -57,7 +57,23 @@ Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.m
     flow. **A failed turn a like opened** shows Failed and its reference with no Retry: Retry resends the person's
     message of a turn, and that turn has none.
   - **Agents' thumbs-ups are unchanged:** they start no turn and can't be taken back. Agents liking the person's
-    messages is its own change.
+    messages is its own change (C5).
+- **C5: agents like the person's messages** (the owner's pick, 2026-11-18; the threads build's PR 7). Added to C1
+  and C2, which stand for an agent's message as before.
+  - `react` also takes the person's message: by its id, or by the word `person`, the person's message the agent's
+    turn answers. That is the last of the person's messages to reach the turn: the one that opened it, or one the
+    person added while it ran. This settles the turned-down "react with no id" for the person's messages only: when
+    several joined one turn, the agent answers the last.
+  - Gathr's copy of the person's message (to every other picked agent, [0028](0028-team-chats.md))
+    stands for the message: by the copy's id or by `person`, the row is on the person's own message, never the copy.
+  - The same row, event, live `reaction` and history entry as an agent's thumbs-up, `message` the person's message's
+    id. One row per agent and message; it wakes nobody, delivers nothing and changes nothing in the chat's state.
+  - Refused with a reference: Gathr's line, the agent's own message, a message not in the chat, and `person` when
+    the turn has no message of the person's (a task's brief, a teammate's message, a like's line).
+  - The window draws the count under the person's bubble, with who agreed, as under an agent's message: on a main
+    message beside its fold line, on a reply in a thread, and in a chat of one agent. The person can't like their
+    own message: no Like on it, and its count is no toggle. A thumbs-up is not something new: the marks of
+    [0077](0077-where-you-left-off.md) count messages.
 - **The two changed texts aren't kept samples** of [0056](0056-gathr-records-which-words-opened-each-turn.md): neither the teammate's message (a kind with no version) nor the briefing is one of the 24. No version moved, and the words tests pass unchanged.
 
 ## Why
@@ -75,7 +91,8 @@ Builds on [0010](0010-coordination-as-state.md) and [0013](0013-one-chat-model.m
 - **Other reactions, or an emoji parameter.**
 - **An agent's thumbs-up that wakes its author or is delivered to it.** The person's does (C4).
 - **Taking an agent's thumbs-up back.** The person takes theirs back (C4).
-- **A thumbs-up on the person's messages or Gathr's lines.** Drawing under the person's message is window work nobody asked for.
+- **A thumbs-up on Gathr's lines.** Until 2026-11-18 this also turned down a thumbs-up on the person's messages
+  ("drawing under the person's message is window work nobody asked for"); the owner picked to allow it (C5).
 - **The person's like delivered only on the agent's latest message, an older one read at its next turn** (the
   owner's review 2). It needed a rule for which message is latest and still left an old question needing a typed
   message to wake a quiet room (review 3).

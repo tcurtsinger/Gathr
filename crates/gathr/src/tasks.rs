@@ -742,7 +742,12 @@ fn may_change(conn: &Connection, t: &Task, by: Option<&str>, what: &str) -> Resu
     }
 }
 
+/// The agent is on the chat's team. A chat of one with no project gives no tasks, as before it kept
+/// a list (0028).
 fn in_team(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
+    if crate::team::alone(conn, chat)? {
+        return Err(refused("tasks are given in a chat with a team"));
+    }
     let members = crate::team::members(conn, chat)?;
     if members.iter().any(|m| m.agent == agent) {
         return Ok(());

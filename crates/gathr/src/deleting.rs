@@ -63,7 +63,8 @@ pub fn project_plan(conn: &Connection, project: &str) -> Result<Plan, Error> {
 }
 
 /// An agent's delete: the projects and chats it is the only agent of (a chat with no members by its
-/// turns), the tasks it leaves, and who leads after it.
+/// turns), the tasks it leaves, and who leads after it. A chat with no project and the agent alone on
+/// its list where another agent spoke stays, as it did before such a chat kept a list (0028).
 pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
     let projects = strings(
         conn,
@@ -81,7 +82,9 @@ pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
         conn,
         "SELECT c.id FROM chats c WHERE
              (EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id AND m.agent_id = ?1)
-              AND NOT EXISTS (SELECT 1 FROM chat_members o WHERE o.chat_id = c.id AND o.agent_id != ?1))
+              AND NOT EXISTS (SELECT 1 FROM chat_members o WHERE o.chat_id = c.id AND o.agent_id != ?1)
+              AND NOT (c.project IS NULL
+                  AND EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id != ?1)))
           OR (NOT EXISTS (SELECT 1 FROM chat_members m WHERE m.chat_id = c.id)
               AND EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id = ?1)
               AND NOT EXISTS (SELECT 1 FROM turns t WHERE t.chat_id = c.id AND t.agent_id != ?1))

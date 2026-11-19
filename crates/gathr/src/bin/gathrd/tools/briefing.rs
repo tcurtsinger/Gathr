@@ -43,7 +43,11 @@ pub fn facts(
             .optional()?,
         None => None,
     };
-    let members = team::members(conn, chat)?;
+    // A chat of one with no project is briefed as it was before it kept a list (0028).
+    let members = match team::alone(conn, chat)? {
+        true => Vec::new(),
+        false => team::members(conn, chat)?,
+    };
     let role = members
         .iter()
         .find(|m| Some(m.agent.as_str()) == agent)
@@ -154,7 +158,7 @@ pub fn text(facts: &Facts) -> String {
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, edit_task, finish_task, list_tasks, \
          cancel_task and restart_task for tasks; message for one member of a team chat; react to give \
-         another agent's message your thumbs-up, by its id; size, for the Supervisor, to record the person's ask as \
+         the person's message or another agent's your thumbs-up, by its id; size, for the Supervisor, to record the person's ask as \
          repair or new; plan, for the Supervisor, to write the plan for a new ask; wait and \
          end_wait instead of polling in a loop; waiting for what this chat waits on and where each agent \
          stands; diag for Gathr's own record of what went wrong (health, failures, trace with a reference); \

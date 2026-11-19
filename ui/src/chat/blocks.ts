@@ -70,7 +70,8 @@ export function block(
   // In the agent's panel, a tick after the task once it is done; a blocked, stopped or held task is its owner's face's
   // mark, never a tick (0071).
   const done = !!on && lastOfTask && task?.state === 'done';
-  const who = `${agent}|${role}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
+  const seat = crew.seated(turn?.agent);
+  const who = `${agent}|${role}|${seat}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
   const hit = cache.get(group.key);
@@ -81,6 +82,7 @@ export function block(
     agent,
     by: turn?.agent ?? undefined,
     role,
+    seat,
     time,
     on,
     done,
@@ -178,6 +180,7 @@ export function versionBlock(
     agent: crew.name(agent),
     by: agent ?? undefined,
     role: crew.role(agent),
+    seat: crew.seated(agent),
     time: m.time,
     head,
     agreed: [
@@ -298,9 +301,14 @@ export function eventsOf(
   }));
 }
 
-/** The person's own message, with their ask's size (0061) and the names they picked. */
-export function personBlock(cache: Cache, m: Message, size: AskSize | undefined, place: Place) {
-  const sig = `${m.body}|${JSON.stringify([size, m.picks, place])}`;
+/** The person's own message, with their ask's size (0061), the names they picked, and agents' thumbs-ups (0057 C5). */
+export function personBlock(
+  cache: Cache,
+  m: Message,
+  { size, agreed }: { size?: AskSize; agreed: string[] },
+  place: Place,
+) {
+  const sig = `${m.body}|${JSON.stringify([size, m.picks, agreed, place])}`;
   return kept(cache, m.id, sig, () => ({
     id: m.id,
     role: 'user',
@@ -313,6 +321,7 @@ export function personBlock(cache: Cache, m: Message, size: AskSize | undefined,
         time: m.time,
         size,
         picks: m.picks ?? undefined,
+        agreed,
       } satisfies Custom,
     },
   }));
