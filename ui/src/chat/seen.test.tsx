@@ -304,9 +304,9 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   expect(getComputedStyle(fold).color).toBe(attention());
 
   fold.focus();
-  // Focus moves the view up to the line. The chat learns it has left its foot from the scroll's own event, a frame
-  // later; a press before that opened the thread while the chat still followed its foot, and the view went back down
-  // (seen in WebKit under load, twice). A person presses a frame or more after the view moves.
+  // Focus takes the view up to the line, and the chat knows at once that it has left its foot (useFocusUp): its down
+  // arrow shows. Before that the chat learnt it from the scroll, frames later in WebKit, and anything drawn at the foot
+  // meanwhile took the view back down (the arrow never showed, once on macOS in CI); the next test forces that.
   await expect.poll(() => document.querySelector<HTMLButtonElement>('.thread-bottom')?.disabled).toBe(false);
   await userEvent.keyboard('{Enter}');
   await expect.poll(() => foldOf(bo())?.textContent).toBe('Collapse replies');
@@ -328,6 +328,41 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   await (foldOf(bo()) as HTMLButtonElement).click();
   await expect.poll(() => foldOf(bo())?.textContent).toBe('4 replies');
   expect(getComputedStyle(foldOf(bo()) as HTMLElement).color).not.toBe(attention());
+});
+
+test('keyboard focus up the chat stays in view while the chat grows at its foot, and Enter opens the thread there', async () => {
+  service(morning(), left());
+  await render(<Chat />);
+  const bo = () => mainWith('Shopping list screen');
+  await expect.poll(() => foldOf(bo())?.textContent).toBe('3 new replies');
+  const view = document.querySelector('.thread-viewport') as HTMLElement;
+  await expect.poll(() => view.scrollHeight - view.scrollTop - view.clientHeight < 2).toBe(true);
+  // Between the chat's top and the message box, to the pixel.
+  const inView = (el: Element | null | undefined) => {
+    const box = (el as Element).getBoundingClientRect();
+    const top = view.getBoundingClientRect().top;
+    const bottom = (view.querySelector('.thread-footer') as Element).getBoundingClientRect().top;
+    return box.top >= top - 1 && box.bottom <= bottom + 1;
+  };
+  const fold = foldOf(bo()) as HTMLButtonElement;
+  expect(inView(fold)).toBe(false);
+
+  // The chat grows at its foot before it has learnt, from the scroll, that focus took the view up: it followed its foot
+  // and took the view back down, away from what had focus. In WebKit the focus scrolls frames later, so anything drawn
+  // at the foot meanwhile (a streamed reply) did it; here the foot grows in the same moment, so every engine meets it.
+  const grown = document.createElement('p');
+  grown.style.height = '120px';
+  fold.focus();
+  document.querySelector('.thread-messages')?.append(grown);
+  await expect.poll(() => inView(fold), { message: 'the line with focus' }).toBe(true);
+  grown.remove();
+  // The chat knows it is away from its foot: its down arrow shows.
+  await expect.poll(() => document.querySelector<HTMLButtonElement>('.thread-bottom')?.disabled).toBe(false);
+
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => foldOf(bo())?.textContent).toBe('Collapse replies');
+  await expect.poll(() => inView(replyWith('Rev, PR 22 is yours to review.'))).toBe(true);
+  expect(inView(foldOf(bo()))).toBe(true);
 });
 
 test('a reply said while the person was away says New after its time and nothing else, whatever its turn did', async () => {

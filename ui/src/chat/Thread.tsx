@@ -11,6 +11,7 @@ import { IconButton } from '../components/IconButton';
 import { type Questions, QuestionsContext } from './Asked';
 import { ChatMap, useTicks } from './ChatMap';
 import { useEdges } from './edges';
+import { useFocusUp } from './focusUp';
 import { useFound, useLatest } from './found';
 import { GathrMessage } from './Gathr';
 import type { Answer, Custom, SendFailure } from './messages';
@@ -127,6 +128,7 @@ export function Thread(props: Props) {
   );
   const found = useFound(props.messages, viewport, reach, target, own ? undefined : props.onTarget);
   useEdges(viewport);
+  useFocusUp(viewport);
   useSeen(viewport, props.reads);
   const runtime = useExternalStoreRuntime({
     messages,
