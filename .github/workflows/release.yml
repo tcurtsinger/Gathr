@@ -1,13 +1,13 @@
 name: Release
 
-# A GitHub Release per merge (F7): once CI passes on a push to main, both installers, the window's
-# update (latest.json, signed with the updater's key) and the service's (gathrd.json, 0031).
+# A GitHub Release per merge (F7): on each push to main, both installers, the window's update
+# (latest.json, signed with the updater's key) and the service's (gathrd.json, 0031). It doesn't wait
+# for CI (the owner's call of 2026-11-19): CI is information (0045), and waiting made every release
+# about half an hour later and let one test that failed at random stop it.
 # A PR that changes how releases are built builds them too, unpublished, pointed at a feed on
 # 127.0.0.1:47199, so an update can be tried on a computer before merge.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
+  push:
     branches: [main]
   pull_request:
     paths:
@@ -29,9 +29,6 @@ env:
 jobs:
   build:
     name: Build (${{ matrix.name }})
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     strategy:
       fail-fast: true
       matrix:
@@ -45,8 +42,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -98,8 +93,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version-file: ui/.node-version
@@ -122,7 +115,7 @@ jobs:
   publish:
     name: Publish
     needs: feeds
-    if: github.event_name == 'workflow_run'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -134,7 +127,7 @@ jobs:
       - name: GitHub Release v${{ env.VERSION }}
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ github.sha }}
         run: |
           rm release/*-*.json 2>/dev/null || true
           gh release create "v$VERSION" release/* --repo "${{ github.repository }}" --target "$SHA" \
