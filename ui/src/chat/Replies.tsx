@@ -203,18 +203,18 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
 }
 
 /**
- * A turn's message in its bubble, in the order it came (0082): each text drawn as a message's text is, and a plan
- * version's chip, which opens the plan's tab there (0078).
+ * A turn's message in its bubble (0082): each text drawn as a message's text is, in the order it came, then a plan
+ * version's chip, which opens the plan's tab there (0078) and says where the version stands.
  */
 export function Pieces({ pieces, actions }: { pieces: Piece[]; actions: Actions }) {
   return pieces.map((p) => {
     if ('plan' in p) {
-      const { plan, version, parts } = p.plan;
+      const { plan, version, state } = p.plan;
       return (
         <PlanChip
           key={p.id}
           version={version}
-          parts={parts}
+          state={state}
           onOpen={() => actions.openPlan?.(plan, version)}
         />
       );
