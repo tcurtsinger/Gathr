@@ -54,7 +54,6 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
         <AgentFace
           agent={m.agent}
           name={name}
-          message={m.id}
           size={small ? 28 : 36}
           onOpen={by ? () => actions.openAgent(by) : undefined}
         />

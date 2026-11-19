@@ -70,18 +70,15 @@ export function Said({
 export function AgentFace({
   agent,
   name,
-  message,
   size,
   onOpen,
 }: {
   agent?: string;
   name: string;
-  /** The message it heads: on the agent's latest, its Working mark turns (0071). */
-  message?: string;
   size: FaceSize;
   onOpen?: () => void;
 }) {
-  const face = <Face agent={{ id: agent ?? '', name }} size={size} mark={useMark(agent, name, message)} />;
+  const face = <Face agent={{ id: agent ?? '', name }} size={size} mark={useMark(agent, name)} />;
   if (!onOpen) return face;
   return (
     <button type="button" className="said-open" aria-label={`Open ${name}`} onClick={onOpen}>

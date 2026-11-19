@@ -93,13 +93,12 @@ const personParts = { Text: PersonText };
 /** An agent's message, or what a thread draws between them: its fold line, "Show earlier", a task handed out. */
 export function AssistantMessage() {
   const own = useAuiState(custom);
-  const id = useAuiState((s) => s.message.id);
   if (own.box) return <ThreadBox topic={own.box.topic} />;
   if (own.newLine) return <NewLine />;
   if (own.earlier) return <Earlier earlier={own.earlier} />;
   if (own.brief) return <TaskMain own={own} />;
   if (own.said) return <TalkMessage own={own} said={own.said} />;
-  return <Reply own={own} id={id} />;
+  return <Reply own={own} />;
 }
 
 /** Above the first main message said while the person was away (0077). */
@@ -119,7 +118,7 @@ function NewLine() {
  * answer opens with its Checked line (0080). A reply sits in its thread, smaller. In the agent's panel its name line
  * also says the task it worked on.
  */
-export function Reply({ own, id }: { own: Custom; id: string }) {
+export function Reply({ own }: { own: Custom }) {
   const {
     agent,
     by,
@@ -156,7 +155,6 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
           <AgentFace
             agent={by}
             name={agent}
-            message={id}
             size={small ? 28 : 36}
             // An agent of the chat has a panel to open; one that left it has none.
             onOpen={by && seat ? () => actions.openAgent(by) : undefined}
