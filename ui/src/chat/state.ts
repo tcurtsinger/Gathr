@@ -131,6 +131,7 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         held: event.held,
         topic: event.topic ?? before?.topic,
         result_of: event.result_of ?? before?.result_of,
+        opened: event.opened ?? before?.opened,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);
