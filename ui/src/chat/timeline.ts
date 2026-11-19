@@ -153,7 +153,7 @@ export function drawn(
   const taskMains = new Map<number, string>();
   let newLined = false;
   // One rule for every chat (0078): a chat of one reads as one timeline because what its agent says is said to the
-  // person. A main message right after the same speaker's isn't named again, until a thread's replies show between.
+  // person. A main message right after the same speaker's isn't named again, unless a thread sits between them.
   const mainRun: { speaker?: string } = {};
   const topics = topicsOf(groups, state, spoken, hosts);
   const threads = threadsOf(groups, topics, state);
@@ -250,6 +250,8 @@ export function drawn(
     every.push(main, ...everyReply);
     if (mainGroup) spots.set(mainGroup, { id: main.id as string });
     if (!count) return boxFor(t.topic);
+    // Its thread sits between it and the next main message, folded to one line or open: that one is named again.
+    mainRun.speaker = undefined;
     all.push(...replyItems);
     const fresh = (r: ThreadMessageLike) => r.role !== 'user' && isNew(view?.left, t.topic, timeIn(r));
     const { shown, hid } = open
@@ -267,7 +269,6 @@ export function drawn(
       );
     }
     items.push(...shown);
-    if (shown.length) mainRun.speaker = undefined;
     const showing = new Set(shown);
     for (const { g, item } of drawnReplies)
       spots.set(g, { id: item.id as string, ...(!showing.has(item) && { topic: t.topic }) });

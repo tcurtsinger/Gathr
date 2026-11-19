@@ -402,6 +402,41 @@ test('a main message right after the same speaker’s main message is not named 
   expect(mainWith('Made-up two').querySelector('.name-line-name')).toBeNull();
 });
 
+// The owner, 2026-11-19: the lead's second plan had no name while the replies under its first were folded, and had
+// one once they were open.
+test('a main message after one with a thread is named, whether that thread is folded or open', async () => {
+  const base = chat('askDone');
+  const one = leadTurn(base, 'one', null, 'Made-up one', 1);
+  const two = leadTurn(one, 'two', 'Made-up: a wait ended', 'Made-up two', 2);
+  const member = two.members[1].agent;
+  const check = {
+    id: 'chk',
+    agent: member,
+    status: 'done',
+    why: null,
+    ref: 'chk',
+    position: 91.5,
+    topic: 'b:one',
+  };
+  const said: Message = {
+    id: 'chk-1',
+    turn: 'chk',
+    time: later(base, 90),
+    role: 'assistant',
+    kind: 'text',
+    body: 'Made-up check',
+  };
+  const state = { ...two, turns: { ...two.turns, chk: check as Turn }, messages: [...two.messages, said] };
+  await render(<View state={state} />);
+  await expect.element(page.getByText('Made-up two')).toBeVisible();
+  const fold = foldOf(mainWith('Made-up one')) as HTMLButtonElement;
+  const named = () => mainWith('Made-up two').querySelector('.name-line-name')?.textContent;
+  for (const open of [fold.getAttribute('aria-expanded'), undefined]) {
+    if (open === undefined) await fold.click();
+    expect(named(), `open: ${fold.getAttribute('aria-expanded')}`).toBe('Lead');
+  }
+});
+
 test('an old chat, tied by task and answers alone, reads as main messages with threads', async () => {
   await render(<View state={chat('oldChat')} />);
   await expect.element(page.getByText('Sort the gravel bars', { exact: true })).toBeVisible();
