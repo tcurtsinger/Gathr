@@ -36,11 +36,11 @@ a member back on task A after task B heard what came since its last turn on B, a
   asked from T (the request's `given_in` turn was on T): `- #<n> <what>: <answer>`, the answer as agents hear it
   ("Picked: … Their words: …"), "cancelled" with its reason, or "not answered yet". Only those asked, or answered
   or cancelled, since the conversation last ran; all of them in a new one.
-- **Never told twice.** A question is left out of the turn that carries its answer: the `answered` turn
-  (`heard_in`), and the brief readied when a task blocked on the question or on its request is let go, which sets the
-  question's or request's `heard_in` to that brief's turn. The turn that carries a settled request (its hear-back, or
-  that brief) leaves out only the question that settled it: the request's other questions, such as one a Discuss
-  replaced, and its cancellation, still show.
+- **Never told twice.** Each turn that carries an answer records which question's (`turn_answers`, migration 0062),
+  and its opening leaves that question out: the `answered` turn, and each brief readied when a task blocked on the
+  question is let go. A request's hear-back, or a brief readied by it, carries the question that settled it
+  (`tasks.settled_by`) and no other: the request's other questions, such as one a Discuss replaced or a second answered
+  in the same batch, still show. `heard_in` stays the turn the answer was heard in, which the chat places it by.
 - **Diagnosable.** A turn that opens with questions records `gathr.task.questions` with how many; a failed read is
   `gathr.room.heard`'s error, and the turn goes without both.
 
@@ -49,6 +49,8 @@ a member back on task A after task B heard what came since its last turn on B, a
 - **The task's `task_sessions` row as the history of where its turns ran.** The row holds only the task's latest
   conversation. A turn kept in another under a background command (N4) would count for the task, and when it went back
   to its own, lines and questions said in between would be missed, not just heard twice.
+- **`heard_in` as the turn that carries an answer.** The chat places an answer by it, so a brief may not move it, and
+  one link can't name several briefs, or tell which of a request's questions a turn carried.
 - **The questions in a task's brief.** The brief is the task's first ask; the questions come after it, and a turn
   that isn't the brief (a wait, a hear-back) needs them as much.
 - **Every question every turn.** A long task would carry every old answer into every turn, where the conversation

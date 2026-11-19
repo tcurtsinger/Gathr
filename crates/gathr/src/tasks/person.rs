@@ -506,6 +506,7 @@ pub(super) fn heard(
                 "UPDATE tasks SET heard_in = ?2 WHERE number = ?1",
                 params![t.number, start.turn],
             )?;
+            links::carried(tx, &start.turn, t.number)?;
         }
         starts.push(start);
     }

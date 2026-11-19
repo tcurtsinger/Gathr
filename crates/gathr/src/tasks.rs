@@ -814,14 +814,8 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                 )?;
                 let carry = person::links::carry(tx, task, blocked)?;
                 let start = ready(tx, blocked, Some(&carry))?;
-                // A question or request whose answer the brief carries: its task's turns don't tell
-                // it again (`words::questions`).
                 if let Some(start) = &start {
-                    tx.execute(
-                        "UPDATE tasks SET heard_in = ?2
-                         WHERE number = ?1 AND kind IN ('person', 'person_request')",
-                        params![task, start.turn],
-                    )?;
+                    person::links::carried(tx, &start.turn, task)?;
                 }
                 starts.extend(start);
             }

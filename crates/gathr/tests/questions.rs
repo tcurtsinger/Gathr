@@ -686,3 +686,81 @@ fn a_task_blocked_on_its_request_hears_the_answer_once() {
     let listed = gathr::tasks::questions(&conn, &ann[0].turn, None).unwrap();
     assert_eq!(listed, None, "the answer told twice");
 }
+
+/// 0084: tasks blocked on the lead's own question each get its answer in their brief. The answer stays
+/// linked to the turn the lead heard it in, and each turn that carries it doesn't list it again.
+#[test]
+fn briefs_readied_by_an_answer_leave_it_linked_where_it_was_heard() {
+    let dir = TempDir::new();
+    let mut conn = room(&dir);
+    conn.execute(
+        "INSERT INTO tasks (chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
+         VALUES ('c', 'mira', 'mira', 'work', 'Plan the release', 'ready', 1, 1)",
+        [],
+    )
+    .unwrap();
+    running(&conn, "mira-3", "mira", Some(3));
+    let q = person::ask(&mut conn, filing("mira-3", None, Some(ASKED)), T)
+        .unwrap()
+        .0
+        .number;
+    let on = Said {
+        on_task: Some(q),
+        ..Default::default()
+    };
+    finish(&mut conn, "ann", 1, Finish::Blocked, &on).unwrap();
+    finish(&mut conn, "mira", 3, Finish::Blocked, &on).unwrap();
+    for turn in ["ann-1", "mira-3"] {
+        moved(&mut conn, turn, "done");
+    }
+    let sent = answer(&mut conn, q, &["Connection lost"], None);
+
+    let heard: String = conn
+        .query_row(
+            "SELECT id FROM turns WHERE opened_by = 'answered' AND agent_id = 'mira'",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(task(&conn, q).heard_in, Some(heard), "{sent:?}");
+    let mira = to(&sent.starts, "mira");
+    assert!(!mira.is_empty(), "{sent:?}");
+    for start in mira {
+        let listed = gathr::tasks::questions(&conn, &start.turn, None).unwrap();
+        assert_eq!(listed, None, "told #{q} twice in {}", start.turn);
+    }
+}
+
+/// 0084: two answers settle one request in one batch. The request's hear-back carries the first,
+/// which settled it, so its opening lists the second alone.
+#[test]
+fn a_second_answer_for_a_settled_request_still_shows() {
+    let dir = TempDir::new();
+    let mut conn = room(&dir);
+    let request = need(&mut conn, "ann", "ann-1");
+    running(&conn, "mira-3", "mira", Some(request));
+    let first = file_for(&mut conn, "mira-3", request);
+    let also = filing(
+        "mira-3",
+        Some(request),
+        Some("Should it say when we retry?"),
+    );
+    let second = person::ask(&mut conn, also, T).unwrap().0.number;
+    moved(&mut conn, "mira-3", "done");
+    moved(&mut conn, "ann-1", "done");
+    let pick = |n: i64| Answer {
+        task: n,
+        pick: vec!["Connection lost".to_string()],
+        ..Default::default()
+    };
+    let sent = person::answer(&mut conn, &[pick(first), pick(second)], T).unwrap();
+    assert_eq!(task(&conn, second).state, State::Done, "{sent:?}");
+
+    let ann = to(&sent.starts, "ann");
+    assert_eq!(ann.len(), 1, "{sent:?}");
+    let (listed, count) = gathr::tasks::questions(&conn, &ann[0].turn, None)
+        .unwrap()
+        .expect("the second answer");
+    assert_eq!(count, 1, "{listed}");
+    assert!(listed.contains(&format!("- #{second} ")), "{listed}");
+}

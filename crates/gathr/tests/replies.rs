@@ -347,6 +347,7 @@ fn the_upgrade_from_0055_keeps_every_rowid_and_the_search_index() {
              ('m2', 'c', 't1', 11, 'assistant', 'text', 'Herons nest by the weir');
          ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
          DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks; ALTER TABLE turns DROP COLUMN session_id;
+              DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
          PRAGMA user_version = 55;",
     )
     .unwrap();
