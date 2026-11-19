@@ -180,8 +180,10 @@ fn a_carry_on_that_cant_be_saved_stops_its_task_and_says_why() {
     let stopped = room.ann_works();
     room.stop(false);
     let db = rusqlite::Connection::open(room.data.join("gathr.db")).unwrap();
+    // The carry-on's turn is written; its message, after it, fails.
     db.execute_batch(
-        "CREATE TRIGGER made_to_fail BEFORE INSERT ON turns WHEN NEW.opened_by = 'carry_on'
+        "CREATE TRIGGER made_to_fail BEFORE INSERT ON messages WHEN NEW.role = 'gathr'
+           AND (SELECT opened_by FROM turns WHERE id = NEW.turn_id) = 'carry_on'
          BEGIN SELECT RAISE(ABORT, 'made to fail'); END;",
     )
     .unwrap();
@@ -207,18 +209,21 @@ fn a_carry_on_that_cant_be_saved_stops_its_task_and_says_why() {
     room.go_until(&info, "everything to end", all_ended);
 }
 
-/// When the start's recovery fails as a whole, it cuts nothing: the turn stays for the next start,
-/// which carries it on once. The failure is found from its reference.
+/// An update saved its carry-on and Gathr crashed before the hand-over cut the turn; then the
+/// start's recovery fails as a whole. It cuts nothing, and the carry-on waits with its turn for the
+/// next start, which runs it once: never a second. The failure is found from its reference.
 #[test]
-fn a_recovery_that_fails_cuts_nothing_and_the_next_start_carries_on() {
+fn a_recovery_that_fails_cuts_nothing_and_the_next_start_carries_on_once() {
     let mut room = Room::start();
     let stopped = room.ann_works();
-    room.stop(false);
-    let db = rusqlite::Connection::open(room.data.join("gathr.db")).unwrap();
-    db.execute_batch(
-        "CREATE TRIGGER made_to_fail BEFORE UPDATE OF status ON turns WHEN OLD.status = 'running'
-         BEGIN SELECT RAISE(ABORT, 'made to fail'); END;",
-    )
+    room.stop(true);
+    let mut db = gathr::db::open(&room.data.join("gathr.db")).unwrap();
+    gathr::carry::save_all(&mut db, "Gathr's update to 9.9.9").unwrap();
+    // The recovery fails at its last step, past the cut, which the take-over never does.
+    db.execute_batch(&format!(
+        "INSERT INTO background (id, turn_id, description, started_ts) VALUES ('made-up', '{stopped}', 'made up', 1);
+         CREATE TRIGGER made_to_fail BEFORE DELETE ON background BEGIN SELECT RAISE(ABORT, 'made to fail'); END;"
+    ))
     .unwrap();
 
     room.start_again();
@@ -228,17 +233,30 @@ fn a_recovery_that_fails_cuts_nothing_and_the_next_start_carries_on() {
         turn_by(&history, "id", &stopped).unwrap()["status"],
         "running"
     );
-    assert!(room.carry_ons(&stopped).is_empty(), "a carry-on was saved");
     let (_, trace) = traced(&room, "gathr.task.recover");
     assert!(trace.contains("made to fail"), "{trace}");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    let history = room.history(&room.service.info);
+    let carried = turn_by(&history, "answers", &stopped).unwrap();
+    assert_eq!(
+        carried["status"], "queued",
+        "it ran before its turn was cut: {history}"
+    );
 
     room.stop(false);
     db.execute_batch("DROP TRIGGER made_to_fail").unwrap();
     room.start_again();
     let info = room.service.info.clone();
-    carry_on_held(&info, &room.chat, &stopped);
+    let history = carry_on_held(&info, &room.chat, &stopped);
+    assert!(
+        history
+            .to_string()
+            .contains("Gathr's update to 9.9.9 ended your turn"),
+        "{history}"
+    );
     assert_eq!(room.carry_ons(&stopped).len(), 1, "one carry-on");
     room.go_until(&info, "everything to end", all_ended);
+    assert_eq!(room.carry_ons(&stopped).len(), 1, "still one carry-on");
     assert!(
         !room.states().contains(&json!("stopped")),
         "{:?}",

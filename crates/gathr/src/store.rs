@@ -608,7 +608,9 @@ pub fn cut_running(conn: &Connection) -> Result<(), Error> {
 
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. The turns that were running then were
-/// cut first, in `tasks::recover`.
+/// cut first, in `tasks::recover`. When that failed, a turn answering one that still reads running
+/// waits for the next start: a carry-on run now would end before its turn was cut, and the next
+/// start would save that turn a second one.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
     // An update held these until the service before stopped: nothing holds them now (0032).
     conn.execute(
@@ -621,7 +623,9 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.task, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
                  ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IN ('liked', 'picked', 'reply')
-         FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
+         FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in')
+           AND NOT EXISTS (SELECT 1 FROM turns was WHERE was.id = t.answers AND was.status = 'running')
+         ORDER BY t.created_ts",
     ))?;
     let rows = stmt.query_map([], |r| {
         Ok(Waiting {
