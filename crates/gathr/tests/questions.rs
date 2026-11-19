@@ -764,3 +764,49 @@ fn a_second_answer_for_a_settled_request_still_shows() {
     assert_eq!(count, 1, "{listed}");
     assert!(listed.contains(&format!("- #{second} ")), "{listed}");
 }
+
+/// 0084 on an upgrade: an answered turn still queued when 0062 runs keeps its answer out of its
+/// opening, as one queued after it does.
+#[test]
+fn an_answered_turn_queued_before_the_upgrade_is_not_told_its_answer_twice() {
+    let dir = TempDir::new();
+    let mut conn = room(&dir);
+    conn.execute(
+        "INSERT INTO tasks (chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
+         VALUES ('c', 'mira', 'mira', 'work', 'Plan the release', 'ready', 1, 1)",
+        [],
+    )
+    .unwrap();
+    running(&conn, "mira-3", "mira", Some(3));
+    let q = person::ask(&mut conn, filing("mira-3", None, Some(ASKED)), T)
+        .unwrap()
+        .0
+        .number;
+    moved(&mut conn, "mira-3", "done");
+    answer(&mut conn, q, &["Connection lost"], None);
+    let (heard, on): (String, Option<i64>) = conn
+        .query_row(
+            "SELECT id, task FROM turns WHERE opened_by = 'answered' AND agent_id = 'mira'",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(on, Some(3), "the answered turn is on Mira's task");
+    let before = gathr::db::SCHEMA_VERSION - 1;
+    conn.execute_batch(&format!(
+        "DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE turns DROP COLUMN session_id; PRAGMA user_version = {before};"
+    ))
+    .unwrap();
+    drop(conn);
+
+    let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
+    let status: String = conn
+        .query_row("SELECT status FROM turns WHERE id = ?1", [&heard], |r| {
+            r.get(0)
+        })
+        .unwrap();
+    assert_eq!(status, "queued");
+    let listed = gathr::tasks::questions(&conn, &heard, None).unwrap();
+    assert_eq!(listed, None, "told #{q} twice in {heard}");
+}

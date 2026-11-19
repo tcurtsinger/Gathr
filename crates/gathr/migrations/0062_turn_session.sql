@@ -14,3 +14,8 @@ CREATE TABLE turn_answers (
     task INTEGER NOT NULL REFERENCES tasks (number) ON DELETE CASCADE,
     PRIMARY KEY (turn_id, task)
 ) STRICT, WITHOUT ROWID;
+
+-- A turn still waiting to run carries the answers it was queued with, which `heard_in` names.
+INSERT INTO turn_answers (turn_id, task)
+SELECT t.heard_in, t.number FROM tasks t JOIN turns u ON u.id = t.heard_in
+WHERE t.kind = 'person' AND u.status IN ('queued', 'waiting_sign_in');
