@@ -88,3 +88,4 @@ fails in CI when the two differ.
 | 0076 | [Replying in a thread](0076-replying-in-a-thread.md) | accepted | yes |
 | 0077 | [Where you left off](0077-where-you-left-off.md) | accepted | yes |
 | 0078 | [Said to you is main, one bubble per turn](0078-said-to-you-is-main-one-bubble-per-turn.md) | accepted | yes |
+| 0079 | [Agents choose where their words show](0079-agents-choose-where-their-words-show.md) | accepted | yes |

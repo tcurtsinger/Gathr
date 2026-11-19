@@ -6,7 +6,10 @@ use std::cell::{Cell, RefCell};
 
 use rusqlite::{Connection, OptionalExtension, Params, Row, StatementStatus, params};
 
-use super::load::{Opening, REPLY_COLUMNS, REPLY_JOINS, Source, Task, Turn, carried_at, reply_at};
+use super::load::{
+    Opening, PLACED_COLUMNS, PLACED_JOIN, REPLY_COLUMNS, REPLY_JOINS, Source, Task, Turn,
+    carried_at, placed_at, reply_at,
+};
 use crate::Error;
 
 pub struct Rows<'c> {
@@ -89,10 +92,11 @@ impl<'c> Rows<'c> {
 
 impl Source for Rows<'_> {
     fn turn(&self, id: &str) -> Option<Turn> {
-        let sql =
-            "SELECT id, agent_id, task, answers, ask_id, result_of, opened_by, created_ts, rowid
-                   FROM turns WHERE id = ?1 AND chat_id = ?2";
-        let (mut turn, at): (Turn, (i64, i64)) = self.one(sql, params![id, self.chat], |r| {
+        let sql = format!(
+            "SELECT t.id, t.agent_id, t.task, t.answers, t.ask_id, t.result_of, t.opened_by, t.created_ts,
+             t.rowid, {PLACED_COLUMNS} FROM turns t {PLACED_JOIN} WHERE t.id = ?1 AND t.chat_id = ?2"
+        );
+        let (mut turn, at): (Turn, (i64, i64)) = self.one(&sql, params![id, self.chat], |r| {
             let turn = Turn {
                 id: r.get(0)?,
                 agent: r.get(1)?,
@@ -101,6 +105,7 @@ impl Source for Rows<'_> {
                 ask: r.get(4)?,
                 result_of: r.get(5)?,
                 opened_by: r.get(6)?,
+                placed: placed_at(r, 9)?,
                 opening: None,
                 before: None,
             };

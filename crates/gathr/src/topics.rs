@@ -9,6 +9,7 @@
 //! to the person, or tied to nothing; its fact says which).
 
 mod load;
+pub mod place;
 pub mod record;
 mod rows;
 #[cfg(test)]
@@ -230,6 +231,9 @@ impl<S: Source> Topics<S> {
         if let Some(n) = f.wrote(t) {
             return Topic::tied(own, "plan", format!("wrote plan version {n}"));
         }
+        if let Some(placed) = &t.placed {
+            return self.placed(&own, placed, next);
+        }
         let opening = t.opening.as_ref();
         // The person's reply (0076): in the thread of what it answers.
         if let Some(r) = opening
@@ -342,6 +346,31 @@ impl<S: Source> Topics<S> {
         t.task.is_none()
             && !t.opened_by.as_deref().is_some_and(|o| quiet.contains(&o))
             && t.agent.as_deref().is_some_and(|a| self.src.is_lead(a))
+    }
+
+    /// Where its agent chose the turn's words show (0079): the room, or where a reply to the task
+    /// or message it named sits.
+    fn placed(&self, own: &str, placed: &load::Placed, next: usize) -> Topic {
+        let (under, why) = match placed {
+            load::Placed::Room => {
+                return Topic::tied(own.to_string(), "placed", "the agent chose the room".into());
+            }
+            load::Placed::Under(load::Reply::Gone(id)) => {
+                let why = format!("message {id} the agent chose not found");
+                return Topic::broken(own.to_string(), why);
+            }
+            load::Placed::Under(r @ load::Reply::Task(n)) => {
+                (r, format!("the agent chose task #{n}'s thread"))
+            }
+            load::Placed::Under(r @ load::Reply::Message(m)) => {
+                (r, format!("the agent chose to reply to message {}", m.id))
+            }
+        };
+        let topic = self.reply_of(own, under, next);
+        match topic.broken {
+            true => topic,
+            false => Topic::tied(topic.key, "placed", why),
+        }
     }
 
     /// Where a reply's turn sits: with the task it is about, or the message it answers. The

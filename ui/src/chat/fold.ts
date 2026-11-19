@@ -68,6 +68,7 @@ const TOOLS: Record<string, [string, string]> = {
   mcp__gathr__give_task: ['Gave a task', 'Giving a task'],
   mcp__gathr__ask_person: ['Asked you a question', 'Asking you a question'],
   mcp__gathr__message: ['Sent a message', 'Sending a message'],
+  mcp__gathr__post: ['Chose where to post', 'Choosing where to post'],
   mcp__gathr__read_chat: ['Read the chat', 'Reading the chat'],
   mcp__gathr__list_tasks: ['Listed tasks', 'Listing tasks'],
   mcp__gathr__finish_task: ['Finished its task', 'Finishing its task'],

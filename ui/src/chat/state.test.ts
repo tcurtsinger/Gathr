@@ -14,6 +14,32 @@ test('a turn sent from another window knows its agent from its live updates alon
   expect(noAgent.turns.t).toMatchObject({ status: 'failed', agent: null });
 });
 
+test("an agent's post moves its running turn by the topic alone, keeping what the turn already held", () => {
+  const queued: LiveEvent = { type: 'turn', chat: 'c', turn: 't', status: 'running', agent: 'a', ref: 'r1' };
+  const held = apply(empty, {
+    ...queued,
+    task: 3,
+    answers: 'u',
+    topic: 't:3',
+    created: '2026-11-19T09:00:00Z',
+  });
+  const moved = apply(held, {
+    type: 'turn',
+    chat: 'c',
+    turn: 't',
+    status: 'running',
+    agent: 'a',
+    topic: 'b:t',
+  });
+  expect(moved.turns.t).toMatchObject({
+    topic: 'b:t',
+    task: 3,
+    answers: 'u',
+    ref: 'r1',
+    created: '2026-11-19T09:00:00Z',
+  });
+});
+
 const delta = (text: string, at: number): LiveEvent => ({ type: 'delta', chat: 'c', turn: 't', text, at });
 const block = (id: string, body: string): Message => ({
   id,
