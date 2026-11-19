@@ -2,6 +2,7 @@
 // unstyled, in the flow, where it can cover the menu item a test clicks next (archive.test.tsx did).
 import { beforeAll } from 'vitest';
 import './theme.css';
+import './test.frames';
 
 // The font arrives by swap, whenever the file does: a swap mid-test moves the text a test measures.
 // beforeAll runs after the imports, so the font face is known.
