@@ -468,6 +468,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
                  DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
          ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
          DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
+         ALTER TABLE turns DROP COLUMN failed_at; ALTER TABLE waits DROP COLUMN failed_at;
          PRAGMA user_version = 54;",
     )
     .unwrap();

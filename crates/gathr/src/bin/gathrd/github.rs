@@ -20,6 +20,8 @@ use crate::tools::Caller;
 const LOG_LINES: usize = 40;
 const ANNOTATIONS: usize = 10;
 const LINE: usize = 300;
+/// The most changed files a turn on a PR is told by name.
+const FILES: usize = 30;
 /// How long an update waits for GitHub to show the PR's new head.
 const UPDATE_WAIT: Duration = Duration::from_secs(20);
 
@@ -83,6 +85,83 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
         ));
     }
     let mut said = vec![format!("Failed checks on #{pr}'s head {}:", short(&head))];
+    said.extend(each_failed(&failed, &repo).await);
+    record(chats, caller, "failures", pr, &head);
+    Ok(said.join("\n"))
+}
+
+/// The failed checks at `commit`, as `failures` says them, for a turn woken by CI that failed
+/// there: read for that commit, never for a head pushed since. None when none failed.
+pub async fn failed_at(repo: &Path, commit: &str) -> Result<Option<String>, String> {
+    let at = |what: &str| format!("repos/{{owner}}/{{repo}}/commits/{commit}/{what}?per_page=100");
+    let (runs, statuses) = (at("check-runs"), at("status"));
+    // In the shape `gh pr view` gives a PR's checks, so each reads as it does there.
+    let runs = [
+        "api",
+        "--paginate",
+        &runs,
+        "--jq",
+        ".check_runs[] | {name, conclusion: (.conclusion // \"\" | ascii_upcase), detailsUrl: .details_url}",
+    ];
+    let statuses = [
+        "api",
+        "--paginate",
+        &statuses,
+        "--jq",
+        ".statuses[] | {context, state: (.state | ascii_upcase), targetUrl: .target_url}",
+    ];
+    let (runs, statuses) = tokio::join!(gh(&runs, repo), gh(&statuses, repo));
+    let both = format!("{}\n{}", runs?, statuses?);
+    let checks: Vec<Value> = both
+        .lines()
+        .filter_map(|l| serde_json::from_str(l.trim()).ok())
+        .collect();
+    let failed: Vec<&Value> = checks.iter().filter(|c| outcome(c).is_some()).collect();
+    if failed.is_empty() {
+        return Ok(None);
+    }
+    let mut said = vec![format!("Failed checks at {}:", short(commit))];
+    said.extend(each_failed(&failed, repo).await);
+    Ok(Some(said.join("\n")))
+}
+
+/// A PR's branch, head and the files it changes, for a turn on its task: its head, and the words.
+pub async fn changes(repo: &Path, pr: i64) -> Result<(String, String), String> {
+    let fields = "headRefName,headRefOid,baseRefName,files";
+    let view = gh(&["pr", "view", &pr.to_string(), "--json", fields], repo).await?;
+    let view: Value = serde_json::from_str(&view)
+        .map_err(|_| format!("GitHub's answer for #{pr} wasn't read"))?;
+    let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
+    let head = text("headRefOid");
+    let files = view["files"].as_array().cloned().unwrap_or_default();
+    let mut said = vec![format!(
+        "#{pr} is {} at {}, into {}, and changes {}:",
+        text("headRefName"),
+        short(&head),
+        text("baseRefName"),
+        match files.len() {
+            1 => "1 file".to_string(),
+            n => format!("{n} files"),
+        }
+    )];
+    for file in files.iter().take(FILES) {
+        said.push(format!(
+            "- {} (+{} -{})",
+            file["path"].as_str().unwrap_or("?"),
+            file["additions"].as_i64().unwrap_or(0),
+            file["deletions"].as_i64().unwrap_or(0)
+        ));
+    }
+    if files.len() > FILES {
+        said.push(format!("- and {} more", files.len() - FILES));
+    }
+    Ok((head, said.join("\n")))
+}
+
+/// Each failed check: its log's last lines and its annotations when it ran on GitHub Actions, else
+/// its link.
+async fn each_failed(failed: &[&Value], repo: &Path) -> Vec<String> {
+    let mut said = Vec::new();
     for check in failed {
         // A check run names itself and its page; a commit status (`StatusContext`) its context and
         // its target (#162's review).
@@ -103,13 +182,13 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
             said.push(format!("Not a GitHub Actions job: see {url}"));
             continue;
         };
-        let log = gh(&["run", "view", "--job", &job, "--log-failed"], &repo).await;
+        let log = gh(&["run", "view", "--job", &job, "--log-failed"], repo).await;
         said.push(match log {
             Ok(log) => last_lines(&log),
             Err(why) => format!("Its log wasn't read: {why}"),
         });
         let path = format!("repos/{{owner}}/{{repo}}/check-runs/{job}/annotations");
-        if let Ok(found) = gh(&["api", &path], &repo).await {
+        if let Ok(found) = gh(&["api", &path], repo).await {
             let found: Value = serde_json::from_str(&found).unwrap_or_default();
             for note in found.as_array().into_iter().flatten().take(ANNOTATIONS) {
                 let at = format!(
@@ -122,8 +201,7 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
             }
         }
     }
-    record(chats, caller, "failures", pr, &head);
-    Ok(said.join("\n"))
+    said
 }
 
 /// Brings the PR up to date with its base, as GitHub's "Update branch" does, for its reviewer: only
@@ -301,7 +379,14 @@ fn said(why: &str) -> String {
 
 /// The chat's project's folder: the repository Gathr asks GitHub about.
 async fn project_folder(chats: &Arc<Chats>, caller: &Caller) -> Result<PathBuf, String> {
-    let chat = caller.chat.clone();
+    folder_of(chats, &caller.chat)
+        .await?
+        .ok_or_else(|| "this chat isn't in a project, so it has no repository".into())
+}
+
+/// The folder of the chat's project, if it's in one.
+pub async fn folder_of(chats: &Arc<Chats>, chat: &str) -> Result<Option<PathBuf>, String> {
+    let chat = chat.to_string();
     let found = chats
         .writer
         .call(move |c| -> Result<Option<String>, gathr::Error> {
@@ -318,8 +403,7 @@ async fn project_folder(chats: &Arc<Chats>, caller: &Caller) -> Result<PathBuf, 
         })
         .await;
     match found {
-        Some(Ok(Some(folder))) => Ok(PathBuf::from(folder)),
-        Some(Ok(None)) => Err("this chat isn't in a project, so it has no repository".into()),
+        Some(Ok(folder)) => Ok(folder.map(PathBuf::from)),
         Some(Err(e)) => Err(e.to_string()),
         None => Err("the database didn't answer".into()),
     }

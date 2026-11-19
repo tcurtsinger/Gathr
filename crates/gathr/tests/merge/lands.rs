@@ -53,7 +53,7 @@ impl Room {
         self.view(n, |view| view["statusCheckRollup"] = checks.clone());
     }
 
-    fn set(&self, setting: &str, value: &str) {
+    pub(super) fn set(&self, setting: &str, value: &str) {
         let path = format!("/api/projects/{}", self.project);
         let changed = self.service.send("PATCH", &path, json!({ setting: value }));
         assert_eq!(changed.status, 200, "{}", changed.body);
@@ -161,7 +161,7 @@ impl Room {
             .collect()
     }
 
-    fn told_once(&self) -> String {
+    pub(super) fn told_once(&self) -> String {
         common::until(120, "Gathr to tell the reviewer", || {
             self.told().into_iter().next()
         })

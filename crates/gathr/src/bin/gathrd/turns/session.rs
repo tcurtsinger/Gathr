@@ -2,6 +2,8 @@
 //! `task_sessions`; every other turn in the agent's latest. An engine holds one conversation, so a
 //! turn on another closes it first, the gentle way.
 
+use std::collections::HashMap;
+
 use gathr::event::Event;
 use gathr::redact::redact;
 use gathr::sessions::{Conversation, Key};
@@ -23,6 +25,8 @@ pub(super) struct Session {
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
+    /// The PR head each task's conversation was told, by task: not told again while it stands.
+    pub told_heads: HashMap<i64, String>,
 }
 
 impl Session {
@@ -189,6 +193,10 @@ impl Task {
         let new = fresh && !self.session.resuming;
         let summed = std::mem::take(&mut self.session.compacted);
         let heard = self.heard(&next.ids, new || summed).await;
+        let text = match self.github_opening(&next.ids, choice, new || summed).await {
+            Some(github) => format!("{github}\n\n{text}"),
+            None => text,
+        };
         let text = match &heard {
             Some(heard) => format!("{heard}\n\n{text}"),
             None => text,

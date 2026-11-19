@@ -9,6 +9,8 @@ mod checkout;
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;
+#[path = "merge/opening.rs"]
+mod opening;
 #[path = "merge/report_count.rs"]
 mod report_count;
 #[path = "merge/review_questions.rs"]
@@ -268,9 +270,10 @@ impl Room {
             assert!(given.starts_with("Task #"), "{given}");
         }
         let token = self.token();
-        // Its engine starts before its turn does: a held turn's start look (0063) comes between.
-        let ran =
-            "SELECT count(*) FROM turns WHERE task IS NOT NULL AND status IN ('running', 'done')";
+        // Its engine starts before its turn does: a held turn's start look (0063) and its opening's
+        // read of the PR come between. Another member's task turn running isn't Vale's.
+        let ran = "SELECT count(*) FROM turns u JOIN tasks t ON t.number = u.task
+                   WHERE t.kind = 'review' AND u.status IN ('running', 'done')";
         common::until(30, "Vale's first review to run", || {
             let n: i64 = self.db().query_row(ran, [], |r| r.get(0)).ok()?;
             (n > 0).then_some(())

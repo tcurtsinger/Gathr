@@ -243,7 +243,7 @@ async fn acted(
                 }
                 Err(why) => {
                     let why = format!("its merge wasn't made: {why}");
-                    tell(chats, review, &seen.head, &why, asker, trace).await
+                    tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await
                 }
             }
         }
@@ -269,11 +269,11 @@ async fn acted(
                 Err(why) => {
                     let why =
                         format!("it's behind {base}, and it wasn't brought up to date: {why}");
-                    tell(chats, review, &seen.head, &why, asker, trace).await
+                    tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await
                 }
             }
         }
-        Act::Tell(why) => tell(chats, review, &seen.head, &why, asker, trace).await,
+        Act::Tell(why) => tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await,
         Act::Wait(why) => {
             saw(chats, review, &seen.head, &why, true).await;
             Ok(Looked::of(
@@ -307,15 +307,18 @@ async fn saw(chats: &Arc<Chats>, review: &Review, head: &str, words: &str, movin
 
 /// Tells the reviewer what stops the PR at this head, once: woken on no task, or, when its own
 /// report had Gathr look, in the answer to it. That the PR is left to them is kept in the same
-/// write as their wake, so nothing reads the chat as stuck between the two (0052).
+/// write as their wake, so nothing reads the chat as stuck between the two (0052). A wake at a head
+/// with a failed check opens with its failed jobs.
 async fn tell(
     chats: &Arc<Chats>,
     review: &Review,
-    head: &str,
+    (head, view): (&str, &Value),
     why: &str,
     asker: Option<&Caller>,
     trace: &str,
 ) -> Result<Looked, String> {
+    let checks = ci::rollup(&view["statusCheckRollup"]);
+    let red = checks.iter().any(|c| c.stand.failed());
     let said = format!("Gathr can't land #{} at {}: {why}.", review.pr, short(head));
     let own = asker.is_some_and(|a| a.agent.as_deref() == Some(review.reviewer.as_str()));
     let wake = (!own).then(|| {
@@ -331,7 +334,14 @@ async fn tell(
         trace.to_string(),
     );
     let told = db(chats, move |c| {
-        landings::tell(c, &review, &head, &why, wake.as_deref(), &trace)
+        let start = landings::tell(c, &review, &head, &why, wake.as_deref(), &trace)?;
+        if let Some(start) = start.as_ref().filter(|_| red) {
+            c.execute(
+                "UPDATE turns SET failed_at = ?2 WHERE id = ?1",
+                [&start.turn, &head],
+            )?;
+        }
+        Ok(start)
     });
     chats.start(told.await?.into_iter().collect());
     Ok(Looked::of(said, false))
