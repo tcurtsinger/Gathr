@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use common::update::*;
 use common::{TempDir, call_tool, gathr, until};
 use gathr::{VERSION, http};
-use serde_json::{Value, json};
+use serde_json::json;
 
 /// Nobody is told a task stopped when it is carrying on (the small Update button's plan, change
 /// 2): an update that stops a member in the middle of a task never sets the task `stopped`, its
@@ -65,19 +65,6 @@ fn an_update_in_the_middle_of_a_task_carries_it_on_and_tells_its_lead_nothing_fa
         made >= ended.as_str().unwrap(),
         "the lead heard back at {made}, before the carry-on ended at {ended}"
     );
-}
-
-/// The turn in `history` whose id or `answers` is `id`, by `field`.
-fn turn_by<'a>(history: &'a Value, field: &str, id: &str) -> Option<&'a Value> {
-    let turns = history["turns"].as_array()?;
-    turns.iter().find(|t| t[field] == id)
-}
-
-/// Whether every turn in the chat has ended.
-fn all_ended(history: &Value) -> bool {
-    let turns = history["turns"].as_array().unwrap();
-    let ended = |t: &Value| matches!(t["status"].as_str(), Some("done" | "stopped" | "failed"));
-    turns.iter().all(ended)
 }
 
 /// What the owner reported before the update stopped its turn still stands: the stopped turn's
@@ -154,15 +141,6 @@ fn an_update_that_fails_to_start_carries_the_task_on_on_the_copy_before() {
     assert_eq!(done, 1, "the task ended once: {history}");
     assert_eq!(room.lead_heard(), (2, 1), "the lead heard back once");
     assert_eq!(room.carry_ons(&stopped).len(), 1, "still one carry-on");
-}
-
-/// The carry-on of `stopped`, saved and held back by the chat's pause on `next`.
-fn held_by_pause(room: &Room, next: &gathr::data::ServiceInfo, stopped: &str) {
-    until(30, "the carry-on held by the pause", || {
-        let history = room.history(next);
-        let carried = turn_by(&history, "answers", stopped)?;
-        (carried["status"] == "queued" && carried["held"] == "pause").then_some(())
-    });
 }
 
 /// A chat the person paused before the update is still paused after it: the carry-on waits for

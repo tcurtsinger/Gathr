@@ -271,9 +271,10 @@ fn a_restart_stops_the_steps_a_dead_service_left_running() {
     // Cut by the restart: stopped, not failed (0051).
     let cut = (&history["turns"][0]["status"], &history["turns"][0]["end"]);
     assert_eq!(cut, (&json!("stopped"), &json!("restart")), "{history}");
+    // Its carry-on may run by now: only the cut turn's steps are read.
     let messages = history["messages"].as_array().unwrap().iter();
     let steps: Vec<&Value> = messages
-        .filter(|m| m["kind"] != "text")
+        .filter(|m| m["kind"] != "text" && m["turn"] == turn)
         .map(|m| &m["body"])
         .collect();
     let stopped = [

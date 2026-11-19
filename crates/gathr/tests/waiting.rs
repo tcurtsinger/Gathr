@@ -810,7 +810,7 @@ fn a_stopped_turn_a_pause_or_a_restart_reads_stopped() {
     turn(&conn, "halted", "ann", None, "stopped");
     at(&conn, "UPDATE turns SET ended_ts = 50 WHERE id = 'halted'");
     turn(&conn, "cut", "cy", None, "running");
-    gathr::store::take_over(&conn).unwrap();
+    gathr::store::cut_running(&conn).unwrap();
     at(&conn, "UPDATE turns SET ended_ts = 60 WHERE id = 'cut'");
     turn(&conn, "dropped", "lead", None, "stopped");
     at(
