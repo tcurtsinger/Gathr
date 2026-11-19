@@ -174,7 +174,8 @@ fn a_plan_is_checked_approved_and_handed_out_through_the_runner(engine: &str) {
     assert_eq!(
         reacted,
         format!(
-            "Gave {message} a thumbs-up.\nRecorded: your check #1 of version 1 is done when the turn running on it ends."
+            "Gave {message} a thumbs-up.\nRecorded: your check #1 of version 1 is done when the turn running on it ends. \
+             End it now. Write only what is still open, not that you agree."
         )
     );
     let member = text(&call_tool(port, &rev, "plan", first_plan()));

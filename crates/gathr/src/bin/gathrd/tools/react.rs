@@ -80,11 +80,14 @@ impl Tools {
         if let Some(a) = agreed {
             self.chats.start(a.starts);
             let (n, v) = (a.check, a.version);
+            // The thumbs-up is the approval: without this a checker closes its turn by saying it again.
+            let open = "Write only what is still open, not that you agree.";
             said.push_str(&match a.took {
                 Took::Kept => format!(
-                    "\nRecorded: your check #{n} of version {v} is done when the turn running on it ends."
+                    "\nRecorded: your check #{n} of version {v} is done when the turn running on it ends. \
+                     End it now. {open}"
                 ),
-                _ => format!("\nYour check #{n} of version {v} is done."),
+                _ => format!("\nYour check #{n} of version {v} is done. {open}"),
             });
         }
         Ok(said)
