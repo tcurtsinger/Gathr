@@ -1,5 +1,5 @@
-// A search hit opened in its chat (plans/search.md): drawn and centred with only the pages it needs, and
-// neither a stream nor a new turn pulls the view away from it.
+// A search hit opened in its chat (plans/search.md): drawn and centred with only the pages it needs. Where the view
+// goes as the chat grows after that is the chat library's (docs/testing.md), not tested.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
@@ -129,7 +129,7 @@ async function openAt(history: History, found: string) {
   return { hit, viewport, reopen, onFound };
 }
 
-test('a hit far up opens centred, and the view holds there while the chat goes on', async () => {
+test('a hit far up opens centred, with focus on it, drawn from its page down', async () => {
   // 299 messages from the end: the third page up.
   const { hit, viewport } = await openAt(long, 'a100');
   // The hit's own text, inside its reply.
@@ -139,21 +139,6 @@ test('a hit far up opens centred, and the view holds there while the chat goes o
   expect(document.activeElement).toBe(hit);
   // Drawn from the hit's page down, not the whole chat.
   expect(viewport.querySelectorAll('[data-message-id]').length).toBeLessThan(2 * turns);
-
-  // Where it shows, not scrollTop: an older page drawn above moves that and keeps the view.
-  const held = hit.getBoundingClientRect().top;
-  // As in WebKit, which has none: Chromium's scroll anchoring would hide a jump.
-  viewport.style.overflowAnchor = 'none';
-  // The agent's next turn starts, then streams a long reply.
-  for (const listen of live)
-    listen({ type: 'turn', chat: 'c', turn: 'next', status: 'running', agent: 'a', position: turns });
-  await frames(3);
-  for (const listen of live) listen({ type: 'delta', chat: 'c', turn: 'next', text: 'More. '.repeat(400) });
-  await expect
-    .poll(() => viewport.querySelector('[data-message-id="a-next"]')?.textContent?.length)
-    .toBeGreaterThan(1000);
-  await frames(3);
-  expect(Math.abs(hit.getBoundingClientRect().top - held)).toBeLessThan(1);
 });
 
 test("a member's hit opens at its message in the one timeline", async () => {
@@ -176,7 +161,7 @@ test("the chat's title, after a hit in it, opens at its latest message", async (
   expect(document.querySelector('[data-search-hit]')).toBeNull();
 });
 
-test('a hit opened after Summary showed an approval stays where it is once it is done', async () => {
+test('a hit opened after Summary showed an approval stays the hit once it is done', async () => {
   // The long chat with a second agent, so it has Summary; its latest turn waiting on an approval.
   const asking = {
     ...long,
@@ -205,10 +190,8 @@ test('a hit opened after Summary showed an approval stays where it is once it is
   await frames(3);
   const hit = document.querySelector('[data-search-hit]') as HTMLElement;
   expect(hit.textContent).toBe('Made-up answer 100');
-  const placed = hit.getBoundingClientRect().top;
-  // The app clears the hit once it is shown: the view does not go back to the approval.
+  // The app clears the hit once it is shown: the chat does not go back to the approval.
   await shown.rerender(<Chat onFound={onFound} />);
   await frames(3);
   expect(document.querySelector('[data-search-hit]')).toBe(hit);
-  expect(hit.getBoundingClientRect().top).toBe(placed);
 });
