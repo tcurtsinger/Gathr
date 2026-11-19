@@ -212,11 +212,14 @@ function service(day: ReturnType<typeof morning>, reads: Read[]) {
   return { puts, kept };
 }
 
-/** The chat in the window; `n` changes to open it again, as a reload does. */
-function Chat({ n = 0 }: { n?: number }) {
+/**
+ * The chat in the window; `n` changes to open it again, as a reload does. `height` TALL holds the whole chat with
+ * nothing to scroll, so what is seen never waits on where the chat library scrolls (docs/testing.md).
+ */
+function Chat({ n = 0, height = 640 }: { n?: number; height?: number }) {
   const [draft, setDraft] = useState('');
   return (
-    <div className="app" style={{ height: 640 }}>
+    <div className="app" style={{ height }}>
       <ChatView
         key={n}
         chat={{ id: 'c', title: 'Made-up morning' }}
@@ -236,6 +239,14 @@ function Chat({ n = 0 }: { n?: number }) {
       />
     </div>
   );
+}
+
+/** A chat tall enough for the whole morning, its threads open, in a window that holds it. */
+const TALL = 2800;
+/** Nothing in the chat to scroll: all of it is in view. */
+async function whole() {
+  const view = document.querySelector('.thread-viewport') as HTMLElement;
+  await expect.poll(() => view.scrollHeight <= view.clientHeight).toBe(true);
 }
 
 const mainWith = (text: string) =>
@@ -288,26 +299,16 @@ test('back in a chat, the New line sits above the first main message not seen, a
 
 test('a folded thread counts its new replies in blue; opened, each reply not seen says New', async () => {
   const { puts } = service(morning(), left());
-  await render(<Chat />);
+  await page.viewport(1100, TALL + 60);
+  await render(<Chat height={TALL} />);
   const bo = () => mainWith('Shopping list screen');
   await expect.poll(() => foldOf(bo())?.textContent).toBe('3 new replies');
-  // A chat opens at its foot, a moment after it is drawn: going up the page before that, the view was pulled back down
-  // and the opened thread was never in it (seen in WebKit, one run in three).
-  await expect
-    .poll(() => {
-      const view = document.querySelector('.thread-viewport') as HTMLElement;
-      return view.scrollHeight - view.scrollTop - view.clientHeight < 2;
-    })
-    .toBe(true);
+  await whole();
   const fold = foldOf(bo()) as HTMLButtonElement;
   expect(fold.getAttribute('aria-expanded')).toBe('false');
   expect(getComputedStyle(fold).color).toBe(attention());
 
   fold.focus();
-  // Focus moves the view up to the line. The chat learns it has left its foot from the scroll's own event, a frame
-  // later; a press before that opened the thread while the chat still followed its foot, and the view went back down
-  // (seen in WebKit under load, twice). A person presses a frame or more after the view moves.
-  await expect.poll(() => document.querySelector<HTMLButtonElement>('.thread-bottom')?.disabled).toBe(false);
   await userEvent.keyboard('{Enter}');
   await expect.poll(() => foldOf(bo())?.textContent).toBe('Collapse replies');
   const said = [
@@ -318,8 +319,7 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   for (const text of said) {
     await expect.poll(() => replyWith(text)?.querySelector('.name-line-new')?.textContent).toBe('New');
   }
-  // The opened thread scrolls its last reply into view, and in view it is seen: only then is none left new. Showing
-  // the earlier reply moves the view up to it, so a test that went on at once left the last two not seen.
+  // In view, the opened replies are seen.
   await written(() => sentFor(puts, 't:3')).toBeGreaterThanOrEqual(us(at(10, 3)));
   await page.getByRole('button', { name: 'Show 1 earlier reply' }).click();
   await expect.poll(() => !!replyWith('Bo, the planner screen is yours.')).toBe(true);
@@ -500,15 +500,17 @@ test('a reply arriving in view is seen at once and never shows a pill', async ()
     day,
     left().map((r) => ({ ...r, seen_us: us(at(10, 7)) })),
   );
-  await render(<Chat />);
+  await page.viewport(1100, TALL + 60);
+  await render(<Chat height={TALL} />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
+  await whole();
   // Any pill drawn at all, for however short a time.
   let shown = 0;
   const watch = new MutationObserver(() => {
     if (pill()) shown += 1;
   });
   watch.observe(document.body, { childList: true, subtree: true, characterData: true });
-  // Bo answers under Mira's word, at the foot of the chat, where the person is.
+  // Bo answers under Mira's word, at the foot of the chat, in view.
   send({
     type: 'turn',
     chat: 'c',

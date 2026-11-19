@@ -193,8 +193,9 @@ test('a message scrolled behind the box shows neither beside it nor under it', a
 
 test('at the chat’s foot the last message’s row of replies and buttons clears the box', async () => {
   await open(1440);
+  // As far down as the chat goes: nothing the chat follows can move it from there.
   const v = viewport();
-  await expect.poll(() => v.scrollHeight - v.clientHeight - v.scrollTop).toBeLessThan(2);
+  v.scrollTop = v.scrollHeight;
   const last = [...document.querySelectorAll('.thread-messages > .said')].at(-1) as HTMLElement;
   const row = last.querySelector('.said-foot') as HTMLElement;
   expect(row, 'the last message has its row').not.toBeNull();
