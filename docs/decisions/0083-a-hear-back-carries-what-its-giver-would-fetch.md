@@ -20,9 +20,10 @@ and a line that came cut says itself that read_chat has it whole.
 
 - **A task's line** (`tasks/words.rs` `line`), in a hear-back and in Gathr's "A task is done:" line, is
   `- #<number> <owner>, <what>: <how>; <note> (PR #<pr>, look at <see>)`. The note is the owner's last report's,
-  shown unless the reason opens with it, as a reason written from the report does (after "left: " for work left). A
-  merge or a hold writes its own reason instead, and one that only happens to contain the note ("#19 merged", note "9")
-  still shows it. The PR is the task's, and the look-at is the report's commit or file. Each one shows only when the
+  shown unless the reason is the one written from the report: the whole note, with a review's suggestions on the lines
+  after it, or for a report of work left, "left: " and the note, with the fix Gathr gave after it. A merge or a hold
+  writes its own reason instead, and one that only happens to begin with the note ("#19 merged", note "#19") still
+  shows it. The PR is the task's, and the look-at is the report's commit or file. Each one shows only when the
   task has it.
 - **No closing line** sends the giver to read_chat. A hear-back on the giver's own task still ends with "This turn is
   on your task #N: end it with finish_task."

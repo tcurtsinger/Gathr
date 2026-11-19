@@ -147,19 +147,12 @@ pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
         (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
         (state, None) => state.as_str().to_string(),
     };
-    // A reason written from the report opens with its note, after "left: " for work left (held.rs).
-    // A merge or a hold writes its own instead: the note goes beside it.
-    let opens = |reason: &str, note: &str| {
-        reason
-            .strip_prefix("left: ")
-            .unwrap_or(reason)
-            .starts_with(note)
-    };
-    if let Some(note) = t.report.as_ref().and_then(|r| r.note.as_deref())
+    if let Some(report) = &t.report
+        && let Some(note) = &report.note
         && !t
             .reason
             .as_deref()
-            .is_some_and(|reason| opens(reason, note))
+            .is_some_and(|r| written_from(r, report.how, note))
     {
         how.push_str(&format!("; {note}"));
     }
@@ -175,6 +168,24 @@ pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
         false => format!(" ({})", facts.join(", ")),
     };
     Ok(format!("- #{} {owner}, {}: {how}{facts}", t.number, t.what))
+}
+
+/// Whether a task's reason is the one written from its report's note (held.rs): the note, with a
+/// review's suggestions on the lines after it, or for work left, "left: " and the note, as a
+/// sentence when the fix Gathr gave follows it. A merge or a hold writes its own reason instead.
+fn written_from(reason: &str, how: Finish, note: &str) -> bool {
+    match how {
+        Finish::Left => reason
+            .strip_prefix("left: ")
+            .and_then(|r| {
+                r.strip_prefix(sentence(note).as_str())
+                    .or(r.strip_prefix(note))
+            })
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with(' ')),
+        _ => reason
+            .strip_prefix(note)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('\n')),
+    }
 }
 
 /// What became of each task the giver hasn't heard of, on the giver's `own` task when it has one

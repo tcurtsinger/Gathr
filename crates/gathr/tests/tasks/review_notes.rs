@@ -339,7 +339,9 @@ fn a_review_left_with_an_unasked_note_gives_its_builder_a_fix_in_passing() {
     assert!(!review_done, "a left review lands nothing");
     let lead = to(&starts, "lead");
     assert_eq!(lead.len(), 1, "the lead hears trouble: {starts:?}");
-    assert!(lead[0].contains(&reason), "{}", lead[0]);
+    // The note is in the reason as a sentence: it isn't said again.
+    let line = format!("{reason} (PR #7)");
+    assert!(lead[0].contains(&line), "{}", lead[0]);
     assert_eq!(to(&starts, "ann").len(), 1, "the fix starts: {starts:?}");
     assert_eq!(outcomes(&conn), ["given"]);
 }
