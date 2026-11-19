@@ -384,14 +384,15 @@ pub fn add_reply(
     message(conn, &id)
 }
 
-/// Gathr's line telling an agent the person liked its message `liked` (0057), in `turn`: never drawn,
-/// as a copy isn't, and a turn it opens serves the ask the liked message served.
-pub fn add_like_line(
+/// Gathr's copy of the message `of` in `turn`, with what the agent reads in it: the person's like
+/// of its message (0057), or the person's message to several agents (0028). Never drawn, and a turn it
+/// opens serves the ask `of` served.
+pub fn add_copy(
     conn: &Connection,
     chat: &str,
     turn: &str,
     body: &str,
-    liked: &str,
+    of: &str,
 ) -> Result<Value, Error> {
     let ts = now_us();
     let id = ulid(ts);
@@ -399,13 +400,13 @@ pub fn add_like_line(
         "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, copy_of)
          VALUES (?1, ?2, ?3, ?4, 'gathr', 'text', ?5, ?6)",
     )?
-    .execute(params![id, chat, turn, ts, body, liked])?;
+    .execute(params![id, chat, turn, ts, body, of])?;
     conn.prepare_cached(
         "UPDATE turns SET ask_id = (SELECT o.ask_id FROM messages s JOIN turns o ON o.id = s.turn_id
              WHERE s.id = ?2)
          WHERE id = ?1 AND ask_id IS NULL",
     )?
-    .execute(params![turn, liked])?;
+    .execute(params![turn, of])?;
     message(conn, &id)
 }
 
@@ -608,11 +609,12 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
         [],
     )?;
-    // A like is the person's too (0057): a pause never holds the turn it opened.
+    // A like and a copy of the person's message are the person's too (0057, 0028): a pause never holds
+    // the turn they opened.
     let mut stmt = conn.prepare(&format!(
         "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.task, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
-                 ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IS 'liked'
+                 ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IN ('liked', 'picked', 'reply')
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in') ORDER BY t.created_ts",
     ))?;
     let rows = stmt.query_map([], |r| {

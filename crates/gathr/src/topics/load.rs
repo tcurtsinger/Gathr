@@ -28,9 +28,19 @@ pub struct Turn {
 pub struct Opening {
     pub id: String,
     pub role: String,
-    /// A copy of another message (a teammate's, a liked one), and the turn that message is in.
-    pub copy_of: Option<(String, Option<String>)>,
+    /// A copy of another message: a teammate's, a liked one, or the person's to several agents (0028).
+    pub copy_of: Option<Carried>,
     /// What the person's reply answers (0076).
+    pub reply: Option<Reply>,
+}
+
+/// The message a copy carries: its id, its turn and its role (none once it is gone), and what it
+/// answers when it is the person's reply.
+#[derive(Clone)]
+pub struct Carried {
+    pub id: String,
+    pub turn: Option<String>,
+    pub role: Option<String>,
     pub reply: Option<Reply>,
 }
 
@@ -53,10 +63,34 @@ pub struct Answered {
     pub reply: bool,
 }
 
-/// The SQL columns that read a reply's target, after `m` (the reply) and `r` (what it answers):
-/// `m.reply_to, m.reply_task, r.id, r.turn_id, r.role, r.about, r.reply_to IS NOT NULL OR r.reply_task IS NOT NULL`.
+/// The SQL columns that read a reply's target, after `m` (the reply) and `r` (what it answers), then
+/// a copy's original `o` and what that answers, `q`.
 pub const REPLY_COLUMNS: &str = "m.reply_to, m.reply_task, r.id, r.turn_id, r.role, r.about,
-     r.reply_to IS NOT NULL OR r.reply_task IS NOT NULL";
+     r.reply_to IS NOT NULL OR r.reply_task IS NOT NULL, o.role, o.reply_to, o.reply_task, q.id, q.turn_id,
+     q.role, q.about, q.reply_to IS NOT NULL OR q.reply_task IS NOT NULL";
+
+/// The joins `REPLY_COLUMNS` reads, after `m` and `o`.
+pub const REPLY_JOINS: &str =
+    "LEFT JOIN messages r ON r.id = m.reply_to LEFT JOIN messages q ON q.id = o.reply_to";
+
+/// What a copy carries, from its id and the original's turn, then the eight columns of `REPLY_COLUMNS`
+/// that read the original, starting at `at`.
+pub fn carried_at(
+    r: &Row<'_>,
+    copy: Option<String>,
+    turn: usize,
+    at: usize,
+) -> rusqlite::Result<Option<Carried>> {
+    let Some(id) = copy else {
+        return Ok(None);
+    };
+    Ok(Some(Carried {
+        id,
+        turn: r.get(turn)?,
+        role: r.get(at)?,
+        reply: reply_at(r, at + 1)?,
+    }))
+}
 
 /// A reply's target from the seven `REPLY_COLUMNS` starting at `at`.
 pub fn reply_at(r: &Row<'_>, at: usize) -> rusqlite::Result<Option<Reply>> {
@@ -120,7 +154,7 @@ type Said = (
     String,
     Option<String>,
     String,
-    Option<(String, Option<String>)>,
+    Option<Carried>,
     Option<String>,
     Option<Reply>,
 );
@@ -252,8 +286,11 @@ impl Facts {
         let recorded = schema >= TOPICS_SCHEMA;
         let about = if recorded { "m.about" } else { "NULL" };
         let (replies, answered) = match schema >= REPLY_SCHEMA {
-            true => (REPLY_COLUMNS, "LEFT JOIN messages r ON r.id = m.reply_to"),
-            false => ("NULL, NULL, NULL, NULL, NULL, NULL, NULL", ""),
+            true => (REPLY_COLUMNS, REPLY_JOINS),
+            false => (
+                "NULL, NULL, NULL, NULL, NULL, NULL, NULL, o.role, NULL, NULL, NULL, NULL, NULL, NULL, NULL",
+                "",
+            ),
         };
         let sql = format!(
             "SELECT m.id, m.turn_id, m.role, m.copy_of, o.turn_id, {about}, {replies}
@@ -261,11 +298,7 @@ impl Facts {
              WHERE m.chat_id = ?1 AND m.role IN ('user', 'gathr') ORDER BY m.ts, m.rowid"
         );
         let said: Vec<Said> = self.read(conn, &sql, chat, |r| {
-            let copy: Option<String> = r.get(3)?;
-            let copy = match copy {
-                Some(of) => Some((of, r.get(4)?)),
-                None => None,
-            };
+            let copy = carried_at(r, r.get(3)?, 4, 13)?;
             let reply = reply_at(r, 6)?;
             Ok((r.get(0)?, r.get(1)?, r.get(2)?, copy, r.get(5)?, reply))
         })?;

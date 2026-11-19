@@ -1,5 +1,6 @@
 //! The names the person picked from the window's `@` list, kept with their message so it draws them
-//! blue (0028, 0072). A span counts UTF-16 code units of the text, as the window does.
+//! blue (0072), and every picked agent gets it (0028). A span counts UTF-16 code units of the text, as
+//! the window does.
 
 use std::collections::HashMap;
 
@@ -49,4 +50,19 @@ pub fn kept(text: &str, mut picks: Vec<Pick>) -> Result<Option<String>, &'static
     Ok(Some(
         serde_json::to_string(&picks).expect("picks serialize"),
     ))
+}
+
+/// The agents of the picks as kept, in the order their names stand, each once: everyone the message
+/// went to besides the agent it was sent to (0028).
+pub fn agents(kept: Option<&str>) -> Vec<String> {
+    let picks: Vec<Pick> = kept
+        .and_then(|k| serde_json::from_str(k).ok())
+        .unwrap_or_default();
+    let mut agents: Vec<String> = Vec::new();
+    for p in picks {
+        if !agents.contains(&p.agent) {
+            agents.push(p.agent);
+        }
+    }
+    agents
 }

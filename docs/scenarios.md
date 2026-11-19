@@ -105,6 +105,19 @@ Parts: 1.9
 - **Then** the project shows each agent's name with that agent's chats under it, and the chat with
   no project sits under its agent's name outside every project
 
+### 1j. Every agent you pick gets the message
+
+Parts: 1.3
+
+- **Given** a team chat with a lead, Ann and Bo, open in the window
+- **When** the person picks Ann and Bo from the @ list in one message, or in a reply in a thread
+- **Then** the box says "To Ann and Bo" by Send; the message is saved once; each gets a turn (Ann's copy goes
+  into the turn she is in when she is at work) and reads one line of Gathr's naming the other before the words;
+  both answers sit in the thread of that message, one after the other
+- **And** in a project's chat a picked agent outside its team refuses the send, nothing saved, with a reference;
+  in a chat with no project the outsiders join in one change, and one past five refuses the send
+- **And** with Bo signed out, Ann's turn runs and Bo's waits for a sign-in, through a restart
+
 ## 2. New work is planned with you and checked first. Repairs don't wait for you
 
 ### 2a. Every ask is sized, and Gathr holds the size

@@ -213,6 +213,7 @@ async fn person_answer(
     Json(body): Json<Answers>,
 ) -> Answer {
     let trace = t.0.clone();
+    let picked = crate::copies::discussed(&s, &t, &body.answers).await?;
     let after = Arc::new(std::sync::Mutex::new((Vec::new(), false)));
     let kept = after.clone();
     let answer = db(&s, &t, "Answer failed", move |c| {
@@ -234,7 +235,13 @@ async fn person_answer(
     if gathrs {
         crate::landing::soon(&s.chats, None);
     }
-    answer
+    let Json(mut answer) = answer?;
+    if !picked.is_empty() {
+        let refused = answer["refused"].as_array().into_iter().flatten();
+        let refused: Vec<i64> = refused.filter_map(|r| r["task"].as_i64()).collect();
+        answer["turns"] = json!(crate::copies::give_discussed(&s, &t, picked, &refused).await);
+    }
+    Ok(Json(answer))
 }
 
 async fn list(

@@ -1,8 +1,9 @@
-//! The person's like reaching its agent (0057): as a short message of theirs would, into the agent's
-//! running turn in the chat, else a turn of its own that a pause never holds and an update does. What
-//! the agent reads is Gathr's line, marked as a copy of the liked message, so the chat draws no bubble
-//! for it and nothing that looks for the person's message of a turn (Retry, asks, the quiet check)
-//! finds one.
+//! Gathr's copy of a message reaching an agent for the person: their like of its message (0057), or
+//! their message to several agents, for each agent but the one it was sent to (0028). As a message of
+//! theirs would: into the agent's running turn in the chat, else a turn of its own that a pause never
+//! holds and an update does. The chat draws no bubble for a copy, and nothing that looks for the
+//! person's message of a turn (Retry, asks, the quiet check) finds one there: the window's Retry
+//! finds the message it carries.
 
 use gathr::event::Event;
 use gathr::ids::{now_us, ulid};
@@ -33,24 +34,22 @@ impl Task {
         matches!(self.chats.writer.call(read).await, Some(Ok(true)))
     }
 
-    pub(super) async fn like(
+    pub(super) async fn copy(
         &mut self,
         chat: String,
-        liked: String,
-        line: String,
+        (of, line, opened): (String, String, Opened),
         trace: String,
     ) -> Result<Value, Failed> {
         self.save_unsaved().await;
         let agent = self.agent.clone();
         if let Some(running) = self.steerable(&chat, agent.as_deref()) {
-            // Failures are the like's own: its reference finds them.
+            // Failures are the copy's own: its reference finds them.
             let ids = Ids {
                 trace: trace.clone(),
                 ..running
             };
-            let (c, t, text, of) = (chat.clone(), ids.turn.clone(), line.clone(), liked.clone());
-            let add =
-                move |tx: &rusqlite::Transaction| store::add_like_line(tx, &c, &t, &text, &of);
+            let (c, t, text, of) = (chat.clone(), ids.turn.clone(), line.clone(), of.clone());
+            let add = move |tx: &rusqlite::Transaction| store::add_copy(tx, &c, &t, &text, &of);
             let message = self.db_save(&ids, "gathr", add).await;
             let message = message.map_err(|why| self.fail_send(&ids, why))?;
             if let Err(e) = self.write_user(&line, Some(&ids.turn)).await {
@@ -58,7 +57,7 @@ impl Task {
                 return Err(self.fail_send(&ids, why));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, line, Opened::Liked));
+            self.unread.push((id, line, opened));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             self.record(
                 Event::point("gathr.turn.steer")
@@ -78,12 +77,12 @@ impl Task {
             person: true,
         };
         let (row, text) = (ids.clone(), line.clone());
-        // The turn and the line that opens it are one write, as the person's message and its turn are.
+        // The turn and the copy that opens it are one write, as the person's message and its turn are.
         let saved = self.chats.writer.call(move |conn| {
             let tx = conn.transaction()?;
-            let of = (row.agent.as_deref(), None, None);
-            store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, Opened::Liked)?;
-            let message = store::add_like_line(&tx, &row.chat, &row.turn, &text, &liked)?;
+            let on = (row.agent.as_deref(), None, None);
+            store::add_turn(&tx, &row.chat, &row.turn, &row.trace, on, opened)?;
+            let message = store::add_copy(&tx, &row.chat, &row.turn, &text, &of)?;
             tx.commit()?;
             Ok::<_, gathr::Error>(message)
         });
@@ -91,8 +90,8 @@ impl Task {
             Some(saved) => saved.map_err(|e| e.to_string()),
             None => Err("the database didn't answer".to_string()),
         };
-        let message =
-            saved.map_err(|why| self.fail_send(&ids, format!("The like wasn't saved: {why}")))?;
+        let message = saved
+            .map_err(|why| self.fail_send(&ids, format!("Gathr's copy wasn't saved: {why}")))?;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         let queued = Queued {
             ids,

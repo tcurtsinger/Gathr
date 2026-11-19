@@ -169,7 +169,7 @@ export function ChatView(props: Props) {
   const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
-  const to = addressed(picks, people, fallback, fresh);
+  const to = addressed(picks, people, fallback, { fresh });
   const reply = useReplying(answering, {
     state,
     people,
@@ -213,8 +213,8 @@ export function ChatView(props: Props) {
     const first = state.messages.length === 0;
     const sent = keptPicks(picks);
     onDraft('', []);
-    if (fresh) return onStart(draft, to.to?.id, sent);
-    send(draft, to.to?.id, sent).then(() => first && onNamed());
+    if (fresh) return onStart(draft, to[0]?.id, sent);
+    send(draft, to[0]?.id, sent).then(() => first && onNamed());
   };
 
   const actions: Actions = {
@@ -224,15 +224,27 @@ export function ChatView(props: Props) {
     // To the agent it was sent to (none if it was sent to none), never the one picked now:
     // if that agent was removed, the service refuses and the failure shows with its reference.
     retry: (t) => {
-      const asked = state.messages.find((m) => m.turn === t && m.role === 'user');
+      // The person's message of the turn, or the one Gathr's copy in it carries (0028).
+      const copy = state.messages.find((m) => m.turn === t && m.role === 'gathr' && m.copy_of);
+      const asked =
+        state.messages.find((m) => m.turn === t && m.role === 'user') ??
+        state.messages.find((m) => m.id === copy?.copy_of && m.role === 'user');
       const turn = state.turns[t];
       // A reply goes again as a reply to what it answered (0076).
       const target = asked && {
         ...(asked.reply_to && { reply_to: asked.reply_to }),
         ...(asked.reply_task != null && { reply_task: asked.reply_task }),
       };
+      // Again to this turn's agent alone: the others it went to have it. Only that agent's name stays picked.
+      const picks = asked?.picks?.filter((p) => p.agent === turn?.agent);
       if (asked && turn)
-        send(asked.body as string, turn.agent ?? undefined, asked.picks ?? undefined, undefined, target);
+        send(
+          asked.body as string,
+          turn.agent ?? undefined,
+          picks?.length ? picks : undefined,
+          undefined,
+          target,
+        );
     },
     resend: (f) => {
       if (!fresh) return send(f.text, f.agent, f.picks, f);
@@ -454,7 +466,7 @@ export function ChatView(props: Props) {
                     inputRef={input}
                     hint={fallback ? `Message ${fallback.name}` : 'Message'}
                     people={people}
-                    to={to.to && { id: to.to.id, name: to.to.name, joins: to.joins }}
+                    to={to}
                   />
                 </>
               )}

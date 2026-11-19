@@ -61,6 +61,30 @@
   color: var(--foreground);
   font-weight: 550;
 }
+/*
+ * Several agents (0028): their faces overlap, each ringed in the box's own colour. The sign stays inside the box at
+ * every width: the faces keep their place and the names end in "…" where there is no room.
+ */
+.composer [data-slot="composer-actions"],
+.composer-to {
+  min-width: 0;
+}
+.composer-faces {
+  display: inline-flex;
+  flex: none;
+}
+.composer-faces .face + .face {
+  margin-left: -5px;
+  box-shadow: 0 0 0 1.5px var(--popover);
+}
+:root.light .composer-faces .face + .face {
+  box-shadow: 0 0 0 1.5px var(--background);
+}
+.composer-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* The blue @Names (composer B): the text drawn again under the see-through textarea, in its font and wrap. */
 .composer-field {
   position: relative;
@@ -109,7 +133,8 @@
   font-size: 14.5px;
 }
 .composer[data-thread] [data-slot="composer-toolbar"] {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 0;
 }
 .composer[data-thread] .composer-to {

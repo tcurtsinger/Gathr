@@ -17,6 +17,7 @@ import { type ChatState, empty } from './state';
 const members = [
   { agent: 'a', name: 'Made-up Lead', role: 'supervisor' as const },
   { agent: 'b', name: 'Ann', role: 'member' as const },
+  { agent: 'c', name: 'Bo', role: 'member' as const },
 ];
 const made = (id: string, name: string) => ({
   id,
@@ -30,7 +31,7 @@ const made = (id: string, name: string) => ({
   skin: null,
   background: null,
 });
-const agents = [made('a', 'Made-up Lead'), made('b', 'Ann')];
+const agents = [made('a', 'Made-up Lead'), made('b', 'Ann'), made('c', 'Bo')];
 const turn = (id: string, agent: string, position: number, more: Partial<Turn> = {}): Turn => ({
   id,
   agent,
@@ -196,6 +197,8 @@ async function replyOn(words: string) {
   const button = row.querySelector<HTMLElement>('.message-actions [aria-label="Reply"]');
   expect(button, `Reply on "${words}"`).not.toBeNull();
   await userEvent.click(button as HTMLElement);
+  // The box takes focus as it is drawn: keys typed before that go nowhere.
+  await expect.element(page.getByRole('textbox', { name: 'Reply' })).toHaveFocus();
   return button as HTMLElement;
 }
 const box = () => page.getByRole('textbox', { name: 'Reply' });
@@ -217,13 +220,15 @@ test('Reply opens the box at the thread’s foot with focus in it; Escape and th
   expect(foot).toBe(words + 1);
   await userEvent.keyboard('{Escape}');
   await expect.element(box()).not.toBeInTheDocument();
-  expect(document.activeElement).toBe(reply);
+  // Focus goes back a frame after the box has gone.
+  await expect.poll(() => document.activeElement).toBe(reply);
 
   await userEvent.click(reply);
   await expect.element(box()).toHaveFocus();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect.element(box()).not.toBeInTheDocument();
-  expect(document.activeElement).toBe(reply);
+  // Focus goes back a frame after the box has gone.
+  await expect.poll(() => document.activeElement).toBe(reply);
 });
 
 test('one box at a time, each thread keeps its own draft, and the main box still sends a main message', async () => {
@@ -291,6 +296,37 @@ test('in a waiting question’s thread the box talks it over: a Discuss, and the
   });
   // Still open in its bubble: its choices are there to pick.
   await expect.element(page.getByRole('button', { name: /^Made-up yes/ })).toBeVisible();
+});
+
+test('a reply with @Bo picked goes to the author and Bo, and By Send names both; a Discuss gives Bo the words', async () => {
+  const sent = service();
+  await render(<Open />);
+  await expect.element(page.getByText('Made-up work words')).toBeVisible();
+  await replyOn('Made-up work words');
+  await userEvent.keyboard('@Bo');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{Enter}does it show the photo');
+  await expect.element(page.getByRole('status').filter({ hasText: 'To Ann and Bo' })).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  await expect.element(box()).not.toBeInTheDocument();
+
+  await replyOn('Made-up question words');
+  await userEvent.keyboard('@Bo');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{Enter}why the long way');
+  await expect.element(page.getByRole('status').filter({ hasText: 'To Made-up Lead and Bo' })).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  await expect.poll(() => sent.length).toBe(2);
+  expect(sent[0].body).toEqual({
+    text: '@Bo does it show the photo',
+    agent: 'b',
+    picks: [{ at: 0, len: 3, agent: 'c' }],
+    reply_to: 'b1',
+  });
+  expect(sent[1].body).toEqual({
+    task: 2,
+    draft: { values: [], notes: '', discuss: true, message: '@Bo why the long way', to: ['c'] },
+  });
 });
 
 test('the chat’s question block has no Discuss switch; the Tasks view’s does', async () => {

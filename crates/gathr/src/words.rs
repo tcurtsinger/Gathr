@@ -23,7 +23,8 @@ pub const PLAN_CHECK: i64 = 1;
 pub const SENT_BACK: i64 = 1;
 pub const RESIZED: i64 = 1;
 pub const LIKED: i64 = 1;
-pub const REPLY: i64 = 1;
+pub const REPLY: i64 = 2;
+pub const PICKED: i64 = 1;
 /// A team's role lines in the briefing (`crate::roles`, 0066): no turn opens with them.
 pub const ROLE: i64 = 1;
 
@@ -60,8 +61,10 @@ pub enum Opened {
     Resized,
     /// The person liked the agent's message (0057).
     Liked,
-    /// The person replied in a thread (0076): Gathr's line names what the reply answers.
+    /// The person replied in a thread (0076): Gathr's line names what the reply answers, and who else got it.
     Reply,
+    /// The person picked several agents (0028): Gathr's line names the others.
+    Picked,
     Person,
     Teammate,
     /// Compact, from the agent panel: the engine's own command, not words to a model.
@@ -71,7 +74,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 21] = [
+    pub const ALL: [Opened; 22] = [
         Opened::Brief,
         Opened::ReviewBrief,
         Opened::RequestBrief,
@@ -89,6 +92,7 @@ impl Opened {
         Opened::Resized,
         Opened::Liked,
         Opened::Reply,
+        Opened::Picked,
         Opened::Person,
         Opened::Teammate,
         Opened::Compaction,
@@ -114,6 +118,7 @@ impl Opened {
             Opened::Resized => "resized",
             Opened::Liked => "liked",
             Opened::Reply => "reply",
+            Opened::Picked => "picked",
             Opened::Person => "person",
             Opened::Teammate => "teammate",
             Opened::Compaction => "compaction",
@@ -141,6 +146,7 @@ impl Opened {
             Opened::Resized => Some(RESIZED),
             Opened::Liked => Some(LIKED),
             Opened::Reply => Some(REPLY),
+            Opened::Picked => Some(PICKED),
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }

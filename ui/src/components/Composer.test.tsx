@@ -160,3 +160,42 @@ test('only a name picked from the list is blue under the text; one typed out is 
   const blue = [...(CSS.highlights.get('composer-mention') ?? [])] as Range[];
   expect(blue.map((r) => r.toString())).toEqual(['@Abe']);
 });
+
+/** Who gets it, three of them, as the 360 column's boxes show it. */
+const three = [
+  { id: 't', name: 'Tamsin' },
+  { id: 's', name: 'Sol' },
+  { id: 'r', name: 'Rowan' },
+];
+
+// In the 360 column the main box is 280 wide and a thread's reply box 267 (measured in the window, PR 5's proof).
+test.each([
+  ['the main box', 280, false],
+  ['a reply box', 267, true],
+])(
+  'in the 360 column the sign by Send stays inside %s with three names, cut with “…” where there is no room',
+  async (_, width, thread) => {
+    await render(
+      <div style={{ width }}>
+        <Composer
+          hint="Reply"
+          draft="Made-up words about the dates"
+          onDraft={() => {}}
+          onSend={() => {}}
+          onClose={thread ? () => {} : undefined}
+          to={three}
+        />
+      </div>,
+    );
+    const sign = page.getByRole('status').element() as HTMLElement;
+    const bar = (sign.closest('[data-slot="composer-bar"]') as HTMLElement).getBoundingClientRect();
+    const inside = (r: DOMRect) => r.left >= bar.left - 0.5 && r.right <= bar.right + 0.5;
+    const faces = [...sign.querySelectorAll('.face')].map((f) => f.getBoundingClientRect());
+    expect(faces).toHaveLength(3);
+    expect(faces.every(inside), 'every face inside the box').toBe(true);
+    expect(inside(sign.getBoundingClientRect()), 'the sign inside the box').toBe(true);
+    const send = page.getByRole('button', { name: 'Send' }).element().getBoundingClientRect();
+    expect(inside(send), 'Send inside the box').toBe(true);
+    expect(sign.textContent).toBe('To Tamsin, Sol and Rowan');
+  },
+);

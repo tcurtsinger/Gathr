@@ -196,9 +196,14 @@ plain. Picked names show in the attention blue at the text's own weight: the box
 text is drawn again in one piece under the see-through textarea and the names
 coloured by a highlight (a span would move the letters after it off the
 textarea's by up to 1/16px). Once something is typed, a quiet sign by Send says
-who gets it, the first picked name else the hint's agent, in 12.5px muted with the
-name in the foreground at 550 and a bare 20px face: "To Ann", or "Bo joins" for an
-agent picked from outside the chat. There is no Everyone option. Sent, the message
+who gets it: every picked agent in the order the names stand, else the hint's
+agent (0028), in 12.5px muted with each name in the foreground at 550 and bare
+20px faces, overlapping by 5px, each after the first ringed 1.5px in the box's own
+colour (the mock-up's `#who` A): "To Ann", "To Ann and Bo", "To Ann, Bo and Cy";
+agents picked from outside a chat with no project are said apart, "Bo joins", "Bo
+and Cy join", "To Ann, Bo joins". The names end in "…" where the row runs out (the
+360 column), the faces stay. Each agent named gets the message. There is no
+Everyone option. Sent, the message
 keeps its picked names, and its bubble draws each in the same attention blue at the
 text's own weight (one rule, `picked.css`, for the box and the bubble); a typed
 @Ann stays plain, as does every name in a message from before picks were kept.
@@ -231,7 +236,8 @@ the lead); the person's other messages, their answers, Gathr's own question and 
 
 The thread box (0076, `#replybox` A) is the same Composer, placed by `chat/ThreadBox.tsx` as an item after the
 thread's last reply shown, inside the thread's rule where its replies sit: one row, 18px corners, 14.5px words, the
-"To Ann" sign, a 24px cross named "Close" and a 28px Send, the field still growing with what is typed; where the
+"To Ann" sign (the message's author first, then each agent picked: "To Ann and Bo"), a 24px cross named "Close" and
+a 28px Send, the field still growing with what is typed; where the
 field would get less than 200px (the 360 column), the sign, the cross and Send go under it, at its right. Its field is
 named "Reply" and so is its hint. Focus goes into it when Reply opens it; Escape (after an open @ list) or the cross
 closes it and focus goes back to that Reply. It has no Stop. One at a time: Reply elsewhere moves it, and each

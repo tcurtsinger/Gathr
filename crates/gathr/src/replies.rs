@@ -68,8 +68,8 @@ pub fn check(conn: &Connection, chat: &str, target: &Target) -> Result<Target, E
     }
 }
 
-/// The person's saved `message` as its agent reads it: Gathr's line naming what it answers, then
-/// their words; their words alone when it answers nothing.
+/// The person's saved `message` as its agent reads it: Gathr's line naming what it answers and who
+/// else got it, then their words; their words alone when it answers nothing and went to one agent.
 pub fn read_as(conn: &Connection, message: &str, body: &str) -> Result<String, Error> {
     Ok(match line(conn, message)? {
         Some(line) => format!("{line}\n\n{body}"),
@@ -77,20 +77,108 @@ pub fn read_as(conn: &Connection, message: &str, body: &str) -> Result<String, E
     })
 }
 
-/// Gathr's line before the reply `message`, for the agent of the turn it is in: none for a message
-/// that answers nothing.
+/// The person's `message` as `reader`, another agent they picked, reads it in Gathr's copy (0028).
+pub fn copy_for(conn: &Connection, message: &str, reader: &str) -> Result<String, Error> {
+    let Some(sent) = sent(conn, message)? else {
+        return Err(Error::Refused(format!(
+            "No message {message} of the person's."
+        )));
+    };
+    let words = conn.query_row("SELECT body FROM messages WHERE id = ?1", [message], |r| {
+        r.get::<_, String>(0)
+    })?;
+    Ok(
+        match said_to(conn, &sent.target, Some(reader), &sent.everyone)? {
+            Some(line) => format!("{line}\n\n{words}"),
+            None => words,
+        },
+    )
+}
+
+/// Gathr's line before the person's `message`, for the agent of the turn it is in: none for a
+/// message that answers nothing and went to that agent alone, or one that isn't the person's.
 pub fn line(conn: &Connection, message: &str) -> Result<Option<String>, Error> {
-    let found: Option<(Option<String>, Option<i64>, Option<String>)> = conn
+    match sent(conn, message)? {
+        Some(sent) => said_to(conn, &sent.target, sent.agent.as_deref(), &sent.everyone),
+        None => Ok(None),
+    }
+}
+
+/// What the person's message answers, the agent it was sent to, and everyone it went to: that
+/// agent, then each picked agent in the order the names stand.
+struct Sent {
+    target: Target,
+    agent: Option<String>,
+    everyone: Vec<String>,
+}
+
+fn sent(conn: &Connection, message: &str) -> Result<Option<Sent>, Error> {
+    let found = conn
         .query_row(
-            "SELECT m.reply_to, m.reply_task, t.agent_id FROM messages m
-             LEFT JOIN turns t ON t.id = m.turn_id WHERE m.id = ?1",
+            "SELECT m.reply_to, m.reply_task, t.agent_id, m.picks FROM messages m
+             LEFT JOIN turns t ON t.id = m.turn_id WHERE m.id = ?1 AND m.role = 'user'",
             [message],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| {
+                let target = Target {
+                    reply_to: r.get(0)?,
+                    reply_task: r.get(1)?,
+                };
+                let agent: Option<String> = r.get(2)?;
+                let picks: Option<String> = r.get(3)?;
+                let mut everyone: Vec<String> = agent.iter().cloned().collect();
+                for picked in crate::picks::agents(picks.as_deref()) {
+                    if !everyone.contains(&picked) {
+                        everyone.push(picked);
+                    }
+                }
+                Ok(Sent {
+                    target,
+                    agent,
+                    everyone,
+                })
+            },
         )
         .optional()?;
-    let Some((to, task, reader)) = found else {
-        return Ok(None);
-    };
+    Ok(found)
+}
+
+/// Gathr's line for `reader` before the person's words: what the reply `target` answers, then who
+/// else of `everyone` got it; none when it answers nothing and went to `reader` alone.
+pub fn said_to(
+    conn: &Connection,
+    target: &Target,
+    reader: Option<&str>,
+    everyone: &[String],
+) -> Result<Option<String>, Error> {
+    let mut names = vec!["you".to_string()];
+    for agent in everyone.iter().filter(|a| Some(a.as_str()) != reader) {
+        names.push(crate::agents::name(conn, agent)?.unwrap_or_else(|| "an agent".into()));
+    }
+    let to = (names.len() > 1).then(|| listed(&names));
+    Ok(match (answered(conn, target, reader)?, to) {
+        (Some(line), Some(to)) => Some(format!("{line} They sent it to {to}.")),
+        (Some(line), None) => Some(line),
+        (None, Some(to)) => Some(format!("The person sent this to {to}.")),
+        (None, None) => None,
+    })
+}
+
+/// "you and Bo", "you, Ann and Bo".
+fn listed(names: &[String]) -> String {
+    match names.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
+        None => String::new(),
+    }
+}
+/// What the reply `target` answers, in words for `reader`: none for a message that answers nothing.
+fn answered(
+    conn: &Connection,
+    target: &Target,
+    reader: Option<&str>,
+) -> Result<Option<String>, Error> {
+    let (to, task) = (target.reply_to.clone(), target.reply_task);
+    let reader = reader.map(String::from);
     let whose = |agent: Option<String>| -> Result<String, Error> {
         Ok(match agent {
             Some(a) if Some(&a) == reader.as_ref() => "your".to_string(),

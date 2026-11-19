@@ -14,6 +14,7 @@ mod chats;
 mod check_runs;
 mod cleanup;
 mod coord;
+mod copies;
 mod deletes;
 mod github;
 mod landing;

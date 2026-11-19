@@ -4,6 +4,7 @@ import { Composer, type Person } from '../components/Composer';
 import type { Picked } from '../components/mention';
 import { Refused } from '../tasks/Question';
 import type { Answer } from './messages';
+import type { Recipient } from './recipient';
 import { useActions } from './Thread';
 
 /** The box open for a reply, as the chat keeps it: its thread's own draft, and who gets it. */
@@ -15,7 +16,7 @@ export interface Box {
   onSend: () => void;
   onClose: () => void;
   people: readonly Person[];
-  to?: { id: string; name: string; joins?: boolean };
+  to?: readonly Recipient[];
   hint: string;
   /** A Discuss the service refused: why, and its reference. */
   refused?: { why: string; ref: string | null };

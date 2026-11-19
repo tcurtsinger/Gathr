@@ -27,6 +27,8 @@ export interface Draft {
   /** Discuss is on: the message goes to the asker alone; the picks and notes wait, kept, until it's off. */
   discuss?: boolean;
   message?: string;
+  /** With Discuss, the other agents picked in its words: each gets them too (0028). */
+  to?: string[];
 }
 
 /** A question Send didn't settle: it stays open, with why and its reference. */
@@ -73,7 +75,10 @@ export function ready(task: PersonTask, draft: Draft | undefined): boolean {
 /** The staged draft as the service takes it; notes go with a pick as its text. */
 export function toAnswer(task: PersonTask, draft: Draft): PersonAnswer {
   const notes = draft.notes.trim() ? { text: draft.notes.trim() } : {};
-  if (draft.discuss) return { task: task.number, discuss: true, text: draft.message?.trim() ?? '' };
+  if (draft.discuss) {
+    const to = draft.to?.length ? { to: draft.to } : {};
+    return { task: task.number, discuss: true, text: draft.message?.trim() ?? '', ...to };
+  }
   if (task.form === 'text') return { task: task.number, text: draft.values[0].trim() };
   if (draft.values.length === 0) return { task: task.number, text: draft.notes.trim() };
   if (task.form === 'yesno') return { task: task.number, yes: draft.values[0] === 'Yes', ...notes };

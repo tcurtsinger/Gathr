@@ -627,7 +627,8 @@ impl Task {
         }
     }
 
-    /// The turn's ask, to send it again: a compaction has none, only its command.
+    /// The turn's ask, to send it again: a compaction has none, only its command. The person's message
+    /// goes again as its agent read it, after Gathr's line (0076, 0028).
     pub(super) async fn text_of(&self, turn: &str) -> String {
         if self.compactions.contains(turn) {
             return super::compact::COMMAND.to_string();
@@ -636,11 +637,12 @@ impl Task {
         self.chats
             .writer
             .call(move |conn| {
-                conn.query_row(
-                    "SELECT body FROM messages WHERE turn_id = ?1 AND role IN ('user', 'gathr') ORDER BY ts LIMIT 1",
+                let (id, body): (String, String) = conn.query_row(
+                    "SELECT id, body FROM messages WHERE turn_id = ?1 AND role IN ('user', 'gathr') ORDER BY ts LIMIT 1",
                     [turn],
-                    |r| r.get::<_, String>(0),
-                )
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )?;
+                gathr::replies::read_as(conn, &id, &body)
             })
             .await
             .and_then(Result::ok)

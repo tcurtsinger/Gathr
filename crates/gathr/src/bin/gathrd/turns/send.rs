@@ -1,6 +1,7 @@
-//! The person's message reaching its agent: into the agent's running turn in the chat, else a turn
-//! of its own. A reply in a thread (0076) keeps what it answers, and its agent reads Gathr's line
-//! naming that before the person's words.
+//! The person's message reaching the agent it is sent to: into the agent's running turn in the chat,
+//! else a turn of its own. A reply in a thread (0076) keeps what it answers; sent to several agents
+//! (0028), each other one gets Gathr's copy (`liked.rs`). Each agent reads Gathr's line naming what a
+//! reply answers and who else got it before the person's words.
 
 use gathr::event::Event;
 use gathr::ids::{now_us, ulid};
@@ -17,14 +18,16 @@ impl Task {
         &mut self,
         chat: String,
         (text, picks, target): (String, Option<String>, Target),
-        agent: Option<String>,
+        (agent, agents): (Option<String>, usize),
         trace: String,
     ) -> Result<Value, Failed> {
         // A reply kept unsaved goes in first, before the message that follows it.
         self.save_unsaved().await;
-        let opened = match target.is_reply() {
-            true => Opened::Reply,
-            false => Opened::Person,
+        // Gathr's line before the words says what a reply answers, and who else got it (0028).
+        let opened = match (target.is_reply(), agents > 1) {
+            (true, _) => Opened::Reply,
+            (false, true) => Opened::Picked,
+            (false, false) => Opened::Person,
         };
         if let Some(ids) = self.steerable(&chat, agent.as_deref()) {
             // G13: into the turn under way. Claude Code reads it after the step it's on and
@@ -36,11 +39,13 @@ impl Task {
                 return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
             }
             let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, read, opened));
+            self.unread.push((id.clone(), read, opened));
             self.publish(&ids.chat, json!({ "type": "message", "message": message }));
             let steer = Event::point("gathr.turn.steer").trace(&ids.trace);
             self.record(steer.chat(&ids.chat).ok());
-            return Ok(json!({ "turn": ids.turn, "status": "running", "steered": true }));
+            return Ok(
+                json!({ "turn": ids.turn, "status": "running", "steered": true, "message": id }),
+            );
         }
         let ids = Ids {
             chat,
@@ -85,7 +90,8 @@ impl Task {
                 .attr("gathr.turn.id", ids.turn.clone())
                 .attr("gathr.message.chars", text.chars().count())
                 .attr("gathr.reply.to", json!(target.reply_to))
-                .attr("gathr.reply.task", json!(target.reply_task)),
+                .attr("gathr.reply.task", json!(target.reply_task))
+                .attr("gathr.send.agents", agents),
         );
         let queued = Queued {
             ids,
@@ -94,7 +100,8 @@ impl Task {
         };
         let ids = &queued.ids;
         let reference = gathr::ids::reference(&ids.trace).to_string();
-        let answer = |status: &str| json!({ "turn": ids.turn, "status": status, "ref": reference });
+        let id = message["id"].clone();
+        let answer = |status: &str| json!({ "turn": ids.turn, "status": status, "ref": reference, "message": id });
         match self.enqueue(&queued).await {
             Ok(status) => Ok(answer(status)),
             Err(why) => Err(Failed {

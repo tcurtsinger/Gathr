@@ -1,7 +1,7 @@
 import type { Agent, Member } from '../api';
 import type { Person } from '../components/Composer';
 import type { FaceMark } from '../components/Face';
-import { first, type Picked } from '../components/mention';
+import type { Picked } from '../components/mention';
 import { roleName } from './team';
 
 const MOST = 5;
@@ -54,17 +54,27 @@ export function unnamed(people: Person[], members: Member[], last?: string | nul
   return [lead, last].map((id) => people.find((p) => p.id === id)).find(Boolean) ?? people[0];
 }
 
+/** Who gets a message, as the sign by Send names them: those not in the chat yet join it. */
+export interface Recipient {
+  id: string;
+  name: string;
+  joins?: boolean;
+}
+
 /**
- * Who a message goes to: the first agent picked from the "@" list, else the hint's agent. The window always
- * sends its id, so a typed name is only text; one picked from outside a chat with no project joins it.
+ * Who a message goes to (0028): every agent picked from the "@" list, in the order the names stand, each once; with
+ * none picked, the hint's agent. A reply (0076) goes to the agent it answers first, then each one picked. The window
+ * sends the first one's id and the picks, so a typed name is only text; one picked from outside a chat with no project
+ * joins it.
  */
 export function addressed(
   picks: readonly Picked[],
   people: Person[],
   fallback: Person | undefined,
-  fresh: boolean,
-) {
-  const pick = first(picks.filter((p) => people.some((q) => q.id === p.id)));
-  const to = people.find((p) => p.id === pick?.id) ?? fallback;
-  return { to, joins: !fresh && !!to?.out };
+  { fresh, reply = false }: { fresh: boolean; reply?: boolean },
+): Recipient[] {
+  const picked = [...picks].sort((a, b) => a.at - b.at).flatMap((p) => people.filter((q) => q.id === p.id));
+  const all = reply || !picked.length ? [fallback, ...picked] : picked;
+  const once = all.filter((p, i): p is Person => !!p && all.findIndex((q) => q?.id === p.id) === i);
+  return once.map((p) => ({ id: p.id, name: p.name, joins: !fresh && !!p.out }));
 }

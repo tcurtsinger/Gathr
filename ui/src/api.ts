@@ -369,6 +369,8 @@ export interface PersonAnswer {
   text?: string;
   /** The text goes to the asker as a message, and the question waits off the list (0065). */
   discuss?: boolean;
+  /** With Discuss, the other agents picked in the text: each gets it too (0028). */
+  to?: string[];
 }
 
 /** What an agent waits on (0010): another agent, CI, a PR or a check. */

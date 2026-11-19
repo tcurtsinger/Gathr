@@ -152,6 +152,7 @@ async fn send(
     if let Some(agent) = &body.agent {
         crate::agents::find(&s, &t, agent, "Send failed").await?;
     }
+    let chosen: Vec<String> = body.picks.iter().map(|p| p.agent.clone()).collect();
     let picks = picked(&s, &t, &body.text, body.picks).await?;
     let id = chat.clone();
     let _ = db(&s, &t, "Send failed", move |conn| {
@@ -159,13 +160,18 @@ async fn send(
     })
     .await?;
     let target = replying(&s, &t, &chat, body.target).await?;
-    let agent = addressee(&s, &t, &chat, body.agent).await?;
+    let (agent, others) = addressee(&s, &t, &chat, body.agent, chosen).await?;
+    let opened = match target.is_reply() {
+        true => gathr::words::Opened::Reply,
+        false => gathr::words::Opened::Picked,
+    };
     let (reply, answer) = oneshot::channel();
     let task = s.chats.task(&chat, agent.as_deref());
     let command = Cmd::Send {
-        chat,
+        chat: chat.clone(),
         text: body.text,
-        agent,
+        agent: agent.clone(),
+        agents: 1 + others.len(),
         picks,
         target,
         trace: t.0.clone(),
@@ -173,7 +179,24 @@ async fn send(
     };
     let _ = task.send(command);
     match answer.await {
-        Ok(Ok(sent)) => Ok(Json(sent)),
+        Ok(Ok(mut sent)) => {
+            let message = sent["message"].as_str().unwrap_or_default().to_string();
+            let mut first =
+                json!({ "agent": agent, "turn": sent["turn"], "status": sent["status"] });
+            if sent["steered"] == true {
+                first["steered"] = json!(true);
+            }
+            let mut turns = vec![first];
+            if !others.is_empty() {
+                let lines = crate::copies::lines(&s, &message, others).await;
+                let lines = lines.map_err(|why| {
+                    fail(StatusCode::INTERNAL_SERVER_ERROR, "Send failed", &why, &t.0)
+                })?;
+                turns.extend(crate::copies::give(&s, &t, &chat, (&message, opened), lines).await);
+            }
+            sent["turns"] = json!(turns);
+            Ok(Json(sent))
+        }
         Ok(Err(failed)) => Err(fail(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Send failed",
@@ -225,8 +248,8 @@ async fn replying(
     }
 }
 
-/// The names picked in `text`, as kept: each fits the text and is a known agent's. Picks route nothing:
-/// the message goes to `agent` alone.
+/// The names picked in `text`, as kept: each fits the text and is a known agent's. Each picked agent
+/// gets the message (0028).
 async fn picked(
     s: &State,
     t: &Trace,
@@ -469,18 +492,19 @@ async fn forward(mut socket: WebSocket, mut events: tokio::sync::broadcast::Rece
     }
 }
 
-/// Who the message goes to among the chat's agents (0028), adding the one picked in a chat with no
-/// project (F8b).
+/// Who the message goes to among the chat's agents (0028), and every other agent picked in it,
+/// adding those picked from outside a chat with no project (F8b).
 async fn addressee(
     s: &State,
     t: &Trace,
     chat: &str,
     sent_to: Option<String>,
-) -> Result<Option<String>, Fail> {
+    picked: Vec<String>,
+) -> Result<(Option<String>, Vec<String>), Fail> {
     let id = chat.to_string();
     let routed = s
         .writer
-        .call(move |conn| gathr::team::route(conn, &id, sent_to.as_deref()))
+        .call(move |conn| gathr::team::route(conn, &id, sent_to.as_deref(), &picked))
         .await;
     let routed = match routed {
         Some(Ok(routed)) => routed,
@@ -506,7 +530,7 @@ async fn addressee(
     if let Some(members) = routed.joined {
         crate::team::changed(s, t, chat, members);
     }
-    Ok(routed.agent)
+    Ok((routed.agent, routed.others))
 }
 
 pub async fn known(s: &State, t: &Trace, chat: &str) -> Result<(), Fail> {
