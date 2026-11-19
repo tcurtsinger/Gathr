@@ -87,18 +87,25 @@ pub(crate) fn carry_line(carry: &str) -> String {
 
 /// What a task's new conversation opens with, before its ask (0055, N6): the agent's last tasks in
 /// the chat but this one, and the brief when the ask isn't it (the task lost its conversation).
-/// The opening, and how many tasks it lists.
+/// `heard`: the chat's recent lines follow it (0081). The opening, and how many tasks it lists.
 pub fn opening(
     conn: &Connection,
     task: i64,
     agent: &str,
     ask: &str,
+    heard: bool,
 ) -> Result<(String, usize), Error> {
     let t = super::records::read(conn, task)?;
-    let mut lines = vec![format!(
-        "This is a new conversation for task #{task}. Your earlier turns in this chat aren't in it: \
-         read_chat and list_tasks have them."
-    )];
+    let mut lines = vec![match heard {
+        true => format!(
+            "This is a new conversation for task #{task}. Your earlier turns in this chat aren't in it, only \
+             its recent lines below: read_chat and list_tasks have the rest."
+        ),
+        false => format!(
+            "This is a new conversation for task #{task}. Your earlier turns in this chat aren't in it: \
+             read_chat and list_tasks have them."
+        ),
+    }];
     let last: Vec<i64> = {
         let mut stmt = conn.prepare_cached(
             "SELECT number FROM tasks WHERE chat_id = ?1 AND owner = ?2 AND number != ?3

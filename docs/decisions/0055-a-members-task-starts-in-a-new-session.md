@@ -1,6 +1,6 @@
 # 0055: A member's task starts in a new session
 
-Status: accepted (owner, 2026-11-14). Date: 2026-11-14.
+Status: accepted (owner, 2026-11-14); amended by [0081](0081-agents-hear-the-room-and-name-each-other.md): the new conversation also hears the chat's last 30 lines, and its opening says so. Date: 2026-11-14.
 
 Built: yes. Proof: `crates/gathr/tests/sessions.rs`, `crates/gathr/tests/tasks/sessions.rs`, `crates/gathr/tests/archive.rs`.
 

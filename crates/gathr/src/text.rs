@@ -1,4 +1,5 @@
-//! One line out of longer text, for a place that shows one: a chat's title, what a step ran.
+//! One line out of longer text, for a place that shows one: a chat's title, what a step ran. And a
+//! long message kept to its start and end, for an agent to read.
 
 use crate::redact::MARK;
 
@@ -25,6 +26,28 @@ pub fn cut(line: &str, limit: usize, more: bool) -> String {
         end = mark;
     }
     format!("{}…", line[..end].trim_end())
+}
+
+/// A message longer than `KEEP_START` and `KEEP_END` together is cut in the middle, with its id to
+/// read the whole of it (0020: a tool returns what the question needs, with an id for the rest).
+/// Its end stays: agents end a message with what matters to a scan, such as "Friction: …" (G176).
+const KEEP_START: usize = 1_500;
+const KEEP_END: usize = 400;
+
+/// A message as `read_chat` lists it, and a turn's opening carries it (0081): whole, or its start and
+/// end with what was cut between.
+pub fn kept(body: &str, id: &str) -> String {
+    let chars: Vec<char> = body.chars().collect();
+    if chars.len() <= KEEP_START + KEEP_END {
+        return body.to_string();
+    }
+    let start: String = chars[..KEEP_START].iter().collect();
+    let end: String = chars[chars.len() - KEEP_END..].iter().collect();
+    let cut = chars.len() - KEEP_START - KEEP_END;
+    format!(
+        "{start} [… {cut} of {} characters cut: read message {id} for all of it …] {end}",
+        chars.len()
+    )
 }
 
 #[cfg(test)]

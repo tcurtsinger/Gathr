@@ -617,6 +617,15 @@ impl Task {
             (true, None, true) => self.end_carried(&turn.ids, why.as_deref()).await,
             _ => self.set_turn(&turn.ids, status, why.as_deref()).await,
         }
+        if status == "done" {
+            let ids = turn.ids;
+            let ended = crate::mentions::Ended {
+                chat: ids.chat,
+                turn: ids.turn,
+                trace: ids.trace,
+            };
+            crate::mentions::wake(self.chats.clone(), ended, Vec::new());
+        }
         self.try_next().await;
     }
 

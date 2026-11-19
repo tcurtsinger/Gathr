@@ -12,11 +12,9 @@ use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde_json::{Value, json};
-use tokio::sync::oneshot;
 
 use super::Caller;
 use super::server::{Tools, caller_of};
-use crate::chats::Cmd;
 
 /// The most a message holds: a short ask or a heads-up, not a task.
 const MOST: usize = 500;
@@ -45,8 +43,9 @@ struct Sent {
 #[tool_router(router = message_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Send one member of this team chat a short message (a quick ask or a heads-up): shown in the team \
-                       chat, it wakes them at most once. For work to be done and heard back on, give a task instead."
+        description = "Send one member of this team chat a short message now, while you work: shown in the team chat, \
+                       it wakes them at most once. @Name in your words reaches them when your turn ends. For work to \
+                       be done and heard back on, give a task instead."
     )]
     async fn message(
         &self,
@@ -184,18 +183,9 @@ impl Tools {
 
     /// Hands the message to the member's own worker, which says where it went.
     async fn deliver(&self, caller: &Caller, sent: &Sent, text: &str) -> &'static str {
-        let (reply, answer) = oneshot::channel();
-        let id = sent.shown["id"].as_str().unwrap_or_default().to_string();
-        let ask = gathr::handoffs::told(&sent.from_name, &id, text);
-        let task = self.chats.task(&caller.chat, Some(&sent.to));
-        let command = Cmd::Message {
-            chat: caller.chat.clone(),
-            ask,
-            answers: sent.answers.clone(),
-            copy_of: id,
-            reply,
-        };
-        let _ = task.send(command);
-        answer.await.unwrap_or("failed")
+        let id = sent.shown["id"].as_str().unwrap_or_default();
+        let ask = gathr::handoffs::told(&sent.from_name, id, text);
+        let to = (caller.chat.as_str(), sent.to.as_str());
+        crate::mentions::deliver(&self.chats, to, ask, &sent.answers, id).await
     }
 }

@@ -118,14 +118,18 @@ pub fn text(facts: &Facts) -> String {
         lines.extend(gathr::roles::lines(role).into_iter().map(String::from));
     }
     if !facts.others.is_empty() {
-        let lead = match facts.team {
-            true => "The chat's other agents",
-            false => "Other agents who have worked here",
+        // A team chat's turn opens with what the chat said since the agent's last turn (0081).
+        let (lead, heard) = match facts.team {
+            true => (
+                "The chat's other agents",
+                "Each turn opens with what the chat said since your last one; read_chat has the rest.",
+            ),
+            false => (
+                "Other agents who have worked here",
+                "Their replies may be missing from your context.",
+            ),
         };
-        lines.push(format!(
-            "{lead}: {}. Their replies may be missing from your context.",
-            facts.others.join(", ")
-        ));
+        lines.push(format!("{lead}: {}. {heard}", facts.others.join(", ")));
     }
     if let Some((folder, project)) = &facts.worktree {
         lines.push(format!(
@@ -157,7 +161,7 @@ pub fn text(facts: &Facts) -> String {
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, edit_task, finish_task, list_tasks, \
-         cancel_task and restart_task for tasks; message for one member of a team chat; react to give \
+         cancel_task and restart_task for tasks; message to reach one member of a team chat now; react to give \
          the person's message or another agent's your thumbs-up, by its id; post to choose where your words this turn \
          show in a team chat; size, for the Supervisor, to record the person's ask as \
          repair or new; plan, for the Supervisor, to write the plan for a new ask; wait and \
@@ -167,8 +171,8 @@ pub fn text(facts: &Facts) -> String {
             .to_string(),
         "End a task turn with finish_task. Assign work with give_task and ask the person with ask_person. Writing it in chat does not create a task."
             .to_string(),
-        "For a quick ask or a heads-up to one member, use message: it wakes them once. Work to be done and heard back on \
-         is a task."
+        "To reach a member of a team chat, write @Name in your words: they get them when your turn ends. message \
+         reaches one now, while you work. Work to be done and heard back on is a task."
             .to_string(),
         "When something in Gathr gets in your way (a tool that refuses wrongly, a lost message, a wrong status), say so \
          with report_friction, once for each thing."
