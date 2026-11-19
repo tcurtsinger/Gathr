@@ -190,7 +190,7 @@
   color: var(--destructive);
 }
 
-/* A turn's steps on its name line: shown while the message is pointed at or has focus, and always for a failed
+/* A turn's steps on its name line: shown while the message is pointed at or has keyboard focus, and always for a failed
    step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */
 .steps-button {
   display: flex;
@@ -207,7 +207,7 @@
   cursor: pointer;
 }
 .said:hover .steps-button,
-.said:focus-within .steps-button,
+.said:has(:focus-visible) .steps-button,
 .said[data-keep] .steps-button,
 .steps-button[aria-expanded="true"] {
   opacity: 1;

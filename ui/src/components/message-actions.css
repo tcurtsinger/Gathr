@@ -1,12 +1,13 @@
 /* The buttons in the row under a message's bubble (DESIGN.md: MessageActions, 0076): icons only, shown while the
-   message is pointed at or holds keyboard focus, by opacity, so Tab reaches them and their spot is always kept. */
+   message is pointed at or holds keyboard focus, by opacity, so Tab reaches them and their spot is always kept.
+   Keyboard focus only: a press with the pointer leaves focus on what was pressed, and the buttons stayed. */
 .message-actions {
   display: flex;
   flex: none;
   gap: 2px;
   opacity: 0;
 }
-.said:is(:hover, :focus-within) .message-actions {
+.said:is(:hover, :has(:focus-visible)) .message-actions {
   opacity: 1;
 }
 /* 24px at every width: the row has no touch size of its own. */

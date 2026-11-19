@@ -3,7 +3,7 @@
 // kept for them, ending at the bubble's bottom right edge. Measured in a real browser at 900 wide and in the 360
 // column. Made-up names and words only.
 import { afterEach, expect, test } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Message, Turn } from '../api';
 import { Composer } from '../components/Composer';
@@ -59,6 +59,10 @@ function state(): ChatState {
     messages: [
       said('p1', 't1', 1, 'Plan the made-up walk', { role: 'user' }),
       said('l1', 't1', 2, 'Made-up plan words'),
+      said('yes-step', 't2', 3, '', {
+        kind: 'tool',
+        body: { name: 'Bash', input: { command: 'made-up' }, status: 'done' } as unknown as string,
+      }),
       said('yes', 't2', 3, 'Yes.'),
       said('ann', 't3', 4, LONG),
       said('step', 't4', 5, '', {
@@ -124,7 +128,19 @@ for (const width of [900, 360]) {
     await userEvent.unhover(yes);
     await userEvent.hover(document.querySelector('.composer') as HTMLElement);
     expect(shown(yes)).toBe(0);
-    (buttons(yes).querySelector('[aria-label="Reply"]') as HTMLElement).focus();
+    // A press with the pointer leaves focus on what was pressed: the buttons still go when the pointer does.
+    const fold = yes.querySelector('.fold-line') as HTMLElement;
+    await userEvent.click(fold);
+    await userEvent.hover(document.querySelector('.composer') as HTMLElement);
+    await expect.poll(() => shown(yes), { message: 'after a press on the fold line' }).toBe(0);
+    expect(getComputedStyle(yes.querySelector('.steps-button') as Element).opacity, 'the steps button').toBe(
+      '0',
+    );
+    // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+    fold.focus();
+    await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
+    // Tab moves on along the row, to the thumbs-up count.
+    await expect.poll(() => document.activeElement?.className).toBe('react');
     expect(shown(yes)).toBe(1);
   });
 

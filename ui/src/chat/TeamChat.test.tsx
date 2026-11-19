@@ -2,7 +2,7 @@
 // under the message it answers, an @Name for whom it is to, thumbs-ups, and a turn's steps on its name line.
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, ToolBody, Turn } from '../api';
 import { useFolds } from './folds';
@@ -254,7 +254,11 @@ test('a turn’s steps show on its name line on hover or focus, and stay for a f
   await expect.poll(() => shown('a')).toBe(true);
   await userEvent.unhover(screen.getByText('Made-up fine words').element());
   await expect.poll(() => shown('a')).toBe(false);
-  steps('a').focus();
+  // By keyboard, as a person reaches it: focus set by script after the pointer was used is no keyboard focus.
+  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
+  const tab = server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}';
+  for (let i = 0; i < 10 && document.activeElement !== steps('a'); i++) await userEvent.keyboard(tab);
+  expect(document.activeElement).toBe(steps('a'));
   await expect.poll(() => shown('a')).toBe(true);
   // It opens the steps under the name line.
   await userEvent.click(steps('a'));
