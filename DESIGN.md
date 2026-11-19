@@ -344,13 +344,26 @@ row, then the buttons. A thread's rule starts under the row. A press folds or
 opens the thread; the line stays where it was, and a thread opened at the chat's foot scrolls up to show above the
 box. A thread starts open; when the chat is opened, one whose main message is handled starts folded (a task done or
 cancelled, a decided version, an answered question, an ask with nothing open, every turn of it over and no approval
-waiting). Nothing folds or opens by itself while the chat is open, not for a new reply; the person's own fold holds
-until the chat closes. Each reply is an item of the chat's own, 13px in from the main message's left edge: a 1px
+waiting) once the person has seen every reply in it (0077). Nothing folds or opens by itself while the chat is open,
+not for a new reply; the person's own fold or open is kept by the service and wins, after a reload and in their other
+window. Each reply is an item of the chat's own, 13px in from the main message's left edge: a 1px
 border line at the edge joins the thread's items, 14px apart, faces at 28px, names at 14px, words at 14.5px, and its
 words still end at the box's right edge. Threads never nest. An open thread of more than three replies shows its
 newest three under "Show 4 earlier replies" (13px muted); a reply that holds an approval waiting, a failed step or a
 running turn always shows. A press shows the rest, and focus goes to the first of them. A search hit, or the
 status line's "needs you", opens the thread, and its earlier replies, to show what it leads to.
+
+Where the person left off (0077), all in the attention blue, as it is theirs to read. Seen is half of a message in
+view, between the chat's top and the box, while the window is in front. When they come back (the chat opened, or the
+window back in front), a New line sits above the first main message said since they were last there: a 1px rule at
+65% of the blue across the column, and "New" at its right, 12px at 600. In an open thread, each reply said since
+says "New" on its name line, after the time, at 550. Both stay while the person reads, and go when they next come
+back. A folded thread's line says how many replies they haven't seen instead of its count, "1 new reply" or "2 new
+replies", at 550; plain again once none is; no faces and no time, as always. Above the status line, the line at the
+foot names the newest reply not seen whose place is out of view: a pill as wide as its words, a 1px border at 50% of
+the blue, the popover's surface, a 20px face, "Ann replied:" and its first words in 13px cut with an ellipsis, the time
+muted, and an up arrow in blue. A press goes there, opening its thread, and the line goes once nothing is left to
+name. It never says what the status line says, and it keeps to the column's width at 360.
 
 Messages agents write to each other sit in the thread of what the writer's work is about; a reply sits where the
 message it answers sits (the one Gathr carried into its turn from the agent it writes to). A message to an agent

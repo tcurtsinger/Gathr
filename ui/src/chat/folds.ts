@@ -1,20 +1,26 @@
 import { useRef, useState } from 'react';
 import type { Spot, Timeline } from './messages';
+import type { Reads } from './reads';
 
 /**
- * Which threads are open while the chat is open (0075). A thread whose main message was handled when the chat opened
- * starts folded, every other open; nothing folds or opens by itself after that, not even for a new reply. The person's
- * own fold or open holds until the chat closes. A search hit or an approval the status line goes to opens its thread,
- * and its earlier replies, once.
+ * Which threads are open (0075, 0077). When the chat opens, a thread whose main message is handled and whose replies
+ * the person has all seen starts folded, every other open; nothing folds or opens by itself after that, not even for a
+ * new reply. The person's own fold or open is kept by the service (`reads`) and wins, in every window and after a
+ * reload. A search hit, an approval the status line goes to, or the line at the foot opens its thread, and its earlier
+ * replies, for as long as the chat is open.
  */
-export function useFolds() {
+export function useFolds(reads?: Reads) {
   const [folds, setFolds] = useState(() => ({
     open: new Map<string, boolean>(),
     earlier: new Set<string>(),
   }));
   const start = useRef<Set<string>>(undefined);
   const revealed = useRef<Partial<Spot>>(undefined);
-  const isOpen = (topic: string) => folds.open.get(topic) ?? !start.current?.has(topic);
+  const kept = (topic: string) => {
+    const folded = reads?.folds.get(topic);
+    return folded === undefined ? undefined : !folded;
+  };
+  const isOpen = (topic: string) => folds.open.get(topic) ?? kept(topic) ?? !start.current?.has(topic);
   const reveal = (topic: string) =>
     setFolds((f) => ({ open: new Map(f.open).set(topic, true), earlier: new Set(f.earlier).add(topic) }));
   return {
@@ -22,7 +28,20 @@ export function useFolds() {
     folds,
     start,
     reveal,
-    fold: (topic: string) => setFolds((f) => ({ ...f, open: new Map(f.open).set(topic, !isOpen(topic)) })),
+    /** The person's own fold or open: kept. */
+    fold: (topic: string) => {
+      const open = isOpen(topic);
+      reads?.fold(topic, open);
+      setFolds((f) => ({ ...f, open: new Map(f.open).set(topic, !open) }));
+    },
+    /** The person folded or opened it in another window: that wins over what this one held. */
+    drop: (topic: string) =>
+      setFolds((f) => {
+        if (!f.open.has(topic)) return f;
+        const open = new Map(f.open);
+        open.delete(topic);
+        return { ...f, open };
+      }),
     /** Opens a thread to reply in it (0076); one already open stays as it is. */
     show: (topic: string) => {
       if (!isOpen(topic)) setFolds((f) => ({ ...f, open: new Map(f.open).set(topic, true) }));

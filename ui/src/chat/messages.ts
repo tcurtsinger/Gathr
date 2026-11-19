@@ -6,6 +6,7 @@ import type { AskSize } from './asks';
 import type { Ending } from './ends';
 import type { Work } from './fold';
 import type { Like } from './likes';
+import type { Left } from './reads';
 import type { Approval, ChatState } from './state';
 import type { Said } from './threads';
 import { drawn } from './timeline';
@@ -73,6 +74,8 @@ export interface Fold {
   topic: string;
   open: boolean;
   count: number;
+  /** When each reply of someone else's was said, in ms: folded, the line counts those not seen yet (0077). */
+  times?: number[];
 }
 
 /** A task the lead hands out, as its main message: from the task's record, as the Tasks view reads it. */
@@ -136,6 +139,8 @@ export type Custom = Place & {
   earlier?: { topic: string; n: number };
   /** The message box at a thread's foot, open for a reply in it (0076). */
   box?: { topic: string };
+  /** The New line, above the first main message said while the person was away (0077). */
+  newLine?: boolean;
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message and an ask's result;
    * in a chat of one, the lead's reply to the person.
@@ -150,7 +155,7 @@ export interface Timeline {
   /** Every block, folded or not, in the same order: what the agent's panel, the marks and the status line read. */
   all: ThreadMessageLike[];
   find: (message: string) => Spot | undefined;
-  /** The threads whose main message is handled: those start folded when the chat opens. */
+  /** The threads whose main message is handled and all seen (0077): those start folded when the chat opens. */
   handled: Set<string>;
 }
 
@@ -172,6 +177,10 @@ export interface View {
   earlier: { has: (topic: string) => boolean };
   /** The thread whose box is open for a reply: one at a time (0076). */
   replying?: string;
+  /** What the person had seen when they came back: the New line goes above the first main message after it (0077). */
+  left?: Left;
+  /** Seen up to here in a thread, now: a handled thread with a reply not seen starts open. */
+  seen?: (topic: string) => number;
 }
 
 export type Cache = Map<string, { sig: string; value: ThreadMessageLike }>;

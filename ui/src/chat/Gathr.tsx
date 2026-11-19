@@ -7,7 +7,7 @@ import { Foot } from './Foot';
 import { MainWord } from './MainWord';
 import type { EventLine } from './messages';
 import { custom } from './Replies';
-import { Bubble, NameLine, Said, When } from './Said';
+import { Bubble, NameLine, NewWord, Said, When } from './Said';
 import { useActions } from './Thread';
 import { Event } from './TurnParts';
 
@@ -32,7 +32,10 @@ export function GathrMessage() {
       line={
         <NameLine
           name="Gathr"
-          pieces={[<When key="t" time={own.time} />]}
+          pieces={[
+            <When key="t" time={own.time} />,
+            own.reply && <NewWord key="new" topic={own.topic} time={own.time} />,
+          ]}
           state={<MainWord state={own.state} />}
         />
       }

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Face, type FaceSize, YouFace } from '../components/Face';
 import { Reference } from '../components/Notice';
 import { useMark } from './faceMarks';
+import { useIsNew } from './reads';
 import { clock, list, roleName } from './team';
 import './said.css';
 import './mains.css';
@@ -130,6 +131,11 @@ export const RoleWord = () => <span className="name-line-role">{roleName.supervi
 /** When it was said, as the clock reads. */
 export const When = ({ time }: { time?: string }) =>
   time ? <time dateTime={time}>{clock(time)}</time> : null;
+
+/** A reply said while the person was away (0077): "New" in the attention blue, until they come back again. */
+export function NewWord({ topic, time }: { topic?: string; time?: string }) {
+  return useIsNew(topic, time) ? <span className="name-line-new">New</span> : null;
+}
 
 /** The task a member's message works on, and a tick once it is done. */
 export const OnTask = ({ what, done }: { what: string; done?: boolean }) => (

@@ -86,3 +86,4 @@ fails in CI when the two differ.
 | 0074 | [An agent's face](0074-an-agents-face.md) | accepted | yes |
 | 0075 | [A team chat is main messages, each with its thread](0075-a-team-chat-is-main-messages-each-with-its-thread.md) | accepted | yes |
 | 0076 | [Replying in a thread](0076-replying-in-a-thread.md) | accepted | yes |
+| 0077 | [Where you left off](0077-where-you-left-off.md) | accepted | yes |

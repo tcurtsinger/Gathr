@@ -13,7 +13,19 @@ import { Foot } from './Foot';
 import type { Like } from './likes';
 import { MainWord } from './MainWord';
 import type { Custom } from './messages';
-import { AgentFace, Bubble, EndRow, EndWord, NameLine, OnTask, RoleWord, Said, When, YouSaid } from './Said';
+import {
+  AgentFace,
+  Bubble,
+  EndRow,
+  EndWord,
+  NameLine,
+  NewWord,
+  OnTask,
+  RoleWord,
+  Said,
+  When,
+  YouSaid,
+} from './Said';
 import { SizeWord } from './Size';
 import { StepsButton, useStepsOpen } from './Steps';
 import type { Approval } from './state';
@@ -96,10 +108,20 @@ export function AssistantMessage() {
   const own = useAuiState(custom);
   const id = useAuiState((s) => s.message.id);
   if (own.box) return <ThreadBox topic={own.box.topic} />;
+  if (own.newLine) return <NewLine />;
   if (own.earlier) return <Earlier earlier={own.earlier} />;
   if (own.brief) return <TaskMain own={own} />;
   if (own.said) return <TalkMessage own={own} said={own.said} />;
   return <Reply own={own} id={id} />;
+}
+
+/** Above the first main message said while the person was away (0077). */
+function NewLine() {
+  return (
+    <MessagePrimitive.Root className="new-line" role="separator">
+      New
+    </MessagePrimitive.Root>
+  );
 }
 
 /**
@@ -153,6 +175,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
               // In a thread the lead is named alone, as every reply is.
               role === 'supervisor' && !small && <RoleWord key="role" />,
               <When key="t" time={own.time} />,
+              small && <NewWord key="new" topic={own.topic} time={own.time} />,
               // The smallest honest mark of an ask's result: it closes the ask it quotes.
               result && 'Result',
               on && <OnTask key="on" what={on} done={done} />,

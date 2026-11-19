@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type PickedName, type ReplyTarget } from '../api';
+import { api, type Failure, type PickedName, type Read, type ReplyTarget } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './messages';
@@ -12,6 +12,8 @@ export type Unsent = (update: (list: SendFailure[]) => SendFailure[]) => void;
 export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   const [state, setState] = useState<ChatState>(empty);
   const [loaded, setLoaded] = useState(false);
+  // Where the person left off, as the history read it (0077).
+  const [reads, setReads] = useState<Read[]>();
   const [loadFailure, setLoadFailure] = useState<Failure | null>(null);
   // A Stop or Pause that failed: nothing to resend, so it lives only while the chat is open.
   const [actionFailure, setActionFailure] = useState<SendFailure | null>(null);
@@ -26,6 +28,7 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
         const held = pending.current ?? [];
         pending.current = null;
         setState(fromLoad(history, work, held));
+        setReads(history.reads ?? []);
         setLoaded(true);
         setLoadFailure(null);
         timeToPaint('gathr.ui.chat_open', openedAt.current, { messages: history.messages.length });
@@ -118,5 +121,5 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   );
 
   const failed = actionFailure ? [...unsent, actionFailure] : unsent;
-  return { state, loaded, loadFailure, failed, send, attempt, approve, reload: load };
+  return { state, loaded, reads, loadFailure, failed, send, attempt, approve, reload: load };
 }

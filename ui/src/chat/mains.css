@@ -77,6 +77,30 @@
 .fold-line[aria-expanded="true"] .fold-chevron {
   rotate: 90deg;
 }
+/* Where the person left off (0077): new replies in a folded thread, a reply said while they were away, and the line
+   above the first main message said then, all in the attention blue. */
+.fold-line[data-new],
+.fold-line[data-new]:hover,
+.name-line-meta > .name-line-new {
+  color: var(--attention);
+  font-weight: 550;
+}
+.thread-messages > .new-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 -4px;
+  color: var(--attention);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.new-line::before {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in oklab, var(--attention) 65%, transparent);
+}
 
 /* A main message's state at its name line's right: its PR, then the mark's shape and its word. */
 .name-line > .main-state {

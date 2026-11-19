@@ -16,6 +16,8 @@ import { GathrMessage } from './Gathr';
 import type { Answer, Custom, SendFailure } from './messages';
 import { useOlder } from './older';
 import { AssistantMessage, UserMessage } from './Replies';
+import { type Reads, ReadsContext } from './reads';
+import { useSeen } from './seen';
 import { type Box, BoxContext } from './ThreadBox';
 import { FoundContext } from './TurnParts';
 import './thread.css';
@@ -79,6 +81,8 @@ interface Props {
   questions?: Questions;
   /** The box open for a reply in a thread (0076). */
   box?: Box;
+  /** Where the person left off (0077): what is seen as it shows, and what the fold lines and the foot line read. */
+  reads?: Reads;
 }
 
 /**
@@ -122,6 +126,7 @@ export function Thread(props: Props) {
   );
   const found = useFound(props.messages, viewport, reach, target, own ? undefined : props.onTarget);
   useEdges(viewport);
+  useSeen(viewport, props.reads);
   const runtime = useExternalStoreRuntime({
     messages,
     convertMessage: asIs,
@@ -137,48 +142,50 @@ export function Thread(props: Props) {
         <JumpContext value={jump}>
           <QuestionsContext value={props.questions ?? null}>
             <BoxContext value={props.box}>
-              <FoundContext value={found.text}>
-                <ThreadPrimitive.Root className="thread">
-                  <ThreadPrimitive.Viewport
-                    ref={viewport}
-                    className="thread-viewport"
-                    scrollToBottomOnRunStart={!found.held}
-                    onScroll={() => {
-                      onScroll();
-                      found.onScroll();
-                    }}
-                  >
-                    <div className="thread-column" data-empty={empty || undefined}>
-                      {header}
-                      {empty && <h2 className="welcome">What are we working on?</h2>}
-                      <div className="thread-messages">
-                        <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
-                      </div>
-                      {after}
-                      {/*
+              <ReadsContext value={props.reads ?? null}>
+                <FoundContext value={found.text}>
+                  <ThreadPrimitive.Root className="thread">
+                    <ThreadPrimitive.Viewport
+                      ref={viewport}
+                      className="thread-viewport"
+                      scrollToBottomOnRunStart={!found.held}
+                      onScroll={() => {
+                        onScroll();
+                        found.onScroll();
+                      }}
+                    >
+                      <div className="thread-column" data-empty={empty || undefined}>
+                        {header}
+                        {empty && <h2 className="welcome">What are we working on?</h2>}
+                        <div className="thread-messages">
+                          <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+                        </div>
+                        {after}
+                        {/*
                         The runtime's footer counts its height and its top margin as how close to the foot still reads as
                         at the foot. So the footer has no margin of its own: this spacer pushes it down a short chat. An auto
                         margin was measured once, on the empty chat, as most of the view's height, and a view that far up
                         followed the next growth to the foot: the reply box.
                       */}
-                      <div className="thread-spacer" />
-                      <ThreadPrimitive.ViewportFooter className="thread-footer">
-                        <ThreadPrimitive.ScrollToBottom asChild>
-                          <IconButton
-                            aria-label="Scroll to bottom"
-                            variant="outline"
-                            className="thread-bottom bg-background"
-                          >
-                            <ArrowDown />
-                          </IconButton>
-                        </ThreadPrimitive.ScrollToBottom>
-                        {children}
-                      </ThreadPrimitive.ViewportFooter>
-                    </div>
-                  </ThreadPrimitive.Viewport>
-                  <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
-                </ThreadPrimitive.Root>
-              </FoundContext>
+                        <div className="thread-spacer" />
+                        <ThreadPrimitive.ViewportFooter className="thread-footer">
+                          <ThreadPrimitive.ScrollToBottom asChild>
+                            <IconButton
+                              aria-label="Scroll to bottom"
+                              variant="outline"
+                              className="thread-bottom bg-background"
+                            >
+                              <ArrowDown />
+                            </IconButton>
+                          </ThreadPrimitive.ScrollToBottom>
+                          {children}
+                        </ThreadPrimitive.ViewportFooter>
+                      </div>
+                    </ThreadPrimitive.Viewport>
+                    <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
+                  </ThreadPrimitive.Root>
+                </FoundContext>
+              </ReadsContext>
             </BoxContext>
           </QuestionsContext>
         </JumpContext>

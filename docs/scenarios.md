@@ -627,6 +627,26 @@ Parts: 6.9
   lead's result is at the bottom, quoting the ask, and the ask's Done leads to it. A chat of one agent
   reads as one timeline, with no state and no fold line
 
+### 6l. The chat shows where you left off
+
+Parts: 6.10
+
+- **Given** a team chat the person last saw at 09:58, with Bo's thread folded by them, a main message of the lead's
+  said at 10:05, three replies in Bo's thread after 09:58 and Ann's reply at 10:08 far up the chat
+- **When** the person opens the chat
+- **Then** a New line sits above the lead's 10:05 message and nowhere else; Bo's thread stays folded and its line
+  says "3 new replies" in blue; the line above the status line names Ann's reply, with her face, its first words and
+  10:08. Opened, Bo's thread shows each of the three saying New, and folded again it says "4 replies". A press on
+  the line at the foot opens Ann's thread at her reply, and the line goes
+- **Given** the same chat open, the person at its foot
+- **When** an answer arrives at the foot, in view, and another far up, out of view
+- **Then** the one in view is seen at once and named nowhere; the one out of view is named at the foot. With the
+  window in the back, nothing is seen until it is in front again
+- **Given** the person's marks and folds kept by the service
+- **When** the window reloads, the service restarts, or the person's other window shows the same chat
+- **Then** the same marks and folds show; a handled thread they have seen all of opens folded, one with a reply not
+  seen opens open, and neither folds or opens by itself while the chat is open. A mark never moves back; a mark for
+  another chat's thread is refused with a reference. A chat with no marks yet opens with nothing new
 ### 6f. Agreeing is a reaction, never a message
 
 Parts: 6.6

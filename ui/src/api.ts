@@ -597,6 +597,18 @@ export interface History {
   reactions?: Reaction[];
   /** When its second agent joined: what came before reads as a chat of one (0075). */
   team_since?: string | null;
+  /** Where the person left off, by thread (0077); none yet for a chat not opened since. */
+  reads?: Read[];
+}
+
+/**
+ * One thread's mark (0077): the newest message the person has seen there, in µs, and their own fold (true) or open
+ * (false), or null for Gathr's rule. `topic` is the thread's key, '' for the chat's main line.
+ */
+export interface Read {
+  topic: string;
+  seen_us: number;
+  folded: boolean | null;
 }
 
 /**
@@ -745,6 +757,9 @@ export const api = {
       `/api/chats/${chat}/messages/${message}/like`,
       questions?.length ? { questions } : {},
     ),
+  /** Keeps what the person has seen in each thread, and their folds (0077): a mark never moves back. */
+  reads: (chat: string, reads: { topic: string; seen_us?: number; folded?: boolean }[]) =>
+    call<{ reads: Read[] }>('PUT', `/api/chats/${chat}/reads`, { reads }),
   /** Takes the like back: the mark goes, and nothing it did is undone. */
   unlike: (chat: string, message: string) =>
     call<{ removed: boolean }>('DELETE', `/api/chats/${chat}/messages/${message}/like`),
