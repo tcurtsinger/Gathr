@@ -1,7 +1,8 @@
 //! Stage 4: a turn opens with what Gathr already holds from GitHub, so its agent needn't ask. A turn
-//! woken by CI that failed, a wait on a PR, a commit or several things, or a PR Gathr can't land,
-//! opens with the failed jobs' last lines at the commit that failed; a turn on a task's PR with its
-//! branch, head and files, told once per head. A GitHub call that fails is found from its reference.
+//! woken by CI that failed, a wait on a PR, a commit or several things, here or in another repository,
+//! or a PR Gathr can't land on red CI, opens with the failed jobs' last lines at the commit that
+//! failed; a turn on a task's PR, the lead's too, with its branch, head and files, told once per head.
+//! A GitHub read that fails or stalls lets the turn through without them, found from its reference.
 use common::replay::{escaped, read_in};
 
 use super::lands::{looking, passed, running};
@@ -11,25 +12,36 @@ use super::*;
 const RUNS: &str = ".check_runs[] | {name, conclusion: (.conclusion // \"\" | ascii_upcase), detailsUrl: .details_url}";
 const STATUSES: &str =
     ".statuses[] | {context, state: (.state | ascii_upcase), targetUrl: .target_url}";
-/// The fields a turn's opening asks of its task's PR.
-const VIEW: &str = "headRefName,headRefOid,baseRefName,files";
+/// The fields Gathr's read of a PR asks for: the `pr` tool's, and a turn's opening's.
+const VIEW: &str = "number,title,state,headRefOid,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup,files";
 
-fn at(commit: &str, what: &str) -> String {
-    format!("repos/{{owner}}/{{repo}}/commits/{commit}/{what}?per_page=100")
+fn at(repo: Option<&str>, commit: &str, what: &str) -> String {
+    let repo = repo.unwrap_or("{owner}/{repo}");
+    format!("repos/{repo}/commits/{commit}/{what}?per_page=100")
 }
 
-/// GitHub's answers for the failed checks at `commit`: one Actions job, `job`, whose log ends in an
-/// error naming the commit.
-fn failed_jobs(commit: &str, job: &str) -> Vec<Value> {
+/// GitHub's answers for the failed checks at `commit`, in `repo` or the folder's own: one Actions
+/// job, `job`, whose log ends in an error naming the commit.
+fn failed_in(repo: Option<&str>, commit: &str, job: &str) -> Vec<Value> {
     let run = json!({ "name": "Rust (macOS)", "conclusion": "FAILURE",
         "detailsUrl": format!("https://github.com/o/r/actions/runs/7/job/{job}") });
     let log = format!("step\t2026-11-19T10:00:00.0000000Z ##[error]test failed at {commit}\n");
+    let mut read_log = vec!["run", "view", "--job", job, "--log-failed"];
+    read_log.extend(repo.map(|r| ["-R", r]).into_iter().flatten());
+    let notes = format!(
+        "repos/{}/check-runs/{job}/annotations",
+        repo.unwrap_or("{owner}/{repo}")
+    );
     vec![
-        json!({ "args": ["api", "--paginate", at(commit, "check-runs"), "--jq", RUNS], "out": run.to_string() }),
-        json!({ "args": ["api", "--paginate", at(commit, "status"), "--jq", STATUSES], "out": "" }),
-        json!({ "args": ["run", "view", "--job", job, "--log-failed"], "out": log }),
-        json!({ "args": ["api", format!("repos/{{owner}}/{{repo}}/check-runs/{job}/annotations")], "out": "[]" }),
+        json!({ "args": ["api", "--paginate", at(repo, commit, "check-runs"), "--jq", RUNS], "out": run.to_string() }),
+        json!({ "args": ["api", "--paginate", at(repo, commit, "status"), "--jq", STATUSES], "out": "" }),
+        json!({ "args": read_log, "out": log }),
+        json!({ "args": ["api", notes], "out": "[]" }),
     ]
+}
+
+fn failed_jobs(commit: &str, job: &str) -> Vec<Value> {
+    failed_in(None, commit, job)
 }
 
 /// What the agent reads at a turn's opening for those failed checks.
@@ -43,15 +55,15 @@ fn opened_with(commit: &str) -> String {
 const FIVE: &str = "#5 is room/five at";
 
 /// Vale's review of #5 (task #1) runs, with #5 changing one file, and in it Vale leaves `wait`, on
-/// CI that is still running; `more` of GitHub's answers come ahead of that. Vale's engine holds its
-/// turn: `review_ends` lets it go.
+/// CI that is still running; `more` of GitHub's answers come ahead of that, and `env` is more of the
+/// service's environment. Vale's engine holds its turn: `review_ends` lets it go.
 fn waiting(
-    data: &Path,
-    repos: &Path,
+    (data, repos): (&Path, &Path),
+    env: &[(&str, &Path)],
     wait: impl Fn(&Room) -> Value,
     more: impl Fn(&Room) -> Vec<Value>,
 ) -> (Room, String, PathBuf) {
-    let mut room = room_replay(data, repos, false, true);
+    let mut room = room_replay_with(data, repos, false, true, env);
     room.ci(0, json!([running("CI")]));
     let one = json!([{ "path": "feature.txt", "additions": 1, "deletions": 0 }]);
     room.view(0, |view| view["files"] = one.clone());
@@ -106,6 +118,22 @@ impl Room {
         all.splice(0..0, then);
         put_answers(&self.data, &answers);
     }
+
+    /// The wake's opening read GitHub and failed: it went on without the lines, and the read's
+    /// trace says why.
+    fn woke_without_lines(&self) -> String {
+        let read = self.read(&self.opened_by("wait_fired"), "Your wait ended");
+        assert!(!read.contains("Failed checks at"), "{read}");
+        let sql = "SELECT ref FROM event_log WHERE name = 'gathr.github.read' AND status = 'error'";
+        let found = common::until(30, "the failed read's event", || {
+            let (ok, rows) = gathr(&self.data, &["diag", "query", sql]);
+            assert!(ok, "{rows}");
+            rows["rows"][0]["ref"].as_str().map(String::from)
+        });
+        let (ok, trace) = gathr(&self.data, &["diag", "trace", &found]);
+        assert!(ok, "{trace}");
+        trace.to_string()
+    }
 }
 
 /// A wait on a PR's CI: the wake opens with the failed job at the head that failed, and the review's
@@ -115,7 +143,7 @@ fn a_failed_ci_wait_on_a_pr_opens_with_its_failed_jobs_and_the_pr_is_told_once()
     let (data, repos) = (TempDir::new(), TempDir::new());
     let wait = |_: &Room| json!({ "ci": "#5", "then": "Merge it" });
     let failed = |room: &Room| failed_jobs(&room.heads[0], "88");
-    let (room, vale, cwd) = waiting(&data.0, &repos.0, wait, failed);
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, failed);
     let head = room.heads[0].clone();
     let first: String = room
         .db()
@@ -148,7 +176,7 @@ fn a_head_pushed_after_ci_failed_reads_the_failures_where_ci_failed() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let wait = |_: &Room| json!({ "ci": "#5", "then": "Merge it" });
     let failed = |room: &Room| failed_jobs(&room.heads[0], "88");
-    let (room, vale, cwd) = waiting(&data.0, &repos.0, wait, failed);
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, failed);
     let [failed, pushed] = room.heads.clone();
     let view = room.answers()[0]["out"].as_str().unwrap().to_string();
     let mut moved: Value = serde_json::from_str(&view).unwrap();
@@ -165,7 +193,7 @@ fn a_failed_ci_wait_on_a_commit_opens_with_its_failed_jobs() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let wait = |room: &Room| json!({ "ci": room.heads[1], "then": "Merge it" });
     let failed = |room: &Room| failed_jobs(&room.heads[1], "90");
-    let (room, vale, cwd) = waiting(&data.0, &repos.0, wait, failed);
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, failed);
     room.review_ends(&vale, &cwd, vec![]);
     room.read(&room.opened_by("wait_fired"), &opened_with(&room.heads[1]));
 }
@@ -176,40 +204,83 @@ fn a_combined_wait_whose_ci_failed_opens_with_its_failed_jobs() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let wait = |room: &Room| json!({ "ci": room.heads[1], "agent": "Lead", "then": "Merge it" });
     let failed = |room: &Room| failed_jobs(&room.heads[1], "91");
-    let (room, vale, cwd) = waiting(&data.0, &repos.0, wait, failed);
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, failed);
     room.review_ends(&vale, &cwd, vec![]);
     room.read(&room.opened_by("wait_fired"), &opened_with(&room.heads[1]));
 }
 
-/// GitHub fails at the opening: the turn starts without the lines, and the failure is an event
-/// found from its reference.
+/// A wait on CI in another repository: its failures are read there, its job's log too.
 #[test]
-fn a_github_call_that_fails_at_a_turns_opening_is_found_from_its_reference() {
+fn a_failed_ci_wait_on_another_repository_reads_its_jobs_there() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let elsewhere = "made-up/elsewhere";
+    let wait = |room: &Room| json!({ "ci": room.heads[1], "repo": elsewhere, "then": "Merge it" });
+    let failed = |room: &Room| failed_in(Some(elsewhere), &room.heads[1], "94");
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, failed);
+    room.review_ends(&vale, &cwd, vec![]);
+    room.read(&room.opened_by("wait_fired"), &opened_with(&room.heads[1]));
+}
+
+/// The lead's task runs in its one conversation, not a task's own: its turn opens with the PR too.
+#[test]
+fn the_leads_task_turn_on_a_pr_opens_with_its_branch_head_and_files() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room_replay(&data.0, &repos.0, false, true);
+    room.ci(0, json!([running("CI")]));
+    let one = json!([{ "path": "feature.txt", "additions": 1, "deletions": 0 }]);
+    room.view(0, |view| view["files"] = one.clone());
+    let lead = room.lead_turn();
+    crate::common::fix_it(room.service.info.port, &lead);
+    let own = common::briefed(json!({ "to": "Lead", "what": "Add the feature", "pr": 5 }));
+    let given = text(&room.call(&lead, "give_task", own));
+    assert!(given.starts_with("Task #1 for Lead"), "{given}");
+    let lead_cwd = PathBuf::from(nth(&data.0.join("env.jsonl"), 0)["cwd"].as_str().unwrap());
+    std::fs::write(lead_cwd.join("go"), "").unwrap();
+    let sql = "SELECT id FROM turns WHERE task = 1 ORDER BY created_ts LIMIT 1";
+    let turn: String = common::until(120, "the lead's task turn", || {
+        room.db().query_row(sql, [], |r| r.get(0)).ok()
+    });
+    let head = &room.heads[0][..7];
+    room.read(
+        &turn,
+        &format!("{FIVE} {head}, into main, and changes 1 file"),
+    );
+}
+
+/// A job's log that can't be read fails the read: no partial lines, and its why is traced.
+#[test]
+fn a_failed_log_read_at_a_turns_opening_is_found_from_its_reference() {
     let (data, repos) = (TempDir::new(), TempDir::new());
     let wait = |room: &Room| json!({ "ci": room.heads[1], "then": "Merge it" });
     let down = |room: &Room| {
-        let runs = at(&room.heads[1], "check-runs");
-        vec![json!({ "args": ["api", "--paginate", runs, "--jq", RUNS],
-            "code": 1, "err": "HTTP 502: Bad Gateway" })]
+        let log = json!({ "args": ["run", "view", "--job", "95"], "code": 1, "err": "HTTP 502: Bad Gateway" });
+        [vec![log], failed_jobs(&room.heads[1], "95")].concat()
     };
-    let (room, vale, cwd) = waiting(&data.0, &repos.0, wait, down);
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &[], wait, down);
     room.review_ends(&vale, &cwd, vec![]);
-    let woke = room.opened_by("wait_fired");
-    let read = room.read(&woke, "Your wait ended");
-    assert!(!read.contains("Failed checks at"), "{read}");
-    let sql = "SELECT ref FROM event_log WHERE name = 'gathr.github.read' AND status = 'error'";
-    let found = common::until(30, "the failed read's event", || {
-        let (ok, rows) = gathr(&room.data, &["diag", "query", sql]);
-        assert!(ok, "{rows}");
-        rows["rows"][0]["ref"].as_str().map(String::from)
-    });
-    let (ok, trace) = gathr(&room.data, &["diag", "trace", &found]);
-    let trace = trace.to_string();
-    let commit = &room.heads[1];
+    let trace = room.woke_without_lines();
+    let why = "Rust (macOS)'s log wasn't read";
     assert!(
-        ok && trace.contains("Bad Gateway") && trace.contains(commit),
+        trace.contains(why) && trace.contains("Bad Gateway") && trace.contains(&room.heads[1]),
         "{trace}"
     );
+}
+
+/// GitHub stalls: the turn waits no longer than the limit, then starts without the lines.
+#[test]
+fn a_stalled_github_read_lets_the_wake_through_and_says_why() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let env = [("GATHR_OPENING_GITHUB_MS", Path::new("1500"))];
+    let wait = |room: &Room| json!({ "ci": room.heads[1], "then": "Merge it" });
+    let stalls = |room: &Room| {
+        let runs = at(None, &room.heads[1], "check-runs");
+        let slow = json!({ "args": ["api", "--paginate", runs, "--jq", RUNS], "out": "", "sleep_ms": 20000 });
+        vec![slow]
+    };
+    let (room, vale, cwd) = waiting((&data.0, &repos.0), &env, wait, stalls);
+    room.review_ends(&vale, &cwd, vec![]);
+    let trace = room.woke_without_lines();
+    assert!(trace.contains("GitHub took over 1.5 s"), "{trace}");
 }
 
 /// Both stops on red CI, required or not, wake the reviewer with the failed jobs at that head.

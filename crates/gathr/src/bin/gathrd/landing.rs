@@ -64,6 +64,8 @@ impl Looked {
 /// The PR as a look found it.
 struct Seen {
     stand: Stand,
+    /// It stops on red CI: its reviewer's wake opens with the failed jobs.
+    red: bool,
     head: String,
     base: String,
     /// The base's commit on origin.
@@ -243,7 +245,7 @@ async fn acted(
                 }
                 Err(why) => {
                     let why = format!("its merge wasn't made: {why}");
-                    tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await
+                    tell(chats, review, (&seen.head, false), &why, asker, trace).await
                 }
             }
         }
@@ -269,11 +271,11 @@ async fn acted(
                 Err(why) => {
                     let why =
                         format!("it's behind {base}, and it wasn't brought up to date: {why}");
-                    tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await
+                    tell(chats, review, (&seen.head, false), &why, asker, trace).await
                 }
             }
         }
-        Act::Tell(why) => tell(chats, review, (&seen.head, &seen.view), &why, asker, trace).await,
+        Act::Tell(why) => tell(chats, review, (&seen.head, seen.red), &why, asker, trace).await,
         Act::Wait(why) => {
             saw(chats, review, &seen.head, &why, true).await;
             Ok(Looked::of(
@@ -307,18 +309,16 @@ async fn saw(chats: &Arc<Chats>, review: &Review, head: &str, words: &str, movin
 
 /// Tells the reviewer what stops the PR at this head, once: woken on no task, or, when its own
 /// report had Gathr look, in the answer to it. That the PR is left to them is kept in the same
-/// write as their wake, so nothing reads the chat as stuck between the two (0052). A wake at a head
-/// with a failed check opens with its failed jobs.
+/// write as their wake, so nothing reads the chat as stuck between the two (0052). A wake for red CI
+/// opens with the failed jobs at that head.
 async fn tell(
     chats: &Arc<Chats>,
     review: &Review,
-    (head, view): (&str, &Value),
+    (head, red): (&str, bool),
     why: &str,
     asker: Option<&Caller>,
     trace: &str,
 ) -> Result<Looked, String> {
-    let checks = ci::rollup(&view["statusCheckRollup"]);
-    let red = checks.iter().any(|c| c.stand.failed());
     let said = format!("Gathr can't land #{} at {}: {why}.", review.pr, short(head));
     let own = asker.is_some_and(|a| a.agent.as_deref() == Some(review.reviewer.as_str()));
     let wake = (!own).then(|| {
@@ -337,7 +337,7 @@ async fn tell(
         let start = landings::tell(c, &review, &head, &why, wake.as_deref(), &trace)?;
         if let Some(start) = start.as_ref().filter(|_| red) {
             c.execute(
-                "UPDATE turns SET failed_at = ?2 WHERE id = ?1",
+                "UPDATE turns SET failed_ci = json_array(json_object('commit', ?2)) WHERE id = ?1",
                 [&start.turn, &head],
             )?;
         }
@@ -360,8 +360,11 @@ async fn judge(
     let b = merging::fetched(repo, &base, vars).await?;
     let at = (&view, head.as_str(), base.as_str(), b.as_str());
     let stand = stand(chats, project, review, at, trace, vars).await?;
+    let red =
+        matches!(&stand, Stand::Stops(why) if red_ci(project, &view, &head).as_ref() == Some(why));
     Ok(Seen {
         stand,
+        red,
         head,
         base,
         b,
@@ -431,8 +434,6 @@ async fn stand(
     if let Some(going) = ci::going(&checks) {
         return Ok(Stand::Waits(format!("CI is still going on {at} ({going})")));
     }
-    let passed = |c: &ci::Check| matches!(c.stand, ci::Stand::Passed | ci::Stand::Skipped);
-    let failed = |c: &ci::Check| matches!(c.stand, ci::Stand::Failed | ci::Stand::Unknown);
     if checks.is_empty() {
         let chat = review.chat.clone();
         let asked = db(chats, move |c| landings::last_update(c, &chat, pr)).await?;
@@ -446,17 +447,8 @@ async fn stand(
                 "no CI checks ran on {at}, and the project requires them"
             )));
         }
-    } else if required && !checks.iter().all(passed) {
-        return Ok(Stand::Stops(format!(
-            "CI on {at} didn't pass, and the project requires it: {}",
-            ci::counted(&checks)
-        )));
-    } else if !required && checks.iter().any(failed) {
-        // 0045: CI is information there, and a failure is read before a merge.
-        return Ok(Stand::Stops(format!(
-            "CI on {at} has a failure, which the project doesn't require to pass: {}. Read it with ci_failures",
-            ci::counted(&checks)
-        )));
+    } else if let Some(why) = red_ci(project, view, head) {
+        return Ok(Stand::Stops(why));
     }
     if matches!(project.ci.as_str(), "gathr" | "both") {
         if !project.has_checks {
@@ -495,6 +487,30 @@ async fn stand(
         }
     }
     Ok(Stand::Ready)
+}
+
+/// CI stops the PR at `head`: it didn't pass where the project requires it, or it has a failure
+/// where the project doesn't (0045: CI is information there, and a failure is read before a merge).
+fn red_ci(project: &Project, view: &Value, head: &str) -> Option<String> {
+    let (checks, at) = (ci::rollup(&view["statusCheckRollup"]), short(head));
+    let passed = |c: &ci::Check| matches!(c.stand, ci::Stand::Passed | ci::Stand::Skipped);
+    let failed = |c: &ci::Check| matches!(c.stand, ci::Stand::Failed | ci::Stand::Unknown);
+    let required = matches!(project.ci.as_str(), "ci" | "both");
+    if checks.is_empty() {
+        None
+    } else if required && !checks.iter().all(passed) {
+        Some(format!(
+            "CI on {at} didn't pass, and the project requires it: {}",
+            ci::counted(&checks)
+        ))
+    } else if !required && checks.iter().any(failed) {
+        Some(format!(
+            "CI on {at} has a failure, which the project doesn't require to pass: {}. Read it with ci_failures",
+            ci::counted(&checks)
+        ))
+    } else {
+        None
+    }
 }
 
 pub async fn db<T: Send + 'static>(

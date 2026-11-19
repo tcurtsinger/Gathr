@@ -21,7 +21,7 @@ Each agent has at most one engine on one conversation at a time. A member's task
 the chat's lines the agent hasn't heard, and `@Name` in an agent's words wakes that member when its turn ends
 ([0081](decisions/0081-agents-hear-the-room-and-name-each-other.md)). A turn woken by failed CI (a wait, or a PR Gathr
 can't land) opens with the failed jobs' last lines at the commit that failed, and a turn on a task's PR with its branch,
-head and files, once per head in that conversation (`turns/github.rs`). Switching closes the old process gently;
+head and files, once per head in that conversation ([0086](decisions/0086-a-turn-opens-with-its-prs-head-and-failed-ci.md)). Switching closes the old process gently;
 Stop uses the provider's interrupt. The turn boundary uses a `Driver` enum and shared `Frame` values,
 not the originally planned shared trait. Shared process cleanup follows 0031.
 [0001](decisions/0001-engine-interface.md), [0031](decisions/0031-short-programs-end-together.md),

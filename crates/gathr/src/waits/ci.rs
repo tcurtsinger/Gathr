@@ -61,11 +61,6 @@ impl Stand {
     fn finished(self) -> bool {
         !matches!(self, Stand::Queued | Stand::Running)
     }
-
-    /// Finished without passing or being skipped.
-    pub fn failed(self) -> bool {
-        matches!(self, Stand::Failed | Stand::Cancelled | Stand::Unknown)
-    }
 }
 
 /// One check, as either of GitHub's shapes says it.

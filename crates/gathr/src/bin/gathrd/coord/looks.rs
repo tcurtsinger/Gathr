@@ -372,7 +372,7 @@ async fn look_ci(wait: &Wait, target: &Target, dir: &Path, vars: &Vars) -> Resul
         since_us: since,
         now_us: now,
     };
-    let red = checks.iter().any(|c| c.stand.failed());
+    let red = checks.iter().any(|c| c.stand == ci::Stand::Failed);
     Ok(match ci::verdict(&seen) {
         (true, line) if red => Look::Red(line, head),
         (true, line) => Look::Met(line),

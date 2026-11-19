@@ -20,8 +20,6 @@ use crate::tools::Caller;
 const LOG_LINES: usize = 40;
 const ANNOTATIONS: usize = 10;
 const LINE: usize = 300;
-/// The most changed files a turn on a PR is told by name.
-const FILES: usize = 30;
 /// How long an update waits for GitHub to show the PR's new head.
 const UPDATE_WAIT: Duration = Duration::from_secs(20);
 
@@ -85,15 +83,20 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
         ));
     }
     let mut said = vec![format!("Failed checks on #{pr}'s head {}:", short(&head))];
-    said.extend(each_failed(&failed, &repo).await);
+    said.extend(each_failed(&failed, (&repo, None), false).await?);
     record(chats, caller, "failures", pr, &head);
     Ok(said.join("\n"))
 }
 
 /// The failed checks at `commit`, as `failures` says them, for a turn woken by CI that failed
-/// there: read for that commit, never for a head pushed since. None when none failed.
-pub async fn failed_at(repo: &Path, commit: &str) -> Result<Option<String>, String> {
-    let at = |what: &str| format!("repos/{{owner}}/{{repo}}/commits/{commit}/{what}?per_page=100");
+/// there: read for that commit, never for a head pushed since, in `repo` (`owner/name`) or else the
+/// folder's own repository. None when none failed. Any read that fails fails it.
+pub async fn failed_at(
+    (dir, repo): (&Path, Option<&str>),
+    commit: &str,
+) -> Result<Option<String>, String> {
+    let named = repo.unwrap_or("{owner}/{repo}");
+    let at = |what: &str| format!("repos/{named}/commits/{commit}/{what}?per_page=100");
     let (runs, statuses) = (at("check-runs"), at("status"));
     // In the shape `gh pr view` gives a PR's checks, so each reads as it does there.
     let runs = [
@@ -110,7 +113,7 @@ pub async fn failed_at(repo: &Path, commit: &str) -> Result<Option<String>, Stri
         "--jq",
         ".statuses[] | {context, state: (.state | ascii_upcase), targetUrl: .target_url}",
     ];
-    let (runs, statuses) = tokio::join!(gh(&runs, repo), gh(&statuses, repo));
+    let (runs, statuses) = tokio::join!(gh(&runs, dir), gh(&statuses, dir));
     let both = format!("{}\n{}", runs?, statuses?);
     let checks: Vec<Value> = both
         .lines()
@@ -121,16 +124,13 @@ pub async fn failed_at(repo: &Path, commit: &str) -> Result<Option<String>, Stri
         return Ok(None);
     }
     let mut said = vec![format!("Failed checks at {}:", short(commit))];
-    said.extend(each_failed(&failed, repo).await);
+    said.extend(each_failed(&failed, (dir, repo), true).await?);
     Ok(Some(said.join("\n")))
 }
 
 /// A PR's branch, head and the files it changes, for a turn on its task: its head, and the words.
-pub async fn changes(repo: &Path, pr: i64) -> Result<(String, String), String> {
-    let fields = "headRefName,headRefOid,baseRefName,files";
-    let view = gh(&["pr", "view", &pr.to_string(), "--json", fields], repo).await?;
-    let view: Value = serde_json::from_str(&view)
-        .map_err(|_| format!("GitHub's answer for #{pr} wasn't read"))?;
+pub async fn changes(dir: &Path, pr: i64) -> Result<(String, String), String> {
+    let view = view(pr, dir).await?;
     let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
     let head = text("headRefOid");
     let files = view["files"].as_array().cloned().unwrap_or_default();
@@ -144,7 +144,7 @@ pub async fn changes(repo: &Path, pr: i64) -> Result<(String, String), String> {
             n => format!("{n} files"),
         }
     )];
-    for file in files.iter().take(FILES) {
+    for file in &files {
         said.push(format!(
             "- {} (+{} -{})",
             file["path"].as_str().unwrap_or("?"),
@@ -152,15 +152,18 @@ pub async fn changes(repo: &Path, pr: i64) -> Result<(String, String), String> {
             file["deletions"].as_i64().unwrap_or(0)
         ));
     }
-    if files.len() > FILES {
-        said.push(format!("- and {} more", files.len() - FILES));
-    }
     Ok((head, said.join("\n")))
 }
 
 /// Each failed check: its log's last lines and its annotations when it ran on GitHub Actions, else
-/// its link.
-async fn each_failed(failed: &[&Value], repo: &Path) -> Vec<String> {
+/// its link. `strict`: a log or annotations that can't be read fail it; else the log says so and
+/// the annotations are left out, as the tool's best effort.
+async fn each_failed(
+    failed: &[&Value],
+    (dir, repo): (&Path, Option<&str>),
+    strict: bool,
+) -> Result<Vec<String>, String> {
+    let named = repo.unwrap_or("{owner}/{repo}");
     let mut said = Vec::new();
     for check in failed {
         // A check run names itself and its page; a commit status (`StatusContext`) its context and
@@ -182,26 +185,31 @@ async fn each_failed(failed: &[&Value], repo: &Path) -> Vec<String> {
             said.push(format!("Not a GitHub Actions job: see {url}"));
             continue;
         };
-        let log = gh(&["run", "view", "--job", &job, "--log-failed"], repo).await;
-        said.push(match log {
+        let mut log = vec!["run", "view", "--job", &job, "--log-failed"];
+        log.extend(repo.map(|r| ["-R", r]).into_iter().flatten());
+        said.push(match gh(&log, dir).await {
             Ok(log) => last_lines(&log),
+            Err(why) if strict => return Err(format!("{name}'s log wasn't read: {why}")),
             Err(why) => format!("Its log wasn't read: {why}"),
         });
-        let path = format!("repos/{{owner}}/{{repo}}/check-runs/{job}/annotations");
-        if let Ok(found) = gh(&["api", &path], repo).await {
-            let found: Value = serde_json::from_str(&found).unwrap_or_default();
-            for note in found.as_array().into_iter().flatten().take(ANNOTATIONS) {
-                let at = format!(
-                    "{}:{}",
-                    note["path"].as_str().unwrap_or("?"),
-                    note["start_line"].as_i64().unwrap_or(0)
-                );
-                let message = note["message"].as_str().unwrap_or_default();
-                said.push(cut(&format!("annotation {at}: {message}")));
-            }
+        let path = format!("repos/{named}/check-runs/{job}/annotations");
+        let found = match gh(&["api", &path], dir).await {
+            Ok(found) => found,
+            Err(why) if strict => return Err(format!("{name}'s annotations weren't read: {why}")),
+            Err(_) => continue,
+        };
+        let found: Value = serde_json::from_str(&found).unwrap_or_default();
+        for note in found.as_array().into_iter().flatten().take(ANNOTATIONS) {
+            let at = format!(
+                "{}:{}",
+                note["path"].as_str().unwrap_or("?"),
+                note["start_line"].as_i64().unwrap_or(0)
+            );
+            let message = note["message"].as_str().unwrap_or_default();
+            said.push(cut(&format!("annotation {at}: {message}")));
         }
     }
-    said
+    Ok(said)
 }
 
 /// Brings the PR up to date with its base, as GitHub's "Update branch" does, for its reviewer: only
@@ -336,7 +344,7 @@ fn update_wait() -> Duration {
 }
 
 async fn view(pr: i64, repo: &std::path::Path) -> Result<Value, String> {
-    let fields = "number,title,state,headRefOid,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup";
+    let fields = "number,title,state,headRefOid,headRefName,baseRefName,mergeable,reviewDecision,statusCheckRollup,files";
     let view = gh(&["pr", "view", &pr.to_string(), "--json", fields], repo).await?;
     serde_json::from_str(&view).map_err(|_| format!("GitHub's answer for #{pr} wasn't read"))
 }

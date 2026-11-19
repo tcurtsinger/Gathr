@@ -40,17 +40,6 @@ fn view(head: &str, base: &str, state: &str, checks: Value) -> String {
 /// in a turn, with its engine's token.
 fn room(data: &Path, repos: &Path, gh: Value) -> Room {
     let (folder, _) = project(repos);
-    // Vale's review turn opens with #5's branch, head and files, read apart from the tools' calls.
-    let mut gh = gh;
-    let opening = [
-        "pr",
-        "view",
-        "5",
-        "--json",
-        "headRefName,headRefOid,baseRefName,files",
-    ];
-    let read = json!({ "args": opening, "out": view(HEAD, "main", "OPEN", json!([])) });
-    gh.as_array_mut().unwrap().insert(0, read);
     let answers = data.join("gh.json");
     std::fs::write(&answers, gh.to_string()).unwrap();
     let service = TestService::with_engine(
@@ -115,6 +104,8 @@ fn room(data: &Path, repos: &Path, gh: Value) -> Room {
     common::until(30, "Vale's turn to open", || {
         (!common::rows(data, opened).is_empty()).then_some(())
     });
+    // That read took the first of a test's answers in turn: the tools' calls start from it again.
+    let _ = std::fs::remove_file(answers.with_extension("json.seen"));
     Room {
         _release: Release(data.join("go")),
         service,

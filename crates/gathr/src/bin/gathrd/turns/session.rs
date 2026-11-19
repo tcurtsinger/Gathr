@@ -25,8 +25,9 @@ pub(super) struct Session {
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
-    /// The PR head each task's conversation was told, by task: not told again while it stands.
-    pub told_heads: HashMap<i64, String>,
+    /// The head each conversation was told of each PR, by conversation and PR: not told again while it
+    /// stands.
+    pub told_heads: HashMap<(String, i64), String>,
 }
 
 impl Session {

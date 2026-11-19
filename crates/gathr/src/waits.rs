@@ -527,8 +527,9 @@ fn fire(
     let on = (wait.task, wait.left_in.as_deref());
     let start = Start::queue(tx, at, on, Opened::WaitFired, text)?;
     tx.execute(
-        "UPDATE turns SET failed_at = (SELECT group_concat(failed_at, ' ') FROM waits
-             WHERE (id = ?2 OR part_of = ?2) AND failed_at IS NOT NULL)
+        "UPDATE turns SET failed_ci = (
+             SELECT NULLIF(json_group_array(json_object('commit', failed_at, 'repo', repo, 'cwd', cwd)), '[]')
+             FROM waits WHERE (id = ?2 OR part_of = ?2) AND failed_at IS NOT NULL)
          WHERE id = ?1",
         params![start.turn, wait.id],
     )?;

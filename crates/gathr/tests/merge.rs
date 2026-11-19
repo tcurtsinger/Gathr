@@ -76,6 +76,17 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
 
 /// In the CI-wake fixture, each engine consumes its own gate and can hold a second turn.
 fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Room {
+    room_replay_with(data, repos, test_change, waking, &[])
+}
+
+/// `room_replay`, with `more` of the service's environment.
+fn room_replay_with(
+    data: &Path,
+    repos: &Path,
+    test_change: bool,
+    waking: bool,
+    more: &[(&str, &Path)],
+) -> Room {
     let (folder, _) = project(repos);
     // A merge commit is made as the person who owns the checkout.
     git(&folder, &["config", "user.name", "Test"]);
@@ -122,7 +133,7 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
             .replace("{\"dir\":\"hold\"}", "{\"dir\":\"hold\",\"line\":\"take\"}");
         std::fs::write(&recording, format!("{}\n{}", held.trim_end(), held)).unwrap();
     }
-    let service = service(data, waking);
+    let service = service_with(data, waking, more);
     let account = service.add_account("Team");
     common::sign_in_account(data, &account);
     let agent = |name: &str| {
