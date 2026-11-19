@@ -160,6 +160,8 @@ pub struct Room {
     pub chat: String,
     pub lead: String,
     pub ann: String,
+    /// The service's environment, for `restart`.
+    env: Vec<(String, PathBuf)>,
 }
 
 impl Room {
@@ -210,6 +212,7 @@ impl Room {
         let made = service.send("POST", "/api/chats", json!({ "members": members }));
         assert_eq!(made.status, 200, "{}", made.body);
         let chat = made.json()["id"].as_str().unwrap().to_string();
+        let env = env.iter().map(|(k, v)| (k.to_string(), v.to_path_buf()));
         Room {
             dir,
             data,
@@ -218,7 +221,40 @@ impl Room {
             chat,
             lead,
             ann,
+            env: env.collect(),
         }
+    }
+
+    /// The service stops, by Quit or killed as a crash would end it, and starts again on the same
+    /// folder.
+    pub fn restart(&mut self, kill: bool) {
+        self.stop(kill);
+        self.start_again();
+    }
+
+    /// The service stops, by Quit or killed. The engines it started are let go, so none outlives
+    /// it holding a `go` meant for one the next service starts.
+    pub fn stop(&mut self, kill: bool) {
+        match kill {
+            true => super::kill(&self.service.info.pid.to_string()),
+            false => _ = self.service.call("POST", "/api/shutdown"),
+        }
+        self.service.child.wait().unwrap();
+        let started = std::fs::read_to_string(self.dir.0.join("env.jsonl")).unwrap_or_default();
+        for n in 0..started.lines().count() {
+            self.go_to(n);
+        }
+    }
+
+    /// The service starts again on the folder, as it was started first.
+    pub fn start_again(&mut self) {
+        let program = self.data.join("app/0.0.1").join(program_name());
+        let env: Vec<(&str, &Path)> = self
+            .env
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_path()))
+            .collect();
+        self.service = TestService::start_program(&program, &self.data, &env);
     }
 
     /// Lets the one engine that holds now go on.
@@ -357,4 +393,26 @@ pub fn carry_on_held(next: &ServiceInfo, chat: &str, stopped: &str) -> Value {
             (carried["status"] == "running").then_some(history.clone())
         },
     )
+}
+
+/// The turn in `history` whose id or `answers` is `id`, by `field`.
+pub fn turn_by<'a>(history: &'a Value, field: &str, id: &str) -> Option<&'a Value> {
+    let turns = history["turns"].as_array()?;
+    turns.iter().find(|t| t[field] == id)
+}
+
+/// Whether every turn in the chat has ended.
+pub fn all_ended(history: &Value) -> bool {
+    let turns = history["turns"].as_array().unwrap();
+    let ended = |t: &Value| matches!(t["status"].as_str(), Some("done" | "stopped" | "failed"));
+    turns.iter().all(ended)
+}
+
+/// The carry-on of `stopped`, saved and held back by the chat's pause on `next`.
+pub fn held_by_pause(room: &Room, next: &ServiceInfo, stopped: &str) {
+    until(30, "the carry-on held by the pause", || {
+        let history = room.history(next);
+        let carried = turn_by(&history, "answers", stopped)?;
+        (carried["status"] == "queued" && carried["held"] == "pause").then_some(())
+    });
 }

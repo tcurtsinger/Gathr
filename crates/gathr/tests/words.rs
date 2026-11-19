@@ -91,6 +91,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "aa923edc4ff88aebeb7bf6708fb0908c027f303219d99dbafe68398e69b1bd55",
     ),
     (
+        "carry_on",
+        2,
+        "2f897d21873137a2ae85e73a8c137d8cc60bef6871e1fba990180fb04dc1a5e5",
+    ),
+    (
         "hear_back",
         2,
         "0d809789abf8f9349065c0aac9cf2e947869f5c78587c3cd47aa68975dccb5f0",
@@ -150,6 +155,7 @@ const SOURCES: &[&str] = &[
     include_str!("merge/lands.rs"),
     include_str!("app_update.rs"),
     include_str!("pauses.rs"),
+    include_str!("restart_room.rs"),
     include_str!("plans/write.rs"),
     include_str!("plans/check.rs"),
     include_str!("plans/decide.rs"),

@@ -450,7 +450,7 @@ fn an_archived_chat_carries_no_state() {
 }
 
 #[test]
-fn a_restart_keeps_what_needs_the_person_and_drops_what_was_running() {
+fn a_restart_keeps_what_needs_the_person_and_carries_on_what_was_running() {
     let data = TempDir::new();
     let (service, chat) = asked_the_person(&data.0);
     until_state(&service, &chat, (true, true));
@@ -469,18 +469,26 @@ fn a_restart_keeps_what_needs_the_person_and_drops_what_was_running() {
         data.0.join("go"),
         data.0.join("env.jsonl"),
     );
-    std::fs::write(&go, "").unwrap();
     let env = [
         ("GATHR_REPLAY", replay.as_path()),
         ("GATHR_REPLAY_HOLD", go.as_path()),
         ("GATHR_REPLAY_ENV", tokens.as_path()),
     ];
+    // Two turns to the next engine: the carry-on, then the answer's.
+    let once = std::fs::read_to_string(&replay).unwrap();
+    std::fs::write(&replay, once.repeat(2)).unwrap();
     let service = TestService::with_engine(&data.0, &env);
-    assert_eq!(state(&service, &chat), (false, true));
+    // The cut turn carries on, and holds.
+    until_state(&service, &chat, (true, true));
+    std::fs::write(&go, "").unwrap();
+    service.wait_for(&chat, 10, "the carry-on's end", |h| {
+        h["turns"][1]["status"] == "done"
+    });
+    until_state(&service, &chat, (false, true));
     let mut live = service.live();
     answer(&service);
     service.wait_for(&chat, 10, "the hear-back turn", |h| {
-        h["turns"].as_array().is_some_and(|t| t.len() == 2)
+        h["turns"].as_array().is_some_and(|t| t.len() == 3)
     });
     ended(&service, &chat);
     until_state(&service, &chat, (false, false));

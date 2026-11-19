@@ -1,6 +1,7 @@
 //! Carry-ons for an update (0032): a queued turn for every agent the update is about to stop, saved
 //! all at once before any engine is told to stop. So each is there whatever an engine does next,
-//! and when one can't be saved, none is and nothing is stopped.
+//! and when one can't be saved, none is and nothing is stopped. A turn a restart cut gets its
+//! carry-on at the next start (0010).
 
 use rusqlite::{Connection, params};
 
@@ -11,6 +12,9 @@ use crate::words::Opened;
 
 /// What every carry-on ends with.
 pub const CHECK_FIRST: &str = "Check what is already done before repeating work, then continue.";
+
+/// Who ended a turn a restart cut, as its carry-on says it.
+pub const RESTART: &str = "Gathr's restart";
 
 /// What a stop ended for one agent, as its carry-on says it.
 pub fn ended(turn: bool, commands: usize) -> String {
@@ -94,6 +98,26 @@ pub fn save_all(conn: &mut Connection, by: &str) -> Result<Vec<Saved>, Error> {
     }
     tx.commit()?;
     Ok(saved)
+}
+
+/// At a start, for `turn`, still running when the service stopped: one carry-on waits for it. One
+/// an update or Stop now saved before the stop stays as it is, with its words and holds; else one
+/// is saved now, on the same task, answering it.
+pub fn restarted(conn: &Connection, turn: &str) -> Result<(), Error> {
+    let (chat, agent, task, pending): (String, Option<String>, Option<i64>, bool) = conn
+        .query_row(
+            "SELECT chat_id, agent_id, task, EXISTS (SELECT 1 FROM turns c WHERE c.answers = t.id
+                AND c.opened_by = 'carry_on' AND c.status IN ('queued', 'waiting_sign_in'))
+         FROM turns t WHERE id = ?1",
+            [turn],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )?;
+    if !pending {
+        let said = said(RESTART, &ended(true, 0));
+        let on = (task, Some(turn));
+        Start::save(conn, (&chat, agent.as_deref()), on, Opened::CarryOn, &said)?;
+    }
+    Ok(())
 }
 
 /// Before the hand-over: a carry-on stands only for a turn the update stopped, or one still running

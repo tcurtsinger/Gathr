@@ -257,18 +257,34 @@ fn what_a_change_starts_is_saved_with_it_so_a_stop_right_after_loses_nothing() {
     );
 }
 
+/// The giving turn is cut with the step it left running, carries on, and its giver hears back once.
 #[test]
-fn a_giving_turn_cut_off_by_a_stop_still_brings_its_hear_back() {
+fn a_giving_turn_cut_off_by_a_stop_carries_on_and_still_brings_its_hear_back() {
     let dir = TempDir::new();
     let mut conn = team(&dir);
     turn(&conn, "lead-turn", "lead", None, "running");
+    let step = r#"{"tool":"Bash","status":"running"}"#;
+    gathr::store::add_message(&conn, "c", "lead-turn", "assistant", "tool", step).unwrap();
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
     work(&mut conn, a, Some(Finish::Done));
     tasks::recover(&mut conn).unwrap();
+    let sql =
+        "SELECT body ->> '$.status' FROM messages WHERE turn_id = 'lead-turn' AND kind = 'tool'";
+    let step: String = conn.query_row(sql, [], |r| r.get(0)).unwrap();
+    assert_eq!(step, "stopped");
     let waiting = gathr::store::take_over(&conn).unwrap();
-    let back = waiting.iter().find(|w| w.agent.as_deref() == Some("lead"));
-    let back = back.expect("the hear-back is taken over");
-    assert!(back.text.contains(&format!("#{a} Ann")), "{}", back.text);
+    let to_lead: Vec<&str> = waiting
+        .iter()
+        .filter(|w| w.agent.as_deref() == Some("lead"))
+        .map(|w| w.text.as_str())
+        .collect();
+    let heard = format!("#{a} Ann");
+    assert_eq!(to_lead.len(), 2, "{to_lead:?}");
+    assert!(
+        to_lead[0].starts_with("Gathr's restart ended your turn."),
+        "{to_lead:?}"
+    );
+    assert!(to_lead[1].contains(&heard), "{to_lead:?}");
 }
 
 #[test]
