@@ -59,9 +59,6 @@ pub fn set(
     if state == State::Done && was.as_deref() != Some("done") {
         super::hear::done_line(tx, task)?;
     }
-    if state.settled() {
-        crate::plans::check::ended(tx, task, state, trace)?;
-    }
     Ok(())
 }
 

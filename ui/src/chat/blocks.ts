@@ -13,6 +13,9 @@ import type { Said, Spoken } from './threads';
 
 const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
 
+/** A member's check of the lead's answer (0080). */
+const isCheck = (t: Turn | undefined) => t?.opened === 'check';
+
 /** Who it is by and the task it is on, and its place in the chat: a main message or a reply in a thread. */
 export interface Heading {
   on?: string;
@@ -98,6 +101,8 @@ export function block(
   // review's notes stay in the Tasks view and the fix's brief.
   const left = lastOfTask && task?.checks != null && task.report?.how === 'left' && !!task.notes?.length;
   const findings = left ? task.notes : undefined;
+  // A member's check of an answer says whose under its name line (0080).
+  const checked = isCheck(turn) && turn?.answers ? crew.name(state.turns[turn.answers]?.agent) : undefined;
   const seat = crew.seated(turn?.agent);
   const who = `${agent}|${role}|${seat}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
@@ -105,7 +110,7 @@ export function block(
   const status = group.last ? turn?.status : '';
   const sig = `${parts}|${partial.length}|${status}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}|${
     opened
-  }|${JSON.stringify([...chips])}|${JSON.stringify(findings)}`;
+  }|${JSON.stringify([...chips])}|${JSON.stringify(findings)}|${checked}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -128,6 +133,7 @@ export function block(
   if (end) custom.ending = end;
   if (opened) custom.opened = opened;
   if (findings) custom.findings = findings;
+  if (checked) custom.checked = checked;
   const value = toReply(group, partial, group.last ? turn : undefined, custom, { gave, chips });
   cache.set(group.key, { sig, value });
   return value;
@@ -154,8 +160,10 @@ function endingOf(group: Group, state: ChatState) {
  */
 export function mute(group: Group, state: ChatState, asked: number[] | undefined): boolean {
   if (group.kind !== 'reply' || asked?.length) return false;
-  if (group.msgs.some((m) => m.kind !== 'text' || m.body)) return false;
   const id = group.turn;
+  // A check that only gave its thumbs-up shows as that thumbs-up on the answer (0080): its steps draw nothing.
+  const steps = !isCheck(id ? state.turns[id] : undefined);
+  if (group.msgs.some((m) => (m.kind === 'text' ? !!m.body : steps))) return false;
   if (group.last && id && (state.partial[id] || state.turns[id]?.status === 'running')) return false;
   if (group.last && id && state.approvals.some((a) => a.turn === id)) return false;
   return !endingOf(group, state);
@@ -217,6 +225,8 @@ export function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
   const text = m.body as string;
   const turn = state.turns[m.turn ?? ''];
   if (turn && text.startsWith(RESIZED)) return [];
+  // The open check's words to an agent (0080): its Checked line says it, and the last word follows what it answers.
+  if (turn?.opened === 'check' || turn?.opened === 'last_word') return [];
   const fix = m.turn ? undefined : fixed(text);
   if (fix) return [fix];
   if (TOLD.test(text)) return [];

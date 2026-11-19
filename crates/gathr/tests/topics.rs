@@ -101,6 +101,23 @@ fn token(data: &Path, n: usize) -> String {
         .to_string()
 }
 
+/// The token of `name`'s `n`th engine (from 1), once it has started: its folder names it.
+fn token_of(data: &Path, name: &str, n: usize) -> String {
+    let folder = std::path::MAIN_SEPARATOR.to_string() + name + std::path::MAIN_SEPARATOR_STR;
+    until(30, &format!("{name}'s engine {n}"), || {
+        let text = std::fs::read_to_string(data.join("env.jsonl")).unwrap_or_default();
+        let starts = text
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok());
+        let mut theirs = starts.filter(|s| s["cwd"].as_str().is_some_and(|c| c.contains(&folder)));
+        Some(
+            theirs.nth(n - 1)?["GATHR_AGENT_TOKEN"]
+                .as_str()?
+                .to_string(),
+        )
+    })
+}
+
 fn part(what: &str) -> Value {
     json!({ "to": "Ann", "what": what, "why": "Notes need tags", "done": "A note carries its tags",
         "proof": "tests/tags.rs passes", "where": "no code", "size": "src/tags.rs", "lines": 60, "after": [] })
@@ -113,7 +130,8 @@ fn part(what: &str) -> Value {
 #[test]
 fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong() {
     let data = TempDir::new();
-    let (service, chat) = team_on(&data.0, "claude");
+    let on = [("GATHR_OPEN_CHECK", Path::new("on"))];
+    let (service, chat) = common::team_on_with(&data.0, "claude", &on);
     first_turns_hold(&data.0);
     common::with_reviewer(&service, &chat);
     let go = data.0.join("go");
@@ -126,41 +144,39 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
         "parts": [part("Add the tags table"), part("Show tags in the list")] });
     let wrote = text(&call_tool(port, &lead, "plan", plan));
     assert!(wrote.starts_with("Wrote version 1 of plan #1"), "{wrote}");
-    let check_turn = turn_on(&service, &chat, 1, &["running"]);
-    let rev = token(&data.0, 1);
-    let shown = service.call("GET", "/api/plans/1").json();
-    let version = shown["versions"][0]["message"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    let agrees = call_tool(port, &rev, "react", json!({ "message": version }));
-    assert_eq!(agrees["isError"], false, "{}", text(&agrees));
+    // The lead's turn ends; Ann and Rev check the plan in the open, each in the recording's words,
+    // and the lead has its last word (0080).
     std::fs::write(&go, "").unwrap();
     until(30, "the plan to wait on the person", || {
         let shown = service.call("GET", "/api/plans/1").json();
         (shown["state"] == "waiting").then_some(())
     });
-    service.wait_for(&chat, 30, "the lead's first turn to end", |h| {
-        h["turns"][0]["status"] == "done"
+    let mut checks = opened(&data.0, "check");
+    checks.extend(opened(&data.0, "last_word"));
+    assert_eq!(checks.len(), 3, "two checks and a last word");
+    service.wait_for(&chat, 30, "every turn so far to end", |h| {
+        let turns = h["turns"].as_array().cloned().unwrap_or_default();
+        turns.iter().all(|t| t["status"] == "done")
     });
 
-    // Ann's first turn holds again, so her report is made while it runs.
+    // Ann's first turn on a task holds again, so her report is made while it runs.
     std::fs::remove_file(&go).unwrap();
     let approved = service.send("POST", "/api/plans/1/approve", json!({ "version": 1 }));
     assert_eq!(approved.status, 200, "{}", approved.body);
-    let ann_turn = turn_on(&service, &chat, 2, &["running"]);
+    let ann_turn = turn_on(&service, &chat, 1, &["running"]);
     common::record_ui(&service, &chat, "ask-at-work");
-    let ann = token(&data.0, 2);
-    let blocked = json!({ "task": 3, "how": "blocked", "note": "it needs the tags table first" });
+    // Ann's first engine checked the plan; her task starts a second (0055).
+    let ann = token_of(&data.0, "Ann", 2);
+    let blocked = json!({ "task": 2, "how": "blocked", "note": "it needs the tags table first" });
     let said = text(&call_tool(port, &ann, "finish_task", blocked));
     assert!(said.starts_with("Recorded: blocked."), "{said}");
     until(30, "the lead's hear-back on the trouble", || {
         opened(&data.0, "hear_back").into_iter().next()
     });
-    let cancelled = service.send("POST", "/api/tasks/3/cancel", json!({}));
+    let cancelled = service.send("POST", "/api/tasks/2/cancel", json!({}));
     assert_eq!(cancelled.status, 200, "{}", cancelled.body);
     let done =
-        json!({ "task": 2, "how": "done", "note": "the table is in", "file": "src/tags.rs" });
+        json!({ "task": 1, "how": "done", "note": "the table is in", "file": "src/tags.rs" });
     let said = text(&call_tool(port, &ann, "finish_task", done));
     assert!(said.starts_with("Recorded: done."), "{said}");
     std::fs::write(&go, "").unwrap();
@@ -180,40 +196,42 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
     let wrote_it = json!(format!("b:{lead_turn}"));
     let found = [
         ("the person's own turn", topic_of(&history, &lead_turn)),
-        ("the plan check's turn", topic_of(&history, &check_turn)),
-        ("Ann's turn on part #2", topic_of(&history, &ann_turn)),
+        ("a check's turn", topic_of(&history, &checks[0])),
+        ("the other check's turn", topic_of(&history, &checks[1])),
+        ("the lead's last word", topic_of(&history, &checks[2])),
+        ("Ann's turn on part #1", topic_of(&history, &ann_turn)),
         (
             "the hear-back on the trouble",
             topic_of(&history, &backs[0]),
         ),
         ("the closing hear-back", topic_of(&history, &backs[1])),
-        ("the check's line", line_topic(&history, "Rev agrees")),
         ("Approve's line", line_topic(&history, "Approved:")),
         (
-            "part #2's done line",
-            line_topic(&history, "A task is done:\n- #2"),
+            "part #1's done line",
+            line_topic(&history, "A task is done:\n- #1"),
         ),
     ];
     let want = [
         ("the person's own turn", wrote_it.clone()),
-        ("the plan check's turn", wrote_it.clone()),
-        ("Ann's turn on part #2", json!("t:2")),
+        ("a check's turn", wrote_it.clone()),
+        ("the other check's turn", wrote_it.clone()),
+        ("the lead's last word", wrote_it.clone()),
+        ("Ann's turn on part #1", json!("t:1")),
         (
             "the hear-back on the trouble",
             json!(format!("b:{}", backs[0])),
         ),
         ("the closing hear-back", json!(format!("r:{}", backs[1]))),
-        ("the check's line", wrote_it.clone()),
         ("Approve's line", wrote_it.clone()),
-        ("part #2's done line", json!("t:2")),
+        ("part #1's done line", json!("t:1")),
     ];
     assert_eq!(found, want, "{history}");
     let closing = history["turns"].as_array().unwrap().iter();
     let closing = closing.clone().find(|t| t["id"] == backs[1].as_str());
     assert_eq!(closing.unwrap()["result_of"], json!(ask), "{history}");
     let listed = listed(&service, &chat);
-    let tasks = [1, 2, 3].map(|n| task_topic(&listed, n));
-    assert_eq!(tasks, [wrote_it, json!("t:2"), json!("t:3")], "{listed}");
+    let tasks = [1, 2].map(|n| task_topic(&listed, n));
+    assert_eq!(tasks, [json!("t:1"), json!("t:2")], "{listed}");
     // The person's message holds no thread: nothing in the chat sits under it.
     let under = json!(format!("m:{ask}"));
     let turns = history["turns"]
@@ -240,83 +258,6 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
         "the ask is done: {listed}"
     );
     common::record_ui(&service, &chat, "ask-done");
-    common::topics_agree(&data.0, &chat);
-}
-
-/// 0078: a check that left findings sits under the lead's bubble that wrote the version, with its
-/// line; the lead's hear-back on it is a main message of its own, and the version it writes there
-/// has its check, and Approve's line, under that bubble.
-#[test]
-fn a_checks_findings_sit_under_the_version_and_the_next_version_is_a_main_of_its_own() {
-    let data = TempDir::new();
-    let (service, chat) = team_on(&data.0, "claude");
-    first_turns_hold(&data.0);
-    common::with_reviewer(&service, &chat);
-    let go = data.0.join("go");
-    let _go = LetGo(go.clone());
-    let port = service.info.port;
-    let (lead_turn, _) = send(&service, &chat, ASK);
-    let lead = common::first_token(&data.0);
-    let plan = |parts: Vec<Value>, answers: Value| json!({ "title": ASK, "text": "Notes carry tags.", "parts": parts, "answers": answers });
-    let v1 = plan(vec![part("Add the tags table")], Value::Null);
-    let wrote = text(&call_tool(port, &lead, "plan", v1));
-    assert!(wrote.starts_with("Wrote version 1 of plan #1"), "{wrote}");
-    let first_check = turn_on(&service, &chat, 1, &["running"]);
-    let rev = token(&data.0, 1);
-    let note = json!({ "kind": "wrong", "file": "src/tags.rs:12", "says": "Tags aren't saved" });
-    let left = json!({ "task": 1, "how": "left", "note": "One gap", "notes": [note] });
-    let said = text(&call_tool(port, &rev, "finish_task", left));
-    assert!(said.starts_with("Recorded: left."), "{said}");
-    std::fs::write(&go, "").unwrap();
-    let heard = until(30, "the lead's hear-back on the findings", || {
-        let sql =
-            "SELECT id FROM turns WHERE opened_by = 'hear_back' AND status IN ('running', 'done')";
-        rows(&data.0, sql)
-            .first()
-            .map(|r| r["id"].as_str().unwrap().to_string())
-    });
-
-    let answers = json!([{ "note": 1, "changed": true, "why": "Tags are saved first" }]);
-    let v2 = plan(vec![part("Save the tags first")], answers);
-    let wrote = text(&call_tool(port, &lead, "plan", v2));
-    assert!(wrote.starts_with("Wrote version 2 of plan #1"), "{wrote}");
-    until(60, "version 2 to wait on the person", || {
-        let shown = service.call("GET", "/api/plans/1").json();
-        (shown["state"] == "waiting").then_some(())
-    });
-    let approved = service.send("POST", "/api/plans/1/approve", json!({ "version": 2 }));
-    assert_eq!(approved.status, 200, "{}", approved.body);
-    let history = service.wait_for(&chat, 30, "Approve's line", |h| {
-        let messages = h["messages"].as_array().cloned().unwrap_or_default();
-        messages.iter().any(|m| {
-            m["body"]
-                .as_str()
-                .is_some_and(|b| b.starts_with("Approved:"))
-        })
-    });
-
-    let (first, next) = (json!(format!("b:{lead_turn}")), json!(format!("b:{heard}")));
-    let found = [
-        ("the turn that wrote v1", topic_of(&history, &lead_turn)),
-        ("v1's check turn", topic_of(&history, &first_check)),
-        (
-            "the findings line",
-            line_topic(&history, "Rev has 1 finding"),
-        ),
-        ("the hear-back that wrote v2", topic_of(&history, &heard)),
-        ("Approve's line", line_topic(&history, "Approved:")),
-    ];
-    let want = [
-        ("the turn that wrote v1", first.clone()),
-        ("v1's check turn", first.clone()),
-        ("the findings line", first.clone()),
-        ("the hear-back that wrote v2", next.clone()),
-        ("Approve's line", next.clone()),
-    ];
-    assert_eq!(found, want, "{history}");
-    let listed = listed(&service, &chat);
-    let checks = [1, 2].map(|n| task_topic(&listed, n));
-    assert_eq!(checks, [first, next], "{listed}");
     common::topics_agree(&data.0, &chat);
 }
 
@@ -526,7 +467,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
          ALTER TABLE messages DROP COLUMN about;
                  DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
          ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
-         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed;
+         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
          PRAGMA user_version = 54;",
     )
     .unwrap();
@@ -584,11 +525,11 @@ fn rows_of(conn: &rusqlite::Connection, sql: &str) -> Vec<String> {
     rows.map(|r| format!("{:?}", r.unwrap())).collect()
 }
 
-/// The PR's forced failure (0019): on the seeded team chat, a plan check whose version's turn is
-/// gone ties to nothing, its lines too, `gathr diag threads` says why, and the history route's
+/// The PR's forced failure (0019): on the seeded team chat, a member's check whose answer's turn is
+/// gone ties to nothing, a line about a version whose turn is gone too, `gathr diag threads` says why, and the history route's
 /// reference finds it.
 #[test]
-fn a_check_whose_versions_turn_is_gone_ties_to_nothing_and_is_found_from_the_historys_reference() {
+fn a_check_whose_answers_turn_is_gone_ties_to_nothing_and_is_found_from_the_historys_reference() {
     let data = TempDir::new();
     let (ok, seeded) = gathr(&data.0, &["seed"]);
     assert!(ok, "{seeded}");
@@ -609,19 +550,20 @@ fn a_check_whose_versions_turn_is_gone_ties_to_nothing_and_is_found_from_the_his
         )
         .unwrap();
     assert!((2_000..2_100).contains(&messages), "{messages} messages");
-    // The chat's last version: its check's line and Approve's are said in no turn.
-    let (check, line): (i64, String) = conn
+    // The chat's last version: a member's check of it, and Approve's line said in no turn (0080).
+    let (check, version, line): (String, i64, String) = conn
         .query_row(
-            "SELECT t.number, v.check_line FROM plan_versions v JOIN plans p ON p.id = v.plan_id
-             JOIN tasks t ON t.checks = v.id WHERE p.chat_id = ?1 ORDER BY v.id DESC LIMIT 1",
+            "SELECT u.id, v.id, v.decided_line FROM plan_versions v JOIN plans p ON p.id = v.plan_id
+             JOIN turns u ON u.answers = v.turn_id AND u.opened_by = 'check'
+             WHERE p.chat_id = ?1 ORDER BY v.id DESC LIMIT 1",
             [&chat],
-            |r| Ok((r.get(0)?, r.get(1)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .unwrap();
-    conn.execute(
-        "UPDATE plan_versions SET turn_id = 'gone' WHERE check_line = ?1",
-        [&line],
-    )
+    conn.execute_batch(&format!(
+        "UPDATE plan_versions SET turn_id = 'gone' WHERE id = {version};
+         UPDATE turns SET answers = 'gone' WHERE id = '{check}';"
+    ))
     .unwrap();
     drop(conn);
 
@@ -639,23 +581,24 @@ fn a_check_whose_versions_turn_is_gone_ties_to_nothing_and_is_found_from_the_his
     assert_eq!(
         [
             row_of(("lines", "message"), json!(line)),
-            row_of(("tasks", "task"), json!(check))
+            row_of(("turns", "turn"), json!(check))
         ],
         [
             json!({ "topic": format!("m:{line}"), "why": why }),
-            json!({ "topic": format!("t:{check}"), "why": why })
+            json!({ "topic": format!("b:{check}"), "why": why })
         ],
         "{}",
         threads["in_words"]
     );
-    // Approve's line of the same version too: nothing else leads nowhere.
-    assert_eq!(threads["counts"]["broken"], 3, "{}", threads["in_words"]);
+    // Nothing else leads nowhere.
+    assert_eq!(threads["counts"]["broken"], 2, "{}", threads["in_words"]);
     common::topics_agree(&data.0, &chat);
     for fact in [
         "handed_out",
         "parent",
         "question",
-        "version",
+        "check",
+        "last_word",
         "result",
         "person",
         "plan",

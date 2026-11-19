@@ -252,8 +252,6 @@ fn gathrs_own_building_gives_wait_for_the_plan() {
     assert_eq!(queued_on(&conn, fix), None);
 
     let wrote = plan(&mut conn, "T", "Add the tags table");
-    assert_eq!(state(&conn, wrote.check).0, State::Ready, "H's check");
-    assert!(queued_on(&conn, wrote.check).is_some());
     agreed(&mut conn, &wrote);
     plans::approve(&mut conn, wrote.plan, 1, T).unwrap();
     let part: i64 = conn

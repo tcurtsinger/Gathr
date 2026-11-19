@@ -210,15 +210,16 @@ impl Task {
     pub(super) async fn publish_turn(&self, ids: &Ids, mut update: Value) {
         let (turn, chat) = (ids.turn.clone(), ids.chat.clone());
         let place = self.chats.writer.call(move |c| {
-            let (position, created, result_of) = store::turn_place(c, &turn)?;
+            let place = store::turn_place(c, &turn)?;
             let topic = gathr::topics::of_turn(c, &chat, &turn)?;
-            Ok::<_, gathr::Error>((position, created, result_of, topic))
+            Ok::<_, gathr::Error>((place, topic))
         });
         match place.await {
-            Some(Ok((position, created, result_of, topic))) => {
+            Some(Ok(((position, created, result_of, opened), topic))) => {
                 update["position"] = json!(position);
                 update["created"] = json!(created);
                 update["result_of"] = json!(result_of);
+                update["opened"] = json!(opened);
                 // What it is about (0075): read when its status goes out, never per streamed word.
                 update["topic"] = json!(topic);
             }

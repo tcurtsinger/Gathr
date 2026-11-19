@@ -1,5 +1,5 @@
 //! 0062, Stage 3 part H: the lead's plan, a record of versions written with `plan`, each checked
-//! before the person sees it, at the SQLite seam.
+//! in the open before the person sees it (0080), at the SQLite seam.
 
 #[path = "plans/check.rs"]
 mod check;
@@ -13,8 +13,8 @@ mod write;
 
 use common::TempDir;
 use gathr::Error;
-use gathr::plans::{self, Answer, Part, Writing, Wrote};
-use gathr::tasks::{self, Finish, Moved, Said, Start};
+use gathr::plans::{self, Part, Writing, Wrote};
+use gathr::tasks::{self, Moved, Start};
 use gathr::words::Opened;
 use rusqlite::{Connection, params};
 
@@ -94,12 +94,7 @@ fn part<'a>(to: &'a str, what: &'a str, after: &'a [i64]) -> Part<'a> {
 }
 
 /// `plan` from Mira's `turn` in chat `c`.
-fn write(
-    conn: &mut Connection,
-    turn: Option<&str>,
-    parts: &[Part],
-    answers: Option<&[Answer]>,
-) -> Result<Wrote, Error> {
+fn write(conn: &mut Connection, turn: Option<&str>, parts: &[Part]) -> Result<Wrote, Error> {
     let w = Writing {
         chat: "c",
         agent: "mira",
@@ -107,7 +102,6 @@ fn write(
         title: TITLE,
         text: TEXT,
         parts,
-        answers,
     };
     plans::write(conn, &w, T)
 }
@@ -132,20 +126,6 @@ fn queued_on(conn: &Connection, task: i64) -> (String, String) {
                WHERE u.task = ?1 AND u.status = 'queued' ORDER BY u.rowid DESC LIMIT 1";
     conn.query_row(sql, [task], |r| Ok((r.get(0)?, r.get(1)?)))
         .unwrap()
-}
-
-/// The text with each message id of the chat's versions read as `<id>`, as the samples have it.
-fn sampled(conn: &Connection, text: &str) -> String {
-    let mut stmt = conn
-        .prepare("SELECT message_id FROM plan_versions")
-        .unwrap();
-    let ids: Vec<String> = stmt
-        .query_map([], |r| r.get(0))
-        .unwrap()
-        .map(Result::unwrap)
-        .collect();
-    ids.iter()
-        .fold(text.to_string(), |t, id| t.replace(id, "<id>"))
 }
 
 /// What Gathr said in no turn in `chat`, oldest first.
@@ -181,56 +161,6 @@ fn moved(
         carries_on: None,
     };
     tasks::turn_moved(conn, &m, status, None).unwrap()
-}
-
-/// The check's queued turn starts running: its id.
-fn begin(conn: &mut Connection, check: i64) -> String {
-    let (turn, _) = queued_on(conn, check);
-    moved(conn, (&turn, "bo"), Some(check), "running");
-    turn
-}
-
-/// A report by `agent` on `task`.
-fn report(
-    conn: &mut Connection,
-    agent: &str,
-    task: i64,
-    how: Finish,
-    said: &Said,
-) -> Result<tasks::Took, Error> {
-    tasks::finish(conn, agent, task, how, said, T).map(|(_, took, ..)| took)
-}
-
-/// Bo leaves the check with a wrong and an unasked note.
-fn findings(conn: &mut Connection, check: i64) {
-    let notes = [
-        tasks::NoteSaid {
-            kind: tasks::NoteKind::Wrong,
-            file: Some("src/notes.rs"),
-            says: "The list query misses tags",
-        },
-        tasks::NoteSaid {
-            kind: tasks::NoteKind::Unasked,
-            file: None,
-            // Ends in a full stop, as agents often write: the reason mustn't double it.
-            says: "Export isn't asked.",
-        },
-    ];
-    let said = Said {
-        note: Some("Two gaps"),
-        notes: &notes,
-        ..Said::default()
-    };
-    report(conn, "bo", check, Finish::Left, &said).unwrap();
-}
-
-/// The ids of the newest report's notes on `check`.
-fn note_ids(conn: &Connection, check: i64) -> Vec<i64> {
-    let mut stmt = conn
-        .prepare("SELECT id FROM review_notes WHERE task = ?1 ORDER BY id")
-        .unwrap();
-    let rows = stmt.query_map([check], |r| r.get(0)).unwrap();
-    rows.map(Result::unwrap).collect()
 }
 
 fn task_state(conn: &Connection, task: i64) -> (tasks::State, Option<String>) {

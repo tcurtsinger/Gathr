@@ -98,7 +98,9 @@ pub fn catch_up(
 }
 
 /// The chat's lines, newest first, the last 30: since `since` without the agent's own turns and what
-/// they carried, or the last of all. Never the turn's own messages or what they carry.
+/// they carried, or the last of all. Never the turn's own messages or what they carry, nor what the
+/// open check's words hand the turn already (0080): a check its answer and the person's message, the
+/// lead's last word the members' checks.
 fn lines(
     conn: &Connection,
     (chat, turn, agent): (&str, &str, &str),
@@ -111,6 +113,11 @@ fn lines(
            AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
            AND m.turn_id IS NOT ?2
            AND m.id NOT IN (SELECT copy_of FROM messages WHERE turn_id = ?2 AND copy_of IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
+                           WHERE u.id = ?2 AND u.opened_by = 'check' AND m.id IN (c.asked, c.answer))
+           AND NOT EXISTS (SELECT 1 FROM turns u JOIN turns k ON k.answers = u.answers
+                           WHERE u.id = ?2 AND u.opened_by = 'last_word' AND k.opened_by = 'check'
+                             AND k.id = m.turn_id)
            AND (?4 IS NULL OR (m.ts > ?4 AND t.agent_id IS NOT ?3 AND m.id NOT IN
                (SELECT c.copy_of FROM messages c JOIN turns u ON u.id = c.turn_id
                 WHERE u.chat_id = ?1 AND u.agent_id = ?3 AND c.copy_of IS NOT NULL)))

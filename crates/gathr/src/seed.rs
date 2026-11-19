@@ -74,6 +74,13 @@ pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Er
     s.asks()?;
     s.threads_chat()?;
     s.one_agent_chat()?;
+    // Each made-up message of the person's has had its check (0080), as at an upgrade: a service on
+    // the folder begins no round for one.
+    tx.execute(
+        "INSERT OR IGNORE INTO open_checks (chat_id, asked, began_ts, ended_ts)
+         SELECT chat_id, id, ts, ts FROM messages WHERE role = 'user' AND turn_id IS NOT NULL",
+        [],
+    )?;
     let made = s.made;
     tx.commit()?;
     Ok(made)

@@ -1,12 +1,12 @@
 //! H6, H6a, H7 and H8: Approve makes each part a task, Send back wakes the lead, Drop ends the
-//! wait, a second plan keeps the first, and a plan keeps its ask's messages, check and tasks.
+//! wait, a second plan keeps the first, and a plan keeps its ask's messages and tasks.
 
 use super::*;
 use gathr::asks::{self, Sizing};
 
 const TEN: i64 = 600_000_000;
 
-/// The chat's unsent versions reach the person, their checks late (H4.12).
+/// The chat's unsent versions reach the person, their rounds late (H4.12).
 fn late(conn: &mut Connection, chat: &str) {
     let now = gathr::ids::now_us();
     plans::overdue(conn, chat, now + TEN, TEN, T).unwrap();
@@ -69,15 +69,14 @@ fn person_says(conn: &mut Connection, turn: &str, text: &str) -> (String, Option
     (message["id"].as_str().unwrap().to_string(), ask)
 }
 
-/// Bo agrees with the version while no turn runs on its check: the version waits on the person.
+/// The members' round on the version ends with their thumbs-ups: the version waits on the person.
 fn agreed(conn: &mut Connection, wrote: &Wrote) {
-    let (queued, _) = queued_on(conn, wrote.check);
-    set_status(conn, &queued, "stopped");
     let message: String = version_field(conn, wrote.version, "message_id");
-    let tx = conn.transaction().unwrap();
-    gathr::reactions::add(&tx, "c", &message, "bo", T).unwrap();
-    plans::agreed(&tx, "c", &message, "bo", T).unwrap().unwrap();
-    tx.commit().unwrap();
+    for start in gathr::open_check::settle(conn, "c", T).unwrap() {
+        gathr::reactions::add(conn, "c", &message, &start.agent, T).unwrap();
+        set_status(conn, &start.turn, "done");
+    }
+    assert_eq!(gathr::open_check::settle(conn, "c", T).unwrap(), []);
 }
 
 /// Mira splits `message` off from her `turn`.
@@ -108,10 +107,10 @@ fn approve_makes_each_part_a_task_word_for_word() {
     let mut parts = three();
     parts[2].after = &[];
     parts[2].after_tasks = &after_41;
-    let wrote = write(&mut conn, Some("T"), &parts, None).unwrap();
+    let wrote = write(&mut conn, Some("T"), &parts).unwrap();
     moved(&mut conn, ("T", "mira"), None, "done");
     late(&mut conn, "c");
-    let late_line = "Bo didn't finish checking version 1 of the plan \"Tags on notes\".";
+    let late_line = "The team didn't finish checking version 1 of the plan \"Tags on notes\".";
     assert_eq!(lines(&conn, "c"), [late_line]);
 
     let decided = plans::approve(&mut conn, wrote.plan, 1, T).unwrap();
@@ -211,7 +210,6 @@ fn approve_makes_each_part_a_task_word_for_word() {
         &serde_json::json!(2),
     );
     assert_eq!(seen, want_seen, "{e}");
-    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Cancelled);
     assert_eq!(
         mira_queued(&conn),
         Vec::<Woken>::new(),
@@ -229,18 +227,11 @@ fn approve_makes_each_part_a_task_word_for_word() {
     );
     assert_eq!(refused(&mut conn, 99, 1), "there's no plan #99");
     asked(&mut conn, "c", "T2", "Add folders");
-    let first = write(
-        &mut conn,
-        Some("T2"),
-        &[part("Ann", "Add folders", &[])],
-        None,
-    )
-    .unwrap();
+    let first = write(&mut conn, Some("T2"), &[part("Ann", "Add folders", &[])]).unwrap();
     let second = write(
         &mut conn,
         Some("T2"),
         &[part("Ann", "Add the folders table", &[])],
-        None,
     );
     let second = second.unwrap();
     assert_eq!(second.plan, first.plan);
@@ -291,7 +282,7 @@ fn approve_makes_each_part_a_task_word_for_word() {
     let after_50 = [50];
     let mut searched = part("Ann", "Search notes", &[]);
     searched.after_tasks = &after_50;
-    let third = write(&mut conn, Some("T3"), &[searched], None).unwrap();
+    let third = write(&mut conn, Some("T3"), &[searched]).unwrap();
     late(&mut conn, "c");
     conn.execute("UPDATE tasks SET state = 'cancelled' WHERE number = 50", [])
         .unwrap();
@@ -299,11 +290,7 @@ fn approve_makes_each_part_a_task_word_for_word() {
         refused(&mut conn, third.plan, 1),
         "Part 1 comes after #50, which was cancelled: send the plan back."
     );
-    assert_eq!(
-        task_count(&conn),
-        before + 4,
-        "the three checks and #50 only"
-    );
+    assert_eq!(task_count(&conn), before + 1, "#50 only");
     gathr::archive::archive(&mut conn, "c", T).unwrap();
     assert_eq!(refused(&mut conn, first.plan, 2), "the chat is archived");
 }
@@ -313,7 +300,7 @@ fn approve_makes_each_part_a_task_word_for_word() {
 fn send_back_and_drop_end_the_wait() {
     let dir = TempDir::new();
     let (mut conn, ask) = room(&dir);
-    let wrote = write(&mut conn, Some("T"), &three(), None).unwrap();
+    let wrote = write(&mut conn, Some("T"), &three()).unwrap();
     moved(&mut conn, ("T", "mira"), None, "done");
     late(&mut conn, "c");
     assert_eq!(needs(&conn, "c"), true);
@@ -348,19 +335,11 @@ fn send_back_and_drop_end_the_wait() {
     assert_eq!(needs(&conn, "c"), false);
 
     asked(&mut conn, "c", "T2", "Add folders");
-    let other = write(
-        &mut conn,
-        Some("T2"),
-        &[part("Ann", "Add folders", &[])],
-        None,
-    )
-    .unwrap();
-    begin(&mut conn, other.check);
+    let other = write(&mut conn, Some("T2"), &[part("Ann", "Add folders", &[])]).unwrap();
     let said = lines(&conn, "c");
     let checked = events(&conn, "checked").len();
     let dropped = plans::drop(&mut conn, other.plan, 1, T).unwrap();
     assert_eq!(dropped.summary.state, plans::State::Dropped);
-    assert_eq!(task_state(&conn, other.check).0, tasks::State::Cancelled);
     let line: Option<String> = version_field(&conn, other.version, "check_line");
     let sent_ts: Option<i64> = version_field(&conn, other.version, "sent_ts");
     assert_eq!((line, sent_ts), (None, None));
@@ -385,7 +364,7 @@ fn send_back_and_drop_end_the_wait() {
 fn a_second_plan_for_an_ask_keeps_the_first() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
-    let first = write(&mut conn, Some("T"), &three(), None).unwrap();
+    let first = write(&mut conn, Some("T"), &three()).unwrap();
     late(&mut conn, "c");
     plans::approve(&mut conn, first.plan, 1, T).unwrap();
     let record = |conn: &Connection| -> Vec<String> {
@@ -403,7 +382,7 @@ fn a_second_plan_for_an_ask_keeps_the_first() {
     let on = [made[0]];
     let mut next = part("Ann", "Index the tags", &[]);
     next.after_tasks = &on;
-    let second = write(&mut conn, Some("T"), &[next], None).unwrap();
+    let second = write(&mut conn, Some("T"), &[next]).unwrap();
     assert_ne!(second.plan, first.plan);
     assert_eq!(second.n, 1);
     late(&mut conn, "c");
@@ -421,7 +400,7 @@ fn a_second_plan_for_an_ask_keeps_the_first() {
 fn a_message_while_a_plan_is_open_joins_its_ask() {
     let dir = TempDir::new();
     let (mut conn, ask) = room(&dir);
-    let wrote = write(&mut conn, Some("T"), &three(), None).unwrap();
+    let wrote = write(&mut conn, Some("T"), &three()).unwrap();
     moved(&mut conn, ("T", "mira"), None, "done");
     agreed(&mut conn, &wrote);
     assert_eq!(plan_state(&conn, "c", wrote.plan), plans::State::Waiting);
@@ -440,10 +419,10 @@ fn a_message_while_a_plan_is_open_joins_its_ask() {
 
 /// H8.3.
 #[test]
-fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
+fn a_split_never_moves_a_plan_or_its_tasks() {
     let dir = TempDir::new();
     let (mut conn, ask) = room(&dir);
-    let wrote = write(&mut conn, Some("T"), &three(), None).unwrap();
+    let wrote = write(&mut conn, Some("T"), &three()).unwrap();
     moved(&mut conn, ("T", "mira"), None, "done");
     agreed(&mut conn, &wrote);
     let (m2, joined) = person_says(&mut conn, "T2", "Also tag old notes");
@@ -451,7 +430,7 @@ fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
     set_status(&conn, "T2", "running");
     let mut tagged = three();
     tagged.push(part("Bo", "Tag old notes", &[1]));
-    write(&mut conn, Some("T2"), &tagged, None).unwrap();
+    write(&mut conn, Some("T2"), &tagged).unwrap();
     let asks_before: i64 = conn
         .query_row("SELECT count(*) FROM asks", [], |r| r.get(0))
         .unwrap();
@@ -467,7 +446,7 @@ fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
         .unwrap();
     assert_eq!(asks_after, asks_before);
 
-    // Steered into the turn that then gives a task and writes a version: the task moves, not the check.
+    // Steered into the turn that then gives a task and writes a version: the task moves, not the plan.
     let m5 = asked(&mut conn, "c", "T5", "Add search");
     let steered =
         gathr::store::add_message(&conn, "c", "T5", "user", "text", "Also search titles").unwrap();
@@ -493,14 +472,14 @@ fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
         look_into: true,
     };
     let (work, _) = tasks::give(&mut conn, &g, T).unwrap();
-    let search = write(
-        &mut conn,
-        Some("T5"),
-        &[part("Ann", "Search notes", &[])],
-        None,
-    )
-    .unwrap();
+    let search = write(&mut conn, Some("T5"), &[part("Ann", "Search notes", &[])]).unwrap();
     split(&mut conn, "T5", &m6).unwrap();
+    let plan_ask = |conn: &Connection, plan: i64| -> String {
+        conn.query_row("SELECT ask_id FROM plans WHERE id = ?1", [plan], |r| {
+            r.get(0)
+        })
+        .unwrap()
+    };
     let ask_of = |conn: &Connection, task: i64| -> String {
         let sql = "SELECT ask_id FROM tasks WHERE number = ?1";
         conn.query_row(sql, [task], |r| r.get(0)).unwrap()
@@ -511,14 +490,14 @@ fn a_split_never_moves_a_plan_its_check_or_its_tasks() {
         "the task given after the message moves"
     );
     assert_eq!(
-        ask_of(&conn, search.check),
+        plan_ask(&conn, search.plan),
         m5,
-        "the check stays with its plan"
+        "the plan stays with its ask"
     );
 
     // Steered into the turn that wrote a version that is then approved: no part's task moves.
     let m7 = asked(&mut conn, "c", "T7", "Add export");
-    let export = write(&mut conn, Some("T7"), &three(), None).unwrap();
+    let export = write(&mut conn, Some("T7"), &three()).unwrap();
     let steered =
         gathr::store::add_message(&conn, "c", "T7", "user", "text", "As CSV too").unwrap();
     let m8 = steered["id"].as_str().unwrap().to_string();

@@ -249,9 +249,12 @@ fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The service on `data`. A test of the open check's own turns (0080) sets `GATHR_OPEN_CHECK` to `on`;
+/// every other test runs with nobody to check, so a lead's answer starts no turns it doesn't expect.
 pub fn gathrd(data: &Path) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_gathrd"));
     command.arg("--data").arg(data).arg("--port").arg("0");
+    command.env("GATHR_OPEN_CHECK", "off");
     command
 }
 

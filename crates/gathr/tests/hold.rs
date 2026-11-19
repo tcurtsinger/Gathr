@@ -207,38 +207,23 @@ fn plan(conn: &mut Connection, turn: &str, what: &str) -> Wrote {
         title: "Tags on notes",
         text: "Let notes carry tags.",
         parts: &[part],
-        answers: None,
     };
     plans::write(conn, &w, T).unwrap()
 }
 
-/// The check agrees with the version while no turn runs on it: the version waits on the person.
+/// The version reaches the person, its round run late (0080): it waits on them.
 fn agreed(conn: &mut Connection, wrote: &Wrote) {
-    let checker = tasks::get(conn, wrote.check)
-        .unwrap()
-        .unwrap()
-        .owner
-        .unwrap();
-    conn.execute(
-        "UPDATE turns SET status = 'stopped' WHERE task = ?1 AND status = 'queued'",
-        [wrote.check],
-    )
-    .unwrap();
-    let message: String = conn
+    let ten = 600_000_000;
+    plans::overdue(conn, "c", gathr::ids::now_us() + ten, ten, T).unwrap();
+    let sent: Option<i64> = conn
         .query_row(
-            "SELECT message_id FROM plan_versions WHERE id = ?1",
+            "SELECT sent_ts FROM plan_versions WHERE id = ?1",
             [wrote.version],
             |r| r.get(0),
         )
         .unwrap();
-    let tx = conn.transaction().unwrap();
-    gathr::reactions::add(&tx, "c", &message, &checker, T).unwrap();
-    plans::agreed(&tx, "c", &message, &checker, T)
-        .unwrap()
-        .unwrap();
-    tx.commit().unwrap();
+    assert!(sent.is_some());
 }
-
 /// A turn Gathr queues in chat `c` for `agent`, on `task`, answering `answers`: its id.
 fn queued(
     conn: &Connection,
@@ -284,9 +269,9 @@ fn the_one_rule_holds_a_new_asks_turns_and_a_look_into_task_for_its_whole_life()
     // Its plan, state by state.
     asks::resize(&mut conn, &m1, "new", T).unwrap();
     let first = plan(&mut conn, "T", "Add the tags table");
-    let check_turn = queued_on(&conn, first.check).unwrap();
     seen.push(("T, its plan being checked", held(&conn, "T"), true));
-    seen.push(("the plan check's turn", held(&conn, &check_turn), true));
+    let check = queued(&conn, "ann", (None, Some("T")), Opened::Check);
+    seen.push(("a member's check of it", held(&conn, &check), true));
     agreed(&mut conn, &first);
     seen.push(("T, its plan waiting on the person", held(&conn, "T"), true));
     plans::send_back(&mut conn, first.plan, 1, "Split it", T).unwrap();

@@ -34,6 +34,7 @@ pub mod landings;
 pub mod launch;
 pub mod likes;
 pub mod notice;
+pub mod open_check;
 pub mod pauses;
 pub mod picks;
 pub mod plans;

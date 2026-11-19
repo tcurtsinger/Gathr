@@ -1,4 +1,4 @@
-//! H2 and H3: a version is written with its parts, its message and its check, or refused saying
+//! H2 and H3: a version is written with its parts and its message, or refused saying
 //! what to do; one question to the person is open at a time for an ask that may get a plan.
 
 use super::*;
@@ -64,7 +64,7 @@ fn a_plan_is_written_as_a_version_with_its_parts_and_its_message() {
     let mut parts = three();
     let after_nine = [9];
     parts[2].after_tasks = &after_nine;
-    let wrote = write(&mut conn, Some("T"), &parts, None).unwrap();
+    let wrote = write(&mut conn, Some("T"), &parts).unwrap();
 
     let plan: (i64, String, String) = conn
         .query_row("SELECT id, ask_id, lead FROM plans", [], |r| {
@@ -165,52 +165,20 @@ fn a_plan_is_written_as_a_version_with_its_parts_and_its_message() {
     assert_eq!(wrote.message["body"], BODY);
     assert_eq!(
         wrote.answer,
-        "Wrote version 1 of plan #1, \"Tags on notes\": 3 parts. Bo checks it in #10; the person sees it after."
-    );
-
-    let check = tasks::get(&conn, wrote.check).unwrap().unwrap();
-    let seen = (
-        check.kind,
-        check.giver.as_deref(),
-        check.owner.as_deref(),
-        check.given_in.as_deref(),
-        check.in_passing,
-        check.checks,
-        check.ask.as_deref(),
-        check.what.as_str(),
+        "Wrote version 1 of plan #1, \"Tags on notes\": 3 parts. The members who took no part check it once this \
+         turn ends; the person sees it after."
     );
     assert_eq!(
-        seen,
-        (
-            tasks::Kind::Review,
-            Some("mira"),
-            Some("bo"),
-            Some("T"),
-            true,
-            Some(wrote.version),
-            Some(ask.as_str()),
-            "Check plan v1: Tags on notes"
-        )
-    );
-    let (turn, brief) = queued_on(&conn, wrote.check);
-    assert_eq!(
-        samples::opened(&conn, &turn),
-        (Some("plan_check".into()), Some(gathr::words::PLAN_CHECK))
-    );
-    samples::same("plan_check: first", &sampled(&conn, &brief));
-    let start = wrote.starts.iter().find(|s| s.task == Some(wrote.check));
-    assert_eq!(start.map(|s| s.text.as_str()), Some(brief.as_str()));
-    assert_eq!(
-        start.map(|s| &s.message["body"]),
-        Some(&serde_json::json!(brief))
+        wrote.starts,
+        [],
+        "no check task: the check waits for the turn's end (0080)"
     );
 
     let said = events(&conn, "version");
     let message_id: String = version_field(&conn, wrote.version, "message_id");
     let expected = serde_json::json!({
         "gathr.plan.id": wrote.plan, "gathr.plan.version": 1, "gathr.ask.id": ask,
-        "gathr.message.id": message_id, "gathr.plan.parts": 3, "gathr.task.check": wrote.check,
-        "gathr.plan.checker": "Bo",
+        "gathr.message.id": message_id, "gathr.plan.parts": 3,
     });
     assert_eq!(said, [expected]);
 }
@@ -239,7 +207,6 @@ fn a_plan_is_refused_saying_what_to_do() {
         title: TITLE,
         text: TEXT,
         parts: &parts,
-        answers: None,
     };
     refused(
         &mut conn,
@@ -371,68 +338,24 @@ fn a_plan_is_refused_saying_what_to_do() {
         refused(&mut conn, w, why);
     }
 
-    let answer = |note: i64| Answer {
-        note,
-        changed: true,
-        why: "Fixed".into(),
-    };
-    let mut early = base("c", "mira", Some("T"));
-    let one = [answer(1)];
-    early.answers = Some(&one);
-    refused(
-        &mut conn,
-        early,
-        "`answers` go with the version after a check that left findings.",
-    );
-
-    let first = write(&mut conn, Some("T"), &three(), None).unwrap();
+    write(&mut conn, Some("T"), &three()).unwrap();
     refused(
         &mut conn,
         base("c", "mira", Some("T")),
-        "Version 2 would be the same as version 1: change a part, or answer the findings.",
-    );
-    findings(&mut conn, first.check);
-    let ids = note_ids(&conn, first.check);
-    let mut stray = base("c", "mira", Some("T"));
-    let wrong = [answer(ids[0]), answer(999)];
-    stray.answers = Some(&wrong);
-    refused(
-        &mut conn,
-        stray,
-        &format!("Note 999 isn't a finding of #{}.", first.check),
-    );
-    let mut short = base("c", "mira", Some("T"));
-    let half = [answer(ids[0])];
-    short.answers = Some(&half);
-    refused(
-        &mut conn,
-        short,
-        &format!(
-            "Answer each finding of #{}, Bo's check of version 1: note {} has no answer.",
-            first.check, ids[1]
-        ),
-    );
-    refused(
-        &mut conn,
-        base("c", "mira", Some("T")),
-        &format!(
-            "Answer each finding of #{}, Bo's check of version 1: notes {} and {} have no answer.",
-            first.check, ids[0], ids[1]
-        ),
+        "Version 2 would be the same as version 1: change a part.",
     );
 }
 
-/// H2.7 3, H4.11.
+/// H2.7 3: a new version of the open plan is its next, and Gathr says no line of its own.
 #[test]
-fn a_new_version_cancels_the_last_check_and_says_no_check_line() {
+fn a_new_version_is_the_open_plans_next() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
-    let first = write(&mut conn, Some("T"), &three(), None).unwrap();
-    let (queued, _) = queued_on(&conn, first.check);
+    let first = write(&mut conn, Some("T"), &three()).unwrap();
     let mut next = three();
     next[1].what = "Show tags on each note";
     next.push(part("Bo", "Tag old notes", &[1]));
-    let second = write(&mut conn, Some("T"), &next, None).unwrap();
+    let second = write(&mut conn, Some("T"), &next).unwrap();
 
     assert_eq!((second.plan, second.n), (first.plan, 2));
     let parts: i64 = conn
@@ -443,35 +366,11 @@ fn a_new_version_cancels_the_last_check_and_says_no_check_line() {
         )
         .unwrap();
     assert_eq!(parts, 4);
-    assert_eq!(
-        task_state(&conn, first.check),
-        (
-            tasks::State::Cancelled,
-            Some("version 2 replaced it".into())
-        )
-    );
-    let stop: Option<String> = conn
-        .query_row("SELECT stop_why FROM turns WHERE id = ?1", [&queued], |r| {
-            r.get(0)
-        })
-        .unwrap();
-    let why = format!(
-        "its task #{} was cancelled: version 2 replaced it",
-        first.check
-    );
-    assert_eq!(stop, Some(why));
     let line: Option<String> = version_field(&conn, first.version, "check_line");
     let sent: Option<i64> = version_field(&conn, first.version, "sent_ts");
     assert_eq!((line, sent), (None, None));
     assert_eq!(lines(&conn, "c"), Vec::<String>::new());
-    let check = tasks::get(&conn, second.check).unwrap().unwrap();
-    let given = (check.checks, check.owner.as_deref(), check.state);
-    assert_eq!(
-        given,
-        (Some(second.version), Some("bo"), tasks::State::Ready)
-    );
 }
-
 /// H3.1, H3.2.
 #[test]
 fn only_one_question_to_the_person_is_open_for_a_planned_ask() {
@@ -526,12 +425,12 @@ fn only_one_question_to_the_person_is_open_for_a_planned_ask() {
         [&gathrs],
     )
     .unwrap();
-    write(&mut conn, Some("T4"), &three(), None).unwrap();
+    write(&mut conn, Some("T4"), &three()).unwrap();
     let mira = question(&mut conn, "T4", "Search titles only?").unwrap();
     let mut next = three();
     next[0].what = "Add the search index";
     assert_eq!(
-        refusal(write(&mut conn, Some("T4"), &next, None)),
+        refusal(write(&mut conn, Some("T4"), &next)),
         format!(
             "Question #{mira} to the person is open for this ask: write the plan once it's answered."
         )

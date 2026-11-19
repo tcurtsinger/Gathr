@@ -1,6 +1,6 @@
 //! The team chat behind 0075's proof: a week of a team at work on a notes app, about 2,000 messages
 //! under some 70 main messages, linked the way the service links them. The person's asks; the lead's
-//! plans, one sent back and one whose check left findings; the tasks it hands out, their reviews and
+//! plans, one sent back and one a member questioned in the open; the tasks it hands out, their reviews and
 //! Gathr's fixes after them; the person's answers to the lead's questions, a Discuss among them;
 //! agents' talk, likes, a quiet room's wake, a wait the lead set; the person's message into a running
 //! turn, and one to two agents picked; each ask's result. Beside it, a chat of one agent with a reply
@@ -182,9 +182,9 @@ impl Seeder<'_> {
         Ok(())
     }
 
-    /// The lead's plan: on the first planned ask a version whose check left findings, which the lead
-    /// hears back on and answers in the next; on the second a version sent back; then the one
-    /// approved. Each is checked by the Reviewer in a turn of its own, with Gathr's lines.
+    /// The lead's plan, checked in the open (0080): on the first planned ask a member questions it,
+    /// quoting it, and the lead has the last word; on the second a version sent back; then the one
+    /// approved. In each round the Reviewer agrees with a thumbs-up alone.
     fn plans(&mut self, room: &mut Room, turn: &Turn, ask: &str, a: &Ask) -> Result<(), Error> {
         let (lead, rev) = (room.team[0].clone(), room.team[4].clone());
         self.conn.execute(
@@ -193,12 +193,8 @@ impl Seeder<'_> {
         )?;
         let plan = self.conn.last_insert_rowid();
         let findings = a.said.starts_with("Add tags");
-        let versions = if findings || a.said.starts_with("Import") {
-            2
-        } else {
-            1
-        };
-        let mut wrote = turn.id.clone();
+        let versions = if a.said.starts_with("Import") { 2 } else { 1 };
+        let (mut wrote, mut asked) = (turn.id.clone(), ask.to_string());
         for n in 1..=versions {
             let title = a.said.split(',').next().unwrap_or(a.said);
             let text = format!(
@@ -220,46 +216,34 @@ impl Seeder<'_> {
                     params![version, k as i64 + 1, room.team[1 + k % 3], what, why],
                 )?;
             }
-            let check = self.given_task(
-                room,
-                (&lead, &rev, &wrote),
-                "review",
-                &format!("Check plan v{n}"),
-                ask,
+            // A version the lead's last word writes has no round of its own.
+            let opened: Option<String> = self.conn.query_row(
+                "SELECT opened_by FROM turns WHERE id = ?1",
+                [&wrote],
+                |r| r.get(0),
             )?;
-            self.conn.execute(
-                "UPDATE tasks SET checks = ?2 WHERE number = ?1",
-                [check, version],
-            )?;
-            let checking = self.turn_as(
-                room,
-                &rev,
-                (Some(check), Some(&wrote)),
-                Opened::PlanCheck,
-                Some(ask),
-            )?;
-            self.put(
-                &room.chat,
-                Some(&checking.id),
-                "gathr",
-                &format!("Task #{check} from Mira: Check plan v{n}"),
-                (None, None),
-            )?;
-            self.tools(&checking, 6)?;
-            self.put(
-                &room.chat,
-                Some(&checking.id),
-                "assistant",
-                "The parts hold together; part 2 needs part 1 first.",
-                (None, None),
-            )?;
-            if findings && n < versions {
-                wrote = self.findings(room, (check, version, n), (ask, title))?;
-                continue;
+            if opened.as_deref() != Some("last_word") {
+                let check = format!(
+                    "Check version {n} of Mira's plan \"{title}\" before the person sees it."
+                );
+                let agreed =
+                    self.turn_as(room, &rev, (None, Some(&wrote)), Opened::Check, Some(ask))?;
+                self.put(&room.chat, Some(&agreed.id), "gathr", &check, (None, None))?;
+                self.tools(&agreed, 4)?;
+                self.conn.execute(
+                    "INSERT INTO reactions (message_id, agent_id, chat_id, created_ts) VALUES (?1, ?2, ?3, ?4)",
+                    params![message, rev, room.chat, self.ts],
+                )?;
+                let last_word = match findings {
+                    true => Some(self.questioned(room, (&wrote, ask), &check)?),
+                    false => None,
+                };
+                self.conn.execute(
+                    "INSERT INTO open_checks (chat_id, asked, answer, answer_turn, began_ts, last_word, ended_ts)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?5)",
+                    params![room.chat, asked, message, wrote, self.ts, last_word],
+                )?;
             }
-            // The plan's lines are tied by the version's own columns, not by `about` (0075).
-            let agrees = format!("Ivo agrees with version {n} of the plan \"{title}\".");
-            let said = self.put(&room.chat, None, "gathr", &agrees, (None, None))?;
             let decided = if n < versions {
                 "sent_back"
             } else {
@@ -287,18 +271,18 @@ impl Seeder<'_> {
                     let id = self.put(&room.chat, Some(&back.id), "gathr", &words, (None, None))?;
                     self.tools(&back, 4)?;
                     wrote = back.id.clone();
+                    asked = id.clone();
                     id
                 }
             };
             self.conn.execute(
-                "UPDATE plan_versions SET check_line = ?2, decided = ?3, decided_ts = ?4, decided_line = ?5 WHERE id = ?1",
-                params![version, said, decided, self.ts, decided_line],
+                "UPDATE plan_versions SET decided = ?2, decided_ts = ?3, decided_line = ?4 WHERE id = ?1",
+                params![version, decided, self.ts, decided_line],
             )?;
         }
         Ok(())
     }
 
-    /// A task given in `in_turn`, done, of `ask`: its number.
     fn given_task(
         &mut self,
         room: &Room,
@@ -686,47 +670,47 @@ impl Seeder<'_> {
         Ok(())
     }
 
-    /// The Reviewer's check of version `n` leaves two findings; the lead hears back and says how it
-    /// answers them: the turn that writes the next version.
-    fn findings(
+    /// A member questions the version `wrote` holds, quoting the line it answers; the lead's last
+    /// word agrees and says how the plan holds it: that last word's turn.
+    fn questioned(
         &mut self,
         room: &mut Room,
-        (check, version, n): (i64, i64, i64),
-        (ask, title): (&str, &str),
+        (wrote, ask): (&str, &str),
+        check: &str,
     ) -> Result<String, Error> {
-        let notes = [
-            (
-                "wrong",
-                Some("src/tags.rs:40"),
-                "Tags aren't saved with the note",
-            ),
-            ("unasked", None, "Coloured tags weren't asked for"),
-        ];
-        for (kind, file, says) in notes {
-            self.conn.execute(
-                "INSERT INTO review_notes (task, reviewed, kind, file, says, created_ts) VALUES (?1, 'v1', ?2, ?3, ?4, ?5)",
-                params![check, kind, file, says, self.ts],
-            )?;
-        }
-        self.conn.execute(
-            // The next version cancels the check it answers, as writing it does (0062).
-            "UPDATE tasks SET state = 'cancelled', finish = 'left', reason = 'left: 2 findings' WHERE number = ?1",
-            [check],
+        let (lead, member) = (room.team[0].clone(), room.team[3].clone());
+        let checking =
+            self.turn_as(room, &member, (None, Some(wrote)), Opened::Check, Some(ask))?;
+        self.put(&room.chat, Some(&checking.id), "gathr", check, (None, None))?;
+        self.tools(&checking, 3)?;
+        let said = "> Mira: Part 1 saves the tags table.\n\nIt saves tags apart from the note, so a note edited \
+                    offline loses them: src/tags.rs:40 writes them in a second transaction.";
+        self.put(
+            &room.chat,
+            Some(&checking.id),
+            "assistant",
+            said,
+            (None, None),
         )?;
-        let words = format!("Ivo has 2 findings on version {n} of the plan \"{title}\".");
-        let line = self.put(&room.chat, None, "gathr", &words, (None, None))?;
-        self.conn.execute(
-            "UPDATE plan_versions SET check_line = ?2, sent_ts = NULL WHERE id = ?1",
-            params![version, line],
+        let last = self.turn_as(
+            room,
+            &lead,
+            (None, Some(wrote)),
+            Opened::LastWord,
+            Some(ask),
         )?;
-        let lead = room.team[0].clone();
-        let back = self.turn_as(room, &lead, (None, None), Opened::HearBack, Some(ask))?;
-        let told = format!("The task you gave is settled:\n- #{check}: left: 2 findings");
-        self.put(&room.chat, Some(&back.id), "gathr", &told, (None, None))?;
-        self.tools(&back, 2)?;
-        let said = "Both findings hold: version 2 saves tags with the note and drops the colours.";
-        self.put(&room.chat, Some(&back.id), "assistant", said, (None, None))?;
-        Ok(back.id)
+        let told = format!("A member questioned your answer:\n{said}");
+        self.put(&room.chat, Some(&last.id), "gathr", &told, (None, None))?;
+        self.tools(&last, 2)?;
+        let answer = "> Tamsin: It saves tags apart from the note.\n\nRight: part 1 saves them in the note's own transaction, as its Done when says.";
+        self.put(
+            &room.chat,
+            Some(&last.id),
+            "assistant",
+            answer,
+            (None, None),
+        )?;
+        Ok(last.id)
     }
 
     /// A wait the lead set on the ask's work ended: Gathr's words open the lead's turn.

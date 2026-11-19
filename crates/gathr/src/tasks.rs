@@ -35,7 +35,6 @@ pub use held::{Hold, background_changed, holds};
 pub use notes::{Note, NoteKind, NoteSaid};
 pub use prs::{Seen, pr_looked, with_prs};
 pub use recover::recover;
-pub(crate) use report::finish_in;
 pub use report::{Finish, Report, Said, Took, finish};
 
 pub use words::{name_of, opening, owner_name, sentence, wait_name};
@@ -544,7 +543,7 @@ pub fn cancel(
 ) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    may_change(&tx, &t, by, "cancel")?;
+    may_change(&t, by, "cancel")?;
     if matches!(t.state, State::Done | State::Cancelled) {
         let state = t.state.as_str();
         return Err(refused(format!("task #{task} is already {state}")));
@@ -577,7 +576,7 @@ pub fn restart(
 ) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
     let t = read(&tx, task).map_err(|_| refused(format!("there's no task #{task}")))?;
-    may_change(&tx, &t, by, "restart")?;
+    may_change(&t, by, "restart")?;
     crate::archive::refuse_archived(&tx, &t.chat)?;
     if let Some(owner) = t.owner.as_deref()
         && crate::agents::is_removed(&tx, owner)?
@@ -677,11 +676,8 @@ fn turn_due(conn: &Connection, task: i64) -> Result<bool, Error> {
     )?)
 }
 
-/// Who may cancel or restart: the giver, or the person (`by` none). A plan check is Gathr's (0062).
-fn may_change(conn: &Connection, t: &Task, by: Option<&str>, what: &str) -> Result<(), Error> {
-    if let Some(version) = t.checks {
-        crate::plans::check::refuse_change(conn, t.number, version, by, what)?;
-    }
+/// Who may cancel or restart: the giver, or the person (`by` none).
+fn may_change(t: &Task, by: Option<&str>, what: &str) -> Result<(), Error> {
     match by.is_none() || by == t.giver.as_deref() {
         true => Ok(()),
         false => Err(refused(format!(

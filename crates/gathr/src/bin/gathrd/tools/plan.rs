@@ -1,10 +1,10 @@
 //! `plan`: the chat's Supervisor writes the plan for the person's ask its turn serves, a version per
-//! call, checked before the person sees it (0062). The rules are `gathr::plans::write`'s.
+//! call, checked in the open before the person sees it (0062, 0080). The rules are `gathr::plans::write`'s.
 
 use std::time::Instant;
 
 use axum::http::request::Parts;
-use gathr::plans::{self, Answer, Part, Writing};
+use gathr::plans::{self, Part, Writing};
 use gathr::tasks::{DONE_MOST, PROOF_MOST, SIZE_MOST, TITLE_MOST, WHERE_MOST};
 use gathr::topics::place;
 use rmcp::handler::server::tool::Extension;
@@ -24,9 +24,6 @@ pub struct Plan {
     text: String,
     /// The parts in order, from 1. Each is a task as give_task gives one.
     parts: Vec<PlanPart>,
-    /// Your answer to each finding of the last check: the note's id, changed (true when this version
-    /// changes for it) and why.
-    answers: Option<Vec<PlanAnswer>>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -60,20 +57,13 @@ pub struct PlanPart {
     after_tasks: Option<Vec<i64>>,
 }
 
-#[derive(serde::Deserialize, schemars::JsonSchema)]
-pub struct PlanAnswer {
-    note: i64,
-    changed: bool,
-    why: String,
-}
-
 #[tool_router(router = plan_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
         description = "Write the plan for the person's ask this turn serves: a title, text, and its parts, each a complete \
-                       task. Calling it again writes the next version; answer each finding of the last check in answers. \
-                       Gathr has each version checked before the person sees it, and on the person's Approve each part \
-                       becomes a task, word for word. The chat's Supervisor only."
+                       task. Calling it again writes the next version. Once \
+                       your turn ends, the members who took no part check it before the person sees it, and on the \
+                       person's Approve each part becomes a task, word for word. The chat's Supervisor only."
     )]
     async fn plan(
         &self,
@@ -106,15 +96,7 @@ impl Tools {
                         after_tasks: p.after_tasks.as_deref().unwrap_or_default(),
                     })
                     .collect();
-                let answers: Option<Vec<Answer>> = ask.answers.map(|all| {
-                    all.into_iter()
-                        .map(|a| Answer {
-                            note: a.note,
-                            changed: a.changed,
-                            why: a.why,
-                        })
-                        .collect()
-                });
+
                 let w = Writing {
                     chat: &chat,
                     agent: &agent,
@@ -122,7 +104,6 @@ impl Tools {
                     title: &ask.title,
                     text: &ask.text,
                     parts: &parts,
-                    answers: answers.as_deref(),
                 };
                 let wrote = plans::write(c, &w, &trace)?;
                 // A plan waits on the person: a thread its agent chose gives way to the room (0079).

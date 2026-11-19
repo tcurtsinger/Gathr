@@ -149,7 +149,9 @@ pub fn run() {
                             Some("hold") => {
                                 let held =
                                     std::env::var_os("GATHR_REPLAY_HOLD").unwrap_or_default();
-                                while !held.is_empty() && !std::path::Path::new(&held).exists() {
+                                let (held, take) =
+                                    (std::path::Path::new(&held), row["line"] == "take");
+                                while !held.as_os_str().is_empty() && !super::let_go(held, take) {
                                     std::thread::sleep(std::time::Duration::from_millis(10));
                                 }
                             }

@@ -171,7 +171,6 @@ fn plan(conn: &mut Connection, turn: &str) -> Result<gathr::plans::Wrote, Error>
         title: "Tags on notes",
         text: "Notes carry tags.",
         parts: &[part],
-        answers: None,
     };
     gathr::plans::write(conn, &w, T)
 }

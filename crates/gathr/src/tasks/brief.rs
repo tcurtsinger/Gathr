@@ -140,11 +140,8 @@ pub(super) fn lines(t: &Task) -> Vec<String> {
     lines
 }
 
-/// The words a task's brief is, by its kind; a plan check's are its own (0062).
+/// The words a task's brief is, by its kind.
 pub(super) fn opened(t: &Task) -> Opened {
-    if t.checks.is_some() {
-        return Opened::PlanCheck;
-    }
     match t.kind {
         Kind::Review => Opened::ReviewBrief,
         Kind::PersonRequest => Opened::RequestBrief,

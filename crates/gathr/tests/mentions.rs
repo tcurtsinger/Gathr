@@ -341,7 +341,7 @@ fn naming_nobody_itself_or_a_stranger_names_nobody() {
              ('m2', 'c', 't', 3, 'assistant', 'tool', '{\"said\": \"@Ann\"}');",
     )
     .unwrap();
-    let mentions = gathr::handoffs::mentions(&conn, "t", &[], "trace").unwrap();
+    let mentions = gathr::handoffs::mentions(&conn, "t", "trace").unwrap();
     assert!(mentions.named.is_empty(), "{:?}", mentions.named);
     let handed: i64 = conn
         .query_row("SELECT count(*) FROM handoffs", [], |r| r.get(0))

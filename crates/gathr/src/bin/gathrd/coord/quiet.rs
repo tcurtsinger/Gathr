@@ -26,7 +26,7 @@ fn times() -> Times {
     }
 }
 
-/// How long a version's check has before the version reaches the person anyway, unless
+/// How long a version's round has before the version reaches the person anyway, unless
 /// `GATHR_PLAN_CHECK_MS` says (dev and tests only).
 const PLAN_CHECK_US: i64 = 600_000_000;
 
@@ -45,6 +45,12 @@ pub async fn check(chats: &Arc<Chats>, chat: &str) {
         .writer
         .call(move |conn| quiet::check(conn, &id, &live, now_us(), times(), &t));
     started(chats, checked.await, ("gathr.quiet.check", chat, &trace));
+    // The lead's answer is checked in the open once the chat is quiet (0080).
+    let (id, t) = (chat.to_string(), trace.clone());
+    let round = chats
+        .writer
+        .call(move |conn| gathr::open_check::settle(conn, &id, &t));
+    started(chats, round.await, ("gathr.check.round", chat, &trace));
     // After what the write committed, the giver's hear-back included: a repair's "Fixed" (0061).
     let (id, t) = (chat.to_string(), trace.clone());
     let fixed = chats

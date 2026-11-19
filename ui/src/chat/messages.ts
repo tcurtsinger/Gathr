@@ -102,6 +102,8 @@ export type Custom = Place & {
   pieces?: Piece[];
   /** A plan check's last block, when it left findings: its newest report's notes, the chip that ends the bubble (0078). */
   findings?: ReviewNote[];
+  /** A member's check of an answer (0080): whose answer, for its Checked line. */
+  checked?: string;
   /** How its turn ended, on its last block: what the person can do under the bubble. */
   ending?: Ending;
   approvals?: Approval[];

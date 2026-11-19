@@ -391,8 +391,8 @@ the flow, and what follows moves down rather than being covered. Names, never he
 passes through it). The person's own like counts in it: "You"
 first in the names, and the count in the attention blue on a 16% tint at 600. Where the person can like, the count
 is a toggle (`aria-pressed`): a click gives theirs or takes it back. On the person's own message it is no toggle, and
-there is no Like. A plan's check that agrees is the checker's thumbs-up on the lead's bubble that holds the
-version, with no line of its own (0062); a question stays a reply.
+there is no Like. A member's check of the lead's answer that agrees is its thumbs-up on that answer, with no bubble
+and no line of its own (0080); a question stays a reply.
 
 What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time
 on the name line, and its words in an outlined bubble one step quieter than an agent's: a 1px border, no
@@ -423,12 +423,18 @@ What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a
 the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
 bubble: the plan's lines, with a clipboard, in the thread of the lead's bubble that holds the version (0078): the
 lead-in "Plan v2:" and "Approved" or "Dropped"; each opens to the whole line and Open plan (0062). A check that agrees
-is a thumbs-up instead, and one that left findings says them in its checker's bubble (below). A line is 13px, muted,
+is a thumbs-up instead, and an old chat's check that left findings says them in its checker's bubble (below). A line is 13px, muted,
 the lead-in in the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for
 overflow. Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
 Keyboard focus uses the hover highlight, without an outline or ring.
 
-A plan check that left findings ends its checker's bubble with the findings chip (0078, the chat-shape mock-up's
+A member's check of the lead's answer that wrote words (0080) opens its bubble with one small grey line under the
+name line, before its words: a check-double icon (14px) and "Checked Mira's answer", 12.5px in the muted colour,
+6px above the words, as SerenityOS draws its check. The quote the member answers and its words follow as any reply's
+Markdown. Gathr's words that opened the check, or the lead's last word, are never drawn: the Checked line says the
+one, and the members' words right above say the other.
+
+An old chat's plan check that left findings (0062) ends its checker's bubble with the findings chip (0078, the chat-shape mock-up's
 findings chip), in the plan chip's shape: a check-circle icon, "7 findings" (wrong and not asked for; "1 finding"), or
 "2 suggestions" for a report of suggestions only, and a chevron that turns down when open. A press or Enter opens it in
 place (`aria-expanded`) to each note of the check's newest report, in order, each on the chat's surface, 10px corners,
@@ -658,15 +664,16 @@ identity and tab. A typed note is never approval.
 A plan's version is a chip in the bubble of the lead's turn that wrote it, where the plan was written
 ([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)): a button with the clipboard icon,
 "Plan · version 2" and "9 parts" in muted small type, last when the lead writes nothing after it, and the
-bubble's thumbs-ups (the checker's among them) under it. Text the lead writes after the plan reads after the
+bubble's thumbs-ups (the members' who agreed among them) under it, and the members' checks and the lead's last word in
+its thread (0080). Text the lead writes after the plan reads after the
 chip, in the same bubble. While the version waits, the bubble's like is the version's: it approves it. The chip
 opens the plan's tab, after the agent's tab, labelled
 "Plan v2" with a close button. The tab reads top to bottom as a task's page does, in the same classes:
 "Version 2" at the top left and, when there is more than one, the versions at the right, `v1 · v2`, muted
 and underlined, the one shown plain; the title; one line with the lead's 16px face and name, the time and
 the plan's state word (Checking, Waiting in the attention colour, Revising, Approved, Dropped, or
-Replaced on an older version); the plan's text; then its fields: Asked, Check ("Bo agrees", "3 findings
-from Bo", "Bo is checking", "Bo didn't finish"), the version's Findings (a suggestion is left out) in a
+Replaced on an older version); the plan's text; then its fields: Asked, an old chat's Check ("Bo agrees", "3 findings
+from Bo", "Bo is checking", "Bo didn't finish"), its Findings (a suggestion is left out) in a
 task's note format, "Wrong · src/notes.rs: ...", the lead's Answers under the findings they answer
 ("Changed: ..." or "Kept: ..."), the ask's Questions, each with its answer or "Open", Sent back with the
 person's words on a version they sent back, and Changed, one row for each turn of the ask in which Gathr

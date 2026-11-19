@@ -138,3 +138,11 @@ What differs from the detail, from the code as it landed:
   - **Measured:** T1 214K input tokens and 35 seconds on Claude Code, 125K and 55 seconds on Codex, both small and working; T8 83K and 84K. No approval was asked.
 - **Checked on the replay stand-in,** end to end: one block of each case, both arms, and again after a trial was left aborted (the next start archived its chat and stopped its queued turn). The arm check was seen to stop the trial with its sense reversed. After T2 and T5 were removed, one round of T1 and T8 ran again on the stand-in, both arms, each run's arm checked. On real engines, the first small try and the full trial ran.
 - **Not verified:** that a release build never reads `GATHR_TRIAL_WITHOUT` (guarded by `cfg!(debug_assertions)`, which no test can see); the paths no run took (`over_cap`, the 90M cap, `usage_limit` and `signed_out` ending the trial); a real engine's stopped turn, how promptly it ends and whether its usage is counted; that the hidden-test check finds `node` in CI's Rust job; macOS.
+
+## Amended by
+
+- [0080](0080-the-team-checks-the-leads-answer-in-the-open.md): three more lines ship without a trial, by the
+  owner's call of 2026-11-19 (the room's next run is their trial): L5 for everyone in a team, L6 for a member and a
+  reviewer, L7 for the lead. `roles::UNTRIED` names them, so the gate above still holds L2 and L3 to the trial's
+  result, and `tests/roles.rs::every_role_line_is_kept_by_the_trial_or_named_untried` fails for a line that is
+  neither. `words::ROLE` is 2.
