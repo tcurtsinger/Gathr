@@ -6,8 +6,8 @@ Date: 2026-11-18.
 Built: yes (the marks kept by the service and read with the history, the New line, the blue counts, each reply's New, the line at the chat's foot, kept folds). Proof: `crates/gathr/tests/reads.rs`, `ui/src/chat/seen.test.tsx`, `ui/src/chat/reads.test.ts`.
 
 Builds on [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md) (threads, and which start folded) and
-[0076](0076-replying-in-a-thread.md). Amends [0069](0069-deleting-a-project-or-an-agent.md) (a chat's own delete removes its
-marks too). Serves no promise as [the charter](../charter.md#the-promises) words it: it is the owner's own ask, "where the
+[0076](0076-replying-in-a-thread.md). A chat's own delete, which [0069](0069-deleting-a-project-or-an-agent.md) uses for a project's chats, removes its
+marks too. Serves no promise as [the charter](../charter.md#the-promises) words it: it is the owner's own ask, "where the
 person left off". The truth map keeps it as 6.10, beside the chat's other ways of explaining itself.
 
 ## The choice
