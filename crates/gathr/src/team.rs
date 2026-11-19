@@ -275,6 +275,38 @@ pub fn addressee(team: &[Member], sent_to: Option<&str>) -> Result<Option<String
     Ok(lead.or(only).map(|m| m.agent.clone()))
 }
 
+/// The members `text` names with `@Name` (0081), ignoring case, in the order they are first named.
+/// Longest name first, each place it is found blanked, so `@Bo` is never found inside `@Bobby`. A
+/// name counts only as a whole word: `@Al` isn't in `@Alex`, and `bob@ann.com` names nobody.
+pub fn mentioned<'a>(team: &'a [Member], text: &str) -> Vec<&'a Member> {
+    let mut left: Vec<char> = text.to_lowercase().chars().collect();
+    let mut longest: Vec<&Member> = team.iter().collect();
+    longest.sort_by_key(|m| std::cmp::Reverse(m.name.chars().count()));
+    let word = |c: &char| c.is_alphanumeric() || *c == '_' || *c == '-';
+    let mut found = Vec::new();
+    for member in longest {
+        let name: Vec<char> = format!("@{}", member.name.to_lowercase()).chars().collect();
+        let mut first = None;
+        let mut at = 0;
+        while name.len() > 1 && at + name.len() <= left.len() {
+            let starts = at == 0 || !word(&left[at - 1]);
+            let ends = left.get(at + name.len()).is_none_or(|c| !word(c));
+            if starts && ends && left[at..at + name.len()] == name[..] {
+                left[at..at + name.len()].fill(' ');
+                first.get_or_insert(at);
+                at += name.len();
+            } else {
+                at += 1;
+            }
+        }
+        if let Some(at) = first {
+            found.push((at, member));
+        }
+    }
+    found.sort_by_key(|(at, _)| *at);
+    found.into_iter().map(|(_, member)| member).collect()
+}
+
 /// The member called `name`, ignoring case, matched as the person's `@Name` is.
 pub fn named<'a>(team: &'a [Member], name: &str) -> Option<&'a Member> {
     first_named(team, &format!("@{}", name.trim().trim_start_matches('@')))
@@ -301,4 +333,43 @@ fn first_named<'a>(team: &'a [Member], text: &str) -> Option<&'a Member> {
         }
     }
     best.map(|(_, _, member)| member)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn team(names: &[&str]) -> Vec<Member> {
+        let member = |name: &&str| Member {
+            agent: name.to_lowercase(),
+            name: name.to_string(),
+            role: Role::Member,
+        };
+        names.iter().map(member).collect()
+    }
+
+    fn named(team: &[Member], text: &str) -> Vec<String> {
+        mentioned(team, text)
+            .iter()
+            .map(|m| m.name.clone())
+            .collect()
+    }
+
+    #[test]
+    fn mentions_are_found_longest_first_in_the_order_named() {
+        let crew = team(&["Bo", "Bobby Tables", "Made-up", "Made"]);
+        assert_eq!(
+            named(&crew, "@bobby tables then @BO"),
+            ["Bobby Tables", "Bo"]
+        );
+        assert_eq!(named(&crew, "@Made-up, not @Made."), ["Made-up", "Made"]);
+        assert_eq!(named(&crew, "@Bo and @Bo again"), ["Bo"]);
+    }
+
+    #[test]
+    fn a_name_counts_only_as_a_whole_word() {
+        let crew = team(&["Ann", "Al"]);
+        assert!(named(&crew, "@Annette, @Alex and bob@ann.com").is_empty());
+        assert_eq!(named(&crew, "(@ann) and @Al: done"), ["Ann", "Al"]);
+    }
 }

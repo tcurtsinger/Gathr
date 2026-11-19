@@ -14,6 +14,9 @@ use super::{Assignment, Ids, Queued, Task};
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
     id: Option<String>,
+    /// The engine compacted the conversation since a turn last opened: the next hears the chat's
+    /// last lines, as a new conversation does (0081).
+    pub compacted: bool,
     /// The task it was opened for: each Init writes that task's row (N5).
     pub task: Option<i64>,
     /// It resumed `id` and no Init has come yet: a turn that fails now was refused the id (N8).
@@ -169,24 +172,36 @@ impl Task {
         }
     }
 
-    /// A new conversation's first turn is sent the opening before its ask (N6), never saved.
+    /// What a turn is sent before its ask, never saved: what the team chat said that the agent
+    /// hasn't heard (0081), and in a new conversation's first turn, the opening (N6) before that.
     pub(super) async fn opening(
-        &self,
+        &mut self,
         next: &Queued,
         choice: &Conversation,
         fresh: bool,
         text: String,
     ) -> String {
         let text = self.held_start(&next.ids, text).await;
+        if self.compactions.contains(&next.ids.turn) {
+            return text;
+        }
+        // A new conversation, or one a compaction summed up, hears the chat's last lines.
+        let new = fresh && !self.session.resuming;
+        let summed = std::mem::take(&mut self.session.compacted);
+        let heard = self.heard(&next.ids, new || summed).await;
+        let text = match &heard {
+            Some(heard) => format!("{heard}\n\n{text}"),
+            None => text,
+        };
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
             return text;
         };
-        let (task, ask) = (*task, next.text.clone());
+        let (task, ask, lines) = (*task, next.text.clone(), heard.is_some());
         let made = self
             .chats
             .writer
-            .call(move |c| gathr::tasks::opening(c, task, &agent, &ask))
+            .call(move |c| gathr::tasks::opening(c, task, &agent, &ask, lines))
             .await;
         let event = Event::point("gathr.session.opening")
             .trace(&next.ids.trace)

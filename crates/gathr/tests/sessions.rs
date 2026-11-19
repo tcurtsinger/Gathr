@@ -428,16 +428,19 @@ fn a_new_sessions_first_turn_lists_its_last_five_tasks() {
         .rev()
         .map(|n| format!("- #{n} Ann, Task {n}: {blocked}"))
         .collect();
+    // The chat's recent lines come between the opening and the ask (0081); which ones depends on how
+    // far the other turns got, so only where they stand is checked here (tests/room.rs has the lines).
     let opening = format!(
-        "This is a new conversation for task #8. Your earlier turns in this chat aren't in it: read_chat and \
-         list_tasks have them.\nYour last tasks in this chat:\n{}\n\nTask #8 from Lead: Task 8",
+        "This is a new conversation for task #8. Your earlier turns in this chat aren't in it, only its recent \
+         lines below: read_chat and list_tasks have the rest.\nYour last tasks in this chat:\n{}\n\n\
+         Recent lines in this chat:\n",
         listed.join("\n")
     );
     let frame: Value = serde_json::from_str(first).unwrap_or_else(|e| panic!("{e}: {first}"));
     let content = frame["message"]["content"].as_str().unwrap_or_default();
     assert!(
-        content.starts_with(&opening),
-        "expected it to start with:\n{opening}\ngot:\n{content}"
+        content.starts_with(&opening) && content.contains("\n\nTask #8 from Lead: Task 8\n"),
+        "expected it to start with:\n{opening}\nand end with the ask, got:\n{content}"
     );
     let ask = sent(&room, &turn_on(&room, 8, 2)).join("\n");
     assert!(!ask.contains(NEW), "the ask for a report runs in it: {ask}");
@@ -449,7 +452,7 @@ fn a_new_sessions_first_turn_lists_its_last_five_tasks() {
         "{last}"
     );
     let chars = content
-        .split("\n\nTask #8 from Lead")
+        .split("\n\nRecent lines in this chat:")
         .next()
         .unwrap()
         .chars()

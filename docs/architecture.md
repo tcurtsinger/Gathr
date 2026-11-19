@@ -17,7 +17,9 @@ the planned read-only pool is not built yet. The CLI's diagnostics open a read-o
 
 Claude Code uses a long-lived stream-json process; Codex uses a long-lived app-server.
 Each agent has at most one engine on one conversation at a time. A member's task has a conversation of its own (`task_sessions`,
-[0055](decisions/0055-a-members-task-starts-in-a-new-session.md)); the lead has one per chat. Switching closes the old process gently;
+[0055](decisions/0055-a-members-task-starts-in-a-new-session.md)); the lead has one per chat. In a team chat each turn's opening carries
+the chat's lines the agent hasn't heard, and `@Name` in an agent's words wakes that member when its turn ends
+([0081](decisions/0081-agents-hear-the-room-and-name-each-other.md)). Switching closes the old process gently;
 Stop uses the provider's interrupt. The turn boundary uses a `Driver` enum and shared `Frame` values,
 not the originally planned shared trait. Shared process cleanup follows 0031.
 [0001](decisions/0001-engine-interface.md), [0031](decisions/0031-short-programs-end-together.md),

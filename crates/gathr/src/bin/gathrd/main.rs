@@ -20,6 +20,7 @@ mod github;
 mod landing;
 mod likes;
 mod logs;
+mod mentions;
 mod merging;
 mod models;
 mod pauses;

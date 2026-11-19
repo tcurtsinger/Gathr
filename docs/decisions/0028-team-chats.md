@@ -1,6 +1,6 @@
 # 0028. Chats for a team: routing, order, worktrees and PATH
 
-Status: accepted (slice 2, F4). Date: 2026-11-08. Builds on [0013](0013-one-chat-model.md).
+Status: accepted (slice 2, F4); amended by [0081](0081-agents-hear-the-room-and-name-each-other.md): an agent's words are read for `@Name`, which wakes that member when its turn ends (the person's text still isn't read). Date: 2026-11-08. Builds on [0013](0013-one-chat-model.md).
 
 Built: yes. Proof: `crates/gathr/tests/team.rs`, `crates/gathr/tests/projects.rs`, `crates/gathr/tests/picked.rs`.
 
