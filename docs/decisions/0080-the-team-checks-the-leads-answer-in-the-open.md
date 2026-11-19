@@ -63,6 +63,11 @@ Amends 0062 and 0066, below. Serves promise 2 of [the charter](../charter.md#the
 - **The schema** (migration `0060_open_checks.sql`): `open_checks`, one row per message of the person's: the answer,
   its turn, when the round began and ended, and the last word. Its check turns are the `check` turns answering the
   answer's turn. The migration counts every message sent before it as had, so an upgrade checks nothing old.
+- **With 0081** (agents hear the room, `@Name` wakes): a round's turn hears nothing twice. A check's words carry the
+  answer and the person's message, and the last word's carry the members' checks, so the chat's lines a turn opens
+  with leave those out (`room.rs`); and a check that names the lead with `@Name` leaves it to the last word
+  (`handoffs::mentions`). Proof: `tests/plans/check.rs::a_rounds_turns_hear_nothing_twice` and
+  `::a_check_that_names_the_lead_wakes_it_once_by_its_last_word`.
 
 ## What goes
 

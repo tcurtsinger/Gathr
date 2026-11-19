@@ -474,3 +474,65 @@ fn an_upgrade_starts_no_round_for_an_older_message() {
         .unwrap();
     assert_eq!(rounds, 1, "the old message counts as had");
 }
+
+/// A check that names the lead with @Name leaves the lead to its last word, which carries those
+/// words (0081 meets 0080): the mention wakes only the other member it names.
+#[test]
+fn a_check_that_names_the_lead_wakes_it_once_by_its_last_word() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let ann = starts[0].turn.clone();
+    says(
+        &conn,
+        &ann,
+        "@Mira the filter doesn't show them. @Bo, you wrote the filter.",
+    );
+    set_status(&conn, &ann, "done");
+    let named: Vec<String> = gathr::handoffs::mentions(&conn, &ann, T)
+        .unwrap()
+        .named
+        .into_iter()
+        .map(|n| n.to)
+        .collect();
+    assert_eq!(named, ["bo"], "Mira hears it in her last word");
+}
+
+/// What a round's turn is handed in its own words, it doesn't hear again as the chat's lines: a check
+/// its answer and the person's message, the last word the members' checks.
+#[test]
+fn a_rounds_turns_hear_nothing_twice() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    let answer = "Done: tags show in the list.";
+    says(&conn, "T", answer);
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let (ann, bo) = (starts[0].turn.clone(), starts[1].turn.clone());
+    assert!(starts[0].text.contains(answer), "{}", starts[0].text);
+    let asked: String = conn
+        .query_row(
+            "SELECT m.body FROM messages m JOIN open_checks c ON c.asked = m.id",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    let heard = |conn: &Connection, turn: &str, agent: &str| {
+        let heard = gathr::room::catch_up(conn, "c", turn, agent, true).unwrap();
+        heard.map(|h| h.text).unwrap_or_default()
+    };
+    let lines = heard(&conn, &ann, "ann");
+    assert!(!lines.contains(answer), "the answer, twice: {lines}");
+    assert!(!lines.contains(&asked), "the ask, twice: {lines}");
+
+    let objection = "No test covers a note with no tags.";
+    says(&conn, &ann, objection);
+    set_status(&conn, &ann, "done");
+    set_status(&conn, &bo, "done");
+    let woken = settle(&mut conn);
+    assert!(woken[0].text.contains(objection), "{}", woken[0].text);
+    let lines = heard(&conn, &woken[0].turn, "mira");
+    assert!(!lines.contains(objection), "the check, twice: {lines}");
+}

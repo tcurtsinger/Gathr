@@ -624,7 +624,7 @@ impl Task {
                 turn: ids.turn,
                 trace: ids.trace,
             };
-            crate::mentions::wake(self.chats.clone(), ended, Vec::new());
+            crate::mentions::wake(self.chats.clone(), ended);
         }
         self.try_next().await;
     }

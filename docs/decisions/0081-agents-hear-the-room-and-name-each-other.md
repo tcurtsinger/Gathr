@@ -68,9 +68,9 @@ agent has to think of. The owner chose to port SerenityOS's way whole (2026-11-1
 - **A hand-off.** Each wake is a hand-off record as a `message` is (`handoffs::record`), counted in the same chain,
   with the same pause at the limit: the chat pauses, "Paused after N hand-offs between agents. Resume to carry on."
   goes in the sender's turn, and nobody from that member on is woken.
-- **One function where a turn ends** (`mentions::wake`, called from `turn_ended`), with the members to skip: a turn
-  that hands its words to someone itself (0080's check turns hand a member's words to the lead) names them there, so
-  they aren't woken twice. It runs apart from the agent's own task: delivery waits on the member's task, which may be
+- **One function where a turn ends** (`mentions::wake`, called from `turn_ended`). A check of the lead's answer (0080)
+  hands its words to the lead in the lead's last word, so naming the lead there wakes nobody
+  (`handoffs::mentions`). It runs apart from the agent's own task: delivery waits on the member's task, which may be
   waiting on this one.
 - **`message` stays,** for reaching a member before the turn ends. Its description and the briefing say both: "To
   reach a member of a team chat, write @Name in your words: they get them when your turn ends. message reaches one

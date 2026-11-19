@@ -116,17 +116,12 @@ pub struct Mentions {
     pub over: Option<Over>,
 }
 
-/// The members `turn`'s words name with `@Name` (0081), but its own agent and those in `skip`, each
-/// recorded as a hand-off from the turn's agent. Its words are its text messages in the chat, not what
-/// it sent with `message`, which reached its member already. Past the limit the chat pauses, the line
-/// saying so goes in the turn, and nobody from that member on is named. None in a chat of one agent,
-/// or an archived one.
-pub fn mentions(
-    conn: &Connection,
-    turn: &str,
-    skip: &[String],
-    trace: &str,
-) -> Result<Mentions, Error> {
+/// The members `turn`'s words name with `@Name` (0081), but its own agent and, for a check, the lead
+/// it checks, each recorded as a hand-off from the turn's agent. Its words are its text messages in the chat, not what it sent with
+/// `message`, which reached its member already. Past the limit the chat pauses, the line saying so
+/// goes in the turn, and nobody from that member on is named. None in a chat of one agent, or an
+/// archived one.
+pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, Error> {
     let found: Option<(String, Option<String>)> = conn
         .query_row(
             "SELECT chat_id, agent_id FROM turns WHERE id = ?1",
@@ -162,13 +157,23 @@ pub fn mentions(
         )?
         .query_map([turn], |r| Ok((r.get(0)?, r.get(1)?)))?
         .collect::<Result<_, _>>()?;
+    // A check's words reach the lead whose answer it checks in the lead's last word (0080): naming
+    // the lead there wakes nobody.
+    let lead: Option<String> = conn
+        .prepare_cached(
+            "SELECT a.agent_id FROM turns u JOIN turns a ON a.id = u.answers
+             WHERE u.id = ?1 AND u.opened_by = 'check'",
+        )?
+        .query_row([turn], |r| r.get::<_, Option<String>>(0))
+        .optional()?
+        .flatten();
     let names = |body: &str, agent: &str| {
         let named = crate::team::mentioned(&team, body);
         named.iter().any(|m| m.agent == agent)
     };
     let all: Vec<&str> = said.iter().map(|(_, body)| body.as_str()).collect();
     for member in crate::team::mentioned(&team, &all.join("\n\n")) {
-        if member.agent == from || skip.contains(&member.agent) {
+        if member.agent == from || lead.as_deref() == Some(member.agent.as_str()) {
             continue;
         }
         let naming: Vec<&(String, String)> = said

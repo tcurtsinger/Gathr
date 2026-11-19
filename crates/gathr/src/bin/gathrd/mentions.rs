@@ -17,20 +17,19 @@ pub struct Ended {
     pub trace: String,
 }
 
-/// Wakes each member the ended turn's words name, but those in `skip`: whoever the caller hands the
-/// words to itself. Apart from the agent's own task, which calls it: delivery waits on the member's
-/// task, which may be waiting on this one.
-pub fn wake(chats: Arc<Chats>, ended: Ended, skip: Vec<String>) {
-    tokio::spawn(async move { woken(&chats, &ended, skip).await });
+/// Wakes each member the ended turn's words name. Apart from the agent's own task, which calls it:
+/// delivery waits on the member's task, which may be waiting on this one.
+pub fn wake(chats: Arc<Chats>, ended: Ended) {
+    tokio::spawn(async move { woken(&chats, &ended).await });
 }
 
-async fn woken(chats: &Arc<Chats>, ended: &Ended, skip: Vec<String>) {
+async fn woken(chats: &Arc<Chats>, ended: &Ended) {
     let (turn, trace) = (ended.turn.clone(), ended.trace.clone());
     let found = chats
         .writer
         .call(move |c| {
             let tx = c.transaction()?;
-            let found = gathr::handoffs::mentions(&tx, &turn, &skip, &trace)?;
+            let found = gathr::handoffs::mentions(&tx, &turn, &trace)?;
             tx.commit()?;
             Ok::<_, gathr::Error>(found)
         })
