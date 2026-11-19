@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { briefRows } from '../tasks/model';
+import { Foot } from './Foot';
 import { MainWord } from './MainWord';
 import type { Custom } from './messages';
 import { AgentFace, Bubble, NameLine, RoleWord, Said, When, YouSaid } from './Said';
@@ -43,7 +44,7 @@ export function TaskMain({ own }: { own: Custom }) {
         />
       }
     >
-      <Bubble>
+      <Bubble foot={<Foot fold={own.thread} answer={own.answer} />}>
         <div className="task-main" data-more={more || undefined}>
           <p className="task-main-title">
             {brief.owner && <span className="mention">@{brief.owner}</span>}

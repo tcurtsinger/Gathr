@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
-import { api, type Failure, type PickedName } from '../api';
+import { api, type Failure, type PickedName, type ReplyTarget } from '../api';
 import { type LiveEvent, listen } from '../live';
 import { report, timeToPaint } from '../report';
 import type { SendFailure } from './messages';
@@ -81,13 +81,15 @@ export function useChat(chat: string, unsent: SendFailure[], onUnsent: Unsent) {
   }, [chat, load]);
 
   const send = useCallback(
-    async (text: string, agent?: string, picks?: PickedName[], retrying?: SendFailure) => {
+    async (text: string, agent?: string, picks?: PickedName[], retrying?: SendFailure, to?: ReplyTarget) => {
+      // A reply sent again answers what it answered (0076).
+      const reply = to ?? retrying?.reply;
       try {
-        await api.send(chat, text, agent, picks);
+        await api.send(chat, text, agent, picks, reply);
         if (retrying) onUnsent((list) => list.filter((f) => f.id !== retrying.id));
       } catch (e) {
         const id = retrying?.id ?? crypto.randomUUID();
-        const failed = { id, text, agent, picks, failure: e as Failure };
+        const failed = { id, text, agent, picks, reply, failure: e as Failure };
         onUnsent((list) =>
           retrying ? list.map((f) => (f.id === failed.id ? failed : f)) : [...list, failed],
         );

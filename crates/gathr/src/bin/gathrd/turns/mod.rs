@@ -16,7 +16,7 @@ use gathr::store;
 use serde_json::{Value, json};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::chats::{Chats, Cmd, Failed};
+use crate::chats::{Chats, Cmd};
 
 mod approvals;
 mod compact;
@@ -33,6 +33,7 @@ mod process;
 mod pushes;
 mod reading;
 mod records;
+mod send;
 mod session;
 mod state;
 mod thinking;
@@ -336,10 +337,12 @@ impl Task {
                 text,
                 agent,
                 picks,
+                target,
                 trace,
                 reply,
             } => {
-                let _ = reply.send(self.send(chat, (text, picks), agent, trace).await);
+                let sent = self.send(chat, (text, picks, target), agent, trace).await;
+                let _ = reply.send(sent);
             }
             Cmd::Like {
                 chat,
@@ -430,86 +433,6 @@ impl Task {
             Cmd::EndChat { chat, close, done } => self.end_chat(&chat, close, done).await,
             Cmd::Retire => self.retire().await,
             Cmd::Close { .. } => unreachable!("handled in run"),
-        }
-    }
-
-    async fn send(
-        &mut self,
-        chat: String,
-        (text, picks): (String, Option<String>),
-        agent: Option<String>,
-        trace: String,
-    ) -> Result<Value, Failed> {
-        // A reply kept unsaved goes in first, before the message that follows it.
-        self.save_unsaved().await;
-        if let Some(ids) = self.steerable(&chat, agent.as_deref()) {
-            // G13: into the turn under way. Claude Code reads it after the step it's on and
-            // says so (`Frame::Read`), as Esc-free typing does in its terminal.
-            // Never sent on to the engine unsaved: its answer would answer a message nobody has.
-            let message = self.db_person_message(&ids, &text, picks).await;
-            let message = message.map_err(|why| self.fail_send(&ids, why))?;
-            if let Err(e) = self.write_user(&text, Some(&ids.turn)).await {
-                return Err(self.fail_send(&ids, format!("Claude Code didn't take it: {e}")));
-            }
-            let id = message["id"].as_str().unwrap_or_default().to_string();
-            self.unread.push((id, text, gathr::words::Opened::Person));
-            self.publish(&ids.chat, json!({ "type": "message", "message": message }));
-            let steer = Event::point("gathr.turn.steer").trace(&ids.trace);
-            self.record(steer.chat(&ids.chat).ok());
-            return Ok(json!({ "turn": ids.turn, "status": "running", "steered": true }));
-        }
-        let ids = Ids {
-            chat,
-            turn: ulid(now_us()),
-            trace,
-            agent,
-            task: None,
-            answers: None,
-            person: true,
-        };
-        let queued = Queued {
-            ids,
-            text,
-            held: None,
-        };
-        let (row, text) = (queued.ids.clone(), queued.text.clone());
-        // The turn and the message that opens it are one write, as Gathr's own are: a check between
-        // two would see the person's turn move the chat, and not that they wrote (0052).
-        let saved = self.chats.writer.call(move |conn| {
-            let tx = conn.transaction()?;
-            let of = (row.agent.as_deref(), row.task, row.answers.as_deref());
-            let opened = gathr::words::Opened::Person;
-            store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, opened)?;
-            let picks = picks.as_deref();
-            let message = store::add_person_message(&tx, &row.chat, &row.turn, &text, picks)?;
-            tx.commit()?;
-            Ok::<_, gathr::Error>(message)
-        });
-        let saved = match saved.await {
-            Some(saved) => saved.map_err(|e| e.to_string()),
-            None => Err("the database didn't answer".to_string()),
-        };
-        let ids = &queued.ids;
-        let message = saved
-            .map_err(|why| self.fail_send(ids, format!("A user message wasn't saved: {why}")))?;
-        self.publish(&ids.chat, json!({ "type": "message", "message": message }));
-        self.record(
-            Event::point("gathr.chat.send")
-                .trace(&ids.trace)
-                .chat(&ids.chat)
-                .ok()
-                .attr("gathr.message.id", message["id"].clone())
-                .attr("gathr.turn.id", ids.turn.clone())
-                .attr("gathr.message.chars", queued.text.chars().count()),
-        );
-        let reference = gathr::ids::reference(&ids.trace).to_string();
-        let answer = |status: &str| json!({ "turn": ids.turn, "status": status, "ref": reference });
-        match self.enqueue(&queued).await {
-            Ok(status) => Ok(answer(status)),
-            Err(why) => Err(Failed {
-                why,
-                trace: ids.trace.clone(),
-            }),
         }
     }
 

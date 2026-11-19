@@ -77,7 +77,7 @@ test('an approval waiting in a folded thread: "needs you" on the line opens the 
   expect(document.querySelector('[aria-label="Needs you"]')).toBeNull();
   // The person folds Ann's task's thread: the card goes with it, the line stays.
   const task = page.getByText('Add the tags table').element().closest('.said') as HTMLElement;
-  const fold = task.nextElementSibling?.querySelector('.fold-line') as HTMLButtonElement;
+  const fold = task.querySelector('.said-foot .fold-line') as HTMLButtonElement;
   fold.click();
   await expect.poll(card).toBeNull();
   await needsYou().click();

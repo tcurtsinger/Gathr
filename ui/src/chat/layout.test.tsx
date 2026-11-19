@@ -85,9 +85,9 @@ for (const width of [900, 360]) {
     const rule = getComputedStyle(reply, '::before');
     expect(rule.borderLeftWidth).toBe('1px');
     expect(Math.abs(box(reply).left - composer.left)).toBeLessThan(1);
-    // The fold line too: inside the width, 13px in.
-    const fold = box(main('Add the tags table').nextElementSibling?.querySelector('.fold-line'));
-    expect(Math.abs(fold.left - composer.left - 13)).toBeLessThan(1);
+    // The fold line is in the row under the main message's bubble, at its left edge (0076).
+    const fold = box(main('Add the tags table').querySelector('.said-foot .fold-line'));
+    expect(Math.abs(fold.left - composer.left)).toBeLessThan(1);
   });
 }
 

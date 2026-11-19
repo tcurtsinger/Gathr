@@ -32,8 +32,35 @@
   margin: 0;
 }
 /* The bubble and a thumbs-up fit their words; the steps, notices and approvals take the column. */
-.said-main > :not(.bubble, .reacts) {
+.said-main > :not(.bubble, .reacts, .said-words) {
   align-self: stretch;
+}
+/*
+ * The bubble and the row under it (0076): one box as wide as the wider of the two, so the row's buttons end at the
+ * bubble's bottom right edge, or follow the row's own content (the fold line, the count) when the bubble is narrower.
+ * The row keeps the buttons' spot whether they show or not, so nothing moves when they do; a message with a row
+ * gives back most of the gap after it, so the chat stays about as tight.
+ */
+.said-words {
+  display: flex;
+  max-width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.said-foot {
+  display: flex;
+  align-self: stretch;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+  min-height: 24px;
+}
+.said-foot > .message-actions {
+  margin-left: auto;
+}
+.thread-messages > .said:has(> .said-main > .said-words > .said-foot) {
+  margin-bottom: -14px;
 }
 /* In a team chat the face opens the agent's panel; pointed at, it takes the hover tint. */
 .said-open {
@@ -231,7 +258,9 @@
   overflow-wrap: anywhere;
 }
 /* A table sizes itself to the column (markdown.css), so its bubble takes the column for it to fill. */
-.said-main > .bubble:has([data-streamdown="table"]) {
+.said-main > .bubble:has([data-streamdown="table"]),
+.said-main > .said-words:has(> .bubble [data-streamdown="table"]),
+.said-words > .bubble:has([data-streamdown="table"]) {
   align-self: stretch;
 }
 .said[data-you] .bubble {
@@ -330,6 +359,10 @@
   gap: 4px 6px;
   max-width: 100%;
   margin-top: 2px;
+}
+/* In the row under a bubble the count is level with the fold line and the buttons. */
+.said-foot > .reacts {
+  margin-top: 0;
 }
 .react {
   position: relative;

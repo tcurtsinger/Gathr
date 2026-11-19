@@ -8,7 +8,9 @@ import { serviceProxy } from './proxy.ts';
 const uiPort = Number(process.env.GATHR_UI_PORT ?? 47112);
 // GATHR_DATA is the service's --data folder; without it there's no service to forward to.
 const data = process.env.GATHR_DATA;
-const mac = process.platform === 'darwin';
+// The Mac's window is WebKit. On Windows the tests run in Edge; `GATHR_TEST_BROWSER=webkit` runs them in Playwright's
+// WebKit instead (`npx playwright install webkit` once), to see a Mac-only failure before CI does.
+const webkit = process.platform === 'darwin' || process.env.GATHR_TEST_BROWSER === 'webkit';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -49,10 +51,10 @@ export default defineConfig({
             // Reduced motion: a size set by a transition that honours it is read where it ends, not part-way. WebKit
             // on a busy macOS runner left a tick's 4px height at 2px past the wait (ChatMap, #180's CI).
             provider: playwright({
-              launchOptions: mac ? {} : { channel: 'msedge' },
+              launchOptions: webkit ? {} : { channel: 'msedge' },
               contextOptions: { reducedMotion: 'reduce' },
             }),
-            instances: [{ browser: mac ? 'webkit' : 'chromium' }],
+            instances: [{ browser: webkit ? 'webkit' : 'chromium' }],
           },
         },
       },

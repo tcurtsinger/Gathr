@@ -29,10 +29,20 @@ export function topicsOf(
   function topicOf(g: Group): string {
     const first = g.msgs[0];
     switch (g.kind) {
-      case 'person':
+      case 'person': {
+        // A reply sits in the thread of what it answers, and so does what its turn says after it (0076).
+        const answered =
+          (first.reply_to && ofMessage.get(first.reply_to)) ||
+          (first.reply_task != null &&
+            (state.tasks.find((t) => t.number === first.reply_task)?.topic ?? `t:${first.reply_task}`));
+        if (answered) {
+          if (g.turn) entered.set(g.turn, answered);
+          return answered;
+        }
         // A person's message into a running turn: what the turn says after it is about it.
         if (g.turn && !g.bound) entered.set(g.turn, `m:${first.id}`);
         return `m:${first.id}`;
+      }
       case 'version':
         return `m:${first.id}`;
       case 'question':

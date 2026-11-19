@@ -98,8 +98,10 @@ test('a reply streaming into a long team chat draws only itself again', async ()
   const screen = await render(<View state={{ ...state, partial: { live: words[0] } }} />);
   // Earlier rounds are handled: their threads start folded.
   await expect.element(screen.getByText('Made-up ask 19')).toBeInTheDocument();
-  // The thread it streams into is open, with its fold line above it.
-  expect(document.querySelector('[data-message-id="fold-m:ul"]')).not.toBeNull();
+  // The thread it streams into is open, with its fold line in the row under its main message (0076).
+  expect(
+    document.querySelector('[data-message-id="ul"] .said-foot .fold-line')?.getAttribute('aria-expanded'),
+  ).toBe('true');
   const stop = watchRenders();
   for (let n = 2; n < 40; n += 2) {
     await screen.rerender(<View state={{ ...state, partial: { live: words.slice(0, n).join(' ') } }} />);

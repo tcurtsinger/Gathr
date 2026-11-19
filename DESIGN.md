@@ -207,15 +207,35 @@ Streamdown is the rendering reference, pending integration approval. Keep user
 messages plain text; render agent Markdown, lists, headings, quotes, code, tables,
 sources, files and tool results. Wide code and tables scroll inside the reply.
 Raw HTML policy, link behavior and Diagnostics references stay governed by Gathr.
-Tools are collapsed where they happened. MessageActions (`ui/src/components/MessageActions.tsx`, one for every
-message) is a small row on the bubble's top right corner, shown while the message is pointed at or holds keyboard
-focus (by opacity, as the steps are, so Tab reaches it), in a thread too: a popover-coloured box with a 1px border,
-10px corners and a soft shadow, holding 24px icon buttons with 15px icons, muted until pointed at. Its lower edge
-stays in the bubble's top padding, so it never covers a word of the first line; over a short bubble it may cover the
-end of the name line while it shows. Today it holds the person's like, a thumbs-up named "Like" (pressed: the
-attention blue); Reply joins it later. An agent's words, a message between agents, a bubble holding a waiting
-question with the asker's pick, and a plan version waiting for the person offer it; the person's own message, Gathr's
-lines and question, a bubble holding a waiting question with no pick, and words still streaming offer none (0057 C4).
+Tools are collapsed where they happened. Every message that can have one has one row under its bubble (`chat/Foot.tsx`,
+0076, the owner's call: "They live in a dedicated spot under the bottom right of the bubble. On the same row as the
+replies and reactions"), the same on main messages, replies, a chat of one agent and messages between agents. Left to
+right: a main message's fold line when it has replies, the thumbs-up count when it has one, then at the right
+MessageActions (`ui/src/components/MessageActions.tsx`): Reply (a reply arrow, named "Reply"), then the person's like
+(a thumbs-up named "Like", pressed: the attention blue), 24px icon buttons with 15px icons, muted until pointed at,
+icons only, no hover text. The buttons show while the message is pointed at or holds keyboard focus (by opacity, as
+the steps are, so Tab reaches them) in a spot the row always keeps, so nothing above, below or beside moves when they
+show. The bubble and the row share one box as wide as the wider of the two: the buttons end at the bubble's bottom
+right edge, or, under a bubble narrower than the row's own content, right after the fold line and the count. Nothing
+of the row covers the bubble's words, its name line, a state word, a steps button or the next message: it sits under
+the bubble, 2px below it, 24px tall. A message with a row gives back 14px of the gap after it, so from a bubble's
+bottom to the next name line is 32px after a main message and 26px after a reply in a thread (20px and 14px before,
+with no row); a main message with replies is 26px from its first reply (48px when the fold line was a row of its own),
+a reply with a count 32px from what follows (51px). Like: an agent's words, a message between agents, a bubble holding
+a waiting question with the asker's pick, and a plan version waiting for the person offer it; the person's own
+message, Gathr's lines and question, a bubble holding a waiting question with no pick, and words still streaming
+offer none (0057 C4). Reply (one rule, `chat/answer.ts`): an agent's message, a message between agents, a plan
+version, a task's message, a waiting question's bubble and a line of Gathr's offer it, and on a main message it
+answers the main message as its thread's (a task's message: its owner; the person's own ask, once it has replies:
+the lead); the person's other messages, their answers, Gathr's own question and a removed agent's message offer none.
+
+The thread box (0076, `#replybox` A) is the same Composer, placed by `chat/ThreadBox.tsx` as an item after the
+thread's last reply shown, inside the thread's rule where its replies sit: one row, 18px corners, 14.5px words, the
+"To Ann" sign, a 24px cross named "Close" and a 28px Send, the field still growing with what is typed; where the
+field would get less than 200px (the 360 column), the sign, the cross and Send go under it, at its right. Its field is
+named "Reply" and so is its hint. Focus goes into it when Reply opens it; Escape (after an open @ list) or the cross
+closes it and focus goes back to that Reply. It has no Stop. One at a time: Reply elsewhere moves it, and each
+thread keeps its own draft.
 Scroll-aware canvas fades appear only beyond the visible top/bottom edge,
 pass pointer input through and leave the scrollbar clear.
 
@@ -311,11 +331,10 @@ the ask's thread, its steps saying "gave 3 tasks".
 An ask's result is the lead's own block, at the bottom, opening with a plain quote of the ask's first line (the
 quote style below): a press on it scrolls up to the ask and holds it there, as a search hit does.
 
-Under a main message with replies, one fold line, 13px muted: a chevron (turned down when open) and, folded, "1
-reply" or "4 replies"; open, "Collapse replies". No faces and no time (the owner's words: "I want just '3
-replies'", "Collapse replies like in Zoom"). The main message's thumbs-up sits on the same row, after the fold
-line; with no replies the row holds the thumbs-up alone, at the bubble's left edge. A reply's thumbs-up stays
-under its own words. A press folds or
+A main message with replies has one fold line, first in the row under its bubble (0076), 13px muted: a chevron
+(turned down when open) and, folded, "1 reply" or "4 replies"; open, "Collapse replies". No faces and no time (the
+owner's words: "I want just '3 replies'", "Collapse replies like in Zoom"). The thumbs-up count follows it on that
+row, then the buttons. A thread's rule starts under the row. A press folds or
 opens the thread; the line stays where it was, and a thread opened at the chat's foot scrolls up to show above the
 box. A thread starts open; when the chat is opened, one whose main message is handled starts folded (a task done or
 cancelled, a decided version, an answered question, an ask with nothing open, every turn of it over and no approval

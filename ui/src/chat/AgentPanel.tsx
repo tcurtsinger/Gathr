@@ -41,8 +41,8 @@ export function blocksOf(items: ThreadMessageLike[], agent: string, kept: Kept) 
   };
   for (const item of items) {
     const custom = (item.metadata?.custom ?? {}) as Custom;
-    // A task handed out is its giver's record, not a block it wrote; a fold line is no one's.
-    if (custom.brief || custom.fold || custom.earlier) continue;
+    // A task handed out is its giver's record, not a block it wrote; "Show earlier" and the reply box are no one's.
+    if (custom.brief || custom.earlier || custom.box) continue;
     const by = custom.said ? custom.said.by : custom.by;
     if (by !== agent || item.role !== 'assistant') continue;
     if (item.status?.type === 'running') now = custom.work ?? now;

@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Named, PickedName, Role, Task } from '../api';
+import type { Failure, Named, PickedName, ReplyTarget, Role, Task } from '../api';
 import type { Out } from '../components/Outcome';
 import type { Said as State } from '../tasks/rows';
 import type { AskSize } from './asks';
@@ -18,7 +18,20 @@ export interface SendFailure {
   agent?: string;
   /** The names picked in it, sent again with it. */
   picks?: PickedName[];
+  /** A reply in a thread: what it answers, sent again with it (0076). */
+  reply?: ReplyTarget;
   failure: Failure;
+}
+
+/**
+ * What Reply on a message answers (0076): the thread its reply joins, the message or task it answers, and the agent
+ * it goes to unless the person picks another with "@".
+ */
+export interface Answer {
+  topic: string;
+  message?: string;
+  task?: number;
+  agent?: string;
 }
 
 /** One of Gathr's notes, as a line: "Vale completed: Review PR #138". */
@@ -49,18 +62,17 @@ export type Place = {
   state?: MainState;
   /** An ask's result: the ask it closes and its first line, quoted. */
   result?: { ask: string; quote: string };
+  /** What Reply on it answers; none where it offers no Reply. */
+  answer?: Answer;
+  /** A main message with replies: its thread's fold line, in the row under its bubble (0076). */
+  thread?: Fold;
 };
 
-/**
- * The row under a main message: its thread's fold line (how many replies, and whether it is open), and the main
- * message's thumbs-up on the same row. With no replies it holds the thumbs-up alone.
- */
+/** A thread's fold line: how many replies, and whether it is open. */
 export interface Fold {
   topic: string;
   open: boolean;
   count: number;
-  agreed?: string[];
-  like?: Like;
 }
 
 /** A task the lead hands out, as its main message: from the task's record, as the Tasks view reads it. */
@@ -120,10 +132,10 @@ export type Custom = Place & {
   gathr?: boolean;
   /** A task handed out, as its main message. */
   brief?: Brief;
-  /** A thread's fold line. */
-  fold?: Fold;
   /** "Show N earlier replies" in a long thread. */
   earlier?: { topic: string; n: number };
+  /** The message box at a thread's foot, open for a reply in it (0076). */
+  box?: { topic: string };
   /**
    * When it was said, on a block with a tick on the conversation map (0039): the person's message and an ask's result;
    * in a chat of one, the lead's reply to the person.
@@ -158,6 +170,8 @@ export interface View {
   start?: Set<string>;
   /** Long threads whose earlier replies the person showed. */
   earlier: { has: (topic: string) => boolean };
+  /** The thread whose box is open for a reply: one at a time (0076). */
+  replying?: string;
 }
 
 export type Cache = Map<string, { sig: string; value: ThreadMessageLike }>;

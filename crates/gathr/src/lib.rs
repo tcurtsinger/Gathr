@@ -43,6 +43,7 @@ pub mod pushes;
 pub mod quiet;
 pub mod reactions;
 pub mod redact;
+pub mod replies;
 pub mod roles;
 pub mod run;
 pub mod search;

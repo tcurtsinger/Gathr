@@ -47,6 +47,16 @@ export interface Message {
   picks?: PickedName[] | null;
   /** A line Gathr said in no turn: the main message it sits under (0075). */
   topic?: string | null;
+  /** The person's reply in a thread (0076): the message it answers. */
+  reply_to?: string | null;
+  /** The person's reply about a task: a task's message has no message of its own. */
+  reply_task?: number | null;
+}
+
+/** What a reply in a thread answers (0076): a message, or a task. */
+export interface ReplyTarget {
+  reply_to?: string;
+  reply_task?: number;
 }
 
 /** A name picked from the "@" list in the text: where its `@Name` starts and how long it is, in UTF-16 units. */
@@ -716,11 +726,12 @@ export const api = {
       '/api/person-tasks/answer',
       { answers },
     ),
-  send: (chat: string, text: string, agent?: string, picks?: PickedName[]) =>
+  send: (chat: string, text: string, agent?: string, picks?: PickedName[], reply?: ReplyTarget) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, {
       text,
       agent,
       picks: picks?.length ? picks : undefined,
+      ...reply,
     }),
   /**
    * The person's like (0057): it reaches the message's agent, or answers the waiting `questions` its bubble holds

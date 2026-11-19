@@ -53,3 +53,12 @@ The service side of a chat with several agents, through the API until F8's scree
 - **`reg query`.** Its output's code page differs by computer, so a folder with an accented name could come back wrong.
 - **PowerShell to read the variables.** About 200 ms per engine start against about 20 ms for `reg export`.
 - **The project's own toolchain files** (`.node-version`, `rust-toolchain.toml`). rustup already reads `rust-toolchain.toml` once `cargo` is found; node version managers are left for when friction shows them.
+
+## Amended: a reply's target (2026-11-18, 0076)
+
+`POST /api/chats/{id}/messages` also takes `reply_to` (a text message of the chat; Gathr's copy of a message stands
+for the message it carries) or `reply_task` (a task of the chat), never both, for a reply typed in a thread. The
+service checks it before anything is saved and refuses anything else with why and a reference. The message keeps
+it (`messages.reply_to`, `reply_task`, migration 0056); its turn serves the ask of what it answers, opens with the
+`reply` kind's line before the person's words, and sits in that thread. Routing is unchanged: the window sends the
+agent it shows by Send, the author of what is answered unless the person picks another.

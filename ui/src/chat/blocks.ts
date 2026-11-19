@@ -287,7 +287,14 @@ export function personBlock(cache: Cache, m: Message, size: AskSize | undefined,
     role: 'user',
     content: [{ type: 'text', text: m.body as string }],
     metadata: {
-      custom: { ...place, tick: m.time, time: m.time, size, picks: m.picks ?? undefined } satisfies Custom,
+      // A reply in a thread (0076) has no tick: the map marks the main line.
+      custom: {
+        ...place,
+        tick: place.reply ? undefined : m.time,
+        time: m.time,
+        size,
+        picks: m.picks ?? undefined,
+      } satisfies Custom,
     },
   }));
 }

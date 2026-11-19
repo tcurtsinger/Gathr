@@ -22,8 +22,8 @@
 }
 
 /*
- * A thread's items: its fold line, "Show earlier" and each reply, each an item of the chat's list, joined by one
- * rule at the main message's left edge. Its replies sit 13px in (the rule and 12px), 14px apart.
+ * A thread's items: "Show earlier", each reply and the reply box, each an item of the chat's list, joined by one
+ * rule at the main message's left edge. Its replies sit 13px in (the rule and 12px).
  */
 .thread-messages > [data-thread-item],
 .thread-messages > .said[data-reply] {
@@ -40,29 +40,9 @@
   left: 0;
   border-left: 1px solid var(--border);
 }
-/* The fold line sits close under its main message, and the rule starts with it. */
-.thread-messages > .fold {
-  margin-top: -10px;
-}
-.thread-messages > .fold::before {
-  top: 0;
-}
-/* One row: the fold line, then the main message's thumbs-up. With no replies the thumbs-up alone, at the bubble's
-   left edge, with no rule. */
-.thread-messages > .fold {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 12px;
-}
-.fold > .reacts {
-  margin-top: 0;
-}
-.thread-messages > .fold[data-bare] {
-  padding-left: 0;
-}
-.thread-messages > .fold[data-bare]::before {
-  content: none;
+/* A thread's first item sits under its main message's row, and the rule starts with it, never crossing the row. */
+.thread-messages > .said:not([data-reply]) + :is(.said[data-reply], [data-thread-item])::before {
+  top: -2px;
 }
 .fold-line,
 .earlier-button {
@@ -84,12 +64,17 @@
 .earlier-button:hover {
   color: var(--foreground);
 }
+/* The message box at a thread's foot (0076): inside the thread's rule, as its replies are, as wide as they reach. */
+.thread-messages > .thread-box {
+  margin-top: 0;
+  padding-top: 2px;
+}
 .fold-chevron {
   width: 14px;
   height: 14px;
   flex: none;
 }
-.fold[data-open] .fold-chevron {
+.fold-line[aria-expanded="true"] .fold-chevron {
   rotate: 90deg;
 }
 
@@ -174,7 +159,9 @@
 }
 
 /* A task handed out: the @Name and the title, then the first line of why, the rest behind More. */
-.said-main > .bubble:has(> .task-main) {
+.said-main > .bubble:has(> .task-main),
+.said-main > .said-words:has(> .bubble > .task-main),
+.said-words > .bubble:has(> .task-main) {
   align-self: stretch;
 }
 .task-main {

@@ -1,27 +1,12 @@
-/* The row on a bubble's top right corner (the reply-react mock-up's #actions B). Its lower edge stays in the bubble's
-   top padding, so it never covers a word of the first line. Shown by opacity, as a turn's steps are, so Tab reaches
-   its buttons. */
-.bubble:has(> .message-actions) {
-  position: relative;
-}
+/* The buttons in the row under a message's bubble (DESIGN.md: MessageActions, 0076): icons only, shown while the
+   message is pointed at or holds keyboard focus, by opacity, so Tab reaches them and their spot is always kept. */
 .message-actions {
-  position: absolute;
-  top: -22px;
-  right: -6px;
-  z-index: 3;
   display: flex;
+  flex: none;
   gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--popover);
-  box-shadow: 0 2px 8px #00000029;
   opacity: 0;
 }
-:root.light .message-actions {
-  box-shadow: 0 2px 8px #0000001a;
-}
-.said:is(:hover, :focus-within) > .said-main > .bubble > .message-actions {
+.said:is(:hover, :focus-within) .message-actions {
   opacity: 1;
 }
 /* 24px at every width: the row has no touch size of its own. */

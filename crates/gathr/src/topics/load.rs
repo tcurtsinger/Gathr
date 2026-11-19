@@ -30,6 +30,54 @@ pub struct Opening {
     pub role: String,
     /// A copy of another message (a teammate's, a liked one), and the turn that message is in.
     pub copy_of: Option<(String, Option<String>)>,
+    /// What the person's reply answers (0076).
+    pub reply: Option<Reply>,
+}
+
+/// What a reply answers: a task, a message, or a message that is gone.
+#[derive(Clone)]
+pub enum Reply {
+    Task(i64),
+    Message(Answered),
+    Gone(String),
+}
+
+/// The message a reply answers: its turn, its role, what a line of Gathr's in no turn is about,
+/// and whether it is a reply itself.
+#[derive(Clone)]
+pub struct Answered {
+    pub id: String,
+    pub turn: Option<String>,
+    pub role: String,
+    pub about: Option<String>,
+    pub reply: bool,
+}
+
+/// The SQL columns that read a reply's target, after `m` (the reply) and `r` (what it answers):
+/// `m.reply_to, m.reply_task, r.id, r.turn_id, r.role, r.about, r.reply_to IS NOT NULL OR r.reply_task IS NOT NULL`.
+pub const REPLY_COLUMNS: &str = "m.reply_to, m.reply_task, r.id, r.turn_id, r.role, r.about,
+     r.reply_to IS NOT NULL OR r.reply_task IS NOT NULL";
+
+/// A reply's target from the seven `REPLY_COLUMNS` starting at `at`.
+pub fn reply_at(r: &Row<'_>, at: usize) -> rusqlite::Result<Option<Reply>> {
+    let (to, task): (Option<String>, Option<i64>) = (r.get(at)?, r.get(at + 1)?);
+    if let Some(n) = task {
+        return Ok(Some(Reply::Task(n)));
+    }
+    let Some(to) = to else {
+        return Ok(None);
+    };
+    let found: Option<String> = r.get(at + 2)?;
+    Ok(Some(match found {
+        Some(id) => Reply::Message(Answered {
+            id,
+            turn: r.get(at + 3)?,
+            role: r.get(at + 4)?,
+            about: r.get(at + 5)?,
+            reply: r.get::<_, Option<bool>>(at + 6)?.unwrap_or(false),
+        }),
+        None => Reply::Gone(to),
+    }))
 }
 
 #[derive(Clone)]
@@ -66,14 +114,19 @@ pub trait Source {
     fn is_lead(&self, agent: &str) -> bool;
 }
 
-/// One message the person or Gathr put in the chat: its id, turn, role, copy and what it's about.
+/// One message the person or Gathr put in the chat: its id, turn, role, copy, what it's about and
+/// what it answers.
 type Said = (
     String,
     Option<String>,
     String,
     Option<(String, Option<String>)>,
     Option<String>,
+    Option<Reply>,
 );
+
+/// The schema whose messages keep what a reply answers (migration 0056).
+pub const REPLY_SCHEMA: i64 = 56;
 
 #[derive(Default)]
 pub struct Facts {
@@ -107,7 +160,7 @@ impl Facts {
         let recorded = schema >= TOPICS_SCHEMA;
         let mut f = Facts::default();
         f.load_turns(conn, chat, recorded)?;
-        f.load_messages(conn, chat, recorded)?;
+        f.load_messages(conn, chat, schema)?;
         f.load_tasks(conn, chat)?;
         let sql = "SELECT v.id, v.message_id, v.check_line, v.decided_line
                    FROM plan_versions v JOIN plans p ON p.id = v.plan_id WHERE p.chat_id = ?1";
@@ -195,16 +248,16 @@ impl Facts {
 
     /// The person's messages and Gathr's, in time order: each turn's first is what opened it, and
     /// those in no turn are Gathr's lines.
-    fn load_messages(
-        &mut self,
-        conn: &Connection,
-        chat: &str,
-        recorded: bool,
-    ) -> Result<(), Error> {
+    fn load_messages(&mut self, conn: &Connection, chat: &str, schema: i64) -> Result<(), Error> {
+        let recorded = schema >= TOPICS_SCHEMA;
         let about = if recorded { "m.about" } else { "NULL" };
+        let (replies, answered) = match schema >= REPLY_SCHEMA {
+            true => (REPLY_COLUMNS, "LEFT JOIN messages r ON r.id = m.reply_to"),
+            false => ("NULL, NULL, NULL, NULL, NULL, NULL, NULL", ""),
+        };
         let sql = format!(
-            "SELECT m.id, m.turn_id, m.role, m.copy_of, o.turn_id, {about}
-             FROM messages m LEFT JOIN messages o ON o.id = m.copy_of
+            "SELECT m.id, m.turn_id, m.role, m.copy_of, o.turn_id, {about}, {replies}
+             FROM messages m LEFT JOIN messages o ON o.id = m.copy_of {answered}
              WHERE m.chat_id = ?1 AND m.role IN ('user', 'gathr') ORDER BY m.ts, m.rowid"
         );
         let said: Vec<Said> = self.read(conn, &sql, chat, |r| {
@@ -213,9 +266,10 @@ impl Facts {
                 Some(of) => Some((of, r.get(4)?)),
                 None => None,
             };
-            Ok((r.get(0)?, r.get(1)?, r.get(2)?, copy, r.get(5)?))
+            let reply = reply_at(r, 6)?;
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, copy, r.get(5)?, reply))
         })?;
-        for (id, turn, role, copy_of, about) in said {
+        for (id, turn, role, copy_of, about, reply) in said {
             let Some(turn) = turn else {
                 self.lines.push(Line { id, about });
                 continue;
@@ -225,7 +279,12 @@ impl Facts {
             };
             let opening = &mut self.turns[i].opening;
             if opening.is_none() {
-                *opening = Some(Opening { id, role, copy_of });
+                *opening = Some(Opening {
+                    id,
+                    role,
+                    copy_of,
+                    reply,
+                });
             }
         }
         Ok(())

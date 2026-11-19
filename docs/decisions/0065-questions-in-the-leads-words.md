@@ -96,3 +96,10 @@ This replaces F9's window and the pager described above:
   kept; Send tries again. The notice titled "Answer failed:" is gone.
 - **Turned down:** the pager kept for questions alone (the owner: each by itself), and a Send that waits for a
   pick on Gathr's question.
+
+## Amended: talked over by Reply in the chat (2026-11-18, 0076)
+
+In the chat, a question waiting on the person is talked over by replying in its thread: the box at the thread's foot
+sends the Discuss through the same route (F5), and the question stays open and comes back as F5 says. The chat's
+question block has no Discuss switch; the Tasks view keeps it, as above. Gathr's own question offers no Reply, as it
+has no switch.

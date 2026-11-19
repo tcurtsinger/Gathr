@@ -38,19 +38,8 @@ test('a chat of one agent is one list in order: the person, then each turn where
 test('a team chat is its main messages in time order, each with its thread; a member is headed by its task', () => {
   const { items, all } = view(round());
   // The tasks the lead handed out are main messages, at the time they were given; a done task's thread starts folded.
-  expect(ids(items)).toEqual([
-    'ask-user',
-    'fold-m:ask-user',
-    'task-1',
-    'fold-t:1',
-    'task-2',
-    'fold-t:2',
-    'a-kit',
-    'mid-user',
-    'fold-m:mid-user',
-    'direct-user',
-    'fold-m:direct-user',
-  ]);
+  // Each fold line is in the row under its main message (0076), no item of its own.
+  expect(ids(items)).toEqual(['ask-user', 'task-1', 'task-2', 'a-kit', 'mid-user', 'direct-user']);
   expect(ids(all)).toEqual([
     'ask-user',
     'a-ask',

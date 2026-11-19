@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react';
 import { useContext } from 'react';
 import { GathrFace } from '../components/Face';
 import { Asked, QuestionsContext } from './Asked';
+import { Foot } from './Foot';
 import { MainWord } from './MainWord';
 import type { EventLine } from './messages';
 import { custom } from './Replies';
@@ -36,7 +37,11 @@ export function GathrMessage() {
         />
       }
     >
-      <Bubble quote={fixed?.text}>
+      <Bubble
+        quote={fixed?.text}
+        // Gathr's own question can't be talked over: only its lines offer Reply (0076).
+        foot={<Foot fold={own.thread} answer={asked.length ? undefined : own.answer} />}
+      >
         {why && <p className="gathr-says">{why}</p>}
         {events.map((e, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: its lines keep their order

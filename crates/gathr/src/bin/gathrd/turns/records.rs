@@ -43,12 +43,23 @@ impl Task {
         ids: &Ids,
         body: &str,
         picks: Option<String>,
-    ) -> Result<Value, String> {
+        target: gathr::replies::Target,
+    ) -> Result<(Value, String), String> {
         let (chat, turn, body) = (ids.chat.clone(), ids.turn.clone(), body.to_string());
         let add = move |tx: &rusqlite::Transaction| {
-            store::add_person_message(tx, &chat, &turn, &body, picks.as_deref())
+            let picks = picks.as_deref();
+            let message = match target.is_reply() {
+                true => store::add_reply(tx, &chat, &turn, &body, picks, &target)?,
+                false => store::add_person_message(tx, &chat, &turn, &body, picks)?,
+            };
+            let id = message["id"].as_str().unwrap_or_default().to_string();
+            // What the engine reads: a reply's line first (0076).
+            let read = gathr::replies::read_as(tx, &id, &body)?;
+            Ok(json!({ "message": message, "read": read }))
         };
-        self.db_save(ids, "user", add).await
+        let saved = self.db_save(ids, "user", add).await?;
+        let read = saved["read"].as_str().unwrap_or_default().to_string();
+        Ok((saved["message"].clone(), read))
     }
 
     pub(super) async fn db_save(

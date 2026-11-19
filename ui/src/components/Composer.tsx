@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import {
   type KeyboardEvent,
   type Ref,
@@ -15,6 +16,7 @@ import {
   Composer as Frame,
 } from '@/components/assistant-ui/elements/composer';
 import { Face } from './Face';
+import { IconButton } from './IconButton';
 import { MentionList, type Person } from './MentionList';
 import { follow, insert, type Picked, typing } from './mention';
 import { NameLayer } from './NameLayer';
@@ -37,14 +39,23 @@ interface Props {
   people?: readonly Person[];
   /** By Send once something is typed: who gets it, and whether it joins the chat. */
   to?: { id: string; name: string; joins?: boolean };
+  /** What its field is called: "Message" at the chat's foot, "Reply" at a thread's (0076). */
+  label?: string;
+  /** Placed at a thread's foot: a cross and Escape close it. */
+  onClose?: () => void;
 }
 
 const NOBODY: readonly Person[] = [];
 const NONE: readonly Picked[] = [];
 
-/** The one composer, on the registry's composer parts. Enter sends, Shift+Enter is a new line; "@" lists names. */
+/**
+ * The one composer, on the registry's composer parts. Enter sends, Shift+Enter is a new line; "@" lists names. At the
+ * chat's foot it sends main messages and holds Stop; at a thread's foot (0076) it is one row with a cross, and Escape
+ * closes it once no "@" list is open.
+ */
 export function Composer(props: Props) {
   const { draft, picks = NONE, onDraft, onSend, onStop, inputRef, hint, people = NOBODY, to } = props;
+  const { label: name = 'Message', onClose } = props;
   const canSend = draft.trim().length > 0;
   const stopping = !!onStop && !canSend;
   // Stop names its scope (the prototype): it ends the chat's turns and the commands they started.
@@ -110,12 +121,17 @@ export function Composer(props: Props) {
       e.stopPropagation();
       return setShut(mention.at);
     }
+    if (e.key === 'Escape' && onClose) {
+      e.preventDefault();
+      e.stopPropagation();
+      return onClose();
+    }
     if (e.key !== 'Enter' || e.shiftKey) return;
     e.preventDefault();
     if (canSend) onSend();
   };
   return (
-    <Frame className="composer">
+    <Frame className="composer" data-thread={onClose ? '' : undefined}>
       {open && <MentionList people={matches} lit={at} onPick={choose} />}
       <ComposerBar>
         <div className="composer-field">
@@ -123,7 +139,7 @@ export function Composer(props: Props) {
           <textarea
             ref={ref}
             className={people.length > 0 ? 'composer-input named' : 'composer-input'}
-            aria-label="Message"
+            aria-label={name}
             aria-activedescendant={open ? `mention-${matches[at].id}` : undefined}
             placeholder={hint}
             rows={1}
@@ -156,6 +172,11 @@ export function Composer(props: Props) {
                   </span>
                 )}
               </span>
+            )}
+            {onClose && (
+              <IconButton aria-label="Close" className="composer-close" onClick={onClose}>
+                <X aria-hidden="true" />
+              </IconButton>
             )}
             <ComposerSend
               aria-label={label}

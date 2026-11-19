@@ -27,6 +27,8 @@ pub enum Cmd {
         agent: Option<String>,
         /// The names picked from the window's `@` list, as kept (`picks::kept`).
         picks: Option<String>,
+        /// What a reply in a thread answers (0076), checked: none for a message on the main line.
+        target: gathr::replies::Target,
         /// The request's trace: the turn's too, so one reference finds both.
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
