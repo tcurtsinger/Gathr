@@ -191,6 +191,17 @@ test('a message scrolled behind the box shows neither beside it nor under it', a
   expect(inChat(face.left + 4, b.top + 10)).toBe(false);
 });
 
+test('at the chat’s foot the last message’s row of replies and buttons clears the box', async () => {
+  await open(1440);
+  const v = viewport();
+  await expect.poll(() => v.scrollHeight - v.clientHeight - v.scrollTop).toBeLessThan(2);
+  const last = [...document.querySelectorAll('.thread-messages > .said')].at(-1) as HTMLElement;
+  const row = last.querySelector('.said-foot') as HTMLElement;
+  expect(row, 'the last message has its row').not.toBeNull();
+  // The owner, 2026-11-19: the row was cut off by the box on the last message.
+  expect(box().top - row.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(8);
+});
+
 test('the arrow to the foot sits just above the box, its right edge in line with the box’s', async () => {
   await open(1440);
   await upBy(400);

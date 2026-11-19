@@ -62,6 +62,10 @@
 .thread-messages > .said:has(> .said-main > .said-words > .said-foot) {
   margin-bottom: -14px;
 }
+/* The chat's last message gives nothing back: its row would lie 8px under the message box. It keeps 10px clear. */
+.thread-messages > .said:last-child:has(> .said-main > .said-words > .said-foot) {
+  margin-bottom: 4px;
+}
 /* In a team chat the face opens the agent's panel; pointed at, it takes the hover tint. */
 .said-open {
   position: relative;
