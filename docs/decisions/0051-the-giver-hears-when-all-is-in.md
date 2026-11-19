@@ -120,3 +120,6 @@ one needs its giver now.
   and why a send failed. A turn Gathr ended for a reason of its own offers nothing, so it shows nothing. The steps,
   with failed and refused ones counted apart, stay in the agent's panel ([0072](0072-the-chat-reads-like-a-team-chat.md)).
   Proof: `ui/src/chat/nameLine.test.tsx`, `ui/src/chat/Ends.test.tsx`.
+- 2026-11-19, the owner's call "Like Claude's app" ([0072](0072-the-chat-reads-like-a-team-chat.md)): a turn's runs of
+  steps are lines in its bubble, in the chat and the panel alike, and nothing counts failed or refused steps any more: a
+  run opened marks each failed step Failed and each refused one Refused, as before.

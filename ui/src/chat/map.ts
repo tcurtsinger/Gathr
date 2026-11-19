@@ -61,7 +61,8 @@ const read = new WeakMap<ThreadMessageLike, Tick | null>();
 
 function tickOf(item: ThreadMessageLike): Tick | null {
   const custom = (item.metadata?.custom ?? {}) as Custom;
-  const part = typeof item.content === 'string' ? undefined : item.content[0];
+  // A turn's words before its last are what it said along the way: its tick reads its final words.
+  const part = typeof item.content === 'string' ? undefined : item.content.at(-1);
   const text = part?.type === 'text' ? part.text : '';
   if (custom.tick === undefined || !text) return null;
   const you = item.role === 'user';

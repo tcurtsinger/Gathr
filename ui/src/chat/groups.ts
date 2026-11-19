@@ -27,8 +27,8 @@ const ended = new Set(['stopped', 'waiting_sign_in', 'failed']);
 export const hasEnding = (t: Turn) => ended.has(t.status);
 
 /**
- * The chat's saved messages as blocks, in saved order (0037). A turn is one block where it began: what it did folds
- * into a row, its last text is the message, and a later reply of the turn lands in that block, so turns streaming at
+ * The chat's saved messages as blocks, in saved order (0037). A turn is one block where it began: its words and the
+ * runs of steps between them, and a later reply of the turn lands in that block, so turns streaming at
  * once never interleave. Only a person's message sent into a running turn, or Gathr's copy of one, splits it, one block
  * before and one after.
  * Each message to an agent is a block of its own. A block keeps one id from its first streamed text to its saved
@@ -73,8 +73,8 @@ export function grouped(state: ChatState): Group[] {
       open.set(m.turn, g);
     } else groups.push({ ...one, key: `a-${m.id}`, kind: 'reply', bound: false });
   });
-  // A turn with streaming text, a notice or an approval but no reply since its latest message still
-  // has one, right after that message.
+  // A turn running, or with streaming text, a notice or an approval, but no reply since its latest message still
+  // has one, right after that message: a running one shows as its agent at work from its start.
   const waiting = new Set(state.approvals.map((a) => a.turn));
   for (const t of Object.values(state.turns)) {
     const last = open.get(t.id) ?? groups.findLast((g) => g.turn === t.id && g.kind !== 'to');
@@ -82,7 +82,7 @@ export function grouped(state: ChatState): Group[] {
       last.last = true;
       continue;
     }
-    if (!(state.partial[t.id] || hasEnding(t) || waiting.has(t.id))) continue;
+    if (!(t.status === 'running' || state.partial[t.id] || hasEnding(t) || waiting.has(t.id))) continue;
     const after = latest.get(t.id);
     groups.push({ ...reply(t.id, after === undefined ? Number.POSITIVE_INFINITY : after + 0.5), last: true });
   }

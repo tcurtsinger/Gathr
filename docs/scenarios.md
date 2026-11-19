@@ -507,7 +507,7 @@ Parts: 5.2
 - **When** the person reads the chat, live or after a reload
 - **Then** no name line says how a turn or a task ended (the owner's call of 2026-11-18): the person's stop has
   Continue under it; the restart's has Continue too, and never reads as failed; Gathr's has nothing to continue,
-  and with no words draws nothing; the failed one has its reference and Retry. No tick and no line says the task
+  and with no words and no steps draws nothing; the failed one has its reference and Retry. No tick and no line says the task
   is done
 
 ### 6a. Gathr can say who is doing what

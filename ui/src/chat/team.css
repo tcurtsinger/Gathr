@@ -1,7 +1,8 @@
-/* The timeline's parts (DESIGN.md "One timeline", 0037): a turn's row and Gathr's events. */
-/* A turn's work row (0037) is assistant-ui's Run activity, each tool step its Tool call (the owner's call,
-   2026-11-12): published colours and spacing, with the owner's sizes: the row 14px, a step 12.5px, the
-   latest step and mid-work words 13px, steps 4px apart. Set from here, so the registry files stay as published. */
+/* The timeline's parts (DESIGN.md "One timeline", 0037): a turn's runs of steps and Gathr's events. */
+/* A run's line, and the panel's Now row, is assistant-ui's Run activity, each tool step its Tool call (the owner's
+   calls, 2026-11-12 and 2026-11-19): published colours and spacing, with the owner's sizes: the line 14px, a step
+   12.5px, the latest step and mid-work words 13px, steps 4px apart. Set from here, so the registry files stay as
+   published. */
 .work {
   gap: 0;
   min-width: 0;

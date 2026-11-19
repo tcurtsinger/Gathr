@@ -9,11 +9,12 @@ import { PickedText } from '../components/PickedText';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
 import { Foot } from './Foot';
+import type { Piece } from './fold';
 import type { Like } from './likes';
 import type { Custom } from './messages';
 import { AgentFace, Bubble, EndRow, NameLine, NewWord, OnTask, Said, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
-import { InPanel, StepsButton } from './Steps';
+import { InPanel } from './Steps';
 import type { Approval } from './state';
 import { Earlier, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
@@ -110,35 +111,27 @@ function NewLine() {
 }
 
 /**
- * A block of an agent's turn: its face and name line (the name, the time, New), its words in a bubble with its plan's
- * chip, thumbs-ups, then its approvals and what the person can do about how it ended. An ask's result quotes the ask
- * (0075). A reply sits in its thread, smaller. In the agent's panel its name line also says the task it worked on and
- * ends with its steps; the chat draws nothing for a block with no words and nothing to act on (timeline.ts).
+ * A block of an agent's turn: its face and name line (the name, the time, New), then in one bubble its words where it
+ * wrote them and each run of steps between them as one line (`Pieces`), its plan's chip and questions, thumbs-ups,
+ * then its approvals and what the person can do about how it ended. An ask's result quotes the ask (0075). A reply sits
+ * in its thread, smaller. In the agent's panel its name line also says the task it worked on.
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, seat, on, done, ending, approvals, agreed, plan, asked, result } = own;
+  const { agent, by, seat, on, done, ending, approvals, agreed, plan, asked, result, pieces } = own;
   const actions = useActions();
   const jump = useJump();
   const panel = useContext(InPanel);
-  const work = panel ? own.work : undefined;
-  const [open, setOpen] = useState(false);
   const small = own.reply;
-  const words = !!own.text || !!plan || !!asked?.length;
-  if (!words && !work && !approvals?.length && !ending) return null;
-  // With no words, what it holds says who it is from.
-  const named = !!agent && (own.head || !words || !!work);
-  // Steps need their line even before the agent's name is known.
-  const lined = named || !!work;
+  const words = !!pieces || !!plan || !!asked?.length;
+  if (!words && !approvals?.length && !ending) return null;
+  // With no bubble, what it holds says who it is from.
+  const named = !!agent && (own.head || !words);
   return (
     <Said
       root
       small={small}
       reply={small}
       agent={by}
-      // With no words, the steps are all the block has: they stay shown.
-      keep={!!work && (work.running || !!work.failed || !!work.refused || !words)}
-      // Nothing under the name line: the face sits beside it.
-      bare={!words && !ending && !approvals?.length && !(work && (open || work.running))}
       face={
         named && (
           <AgentFace
@@ -152,7 +145,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
         )
       }
       line={
-        lined && (
+        named && (
           <NameLine
             name={agent ?? ''}
             pieces={[
@@ -160,22 +153,17 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
               small && <NewWord key="new" topic={own.topic} time={own.time} />,
               panel && on && <OnTask key="on" what={on} done={done} />,
             ]}
-            end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
           />
         )
       }
     >
-      {/* Closed, a finished turn's steps aren't drawn at all: a long chat mounts no list it doesn't show. */}
-      {work && (open || work.running) && (
-        <WorkRow work={work} onOpenTask={actions.openTask} open={open} onOpenChange={setOpen} />
-      )}
       {words && (
         <Bubble
           quote={result?.quote}
           onQuote={result && (() => jump(result.ask))}
           foot={<Foot fold={own.thread} agreed={agreed} like={own.like} answer={own.answer} />}
         >
-          <MessagePrimitive.Parts components={parts} />
+          {pieces && <Pieces pieces={pieces} onOpenTask={actions.openTask} />}
           {plan && (
             <PlanChip
               version={plan.version}
@@ -193,6 +181,21 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
       ))}
       {ending && <EndActs ending={ending} agent={by} actions={actions} />}
     </Said>
+  );
+}
+
+/**
+ * A turn's pieces in its bubble, in the order they came (the owner's call of 2026-11-19): each text drawn as a
+ * message's text is, and each run of steps between them as one quiet line that opens to its steps.
+ */
+export function Pieces({ pieces, onOpenTask }: { pieces: Piece[]; onOpenTask: (task: number) => void }) {
+  return pieces.map((p) =>
+    'run' in p ? (
+      <WorkRow key={p.id} work={p.run} onOpenTask={onOpenTask} />
+    ) : (
+      // By its place, not its message: text still streaming keeps its node once saved.
+      <MessagePrimitive.PartByIndex key={`words-${p.words}`} index={p.words} components={parts} />
+    ),
   );
 }
 

@@ -1,9 +1,9 @@
 // The chat read as a team chat (0072): every message beside its author's face, talk between agents as a thread
-// under the message it answers, an @Name for whom it is to, thumbs-ups, and in the agent's panel a turn's steps on its
-// name line.
+// under the message it answers, an @Name for whom it is to, thumbs-ups, and the agent's panel drawing a turn's blocks
+// as the chat does.
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
-import { page, server, userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, ToolBody, Turn } from '../api';
 import { blocksOf, noneKept } from './AgentPanel';
@@ -128,7 +128,7 @@ test('a reply between agents reads in the thread of what it answers, and the thr
   const replies = [...document.querySelectorAll('.said[data-reply]')].map((r) => r.textContent).join(' ');
   expect(replies).toContain('Made-up question');
   expect(replies).toContain('Made-up answer');
-  // The turn that only answered has no message of its own: its step is on the answer's name line.
+  // The turn that only answered has no message of its own: its step is a line in the answer's bubble.
   expect(document.querySelectorAll('.said')).toHaveLength(4);
 
   await screen.getByRole('button', { name: 'Collapse replies' }).click();
@@ -224,7 +224,7 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
 
-/** The agents' blocks as their panels list them, the steps on their name lines (`InPanel`). */
+/** The agents' blocks as their panels list them (`InPanel`). */
 function Panel({ state }: { state: ChatState }) {
   const none = () => {};
   const actions: Actions = {
@@ -243,66 +243,37 @@ function Panel({ state }: { state: ChatState }) {
   return <Blocks messages={blocks} actions={actions} />;
 }
 
-test('in the agent’s panel a turn’s steps show on its name line on hover or focus, and stay for a failed step', async () => {
+test('in the agent’s panel a block reads as in the chat: each run a line in its bubble, opened by pointer or keyboard', async () => {
   const state: ChatState = {
     ...empty,
     members,
-    turns: { fine: turn('fine', 'a', 0), broke: turn('broke', 'b', 1) },
+    turns: { fine: turn('fine', 'a', 0), broke: turn('broke', 'b', 1), quiet: turn('quiet', 'c', 2) },
     messages: [
       tool('t1', 'fine', 'Read'),
       said('m1', 'fine', 'Made-up fine words'),
       tool('t2', 'broke', 'Bash', { status: 'error' }),
       said('m2', 'broke', 'Made-up words after a failure'),
+      tool('t3', 'quiet', 'Read'),
+      tool('t4', 'quiet', 'Bash'),
     ],
   };
   const screen = await render(<Panel state={state} />);
-  const steps = (agent: string) =>
-    document.querySelector(`.said[data-agent="${agent}"] .steps-button`) as HTMLElement;
   await expect.element(screen.getByText('Made-up fine words')).toBeVisible();
-  const shown = (agent: string) => getComputedStyle(steps(agent)).opacity === '1';
-  expect(shown('a')).toBe(false);
-  expect(steps('b').textContent).toContain('1 failed');
-  expect(shown('b')).toBe(true);
+  const line = (agent: string) =>
+    document.querySelector(
+      `.said[data-agent="${agent}"] .bubble > .work [data-slot="collapsible-trigger"]`,
+    ) as HTMLElement;
+  // No hover needed, and nothing on the name line: a turn that only ran steps has its line too.
+  expect(['a', 'b', 'c'].map((a) => line(a).textContent?.trim())).toEqual([
+    'Read 1 file',
+    'Ran 1 command',
+    'Read 1 file, ran 1 command',
+  ]);
+  expect(document.querySelectorAll('.name-line button')).toHaveLength(0);
 
-  await userEvent.hover(screen.getByText('Made-up fine words').element());
-  await expect.poll(() => shown('a')).toBe(true);
-  await userEvent.unhover(screen.getByText('Made-up fine words').element());
-  await expect.poll(() => shown('a')).toBe(false);
-  // By keyboard, as a person reaches it: focus set by script after the pointer was used is no keyboard focus.
-  // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
-  const tab = server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}';
-  for (let i = 0; i < 10 && document.activeElement !== steps('a'); i++) await userEvent.keyboard(tab);
-  expect(document.activeElement).toBe(steps('a'));
-  await expect.poll(() => shown('a')).toBe(true);
-  // It opens the steps under the name line.
-  await userEvent.click(steps('a'));
+  line('b').focus();
+  await userEvent.keyboard('{Enter}');
+  await expect.element(screen.getByRole('img', { name: 'Failed' })).toBeVisible();
+  await userEvent.click(line('a'));
   await expect.element(screen.getByRole('button', { name: /^Read a file/ })).toBeVisible();
-});
-
-test('in the agent’s panel a turn that only ran steps shows them without hover; one with words hides them', async () => {
-  const state: ChatState = {
-    ...empty,
-    members,
-    turns: { quiet: turn('quiet', 'a', 0), said: turn('said', 'b', 1) },
-    messages: [
-      tool('t1', 'quiet', 'Read'),
-      tool('t2', 'quiet', 'Bash'),
-      tool('t3', 'said', 'Read'),
-      said('m1', 'said', 'Made-up words'),
-    ],
-  };
-  const screen = await render(
-    <>
-      <p>Made-up place to point at</p>
-      <Panel state={state} />
-    </>,
-  );
-  // Nothing pointed at the messages: the pointer rests on the line above them.
-  await userEvent.hover(screen.getByText('Made-up place to point at').element());
-  const steps = (agent: string) =>
-    document.querySelector(`.said[data-agent="${agent}"] .steps-button`) as HTMLElement;
-  await expect.poll(() => !!steps('b')).toBe(true);
-  // The steps are all the quiet turn has: they show with nothing pointed at.
-  expect(getComputedStyle(steps('a')).opacity).toBe('1');
-  expect(getComputedStyle(steps('b')).opacity).toBe('0');
 });

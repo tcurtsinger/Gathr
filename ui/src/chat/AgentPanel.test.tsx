@@ -240,16 +240,22 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
   // Newest first: what it wrote to the lead, then its earlier turn. Nobody else's blocks, nor the running one.
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
+  // The bubble's words, and each run's line as "> what it did".
+  const read = (bubble: Element | null) =>
+    [...(bubble?.children ?? [])]
+      .map((p) =>
+        p.matches('.work') ? `> ${p.querySelector('button')?.textContent?.trim()}` : p.textContent,
+      )
+      .join('');
   const blocks = [...earlier.element().querySelectorAll('.said')].map((b) => [
     b.querySelector('.name-line-name')?.textContent,
     b.querySelector('.name-line-what')?.textContent ?? null,
-    b.querySelector('.bubble')?.textContent,
+    read(b.querySelector('.bubble')),
   ]);
   expect(blocks).toEqual([
     ['Made-up Member', null, '@Made-up LeadMade-up question for the lead'],
-    ['Made-up Member', 'on Made-up task 7', 'Made-up earlier finding'],
+    ['Made-up Member', 'on Made-up task 7', '> Read 1 fileMade-up earlier finding'],
   ]);
-  await expect.element(earlier.getByRole('button', { name: '1 step' })).toBeVisible();
 
   // Its tasks, open ones first; one opens in the Tasks tab.
   const list = panel.getByRole('region', { name: 'Tasks in this chat' });
@@ -258,7 +264,7 @@ test('a working agent: when it began, its task, its running row opened, its earl
   expect(openedTasks).toEqual([7, 9]);
 });
 
-test('steps live in the panel: a turn that only ran steps shows there, opened by pointer and keyboard, not in the chat', async () => {
+test('a turn that only ran steps shows in the panel as in the chat, opened by pointer and keyboard; Now opens the running one', async () => {
   // The reviewer's turn that read and ran, one step failed, and said nothing.
   service({
     history: {
@@ -274,7 +280,7 @@ test('steps live in the panel: a turn that only ran steps shows there, opened by
   await render(<Chat />);
   await openFromSummary(/^Made-up Third/);
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
-  const steps = earlier.getByRole('button', { name: '2 steps · 1 failed' });
+  const steps = earlier.getByRole('button', { name: 'Read 1 file, ran 1 command' });
   await expect.element(steps).toBeVisible();
   (steps.element() as HTMLButtonElement).focus();
   await userEvent.keyboard('{Enter}');
@@ -287,10 +293,10 @@ test('steps live in the panel: a turn that only ran steps shows there, opened by
   await expect
     .element(panel.getByRole('region', { name: 'Now' }).getByText('Running a command'))
     .toBeVisible();
-  // The chat draws neither: no steps, and no block for a turn that said nothing.
-  const chat = page.getByRole('main').element();
-  expect(chat.querySelectorAll('.steps-button, .work')).toHaveLength(0);
-  expect(chat.textContent).not.toMatch(/Running a command|failed/);
+  // The chat draws the same: the quiet turn's line, and the running turn's working line with its latest step.
+  const chat = page.getByRole('main');
+  await expect.element(chat.getByRole('button', { name: 'Read 1 file, ran 1 command' })).toBeVisible();
+  await expect.element(chat.getByText('Running a command', { exact: true })).toBeVisible();
 });
 
 test("a cancelled task is listed in its owner's tab, and a fix Gathr gave reads as Gathr's", async () => {
@@ -559,7 +565,7 @@ test('behind another tab the panel keeps its scroll and its opened rows, and not
   service();
   await render(<Chat />);
   await openFromSummary(/^Made-up Member/);
-  const earlier = panel.getByRole('button', { name: '1 step' });
+  const earlier = panel.getByRole('button', { name: 'Read 1 file' });
   await earlier.click();
   await expect.element(earlier).toHaveAttribute('aria-expanded', 'true');
   const scroller = panel.element().querySelector('.agent-panel') as HTMLElement;
@@ -582,7 +588,7 @@ test('behind another tab the panel keeps its scroll and its opened rows, and not
   await other.click();
   const next = tool('t9', 'now', 'Edit', { status: 'running' });
   for (const listener of live) listener({ type: 'message', chat: 'c', message: next });
-  // The chat draws no step: another agent's words after it say the step has come.
+  // Another agent's words after it say the step has come.
   const after = said('m10', 'rev', 'Made-up later note');
   for (const listener of live) listener({ type: 'message', chat: 'c', message: after });
   await expect.element(page.getByRole('main').getByText('Made-up later note')).toBeVisible();

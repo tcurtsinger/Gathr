@@ -215,7 +215,7 @@ test('how a task ended is no tick and no word in the chat, live or after a reloa
   expect(document.body.textContent).not.toMatch(/completed|A task is done/);
 });
 
-test('in the agent’s panel a refused step reads Refused, and the steps count it as refused', async () => {
+test('a refused step reads Refused, and its run never counts it as a task given', async () => {
   const state = round();
   state.messages.push(
     tool('ask', 'give', 'mcp__gathr__give_task', { status: 'error', input: { text: 'Bo: Tag picker' } }),
@@ -223,10 +223,8 @@ test('in the agent’s panel a refused step reads Refused, and the steps count i
   );
   const mira = toThread(state, agents, [], new Map(), opened).every.filter((b) => b.id === 'a-ask');
   await render(<Blocks messages={mira} actions={quiet} />);
-  const steps = page.getByRole('button', { name: /refused/ });
+  const steps = page.getByRole('button', { name: '1 step', exact: true });
   await expect.element(steps).toBeInTheDocument();
-  expect(steps.element().textContent).toMatch(/1 refused/);
-  expect(steps.element().textContent).not.toMatch(/failed/);
   (steps.element() as HTMLButtonElement).focus();
   await userEvent.keyboard('{Enter}');
   await expect.element(page.getByText('Refused', { exact: true })).toBeVisible();

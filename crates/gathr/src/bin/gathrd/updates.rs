@@ -72,9 +72,19 @@ impl Updates {
 
     /// The copy in use and the last check, for Settings.
     pub fn view(&self) -> Value {
+        // The check's state first, the copy after: a check that ends between the two reads then shows as
+        // checking with its new copy for one read, never as idle with the copy from before it.
+        let (checking, checked, failed) = {
+            let shown = self.shown();
+            let failed = shown.failed.as_ref();
+            (
+                shown.checking,
+                shown.checked_us.map(ids::utc),
+                failed.map(|(why, r)| json!({ "why": why, "ref": r })),
+            )
+        };
         let current = self.copies().current();
-        let shown = self.shown();
-        let state = match (self.feed(), shown.checking) {
+        let state = match (self.feed(), checking) {
             (None, _) => "off",
             (_, true) => "checking",
             _ => "idle",
@@ -83,8 +93,8 @@ impl Updates {
             "version": current.as_ref().map(|c| &c.version),
             "previous": current.as_ref().and_then(|c| c.previous.as_ref()),
             "state": state,
-            "checked": shown.checked_us.map(ids::utc),
-            "failed": shown.failed.as_ref().map(|(why, r)| json!({ "why": why, "ref": r })),
+            "checked": checked,
+            "failed": failed,
         })
     }
 
