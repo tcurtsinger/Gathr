@@ -155,7 +155,13 @@ export function Thread(props: Props) {
                         <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
                       </div>
                       {after}
-                      <ThreadPrimitive.ViewportFooter className="thread-footer">
+                      {/*
+                        A plain block, not the runtime's ViewportFooter: that one counts its height and its top margin as a
+                        content inset, as for a footer laid over the messages, and takes a view that close to the foot as at
+                        it. This one is in the flow, and its auto margin was measured while the chat was still empty, so a
+                        view hundreds of pixels up read as at the foot and followed the next growth there: the reply box.
+                      */}
+                      <div className="thread-footer">
                         <ThreadPrimitive.ScrollToBottom asChild>
                           <IconButton
                             aria-label="Scroll to bottom"
@@ -166,7 +172,7 @@ export function Thread(props: Props) {
                           </IconButton>
                         </ThreadPrimitive.ScrollToBottom>
                         {children}
-                      </ThreadPrimitive.ViewportFooter>
+                      </div>
                     </div>
                   </ThreadPrimitive.Viewport>
                   <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />
