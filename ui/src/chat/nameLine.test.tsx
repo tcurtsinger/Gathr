@@ -71,7 +71,7 @@ test('a reply that worked on a task, ran steps with one failed and ended cancell
   const rowan = blockOf('rowan') as Element;
   expect(rowan.querySelector('.name-line-name')?.textContent).toBe('Rowan');
   expect(pieces(rowan.querySelector('.name-line') as Element)).toEqual(['time']);
-  // Its steps are one line in its bubble, above its words (the owner's call of 2026-11-19), not on its name line.
+  // Its steps are one line at its bubble's foot (0082), not on its name line.
   expect([...rowan.querySelectorAll('.bubble > .work button')].map((w) => w.textContent?.trim())).toEqual([
     'Read 1 file, ran 1 command',
   ]);
@@ -86,11 +86,15 @@ test('a main message says no state, mark or PR; the lead is not called Superviso
     const lines = [...document.querySelectorAll('.thread-messages .name-line')];
     // The person's own ask keeps its size, which is theirs to change.
     const extra = lines
+      // Its title and how long a finished turn took are SerenityOS's card's (0082): no state.
       .map((l) => [l.querySelector('.name-line-name')?.textContent, ...pieces(l).filter((p) => p !== 'time')])
+      .map((l) => l.filter((p) => !['Lead', 'Reviewer'].includes(p ?? '') && !/^\d+[smh]/.test(p ?? '')))
       .filter((l) => l.length > 1 && !(l[0] === 'You' && l.length === 2 && /Fix|Plan/.test(l[1] ?? '')));
     expect(extra, name).toEqual([]);
     expect(
-      document.querySelectorAll('.thread-messages .name-line :is(.main-state, .mark, svg):not(.ask-size *)'),
+      document.querySelectorAll(
+        '.thread-messages .name-line :is(.main-state, .mark, svg):not(.ask-size *, .name-line-took *)',
+      ),
       name,
     ).toHaveLength(0);
   }
@@ -132,10 +136,7 @@ test('an ended turn that only ran steps keeps its line as a reply; a turn droppe
   state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
   state.messages.push(tool('rowan', 'rowan-read', 'Read'), tool('rowan', 'rowan-edit', 'Edit'));
   const t = toThread(state, agents, [], new Map(), opened);
-  const pieces = custom(t.items.find((i) => i.id === 'a-rowan')).pieces;
-  expect(pieces?.map((p) => ('run' in p ? p.run.label : 'words' in p && p.words))).toEqual([
-    'Read 1 file, edited 1 file',
-  ]);
+  expect(custom(t.items.find((i) => i.id === 'a-rowan')).line?.label).toBe('Read 1 file, edited 1 file');
   // In the thread of Mira's answer (0078): Rowan's line and Kit's words.
   expect(custom(t.items.find((i) => i.id === 'a-ask')).thread?.count).toBe(2);
 

@@ -162,7 +162,9 @@ test("your message into the lead's running turn: what it says after is a main me
   await render(<View state={state} />);
   await expect.element(page.getByText('Made-up after it')).toBeVisible();
   const last = mainEls().slice(-4);
-  expect(last.map((m) => m.querySelector('.bubble')?.textContent)).toEqual([
+  // The words of each bubble; the running turn's working line stays at its foot (0082).
+  const words = (m: Element) => m.querySelector('.bubble > :not(.work)')?.textContent;
+  expect(last.map(words)).toEqual([
     'Made-up first ask',
     'Made-up start',
     'Made-up second word',

@@ -120,6 +120,26 @@ test('a live turn keeps what opened it, as a reload reads it (0080)', () => {
   expect(apply(apply(empty, queued), running).turns.k1.opened).toBe('check');
 });
 
+// The last change of this kind failed live: the reducer dropped a field the live event carried (0082's brief).
+test('a live turn keeps when it was made and when it ended, through every later event of it', () => {
+  const made = '2026-11-19T10:00:00Z';
+  const turn = (status: 'queued' | 'running' | 'done', more = {}): LiveEvent => ({
+    type: 'turn',
+    chat: 'c',
+    turn: 'k1',
+    status,
+    agent: 'b',
+    ...more,
+  });
+  const steps = [
+    turn('queued', { created: made }),
+    turn('running'),
+    turn('done', { ended: '2026-11-19T10:00:14Z' }),
+  ];
+  const state = steps.reduce(apply, empty);
+  expect([state.turns.k1.created, state.turns.k1.ended]).toEqual([made, '2026-11-19T10:00:14Z']);
+});
+
 test("a live context update moves that member's fill and window alone", () => {
   const state = {
     ...empty,

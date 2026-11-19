@@ -82,6 +82,8 @@ export interface Turn {
   /** The agent it was sent to; null for a turn sent to no agent. */
   agent: string | null;
   created?: string;
+  /** When it ended; none while it is to end. Its name line says how long it took (0082). */
+  ended?: string | null;
   /** Its place in the chat by when it started; none until it starts. */
   position?: number | null;
   /** The task it works on: its reply sits in the thread under the turn that gave the task. */

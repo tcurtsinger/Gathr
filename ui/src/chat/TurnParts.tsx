@@ -31,8 +31,8 @@ import '../plans/plans.css';
 export const FoundContext = createContext<string | undefined>(undefined);
 
 /**
- * Steps as one row, assistant-ui's Run activity (the owner's calls, 2026-11-12 and 2026-11-19): in a bubble, a run of
- * steps between words, closed to what it did ("Read 2 files, ran 1 command"); in the agent's panel's Now, a running
+ * Steps as one row, assistant-ui's Run activity (the owner's calls, 2026-11-12 and 2026-11-19): at a bubble's foot, a
+ * turn's steps and narration, closed to what it did ("Read 2 files, ran 1 command", 0082); in the agent's panel's Now, a running
  * turn's steps. While it runs it says "Working", shimmering, its latest step under it; open, each tool step is a Tool
  * call, which opens to what it ran and what came back (0044), and Gathr's own lines sit between them: its thoughts,
  * the tasks it gave, and in the panel what it wrote mid-work.
@@ -48,16 +48,22 @@ export function WorkRow({
   startOpen?: boolean;
 }) {
   const [open, setOpen] = useState(startOpen);
+  // The line a running row shows under "Working": what the agent last said it was doing, as SerenityOS's card shows its
+  // latest words while it works (0082); with nothing said yet, its latest step as it reads now.
+  const said = work.running && work.steps.some((step) => 'say' in step);
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
     id: step.id,
     kind: 'say' in step ? 'commentary' : 'tool',
-    // The line a running row shows under "Working": its latest step, as it reads now.
     label:
       'say' in step
-        ? ''
-        : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
-            .filter(Boolean)
-            .join(' '),
+        ? said
+          ? step.say
+          : ''
+        : said
+          ? ''
+          : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
+              .filter(Boolean)
+              .join(' '),
     content: <StepEntry step={step} onOpenTask={onOpenTask} />,
   }));
   return (

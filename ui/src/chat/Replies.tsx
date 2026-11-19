@@ -12,7 +12,7 @@ import { Foot } from './Foot';
 import type { Piece } from './fold';
 import type { Like } from './likes';
 import type { Custom } from './messages';
-import { AgentFace, Bubble, EndRow, NameLine, NewWord, OnTask, Said, When, YouSaid } from './Said';
+import { AgentFace, Bubble, EndRow, NameLine, NewWord, OnTask, Said, Took, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
 import { InPanel } from './Steps';
 import type { Approval } from './state';
@@ -21,6 +21,7 @@ import { TaskMain } from './TaskMain';
 import { type Actions, useActions, useJump } from './Thread';
 import { ThreadBox } from './ThreadBox';
 import { CheckedLine, FindingsChip, FoundContext, PlanChip, WorkRow } from './TurnParts';
+import { titleOf } from './team';
 
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
@@ -111,10 +112,10 @@ function NewLine() {
 }
 
 /**
- * A block of an agent's turn: its face and name line (the name, the time, New), then in one bubble its words where it
- * wrote them, each run of steps between them as one line and its plan's chip where it wrote the plan (`Pieces`), its
- * questions, a plan check's findings chip last, thumbs-ups, then its approvals and what the person can do about how it
- * ended. An ask's result quotes the ask (0075); a turn Gathr's words opened quotes them (0078); a member's check of an
+ * A block of an agent's turn, as SerenityOS's card reads (0082): its face and name line (the name, its title, the time,
+ * New, how long it took), then in one bubble its message and its plan's chip where it wrote the plan (`Pieces`), its
+ * questions, a plan check's findings chip, and at the foot one line for its steps and narration; thumbs-ups, then its
+ * approvals and what the person can do about how it ended. An ask's result quotes the ask (0075); a turn Gathr's words opened quotes them (0078); a member's check of an
  * answer opens with its Checked line (0080). A reply sits in its thread, smaller. In the agent's panel its name line
  * also says the task it worked on.
  */
@@ -132,6 +133,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
     result,
     opened,
     pieces,
+    line,
     findings,
     checked,
   } = own;
@@ -139,7 +141,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
   const jump = useJump();
   const panel = useContext(InPanel);
   const small = own.reply;
-  const words = !!pieces || !!asked?.length || !!findings;
+  const words = !!pieces || !!line || !!asked?.length || !!findings;
   if (!words && !approvals?.length && !ending) return null;
   // With no bubble, what it holds says who it is from.
   const named = !!agent && (own.head || !words);
@@ -165,9 +167,11 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
         named && (
           <NameLine
             name={agent ?? ''}
+            title={titleOf(own.role)}
             pieces={[
               <When key="t" time={own.time} />,
               small && <NewWord key="new" topic={own.topic} time={own.time} />,
+              own.took && <Took key="took" took={own.took} />,
               panel && on && <OnTask key="on" what={on} done={done} />,
             ]}
           />
@@ -187,6 +191,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
             <Asked key={n} task={n} />
           ))}
           {findings && <FindingsChip notes={findings} />}
+          {line && <WorkRow work={line} onOpenTask={actions.openTask} />}
         </Bubble>
       )}
       {approvals?.map((a) => (
@@ -198,13 +203,11 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
 }
 
 /**
- * A turn's pieces in its bubble, in the order they came (the owner's call of 2026-11-19): each text drawn as a
- * message's text is, each run of steps between them as one quiet line that opens to its steps, and a plan version's
- * chip, which opens the plan's tab there (0078).
+ * A turn's message in its bubble, in the order it came (0082): each text drawn as a message's text is, and a plan
+ * version's chip, which opens the plan's tab there (0078).
  */
 export function Pieces({ pieces, actions }: { pieces: Piece[]; actions: Actions }) {
   return pieces.map((p) => {
-    if ('run' in p) return <WorkRow key={p.id} work={p.run} onOpenTask={actions.openTask} />;
     if ('plan' in p) {
       const { plan, version, parts } = p.plan;
       return (

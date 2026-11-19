@@ -98,8 +98,12 @@ export type Custom = Place & {
   done?: boolean;
   /** What the turn did before its last words: the agent panel's row, and what reads how the turn stands. */
   work?: Work;
-  /** What its bubble draws, in order: its words, and each run of steps between them as one line. */
+  /** What its bubble draws, in order: its message's words and its plan chips (0082). */
   pieces?: Piece[];
+  /** Its steps and narration, in order, as the one line at its bubble's foot; the working line while it runs (0082). */
+  line?: Work;
+  /** How long its turn took, on its last block once done: "14s" (0082). */
+  took?: string;
   /** A plan check's last block, when it left findings: its newest report's notes, the chip that ends the bubble (0078). */
   findings?: ReviewNote[];
   /** A member's check of an answer (0080): whose answer, for its Checked line. */

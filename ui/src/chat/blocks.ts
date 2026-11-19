@@ -3,12 +3,12 @@ import type { Message, ThinkingBody, ToolBody, Turn } from '../api';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, changed, fixed } from './asks';
 import { ending } from './ends';
-import { type Chip, fold, type Given, type Piece, type Work } from './fold';
+import { type Chip, duration, fold, type Given, type Work } from './fold';
 import type { Group } from './groups';
 import { blockLike, likeOpened, PERSON, saidLike, versionLike } from './likes';
 import type { Cache, Custom, EventLine, Place, SendFailure } from './messages';
 import type { ChatState } from './state';
-import type { Team } from './team';
+import { type Team, titleOf } from './team';
 import type { Said, Spoken } from './threads';
 
 const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
@@ -178,9 +178,17 @@ function toReply(
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
-  const { work, words, pieces } = fold(group.msgs, partial, status === 'running', gave, began, chips);
+  const { work, words, pieces, line } = fold(group.msgs, partial, status === 'running', gave, began, chips);
   if (work) custom.work = work;
   if (pieces.length) custom.pieces = pieces;
+  if (line) custom.line = line;
+  // How long the turn took (0082): on its last block once it is done, from when it was made, as the working line counts.
+  const took =
+    status === 'done' &&
+    turn?.created &&
+    turn.ended &&
+    duration(Date.parse(turn.ended) - Date.parse(turn.created));
+  if (took) custom.took = took;
   return {
     id: group.key,
     role: 'assistant',
@@ -352,11 +360,7 @@ export function talkBlock(
   group: Group,
   state: ChatState,
   crew: Team,
-  {
-    spoken,
-    did,
-    place,
-  }: { spoken: Map<string, Spoken>; did?: { work?: Work; pieces: Piece[] }; place: Place },
+  { spoken, did, place }: { spoken: Map<string, Spoken>; did?: { work?: Work; line?: Work }; place: Place },
 ): ThreadMessageLike {
   const m = group.msgs[0];
   const agent = state.turns[m.turn ?? '']?.agent ?? undefined;
@@ -372,7 +376,8 @@ export function talkBlock(
     agreed: agreedBy(state, crew, m.id),
     like: saidLike(state, m.id),
     ...(did?.work && { work: did.work }),
-    ...(!!did?.pieces.length && { pieces: did.pieces }),
+    ...(did?.line && { line: did.line }),
+    ...(titleOf(crew.role(agent)) && { title: titleOf(crew.role(agent)) }),
   };
   return kept(cache, group.key, JSON.stringify([said, text, place]), () => ({
     id: group.key,

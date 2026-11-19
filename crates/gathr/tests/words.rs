@@ -165,6 +165,16 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "a57edb981d9f7a821156c834bb42398b3cf6d7918fd21ad5e810cae25440f6ae",
     ),
+    (
+        "check",
+        2,
+        "72fa2db387d90be17ce050d8b3184cbb66c7eed24bc93a73d33be8d74cf96407",
+    ),
+    (
+        "last_word",
+        2,
+        "6bed4d345a91141b49f1028daf788459ab4a23e316be45b3b5b360b91fbff28b",
+    ),
 ];
 /// Every file that asserts samples.
 const SOURCES: &[&str] = &[

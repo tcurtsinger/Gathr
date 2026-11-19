@@ -98,6 +98,19 @@
   font-size: 15px;
   font-weight: 650;
 }
+/* What the chat knows the agent as (0082): grey, at the meta's size, before the time. */
+.name-line-title {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+/* How long a finished turn took, after SerenityOS's tick. */
+.name-line-meta > .name-line-took {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .name-line-meta {
   display: flex;
   min-width: 0;
@@ -184,9 +197,10 @@
   padding: 8px 13px;
   border-radius: 18px;
   background: color-mix(in oklab, var(--foreground) 8%, var(--background));
-  font-size: 15px;
-  font-weight: 450;
-  line-height: 1.45;
+  /* SerenityOS's reading size and leading (0082): the words at 400, so a section label and bold stand out. */
+  font-size: 15.5px;
+  font-weight: 400;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 /* A table sizes itself to the column (markdown.css), so its bubble takes the column for it to fill. */
@@ -403,5 +417,5 @@
   font-size: 14px;
 }
 .said[data-small] .bubble {
-  font-size: 14.5px;
+  font-size: 15px;
 }

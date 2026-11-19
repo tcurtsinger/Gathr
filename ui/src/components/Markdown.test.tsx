@@ -72,7 +72,7 @@ for (const [name, text] of Object.entries(cases)) {
 
 // The owner's call (room tasks 144, 145; plans/reply-spacing.md): Gathr's own spacing in a reply, not
 // Streamdown's, so a Streamdown update can't loosen it again.
-test('a reply reads tight in its bubble: bullets hang, items 3px apart, paragraphs 10px, headings 20px, inline code 0.88em', async () => {
+test('a reply reads as SerenityOS’s does in its bubble: bullets hang, items 3px apart, paragraphs 10px, a heading a bold label a step up, code 0.84em', async () => {
   const text = [
     'First paragraph.',
     'Second paragraph.',
@@ -108,10 +108,11 @@ test('a reply reads tight in its bubble: bullets hang, items 3px apart, paragrap
   expect(Math.round(box(two).top - box(one).bottom)).toBe(10);
 
   const heading = getComputedStyle(root.querySelector('h2') as HTMLElement);
-  expect([heading.fontSize, heading.fontWeight]).toEqual(['20px', '600']);
+  // A section label (0082): a step larger than the 15.5px words, semibold, never a page title.
+  expect([heading.fontSize, heading.fontWeight]).toEqual(['16.4688px', '600']);
   const code = getComputedStyle(root.querySelector('[data-streamdown="inline-code"]') as HTMLElement);
-  // The bubble's 15px words at 450: code a step smaller, at their weight.
-  expect([code.fontSize, code.fontWeight]).toEqual(['13.2px', '450']);
+  // The bubble's 15.5px words at 400: code a step smaller, at their weight.
+  expect([code.fontSize, code.fontWeight]).toEqual(['13.02px', '400']);
 });
 
 // Vale's review of #154: an item written with two paragraphs keeps them as two lines, 6px apart (the plan's

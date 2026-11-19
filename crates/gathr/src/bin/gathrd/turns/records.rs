@@ -215,9 +215,11 @@ impl Task {
             Ok::<_, gathr::Error>((place, topic))
         });
         match place.await {
-            Some(Ok(((position, created, result_of, opened), topic))) => {
+            Some(Ok(((position, created, result_of, opened, ended), topic))) => {
                 update["position"] = json!(position);
                 update["created"] = json!(created);
+                // When it ended: the window's name line says how long it took (0082).
+                update["ended"] = json!(ended);
                 update["result_of"] = json!(result_of);
                 update["opened"] = json!(opened);
                 // What it is about (0075): read when its status goes out, never per streamed word.
