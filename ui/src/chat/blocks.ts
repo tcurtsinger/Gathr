@@ -279,9 +279,14 @@ export function eventsOf(
   }));
 }
 
-/** The person's own message, with their ask's size (0061) and the names they picked. */
-export function personBlock(cache: Cache, m: Message, size: AskSize | undefined, place: Place) {
-  const sig = `${m.body}|${JSON.stringify([size, m.picks, place])}`;
+/** The person's own message, with their ask's size (0061), the names they picked, and agents' thumbs-ups (0057 C5). */
+export function personBlock(
+  cache: Cache,
+  m: Message,
+  { size, agreed }: { size?: AskSize; agreed: string[] },
+  place: Place,
+) {
+  const sig = `${m.body}|${JSON.stringify([size, m.picks, agreed, place])}`;
   return kept(cache, m.id, sig, () => ({
     id: m.id,
     role: 'user',
@@ -294,6 +299,7 @@ export function personBlock(cache: Cache, m: Message, size: AskSize | undefined,
         time: m.time,
         size,
         picks: m.picks ?? undefined,
+        agreed,
       } satisfies Custom,
     },
   }));

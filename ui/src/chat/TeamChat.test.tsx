@@ -196,8 +196,8 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
   await expect.element(mark).toBeVisible();
   // The emoji and the count; the names are hidden until asked for.
   expect([...mark.element().children].slice(0, 2).map((c) => c.textContent)).toEqual(['👍', '1']);
-  // For the member's words and its question; none for the person's own.
-  expect(document.querySelectorAll('.react')).toHaveLength(2);
+  // For the member's words, its question and the person's own (0057 C5).
+  expect(document.querySelectorAll('.react')).toHaveLength(3);
   const who = finding.querySelector('.react-who') as HTMLElement;
   expect(getComputedStyle(who).display).toBe('none');
   await userEvent.hover(mark.element());

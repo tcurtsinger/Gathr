@@ -655,6 +655,10 @@ Parts: 6.6
 - **When** all the builder has to say is that it agrees, it reacts to the id the message carried
 - **Then** the lead's message shows a thumbs-up and a count, with the builder's name when it is
   pointed at or focused. No new message is posted, and nobody is woken by it. The window shows it at once
+- **And when** all an agent has to say to the person's message is that it agrees, it reacts with `person` or the
+  message's id, its own copy's id too
+- **Then** the person's message shows the thumbs-up and the count under its bubble, beside its replies, with the
+  agent's name when pointed at or focused; the person has no Like on their own message. Nobody is woken
 
 ### 6i. An agent reads why something failed, in its own chat
 

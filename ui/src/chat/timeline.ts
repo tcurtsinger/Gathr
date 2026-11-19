@@ -3,6 +3,7 @@ import type { Message } from '../api';
 import { answerOf, flatThreads, threadAnswer } from './answer';
 import { askSizes } from './asks';
 import {
+  agreedBy,
   block,
   eventsOf,
   failed,
@@ -100,7 +101,12 @@ export function drawn(
         return saidBlock(cache, g, place);
       case 'person':
         head();
-        return personBlock(cache, g.msgs[0], sizes.get(g.msgs[0].id), place);
+        return personBlock(
+          cache,
+          g.msgs[0],
+          { size: sizes.get(g.msgs[0].id), agreed: agreedBy(state, crew, g.msgs[0].id) },
+          place,
+        );
       case 'version':
         // Named as the lead's reply blocks are: the lead's turn works on no task.
         return versionBlock(
