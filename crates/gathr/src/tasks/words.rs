@@ -136,17 +136,23 @@ pub fn ask(t: &Task) -> String {
 /// task's `line`. The window hides both by this first line (`TOLD` in `ui/src/chat/blocks.ts`).
 pub const DONE: &str = "A task is done:";
 
-/// A task as a hear-back names it: "- #<number> <owner>, <what>: <how> (PR #<pr>, look at <see>)",
-/// the PR and the look-at when it has them.
+/// A task as a hear-back names it: "- #<number> <owner>, <what>: <how>; <note> (PR #<pr>, look at
+/// <see>)", the report's note, the PR and the look-at when it has them.
 pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
     let left = t.report.as_ref().is_some_and(|r| r.how == Finish::Left);
-    let how = match (t.state, &t.reason) {
+    let mut how = match (t.state, &t.reason) {
         (State::Done, None) => "done".to_string(),
         // Stopped as left, or with no report: the reason says which, in the owner's words.
         (State::Blocked, Some(reason)) if left || (t.report.is_none() && t.asked) => reason.clone(),
         (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
         (state, None) => state.as_str().to_string(),
     };
+    // A merge or a hold puts its own reason in place of the note (prs.rs): the note goes beside it.
+    if let Some(note) = t.report.as_ref().and_then(|r| r.note.as_deref())
+        && !how.contains(note)
+    {
+        how.push_str(&format!("; {note}"));
+    }
     let owner = owner_name(conn, t.owner.as_deref())?;
     let see = t.report.as_ref().and_then(|r| r.see.as_ref());
     let pr = t.pr.map(|pr| format!("PR #{pr}"));

@@ -153,7 +153,7 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "hear_back",
         "hear_back: one stands",
         "Where the task you gave stands:\n\
-         - #2 Ann, Fix the note: held: done, waiting on #90 to merge (PR #90)\n\
+         - #2 Ann, Fix the note: held: done, waiting on #90 to merge; see the change (PR #90)\n\
          This turn is on your task #1: end it with finish_task.",
     ),
     (

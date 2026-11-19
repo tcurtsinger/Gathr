@@ -153,7 +153,7 @@ const KEPT: &[(&str, i64, &str)] = &[
     (
         "hear_back",
         4,
-        "1bfe89cc3f3e8eb42187315276b79602bdcf0ec467c081a5a280da3ef03bff67",
+        "7ef9b6ebec5c9c754ee2f8d226d97d436234db9d028e4dab6ca7cd053d563e06",
     ),
     (
         "role",

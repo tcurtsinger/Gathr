@@ -397,7 +397,9 @@ fn a_hear_back_names_the_tasks_pr_and_what_to_look_at() {
     tasks::ended(&mut conn, a, Outcome::Ok, T).unwrap();
     let starts = tasks::pr_looked(&mut conn, a, "MERGED", None, None, T).unwrap();
 
-    let line = format!("- #{a} Ann, Fix the build: done: #9 merged (PR #9, look at src/build.rs)");
+    let line = format!(
+        "- #{a} Ann, Fix the build: done: #9 merged; the build is green (PR #9, look at src/build.rs)"
+    );
     let done = lines(&conn);
     assert_eq!(done, [format!("A task is done:\n{line}")]);
     let back = to_lead(&starts);
