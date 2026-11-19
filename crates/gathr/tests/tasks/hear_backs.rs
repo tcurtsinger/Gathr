@@ -386,9 +386,10 @@ fn a_hear_back_names_the_tasks_pr_and_what_to_look_at() {
     lead_turn(&conn, "lead-turn", None);
     let (a, _) = give(&mut conn, "ann", &[], Some("lead-turn"));
     let id = begin(&mut conn, a);
+    // "#19 merged" happens to hold the note "9": the note is still the owner's, and still said.
     let said = Said {
-        note: Some("the build is green"),
-        pr: Some(9),
+        note: Some("9"),
+        pr: Some(19),
         file: Some("src/build.rs"),
         ..Said::default()
     };
@@ -397,9 +398,8 @@ fn a_hear_back_names_the_tasks_pr_and_what_to_look_at() {
     tasks::ended(&mut conn, a, Outcome::Ok, T).unwrap();
     let starts = tasks::pr_looked(&mut conn, a, "MERGED", None, None, T).unwrap();
 
-    let line = format!(
-        "- #{a} Ann, Fix the build: done: #9 merged; the build is green (PR #9, look at src/build.rs)"
-    );
+    let line =
+        format!("- #{a} Ann, Fix the build: done: #19 merged; 9 (PR #19, look at src/build.rs)");
     let done = lines(&conn);
     assert_eq!(done, [format!("A task is done:\n{line}")]);
     let back = to_lead(&starts);

@@ -147,9 +147,19 @@ pub fn line(conn: &Connection, t: &Task) -> Result<String, Error> {
         (state, Some(reason)) => format!("{}: {reason}", state.as_str()),
         (state, None) => state.as_str().to_string(),
     };
-    // A merge or a hold puts its own reason in place of the note (prs.rs): the note goes beside it.
+    // A reason written from the report opens with its note, after "left: " for work left (held.rs).
+    // A merge or a hold writes its own instead: the note goes beside it.
+    let opens = |reason: &str, note: &str| {
+        reason
+            .strip_prefix("left: ")
+            .unwrap_or(reason)
+            .starts_with(note)
+    };
     if let Some(note) = t.report.as_ref().and_then(|r| r.note.as_deref())
-        && !how.contains(note)
+        && !t
+            .reason
+            .as_deref()
+            .is_some_and(|reason| opens(reason, note))
     {
         how.push_str(&format!("; {note}"));
     }

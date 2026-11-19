@@ -185,8 +185,9 @@ fn left_with_nothing_open_stops_and_tells_the_giver() {
     assert!(starts.iter().all(|s| s.agent != "ann"), "{starts:?}");
     let back = to_lead(&starts);
     assert_eq!(back.len(), 1, "{starts:?}");
-    let line = format!("#{task} Ann, Fix the build: left: the drivers and the PR remain");
-    assert!(back[0].text.contains(&line), "{}", back[0].text);
+    // The note opens the reason, so it isn't said again.
+    let line = format!("- #{task} Ann, Fix the build: left: the drivers and the PR remain");
+    assert!(back[0].text.lines().any(|l| l == line), "{}", back[0].text);
 
     // Restarted by its giver, it carries on with no report standing.
     tasks::restart(&mut conn, Some("lead"), task, T).unwrap();
