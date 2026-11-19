@@ -11,6 +11,7 @@ import {
 } from '../api';
 import { began } from '../chat/team';
 import { Face } from '../components/Face';
+import { Markdown } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { briefRows } from '../tasks/model';
@@ -185,7 +186,7 @@ export function PlanTab(props: Props) {
               ),
             ]}
           />
-          <p className="plan-text">{v.text}</p>
+          <Markdown text={v.text} className="plan-text" />
           <Fields plan={plan} version={v} before={before} name={name} />
           <div className="task-list plan-parts">
             <section aria-label="Parts">
@@ -446,7 +447,7 @@ function Part({ part: p, mark, before, parts, open, onToggle, name }: PartProps)
     <Fragment key={label}>
       <dt>{label}</dt>
       <dd>
-        <span>{words}</span>
+        {words && <Markdown text={words} />}
         {changed(field) && <span className="plan-was">Was: {old(field) || 'none'}</span>}
       </dd>
     </Fragment>

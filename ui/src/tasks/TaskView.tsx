@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import type { Failure, Task } from '../api';
 import { began } from '../chat/team';
 import { Face, GathrFace, YouFace } from '../components/Face';
+import { Markdown } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { asker, briefRows, edited, gathrs, idle, reported, reviewedAt } from './model';
 import { Note } from './Note';
@@ -121,13 +122,17 @@ export function TaskView({ task, tasks, project, name, onSettle, onReference, on
             {task.why && (
               <>
                 <dt>Why</dt>
-                <dd className="task-why">{task.why}</dd>
+                <dd>
+                  <Markdown text={task.why} />
+                </dd>
               </>
             )}
             {task.reason && !told && (
               <>
                 <dt>Reason</dt>
-                <dd>{task.reason}</dd>
+                <dd>
+                  <Markdown text={task.reason} />
+                </dd>
               </>
             )}
             {brief.map(
@@ -135,14 +140,18 @@ export function TaskView({ task, tasks, project, name, onSettle, onReference, on
                 value && (
                   <Fragment key={label}>
                     <dt>{label}</dt>
-                    <dd>{value}</dd>
+                    <dd>
+                      <Markdown text={value} />
+                    </dd>
                   </Fragment>
                 ),
             )}
             {report && (
               <>
                 <dt>Report</dt>
-                <dd>{report}</dd>
+                <dd>
+                  <Markdown text={report} />
+                </dd>
               </>
             )}
             {review && (
