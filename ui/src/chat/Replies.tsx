@@ -20,7 +20,7 @@ import { Earlier, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
 import { type Actions, useActions, useJump } from './Thread';
 import { ThreadBox } from './ThreadBox';
-import { FoundContext, PlanChip, WorkRow } from './TurnParts';
+import { FindingsChip, FoundContext, PlanChip, WorkRow } from './TurnParts';
 
 export const custom = (s: { message: { metadata: { custom: Record<string, unknown> } } }) =>
   s.message.metadata.custom as Custom;
@@ -113,17 +113,18 @@ function NewLine() {
 /**
  * A block of an agent's turn: its face and name line (the name, the time, New), then in one bubble its words where it
  * wrote them, each run of steps between them as one line and its plan's chip where it wrote the plan (`Pieces`), its
- * questions, thumbs-ups, then its approvals and what the person can do about how it ended. An ask's result quotes the
+ * questions, a plan check's findings chip last, thumbs-ups, then its approvals and what the person can do about how it ended. An ask's result quotes the
  * ask (0075); a turn Gathr's words opened quotes them (0078). A reply sits in its thread, smaller. In the agent's panel
  * its name line also says the task it worked on.
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, seat, on, done, ending, approvals, agreed, asked, result, opened, pieces } = own;
+  const { agent, by, seat, on, done, ending, approvals, agreed, asked, result, opened, pieces, findings } =
+    own;
   const actions = useActions();
   const jump = useJump();
   const panel = useContext(InPanel);
   const small = own.reply;
-  const words = !!pieces || !!asked?.length;
+  const words = !!pieces || !!asked?.length || !!findings;
   if (!words && !approvals?.length && !ending) return null;
   // With no bubble, what it holds says who it is from.
   const named = !!agent && (own.head || !words);
@@ -169,6 +170,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
           {asked?.map((n) => (
             <Asked key={n} task={n} />
           ))}
+          {findings && <FindingsChip notes={findings} />}
         </Bubble>
       )}
       {approvals?.map((a) => (

@@ -1,5 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
-import type { Failure, Named, PickedName, ReplyTarget, Role, Task } from '../api';
+import type { Failure, Named, PickedName, ReplyTarget, ReviewNote, Role, Task } from '../api';
 import type { AskSize } from './asks';
 import type { Ending } from './ends';
 import type { Piece, Work } from './fold';
@@ -100,6 +100,8 @@ export type Custom = Place & {
   work?: Work;
   /** What its bubble draws, in order: its words, and each run of steps between them as one line. */
   pieces?: Piece[];
+  /** A plan check's last block, when it left findings: its newest report's notes, the chip that ends the bubble (0078). */
+  findings?: ReviewNote[];
   /** How its turn ended, on its last block: what the person can do under the bubble. */
   ending?: Ending;
   approvals?: Approval[];

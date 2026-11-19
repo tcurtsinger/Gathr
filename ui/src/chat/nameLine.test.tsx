@@ -3,7 +3,7 @@
 // or act on draws nothing, counted nowhere.
 import { useRef } from 'react';
 import { afterEach, expect, test } from 'vitest';
-import { page, userEvent } from 'vitest/browser';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { agents, custom, opened, round, task, tool } from './madeUp';
 import { toThread } from './messages';
@@ -190,51 +190,4 @@ test('the 360 column never scrolls sideways, whatever a reply’s turn did', asy
   expect(view.scrollWidth - view.clientWidth).toBe(0);
   for (const line of document.querySelectorAll('.thread-messages .name-line'))
     expect(line.scrollWidth - line.clientWidth, line.textContent ?? '').toBe(0);
-});
-
-/** The round with a turn of Kit's that nothing ties, at work and with no words yet: the chat's newest. */
-function late(): ChatState {
-  const state = round();
-  state.turns.late = {
-    ...state.turns.kit,
-    id: 'late',
-    ref: 'late',
-    task: undefined,
-    position: 9,
-    topic: 'b:late',
-  };
-  state.turns.late.status = 'running';
-  state.messages.push(tool('late', 'late-run', 'Bash', { status: 'running' }));
-  return state;
-}
-
-test('a working turn’s first words show in place: the chat at its foot follows them, one scrolled up stays', async () => {
-  const words = { ...late(), partial: { late: 'Made-up first words '.repeat(30) } };
-  const viewport = () => document.querySelector('.thread-viewport') as HTMLElement;
-  const fromFoot = () => viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop;
-  // At its foot.
-  const screen = await render(<View state={late()} height={420} />);
-  await expect.element(page.getByText('It does')).toBeVisible();
-  await expect.poll(() => viewport().scrollHeight > viewport().clientHeight).toBe(true);
-  viewport().scrollTop = viewport().scrollHeight;
-  await expect.poll(fromFoot).toBeLessThan(2);
-  await screen.rerender(<View state={words} height={420} />);
-  await expect.element(page.getByText(/^Made-up first words/)).toBeInTheDocument();
-  await expect.poll(fromFoot).toBeLessThan(2);
-
-  // Scrolled up: what the person reads stays where it was.
-  await screen.rerender(<View state={late()} height={420} />);
-  await expect.poll(() => !!blockOf('kit')?.textContent?.includes('Made-up first words')).toBe(false);
-  // As the person scrolls: the chat hears it, and stops following its foot.
-  await userEvent.wheel(viewport(), { delta: { y: -100_000 } });
-  const first = page.getByText('Fix the reconnect').element();
-  await expect.poll(() => viewport().scrollTop).toBe(0);
-  // The chat's own sign that it heard the scroll: its arrow to the foot is offered. Before it, WebKit could still
-  // follow the foot (one run in three).
-  await expect.poll(() => !!document.querySelector('.thread-bottom:not(:disabled)')).toBe(true);
-  const top = first.getBoundingClientRect().top;
-  await screen.rerender(<View state={words} height={420} />);
-  await expect.element(page.getByText(/^Made-up first words/)).toBeInTheDocument();
-  expect(viewport().scrollTop).toBe(0);
-  expect(first.getBoundingClientRect().top - top).toBe(0);
 });

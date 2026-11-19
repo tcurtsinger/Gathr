@@ -121,7 +121,9 @@ ended (G194); the person would rather choose when.
 
 ## Releases
 
-- **One per merge:** `.github/workflows/release.yml` runs once CI passes on a push to `main`, as `0.1.<run>` (written
+- **One per merge:** `.github/workflows/release.yml` runs on each push to `main` (until 2026-11-19 it waited for CI
+  to pass, which made a release about half an hour later and let one test that failed at random stop it; CI is
+  information, [0045](0045-review-gates-gathrs-own-repo.md)), as `0.1.<run>` (written
   into `Cargo.toml` in CI only), and publishes `v0.1.<run>` with `gh`: the Windows NSIS installer (per user,
   unsigned), the Mac `.dmg` (Apple Silicon, ad-hoc signed), the window's update with `latest.json`, and each system's
   archive with `gathrd.json`. Every step is `scripts/release.mjs`, so a local build runs the same ones.

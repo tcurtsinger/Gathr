@@ -188,7 +188,7 @@ test('a review lists its notes, each with its kind and file', async () => {
   expect(lefts.size, 'every note sits in the value column, under the first').toBe(1);
   expect(lines).toEqual([
     'Wrong · src/export.ts: The export skips archived chats',
-    'Unasked · src/cache.rs: A cache the ask does not need',
+    'Not asked for · src/cache.rs: A cache the ask does not need',
     'Suggestion · Name the button Export',
   ]);
 });
