@@ -553,7 +553,7 @@ fn a_rounds_turns_hear_nothing_twice() {
         )
         .unwrap();
     let heard = |conn: &Connection, turn: &str, agent: &str| {
-        let heard = gathr::room::catch_up(conn, "c", turn, agent, true).unwrap();
+        let heard = gathr::room::catch_up(conn, "c", (turn, agent), None, None).unwrap();
         heard.map(|h| h.text).unwrap_or_default()
     };
     let lines = heard(&conn, &ann, "ann");

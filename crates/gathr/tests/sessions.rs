@@ -3,6 +3,8 @@
 //! its frames (`GATHR_REPLAY_SESSION=echo`), so each task's conversation has an id of its own.
 
 mod common;
+#[path = "sessions/record.rs"]
+mod record;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
