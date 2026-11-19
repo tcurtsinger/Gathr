@@ -143,7 +143,7 @@ test("a task opens in the Tasks tab from the steps of the turn that gave it, in 
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
   await page.getByRole('button', { name: 'Open Made-up Mira' }).click();
   const panel = page.getByRole('tabpanel', { name: 'Made-up Mira' });
-  await panel.getByRole('button', { name: /^1 step · gave 1 task/ }).click();
+  await panel.getByRole('button', { name: 'Gave 1 task' }).click();
   await expect.element(page.getByText('Gave Made-up Sol a task')).toBeVisible();
   await page.getByRole('button', { name: '#82 Verify the reconnect repair' }).click();
   await expect.element(page.getByRole('region', { name: 'Task #82' })).toBeVisible();

@@ -2,7 +2,7 @@ import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Failure, Named, PickedName, ReplyTarget, Role, Task } from '../api';
 import type { AskSize } from './asks';
 import type { Ending } from './ends';
-import type { Work } from './fold';
+import type { Piece, Work } from './fold';
 import type { Like } from './likes';
 import type { Left } from './reads';
 import type { Approval, ChatState } from './state';
@@ -96,10 +96,10 @@ export type Custom = Place & {
   on?: string;
   /** That task is done, and this is its last message: a tick after it. */
   done?: boolean;
-  /** What the turn did before its message: its steps, in the agent's panel. */
+  /** What the turn did before its last words: the agent panel's row, and what reads how the turn stands. */
   work?: Work;
-  /** It has words to show, saved or streaming. */
-  text?: boolean;
+  /** What its bubble draws, in order: its words, and each run of steps between them as one line. */
+  pieces?: Piece[];
   /** How its turn ended, on its last block: what the person can do under the bubble. */
   ending?: Ending;
   approvals?: Approval[];
@@ -144,8 +144,8 @@ export interface Timeline {
   /** Every block the chat draws, folded or not, in the same order: what the marks and the New pill read. */
   all: ThreadMessageLike[];
   /**
-   * `all` and, in their places, the blocks the chat draws nothing for (a turn with no words yet, or only steps): what
-   * the agent's panel and the faces' marks read.
+   * `all` and, in their places, the blocks the chat draws nothing for (a turn's with no words, no steps and nothing to
+   * act on): what the agent's panel and the faces' marks read.
    */
   every: ThreadMessageLike[];
   find: (message: string) => Spot | undefined;

@@ -1,5 +1,5 @@
 import type { Message, Turn } from '../api';
-import type { Work } from './fold';
+import type { Piece, Work } from './fold';
 import type { Group } from './groups';
 import type { Like } from './likes';
 import type { ChatState } from './state';
@@ -21,8 +21,10 @@ export interface Said {
   agreed: string[];
   /** The person's like (0057). */
   like?: Like;
-  /** What the writer's turn did before it, when that turn drew nothing else. */
+  /** What the writer's turn did before it, when that turn drew nothing else: the panel's row. */
   work?: Work;
+  /** The same as the lines its bubble draws above its words: each run of steps, the working line while it runs. */
+  pieces?: Piece[];
 }
 
 /** A message's words as drawn: an @Name it opens with goes, as the name is drawn before them. */

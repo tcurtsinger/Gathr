@@ -18,7 +18,7 @@ const time = (minute: number) => `2026-11-08T10:${String(minute).padStart(2, '0'
 
 /**
  * Mira's word, then six replies under it from Ann and Bo; Bo is still at work, so the thread is open. With `role` gathr,
- * the replies are Gathr's lines, which have no row under them.
+ * the replies are Gathr's lines, which have no row under them, and Bo's working bubble after them, which has none here.
  */
 function state(role: Message['role'] = 'assistant'): ChatState {
   const turns: Record<string, Turn> = {};
@@ -69,7 +69,8 @@ for (const [which, role, feet] of [
   test(`a thread’s rule is one line, ${which}: each piece starts where the one above ends`, async () => {
     await page.viewport(1100, 900);
     await render(<View state={state(role)} actions={{ canReply: () => !!feet, reply: () => {} }} />);
-    await expect.element(page.getByText('Show 3 earlier replies')).toBeVisible();
+    // Bo's turn, running after a line of Gathr's, has its working bubble as one more reply.
+    await expect.element(page.getByText(`Show ${feet ? 3 : 4} earlier replies`)).toBeVisible();
     const rows = [...document.querySelectorAll('.said[data-reply] .said-foot')].map((f) =>
       [...f.querySelectorAll('button')].map((b) => b.getAttribute('aria-label')).join(','),
     );
