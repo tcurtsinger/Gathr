@@ -199,6 +199,25 @@ for (const [what, words] of [
   });
 }
 
+// Within the message box's own height of the foot the view counts as at the foot, and follows the chat as it grows
+// (a streaming answer). The reply box growing it must still end up in view, whichever message it is for.
+test('Reply on the topmost message in view, with the chat a little above its foot, keeps the box in view', async () => {
+  await open();
+  const v = viewport();
+  v.scrollTop = v.scrollHeight - v.clientHeight - 60;
+  await frames();
+  expect(fromFoot()).toBeGreaterThan(40);
+  const top = v.getBoundingClientRect().top;
+  const first = [...document.querySelectorAll<HTMLElement>('.thread-messages > .said')].find(
+    (m) =>
+      m.getBoundingClientRect().top >= top + 30 && m.querySelector('.message-actions [aria-label="Reply"]'),
+  ) as HTMLElement;
+  const box = (await reply(first)).getBoundingClientRect();
+  const footer = (document.querySelector('.thread-footer') as HTMLElement).getBoundingClientRect();
+  expect(box.top, 'the box under the top of the view').toBeGreaterThanOrEqual(top);
+  expect(box.bottom, 'the box above the message box').toBeLessThanOrEqual(footer.top);
+});
+
 test('Reply on the last main message, with the chat at its foot, keeps the box in view', async () => {
   await open();
   const v = viewport();
