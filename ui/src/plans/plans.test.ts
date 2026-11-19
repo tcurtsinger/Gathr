@@ -161,8 +161,9 @@ function planned(): ChatState {
   };
 }
 
-// Every block, in its thread or not: what each block is, not which threads are open (0075).
-const view = (state: ChatState) => toThread(state, agents, [], new Map()).all;
+// Every block, in its thread or not, and those only the agent's panel shows: what each block is, not which threads are
+// open (0075).
+const view = (state: ChatState) => toThread(state, agents, [], new Map()).every;
 const custom = (m: ThreadMessageLike | undefined) => (m?.metadata?.custom ?? {}) as Custom;
 const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const text = (m: ThreadMessageLike | undefined) =>
@@ -189,7 +190,8 @@ test("a version is its own block after the lead's earlier text, headed by the le
 test("the lead's text after the plan call is a block of its own in the ask's thread; the version is a main message", () => {
   const items = view(planned());
   const order = ids(items);
-  // The ask's thread holds the lead's text before and after the call; the chip is its own main message after it.
+  // The ask's thread holds the lead's text before and after the call (before it, only steps and words said mid-work:
+  // the agent's panel shows them); the chip is its own main message after it.
   expect(order.slice(order.indexOf('m1'), order.indexOf('a-ask-1') + 1)).toEqual(['m1', 'a-ask', 'a-ask-1']);
   expect(order.indexOf('v1')).toBeGreaterThan(order.indexOf('a-ask-1'));
   expect(custom(items.find((m) => m.id === 'v1'))).toMatchObject({ head: true, topic: 'm:v1' });

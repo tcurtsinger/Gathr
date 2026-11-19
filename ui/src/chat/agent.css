@@ -69,6 +69,12 @@
 .agent-state {
   flex: 1;
 }
+.agent-state > .name-line-end {
+  color: var(--foreground);
+}
+.agent-state > .name-line-end[data-bad] {
+  color: var(--destructive);
+}
 .agent-state > .name-line-end[data-you] {
   color: var(--attention);
 }

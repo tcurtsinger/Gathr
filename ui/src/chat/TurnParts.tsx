@@ -1,5 +1,5 @@
 import { Bell, CircleCheck, CircleHelp, ClipboardList, FilePen, PenLine, Send } from 'lucide-react';
-import { createContext, useContext, useState } from 'react';
+import { createContext, useState } from 'react';
 import {
   CollapsibleContent,
   CollapsibleRoot,
@@ -10,7 +10,7 @@ import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
 import { counted } from '../plans/plans';
 import type { Step, Work } from './fold';
 import type { EventLine } from './messages';
-import { LiveTime, useStepsOpen } from './Steps';
+import { LiveTime } from './Steps';
 import './team.css';
 import '../plans/plans.css';
 
@@ -41,8 +41,7 @@ export function WorkRow({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const found = useContext(FoundContext);
-  const [own, setOwn] = useStepsOpen(work, startOpen);
+  const [own, setOwn] = useState(startOpen);
   const open = given ?? own;
   const setOpen = onOpenChange ?? setOwn;
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
@@ -55,7 +54,7 @@ export function WorkRow({
         : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
             .filter(Boolean)
             .join(' '),
-    content: <StepEntry step={step} found={found} onOpenTask={onOpenTask} />,
+    content: <StepEntry step={step} onOpenTask={onOpenTask} />,
   }));
   return (
     <RunActivity
@@ -76,18 +75,9 @@ export function WorkRow({
 }
 
 /** One step inside the row: a Tool call, or one of Gathr's own lines. */
-function StepEntry({
-  step,
-  found,
-  onOpenTask,
-}: {
-  step: Step;
-  found?: string;
-  onOpenTask: (task: number) => void;
-}) {
+function StepEntry({ step, onOpenTask }: { step: Step; onOpenTask: (task: number) => void }) {
   const [open, setOpen] = useState(false);
-  if ('say' in step)
-    return <p className={step.say === found ? 'work-say found-part' : 'work-say'}>{step.say}</p>;
+  if ('say' in step) return <p className="work-say">{step.say}</p>;
   const { task } = step;
   if (task !== undefined)
     return (

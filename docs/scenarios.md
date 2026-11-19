@@ -505,9 +505,10 @@ Parts: 5.2
 - **Given** a team chat where turns end: one the person stops, one a restart cuts, one Gathr ends as its task now
   waits for its plan, one that fails, and a task that ends done after two turns of its member's
 - **When** the person reads the chat, live or after a reload
-- **Then** the person's stop has Continue under it and no word; the restart's says "Gathr restarted", with Continue,
-  and never failed; Gathr's says "Needs plan", with nothing to continue; the failed one says Failed, with its
-  reference and Retry. The done task's tick is on its member's last message, once, and no line repeats it
+- **Then** no name line says how a turn or a task ended (the owner's call of 2026-11-18): the person's stop has
+  Continue under it; the restart's has Continue too, and never reads as failed; Gathr's has nothing to continue,
+  and with no words draws nothing; the failed one has its reference and Retry. No tick and no line says the task
+  is done
 
 ### 6a. Gathr can say who is doing what
 
@@ -621,11 +622,10 @@ Parts: 6.9
   parts handed out, one done, one at work, and a question waits on the person
 - **When** the person opens the chat
 - **Then** the main line reads the ask, the plan, each task and the question in the order they were
-  put, each with its state at the right of its name line: the ask Working, the plan Approved, the
-  tasks as the Tasks list says them, the question Needs you in blue. The done task's thread is
-  folded, the one at work open; nothing folds by itself while the chat is open. Once all is in, the
-  lead's result is at the bottom, quoting the ask, and the ask's Done leads to it. A chat of one agent
-  reads as one timeline, with no state and no fold line
+  put, none saying its state (the owner's call of 2026-11-18: the faces' marks, Summary and the Tasks
+  list say it). The done task's thread is folded, the one at work open; nothing folds by itself while
+  the chat is open. Once all is in, the lead's result is at the bottom, quoting the ask, and the quote
+  leads to the ask. A chat of one agent reads as one timeline, with no fold line
 
 ### 6l. The chat shows where you left off
 

@@ -326,6 +326,40 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   expect(getComputedStyle(foldOf(bo()) as HTMLElement).color).not.toBe(attention());
 });
 
+test('a reply said while the person was away says New after its time and nothing else, whatever its turn did', async () => {
+  const day = morning();
+  // Ann's word in Bo's thread worked on her own task, ran a step that failed, and was cut when its task was cancelled.
+  day.turns = day.turns.map((t) =>
+    t.id === 'ann2' ? { ...t, task: 2, status: 'stopped', end: 'cancelled' } : t,
+  );
+  const tool: Message = {
+    id: 't-ann2',
+    turn: 'ann2',
+    time: at(10, 2),
+    role: 'assistant',
+    kind: 'tool',
+    body: { tool: 'Bash', status: 'error' },
+  };
+  day.messages.splice(
+    day.messages.findIndex((m) => m.id === 'w-ann2'),
+    0,
+    tool,
+  );
+  service(day, left());
+  await render(<Chat />);
+  const bo = () => mainWith('Shopping list screen');
+  await expect.poll(() => foldOf(bo())?.textContent).toBe('3 new replies');
+  (foldOf(bo()) as HTMLButtonElement).click();
+  const line = () => replyWith('Nice. The shape is final.')?.querySelector('.name-line');
+  await expect.poll(() => line()?.querySelector('.name-line-new')?.textContent).toBe('New');
+  const pieces = [
+    ...(line()?.querySelectorAll(
+      '.name-line-meta > *, .name-line > :not(.name-line-name, .name-line-meta)',
+    ) ?? []),
+  ];
+  expect(pieces.map((p) => (p.tagName === 'TIME' ? 'time' : p.textContent))).toEqual(['time', 'New']);
+});
+
 test('opened, a long thread shows every reply said while the person was away, not only its newest three', async () => {
   service(
     morning(),
@@ -568,12 +602,14 @@ test('a handled thread all seen opens folded, one with a reply not seen opens op
   expect(foldOf(mainWith('Tidy units in old recipes'))?.getAttribute('aria-expanded')).toBe('true');
   expect(foldOf(mainWith('Add up ingredients'))?.getAttribute('aria-expanded')).toBe('true');
 
-  // Ann's task is done while the chat is open: her thread stays open.
+  // Ann's task is done while the chat is open: her thread stays open. Her face's mark says the task came.
+  const annMark = () =>
+    document.querySelector('.summary-button .face[data-agent="ann"] .mark')?.getAttribute('data-state') ??
+    '-';
+  const owed = annMark();
   day.tasks[1] = { ...day.tasks[1], state: 'done' };
   send({ type: 'tasks', chat: 'c', tasks: day.tasks, waits: [], asks: [] });
-  await expect
-    .poll(() => mainWith('Add up ingredients')?.querySelector('.main-state-word')?.textContent)
-    .toBe('Done');
+  await expect.poll(annMark).not.toBe(owed);
   expect(foldOf(mainWith('Add up ingredients'))?.getAttribute('aria-expanded')).toBe('true');
 
   // Opened again, as after a reload: handled and seen, it starts folded.

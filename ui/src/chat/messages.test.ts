@@ -224,7 +224,7 @@ test('a step shows what it ran as its chip, under the engine’s own words for i
     tool('lead', 's15', 'WebSearch', { status: 'running' }),
   );
   state.turns.lead.status = 'running';
-  const work = custom(byId(view(state).all, 'a-lead')).work;
+  const work = custom(byId(view(state).every, 'a-lead')).work;
   // What each step says now: a running one in the present (Tool call swaps between the two).
   const shown = work?.steps.map((s) =>
     'say' in s ? s.say : [s.state === 'running' ? s.doing : s.label, s.detail],
@@ -254,15 +254,15 @@ test('a running turn’s row says what the agent is doing now; text streaming la
   const state = round();
   state.turns.kit.status = 'running';
   state.messages.push(tool('kit', 'k1', 'Edit'), tool('kit', 'k2', 'Shell', { status: 'running' }));
-  const running = custom(byId(view(state).all, 'a-kit')).work;
+  const running = custom(byId(view(state).every, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Running a command', notes: ['2 steps'] });
   expect(running?.steps[0]).toEqual({ id: expect.any(String), say: 'Checked' });
-  expect(text(byId(view(state).all, 'a-kit'))).toBe('');
+  expect(text(byId(view(state).every, 'a-kit'))).toBe('');
 
   // The command ended and it writes: the row stays, the words show as its message.
   state.messages[state.messages.length - 1] = tool('kit', 'k2', 'Shell');
   state.partial = { kit: 'All 360 pass' };
-  const block = byId(view(state).all, 'a-kit');
+  const block = byId(view(state).every, 'a-kit');
   expect(custom(block).work).toMatchObject({ running: true, label: 'Working', notes: ['2 steps'] });
   expect(text(block)).toBe('All 360 pass');
 });
@@ -468,14 +468,14 @@ test('a block that did not change is the same object on the next draw; a changed
   const state = round();
   state.messages.push(tool('kit', 'k1', 'Bash', { status: 'running' }));
   const cache = new Map();
-  const before = toThread(state, agents, [], cache).all;
-  const after = toThread({ ...state, partial: { rowan: 'More' } }, agents, [], cache).all;
+  const before = toThread(state, agents, [], cache).every;
+  const after = toThread({ ...state, partial: { rowan: 'More' } }, agents, [], cache).every;
   const same = before.map((m, i) => m === after[i]);
   // Only Rowan's block, now streaming, was made again: the person's messages are kept too.
   expect(same).toEqual(ids(before).map((id) => id !== 'a-rowan'));
 
   const ended = { ...state, messages: [...state.messages.slice(0, -1), tool('kit', 'k1', 'Bash')] };
-  const next = toThread(ended, agents, [], cache).all;
+  const next = toThread(ended, agents, [], cache).every;
   const kit = (all: typeof next) => byId(all, 'a-kit');
   expect(kit(next)).not.toBe(kit(before));
   expect(custom(kit(next)).work?.steps.at(-1)).toMatchObject({ state: 'ok' });
@@ -493,7 +493,7 @@ test('a turn with only its ending has its block after the message that began it;
   );
   const { items } = view(alone(state));
   expect(ids(items).slice(-5)).toEqual(['bad-user', 'a-bad', 'queued-user', 'cut-user', 'a-cut']);
-  expect(custom(byId(items, 'a-bad')).ending).toMatchObject({ word: 'Failed', act: 'retry' });
+  expect(custom(byId(items, 'a-bad')).ending).toMatchObject({ act: 'retry' });
   expect(text(byId(items, 'a-cut'))).toBe('');
 });
 
@@ -594,7 +594,7 @@ test('while a thought runs the turn’s row says Thinking; its end over the sock
   let state = round();
   state.turns.kit.status = 'running';
   state.messages.push(tool('kit', 'k1', 'Edit'), thought('kit', 'th', { status: 'running' }));
-  const running = custom(byId(view(state).all, 'a-kit')).work;
+  const running = custom(byId(view(state).every, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Thinking', notes: ['1 step'] });
   expect(running?.steps.at(-1)).toEqual({ id: 'th', label: 'Thinking', state: 'running' });
 
@@ -604,7 +604,7 @@ test('while a thought runs the turn’s row says Thinking; its end over the sock
     message: 'th',
     body: { status: 'done', duration_ms: 6_000 },
   });
-  const after = custom(byId(view(state).all, 'a-kit')).work;
+  const after = custom(byId(view(state).every, 'a-kit')).work;
   expect(after).toMatchObject({ running: true, label: 'Working', notes: ['1 step'] });
   expect(after?.steps.at(-1)).toMatchObject({ label: 'Thought for 6s', state: 'ok' });
 });
@@ -620,7 +620,7 @@ test('thoughts with nothing between them are one step, with their time together 
     thought('kit', 'd', { status: 'done', duration_ms: 5_000 }),
     thought('kit', 'e', { status: 'running' }),
   );
-  const work = custom(byId(view(state).all, 'a-kit')).work;
+  const work = custom(byId(view(state).every, 'a-kit')).work;
   expect(work).toMatchObject({ running: true, label: 'Thinking' });
   expect(work?.steps.slice(-3)).toMatchObject([
     { id: 'a', label: 'Thought for 1m 02s', state: 'ok' },
@@ -635,7 +635,7 @@ test('thoughts with nothing between them are one step, with their time together 
     message: 'e',
     body: { status: 'stopped', duration_ms: 2_000 },
   });
-  expect(custom(byId(view(after).all, 'a-kit')).work?.steps.at(-1)).toMatchObject({
+  expect(custom(byId(view(after).every, 'a-kit')).work?.steps.at(-1)).toMatchObject({
     id: 'd',
     label: 'Thought for 7s',
     state: 'stopped',

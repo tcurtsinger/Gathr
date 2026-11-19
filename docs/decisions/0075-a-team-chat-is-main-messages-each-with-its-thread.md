@@ -122,3 +122,9 @@ recorded would show. One answer serves the chat, the Tasks views and `gathr diag
   lead to. The message box is wider than the words and the faces; the words stay as wide as the column. A thread's rule
   is drawn once: each item's piece reaches up to where the item above ends, never over it (a piece drawn twice read
   thicker in the dark theme, where the border is see-through).
+- 2026-11-18, the owner's look at the name line: asked about the words at the right of a main message ("Needs you",
+  "Working", the PR), "Remove all of it"; of "New", "Supervisor" and "Result", only New stays. A main message says no
+  state, mark or PR, the lead is not called Supervisor, and a result says no "Result": it still quotes its ask, and
+  the quote leads to it, but the ask's Done that led to the result goes with the state. Which threads are handled is
+  still worked out from the same facts (`handledOf`, `ui/src/chat/mains.ts`), so folding is unchanged. Proof:
+  `ui/src/chat/nameLine.test.tsx`.

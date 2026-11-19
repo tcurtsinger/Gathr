@@ -42,8 +42,8 @@ const said = (
 });
 
 /**
- * A team chat: the person's ask with the lead's answer under it (its state word at its name line's right); the lead's
- * short "Yes." with Ann's long reply under it and Ann's thumbs-up on it; and Ann's long message with steps.
+ * A team chat: the person's ask with the lead's answer under it; the lead's short "Yes." with Ann's long reply under it
+ * and Ann's thumbs-up on it; and Ann's long message with steps (the agent's panel's).
  */
 function state(): ChatState {
   return {
@@ -133,9 +133,6 @@ for (const width of [900, 360]) {
     await userEvent.click(fold);
     await userEvent.hover(document.querySelector('.composer') as HTMLElement);
     await expect.poll(() => shown(yes), { message: 'after a press on the fold line' }).toBe(0);
-    expect(getComputedStyle(yes.querySelector('.steps-button') as Element).opacity, 'the steps button').toBe(
-      '0',
-    );
     // Safari's Tab skips buttons unless the person turns that on; Option+Tab reaches them.
     fold.focus();
     await userEvent.keyboard(server.browser === 'webkit' ? '{Alt>}{Tab}{/Alt}' : '{Tab}');
@@ -193,8 +190,8 @@ for (const width of [900, 360]) {
     expect(parts()).toEqual(hidden);
   });
 
-  test(`at ${width} wide, the buttons cover no state word, steps button, name line, words or next message`, async () => {
-    const { message } = await drawn(width);
+  test(`at ${width} wide, the buttons cover no name line, words or next message`, async () => {
+    await drawn(width);
     const all = [...document.querySelectorAll('.thread-messages > .said')];
     let checked = 0;
     for (const m of all) {
@@ -204,16 +201,11 @@ for (const width of [900, 360]) {
       checked++;
       const r = box(row);
       const next = m.nextElementSibling;
-      const others = [
-        ...m.querySelectorAll('.name-line, .main-state, .steps-button, .bubble'),
-        ...(next ? [next] : []),
-      ];
+      const others = [...m.querySelectorAll('.name-line, .bubble'), ...(next ? [next] : [])];
       for (const o of others)
         expect(apart(r, box(o)), `${m.textContent?.slice(0, 30)} over ${o.className}`).toBe(true);
     }
     // The person's ask, the lead's answer, "Yes.", Ann's reply and Ann's long message.
     expect(checked).toBeGreaterThanOrEqual(4);
-    expect(message('Plan the made-up walk').querySelector('.main-state')).not.toBeNull();
-    expect(message('Made-up long words').querySelector('.steps-button')).not.toBeNull();
   });
 }

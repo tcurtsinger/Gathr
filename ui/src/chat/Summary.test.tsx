@@ -72,8 +72,8 @@ function Shown({
 }) {
   const [open, setOpen] = useState(false);
   const pauses = { pauses: [], usage: [] };
-  const items = toThread(state, [], [], new Map()).items;
-  const team = glances(state, activity(items), waiting);
+  const { items, every } = toThread(state, [], [], new Map());
+  const team = glances(state, activity(every), waiting);
   const marks = useChatMarks(team, items, false);
   return (
     <MarksContext value={marks}>

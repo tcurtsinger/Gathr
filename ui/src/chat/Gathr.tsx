@@ -4,7 +4,6 @@ import { useContext } from 'react';
 import { GathrFace } from '../components/Face';
 import { Asked, QuestionsContext } from './Asked';
 import { Foot } from './Foot';
-import { MainWord } from './MainWord';
 import type { EventLine } from './messages';
 import { custom } from './Replies';
 import { Bubble, NameLine, NewWord, Said, When } from './Said';
@@ -36,7 +35,6 @@ export function GathrMessage() {
             <When key="t" time={own.time} />,
             own.reply && <NewWord key="new" topic={own.topic} time={own.time} />,
           ]}
-          state={<MainWord state={own.state} />}
         />
       }
     >

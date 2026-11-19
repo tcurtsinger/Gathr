@@ -162,19 +162,12 @@ test("a member's hit opens at its message in the one timeline", async () => {
   expect(hit.textContent).toBe('Made-up finding 12');
 });
 
-test('a hit on what a turn wrote mid-work opens its row at those words', async () => {
+test('a hit on what a turn wrote mid-work opens at the message it led to: its steps are the agent’s panel’s', async () => {
   const { hit } = await openAt(team, 'r12');
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
-  const steps = hit.closest('.work ol') as HTMLElement;
-  expect(steps).not.toBeNull();
-  // Nothing slides the steps in after the hit is centred: it stays where it was put.
-  expect(getComputedStyle(steps).animationName).toBe('none');
-  const placed = hit.getBoundingClientRect().top;
-  await frames(12);
-  expect(hit.getBoundingClientRect().top).toBe(placed);
-  expect(hit.textContent).toBe('Made-up start 12');
+  expect(hit.textContent).toContain('Made-up finding 12');
+  expect(hit.textContent).not.toContain('Made-up start 12');
 });
-
 test("the chat's title, after a hit in it, opens at its latest message", async () => {
   const { viewport, reopen, onFound } = await openAt(long, 'a100');
   await reopen({ at: performance.now() });
@@ -182,26 +175,6 @@ test("the chat's title, after a hit in it, opens at its latest message", async (
   await frames(3);
   expect(viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop).toBeLessThan(2);
   expect(document.querySelector('[data-search-hit]')).toBeNull();
-});
-
-test('a reply that says the same thing twice opens at the passage the hit is', async () => {
-  const same = 'Made-up identical passage.';
-  const twice: History = {
-    ...long,
-    messages: [
-      ...long.messages,
-      text('u', 'tt', 'user', 'Made-up ask'),
-      text('d1', 'tt', 'assistant', same),
-      ...Array.from({ length: 40 }, (_, n) => text(`p${n}`, 'tt', 'assistant', `Made-up paragraph ${n}`)),
-      text('d2', 'tt', 'assistant', same),
-      ...Array.from({ length: 20 }, (_, n) => text(`q${n}`, 'tt', 'assistant', `Made-up close ${n}`)),
-    ],
-    turns: [...long.turns, done('tt', 'a', turns)],
-  };
-  const { hit } = await openAt(twice, 'd2');
-  const passages = [...(hit.closest('[data-message-id]')?.querySelectorAll('.found-part') ?? [])];
-  expect(passages).toHaveLength(2);
-  expect(passages.indexOf(hit)).toBe(1);
 });
 
 test('a hit opened after Summary showed an approval stays where it is once it is done', async () => {

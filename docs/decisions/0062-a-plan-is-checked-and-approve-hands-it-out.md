@@ -107,4 +107,5 @@ Where the code differs from the detail the owner approved, the code stands.
 - [0063](0063-building-waits-for-a-new-asks-plan.md): Approve releases the ask's tasks that wait for its plan.
 - [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md): each version is a main message of its own, with
   its state at its name line's right (Checking, Needs you, Working, Approved, Sent back, Dropped); its check, Gathr's
-  lines about it and the lead's turn a send-back started sit in its thread.
+  lines about it and the lead's turn a send-back started sit in its thread. Since 2026-11-18 (the owner: "Remove all
+  of it") a version says no state there; the plan's tab says it.

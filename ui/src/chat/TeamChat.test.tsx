@@ -1,14 +1,16 @@
 // The chat read as a team chat (0072): every message beside its author's face, talk between agents as a thread
-// under the message it answers, an @Name for whom it is to, thumbs-ups, and a turn's steps on its name line.
+// under the message it answers, an @Name for whom it is to, thumbs-ups, and in the agent's panel a turn's steps on its
+// name line.
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
 import { page, server, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Agent, Message, ToolBody, Turn } from '../api';
+import { blocksOf, noneKept } from './AgentPanel';
 import { useFolds } from './folds';
 import { toThread } from './messages';
 import { apply, type ChatState, empty } from './state';
-import { type Actions, Thread } from './Thread';
+import { type Actions, Blocks, Thread } from './Thread';
 
 const members = [
   { agent: 'a', name: 'Made-up Lead', role: 'supervisor' as const },
@@ -222,25 +224,38 @@ test('a thumbs-up is the emoji and a count; who gave it shows on hover or focus,
   expect(document.querySelector('[role="tooltip"]')).toBeNull();
 });
 
-test('a turn’s steps show on its name line on hover or focus, and stay for a failed step or a working agent', async () => {
+/** The agents' blocks as their panels list them, the steps on their name lines (`InPanel`). */
+function Panel({ state }: { state: ChatState }) {
+  const none = () => {};
+  const actions: Actions = {
+    openTask: none,
+    openAgent: none,
+    diagnostics: none,
+    reference: none,
+    signIn: none,
+    retry: none,
+    resend: none,
+    carryOn: none,
+    approve: none,
+  };
+  const every = toThread(state, agents, [], new Map()).every;
+  const blocks = members.flatMap((m) => blocksOf(every, m.agent, noneKept()).earlier);
+  return <Blocks messages={blocks} actions={actions} />;
+}
+
+test('in the agent’s panel a turn’s steps show on its name line on hover or focus, and stay for a failed step', async () => {
   const state: ChatState = {
     ...empty,
     members,
-    turns: {
-      fine: turn('fine', 'a', 0),
-      broke: turn('broke', 'b', 1),
-      busy: turn('busy', 'c', 2, { status: 'running' }),
-    },
+    turns: { fine: turn('fine', 'a', 0), broke: turn('broke', 'b', 1) },
     messages: [
       tool('t1', 'fine', 'Read'),
       said('m1', 'fine', 'Made-up fine words'),
       tool('t2', 'broke', 'Bash', { status: 'error' }),
       said('m2', 'broke', 'Made-up words after a failure'),
-      tool('t3', 'busy', 'Read'),
-      tool('t4', 'busy', 'Bash', { status: 'running' }),
     ],
   };
-  const screen = await render(<View state={state} />);
+  const screen = await render(<Panel state={state} />);
   const steps = (agent: string) =>
     document.querySelector(`.said[data-agent="${agent}"] .steps-button`) as HTMLElement;
   await expect.element(screen.getByText('Made-up fine words')).toBeVisible();
@@ -248,7 +263,6 @@ test('a turn’s steps show on its name line on hover or focus, and stay for a f
   expect(shown('a')).toBe(false);
   expect(steps('b').textContent).toContain('1 failed');
   expect(shown('b')).toBe(true);
-  expect(shown('c')).toBe(true);
 
   await userEvent.hover(screen.getByText('Made-up fine words').element());
   await expect.poll(() => shown('a')).toBe(true);
@@ -265,7 +279,7 @@ test('a turn’s steps show on its name line on hover or focus, and stay for a f
   await expect.element(screen.getByRole('button', { name: /^Read a file/ })).toBeVisible();
 });
 
-test('a turn that only ran steps shows them without hover; one with words still hides them', async () => {
+test('in the agent’s panel a turn that only ran steps shows them without hover; one with words hides them', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -280,7 +294,7 @@ test('a turn that only ran steps shows them without hover; one with words still 
   const screen = await render(
     <>
       <p>Made-up place to point at</p>
-      <View state={state} />
+      <Panel state={state} />
     </>,
   );
   // Nothing pointed at the messages: the pointer rests on the line above them.

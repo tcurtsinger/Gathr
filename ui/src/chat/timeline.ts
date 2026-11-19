@@ -8,6 +8,7 @@ import {
   failed,
   heard,
   kept,
+  mute,
   personBlock,
   questionBlock,
   saidBlock,
@@ -16,7 +17,7 @@ import {
 } from './blocks';
 import { fold } from './fold';
 import { type Group, givenBy, grouped, hasEnding, lastBlocks } from './groups';
-import { askOf, newest, stateOf, type Thread, threadsOf, timeOf } from './mains';
+import { askOf, handledOf, newest, type Thread, threadsOf, timeOf } from './mains';
 import {
   briefOf,
   type Cache,
@@ -54,9 +55,15 @@ export function drawn(
   const numbered = new Map(state.tasks.map((t) => [t.number, t]));
   const { quiet, spoken } = talks(groups, state, crew, hasEnding);
   const worked = new Map([...quiet].map(([work, to]) => [to, work]));
-  /** A block `draw` draws nothing for: its words shown with the message they led to, or Gathr's with no line. */
+  /**
+   * A block `draw` draws nothing for: its words shown with the message they led to, Gathr's with no line, or a turn's
+   * with no words and nothing to act on, which only the agent's panel shows (`muted`).
+   */
   const drawsNothing = (g: Group) =>
-    quiet.has(g) || (g.kind === 'gathr' && (heardIn.has(g.turn ?? '') || !heard(g, state, crew).length));
+    quiet.has(g) ||
+    (g.kind === 'gathr' && (heardIn.has(g.turn ?? '') || !heard(g, state, crew).length)) ||
+    mute(g, state, hosts.get(g));
+  const muted = new Set<ThreadMessageLike>();
 
   /** Who a reply block is by and the task it is on: a block that follows its speaker's isn't named again. */
   const heading = (g: Group, topic?: string) => {
@@ -69,9 +76,23 @@ export function drawn(
     const last = turn?.task != null && lastOf.get(turn.task) === g;
     return { on, last, who: `${turn?.agent}|${on}` };
   };
-  /** One block as an item, or none when it draws nothing; `speaker` is whoever was named last in its run. */
+  /**
+   * One block as an item, or none when it draws nothing; `speaker` is whoever was named last in its run. A muted block
+   * is made for the agent's panel, and names nobody in the chat.
+   */
   const draw = (g: Group, place: Place, run: { speaker?: string }, ticked?: boolean) => {
     if (quiet.has(g)) return null;
+    const asked = hosts.get(g);
+    if (mute(g, state, asked)) {
+      const item = block(cache, g, state, crew, gave, {
+        ...heading(g, place.topic),
+        head: true,
+        asked,
+        place,
+      });
+      muted.add(item);
+      return item;
+    }
     const head = (who?: string) => {
       const named = who === undefined || who !== run.speaker;
       run.speaker = who;
@@ -113,21 +134,14 @@ export function drawn(
         );
       default: {
         const h = heading(g, place.topic);
-        const value = block(cache, g, state, crew, gave, {
-          ...h,
-          head: head(h.who),
-          asked: hosts.get(g),
-          place,
-          ticked,
-        });
-        // A block with nothing to show (Replies.tsx) names nobody.
-        return value;
+        return block(cache, g, state, crew, gave, { ...h, head: head(h.who), asked, place, ticked });
       }
     }
   };
 
   const items: ThreadMessageLike[] = [];
   const all: ThreadMessageLike[] = [];
+  const every: ThreadMessageLike[] = [];
   const spots = new Map<Group, { id: string; topic?: string }>();
   const handled = new Set<string>();
   const taskMains = new Map<number, string>();
@@ -147,11 +161,13 @@ export function drawn(
     const replies = under.get(g);
     if (replies || (answer && answer.topic === view?.replying)) {
       const t: Thread = { topic: flatTopic(g), main: g, replies: replies ?? [], at: 0 };
-      drawThread(t, new Map(), undefined, true);
+      drawThread(t, undefined);
       continue;
     }
     const item = draw(g, answer ? { answer } : {}, run);
     if (!item) continue;
+    every.push(item);
+    if (muted.has(item)) continue;
     newLineAbove(item);
     items.push(item);
     all.push(item);
@@ -163,7 +179,7 @@ export function drawn(
     const rest = flat.length ? groups.filter((g) => !before.has(g)) : groups;
     const topics = topicsOf(rest, state, spoken, hosts);
     const threads = threadsOf(rest, topics, state);
-    // Each ask's newest result, by its topic: the ask's Done leads there, and the result quotes the ask.
+    // Each ask's newest result, by its topic: the result quotes the ask.
     const results = new Map<string, string>();
     for (const t of threads) {
       const turn = t.topic.startsWith('r:') ? t.topic.slice(2) : undefined;
@@ -171,7 +187,7 @@ export function drawn(
       if (ask) results.set(ask, t.topic);
     }
     const closes = new Map([...results].map(([ask, topic]) => [topic, ask]));
-    for (const t of threads) drawThread(t, results, closes.get(t.topic));
+    for (const t of threads) drawThread(t, closes.get(t.topic));
   }
 
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
@@ -184,28 +200,32 @@ export function drawn(
       ),
     );
   }
-  return { items, all, find, handled };
+  return { items, all, every, find, handled };
 
-  /** A main message and its thread; `flat`, in a chat drawn flat: no state word. */
-  function drawThread(t: Thread, results: Map<string, string>, ask: string | undefined, flat = false) {
-    const { state: word, handled: settled } = stateOf(t, state, results);
+  /** A main message and its thread. */
+  function drawThread(t: Thread, ask: string | undefined) {
+    const settled = handledOf(t, state);
     const quote = ask && state.asks.find((a) => a.id === ask)?.title;
-    const mainPlace: Place = {
-      topic: t.topic,
-      ...(!flat && { state: word }),
-      ...(ask && quote && { result: { ask, quote } }),
-    };
+    const mainPlace: Place = { topic: t.topic, ...(ask && quote && { result: { ask, quote } }) };
     const replies = [...t.replies];
-    // Its first block draws nothing (Gathr's words that opened a hear-back): the first that does is the message.
+    // Its first block draws nothing (Gathr's words that opened a hear-back, a turn with no words yet): the first that
+    // does is the message.
     let mainGroup = t.task ? undefined : t.main;
-    while (!t.task && mainGroup && drawsNothing(mainGroup)) mainGroup = replies.shift();
+    while (!t.task && mainGroup && drawsNothing(mainGroup)) {
+      const forPanel = draw(mainGroup, { topic: t.topic }, {});
+      if (forPanel) every.push(forPanel);
+      mainGroup = replies.shift();
+    }
     if (!t.task && !mainGroup) return;
     const reply: Place = { topic: t.topic, reply: true };
     const drawnReplies: { g: Group; item: ThreadMessageLike }[] = [];
+    const everyReply: ThreadMessageLike[] = [];
     const run: { speaker?: string } = {};
     for (const g of replies) {
       const item = draw(g, { ...reply, answer: answerOf(g, t.topic, state) }, run);
-      if (item) drawnReplies.push({ g, item });
+      if (!item) continue;
+      everyReply.push(item);
+      if (!muted.has(item)) drawnReplies.push({ g, item });
     }
     const replyItems = drawnReplies.map((r) => r.item);
     const count = replyItems.length;
@@ -233,17 +253,20 @@ export function drawn(
     const unseen = !!seen && times.some((x) => x > seen(t.topic));
     let done = settled && !replyItems.some(needsYou) && !unseen;
     let { open, item: main } = drawMain(done);
-    if (!main) return;
-    if (done && needsYou(main)) {
+    if (main && done && needsYou(main)) {
       done = false;
       ({ open, item: main } = drawMain(false));
     }
-    if (!main) return;
+    if (!main) {
+      every.push(...everyReply);
+      return;
+    }
     if (done) handled.add(t.topic);
     if (t.task) taskMains.set(t.task.number, main.id as string);
     newLineAbove(main);
     items.push(main);
     all.push(main);
+    every.push(main, ...everyReply);
     if (mainGroup) spots.set(mainGroup, { id: main.id as string });
     if (!count) return boxFor(t.topic);
     all.push(...replyItems);
