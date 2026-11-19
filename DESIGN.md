@@ -578,8 +578,9 @@ under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's ha
 dot). It sits at the face's top right, 1px over its edge: 12px at 36, 10px at 28, 9px at 24, 8px at 20, cut
 out of the surface behind it by a ring of that surface's colour (2px at 36 and 28, 1.5px below), so it reads on
 any background a face is drawn on. Faces of 24px and up carry it, and the top line's at 20; 16px faces (the
-panel's tab) and Settings' faces don't. A Working mark turns once in 1.6s on the top line and on the agent's
-latest message only; elsewhere, and under reduced motion, it is still.
+panel's tab) and Settings' faces don't. A Working mark turns once in 1.6s on every face of an agent at work,
+its older messages too (the owner's call of 2026-11-19: a ring standing still read as stuck); in a face's card
+and a task's state word, and under reduced motion, it is still.
 
 Pointing at a face, or focusing the button that holds it, shows its card above it: a 10px-radius popover
 surface, the name at 13.5px/600 (and Supervisor after it, muted), then the mark at 10px and the state's word,
@@ -587,7 +588,7 @@ what and since when: "Can't run · Failed · Show cook times · 1m", "Working ·
 Free says only "Free". It is information, the one hover that shows something in the window besides who
 reacted. An archived chat shows no marks; an agent no longer in the chat has none, is off the top line, and
 its card says Removed. A chat's sidebar row shows its most pressing of Needs you, Can't run and Working as the
-same mark at 9px, still, 8px after its cut title.
+same mark at 9px, Working turning as on a face, 8px after its cut title.
 
 ### Agent panel
 

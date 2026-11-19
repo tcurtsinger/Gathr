@@ -72,9 +72,9 @@ function Shown({
 }) {
   const [open, setOpen] = useState(false);
   const pauses = { pauses: [], usage: [] };
-  const { items, every } = toThread(state, [], [], new Map());
+  const { every } = toThread(state, [], [], new Map());
   const team = glances(state, activity(every), waiting);
-  const marks = useChatMarks(team, items, false);
+  const marks = useChatMarks(team, false);
   return (
     <MarksContext value={marks}>
       <header style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>

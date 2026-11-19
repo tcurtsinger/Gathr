@@ -201,10 +201,10 @@ export function ChatView(props: Props) {
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
   const crew = glances(state, activity(timeline.every), waiting, before.current);
   before.current = crew;
-  const marks = useChatMarks(crew, timeline.items, archived);
+  const marks = useChatMarks(crew, archived);
   const names = useMemo(() => state.members.map((m) => m.name), [state.members]);
   // Who the message box can name, and who gets a message that names nobody: there is no picker.
-  const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
+  const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.faces };
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
   const to = addressed(picks, people, fallback, { fresh });

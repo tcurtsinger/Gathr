@@ -63,7 +63,7 @@ test('focus in a row shows its More, which takes focus though it had no room', a
 });
 
 // 0071: a chat's row shows its most pressing mark of three, as the service works it out, and says it.
-test('a chat’s row shows Needs you, Can’t run or Working, and nothing for the rest', async () => {
+test('a chat’s row shows Needs you, Can’t run or Working, which turns, and nothing for the rest', async () => {
   await sidebar([
     { id: 'c1', title: 'Made-up asking', mark: 'needs_you', needs: true },
     { id: 'c2', title: 'Made-up stuck', mark: 'cant_run', needs: true },
@@ -72,7 +72,8 @@ test('a chat’s row shows Needs you, Can’t run or Working, and nothing for th
   ]);
   const marks = [...document.querySelectorAll('.chat-link')].map((row) => {
     const mark = row.querySelector('[role="img"]');
-    return `${mark?.querySelector('.mark')?.getAttribute('data-state') ?? '-'} ${mark?.getAttribute('aria-label') ?? ''}`;
+    const turns = mark?.querySelector('.mark')?.hasAttribute('data-spin') ? ' turning' : '';
+    return `${mark?.querySelector('.mark')?.getAttribute('data-state') ?? '-'} ${mark?.getAttribute('aria-label') ?? ''}${turns}`;
   });
-  expect(marks).toEqual(['needs Needs you', 'cant Can’t run', 'working Working', '- ']);
+  expect(marks).toEqual(['needs Needs you', 'cant Can’t run', 'working Working turning', '- ']);
 });
