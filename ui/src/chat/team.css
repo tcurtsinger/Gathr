@@ -14,6 +14,11 @@
 .work.shimmer > [role="status"] {
   font-size: 0;
 }
+/* The shimmer's highlight is a box that travels past the row's right edge: cut there, it adds no width to the chat,
+   which showed a sideways scroll bar while an agent worked. */
+.work.shimmer {
+  overflow-x: clip;
+}
 .work [data-slot="collapsible-content"] > ol {
   gap: 4px;
   /* A step's chip is cut to the column, never the column widened to the chip. */
