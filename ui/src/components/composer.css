@@ -61,7 +61,11 @@
   color: var(--foreground);
   font-weight: 550;
 }
-/* Several agents (0028): their faces overlap, each ringed in the box's own colour. Long names end in "…". */
+/*
+ * Several agents (0028): their faces overlap, each ringed in the box's own colour. The sign stays inside the box at
+ * every width: the faces keep their place and the names end in "…" where there is no room.
+ */
+.composer [data-slot="composer-actions"],
 .composer-to {
   min-width: 0;
 }
@@ -129,7 +133,8 @@
   font-size: 14.5px;
 }
 .composer[data-thread] [data-slot="composer-toolbar"] {
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 0;
 }
 .composer[data-thread] .composer-to {

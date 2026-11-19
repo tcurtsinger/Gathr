@@ -494,7 +494,7 @@ async fn forward(mut socket: WebSocket, mut events: tokio::sync::broadcast::Rece
 
 /// Who the message goes to among the chat's agents (0028), and every other agent picked in it,
 /// adding those picked from outside a chat with no project (F8b).
-pub async fn addressee(
+async fn addressee(
     s: &State,
     t: &Trace,
     chat: &str,

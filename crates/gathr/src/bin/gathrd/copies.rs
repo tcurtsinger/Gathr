@@ -2,6 +2,7 @@
 //! carries them, to each agent's task, one after another. A copy that can't go is said in its row of
 //! the answer, with why and the reference; the others still go.
 
+use axum::http::StatusCode;
 use gathr::words::Opened;
 use serde_json::{Value, json};
 use tokio::sync::oneshot;
@@ -66,17 +67,18 @@ pub async fn lines(
     }
 }
 
-/// A Discuss with other agents picked in its words (0028): its question, its chat, and who else gets
-/// the words beside the question's asker.
+/// A Discuss with other agents picked in its words (0028): its question, its chat, its asker, and
+/// where the words go, worked out and not yet written.
 pub struct Discussed {
     task: i64,
     chat: String,
     asker: Option<String>,
-    others: Vec<String>,
+    plan: gathr::team::Plan,
 }
 
 /// Each Discuss in `answers` with picks, routed as a message to the asker with those picks is: a pick
-/// outside a project's team, or one too many joining, refuses it all before anything is saved.
+/// outside a project's team, or one too many joining, refuses it all. Nothing is written here: agents
+/// join only once the answer is taken (`give_discussed`).
 pub async fn discussed(
     s: &State,
     t: &Trace,
@@ -94,20 +96,35 @@ pub async fn discussed(
             continue;
         };
         let (chat, asker): (String, Option<String>) = (chat, asker);
-        let (_, others) =
-            crate::routes::addressee(s, t, &chat, asker.clone(), a.to.clone()).await?;
+        let (id, sent_to, picked) = (chat.clone(), asker.clone(), a.to.clone());
+        let planned = s
+            .writer
+            .call(move |conn| gathr::team::plan(conn, &id, sent_to.as_deref(), &picked));
+        let refuse = |status, why: &str| crate::routes::fail(status, "Answer failed", why, &t.0);
+        let plan = match planned.await {
+            Some(Ok(Ok(plan))) => plan,
+            Some(Ok(Err(why))) => return Err(refuse(StatusCode::BAD_REQUEST, why)),
+            Some(Err(e)) => return Err(refuse(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+            None => {
+                return Err(refuse(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the database didn't answer",
+                ));
+            }
+        };
         found.push(Discussed {
             task,
             chat,
             asker,
-            others,
+            plan,
         });
     }
     Ok(found)
 }
 
-/// Gathr's copy of the asker's line that carries each Discuss to each other agent picked in it, read
-/// as a reply about the question. A Discuss refused gives nothing.
+/// Once the answers are taken: the outsiders each Discuss brings in join, then Gathr's copy of the
+/// asker's line that carries it goes to each other agent picked in it, read as a reply about the
+/// question. A Discuss refused writes and gives nothing.
 pub async fn give_discussed(
     s: &State,
     t: &Trace,
@@ -120,8 +137,30 @@ pub async fn give_discussed(
             task,
             chat,
             asker,
-            others,
+            plan,
         } = d;
+        let others = plan.others.clone();
+        let id = chat.clone();
+        match s
+            .writer
+            .call(move |conn| gathr::team::join(conn, &id, plan))
+            .await
+        {
+            Some(Ok(routed)) => {
+                if let Some(members) = routed.joined {
+                    crate::team::changed(s, t, &chat, members);
+                }
+            }
+            Some(Err(e)) => {
+                rows.push(json!({ "task": task, "status": "failed", "why": e.to_string() }));
+                continue;
+            }
+            None => {
+                let why = "the database didn't answer";
+                rows.push(json!({ "task": task, "status": "failed", "why": why }));
+                continue;
+            }
+        }
         let read = s.writer.call(move |conn| {
             let sql = "SELECT m.id, t.answer FROM tasks t JOIN messages m ON m.turn_id = t.heard_in
                        WHERE t.number = ?1 AND m.role = 'gathr' ORDER BY m.ts, m.rowid LIMIT 1";

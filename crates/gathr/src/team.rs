@@ -133,10 +133,15 @@ pub struct Routed {
     pub joined: Option<Vec<Member>>,
 }
 
-/// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
-/// chat with no project, the picked agents from outside it join it in one write (F8b): the chat's agent
-/// until then leads as its Supervisor, the new ones are members. A chat with one agent so far keeps
-/// no list. In a project's chat a pick outside its team refuses the send. The `Err` is why the
+/// Where a message will go, worked out and nothing written: its agent, every other agent picked in
+/// it, and the chat's whole team when agents join it.
+pub struct Plan {
+    pub agent: Option<String>,
+    pub others: Vec<String>,
+    pub seats: Option<Vec<(String, Role)>>,
+}
+
+/// Who a message goes to (0028), and the outsiders it brings in, in one write. The `Err` is why the
 /// message can't go; nothing is written then.
 pub fn route(
     conn: &mut Connection,
@@ -144,6 +149,22 @@ pub fn route(
     sent_to: Option<&str>,
     picked: &[String],
 ) -> Result<Result<Routed, &'static str>, Error> {
+    match plan(conn, chat, sent_to, picked)? {
+        Ok(plan) => Ok(Ok(join(conn, chat, plan)?)),
+        Err(why) => Ok(Err(why)),
+    }
+}
+
+/// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
+/// chat with no project, the picked agents from outside it join it (F8b): the chat's agent until then
+/// leads as its Supervisor, the new ones are members. A chat with one agent so far keeps no list. In
+/// a project's chat a pick outside its team refuses the send. Reads only: `join` writes it.
+pub fn plan(
+    conn: &Connection,
+    chat: &str,
+    sent_to: Option<&str>,
+    picked: &[String],
+) -> Result<Result<Plan, &'static str>, Error> {
     use rusqlite::OptionalExtension;
     let team = members(conn, chat)?;
     let plain: bool = conn.query_row(
@@ -163,19 +184,17 @@ pub fn route(
         .chain(others.iter().map(String::as_str))
         .filter(|a| outside(a))
         .collect();
-    let besides = |others: Vec<String>, agent: &Option<String>| -> Vec<String> {
-        others
-            .into_iter()
-            .filter(|o| Some(o) != agent.as_ref())
-            .collect()
+    let planned = |agent: Option<String>, others: Vec<String>, seats| {
+        let others = others.into_iter().filter(|o| Some(o) != agent.as_ref());
+        Plan {
+            others: others.collect(),
+            agent,
+            seats,
+        }
     };
     if joining.is_empty() || (!plain && team.is_empty()) {
         let agent = addressee(&team, sent_to);
-        return Ok(agent.map(|agent| Routed {
-            others: besides(others, &agent),
-            agent,
-            joined: None,
-        }));
+        return Ok(agent.map(|agent| planned(agent, others, None)));
     }
     if !plain {
         return Ok(Err(match sent_to.is_some_and(outside) {
@@ -201,14 +220,11 @@ pub fn route(
         );
     }
     seats.extend(joining.iter().map(|a| (a.to_string(), Role::Member)));
-    let agent = sent_to.map(String::from);
     if seats.len() == 1 {
-        let agent = agent.or_else(|| Some(seats[0].0.clone()));
-        return Ok(Ok(Routed {
-            others: besides(others, &agent),
-            agent,
-            joined: None,
-        }));
+        let agent = sent_to
+            .map(String::from)
+            .or_else(|| Some(seats[0].0.clone()));
+        return Ok(Ok(planned(agent, others, None)));
     }
     if !seats.iter().any(|(_, role)| *role == Role::Supervisor) {
         seats[0].1 = Role::Supervisor;
@@ -216,19 +232,28 @@ pub fn route(
     if let Some(why) = refused(&seats) {
         return Ok(Err(why));
     }
-    set_members(conn, chat, &seats)?;
-    let joined = members(conn, chat)?;
-    let agent = match agent {
-        Some(agent) => Some(agent),
-        None => addressee(&joined, None).ok().flatten(),
-    };
-    Ok(Ok(Routed {
-        others: besides(others, &agent),
-        agent,
-        joined: Some(joined),
-    }))
+    let lead = seats.iter().find(|(_, role)| *role == Role::Supervisor);
+    let agent = sent_to
+        .map(String::from)
+        .or_else(|| lead.map(|(a, _)| a.clone()));
+    Ok(Ok(planned(agent, others, Some(seats))))
 }
 
+/// Writes what `plan` worked out: the chat's team when agents join it.
+pub fn join(conn: &mut Connection, chat: &str, plan: Plan) -> Result<Routed, Error> {
+    let joined = match &plan.seats {
+        Some(seats) => {
+            set_members(conn, chat, seats)?;
+            Some(members(conn, chat)?)
+        }
+        None => None,
+    };
+    Ok(Routed {
+        agent: plan.agent,
+        others: plan.others,
+        joined,
+    })
+}
 /// Who a message goes to in a chat with `team` (0028): the agent it was sent to, which must be one
 /// of them; else the Supervisor, or the only agent. A chat with no agents keeps what it was sent
 /// to. The text is never read for names: a name counts only when picked from the window's list,

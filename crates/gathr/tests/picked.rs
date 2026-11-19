@@ -482,3 +482,117 @@ fn a_discuss_with_a_pick_gives_the_picked_agent_the_words_in_the_questions_threa
     assert_ne!(state[0]["state"], "done", "a Discuss answers nothing");
     common::topics_agree(&data.0, &chat);
 }
+
+/// A Discuss whose answer is refused saves nothing: an outsider picked in a chat with no project
+/// doesn't join, and the refusal is found from its reference.
+#[test]
+fn a_refused_discuss_with_an_outsider_picked_leaves_the_chats_members_as_they_were() {
+    let data = TempDir::new();
+    let (service, chat, lead) = team(&data.0, &engine(&data.0, &[], 4), &[]);
+    let cy = agent(&service, "Cy", &account_of(&service, &lead));
+    let first = post(&service, &chat, json!({ "text": "Word the notice" }));
+    let first = first.json()["turn"].as_str().unwrap().to_string();
+    turn_is(&service, &chat, &first, &["done"]);
+    let token = common::first_token(&data.0);
+    let ask = json!({ "what": "Which notice text should ship?", "choices": [{ "label": "Lost" }, { "label": "Back" }] });
+    let asked = text(&call_tool(service.info.port, &token, "ask_person", ask));
+    assert!(
+        asked.starts_with("Task #1 is on the person's Tasks list."),
+        "{asked}"
+    );
+    let answer = |a: Value| {
+        service.send(
+            "POST",
+            "/api/person-tasks/answer",
+            json!({ "answers": [a] }),
+        )
+    };
+    let picked = answer(json!({ "task": 1, "pick": ["Lost"] }));
+    assert_eq!(picked.json()["refused"], json!([]), "{}", picked.body);
+    let members = |h: &Value| h["members"].as_array().map(|m| m.len());
+    let before = members(&history(&service, &chat));
+
+    let talk = json!({ "task": 1, "discuss": true, "text": "Why lost?", "to": [cy] });
+    let sent = answer(talk);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let said = sent.json();
+    assert_eq!(said["refused"][0]["why"], "#1 is already done", "{said}");
+    assert_eq!(
+        members(&history(&service, &chat)),
+        before,
+        "Cy joined a refused Discuss"
+    );
+    let changes = rows(
+        &data.0,
+        &format!(
+            "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.members' AND conversation_id = '{chat}'"
+        ),
+    );
+    assert_eq!(
+        changes,
+        [json!({ "n": 1 })],
+        "only the chat's making changed its members"
+    );
+    let reference = said["refused"][0]["ref"].as_str().unwrap();
+    let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
+    assert!(
+        ok && trace.to_string().contains("#1 is already done"),
+        "{reference}: {trace}"
+    );
+}
+
+/// A turn sent again after its engine refused the login reads what it read the first time: Gathr's
+/// line before the words, here a reply's naming who else got it.
+#[test]
+fn a_reply_sent_again_after_a_refused_login_reads_gathrs_line_again() {
+    let data = TempDir::new();
+    // Each engine's first turn answers; its second meets a refused login.
+    let frames = |name: &str| std::fs::read_to_string(common::recording(name)).unwrap();
+    let replay = data.0.join("refused.jsonl");
+    let both = format!(
+        "{}\n{}",
+        frames("signed_in").trim_end(),
+        frames("signed_out")
+    );
+    std::fs::write(&replay, both).unwrap();
+    let (service, chat, lead) = team(&data.0, &replay, &[]);
+    let (ann, bo) = with_bo(&service, &chat, &account_of(&service, &lead));
+    let asked = post(
+        &service,
+        &chat,
+        json!({ "text": "Plan the river walk", "agent": ann }),
+    );
+    let asked = asked.json()["turn"].as_str().unwrap().to_string();
+    turn_is(&service, &chat, &asked, &["done"]);
+    let shown = history(&service, &chat);
+    let mut theirs = shown["messages"].as_array().unwrap().iter();
+    let to = theirs
+        .rfind(|m| m["turn"] == asked.as_str() && m["role"] == "assistant")
+        .unwrap()["id"]
+        .clone();
+
+    let words = "@Bo does it pass the old mill?";
+    let picks = json!([{ "at": 0, "len": 3, "agent": bo }]);
+    let body = json!({ "text": words, "agent": ann, "picks": picks, "reply_to": to });
+    let sent = post(&service, &chat, body);
+    assert_eq!(sent.status, 200, "{}", sent.body);
+    let turn = sent_to(&sent.json(), &ann)["turn"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    turn_is(&service, &chat, &turn, &["waiting_sign_in"]);
+    let account = account_of(&service, &lead);
+    common::sign_in_account(&data.0, account.as_str().unwrap());
+    turn_is(&service, &chat, &turn, &["done"]);
+
+    let line = "They sent it to you and Bo.";
+    let both = escaped(&format!("{line}\n\n{words}"));
+    let sql = format!(
+        "SELECT body FROM engine_raw WHERE direction = 'in' AND turn_id = '{turn}' ORDER BY id"
+    );
+    let read = rows(&data.0, &sql);
+    let with_line = read
+        .iter()
+        .filter(|r| r["body"].as_str().unwrap_or_default().contains(&both));
+    assert_eq!(with_line.count(), 2, "each attempt read the line: {read:?}");
+}

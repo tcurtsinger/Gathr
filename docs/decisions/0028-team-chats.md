@@ -88,12 +88,14 @@ the threads plan); there is still no Everyone.
   message's id) and `turns`: `[{agent, turn, status}]`, one row per agent; a copy that couldn't go says `failed`,
   why and its reference, and the others still go. `gathr.chat.send` records `gathr.send.agents`.
 - **The sign by Send** names everyone: "To Ann and Bo", "To Ann, Bo and Cy"; in a chat with no project those not in
-  it yet join: "Bo and Cy join", "To Ann, Bo joins". The thread's reply box says the same, the author first.
+  it yet join: "Bo and Cy join", "To Ann, Bo joins". It stays inside the box at every width: the faces keep their place and the names end in
+  "…" where there is no room (the 360 column). The thread's reply box says the same, the author first.
 - **A Discuss with picks** (a reply in a waiting question's thread, [0065](0065-questions-in-the-leads-words.md)): the
   lead hears it as before; each other picked agent gets Gathr's copy of the lead's line that carries it, read as a
   reply about the question ("The person replies about task #4 "…". They sent it to you and Mira."), in the
   question's thread. `POST /api/person-tasks/answer` takes `to` (agent ids) beside `discuss`, routed as a message's
-  picks are.
+  picks are: checked before anything is saved, and outsiders join a chat with no project only once the answer is
+  taken, so a refused answer writes nothing.
 - **Retry** of a failed turn sends the words again to that turn's agent alone: the others already have them. A copy's
   turn retries the message it carries.
 
