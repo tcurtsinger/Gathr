@@ -458,6 +458,9 @@ fn a_shared_folder_that_leads_into_the_data_folder_is_never_written_through() {
         h["turns"][0]["status"] == "done"
     });
     engine_closed(&s.started);
+    // The next engine holds too, so its token still works below: let go, it ended its turn at once and closed
+    // 300 ms later, at random before the last write.
+    std::fs::remove_file(s.data.0.join("go")).unwrap();
     send(&s.service, &s.chat, &s.agent);
     let again = nth(&s.data.0.join("env.jsonl"), 1);
     let args: Vec<Value> = serde_json::from_value(nth(&s.data.0.join("args.jsonl"), 1)).unwrap();

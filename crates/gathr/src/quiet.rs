@@ -125,7 +125,11 @@ impl Kept {
     }
 }
 
+/// The chat's Supervisor; none in a chat of one with no project, as before it kept a list (0028).
 fn lead(conn: &Connection, chat: &str) -> Result<Option<Member>, Error> {
+    if team::alone(conn, chat)? {
+        return Ok(None);
+    }
     let members = team::members(conn, chat)?;
     Ok(members.into_iter().find(|m| m.role == Role::Supervisor))
 }

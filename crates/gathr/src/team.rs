@@ -1,6 +1,6 @@
 //! A chat's agents and their roles (0013), and who a message goes to (0028).
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde::Serialize;
 
 use crate::Error;
@@ -155,17 +155,25 @@ pub fn route(
     }
 }
 
+/// Whether the chat has no project and one agent on its list. Such a chat kept no list before 0058;
+/// what looks for a lead finds none in it still, until the owner decides each (0028).
+pub fn alone(conn: &Connection, chat: &str) -> Result<bool, Error> {
+    let sql = "SELECT c.project IS NULL AND (SELECT count(*) FROM chat_members m WHERE m.chat_id = c.id) = 1
+               FROM chats c WHERE c.id = ?1";
+    let alone = conn.prepare_cached(sql)?.query_row([chat], |r| r.get(0));
+    Ok(alone.optional()?.unwrap_or(false))
+}
+
 /// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
-/// chat with no project, the picked agents from outside it join it (F8b): the chat's agent until then
-/// leads as its Supervisor, the new ones are members. A chat with one agent so far keeps no list. In
-/// a project's chat a pick outside its team refuses the send. Reads only: `join` writes it.
+/// chat with no project, its first agent leads it, and the picked agents from outside it join it
+/// (F8b) as members. In a project's chat a pick outside its team refuses the send. Reads only:
+/// `join` writes it.
 pub fn plan(
     conn: &Connection,
     chat: &str,
     sent_to: Option<&str>,
     picked: &[String],
 ) -> Result<Result<Plan, &'static str>, Error> {
-    use rusqlite::OptionalExtension;
     let team = members(conn, chat)?;
     let plain: bool = conn.query_row(
         "SELECT project IS NULL FROM chats WHERE id = ?1",
@@ -220,12 +228,6 @@ pub fn plan(
         );
     }
     seats.extend(joining.iter().map(|a| (a.to_string(), Role::Member)));
-    if seats.len() == 1 {
-        let agent = sent_to
-            .map(String::from)
-            .or_else(|| Some(seats[0].0.clone()));
-        return Ok(Ok(planned(agent, others, None)));
-    }
     if !seats.iter().any(|(_, role)| *role == Role::Supervisor) {
         seats[0].1 = Role::Supervisor;
     }

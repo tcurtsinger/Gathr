@@ -97,6 +97,8 @@ export type Custom = Place & {
   /** The agent's id: its face opens its panel, and the panel lists its blocks. */
   by?: string;
   role?: Role;
+  /** The agent is one of the chat's: its face opens its panel, in a chat of one too. */
+  seat?: boolean;
   /** When the reply began, shown in a team chat. */
   time?: string;
   /** The speaker changed from the block before, so this one names it. */

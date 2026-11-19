@@ -99,6 +99,10 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   turn's "silent 12m" on its agent's row. Who needs you is the mark and Summary's row, which goes to what is needed
   ([0037](0037-one-timeline.md)'s change). The answer, the tool and `gathr diag waiting` don't change. A chat of one
   agent has no Summary: there the mark on the agent's face says it, and Gathr's own waits are in `gathr diag waiting`.
+- 2026-11-18, a chat of one is the same (the owner: "One agent chat should be the exact same as a multi-agent chat").
+  It keeps its list ([0028](0028-team-chats.md)), so `waiting` answers its agent's standing and its face has its
+  mark, and it has Summary ([0038](0038-summary-holds-the-plan.md)): Gathr's own waits are rows there, as in a team.
+  The line above no longer holds.
 
 ## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
 

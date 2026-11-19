@@ -43,7 +43,11 @@ pub fn facts(
             .optional()?,
         None => None,
     };
-    let members = team::members(conn, chat)?;
+    // A chat of one with no project is briefed as it was before it kept a list (0028).
+    let members = match team::alone(conn, chat)? {
+        true => Vec::new(),
+        false => team::members(conn, chat)?,
+    };
     let role = members
         .iter()
         .find(|m| Some(m.agent.as_str()) == agent)

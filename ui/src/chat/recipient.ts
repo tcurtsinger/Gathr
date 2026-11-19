@@ -12,7 +12,7 @@ interface Chat {
   project: boolean;
   /** Not made yet: its first message makes it. */
   fresh: boolean;
-  /** The agent of its latest turn: a chat with one agent keeps no list of members (0028). */
+  /** The agent of its latest turn, for a chat with no list of members yet. */
   last?: string | null;
   marks?: ReadonlyMap<string, FaceMark>;
 }
@@ -37,7 +37,7 @@ export function nameable({ members, agents, project, fresh, last, marks }: Chat)
         .map((m) => ({
           id: m.agent,
           name: m.name,
-          meta: members.length > 1 ? roleName[m.role] : undefined,
+          meta: roleName[m.role],
           mark: mark(m.agent),
         }))
     : !fresh && own

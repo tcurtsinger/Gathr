@@ -193,7 +193,8 @@ export function ChatView(props: Props) {
       },
     [answers, chatTasks, named],
   );
-  const team = !fresh && state.members.length > 1;
+  // Every chat with an agent keeps its list (0028): one agent has the faces button as a team has.
+  const team = !fresh && state.members.length > 0;
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);

@@ -68,18 +68,30 @@ pub fn want(conn: &Connection, turn: &str) -> Result<Key, Error> {
         Option<String>,
         Option<String>,
         Option<i64>,
+        String,
     );
-    let (agent, task, role, answered, answered_task): Row = conn.query_row(
-        "SELECT u.agent_id, u.task, m.role, a.agent_id, a.task FROM turns u
+    let (agent, task, role, answered, answered_task, chat): Row = conn.query_row(
+        "SELECT u.agent_id, u.task, m.role, a.agent_id, a.task, u.chat_id FROM turns u
          LEFT JOIN chat_members m ON m.chat_id = u.chat_id AND m.agent_id = u.agent_id
          LEFT JOIN turns a ON a.id = u.answers
          WHERE u.id = ?1",
         [turn],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+            ))
+        },
     )?;
+    // A chat of one with no project keeps the keys it had before it kept a list (0028).
+    let lead = role.as_deref() == Some("supervisor") && !crate::team::alone(conn, &chat)?;
     Ok(match (agent, task, answered_task) {
         (None, _, _) => Key::Latest,
-        _ if role.as_deref() == Some("supervisor") => Key::Lead,
+        _ if lead => Key::Lead,
         (_, Some(task), _) => Key::Task(task),
         (agent, None, Some(task)) if agent == answered => Key::Answers(task),
         _ => Key::Latest,

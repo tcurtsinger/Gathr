@@ -206,9 +206,9 @@ fn picking_another_agent_in_a_plain_chat_adds_it_under_the_first_as_supervisor()
 
     let one = send(&ids[0], 1);
     assert_eq!(
-        one["members"],
-        json!([]),
-        "one agent is a plain chat still: {one}"
+        roles(&one["members"]),
+        [pair(&ids[0], "supervisor")],
+        "a chat of one keeps its agent as its lead: {one}"
     );
     let two = send(&ids[1], 2);
     assert_eq!(
@@ -238,7 +238,10 @@ fn picking_another_agent_in_a_plain_chat_adds_it_under_the_first_as_supervisor()
     assert_eq!(sixth.status, 400, "a sixth agent: {}", sixth.body);
     let joins = "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.members'";
     let (_, rows) = gathr(&data.0, &["diag", "query", joins]);
-    assert_eq!(rows["rows"][0]["n"], 4, "each join is recorded: {rows}");
+    assert_eq!(
+        rows["rows"][0]["n"], 5,
+        "the first agent's seat and each join are recorded: {rows}"
+    );
 }
 
 /// A window open before them hears of both, so its sidebar shows them (the round's "No chats yet").

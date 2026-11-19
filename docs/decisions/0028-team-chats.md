@@ -103,3 +103,30 @@ Turned down: the message saved once per agent (N bubbles to hide, N search hits,
 with N turns pointing at it (every place that finds "the person's message of a turn" would change: Retry, steering,
 asks). The cost is one more turn of each named agent; its conversation resumes, so most of its context is read from
 the engine's cache.
+
+## Amended: a chat of one keeps its list (2026-11-18)
+
+The owner: "One agent chat should be the exact same as a multi-agent chat." Shown what differed, they picked two
+groups: the gaps an empty list left, and the same panels and buttons. Not the drawing (threads stay a team's) and not
+the team process (asks, plans, holds, `message`).
+
+- **The list.** A chat gets its row when it gets its agent: the first message sent to an agent in a chat with no
+  project writes that agent as its `supervisor` (one `gathr.chat.members` event, live as `members`). "A chat that
+  has run on one agent keeps no list until a second joins" (Picking an agent, above) no longer holds. A second agent
+  joins as before: the one already there leads, the joiner is a member, in one write. A chat with no agent yet keeps
+  none.
+- **Older chats** (migration 0058): a chat with turns and no list gets one row, the agent of its latest turn, leaving
+  out a removed one, as its Supervisor since its first turn. A chat whose turns ran as several agents gets only that
+  one. A chat with a list, with no turns, or whose turns ran as no agent is left as it is.
+- **What it brings** a chat of one: the person's like is told to its agent, a failed last turn marks the chat in the
+  sidebar and is its agent's standing in `waiting`, and the window shows the faces button, Summary and the agent's
+  panel ([0038](0038-summary-holds-the-plan.md)).
+- **What stays as it was.** In a chat with no project and one agent on its list, what looks for a lead finds none,
+  as before, until the owner decides each: the quiet room's wake and its silent-turn line, the stale-task line, a
+  task given (refused: "tasks are given in a chat with a team"), a turn's conversation key, the briefing (no role,
+  "Other agents who have worked here"), and an agent's delete (such a chat where another agent spoke stays, as a chat
+  with no list did). `team::alone` is that one check. Asks, sizes, plans, holds and `message` still need two agents.
+
+Turned down: keeping no list and reading a chat of one's agent from its turns everywhere it is needed (each place
+would read it its own way, as the window and the service already did); naming the lone agent's role on its name line
+(that line is being redesigned apart, and the owner decides the word there).

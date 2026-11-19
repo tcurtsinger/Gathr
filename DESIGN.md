@@ -292,7 +292,9 @@ person's own stop has no word: the face's mark says Stopped. Under the bubble, 1
 it: why, the reference (12px mono, dotted underline, opening Diagnostics) and one outline button 26px high,
 Continue (until its carry-on starts), Retry or Sign in (0051). A block that follows its speaker's in the same
 turn has no face or name line and lines up with the one above, unless it says how its task or turn ended. The face
-opens the agent's panel in a team chat.
+opens the agent's panel while the agent is in the chat, in a chat of one too (0028's list kept for one); its card
+names the Supervisor there as in a team. The name line above a lone agent's messages names no role for now: that line
+is being redesigned apart.
 
 A turn's steps are the end of its name line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
 part omitted when it is zero, "1 failed" and "1 refused" in the danger colour, the time ticking while it runs. They show
@@ -482,7 +484,8 @@ Only its ticks take the pointer.
 ### Summary
 
 Summary holds what the plan bar and a status bar would say, so neither exists
-([0038](docs/decisions/0038-summary-holds-the-plan.md)). A chat with more than one agent has it.
+([0038](docs/decisions/0038-summary-holds-the-plan.md)). Every chat that has an agent has it, a chat of one too: its
+button is that one face, its Team that agent's row and Gathr's.
 
 Its button in the top line carries no words. It is the roster: every agent of the chat at 20px, in the
 chat's order, 6px apart so no face covers another's mark, each with its state's mark (see **State marks**

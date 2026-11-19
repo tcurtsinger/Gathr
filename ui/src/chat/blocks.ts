@@ -79,7 +79,8 @@ export function block(
   const shown = on && lastOfTask ? task?.state : undefined;
   const done = shown === 'done';
   const out = !end?.word && (shown === 'cancelled' || shown === 'failed') ? shown : undefined;
-  const who = `${agent}|${role}|${on}|${done}|${out}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
+  const seat = crew.seated(turn?.agent);
+  const who = `${agent}|${role}|${seat}|${on}|${done}|${out}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
   const hit = cache.get(group.key);
@@ -90,6 +91,7 @@ export function block(
     agent,
     by: turn?.agent ?? undefined,
     role,
+    seat,
     time,
     on,
     done,
@@ -159,6 +161,7 @@ export function versionBlock(
     agent: crew.name(agent),
     by: agent ?? undefined,
     role: crew.role(agent),
+    seat: crew.seated(agent),
     time: m.time,
     head,
     agreed: [

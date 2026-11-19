@@ -387,7 +387,11 @@ fn in_a_chat_with_no_project_two_outsiders_join_in_one_write_and_one_too_many_re
             "SELECT count(*) AS n FROM event_log WHERE name = 'gathr.chat.members' AND conversation_id = '{chat}'"
         ),
     );
-    assert_eq!(changes, [json!({ "n": 1 })], "one members change");
+    assert_eq!(
+        changes,
+        [json!({ "n": 2 })],
+        "the lead's seat with the first message, then one change for both joiners"
+    );
 
     let more = "@Cy @Dee @Eve too";
     let picks = json!([

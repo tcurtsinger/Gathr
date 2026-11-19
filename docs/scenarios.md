@@ -522,6 +522,8 @@ Parts: 6.1
   person stopped or paused, or whose turn a restart cut, reads stopped; one whose task is blocked reads blocked; a lead
   whose plan waits on the person needs them; each says since when. Every face of each agent in the chat carries that
   one state's mark, and pointing at a face, or focusing its button, says the state, what and since when
+- **And** in a chat of one agent the same: its agent's last turn failed, so the chat's row says it can't run, the answer
+  names the agent as can't run, its face carries the mark, and Summary lists it, with Gathr's own waits after it
 
 ### 6b. Gathr can say what the room is waiting on
 
