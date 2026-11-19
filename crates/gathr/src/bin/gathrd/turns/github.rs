@@ -36,14 +36,10 @@ impl Task {
         forgot: bool,
     ) -> Option<String> {
         let task = ids.task.or(task_of(choice));
-        let conversation = match task_of(choice) {
-            Some(task) => format!("task {task}"),
-            None => format!("latest in {}", ids.chat),
-        };
-        if forgot {
-            self.session
-                .told_heads
-                .retain(|(c, _), _| *c != conversation);
+        // The conversation the engine is in, whichever task chose it: none yet when it opened new.
+        let conversation = self.session.id.clone();
+        if let (true, Some(open)) = (forgot, &conversation) {
+            self.session.told_heads.retain(|(c, _), _| c != open);
         }
         let event = Event::point("gathr.github.read")
             .trace(&ids.trace)
@@ -75,7 +71,10 @@ impl Task {
         let failed: Vec<Failed> = failed
             .and_then(|f| serde_json::from_str(&f).ok())
             .unwrap_or_default();
-        let told = |pr: i64| self.session.told_heads.get(&(conversation.clone(), pr));
+        let told = |pr: i64| {
+            let open = conversation.clone()?;
+            self.session.told_heads.get(&(open, pr))
+        };
         let pr = pr.filter(|(pr, head)| head.is_none() || told(*pr) != head.as_ref());
         if failed.is_empty() && pr.is_none() {
             return None;
@@ -118,8 +117,12 @@ impl Task {
         let ms = started.elapsed().as_millis() as i64;
         match read {
             Ok((said, head)) => {
-                if let Some((pr, head)) = head {
-                    self.session.told_heads.insert((conversation, pr), head);
+                match (head, conversation) {
+                    (Some((pr, head)), Some(open)) => {
+                        self.session.told_heads.insert((open, pr), head);
+                    }
+                    (Some(told), None) => self.session.told_unsaid.push(told),
+                    (None, _) => {}
                 }
                 let text = said.join("\n\n");
                 let event = event.ok().attr("chars", text.chars().count());

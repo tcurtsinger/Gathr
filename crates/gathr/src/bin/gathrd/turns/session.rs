@@ -15,7 +15,7 @@ use super::{Assignment, Ids, Queued, Task};
 #[derive(Default)]
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
-    id: Option<String>,
+    pub id: Option<String>,
     /// The engine compacted the conversation since a turn last opened: the next hears the chat's
     /// last lines, as a new conversation does (0081).
     pub compacted: bool,
@@ -25,15 +25,20 @@ pub(super) struct Session {
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
-    /// The head each conversation was told of each PR, by conversation and PR: not told again while it
-    /// stands.
+    /// The head each conversation was told of each PR, by its session id and PR: not told again
+    /// while it stands, whichever task's turn runs in it.
     pub told_heads: HashMap<(String, i64), String>,
+    /// Heads told before the engine said its session: kept under it at its Init.
+    pub told_unsaid: Vec<(i64, String)>,
 }
 
 impl Session {
     /// The engine said its session: the task whose row takes it (N5).
     pub fn init(&mut self, id: &str) -> Option<i64> {
-        self.id.get_or_insert_with(|| id.to_string());
+        let id = self.id.get_or_insert_with(|| id.to_string());
+        for (pr, head) in self.told_unsaid.drain(..) {
+            self.told_heads.insert((id.clone(), pr), head);
+        }
         self.resuming = false;
         self.task
     }
@@ -146,6 +151,7 @@ impl Task {
     pub(super) async fn opened(&mut self, choice: &Conversation, resumed: Option<String>) {
         self.session.resuming = resumed.is_some();
         self.session.id = resumed;
+        self.session.told_unsaid.clear();
         self.session.task = task_of(choice);
         let from = match choice {
             Conversation::Latest => return,

@@ -304,3 +304,57 @@ fn a_pr_gathr_cant_land_on_red_ci_wakes_its_reviewer_with_the_failed_jobs() {
         room.read(&room.opened_by("landing"), &opened_with(&head));
     }
 }
+
+/// A fix Gathr gives runs in its PR's work task's conversation (answer 4): a task of another number,
+/// at the head that conversation was told, so its turn doesn't ask GitHub for #5 again.
+#[test]
+fn a_fix_in_the_conversation_told_its_prs_head_doesnt_read_it_again() {
+    let (data, repos) = (TempDir::new(), TempDir::new());
+    let mut room = room_replay(&data.0, &repos.0, false, true);
+    let one = json!([{ "path": "feature.txt", "additions": 1, "deletions": 0 }]);
+    room.view(0, |view| view["files"] = one.clone());
+    let lead = room.lead_turn();
+    crate::common::fix_it(room.service.info.port, &lead);
+    let work = json!({ "to": "Ann", "what": "Add the feature", "pr": 5 });
+    let given = text(&room.call(&lead, "give_task", common::briefed(work)));
+    assert!(given.starts_with("Task #1 for Ann"), "{given}");
+    room.token();
+    let sql = "SELECT id FROM turns WHERE task = 1 ORDER BY created_ts LIMIT 1";
+    let first: String = common::until(120, "Ann's work turn", || {
+        room.db().query_row(sql, [], |r| r.get(0)).ok()
+    });
+    room.read(&first, FIVE);
+    let vale = room.reviews(&lead, &[5]);
+    let ann_cwd = PathBuf::from(nth(&data.0.join("env.jsonl"), 1)["cwd"].as_str().unwrap());
+    let vale_cwd = PathBuf::from(nth(&data.0.join("env.jsonl"), 2)["cwd"].as_str().unwrap());
+    let notes = json!([{ "kind": "wrong", "file": "feature.txt:1", "says": "it fails" }]);
+    let left = json!({ "how": "left", "task": 2, "note": "one thing fails", "commit": room.heads[0],
+                       "notes": notes });
+    let kept = room.call(&vale, "finish_task", left);
+    assert_eq!(kept["isError"], false, "{}", text(&kept));
+    std::fs::write(vale_cwd.join("go"), "").unwrap();
+    // The fix waits behind Ann's running turn until a look tells it #5's head.
+    let head = "SELECT pr_head FROM tasks WHERE number = 3 AND what = 'Fix the review of #5'";
+    let known: String = common::until(120, "the fix to know #5's head", || {
+        room.db().query_row(head, [], |r| r.get(0)).ok()
+    });
+    assert_eq!(known, room.heads[0]);
+    std::fs::write(ann_cwd.join("go"), "").unwrap();
+
+    let sql = "SELECT id FROM turns WHERE task = 3 ORDER BY created_ts LIMIT 1";
+    let fix: String = common::until(120, "the fix's turn", || {
+        room.db().query_row(sql, [], |r| r.get(0)).ok()
+    });
+    let read = room.read(&fix, "Fix the review of #5");
+    assert!(
+        !read.contains(FIVE),
+        "told #5 again at the same head: {read}"
+    );
+    let sessions = "SELECT count(DISTINCT session_id) FROM task_sessions WHERE task IN (1, 3)";
+    let shared: i64 = room.db().query_row(sessions, [], |r| r.get(0)).unwrap();
+    assert_eq!(shared, 1, "the fix ran in the work task's conversation");
+    let reads = "SELECT count(*) FROM event_log WHERE name = 'gathr.github.read'
+                 AND json_extract(attrs, '$.\"gathr.turn.id\"') = ?1";
+    let asked: i64 = room.db().query_row(reads, [&fix], |r| r.get(0)).unwrap();
+    assert_eq!(asked, 0, "the fix's opening asked GitHub");
+}

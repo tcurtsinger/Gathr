@@ -25,10 +25,11 @@ In the baseline, 70% of turns on a task read git state in their first three call
   repository, never for a head pushed since (`github::failed_at`, sharing `each_failed` with `ci_failures`).
 - **A turn on a task's PR**, a member's in its task's conversation or the lead's in its own, opens with the PR's
   branch, head and every changed file (`github::changes`, from the same view as `pr`, with `files`).
-- **Told once per head.** Each engine's task keeps, in memory, the head each conversation was told of each PR. While
-  Gathr's own looks still hold that head (`tasks.pr_head`), no call is made; a head GitHub shows that was told already
-  isn't said again. A new conversation, or one a compaction summed up, is told again. So is every conversation after
-  the service restarts, as the memory goes with it: one repeat, which costs a GitHub read and a few lines.
+- **Told once per head.** Each engine's task keeps, in memory, the head each conversation was told of each PR, by the
+  engine session the turn runs in, whichever task chose it: a fix Gathr gives runs in its work task's. While Gathr's
+  own looks still hold that head (`tasks.pr_head`), no call is made; a head GitHub shows that was told already isn't
+  said again. A new conversation, or one a compaction summed up, is told again. So is every conversation after the
+  service restarts, as the memory goes with it: one repeat, which costs a GitHub read and a few lines.
 - **Bounded and diagnosable.** All of it waits at most 20 seconds before the turn starts without it. Any read that
   fails or runs over leaves the turn without these lines, never with part of them, and records `gathr.github.read`
   with `why` and how long it took (`ms`); a read that worked records the same event as ok.
