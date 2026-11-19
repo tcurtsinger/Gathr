@@ -21,8 +21,9 @@ export function useFocusUp(viewport: RefObject<HTMLElement | null>) {
       if (target === el || target.closest('.thread-footer')) return;
       const view = el.getBoundingClientRect();
       const box = target.getBoundingClientRect();
-      // One taller than the view is left to the browser.
-      if (box.top < view.top && box.height <= view.height) target.scrollIntoView({ block: 'center' });
+      // Only what is wholly above the view: a press with the pointer lands on something that shows, and moving that
+      // under the pointer would lose the press. One taller than the view is left to the browser.
+      if (box.bottom <= view.top && box.height <= view.height) target.scrollIntoView({ block: 'center' });
       if (el.scrollTop < told) el.dispatchEvent(new Event('scroll'));
     };
     el.addEventListener('scroll', onScroll, { passive: true });
