@@ -48,12 +48,14 @@ test("the lead's answer is a main message right under yours, its plan chip in it
   const bubble = answer.querySelector('.bubble') as HTMLElement;
   const chip = bubble.querySelector('.plan-chip') as HTMLElement;
   expect(document.querySelectorAll('.plan-chip')).toHaveLength(1);
-  // The chip stands where the plan was written: before the words the lead wrote after it.
+  // The chip ends the message, after the words the lead wrote, and says where the version stands (the owner's calls
+  // of 2026-11-19).
   const words = [...bubble.querySelectorAll('p')].find((p) => p.textContent === 'Hi!') as HTMLElement;
-  expect(chip.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(words.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(chip.textContent).toMatch(/^Plan v\d+:Approved$/);
 });
 
-test("the plan's check and Gathr's lines on it read in the thread of the lead's bubble, by keyboard too", async () => {
+test("the plan's check reads in the thread of the lead's bubble, by keyboard too; the person's Approve is no line there", async () => {
   await render(<View state={chat('askAtWork')} />);
   await expect.element(page.getByText('Add the tags table')).toBeVisible();
   const answer = mainEls()[1];
@@ -66,12 +68,12 @@ test("the plan's check and Gathr's lines on it read in the thread of the lead's 
     .poll(() => replies().map((r) => r.querySelector('.name-line-name')?.textContent))
     .toContain('Rev');
   const rev = replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Rev') as Element;
-  const approved = replies().find((r) => r.textContent?.includes('Approved')) as Element;
-  for (const reply of [rev, approved])
-    expect(answer.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(answer.compareDocumentPosition(rev) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // Before the next main message: in this thread.
   const next = mainEls()[2];
-  expect(approved.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(rev.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // The version's chip says Approved; Gathr says no line of its own for it.
+  expect(replies().filter((r) => r.textContent?.includes('Approved'))).toEqual([]);
 });
 
 /** The lead's turn `id`, opened by Gathr's `opening` words if any, and answering with `words`, at minute `at`. */
@@ -300,7 +302,7 @@ test("a main message's thumbs-up sits in the row under its bubble, after the rep
   const state = chat('askAtWork');
   await render(<View state={liked(state, state.plans[0].versions[0].message as string)} />);
   await expect.poll(() => document.querySelector('.said-foot .react')).not.toBeNull();
-  const main = mainWith('version 1');
+  const main = mainWith('Plan v1:');
   const row = main.querySelector('.said-foot') as HTMLElement;
   expect(main.querySelectorAll('.reacts')).toHaveLength(1);
   const line = (row.querySelector('.fold-line') as HTMLElement).getBoundingClientRect();

@@ -1,6 +1,6 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Message, ThinkingBody, ToolBody, Turn } from '../api';
-import { agreedCheck, planLine, versionOf } from '../plans/plans';
+import { agreedCheck, planLine, versionOf, versionWord } from '../plans/plans';
 import { type AskSize, changed, fixed } from './asks';
 import { ending } from './ends';
 import { type Chip, duration, fold, type Given, type Work } from './fold';
@@ -75,7 +75,7 @@ export function block(
   const chips = new Map(
     found.map(({ plan, version }) => [
       version.message as string,
-      { plan: plan.id, version: version.n, parts: version.parts },
+      { plan: plan.id, version: version.n, state: versionWord(plan, version.n) },
     ]),
   );
   const newest = found.at(-1);

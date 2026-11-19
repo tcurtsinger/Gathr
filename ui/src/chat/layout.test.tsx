@@ -101,7 +101,7 @@ test("the person's own message starts at the column's edge, and a plan's chip si
   const { column, main } = await drawn(900);
   const ask = box(main('Add tags to notes').querySelector('.bubble'));
   expect(Math.abs(ask.left - column.left)).toBeLessThan(1);
-  const plan = main('version 1');
+  const plan = main('Plan v1:');
   const chip = box(plan.querySelector('.plan-chip'));
   const bubble = box(plan.querySelector('.bubble'));
   expect(Math.abs(bubble.left - column.left)).toBeLessThan(1);

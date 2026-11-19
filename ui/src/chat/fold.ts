@@ -25,7 +25,8 @@ export type Step =
 export interface Chip {
   plan: number;
   version: number;
-  parts: number;
+  /** Where the version stands, in a word: "Waiting", "Approved", "Replaced" (`versionWord`). */
+  state: string;
 }
 
 /**
@@ -244,10 +245,12 @@ function piecesOf(
   }
   const words: string[] = [];
   const pieces: Piece[] = [];
+  // A plan's chip ends the message, above the steps line (the owner's call of 2026-11-19).
+  const plans: Piece[] = [];
   const steps: Step[] = [];
   for (const m of all) {
     const chip = chips?.get(m.id);
-    if (chip) pieces.push({ id: m.id, plan: chip });
+    if (chip) plans.push({ id: m.id, plan: chip });
     else if (message.has(m)) {
       pieces.push({ id: m.id, words: words.length });
       words.push(m.body as string);
@@ -257,6 +260,7 @@ function piecesOf(
     pieces.push({ id: 'streaming', words: words.length });
     words.push(streaming);
   }
+  pieces.push(...plans);
   const tools = all.filter((m) => m.kind !== 'text');
   if (steps.length) return { words, pieces, line: lineOf(tools, steps, running, gave, since) };
   const working = { steps, running, label: 'Working', notes: [], since };

@@ -26,6 +26,13 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+/* "Plan v2:" at 600, then where the version stands; what waits on the person in the colour of what does. */
+.plan-chip strong {
+  font-weight: 600;
+}
+.plan-chip .waits {
+  color: var(--accent);
+}
 
 /* The plan's tab: a task's page, its parts as Tasks rows (0062 H5.4, the plan-tab mock-up). */
 .plan-versions {

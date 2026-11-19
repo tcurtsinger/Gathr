@@ -124,8 +124,6 @@ test("a check that left findings has no findings line of Gathr's, Plan v1 and it
   await render(<View state={leftWith(SEVEN)} />);
   await openThread();
   await expect.element(page.getByRole('button', { name: '7 findings' })).toBeVisible();
-  const text = document.querySelector('.thread-messages')?.textContent ?? '';
-  expect(text).not.toContain('Plan v1:');
   expect(document.querySelectorAll('.event-line')).toHaveLength(0);
 });
 
