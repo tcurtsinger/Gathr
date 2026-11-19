@@ -26,9 +26,10 @@ promise 6 of [the charter](../charter.md#the-promises).
   chip as before, and at its foot **one steps line**: every step and every piece of narration in order, closed to
   what the turn did counted by kind ("Read 1 file, ran 2 commands"; a thumbs-up and finishing a task aren't counted),
   open to each in order, narration grey (`work-say`). While the turn runs it is the working line ("Working · 12s");
-  the words being written show as words, and fold into the line once a step follows them; under "Working" the line
-  then shows what the agent last said it was doing, as SerenityOS's card shows its latest words while it works, or
-  its latest step while it has said nothing. The bubble shows from the moment the turn runs and never blanks.
+  the agent's newest words show as words above it, staying there through the steps that follow until newer words
+  come, and under "Working" the line shows its latest step. (As first built the newest words moved into that line
+  once a step followed; the owner, the same day: "I have to decipher out of the shimmering stuff".) The bubble shows
+  from the moment the turn runs and never blanks.
 - **The name line**: the name, then the agent's title in grey, then the time, New, and once its turn is done a tick
   and how long it took ("14s", "4m 12s"), from when the turn was made to when it ended, as the working line counts.
   Gathr keeps no title of an agent's own, so the title is its role in a team: "Lead" and "Reviewer"; a member's says
