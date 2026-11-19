@@ -111,3 +111,12 @@ one needs its giver now.
     engine's download draws nothing, and its agent's card says "Claude Code download".
   - **A step Gathr refused reads Refused,** and the steps on the name line count it apart from failed ones: Gathr's own
     tools answer an error only to refuse.
+- 2026-11-18, the owner's look at the name line: "I dont need the cancelled. The steps and time are already in the
+  agents panel so I dont need those. The approved and done are already usually communicated in the chat message by the
+  agent anyways. It's all just added noise IMO." How a task or a turn ended is no longer a word on the name line: no
+  tick for a done task, no Cancelled or Failed, no "Gathr restarted", "Needs plan", "Not needed", "Usage limit" or
+  "Gathr ended it", and no "Not sent" on the person's own message. What the person can do stays under the bubble as
+  before: Continue (a stop of theirs or a restart's, until its carry-on starts), Retry with the reference, or Sign in,
+  and why a send failed. A turn Gathr ended for a reason of its own offers nothing, so it shows nothing. The steps,
+  with failed and refused ones counted apart, stay in the agent's panel ([0072](0072-the-chat-reads-like-a-team-chat.md)).
+  Proof: `ui/src/chat/nameLine.test.tsx`, `ui/src/chat/Ends.test.tsx`.

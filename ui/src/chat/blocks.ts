@@ -16,7 +16,7 @@ const engineWait = (t: Turn) => t.held === 'claude' || t.held === 'codex';
 /** Who it is by and the task it is on, and its place in the chat: a main message or a reply in a thread. */
 export interface Heading {
   on?: string;
-  /** Its task's last block: how the task ended is said here. */
+  /** Its task's last block: the agent's panel ticks its task here once done. */
   last: boolean;
   head: boolean;
   asked?: number[];
@@ -49,17 +49,9 @@ export function block(
     const made = gave.get(m.id);
     return `${m.id}:${status}:${duration_ms}:${made?.task.number}:${made?.task.what}:${made?.owner}`;
   });
-  // The turn that answers a stopped one is its carry-on: once it runs or has ended, the work went on
-  // there. One still waiting, or stopped (it may never have started), leaves Continue with the person.
-  const went = ['running', 'done', 'failed'];
-  const carried =
-    turn?.status === 'stopped' &&
-    Object.values(state.turns).some((t) => t.answers === id && went.includes(t.status));
   const task = state.tasks.find((t) => t.number === turn?.task);
-  const how = group.last && turn ? ending(turn, task, carried) : undefined;
-  const end =
-    how?.act === 'retry' && id && likeOpened(state, id) ? { ...how, act: 'reference' as const } : how;
-  const ended = end ? `${turn?.status}|${turn?.ref}|${end.word}|${end.act}` : '';
+  const end = endingOf(group, state);
+  const ended = end ? `${turn?.status}|${turn?.ref}|${end.act}` : '';
   // A tick on the map (0039): in a chat of one, the lead's reply to the person, the last block of each of its turns
   // once it has ended; in a team, its main messages say where each piece of work began instead.
   const lead = state.members.length > 1 ? role === 'supervisor' : true;
@@ -75,12 +67,11 @@ export function block(
   const last = group.msgs.at(-1);
   const like = blockLike(state, group.msgs, asked ?? [], !!partial);
   const agreed = !partial && last && (last.kind === 'text' || like) ? agreedBy(state, crew, last.id) : [];
-  // A blocked, stopped or held task is its owner's face's mark, never a tick (0071); a word of the turn's says enough.
-  const shown = on && lastOfTask ? task?.state : undefined;
-  const done = shown === 'done';
-  const out = !end?.word && (shown === 'cancelled' || shown === 'failed') ? shown : undefined;
+  // In the agent's panel, a tick after the task once it is done; a blocked, stopped or held task is its owner's face's
+  // mark, never a tick (0071).
+  const done = !!on && lastOfTask && task?.state === 'done';
   const seat = crew.seated(turn?.agent);
-  const who = `${agent}|${role}|${seat}|${on}|${done}|${out}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
+  const who = `${agent}|${role}|${seat}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   const sig = `${parts}|${partial.length}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
   const hit = cache.get(group.key);
@@ -95,7 +86,6 @@ export function block(
     time,
     on,
     done,
-    out,
     head,
     approvals,
     tick,
@@ -107,6 +97,35 @@ export function block(
   const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
   cache.set(group.key, { sig, value });
   return value;
+}
+
+/** What the person can do about how a block's turn ended, on the turn's last block. */
+function endingOf(group: Group, state: ChatState) {
+  const id = group.turn;
+  const turn = id ? state.turns[id] : undefined;
+  if (!group.last || !id || !turn) return undefined;
+  // The turn that answers a stopped one is its carry-on: once it runs or has ended, the work went on
+  // there. One still waiting, or stopped (it may never have started), leaves Continue with the person.
+  const went = ['running', 'done', 'failed'];
+  const carried =
+    turn.status === 'stopped' &&
+    Object.values(state.turns).some((t) => t.answers === id && went.includes(t.status));
+  const how = ending(turn, carried);
+  return how?.act === 'retry' && likeOpened(state, id) ? { ...how, act: 'reference' as const } : how;
+}
+
+/**
+ * A turn's block the chat draws nothing for (the owner's call of 2026-11-18): no words yet, or only steps, and nothing
+ * the person can act on (an approval, a question it asked, what to do about how its turn ended). The agent's panel
+ * still lists it, with its steps.
+ */
+export function mute(group: Group, state: ChatState, asked: number[] | undefined): boolean {
+  if (group.kind !== 'reply' || asked?.length) return false;
+  const id = group.turn;
+  const last = group.msgs.at(-1);
+  if ((last?.kind === 'text' && last.body) || (group.last && id && state.partial[id])) return false;
+  if (group.last && id && state.approvals.some((a) => a.turn === id)) return false;
+  return !endingOf(group, state);
 }
 
 function toReply(

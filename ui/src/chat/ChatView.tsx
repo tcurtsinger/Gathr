@@ -198,7 +198,7 @@ export function ChatView(props: Props) {
   const before = useRef<Glance[]>([]);
   // What the chat waits on, as the service answers it; a pause changes it with no live message.
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
-  const crew = glances(state, activity(timeline.all), waiting, before.current);
+  const crew = glances(state, activity(timeline.every), waiting, before.current);
   before.current = crew;
   const marks = useChatMarks(crew, timeline.items, archived);
   // Who the message box can name, and who gets a message that names nobody: there is no picker.
@@ -381,7 +381,7 @@ export function ChatView(props: Props) {
             glance={opened}
             tasks={state.tasks}
             members={state.members}
-            {...blocksOf(timeline.all, agent, mine)}
+            {...blocksOf(timeline.every, agent, mine)}
             actions={stable}
             onMessage={!archived && people.some((p) => p.id === agent) ? message : undefined}
             onCompact={archived ? undefined : compact}

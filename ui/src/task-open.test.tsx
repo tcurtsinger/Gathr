@@ -1,5 +1,5 @@
-// An agent's task opens in the Tasks tab with its PR's checks run, from the agent's panel or the row of the
-// turn that gave it (owner's pick A, room task 70; 0043 C6; 0038). The service is the edge: fetch answers
+// An agent's task opens in the Tasks tab with its PR's checks run, from the agent's panel or the steps of the
+// turn that gave it there (owner's pick A, room task 70; 0043 C6; 0038). The service is the edge: fetch answers
 // as it would.
 import { afterEach, expect, test, vi } from 'vitest';
 import { page } from 'vitest/browser';
@@ -136,11 +136,14 @@ test("an agent in Summary opens as a workspace tab, and its task opens from ther
   await expect.element(page.getByRole('tab', { name: 'Tasks' })).toHaveAttribute('aria-selected', 'true');
 });
 
-test('a task opens in the Tasks tab from the row of the turn that gave it', async () => {
+test("a task opens in the Tasks tab from the steps of the turn that gave it, in its agent's panel", async () => {
+  await page.viewport(1440, 900);
   service();
   await render(<App />);
   await page.getByRole('button', { name: 'Made-up round', exact: true }).click();
-  await page.getByRole('button', { name: /^1 step · gave 1 task/ }).click();
+  await page.getByRole('button', { name: 'Open Made-up Mira' }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Made-up Mira' });
+  await panel.getByRole('button', { name: /^1 step · gave 1 task/ }).click();
   await expect.element(page.getByText('Gave Made-up Sol a task')).toBeVisible();
   await page.getByRole('button', { name: '#82 Verify the reconnect repair' }).click();
   await expect.element(page.getByRole('region', { name: 'Task #82' })).toBeVisible();

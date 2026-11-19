@@ -94,10 +94,9 @@ test("a review and its fix read in the work task's thread, after its build, neve
       'And the dark theme?',
     ),
   ).toBe(true);
-  // Each keeps its own name line: who, and the task it worked on.
-  const named = [...document.querySelectorAll('.said[data-reply] .name-line')].map((l) => l.textContent);
-  expect(named.find((l) => l?.includes('Sol'))).toContain('on Review PR #18');
-  expect(named.findLast((l) => l?.includes('Rowan'))).toContain('on Fix the review of #18');
+  // Each keeps its own name line, who said it; the task it worked on is its agent's panel's.
+  const named = [...document.querySelectorAll('.said[data-reply] .name-line-name')].map((l) => l.textContent);
+  expect(named).toEqual(expect.arrayContaining(['Sol', 'Rowan']));
   const review = page.getByText('One problem: redirects reach private addresses').element();
   expect(review.closest('.said')?.hasAttribute('data-reply')).toBe(true);
 });
@@ -125,7 +124,7 @@ test('once settled it stays as it is while the chat is open, and starts folded w
 });
 
 test('in a folded thread, a review is still its reviewer’s: on its panel, and as its running row', () => {
-  const done = view(reviewed('done', 'done')).all;
+  const done = view(reviewed('done', 'done')).every;
   const sols = blocksOf(done, 'sol', noneKept()).earlier;
   expect(sols.flatMap((b) => ((b.content ?? []) as readonly { text?: string }[]).map((p) => p.text))).toEqual(
     ['One problem: redirects reach private addresses'],
@@ -138,7 +137,7 @@ test('in a folded thread, a review is still its reviewer’s: on its panel, and 
     kind: 'tool',
     body: { tool: 'Read', status: 'running' },
   });
-  const all = view(running).all;
+  const all = view(running).every;
   expect(blocksOf(all, 'sol', noneKept()).now?.running).toBe(true);
   expect(activity(all).has('sol')).toBe(true);
 });

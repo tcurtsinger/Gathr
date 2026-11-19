@@ -1,4 +1,4 @@
-import type { PersonTask, PlanSummary, PlanVersionSummary, Task } from '../api';
+import type { PersonTask, Task } from '../api';
 import { inWords } from '../chat/statusWords';
 import type { Mark } from '../components/marks';
 
@@ -57,34 +57,13 @@ export function said(t: Task, tasks: Task[]): Said {
   return before.length ? { word: `After ${before.map((n) => `#${n}`).join(', ')}` } : { mark: 'waiting' };
 }
 
-/** A task's or a question's state as its main message in the chat says it (0075): `said`, with Done in words. */
+/** A task's or a question's state, with Done in words: whether its main message's thread is handled (0075, 0077). */
 export function mainSaid(t: Task, tasks: Task[]): Said {
   const s = said(t, tasks);
   if (t.kind === 'person' && 'done' in s) return { done: true, word: 'Answered' };
   if (t.kind === 'person' && 'you' in s) return { you: true, word: 'Needs you' };
   return 'done' in s ? { done: true, word: 'Done' } : s;
 }
-
-/** A version of the lead's plan as its main message says it: the newest by its plan's state, an older by how it ended. */
-export function versionSaid(plan: PlanSummary, version: PlanVersionSummary): Said | undefined {
-  if (version.decided === 'approved') return { done: true, word: 'Approved' };
-  if (version.decided === 'sent_back') return { word: 'Sent back' };
-  if (version.decided === 'dropped') return { word: 'Dropped' };
-  if (plan.versions.at(-1)?.id !== version.id) return undefined;
-  switch (plan.state) {
-    case 'checking':
-      return { word: 'Checking' };
-    case 'waiting':
-      return { you: true, word: 'Needs you' };
-    case 'revising':
-      return { mark: 'working' };
-    default:
-      return undefined;
-  }
-}
-
-/** The person's message as its main message says it: Working while anything it started is open, else Done. */
-export const openSaid = (open: boolean): Said => (open ? { mark: 'working' } : { done: true, word: 'Done' });
 
 /** The chat's tasks as the Tasks tab lists them: questions for the person, what is open, what is over. */
 export function grouped(tasks: Task[]): { title: string; tasks: Task[] }[] {

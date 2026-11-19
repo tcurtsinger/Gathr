@@ -374,7 +374,6 @@ test('a failed turn a like opened shows its reference and no Retry; others keep 
   await expect.element(screen.getByText('ref-like', { exact: true })).toBeVisible();
   const retries = (ref: string) =>
     [...block(ref).querySelectorAll('button')].filter((b) => b.textContent === 'Retry');
-  expect(block('ref-like').textContent).toContain('Failed');
   expect(retries('ref-like')).toHaveLength(0);
   expect(retries('ref-mate')).toHaveLength(1);
   expect(retries('ref-mine')).toHaveLength(1);

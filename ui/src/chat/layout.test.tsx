@@ -5,8 +5,6 @@ import { afterEach, expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { Composer } from '../components/Composer';
-import { StateWord } from '../components/StateWord';
-import type { Said } from '../tasks/rows';
 import { chat, View } from './recorded';
 import type { ChatState } from './state';
 
@@ -98,62 +96,6 @@ for (const width of [900, 360]) {
     expect(Math.abs(fold.left - column.left)).toBeLessThan(1);
   });
 }
-
-test('in the 360 column Supervisor leaves the name line, and the state keeps its place at its right', async () => {
-  const { column, main } = await drawn(360);
-  const task = main('Add the tags table');
-  const role = task.querySelector('.name-line-role') as HTMLElement;
-  expect(getComputedStyle(role).display).toBe('none');
-  const state = box(task.querySelector('.main-state'));
-  expect(Math.abs(state.right - column.right)).toBeLessThan(1);
-  expect(task.querySelector('.main-state')?.textContent).toBe('Working');
-});
-
-test('in a wide pane the lead is named Supervisor on a main message', async () => {
-  const { main } = await drawn(900);
-  const role = main('Add the tags table').querySelector('.name-line-role') as HTMLElement;
-  expect(getComputedStyle(role).display).not.toBe('none');
-});
-
-/** How far the text starts after the ink of the shape before it: the mark's own drawing, not its box. */
-function gapOf(word: Element): number {
-  const shapes = [...word.querySelectorAll('svg path, svg circle, svg rect, svg polyline')];
-  const ink = Math.max(...shapes.map((s) => s.getBoundingClientRect().right));
-  const text = [...word.childNodes].find((n) => n.nodeType === Node.TEXT_NODE) as Text;
-  const range = document.createRange();
-  range.selectNodeContents(text);
-  return range.getBoundingClientRect().left - ink;
-}
-
-test('every state mark keeps one gap before its word, and Needs you is a small dot', async () => {
-  const states: [string, Said][] = [
-    ['Done', { done: true, word: 'Done' }],
-    ['Needs you', { you: true, word: 'Needs you' }],
-    ['Working', { mark: 'working' }],
-    ['Waiting', { mark: 'waiting' }],
-    ['Blocked', { mark: 'blocked' }],
-    ['Stopped', { mark: 'stopped' }],
-  ];
-  await render(
-    <div className="name-line" style={{ width: 400 }}>
-      <span className="name-line-name">Made-up</span>
-      {states.map(([name, said]) => (
-        <span key={name} className="main-state">
-          <StateWord said={said} className="main-state-word" />
-        </span>
-      ))}
-    </div>,
-  );
-  const words = [...document.querySelectorAll('.main-state-word')];
-  const gaps = words.map((w) => +gapOf(w).toFixed(1));
-  for (const [i, [name]] of states.entries())
-    expect(gaps[i], `${name}: ${gaps.join(', ')}`).toBeGreaterThanOrEqual(4.5);
-  for (const [i, [name]] of states.entries())
-    expect(gaps[i], `${name}: ${gaps.join(', ')}`).toBeLessThanOrEqual(5.5);
-  // The mock-up's dot: 7.2px across, against the 12px marks.
-  const dot = words[1].querySelector('svg circle')?.getBoundingClientRect();
-  expect(Math.round(dot?.width ?? 0)).toBe(7);
-});
 
 test("the person's own message starts at the column's edge, and a plan's chip sits inside its bubble", async () => {
   const { column, main } = await drawn(900);

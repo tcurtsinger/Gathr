@@ -121,10 +121,11 @@ test('a question waiting on the person: the asker’s row goes to the question',
   serve(history, work);
   await render(chat());
   await pressRow('Lead');
-  // Held as a search hit is: the message that asks, the one that says Needs you.
+  // Held as a search hit is: the lead's message that asks.
   await expect
-    .poll(() => document.querySelector('[data-search-hit]')?.textContent ?? '')
-    .toContain('Needs you');
+    .poll(() => document.querySelector('[data-search-hit] .name-line-name')?.textContent ?? '')
+    .toBe('Lead');
+  expect(document.querySelector('[data-search-hit]')?.textContent).toContain('Hi!');
 });
 
 test('with nothing in the chat to go to, a needs-you row opens the agent as every row does', async () => {
