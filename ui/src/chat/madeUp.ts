@@ -96,12 +96,12 @@ export function round(): ChatState {
     said('kit', 'gathr', 'Task #2 from Mira: Task 2'),
     said('kit', 'assistant', 'Checked'),
   ];
-  // What each turn is about, as the service names it (0075): a turn the person's message opened is about that
-  // message; a turn on a task the lead handed out is about that task.
+  // What each turn is about, as the service names it (0075, 0078): a turn the person's message opened is said to them,
+  // a main message of its own; a turn on a task the lead handed out is about that task.
   const about: Record<string, string> = {
-    ask: `m:${messages[0].id}`,
-    mid: `m:${messages[2].id}`,
-    direct: `m:${messages[4].id}`,
+    ask: 'b:ask',
+    mid: 'b:mid',
+    direct: 'b:direct',
     rowan: 't:1',
     kit: 't:2',
   };
@@ -120,8 +120,15 @@ export function round(): ChatState {
   };
 }
 
-/** The same round in a chat of one agent: one timeline, as the chat was before it had threads (0037). */
-export const alone = (state: ChatState): ChatState => ({ ...state, members: [] });
+/**
+ * The same turns in a chat of one agent: one timeline (0037), as the service names each turn there, said to the person
+ * and a main message of its own (0078).
+ */
+export const alone = (state: ChatState): ChatState => ({
+  ...state,
+  members: [],
+  turns: Object.fromEntries(Object.entries(state.turns).map(([id, t]) => [id, { ...t, topic: `b:${id}` }])),
+});
 
 export const view = (state: ChatState) => toThread(state, agents, [], new Map());
 /** Every thread open and whole: for tests of how a block draws, wherever it sits. */

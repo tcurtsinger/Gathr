@@ -109,3 +109,6 @@ Where the code differs from the detail the owner approved, the code stands.
   its state at its name line's right (Checking, Needs you, Working, Approved, Sent back, Dropped); its check, Gathr's
   lines about it and the lead's turn a send-back started sit in its thread. Since 2026-11-18 (the owner: "Remove all
   of it") a version says no state there; the plan's tab says it.
+- [0078](0078-said-to-you-is-main-one-bubble-per-turn.md): a version is a chip in the bubble of the lead's turn that wrote it, where it wrote it, and no message of
+  its own; its check and Gathr's lines about it sit in the thread of that bubble, and the turn a send-back started is the
+  lead's next main message, quoting "Sent back" and the person's words. While it waits, the bubble's like approves it.

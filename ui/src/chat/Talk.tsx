@@ -69,7 +69,7 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       }
     >
       <Bubble
-        lead={m.pieces && <Pieces pieces={m.pieces} onOpenTask={actions.openTask} />}
+        lead={m.pieces && <Pieces pieces={m.pieces} actions={actions} />}
         quote={m.quote}
         mention={m.to}
         foot={<Foot fold={own.thread} agreed={m.agreed} like={m.like} answer={own.answer} />}

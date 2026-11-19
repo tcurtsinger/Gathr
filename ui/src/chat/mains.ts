@@ -23,8 +23,9 @@ const OPEN = new Set(['queued', 'running', 'waiting_sign_in']);
 
 /**
  * The chat as main messages, each with its thread (0075), in time order. A main message is the person's message, a
- * task the lead hands out, a plan version, a question to the person, an ask's result, a line of Gathr's that is a main
- * message, or a turn nothing ties; every other block sits in its topic's thread, in the chat's order.
+ * turn's bubble said to them (0078: an answer, a report, a plan written), a task the lead hands out, a question to the
+ * person, an ask's result, a line of Gathr's that is a main message, or a turn nothing ties; every other block sits in
+ * its topic's thread, in the chat's order.
  */
 export function threadsOf(groups: Group[], topics: Map<Group, string>, state: ChatState): Thread[] {
   const tasks = new Map(state.tasks.map((t) => [t.number, t]));
@@ -93,10 +94,12 @@ export function handledOf(t: Thread, state: ChatState): boolean {
     const task = state.tasks.find((x) => `t:${x.number}` === t.topic);
     return still && !!task && ended(mainSaid(task, state.tasks));
   }
-  if (g?.kind === 'version') {
-    const version = state.plans.flatMap((p) => p.versions).find((v) => v.message === g.msgs[0].id);
-    if (version) return still && version.decided != null;
-  }
+  // A bubble holding a plan version is handled once the person decided it (0078); its turn's blocks are its own, also
+  // when Gathr's words that opened it come first.
+  const own = [g, ...t.replies].filter((x) => !!x?.turn && x.turn === g?.turn);
+  const holds = new Set(own.flatMap((x) => x?.msgs.map((m) => m.id) ?? []));
+  const version = state.plans.flatMap((p) => p.versions).findLast((v) => holds.has(v.message as string));
+  if (version) return still && version.decided != null;
   if (g?.kind === 'person') {
     const ask = state.asks.find((a) => a.id === g.msgs[0].id);
     return !(ask?.open ?? !still) && still;
@@ -106,21 +109,6 @@ export function handledOf(t: Thread, state: ChatState): boolean {
 
 const ended = (s: State) =>
   'done' in s || ('icon' in s && s.icon !== 'merge') || ('word' in s && s.word !== 'Checking');
-
-/** The ask a result closes: what the turn it answers was about, or the ask of the tasks that turn gave. */
-export function askOf(
-  turn: string,
-  state: ChatState,
-  topics: Map<Group, string>,
-  groups: Group[],
-): string | undefined {
-  const answers = state.turns[turn]?.answers;
-  if (!answers) return undefined;
-  const asks = new Set(state.asks.map((a) => a.id));
-  const about = state.turns[answers]?.topic ?? groups.find((g) => g.turn === answers && topics.has(g))?.key;
-  if (about?.startsWith('m:') && asks.has(about.slice(2))) return about.slice(2);
-  return state.tasks.find((t) => t.given_in === answers && t.ask)?.ask;
-}
 
 /**
  * Which of an open thread's replies show: all of a short one; of a long one its newest, every one said while the person

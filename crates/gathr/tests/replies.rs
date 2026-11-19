@@ -168,10 +168,11 @@ fn a_reply_keeps_its_target_reaches_its_author_with_the_line_and_sits_in_that_th
         .replace(id, "<id>")
         .replace(message["time"].as_str().unwrap(), "<time>");
     samples::same("reply: a message", &sampled);
-    // In the thread of the message it answers, and the ask that message served.
+    // In the thread of the message it answers, the lead's answer, a main message (0078); and the ask
+    // that message served.
     let target_topic = turn_of(&shown, &asked)["topic"].clone();
     assert_eq!(turn_of(&shown, &turn)["topic"], target_topic, "{shown}");
-    assert_eq!(target_topic, json!(format!("m:{}", ask.as_str().unwrap())));
+    assert_eq!(target_topic, json!(format!("b:{asked}")));
     assert_eq!(ask_of(&data.0, &turn), ask);
     common::topics_agree(&data.0, &chat);
 

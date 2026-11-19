@@ -1,10 +1,12 @@
 //! What every turn, task and line said in no turn of a chat is about (0075): the main message it
-//! sits under. A main message is the person's message, a task the lead hands out, a question to
-//! the person, a plan version, the result of an ask, or anything nothing ties: its own. Read from
-//! what the chat records, once per chat (`load`), and resolved with maps: never a query per row.
+//! sits under. A main message is the person's message, what is said to them (0078: an answer to
+//! their message, the lead's report, a turn that wrote a plan), a task the lead hands out, a
+//! question to the person, the result of an ask, or anything nothing ties: its own. Read from what
+//! the chat records, once per chat (`load`), and resolved with maps: never a query per row.
 //!
-//! Keys: `t:<task>` (a task or question), `m:<message>` (the person's message, a plan version, a
-//! main line of Gathr's), `r:<turn>` (a result), `b:<turn>` (a turn tied to nothing).
+//! Keys: `t:<task>` (a task or question), `m:<message>` (the person's message, a main line of
+//! Gathr's), `r:<turn>` (a result), `b:<turn>` (a turn's bubble as a main message of its own: said
+//! to the person, or tied to nothing; its fact says which).
 
 mod load;
 pub mod record;
@@ -148,7 +150,7 @@ impl Topics<Facts> {
                 );
             }
             if let Some(message) = about.strip_prefix("m:") {
-                return match f.asks.contains(message) || f.versions.values().any(|m| m == message) {
+                return match f.asks.contains(message) {
                     true => Topic::tied(about.clone(), "about", format!("about message {message}")),
                     false => Topic::broken(own, format!("message {message} not found")),
                 };
@@ -161,9 +163,11 @@ impl Topics<Facts> {
                 format!("the Fixed line of ask {ask}"),
             );
         }
-        if let Some(message) = f.version_lines.get(&line.id) {
-            let why = format!("said of plan version {message}");
-            return Topic::tied(format!("m:{message}"), "plan_line", why);
+        // A check's or decision's line sits with the lead's bubble that holds the version (0078).
+        if let Some(turn) = f.version_lines.get(&line.id) {
+            let why = format!("said of the plan version turn {turn} wrote");
+            let found = self.follow_turn(turn, 1);
+            return self.via(&own, found, "plan_line", why, format!("turn {turn}"));
         }
         if let Some((ask, task)) = f.held_lines.get(&line.id) {
             match (ask, task) {
@@ -222,6 +226,10 @@ impl<S: Source> Topics<S> {
                 format!("the result of ask {ask}"),
             );
         }
+        // A plan waiting on the person is always a main message (0078).
+        if let Some(n) = f.wrote(t) {
+            return Topic::tied(own, "plan", format!("wrote plan version {n}"));
+        }
         let opening = t.opening.as_ref();
         // The person's reply (0076): in the thread of what it answers.
         if let Some(r) = opening
@@ -230,22 +238,23 @@ impl<S: Source> Topics<S> {
         {
             return self.reply_of(&own, r, next);
         }
-        if let Some(o) = opening.filter(|o| o.role == "user") {
-            return Topic::tied(
-                format!("m:{}", o.id),
-                "person",
-                "opened by the person's message".into(),
-            );
+        if opening.is_some_and(|o| o.role == "user") {
+            let why = "opened by the person's message: said to them";
+            return Topic::tied(own, "person", why.into());
         }
-        // A send-back's turn answers the turn that wrote the version, which may be the ask's: it sits with the version.
-        // Asked only of a turn a send-back opened, or an old one that doesn't say what opened it.
-        let may = matches!(t.opened_by.as_deref(), None | Some("sent_back"));
-        if let Some(version) = may.then(|| f.sent_back(t)).flatten() {
-            return Topic::tied(
-                format!("m:{version}"),
-                "sent_back",
-                format!("opened by the send-back of plan version {version}"),
-            );
+        // The person's message to several agents (0028): each answer is said to them, a reply's in
+        // the thread of what it answers.
+        let copy = opening.and_then(|o| o.copy_of.as_ref());
+        if let Some(copy) = copy.filter(|c| c.role.as_deref() == Some("user")) {
+            let why = format!("carries the person's message {}", copy.id);
+            let Some(r) = &copy.reply else {
+                return Topic::tied(own, "picked", why);
+            };
+            let topic = self.reply_of(&own, r, next);
+            return match topic.broken {
+                true => topic,
+                false => Topic::tied(topic.key, "copy", why),
+            };
         }
         if let Some(q) = f.heard(t) {
             return Topic::tied(
@@ -269,19 +278,11 @@ impl<S: Source> Topics<S> {
                 None => Topic::broken(own, format!("PR #{pr} has no task in this chat")),
             };
         }
-        if let Some(copy) = opening.and_then(|o| o.copy_of.as_ref()) {
+        // A teammate's message sits where the sender's does; a like of the lead's own message, on no
+        // task, is said to the person (below).
+        let liked = t.opened_by.as_deref() == Some("liked");
+        if let Some(copy) = copy.filter(|_| !(liked && self.speaks(t))) {
             let why = format!("carries message {}", copy.id);
-            // The person's message to several agents (0028) sits where it sits, whatever turn it joined.
-            if copy.role.as_deref() == Some("user") {
-                let topic = match &copy.reply {
-                    Some(r) => self.reply_of(&own, r, next),
-                    None => Topic::tied(format!("m:{}", copy.id), "copy", why.clone()),
-                };
-                return match topic.broken {
-                    true => topic,
-                    false => Topic::tied(topic.key, "copy", why),
-                };
-            }
             return match &copy.turn {
                 Some(turn) => self.via(
                     &own,
@@ -302,6 +303,10 @@ impl<S: Source> Topics<S> {
                 why,
                 format!("task #{n}"),
             );
+        }
+        if self.speaks(t) {
+            let why = "the lead, on no task of its own, speaks to the person";
+            return Topic::tied(own, "lead", why.into());
         }
         if let Some(a) = &t.answers {
             let why = format!("answers turn {a}");
@@ -327,6 +332,16 @@ impl<S: Source> Topics<S> {
             );
         }
         Topic::alone(own, "no task, no turn it answers and no ask".into())
+    }
+
+    /// The chat's lead on no task of its own, opened by anything but a wake, a silent turn or stale
+    /// tasks told (they serve their ask), a turn the engine began or a compaction: its words are said
+    /// to the person (0078), as is an old turn that doesn't say what opened it.
+    fn speaks(&self, t: &load::Turn) -> bool {
+        let quiet = ["wake", "silent", "stale", "engine", "compaction"];
+        t.task.is_none()
+            && !t.opened_by.as_deref().is_some_and(|o| quiet.contains(&o))
+            && t.agent.as_deref().is_some_and(|a| self.src.is_lead(a))
     }
 
     /// Where a reply's turn sits: with the task it is about, or the message it answers. The
@@ -394,15 +409,14 @@ impl<S: Source> Topics<S> {
         if t.kind == "person" {
             return Topic::tied(own, "question", "a question to the person".into());
         }
+        // A plan check sits under the lead's bubble that holds the version (0078).
         if let Some(v) = t.checks {
-            return match self.src.version(v) {
-                Some(message) => Topic::tied(
-                    format!("m:{message}"),
-                    "version",
-                    format!("checks plan version {message}"),
-                ),
-                None => Topic::broken(own, format!("plan version {v} not found")),
+            let Some(turn) = self.src.version(v) else {
+                return Topic::broken(own, format!("plan version {v} not found"));
             };
+            let why = format!("checks the plan version turn {turn} wrote");
+            let found = self.follow_turn(&turn, next);
+            return self.via(&own, found, "version", why, format!("turn {turn}"));
         }
         if let Some(p) = t.parent {
             let why = format!("part of #{p}");

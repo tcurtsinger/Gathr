@@ -1,0 +1,173 @@
+{
+  "history": {
+    "agent": "fea0bd9835f2f7da",
+    "approvals": [],
+    "archived": null,
+    "chat": "01M7T8KKKK5VWNS36K8KQ40W99",
+    "folder": null,
+    "members": [
+      {
+        "agent": "fea0bd9835f2f7da",
+        "context": {
+          "compact_at": 500000,
+          "used": 25340,
+          "window": 1000000
+        },
+        "name": "Mira",
+        "paused": false,
+        "role": "supervisor",
+        "usage_until_us": null
+      }
+    ],
+    "messages": [
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "Plan the river walk",
+        "copy_of": null,
+        "id": "01M7T8KKKN0TYC98WD77GWZKTH",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": null,
+        "role": "user",
+        "time": "2026-11-19T16:00:34.421Z",
+        "to": null,
+        "turn": "01M7T8KKKN0PRNF1KERRKVGPDF"
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "Hi!",
+        "copy_of": null,
+        "id": "01M7T8KKVN92D8202JYVVYTBAR",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": null,
+        "role": "assistant",
+        "time": "2026-11-19T16:00:34.677Z",
+        "to": null,
+        "turn": "01M7T8KKKN0PRNF1KERRKVGPDF"
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "And the map legend?",
+        "copy_of": null,
+        "id": "01M7T8KKWTQDNMJFN4PHZ4YDY2",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": null,
+        "role": "user",
+        "time": "2026-11-19T16:00:34.714Z",
+        "to": null,
+        "turn": "01M7T8KKWTFQ1GR2Z6N58ZF923"
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "Hi!",
+        "copy_of": null,
+        "id": "01M7T8KKX21ZCBFPQJG1NBGZ1J",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": null,
+        "role": "assistant",
+        "time": "2026-11-19T16:00:34.722Z",
+        "to": null,
+        "turn": "01M7T8KKWTFQ1GR2Z6N58ZF923"
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "Does it pass the old mill?",
+        "copy_of": null,
+        "id": "01M7T8KKYRYKT4VEV9G6EZRHT0",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": "01M7T8KKVN92D8202JYVVYTBAR",
+        "role": "user",
+        "time": "2026-11-19T16:00:34.776Z",
+        "to": null,
+        "turn": "01M7T8KKYRGNNRE26Y36A0YZWX"
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "body": "Hi!",
+        "copy_of": null,
+        "id": "01M7T8KKZ1WSCDVV826BNNPRJR",
+        "kind": "text",
+        "picks": null,
+        "reply_task": null,
+        "reply_to": null,
+        "role": "assistant",
+        "time": "2026-11-19T16:00:34.785Z",
+        "to": null,
+        "turn": "01M7T8KKYRGNNRE26Y36A0YZWX"
+      }
+    ],
+    "project": null,
+    "reactions": [],
+    "reads": [],
+    "run": {
+      "state": "running"
+    },
+    "streaming": [],
+    "turns": [
+      {
+        "agent": "fea0bd9835f2f7da",
+        "answers": null,
+        "created": "2026-11-19T16:00:34.421Z",
+        "end": null,
+        "ended": "2026-11-19T16:00:34.680Z",
+        "held": null,
+        "id": "01M7T8KKKN0PRNF1KERRKVGPDF",
+        "position": 1,
+        "ref": "ddc7f181",
+        "result_of": null,
+        "status": "done",
+        "task": null,
+        "topic": "b:01M7T8KKKN0PRNF1KERRKVGPDF",
+        "why": null
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "answers": null,
+        "created": "2026-11-19T16:00:34.714Z",
+        "end": null,
+        "ended": "2026-11-19T16:00:34.725Z",
+        "held": null,
+        "id": "01M7T8KKWTFQ1GR2Z6N58ZF923",
+        "position": 2,
+        "ref": "82b70523",
+        "result_of": null,
+        "status": "done",
+        "task": null,
+        "topic": "b:01M7T8KKWTFQ1GR2Z6N58ZF923",
+        "why": null
+      },
+      {
+        "agent": "fea0bd9835f2f7da",
+        "answers": null,
+        "created": "2026-11-19T16:00:34.776Z",
+        "end": null,
+        "ended": "2026-11-19T16:00:34.788Z",
+        "held": null,
+        "id": "01M7T8KKYRGNNRE26Y36A0YZWX",
+        "position": 3,
+        "ref": "0b434f67",
+        "result_of": null,
+        "status": "done",
+        "task": null,
+        "topic": "b:01M7T8KKKN0PRNF1KERRKVGPDF",
+        "why": null
+      }
+    ]
+  },
+  "work": {
+    "asks": [],
+    "caught": [],
+    "plans": [],
+    "tasks": [],
+    "waits": []
+  }
+}

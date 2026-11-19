@@ -128,3 +128,9 @@ recorded would show. One answer serves the chat, the Tasks views and `gathr diag
   the quote leads to it, but the ask's Done that led to the result goes with the state. Which threads are handled is
   still worked out from the same facts (`handledOf`, `ui/src/chat/mains.ts`), so folding is unchanged. Proof:
   `ui/src/chat/nameLine.test.tsx`.
+- 2026-11-19, [0078](0078-said-to-you-is-main-one-bubble-per-turn.md) (the owner's pick of the chat-shape mock-up's structure A): what is said to the person is a main
+  message. A turn the person's message opened, Gathr's copy of it for each agent picked, a turn that wrote a plan
+  version, and the lead's turn on no task of its own (but a wake, a silent turn or stale tasks told, the engine's own
+  turn, a compaction) are each their own `b:<turn>`; a plan check and its lines sit with the turn that wrote the
+  version; the send-back's case goes. History sends `result_of` and no longer `team_since`: a chat of one, and what a
+  chat said before it became a team, are drawn by the same rule.

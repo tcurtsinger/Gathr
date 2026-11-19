@@ -249,19 +249,23 @@ leaves the scrollbar clear. There is none above the message box: the chat is cut
 
 A team chat is main messages, each with its thread
 ([0075](docs/decisions/0075-a-team-chat-is-main-messages-each-with-its-thread.md), the threads mock-up's `#day`,
-`#roots` A and `#result` A). A main message is something put to someone that starts a piece of work or needs the
-person: the person's own message, each task the lead hands out, each version of a plan, a question to the person,
+`#roots` A and `#result` A). A main message is what is said to the person, or put to someone to start a piece of
+work ([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md), the chat-shape mock-up's structure
+A): the person's own message, the answer to it, every report of the lead's when it hears back, a turn that writes
+a plan, each task the lead hands out, the answer of each agent the person picked with @, a question to the person,
 the result of an ask, and anything nothing ties. Main messages read in the order they were put; under each, its
-thread: the answers, the agents' progress and talk, the PR, its review and fix, Gathr's lines about it. The service
-says what each turn, task and line is about; the window never guesses. A chat of one agent is one timeline, as the
-chat was before ([0037](docs/decisions/0037-one-timeline.md)), and so is what a chat said before it became a team.
+thread: the work on a task, its PR, review and fix; a plan's check under the lead's bubble that holds the version;
+the agents' talk; Gathr's lines about it. The service says what each turn, task and line is about; the window never
+guesses. One rule for every chat: a chat of one agent reads as one timeline, as the chat was before
+([0037](docs/decisions/0037-one-timeline.md)), because what its agent says is said to the person; a main message
+right after the same speaker's main message isn't named again, until a thread's replies show between them.
 The approved designs (Shared/designs) are a reference only: compose the existing registry components and Gathr
 state in React; never port their HTML.
 
-Inside a thread, and in a chat of one, a turn is one block where it began, in 0028's turn-start order between
-turns, so replies streaming at once never interleave and a later reply lands in its own turn's block. Only a
+A turn is one bubble where it began, in 0028's turn-start order between turns, so replies streaming at once never
+interleave and a later reply lands in its own turn's bubble; a plan version it writes is a chip in it. Only a
 person's message sent into a running turn splits that turn: one block before it, one after, and what the turn says
-after it is about that message.
+after it is a main message of its own (in the thread, after a reply typed there).
 
 **The words are as wide as the column** (the owner's rule): a main message's bubble starts at the column's left edge
 and a full one ends at its right edge; its face hangs in a 48px gutter left of that width. Where the pane leaves no
@@ -333,8 +337,8 @@ A task the lead hands out is drawn from its record, as no message carries the ha
 (You for one the person gave) and the time it was given, then in a bubble as wide as the box the owner's blue
 @Name and the task's title at 600 (a press opens it in the Tasks tab), and under it the first line of why it was
 given, 14px at 78%, cut with an ellipsis, then "More" (13px muted, dotted underline) that opens the rest of why and
-the brief's Done when, Proof, Where and Size in place; "Less" closes them. The lead's turn that gave it stays in
-the ask's thread, its line saying "Gave 3 tasks".
+the brief's Done when, Proof, Where and Size in place; "Less" closes them. The lead's turn that gave it is a main
+message before it, its line saying "Gave 3 tasks".
 
 An ask's result is the lead's own block, at the bottom, opening with a plain quote of the ask's first line (the
 quote style below): a press on it scrolls up to the ask and holds it there, as a search hit does.
@@ -385,8 +389,8 @@ the flow, and what follows moves down rather than being covered. Names, never he
 passes through it). The person's own like counts in it: "You"
 first in the names, and the count in the attention blue on a 16% tint at 600. Where the person can like, the count
 is a toggle (`aria-pressed`): a click gives theirs or takes it back. On the person's own message it is no toggle, and
-there is no Like. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
-its own (0062); a question stays a reply.
+there is no Like. A plan's check that agrees is the checker's thumbs-up on the lead's bubble that holds the
+version, with no line of its own (0062); a question stays a reply.
 
 What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time
 on the name line, and its words in an outlined bubble one step quieter than an agent's: a 1px border, no
@@ -396,8 +400,11 @@ PRs, muted. A change Gathr caught in a held turn is its line, "Mira changed 3 fi
 approved" ("on look-into task #12" for a look-into task; "1 file" for one), then one file per line, each with
 a file icon in monospace, at most 20, then "and 2 more", then "Committed: 1" when some came from commits (0063).
 A check that ran late is "Plan v1 came to you before Rev finished checking it.". When the person's change of
-size held or released tasks: "Tag picker waits for the plan." or "Tag picker is back in line.". Anything else
-(a wait's result, a wake-up, a stale-task nudge, a usage interruption) is its words, whole.
+size held or released tasks: "Tag picker waits for the plan." or "Tag picker is back in line.". Gathr's words that
+open a turn and draw something (a wait's result, a wake-up, a silent turn or stale tasks told, a carry-on, a usage
+interruption, a landing hand-off, "Plan v1: Sent back" with the person's words) are the quote at the top of that
+turn's bubble, in the quote style below but up to three lines, cut with an ellipsis (0078): Gathr draws no bubble
+for them. Until the turn has a bubble that draws, they are Gathr's message, whole.
 
 Gathr's question is its message too, a main message: the question's why as its words, and the question block (Human
 tasks) in its bubble. An agent's question sits in the bubble of the block that asked it, with the same block; that
@@ -412,9 +419,9 @@ nor is Gathr's copy of an agent's message, or what a turn that hears the person'
 
 What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a done task are for the agents, and
 the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
-bubble: the plan's lines, with a clipboard: the lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up
-instead) (opening to the plan's title), "Sent back" (opening to the person's words), and "Plan v2:" "Approved"
-or "Dropped"; each opens to the whole line and Open plan (0062). A line is 13px, muted, the lead-in in
+bubble: the plan's lines, with a clipboard, in the thread of the lead's bubble that holds the version (0078): the
+lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up instead) (opening to the plan's title), and
+"Plan v2:" "Approved" or "Dropped"; each opens to the whole line and Open plan (0062). A line is 13px, muted, the lead-in in
 the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for overflow.
 Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
 Keyboard focus uses the hover highlight, without an outline or ring.
@@ -638,10 +645,12 @@ Team status appears in Summary, and each agent's detail in its panel. Progress m
 derive from real task completion, not a decorative timer. Plans have their own
 identity and tab. A typed note is never approval.
 
-A plan's version is the lead's own block in the timeline: the speaker header, then a chip, a
-button with the clipboard icon, "Plan · version 2" and "9 parts" in muted small type, then the
-thumbs-up names under it, the same as under a reply. Text the lead writes after the plan reads
-after the chip, in a block of its own. The chip opens the plan's tab, after the agent's tab, labelled
+A plan's version is a chip in the bubble of the lead's turn that wrote it, where the plan was written
+([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)): a button with the clipboard icon,
+"Plan · version 2" and "9 parts" in muted small type, last when the lead writes nothing after it, and the
+bubble's thumbs-ups (the checker's among them) under it. Text the lead writes after the plan reads after the
+chip, in the same bubble. While the version waits, the bubble's like is the version's: it approves it. The chip
+opens the plan's tab, after the agent's tab, labelled
 "Plan v2" with a close button. The tab reads top to bottom as a task's page does, in the same classes:
 "Version 2" at the top left and, when there is more than one, the versions at the right, `v1 · v2`, muted
 and underlined, the one shown plain; the title; one line with the lead's 16px face and name, the time and

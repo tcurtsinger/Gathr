@@ -110,10 +110,14 @@ fn a_live_turns_topic_costs_the_same_in_a_chat_ten_times_as_long() {
     let (small, large) = (live(6), live(60));
     let topics =
         |found: &[(Option<String>, i64)]| found.iter().map(|f| f.0.clone()).collect::<Vec<_>>();
-    assert_eq!(topics(&small), [Some("t:18".into()), Some("m:m161".into())]);
+    // The lead's hear-back on no task of its own is a main message of its own (0078).
+    assert_eq!(
+        topics(&small),
+        [Some("t:18".into()), Some("b:back5".into())]
+    );
     assert_eq!(
         topics(&large),
-        [Some("t:180".into()), Some("m:m1889".into())]
+        [Some("t:180".into()), Some("b:back59".into())]
     );
     for (s, l) in small.iter().zip(&large) {
         assert!(
@@ -136,17 +140,18 @@ fn the_topics_cost_grows_with_the_chat_not_with_its_rows_times_the_chat() {
     );
 }
 
-/// Found in review: the lead's turn a send-back queued answers the turn that wrote the version, which
-/// is the person's ask's, so it sat in the ask's thread. Its opening line is the version's decided
-/// line: it sits with the version sent back, read whole or one row at a time.
+/// 0078: the lead's turn a send-back queued is a main message of its own, as is the turn that wrote
+/// the version it sent back, read whole or one row at a time; the version's check sits under that
+/// turn.
 #[test]
-fn the_turn_a_send_back_queued_sits_with_the_version_sent_back() {
+fn the_turn_a_send_back_queued_and_the_turn_that_wrote_the_version_are_each_main() {
     let path = std::env::temp_dir().join(format!("gathr-topics-{}.db", crate::ids::uuid()));
     let conn = crate::db::open(&path).unwrap();
     conn.execute_batch(
         "INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('acc', 'claude', 'A', 'a', 0);
          INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('lead', 'Lead', 'lead', 'acc', 0);
          INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 0);
+         INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES ('c', 'lead', 'supervisor', 0);
          INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, opened_by) VALUES
              ('asked', 'c', 'x', 'done', 1, 'lead', 'person');
          INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, answers, opened_by) VALUES
@@ -158,14 +163,26 @@ fn the_turn_a_send_back_queued_sits_with_the_version_sent_back() {
          INSERT INTO asks (id, chat_id) VALUES ('ask', 'c');
          INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'ask', 'lead', 2);
          INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts, decided, decided_line)
-             VALUES (1, 1, 1, 'v1', 'asked', 'Tags', 'x', 2, 'sent_back', 'told');",
+             VALUES (1, 1, 1, 'v1', 'asked', 'Tags', 'x', 2, 'sent_back', 'told');
+         INSERT INTO tasks (number, chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts, checks)
+             VALUES (1, 'c', 'lead', 'lead', 'asked', 'review', 'Check plan v1', 'done', 2, 2, 1);",
     )
     .unwrap();
     let whole = super::Topics::of_chat(&conn, "c").unwrap();
     let rows = super::Topics::on_demand(&conn, "c");
-    let found = [whole.turn("back"), rows.turn("back")].map(|t| t.unwrap().key);
-    assert_eq!(found, ["m:v1", "m:v1"]);
-    assert_eq!(whole.turn("asked").unwrap().key, "m:ask");
+    let found = [
+        whole.turn("back"),
+        rows.turn("back"),
+        whole.turn("asked"),
+        rows.turn("asked"),
+        whole.task(1),
+        rows.task(1),
+    ];
+    let found = found.map(|t| t.unwrap().key);
+    let want = [
+        "b:back", "b:back", "b:asked", "b:asked", "b:asked", "b:asked",
+    ];
+    assert_eq!(found, want);
     rows.src.read().unwrap();
     drop((whole, rows));
     drop(conn);

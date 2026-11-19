@@ -131,7 +131,7 @@ fn refused(data: &Path, answer: &Response, why: &str) {
 }
 
 #[test]
-fn two_picked_agents_each_get_a_turn_the_message_is_saved_once_and_both_answer_in_its_thread() {
+fn two_picked_agents_each_get_a_turn_the_message_is_saved_once_and_each_answer_is_a_main_message() {
     let data = TempDir::new();
     let (service, chat, lead) = team(&data.0, &engine(&data.0, &[], 3), &[]);
     let (ann, bo) = with_bo(&service, &chat, &account_of(&service, &lead));
@@ -162,9 +162,10 @@ fn two_picked_agents_each_get_a_turn_the_message_is_saved_once_and_both_answer_i
             common::opened(&data.0, &json!(turn)),
             (json!("picked"), json!(gathr::words::PICKED))
         );
+        // Each picked agent's answer is a main message of its own (0078).
         assert_eq!(
             turn_of(&shown, turn)["topic"],
-            json!(format!("m:{id}")),
+            json!(format!("b:{turn}")),
             "{shown}"
         );
     }
@@ -221,14 +222,10 @@ fn an_agent_at_work_takes_the_copy_into_its_turn_and_the_free_one_starts_its_own
     assert_ne!(bos, working);
     reads(&data.0, &working, "The person sent this to you and Bo.");
     turn_is(&service, &chat, &bos, &["done"]);
-    let id = person_said(&history(&service, &chat), WORDS)[0]["id"].clone();
     let shown = history(&service, &chat);
-    assert_eq!(
-        turn_of(&shown, &bos)["topic"],
-        json!(format!("m:{}", id.as_str().unwrap()))
-    );
+    assert_eq!(turn_of(&shown, &bos)["topic"], json!(format!("b:{bos}")));
 
-    // Sent to Ann, at work: the message joins her turn, and Bo's turn sits under it all the same.
+    // Sent to Ann, at work: the message joins her turn, and Bo's turn is a main message all the same.
     let again = "@Ann @Bo and the legend's colours?";
     let picks = json!([{ "at": 0, "len": 4, "agent": ann }, { "at": 5, "len": 3, "agent": bo }]);
     let sent = post(
@@ -242,14 +239,10 @@ fn an_agent_at_work_takes_the_copy_into_its_turn_and_the_free_one_starts_its_own
     let later = sent_to(&answer, &bo)["turn"].as_str().unwrap().to_string();
     turn_is(&service, &chat, &later, &["running", "done"]);
     let shown = history(&service, &chat);
-    let id = person_said(&shown, again)[0]["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
     assert_eq!(
         turn_of(&shown, &later)["topic"],
-        json!(format!("m:{id}")),
-        "Bo's turn sits with the message, not with Ann's work: {shown}"
+        json!(format!("b:{later}")),
+        "Bo's answer is a main message, not with Ann's work: {shown}"
     );
     common::topics_agree(&data.0, &chat);
 }
@@ -276,7 +269,6 @@ fn a_reply_with_picks_reaches_its_author_and_each_pick_with_the_reply_line_namin
         theirs["id"].as_str().unwrap(),
         theirs["time"].as_str().unwrap(),
     );
-    let ask = person_said(&shown, "Plan the river walk")[0]["id"].clone();
 
     // A reply to Ann's message that picks Bo and the lead.
     let words = "@Bo @Lead does it pass the old mill?";
@@ -308,7 +300,8 @@ fn a_reply_with_picks_reaches_its_author_and_each_pick_with_the_reply_line_namin
     let sampled = lines[1].replace(to, "<id>").replace(time, "<time>");
     samples::same("reply: a message, to three", &sampled);
     let shown = history(&service, &chat);
-    let thread = json!(format!("m:{}", ask.as_str().unwrap()));
+    // In the thread of Ann's answer, a main message of its own (0078).
+    let thread = json!(format!("b:{asked}"));
     for turn in &turns {
         assert_eq!(turn_of(&shown, turn)["topic"], thread, "{shown}");
     }

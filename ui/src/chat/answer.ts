@@ -44,32 +44,3 @@ export function threadAnswer(t: Thread, main: Answer | undefined, state: ChatSta
   if (t.main?.kind === 'person') return { topic: t.topic, message: t.main.msgs[0].id, agent: lead(state) };
   return main;
 }
-
-/**
- * A chat drawn flat (one agent, or before it became a team): each reply of the person's, and what its turn said after
- * it, sit in a thread under the message it answers. A reply to a reply joins the same thread: threads never nest.
- */
-export function flatThreads(flat: Group[]): Map<Group, Group[]> {
-  const holder = new Map<string, Group>();
-  for (const g of flat) for (const m of g.msgs) holder.set(m.id, g);
-  const mainOf = new Map<Group, Group>();
-  const threads = new Map<Group, Group[]>();
-  const turns = new Map<string, Group>();
-  for (const g of [...flat].sort((a, b) => a.at - b.at)) {
-    const first = g.msgs[0];
-    let main: Group | undefined;
-    if (g.kind === 'person') {
-      const target = first?.reply_to ? holder.get(first.reply_to) : undefined;
-      main = target && (mainOf.get(target) ?? target);
-      // What the turn says after the person's message is about that message: a reply's thread, or none.
-      if (g.turn) {
-        if (main) turns.set(g.turn, main);
-        else turns.delete(g.turn);
-      }
-    } else if (g.turn) main = turns.get(g.turn);
-    if (!main || main === g) continue;
-    mainOf.set(g, main);
-    threads.set(main, [...(threads.get(main) ?? []), g]);
-  }
-  return threads;
-}

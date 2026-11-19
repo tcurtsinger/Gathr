@@ -1,6 +1,7 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Message } from '../api';
-import { answerOf, flatThreads, threadAnswer } from './answer';
+import { versionOf } from '../plans/plans';
+import { answerOf, threadAnswer } from './answer';
 import { askSizes } from './asks';
 import {
   agreedBy,
@@ -12,13 +13,13 @@ import {
   mute,
   personBlock,
   questionBlock,
+  quoteOf,
   saidBlock,
   talkBlock,
-  versionBlock,
 } from './blocks';
 import { fold } from './fold';
 import { type Group, givenBy, grouped, hasEnding, lastBlocks } from './groups';
-import { askOf, handledOf, newest, type Thread, threadsOf, timeOf } from './mains';
+import { handledOf, newest, type Thread, threadsOf } from './mains';
 import {
   briefOf,
   type Cache,
@@ -56,13 +57,14 @@ export function drawn(
   const numbered = new Map(state.tasks.map((t) => [t.number, t]));
   const { quiet, spoken } = talks(groups, state, crew, hasEnding);
   const worked = new Map([...quiet].map(([work, to]) => [to, work]));
+  const { quoted, opened } = openings(groups);
   /**
-   * A block `draw` draws nothing for: its words shown with the message they led to, Gathr's with no line, or a turn's
-   * with no words and nothing to act on, which only the agent's panel shows (`muted`).
+   * A block `draw` draws nothing for: its words shown with the message they led to, Gathr's with no line or quoted in
+   * its turn's bubble, or a turn's with no words and nothing to act on, which only the agent's panel shows (`muted`).
    */
   const drawsNothing = (g: Group) =>
     quiet.has(g) ||
-    (g.kind === 'gathr' && (heardIn.has(g.turn ?? '') || !heard(g, state, crew).length)) ||
+    (g.kind === 'gathr' && (quoted.has(g) || heardIn.has(g.turn ?? '') || !heard(g, state, crew).length)) ||
     mute(g, state, hosts.get(g));
   const muted = new Set<ThreadMessageLike>();
 
@@ -109,7 +111,7 @@ export function drawn(
         return talkBlock(cache, g, state, crew, { spoken, did, place });
       }
       case 'gathr': {
-        const lines = heardIn.has(g.turn ?? '') ? [] : heard(g, state, crew);
+        const lines = heardIn.has(g.turn ?? '') || quoted.has(g) ? [] : heard(g, state, crew);
         if (!lines.length) return null;
         head();
         return eventsOf(cache, g.key, lines, g.msgs[0].time, place);
@@ -128,19 +130,17 @@ export function drawn(
           { size: sizes.get(g.msgs[0].id), agreed: agreedBy(state, crew, g.msgs[0].id) },
           place,
         );
-      case 'version':
-        // Named as the lead's reply blocks are: the lead's turn works on no task.
-        return versionBlock(
-          cache,
-          g,
-          state,
-          crew,
-          head(`${state.turns[g.turn ?? '']?.agent}|undefined`),
-          place,
-        );
       default: {
         const h = heading(g, place.topic);
-        return block(cache, g, state, crew, gave, { ...h, head: head(h.who), asked, place, ticked });
+        const quote = opened.get(g);
+        return block(cache, g, state, crew, gave, {
+          ...h,
+          head: head(h.who),
+          asked,
+          place,
+          ticked,
+          opened: quote,
+        });
       }
     }
   };
@@ -151,50 +151,20 @@ export function drawn(
   const spots = new Map<Group, { id: string; topic?: string }>();
   const handled = new Set<string>();
   const taskMains = new Map<number, string>();
-  const isTeam = state.members.length > 1;
-  const since = isTeam
-    ? Date.parse(state.teamSince ?? '') || Number.NEGATIVE_INFINITY
-    : Number.POSITIVE_INFINITY;
-  const flat = isTeam ? groups.filter((g) => timeOf(g, state) < since) : groups;
-  const run: { speaker?: string } = {};
   let newLined = false;
-  // Drawn flat, but a reply to an older message makes a thread under it (0076).
-  const under = flatThreads(flat);
-  const inThread = new Set([...under.values()].flat());
-  for (const g of flat) {
-    if (inThread.has(g)) continue;
-    const answer = answerOf(g, flatTopic(g), state);
-    const replies = under.get(g);
-    if (replies || (answer && answer.topic === view?.replying)) {
-      const t: Thread = { topic: flatTopic(g), main: g, replies: replies ?? [], at: 0 };
-      drawThread(t, undefined);
-      continue;
-    }
-    const item = draw(g, answer ? { answer } : {}, run);
-    if (!item) continue;
-    every.push(item);
-    if (muted.has(item)) continue;
-    newLineAbove(item);
-    items.push(item);
-    all.push(item);
-    spots.set(g, { id: item.id as string });
+  // One rule for every chat (0078): a chat of one reads as one timeline because what its agent says is said to the
+  // person. A main message right after the same speaker's isn't named again, until a thread's replies show between.
+  const mainRun: { speaker?: string } = {};
+  const topics = topicsOf(groups, state, spoken, hosts);
+  const threads = threadsOf(groups, topics, state);
+  // Each ask's newest result, by its topic: the result quotes the ask.
+  const results = new Map<string, string>();
+  for (const t of threads) {
+    const ask = t.topic.startsWith('r:') ? state.turns[t.topic.slice(2)]?.result_of : undefined;
+    if (ask) results.set(ask, t.topic);
   }
-
-  if (isTeam) {
-    const before = new Set(flat);
-    const rest = flat.length ? groups.filter((g) => !before.has(g)) : groups;
-    const topics = topicsOf(rest, state, spoken, hosts);
-    const threads = threadsOf(rest, topics, state);
-    // Each ask's newest result, by its topic: the result quotes the ask.
-    const results = new Map<string, string>();
-    for (const t of threads) {
-      const turn = t.topic.startsWith('r:') ? t.topic.slice(2) : undefined;
-      const ask = turn && askOf(turn, state, topics, rest);
-      if (ask) results.set(ask, t.topic);
-    }
-    const closes = new Map([...results].map(([ask, topic]) => [topic, ask]));
-    for (const t of threads) drawThread(t, closes.get(t.topic));
-  }
+  const closes = new Map([...results].map(([ask, topic]) => [topic, ask]));
+  for (const t of threads) drawThread(t, closes.get(t.topic));
 
   // A send that opened a turn fails that turn too, and the turn's notice already says so.
   const told = new Set(Object.values(state.turns).map((t) => t.ref));
@@ -226,9 +196,9 @@ export function drawn(
     const reply: Place = { topic: t.topic, reply: true };
     const drawnReplies: { g: Group; item: ThreadMessageLike }[] = [];
     const everyReply: ThreadMessageLike[] = [];
-    const run: { speaker?: string } = {};
+    const replyRun: { speaker?: string } = {};
     for (const g of replies) {
-      const item = draw(g, { ...reply, answer: answerOf(g, t.topic, state) }, run);
+      const item = draw(g, { ...reply, answer: answerOf(g, t.topic, state) }, replyRun);
       if (!item) continue;
       everyReply.push(item);
       if (!muted.has(item)) drawnReplies.push({ g, item });
@@ -251,22 +221,27 @@ export function drawn(
       const own = answerOf(g, t.topic, state);
       // Reply on a main message answers it as its thread's: the person's own ask only once it has a thread.
       const answer = g.kind === 'person' && !count ? undefined : threadAnswer({ ...t, main: g }, own, state);
-      return { open, item: draw(g, { ...mainPlace, thread, answer }, {}, !!ask) };
+      // Drawn again only when it turned out to need the person: the run as it stood before it.
+      const named = { ...mainRun };
+      const item = draw(g, { ...mainPlace, thread, answer }, named, !!ask);
+      return { open, item, named };
     };
     // A turn that ended needing the person (Retry, Continue, Sign in) keeps its thread from being handled; a reply the
     // person hasn't seen keeps it open (0077).
     const seen = view?.seen;
     const unseen = !!seen && times.some((x) => x > seen(t.topic));
     let done = settled && !replyItems.some(needsYou) && !unseen;
-    let { open, item: main } = drawMain(done);
+    let { open, item: main, named } = drawMain(done);
     if (main && done && needsYou(main)) {
       done = false;
-      ({ open, item: main } = drawMain(false));
+      ({ open, item: main, named } = drawMain(false));
     }
     if (!main) {
       every.push(...everyReply);
       return;
     }
+    // After a task's message, which always names its giver, the next main message is named again.
+    mainRun.speaker = named?.speaker;
     if (done) handled.add(t.topic);
     if (t.task) taskMains.set(t.task.number, main.id as string);
     newLineAbove(main);
@@ -292,6 +267,7 @@ export function drawn(
       );
     }
     items.push(...shown);
+    if (shown.length) mainRun.speaker = undefined;
     const showing = new Set(shown);
     for (const { g, item } of drawnReplies)
       spots.set(g, { id: item.id as string, ...(!showing.has(item) && { topic: t.topic }) });
@@ -326,10 +302,25 @@ export function drawn(
     );
   }
 
-  /** A block's thread in a chat drawn flat: its own, by the message Reply on it answers. */
-  function flatTopic(g: Group): string {
-    const words = g.msgs.findLast((m) => m.kind === 'text') ?? g.msgs[0];
-    return `m:${words?.id ?? g.key}`;
+  /**
+   * Gathr's words that open a turn and draw something (a wait's result, a wake-up, a carry-on, Sent back), quoted at the
+   * top of that turn's first bubble that draws (0078); with no such bubble yet, they draw as Gathr's line.
+   */
+  function openings(all: Group[]) {
+    const quoted = new Map<Group, Group>();
+    const opened = new Map<Group, string>();
+    for (const g of all) {
+      if (g.kind !== 'gathr' || !g.bound || !g.turn || heardIn.has(g.turn)) continue;
+      const lines = heard(g, state, crew);
+      if (!lines.length) continue;
+      const bubble = all.find(
+        (b) => b.kind === 'reply' && b.turn === g.turn && !quiet.has(b) && !mute(b, state, hosts.get(b)),
+      );
+      if (!bubble) continue;
+      quoted.set(g, bubble);
+      opened.set(bubble, quoteOf(lines));
+    }
+    return { quoted, opened };
   }
 
   function needsYou(item: ThreadMessageLike) {
@@ -363,8 +354,9 @@ export function drawn(
     const m = (hit?.copy_of && state.messages.find((x) => x.id === hit.copy_of)) || hit;
     if (!m) return undefined;
     const own = groups.find((g) => g.msgs.includes(m));
-    const at = own && spots.get(own);
-    if (at && own && m.kind === 'text' && own.kind !== 'gathr') {
+    // Gathr's quoted words show in their turn's bubble, and a version as its chip there: no words of the bubble's.
+    const at = own && (spots.get(own) ?? spots.get(quoted.get(own) as Group));
+    if (at && own && m.kind === 'text' && own.kind !== 'gathr' && !versionOf(state.plans, m.id)) {
       const words = (x: Message) => (x.to ? (spoken.get(x.id)?.text ?? x.body) : x.body);
       const before = own.msgs.slice(0, own.msgs.indexOf(m));
       const nth = before.filter((x) => x.kind === 'text' && words(x) === words(m)).length;

@@ -615,6 +615,14 @@ Parts: 6.4, 6.5
 - **Given** a chat with one agent
 - **When** the person replies to an older answer of the agent
 - **Then** the reply and the answer to it sit in a thread under that older answer; the rest stays flat
+- **Given** a team chat (0078)
+- **When** the person asks the lead, the lead plans and its check leaves findings, the lead hears back, writes the
+  next version and later reports, and the person picks two agents with @
+- **Then** the lead's answer is a main message right under the person's message, whole, its plan chip in its bubble
+  where it wrote the plan; the check, its line and Approve's line sit in the thread of the bubble that holds that
+  version; each hear-back of the lead's is a main message, the one that closes the ask its result; each picked agent's
+  answer is a main message; Gathr's words that opened a turn (a wait's result, a carry-on, Sent back) are the quote at
+  the top of its bubble, with no message of Gathr's for them
 
 ### 6k. The chat says what each main message waits on
 

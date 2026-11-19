@@ -262,6 +262,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Gathr's words that opened the turn (0078): up to three lines, cut with an ellipsis. */
+.bubble-quote[data-lines="3"] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
 /* An @Name: the accent blue, no underline, so a link stays told apart. It opens the first line of the words: the
    words' first paragraph runs on after it, so the bubble fits them both. */
 .mention {

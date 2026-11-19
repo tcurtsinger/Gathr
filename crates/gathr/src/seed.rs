@@ -56,7 +56,7 @@ pub struct Seeded {
     pub events: u32,
 }
 
-/// Adds the seven chats in one transaction, and the files of the person's tasks under `files`.
+/// Adds the eight chats in one transaction, and the files of the person's tasks under `files`.
 /// Each run adds a new set.
 pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Error> {
     let tx = conn.transaction()?;
@@ -73,6 +73,7 @@ pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Er
     s.team_chat()?;
     s.asks()?;
     s.threads_chat()?;
+    s.one_agent_chat()?;
     let made = s.made;
     tx.commit()?;
     Ok(made)

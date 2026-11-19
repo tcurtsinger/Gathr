@@ -99,3 +99,8 @@ This reverses the change of 2026-11-18 above for every block with words or steps
 with none of these and nothing to act on draws nothing. The agent's panel draws a block the same way (its name
 line keeps the task); its Now keeps the running turn's whole row. Proof: `ui/src/chat/turn.test.tsx`,
 `ui/src/chat/nameLine.test.tsx`, `ui/src/chat/marks.test.tsx`.
+
+## Amended by [0078](0078-said-to-you-is-main-one-bubble-per-turn.md)
+
+- A plan version no longer splits its turn: it is a chip among the bubble's pieces, where it was written. A chat of one
+  is drawn by the same rule as a team's, and reads as one timeline because what its agent says is said to the person.
