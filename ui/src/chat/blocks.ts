@@ -29,9 +29,9 @@ export interface Heading {
 
 /**
  * A block of an agent's turn: its words where it wrote them, each run of steps between them one line (the owner's call
- * of 2026-11-19), a plan version it wrote as its chip, and Gathr's words that opened the turn as its quote (0078). One
- * that didn't change is the same object as on the draw before (`cache`), so the thread can tell which blocks to draw
- * again.
+ * of 2026-11-19), a plan version it wrote as its chip, a plan check's findings as the chip that ends it, and Gathr's
+ * words that opened the turn as its quote (0078). One that didn't change is the same object as on the draw before
+ * (`cache`), so the thread can tell which blocks to draw again.
  */
 export function block(
   cache: Cache,
@@ -94,6 +94,10 @@ export function block(
   // In the agent's panel, a tick after the task once it is done; a blocked, stopped or held task is its owner's face's
   // mark, never a tick (0071).
   const done = !!on && lastOfTask && task?.state === 'done';
+  // A plan check that left findings ends its checker's last bubble with them (0078). Only a plan check: a code
+  // review's notes stay in the Tasks view and the fix's brief.
+  const left = lastOfTask && task?.checks != null && task.report?.how === 'left' && !!task.notes?.length;
+  const findings = left ? task.notes : undefined;
   const seat = crew.seated(turn?.agent);
   const who = `${agent}|${role}|${seat}|${on}|${done}|${head}|${tick}|${agreed}|${JSON.stringify(like)}`;
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
@@ -101,7 +105,7 @@ export function block(
   const status = group.last ? turn?.status : '';
   const sig = `${parts}|${partial.length}|${status}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}|${
     opened
-  }|${JSON.stringify([...chips])}`;
+  }|${JSON.stringify([...chips])}|${JSON.stringify(findings)}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -123,6 +127,7 @@ export function block(
   };
   if (end) custom.ending = end;
   if (opened) custom.opened = opened;
+  if (findings) custom.findings = findings;
   const value = toReply(group, partial, group.last ? turn : undefined, custom, { gave, chips });
   cache.set(group.key, { sig, value });
   return value;

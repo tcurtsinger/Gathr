@@ -50,7 +50,8 @@ export const counted = (n: number, word: string) => `${n} ${word}${n === 1 ? '' 
 /**
  * Gathr's line for a plan (0062 H5.2), found by the message that says it, never by its words: a version's
  * check line, or the person's word on it (Approve's and Drop's lines, the send-back's turn). A check that agrees
- * has no line (null): it is the checker's thumbs-up on the version (0072).
+ * has no line (null): it is the checker's thumbs-up on the version (0072); nor has one that left findings, which the
+ * chip in the checker's bubble says (0078).
  */
 export function planLine(m: Message, state: ChatState, crew: Team): EventLine | null | undefined {
   for (const plan of state.plans) {
@@ -63,11 +64,10 @@ export function planLine(m: Message, state: ChatState, crew: Team): EventLine | 
         plan: { id: plan.id, version: v.n },
       });
       if (v.check_line === m.id) {
-        const said = checked(v, m, state, crew);
-        if (said === null) return null;
-        if (!v.sent) return line(said, plan.title);
+        const by = unfinished(v, m, state, crew);
+        if (by === null) return null;
         // The version reached the person before its check ended: Gathr says so in a sentence of its own (0073).
-        const text = `Plan v${v.n} came to you before ${said} finished checking it.`;
+        const text = `Plan v${v.n} came to you before ${by} finished checking it.`;
         return { kind: 'version', text, more: plan.title, plan: { id: plan.id, version: v.n } };
       }
       if (v.decided_line !== m.id) continue;
@@ -81,22 +81,21 @@ export function planLine(m: Message, state: ChatState, crew: Team): EventLine | 
 }
 
 /**
- * How the check ended when its line was said: a version that didn't reach the person has findings; one that
- * did was agreed only by a report made by then, as a check that ran late can agree after Gathr sent it on,
- * else it is the checker's, who hadn't finished. Agreed, it has no words: null.
+ * Who hadn't finished the check when its line was said, for a version that reached the person; null for one that
+ * didn't (it has findings) and for a check agreed by a report made by then, as a check that ran late can agree after
+ * Gathr sent it on.
  */
-function checked(v: PlanVersionSummary, line: Message, state: ChatState, crew: Team): string | null {
+function unfinished(v: PlanVersionSummary, line: Message, state: ChatState, crew: Team): string | null {
+  if (!v.sent) return null;
   const check = state.tasks.findLast((t) => t.checks === v.id);
-  const by = crew.name(check?.owner) ?? 'An agent';
-  if (!v.sent) return counted(check?.notes?.filter((n) => n.kind !== 'suggestion').length ?? 0, 'finding');
   const at = check?.report?.at_us;
   const agreed = check?.state === 'done' && (at == null || at <= (Date.parse(line.time) + 1) * 1000);
-  return agreed ? null : by;
+  return agreed ? null : (crew.name(check?.owner) ?? 'An agent');
 }
 
 /** Who agreed with a version by checking it, as its check line said (0062): their thumbs-up on it (0072). */
 export function agreedCheck(v: PlanVersionSummary, state: ChatState, crew: Team): string[] {
   const line = state.messages.find((m) => m.id === v.check_line);
   const by = crew.name(state.tasks.findLast((t) => t.checks === v.id)?.owner);
-  return line && by && checked(v, line, state, crew) === null ? [by] : [];
+  return line && by && v.sent && unfinished(v, line, state, crew) === null ? [by] : [];
 }

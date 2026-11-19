@@ -112,3 +112,6 @@ Where the code differs from the detail the owner approved, the code stands.
 - [0078](0078-said-to-you-is-main-one-bubble-per-turn.md): a version is a chip in the bubble of the lead's turn that wrote it, where it wrote it, and no message of
   its own; its check and Gathr's lines about it sit in the thread of that bubble, and the turn a send-back started is the
   lead's next main message, quoting "Sent back" and the person's words. While it waits, the bubble's like approves it.
+  Since 2026-11-19 the check's findings line ("Plan v1: 3 findings") is no longer drawn: a chip at the end of the
+  checker's bubble says "3 findings" and opens to each note; a note's kind `unasked` reads "Not asked for", in the
+  plan's tab and the Tasks view too, drawn by one component (`ui/src/tasks/Note.tsx`) in place of `noteLine`.

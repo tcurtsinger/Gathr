@@ -1,4 +1,4 @@
-import type { PersonAnswer, PersonTask, ReviewNote, Task, TaskField } from '../api';
+import type { PersonAnswer, PersonTask, Task, TaskField } from '../api';
 import { began, list } from '../chat/team';
 
 /** Who asks a question no agent gave: Gathr itself, as the far end's stop does (0054). */
@@ -127,16 +127,6 @@ export function reviewedAt(task: Task): string | null {
   return task.pr && task.pr_head
     ? `${at}. Out of date: #${task.pr} is at ${short(task.pr_head)}`
     : `${at}. Out of date`;
-}
-
-const kinds = { wrong: 'Wrong', unasked: 'Unasked', suggestion: 'Suggestion' };
-
-/** A review's note in a line: "Unasked · src/cache.rs: what it is" (0053). */
-export const noteLine = (n: ReviewNote) => `${kinds[n.kind]} · ${n.file ? `${n.file}: ` : ''}${n.says}`;
-
-/** A review's notes, one line each. */
-export function noteLines(task: Task): string[] {
-  return (task.notes ?? []).map(noteLine);
 }
 
 /** A task's size: "src/export.ts, about 120 lines". */

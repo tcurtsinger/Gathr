@@ -287,8 +287,29 @@
   margin-top: 12px;
   background: var(--background);
 }
-.bubble > .plan-chip:first-child {
+.bubble > .plan-chip:first-child,
+.bubble > .findings:first-child > .plan-chip {
   margin-top: 0;
+}
+/* A plan check's findings (0078): the chip's chevron turns down when open, each note on the chat's surface under it. */
+.findings-chip[data-state="open"] .findings-open {
+  rotate: 90deg;
+}
+.findings-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.findings-notes li {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--background);
+  overflow-wrap: anywhere;
 }
 
 /* A thumbs-up: the emoji and the count, no box. Who gave it shows on hover or focus: names, not help. */

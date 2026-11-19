@@ -238,9 +238,10 @@ test('a check line says the outcome the version reached the person with', () => 
   const said = (state: ChatState) =>
     view(state)
       .flatMap((m) => custom(m).events ?? [])
-      .find((e) => e.kind === 'version')?.text;
+      .find((e) => e.kind === 'version' && e.text !== 'Approved')?.text;
   const unfinished = 'Plan v1 came to you before Bo finished checking it.';
-  expect([findings, late, failed].map(said)).toEqual(['2 findings', unfinished, unfinished]);
+  // Findings have no line: the chip in the checker's bubble says them (0078).
+  expect([findings, late, failed].map(said)).toEqual([undefined, unfinished, unfinished]);
   // None of them is a thumbs-up on the bubble that holds the version.
   const first = (state: ChatState) => custom(view(state).find((m) => m.id === 'a-ask')).agreed;
   expect([findings, late, failed].map(first)).toEqual([[], [], []]);
@@ -287,7 +288,7 @@ test("a hear-back draws no line: the plan's own lines say how its check ended", 
   const lines = view(state).flatMap((m) => custom(m).events ?? []);
   expect(
     lines.filter((e) => e.kind === 'task' || e.kind === 'version').map((e) => `${e.who} ${e.text}`),
-  ).toEqual(['Plan v1: 1 finding', 'Plan v2: Approved']);
+  ).toEqual(['Plan v2: Approved']);
 });
 
 test('a give_task call in the same turn as the plan keeps its label', () => {

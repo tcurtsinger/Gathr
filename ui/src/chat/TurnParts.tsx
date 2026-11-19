@@ -1,4 +1,14 @@
-import { Bell, CircleCheck, CircleHelp, ClipboardList, FilePen, PenLine, Send } from 'lucide-react';
+import {
+  Bell,
+  ChevronRight,
+  CircleCheck,
+  CircleCheckBig,
+  CircleHelp,
+  ClipboardList,
+  FilePen,
+  PenLine,
+  Send,
+} from 'lucide-react';
 import { createContext, useState } from 'react';
 import {
   CollapsibleContent,
@@ -7,7 +17,9 @@ import {
 } from '@/components/assistant-ui/elements/collapsible-root';
 import { RunActivity, type RunActivityEntry } from '@/components/assistant-ui/elements/run-activity';
 import { ToolCall } from '@/components/assistant-ui/elements/tool-call';
+import type { ReviewNote } from '../api';
 import { counted } from '../plans/plans';
+import { Note } from '../tasks/Note';
 import type { Step, Work } from './fold';
 import type { EventLine } from './messages';
 import { LiveTime } from './Steps';
@@ -120,6 +132,33 @@ export function PlanChip({ version, parts, onOpen }: { version: number; parts: n
       <span>Plan · version {version}</span>
       <small>{counted(parts, 'part')}</small>
     </button>
+  );
+}
+
+/**
+ * A plan check's findings at the end of its checker's bubble (0078), in the plan chip's shape: "7 findings" (wrong and
+ * not asked for), or "2 suggestions" for a report of suggestions only. A press opens it to each note, in order.
+ */
+export function FindingsChip({ notes }: { notes: ReviewNote[] }) {
+  const found = notes.filter((n) => n.kind !== 'suggestion').length;
+  return (
+    <CollapsibleRoot className="findings">
+      <CollapsibleTrigger className="plan-chip findings-chip">
+        <CircleCheckBig aria-hidden="true" />
+        <span>{found ? counted(found, 'finding') : counted(notes.length, 'suggestion')}</span>
+        <ChevronRight className="findings-open" aria-hidden="true" />
+      </CollapsibleTrigger>
+      <CollapsibleContent asChild>
+        <ul className="findings-notes">
+          {notes.map((note, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: two notes may read the same
+            <li key={i}>
+              <Note note={note} />
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </CollapsibleRoot>
   );
 }
 
