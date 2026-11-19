@@ -157,7 +157,8 @@ pub fn live_tasks(
     }
 }
 
-/// At start, before the turns left waiting are taken over: tasks cut off by the stop are stopped.
+/// At start, before the turns left waiting are taken over: turns cut off by the stop carry on. When
+/// that fails, they stay running for the next start, and the error has a reference.
 pub async fn recover(chats: &Arc<Chats>) {
     let recovered = chats.writer.call(tasks::recover).await;
     let event = Event::point("gathr.task.recover");
@@ -165,9 +166,12 @@ pub async fn recover(chats: &Arc<Chats>) {
         Some(Ok(n)) => chats
             .writer
             .record(event.ok().attr("gathr.task.stopped", n)),
-        Some(Err(e)) => chats
-            .writer
-            .record(event.error("sqlite").attr("why", e.to_string())),
+        Some(Err(e)) => chats.writer.record(
+            event
+                .trace(&gathr::ids::trace_id())
+                .error("sqlite")
+                .attr("why", e.to_string()),
+        ),
         None => {}
     }
 }

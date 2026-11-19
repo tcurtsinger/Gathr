@@ -357,6 +357,11 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          work, then continue.",
     ),
     (
+        "carry_on",
+        "carry_on: restart",
+        "Gathr's restart ended your turn. Check what is already done before repeating work, then continue.",
+    ),
+    (
         "liked",
         "liked: a message",
         "The person liked your message <id> of <time>: \"Hi!\". A like means they approve it or agree. \

@@ -90,13 +90,18 @@ fn a_turn_that_ends_with_nothing_said_fails() {
     assert!(turn["ref"].is_string(), "{history}");
 }
 
-/// A turn a restart cut didn't fail: its message reached the agent, which can carry on. It reads stopped, cut by
-/// the restart (`end`), and its reference leads to the cut.
+/// A turn a restart cut didn't fail: its message reached the agent, which carries on. It reads stopped, cut by
+/// the restart (`end`), and its reference leads to the cut. On no task, it carries on all the same.
 #[test]
-fn a_turn_a_restart_cut_reads_stopped_not_failed() {
+fn a_turn_a_restart_cut_reads_stopped_not_failed_and_carries_on() {
     let data = TempDir::new();
     let held = held_recording(&data.0, "signed_in");
-    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &held)]);
+    let go = data.0.join("go");
+    let env = [
+        ("GATHR_REPLAY", held.as_path()),
+        ("GATHR_REPLAY_HOLD", go.as_path()),
+    ];
+    let service = TestService::with_engine(&data.0, &env);
     service.signed_in(&data.0);
     let chat = service.new_chat();
     let path = format!("/api/chats/{chat}/messages");
@@ -107,7 +112,7 @@ fn a_turn_a_restart_cut_reads_stopped_not_failed() {
     });
     service.stop();
 
-    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &held)]);
+    let service = TestService::with_engine(&data.0, &env);
     let history = service.call("GET", &format!("/api/chats/{chat}")).json();
     let turn = &history["turns"][0];
     let ended = (turn["status"].as_str(), turn["end"].as_str());
@@ -116,4 +121,13 @@ fn a_turn_a_restart_cut_reads_stopped_not_failed() {
     let (ok, traced) = gathr(&data.0, &["diag", "trace", reference]);
     assert!(ok, "{traced}");
     assert!(traced.to_string().contains("gathr.turn.cut"), "{traced}");
+
+    std::fs::write(&go, "").unwrap();
+    let history = service.wait_for(&chat, 10, "the carry-on's end", |h| {
+        h["turns"][1]["status"] == "done"
+    });
+    let turns = history["turns"].as_array().unwrap();
+    assert_eq!(turns.len(), 2, "one carry-on: {history}");
+    assert_eq!(turns[1]["answers"], turns[0]["id"], "{history}");
+    assert!(turns[1]["task"].is_null(), "{history}");
 }
