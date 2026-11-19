@@ -218,8 +218,8 @@ replies and reactions"), the same on main messages, replies, a chat of one agent
 right: a main message's fold line when it has replies, the thumbs-up count when it has one, then at the right
 MessageActions (`ui/src/components/MessageActions.tsx`): Reply (a reply arrow, named "Reply"), then the person's like
 (a thumbs-up named "Like", pressed: the attention blue), 24px icon buttons with 15px icons, muted until pointed at,
-icons only, no hover text. The buttons show while the message is pointed at or holds keyboard focus (by opacity, as
-the steps in the agent's panel are, so Tab reaches them) in a spot the row always keeps, so nothing above, below or
+icons only, no hover text. The buttons show while the message is pointed at or holds keyboard focus (by opacity, so
+Tab reaches them) in a spot the row always keeps, so nothing above, below or
 beside moves when they show. The bubble and the row share one box as wide as the wider of the two: the buttons end at
 the bubble's bottom right edge, or, under a bubble narrower than the row's own content, right after the fold line and
 the count. Nothing of the row covers the bubble's words, its name line or the next message: it sits under
@@ -275,13 +275,25 @@ face is "Y" on the accent surface. The bubble fits its words up to the column: t
 the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 8px 13px padding, 15px
 words at 450 and 1.45, paragraphs and what sits between them 10px apart, list items 3px, inline code
 0.88em on a 6% tint, a code block on the chat's own surface. A bubble with a table takes the column, so
-the table fills it as before. A message with no words and nothing the person can act on draws nothing in the chat
-(the owner's call of 2026-11-18): an agent at work before its first word, or a turn that only ran steps. Its face's
-mark says it works, the agent's panel lists it, and it counts nowhere: not in a thread's replies or new replies, not
-in the New pill, not on the map, not where a search hit lands. Its words show in their place as they stream in. A
-block with no words but with an approval, a question, or Retry, Continue or Sign in under it shows, named, with the
-time. When anything other than a bubble follows the name line (a notice, an approval), the face sits level with it
-as with a bubble, 5px under the name line.
+the table fills it as before.
+
+**A turn reads as Claude's app reads it** (the owner's call of 2026-11-19, reversing 2026-11-18's "a turn with no
+words draws nothing"): in the agent's one bubble, in the order they came, every piece of words it wrote, drawn as the
+message's Markdown, and between them each run of steps (tool calls, thoughts, tasks it gave) folded to one quiet line,
+14px muted with a chevron: assistant-ui's Run activity. Closed and finished, the line says what the run did, counted
+by kind, short: "Read 2 files, ran 1 command", "Ran 3 commands", "Edited 1 file", "Gave 2 tasks", at most three kinds
+and then "and 2 more"; a tool of no counted kind is a plain "2 steps", a thought is not counted, and a run of only a
+thought reads as the thought does, "Thought for 9s" (the counted kinds are `COUNTED` in `ui/src/chat/fold.ts`). A
+press or Enter opens it to its steps, each as the panel draws it (below). While a run is going its line is the
+working line: "Working · 1m 04s", shimmering, its latest step under it ("Running a command"). The bubble shows from
+the moment the turn runs, before any word or step, holding the working line alone; a turn only queued behind
+another draws nothing. Words never move into a line and never leave the chat: when the turn ends nothing moves, the
+last run's line turns into its finished words, and the final words are the last piece. A message between agents
+from a turn that only sent it has that turn's runs as lines above its words. A block with no words, no steps, no
+running turn and nothing to act on (a turn Gathr dropped before it ran) draws nothing and counts nowhere. A block
+with no bubble but with an approval or Retry, Continue or Sign in under it shows, named, with the time. When
+anything other than a bubble follows the name line (a notice, an approval), the face sits level with it as with a
+bubble, 5px under the name line.
 
 Above the bubble, one name line, 20px: the name at 15px/650, 8px, then the time, 12.5px at 450, muted, tabular
 figures, and on a reply said while the person was away "New" (below), with "·" between them 6px each side. Nothing
@@ -290,21 +302,16 @@ turn or its task ended. The person's own message ends with its ask's size (below
 can be done about how a turn ended: why a send failed, the reference (12px mono, dotted underline, opening
 Diagnostics) and one outline button 26px high, Continue (after the person's stop or a restart, until its carry-on
 starts), Retry or Sign in (0051). A block that follows its speaker's in the same turn has no face or name line and
-lines up with the one above, unless it has no words. The face opens the agent's panel while the agent is in the chat, in a chat of
+lines up with the one above, unless it has no bubble. The face opens the agent's panel while the agent is in the chat, in a chat of
 one too (0028's list kept for one); its card names the Supervisor there as in a team.
 
-A chat of one agent has its agent's panel as a team has (0028), so its steps are read there too. In the agent's panel (**Agent panel**), the
-same name line also says, for a member or reviewer, "on" the task its turn
-works on, cut with an ellipsis (not in that task's own thread), and a 12px tick on its last message once that task is
-done; then the turn's steps end the line: "· 10 steps · gave 2 tasks · 6m 40s · 1 failed ›", one
-part omitted when it is zero, "1 failed" and "1 refused" in the danger colour, the time ticking while it runs. They show
-while the message is pointed at or has keyboard focus, and always for a failed step, an agent still
-working, steps opened or a block with no words (no text and no plan chip), whose steps are all it has; at rest the line holds its place. Click or Enter opens the steps under the name
-line, above the bubble: each tool call as a step in plain words from the tool's name, Failed in the
-danger colour on a failed one; a task it gave reads "Gave Cass a
-task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip reads
-"#119 Look into: Survey tag libraries", 0063); what it wrote between
-steps shows as muted lines. A step that kept what it ran
+A chat of one agent has its agent's panel as a team has (0028). In the agent's panel (**Agent panel**), its blocks
+are drawn as in the chat, runs and words in one bubble, and the same name line also says, for a member or reviewer,
+"on" the task its turn works on, cut with an ellipsis (not in that task's own thread), and a 12px tick on its last
+message once that task is done. A run opened shows each tool call as a step in plain words from the tool's name,
+Failed in the danger colour on a failed one, Refused in the danger colour on a call Gathr refused; a task it gave
+reads "Gave Cass a task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip
+reads "#119 Look into: Survey tag libraries", 0063). A step that kept what it ran
 ([0041](docs/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
 status icon, a short label, the chip ("Ran" then "git merge origin/main"; also
 Read, Edited, Searched, Fetched, Searched the web, Ran a sub-agent). When the engine gave the
@@ -315,10 +322,9 @@ the shared tooltip. A step that kept
 nothing reads as before ("Ran a command"). A thought ([0042](docs/decisions/0042-thinking.md)) is a step
 of its own, in order with the others: "Thought for 9s", with no chip and nothing to open; one under a
 second is left out, and thoughts are not counted in "6 steps". Thoughts with nothing between them are one
-step, with their time together. While a turn runs, the panel's Now shows its steps opened, what the agent is doing
-now (Running a command, Thinking) on the running one. The turn's last text is the
-message. A turn that only wrote once has no steps, nor has one whose only work was a thought under a
-second.
+step, with their time together. While a turn runs, the panel's Now shows all its steps opened, what it wrote
+between them as muted lines, and what the agent is doing now (Running a command, Thinking) on the running one. A
+turn that only wrote has no line, nor has one whose only work was a thought under a second.
 
 A main message says nothing of where it stands (the owner, 2026-11-18: "Remove all of it"): no state, mark or PR at
 its name line's right. The marks on the faces, Summary and the Tasks views say it.
@@ -328,7 +334,7 @@ A task the lead hands out is drawn from its record, as no message carries the ha
 @Name and the task's title at 600 (a press opens it in the Tasks tab), and under it the first line of why it was
 given, 14px at 78%, cut with an ellipsis, then "More" (13px muted, dotted underline) that opens the rest of why and
 the brief's Done when, Proof, Where and Size in place; "Less" closes them. The lead's turn that gave it stays in
-the ask's thread; in the agent's panel its steps say "gave 3 tasks".
+the ask's thread, its line saying "Gave 3 tasks".
 
 An ask's result is the lead's own block, at the bottom, opening with a plain quote of the ask's first line (the
 quote style below): a press on it scrolls up to the ask and holds it there, as a search hit does.
@@ -367,7 +373,8 @@ message it answers sits (the one Gathr carried into its turn from the agent it w
 opens with the agent's @Name in the accent blue at the words' weight, no underline, unless it quotes what it
 answers: when something came between the two, the answered words lead the bubble plainly, one line cut with an
 ellipsis, 13px muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no
-block of its own: in the agent's panel its steps are on its first message's name line. Gathr's copy of a message in
+block of its own: its runs of steps are lines at the top of its first message's bubble, the working line while it
+runs. Gathr's copy of a message in
 the receiver's turn
 is never shown.
 A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box: an agent's, or
@@ -579,8 +586,8 @@ left the chat keeps its words, and its steps in Plan, but has nothing to open.
 - **Now:** its running turn's row, the timeline's own, with its steps showing. A turn that has done
   nothing yet reads Working; one that only waits on the person has no Now.
 - **Earlier in this chat:** its earlier blocks, newest first, drawn by the timeline's own components
-  at 15px, each headed by its name and time, the task it worked on, and its steps (the chat shows none, the owner's
-  call of 2026-11-18): its turns, those that only ran steps too, and what it wrote to other agents. The latest
+  at 15px, each headed by its name and time and the task it worked on, its words and runs of steps as the chat draws
+  them: its turns, those that only ran steps too, and what it wrote to other agents. The latest
   10; older ones stay in the chat.
 - **Tasks in this chat:** every task of its own, cancelled ones too, open ones first, five before Show more, as
   the Tasks tab's rows without the face or the name: "#22 · Merging". A row opens the task.

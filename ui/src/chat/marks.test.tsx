@@ -97,12 +97,15 @@ const stands = (id: string, state: Standing['state'], more: Partial<Standing> = 
 });
 const twoMinutes = () => (Date.now() - 125_000) * 1000;
 
-function service(third = stands('c', 'cant_run', { what: 'Failed', task: 8, since_us: twoMinutes() })) {
+function service(
+  third = stands('c', 'cant_run', { what: 'Failed', task: 8, since_us: twoMinutes() }),
+  said = history,
+) {
   const waiting = { lines: [], agents: [stands('a', 'free'), stands('b', 'working'), third], gathr: [] };
   vi.stubGlobal('fetch', async (path: string) => {
     if (path.endsWith('/waiting')) return new Response(JSON.stringify(waiting));
     if (path.endsWith('/tasks')) return new Response(JSON.stringify({ tasks: [task(8, 'c')], waits: [] }));
-    return new Response(JSON.stringify(path === '/api/pauses' ? {} : history));
+    return new Response(JSON.stringify(path === '/api/pauses' ? {} : said));
   });
 }
 
@@ -147,6 +150,14 @@ test('the top line shows every agent of the chat in its order, each with its mar
   // A message's face carries the same mark; only the member's latest turns. One that left has none.
   expect(faces('.thread-messages')).toEqual(['a:free', 'b:working', 'z:-', 'c:cant', 'b:working turning']);
   await expect.element(page.getByRole('button', { name: /^Summary/ })).toBeVisible();
+});
+
+test('an agent at work before its first word has its bubble, and its Working mark turns on that face', async () => {
+  service(undefined, { ...history, messages: history.messages.filter((m) => m.turn !== 'now') });
+  await chat();
+  await expect
+    .poll(() => faces('.thread-messages'))
+    .toEqual(['a:free', 'b:working', 'z:-', 'c:cant', 'b:working turning']);
 });
 
 test('a face’s card names the state, what and since when, by pointer and by keyboard focus', async () => {

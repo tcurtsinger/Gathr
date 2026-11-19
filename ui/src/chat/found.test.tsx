@@ -162,11 +162,10 @@ test("a member's hit opens at its message in the one timeline", async () => {
   expect(hit.textContent).toBe('Made-up finding 12');
 });
 
-test('a hit on what a turn wrote mid-work opens at the message it led to: its steps are the agent’s panel’s', async () => {
+test('a hit on what a turn wrote mid-work opens at those words, in their place in its block', async () => {
   const { hit } = await openAt(team, 'r12');
   expect(hit.closest('[data-message-id]')?.getAttribute('data-message-id')).toBe('a-w12');
-  expect(hit.textContent).toContain('Made-up finding 12');
-  expect(hit.textContent).not.toContain('Made-up start 12');
+  expect(hit.textContent).toBe('Made-up start 12');
 });
 test("the chat's title, after a hit in it, opens at its latest message", async () => {
   const { viewport, reopen, onFound } = await openAt(long, 'a100');
