@@ -166,12 +166,16 @@ impl Task {
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
                 let (account, agent) = (account.unwrap_or_default(), self.agent.clone());
                 let task = self.session.init(&session_id);
+                let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
                 let saved = self
                     .chats
                     .writer
                     .call(move |conn| {
                         let (agent, id) = (agent.as_deref(), &session_id);
                         store::set_engine_session(conn, &chat, agent, id, &account)?;
+                        // The conversation the turn ran in: what it hears next counts from it (0084).
+                        let ran = "UPDATE turns SET session_id = ?2 WHERE id = ?1";
+                        conn.execute(ran, rusqlite::params![turn, id])?;
                         match (task, agent) {
                             (Some(task), Some(agent)) => {
                                 gathr::sessions::set(conn, task, agent, &chat, &account, id)

@@ -21,11 +21,13 @@ a member back on task A after task B heard what came since its last turn on B, a
 ## The choice
 
 - **One "since" for both.** A turn's conversation last ran at the newest started turn of the agent in the chat that
-  ran in it (`room::last_ran`). When the engine opens again on a task's conversation (0055's resume), that is the
-  newest turn on a task whose `task_sessions` row holds that conversation, a turn on no task counted by the task of
-  the turn it answers. Otherwise the engine is already open, or opened on the agent's latest conversation, and ran
-  the agent's last turn there. A new conversation, or one a compaction summed up, has no "since": it hears the last
-  30 lines and every question. Read from rows Gathr already keeps: no migration.
+  ran in it (`room::last_ran`). Each turn keeps the conversation it ran in (`turns.session_id`, migration 0062): the
+  open engine's session as the turn starts, or the one its engine reports at Init. When the engine opens again on a
+  task's conversation (0055's resume), that is the newest turn that ran in it, whatever task it was on: a turn kept in
+  another conversation under a background command (0055's N4) doesn't count. Otherwise the engine is already open, or
+  opened on the agent's latest conversation, and ran the agent's last turn there. A new conversation, or one a
+  compaction summed up, has no "since": it hears the last 30 lines and every question. Turns from before the
+  migration have no conversation, so the first resume after it hears the last 30 lines.
 - **The chat's lines** (0081) count from it. Coming back to a task's conversation, the agent also hears its own
   lines said since in other conversations, which that one never had; still the last 30 at most.
 - **The questions.** A turn on task T (`turns.task`, so the lead's task turns too, though they run on its one
@@ -34,17 +36,19 @@ a member back on task A after task B heard what came since its last turn on B, a
   asked from T (the request's `given_in` turn was on T): `- #<n> <what>: <answer>`, the answer as agents hear it
   ("Picked: … Their words: …"), "cancelled" with its reason, or "not answered yet". Only those asked, or answered
   or cancelled, since the conversation last ran; all of them in a new one.
-- **Never told twice.** A question is left out of the `answered` turn that brought its answer (`heard_in`), and a
-  member's question out of the hear-back that reported its request settled: that hear-back now sets the request's
-  `heard_in` too, as the `answered` turn's does for the question.
+- **Never told twice.** A question is left out of the turn that carries its answer: the `answered` turn
+  (`heard_in`), and the brief readied when a task blocked on the question or on its request is let go, which sets the
+  question's or request's `heard_in` to that brief's turn. The turn that carries a settled request (its hear-back, or
+  that brief) leaves out only the question that settled it: the request's other questions, such as one a Discuss
+  replaced, and its cancellation, still show.
 - **Diagnosable.** A turn that opens with questions records `gathr.task.questions` with how many; a failed read is
   `gathr.room.heard`'s error, and the turn goes without both.
 
 ## Turned down
 
-- **A column for the conversation each turn ran in.** Exact for turns on no task that ran in a task's conversation
-  (they are counted by the task they answer, or not at all, so such a line may be heard twice), but a migration for
-  lines heard twice, never missed.
+- **The task's `task_sessions` row as the history of where its turns ran.** The row holds only the task's latest
+  conversation. A turn kept in another under a background command (N4) would count for the task, and when it went back
+  to its own, lines and questions said in between would be missed, not just heard twice.
 - **The questions in a task's brief.** The brief is the task's first ask; the questions come after it, and a turn
   that isn't the brief (a wait, a hear-back) needs them as much.
 - **Every question every turn.** A long task would carry every old answer into every turn, where the conversation

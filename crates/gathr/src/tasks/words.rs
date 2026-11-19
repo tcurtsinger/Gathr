@@ -126,7 +126,9 @@ pub fn opening(
 
 /// The questions to the person asked from `turn`'s task, by its owner or by the lead for its request,
 /// asked or answered after `since` (all of them with none), each with its answer or "not answered
-/// yet". Never one whose answer `turn` was woken with, or its request's hear-back. The lines, and how many questions.
+/// yet". Never one whose answer `turn` carries: its own, or as the one that settled the request `turn`
+/// carries; a request's other questions, such as one a Discuss replaced, still show. The lines, and how
+/// many questions.
 pub fn questions(
     conn: &Connection,
     turn: &str,
@@ -136,7 +138,7 @@ pub fn questions(
         let mut stmt = conn.prepare_cached(
             "SELECT q.number, me.task FROM turns me JOIN tasks q ON q.kind = 'person'
              LEFT JOIN tasks r ON r.number = q.request
-             WHERE me.id = ?1 AND q.heard_in IS NOT ?1 AND r.heard_in IS NOT ?1
+             WHERE me.id = ?1 AND q.heard_in IS NOT ?1 AND NOT (r.heard_in IS ?1 AND q.state = 'done')
                AND me.task IN (SELECT task FROM turns WHERE id IN (q.given_in, r.given_in))
                AND (?2 IS NULL OR q.created_ts > ?2 OR (q.state IN ('done', 'cancelled') AND q.updated_ts > ?2))
              ORDER BY q.number",

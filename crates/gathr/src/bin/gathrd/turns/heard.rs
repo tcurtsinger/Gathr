@@ -20,10 +20,14 @@ impl Task {
             return (None, None);
         };
         let (chat, turn) = (ids.chat.clone(), ids.turn.clone());
+        // The conversation the turn runs in, when the engine knows it already; a new one's Init says it.
+        let ran_in = self.session.id.clone();
         let read = self
             .chats
             .writer
             .call(move |c| {
+                let ran = "UPDATE turns SET session_id = ?2 WHERE id = ?1 AND ?2 IS NOT NULL";
+                c.execute(ran, rusqlite::params![turn, ran_in])?;
                 let resumed = resumed.as_deref();
                 let since = match fresh {
                     true => None,

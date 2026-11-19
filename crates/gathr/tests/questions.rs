@@ -682,4 +682,7 @@ fn a_task_blocked_on_its_request_hears_the_answer_once() {
         )
         .unwrap();
     assert!(heard, "the readied brief carried it");
+    // 0084: the brief's opening doesn't list #4 again, even as a new conversation's.
+    let listed = gathr::tasks::questions(&conn, &ann[0].turn, None).unwrap();
+    assert_eq!(listed, None, "the answer told twice");
 }

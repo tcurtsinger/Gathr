@@ -41,13 +41,11 @@ struct Line {
 }
 
 /// The agent's started turns in `chat` but `turn`, in the conversation `turn` runs in: when the engine
-/// opened again on a task's conversation (`?4`), the turns on the tasks that kept it, else every one,
-/// as the engine already open ran the last of them.
-const MINE: &str =
-    "WITH mine AS (SELECT u.id, u.created_ts FROM turns u LEFT JOIN turns a ON a.id = u.answers
+/// opened again on a task's conversation (`?4`), the turns that ran in it, else every one, as the
+/// engine already open ran the last of them.
+const MINE: &str = "WITH mine AS (SELECT u.id, u.created_ts FROM turns u
     WHERE u.chat_id = ?1 AND u.id != ?2 AND u.agent_id = ?3 AND u.position IS NOT NULL
-      AND (?4 IS NULL OR coalesce(u.task, a.task) IN
-           (SELECT task FROM task_sessions WHERE agent_id = ?3 AND session_id = ?4))) ";
+      AND (?4 IS NULL OR u.session_id = ?4)) ";
 
 /// When `agent`'s conversation last ran a turn in `chat` before `turn`: the conversation it resumed,
 /// `resumed`, when its engine opened again on a task's; else the one open. `None` when it never did.

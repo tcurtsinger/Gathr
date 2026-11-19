@@ -450,7 +450,7 @@ fn the_upgrade_from_0058_keeps_every_rowid_the_search_index_and_each_turns_place
              ('m2', 'c', 'asked', 11, 'assistant', 'text', 'Rowan counts them'),
              ('m3', 'c', 'work', 20, 'gathr', 'text', 'Task #1 from Mira: Count the herons'),
              ('m4', 'c', 'work', 21, 'assistant', 'text', 'Nine herons');
-         ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
+         ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks; ALTER TABLE turns DROP COLUMN session_id;
          PRAGMA user_version = 58;",
     )
     .unwrap();

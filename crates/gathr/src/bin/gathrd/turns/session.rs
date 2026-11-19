@@ -13,7 +13,7 @@ use super::{Assignment, Ids, Queued, Task};
 #[derive(Default)]
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
-    id: Option<String>,
+    pub id: Option<String>,
     /// The engine compacted the conversation since a turn last opened: the next hears the chat's
     /// last lines, as a new conversation does (0081).
     pub compacted: bool,
