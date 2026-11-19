@@ -9,6 +9,7 @@ import { render } from 'vitest-browser-react';
 import type { Agent, History, Member, Message, Read, Task, Turn } from '../api';
 import type { LiveEvent } from '../live';
 import { ChatView } from './ChatView';
+import { WRITE_MS } from './reads';
 import { watchRenders } from './renderWatch';
 import { clock } from './team';
 import '../app.css';
@@ -251,6 +252,11 @@ const footLine = () => document.querySelector<HTMLButtonElement>('.foot-line');
 /** The newest mark sent for a thread, in µs. */
 const sentFor = (puts: Read[][], topic: string) =>
   Math.max(0, ...puts.flat().flatMap((r) => (r.topic === topic && r.seen_us ? [r.seen_us] : [])));
+/**
+ * A wait for a write to the service: the window may hold one for up to WRITE_MS after its last, which is as long as a
+ * poll waits unless told. Under load that was a race, seen in WebKit.
+ */
+const written = <T,>(read: () => T) => expect.poll(read, { timeout: 3 * WRITE_MS });
 const attention = () => {
   const probe = document.createElement('span');
   probe.style.color = getComputedStyle(document.documentElement).getPropertyValue('--attention').trim();
@@ -273,10 +279,18 @@ test('back in a chat, the New line sits above the first main message not seen, a
 });
 
 test('a folded thread counts its new replies in blue; opened, each reply not seen says New', async () => {
-  service(morning(), left());
+  const { puts } = service(morning(), left());
   await render(<Chat />);
   const bo = () => mainWith('Shopping list screen');
   await expect.poll(() => foldOf(bo())?.textContent).toBe('3 new replies');
+  // A chat opens at its foot, a moment after it is drawn: going up the page before that, the view was pulled back down
+  // and the opened thread was never in it (seen in WebKit, one run in three).
+  await expect
+    .poll(() => {
+      const view = document.querySelector('.thread-viewport') as HTMLElement;
+      return view.scrollHeight - view.scrollTop - view.clientHeight < 2;
+    })
+    .toBe(true);
   const fold = foldOf(bo()) as HTMLButtonElement;
   expect(fold.getAttribute('aria-expanded')).toBe('false');
   expect(getComputedStyle(fold).color).toBe(attention());
@@ -292,6 +306,9 @@ test('a folded thread counts its new replies in blue; opened, each reply not see
   for (const text of said) {
     await expect.poll(() => replyWith(text)?.querySelector('.name-line-new')?.textContent).toBe('New');
   }
+  // The opened thread scrolls its last reply into view, and in view it is seen: only then is none left new. Showing
+  // the earlier reply moves the view up to it, so a test that went on at once left the last two not seen.
+  await written(() => sentFor(puts, 't:3')).toBeGreaterThanOrEqual(us(at(10, 3)));
   await page.getByRole('button', { name: 'Show 1 earlier reply' }).click();
   await expect.poll(() => !!replyWith('Bo, the planner screen is yours.')).toBe(true);
   expect(replyWith('Bo, the planner screen is yours.')?.querySelector('.name-line-new')).toBeNull();
@@ -351,7 +368,7 @@ test('a reply arriving out of view is named at the foot; a click goes there, ope
   await expect.poll(() => foldOf(mainWith('Add up ingredients'))?.getAttribute('aria-expanded')).toBe('true');
   await expect.poll(() => replyWith(ANN_NEW)?.hasAttribute('data-search-hit')).toBe(true);
   await expect.poll(() => footLine()).toBeNull();
-  await expect.poll(() => sentFor(puts, 't:2')).toBeGreaterThanOrEqual(us(at(10, 8)));
+  await written(() => sentFor(puts, 't:2')).toBeGreaterThanOrEqual(us(at(10, 8)));
 });
 
 test('a reply arriving in view is seen at once and named nowhere', async () => {
@@ -380,7 +397,7 @@ test('a reply arriving in view is seen at once and named nowhere', async () => {
     message: words('w-bo3', 'bo3', 'Recipe order is on purpose.', at(10, 9)),
   });
   await expect.element(page.getByText('Recipe order is on purpose.')).toBeVisible();
-  await expect.poll(() => sentFor(puts, 'b:wake')).toBeGreaterThanOrEqual(us(at(10, 9)));
+  await written(() => sentFor(puts, 'b:wake')).toBeGreaterThanOrEqual(us(at(10, 9)));
   expect(footLine()).toBeNull();
 });
 
@@ -396,7 +413,7 @@ test('nothing is seen while the window is in the back; brought to the front, wha
 
   vi.spyOn(document, 'hasFocus').mockReturnValue(true);
   window.dispatchEvent(new FocusEvent('focus'));
-  await expect.poll(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 5)));
+  await written(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 5)));
 });
 
 test('a window opened in the back and first brought to the front shows what came meanwhile as New', async () => {
@@ -487,7 +504,7 @@ test('the person’s own fold or open is kept, wins over the rule, and holds aft
   expect(foldOf(mainWith('Made-up side ask 4'))?.getAttribute('aria-expanded')).toBe('false');
 
   (side() as HTMLButtonElement).click();
-  await expect.poll(() => puts.flat().find((r) => r.topic === 'm:u-f3' && r.folded === true)).toBeTruthy();
+  await written(() => puts.flat().find((r) => r.topic === 'm:u-f3' && r.folded === true)).toBeTruthy();
   await screen.rerender(<Chat n={1} />);
   await expect.poll(() => side()?.getAttribute('aria-expanded')).toBe('false');
   expect(foldOf(mainWith('Shopping list screen'))?.getAttribute('aria-expanded')).toBe('false');
@@ -497,7 +514,7 @@ test('a chat with no marks opens with nothing new and its handled threads folded
   const { puts } = service(morning(), []);
   await render(<Chat />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
-  await expect.poll(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 8)));
+  await written(() => sentFor(puts, '')).toBeGreaterThanOrEqual(us(at(10, 8)));
   expect(document.querySelector('.new-line')).toBeNull();
   expect(document.querySelector('.name-line-new')).toBeNull();
   expect(footLine()).toBeNull();
@@ -513,7 +530,7 @@ test('seeing messages as the chat scrolls draws no message again', async () => {
   await render(<Chat />);
   await expect.element(page.getByText('Bo’s screen lists ingredients in recipe order.')).toBeVisible();
   const viewport = document.querySelector('.thread-viewport') as HTMLElement;
-  await expect.poll(() => sentFor(puts, '')).toBeGreaterThan(0);
+  await written(() => sentFor(puts, '')).toBeGreaterThan(0);
   const stop = watchRenders();
   const writes = puts.length;
   for (let top = viewport.scrollTop; top > 0; top -= 120) {
@@ -522,7 +539,7 @@ test('seeing messages as the chat scrolls draws no message again', async () => {
   }
   viewport.scrollTop = 0;
   // Ann's thread, at the top, is seen: its mark goes out.
-  await expect.poll(() => sentFor(puts, 't:2')).toBeGreaterThanOrEqual(us(at(10, 8)));
+  await written(() => sentFor(puts, 't:2')).toBeGreaterThanOrEqual(us(at(10, 8)));
   const drawn = stop();
   expect(drawn).toEqual({});
   // Many marks, few writes: at most one a second.
