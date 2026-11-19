@@ -73,7 +73,8 @@ export function useReplying(
     const { answer } = open;
     const { text, picks } = draftOf(answer.topic) ?? { text: '', picks: NONE };
     const fallback = people.find((p) => p.id === answer.agent);
-    const to = addressed(picks, people, fallback, false).to;
+    // The agent it answers first, then each agent picked in it (0028).
+    const to = addressed(picks, people, fallback, { fresh: false, reply: true });
     const onSend = async () => {
       if (!text.trim()) return;
       setDraft(answer.topic, '', []);
@@ -81,7 +82,15 @@ export function useReplying(
       const question = waiting(answer.topic);
       close();
       if (question && discuss) {
-        const refusal = await discuss(question, { values: [], notes: '', discuss: true, message: text });
+        const others = to.slice(1).map((p) => p.id);
+        const talk = {
+          values: [],
+          notes: '',
+          discuss: true,
+          message: text,
+          ...(others.length ? { to: others } : {}),
+        };
+        const refusal = await discuss(question, talk);
         if (!refusal) return;
         // Not taken: the words come back to the box, with why and the reference.
         setDraft(answer.topic, text, picks);
@@ -91,7 +100,7 @@ export function useReplying(
       }
       const target: ReplyTarget =
         answer.task != null ? { reply_task: answer.task } : { reply_to: answer.message };
-      send(text, to?.id, keptPicks(picks), undefined, target);
+      send(text, to[0]?.id, keptPicks(picks), undefined, target);
     };
     box = {
       topic: answer.topic,
@@ -101,7 +110,7 @@ export function useReplying(
       onSend,
       onClose: close,
       people,
-      to: to && { id: to.id, name: to.name, joins: false },
+      to,
       hint: 'Reply',
       refused: refused?.topic === answer.topic ? refused : undefined,
     };

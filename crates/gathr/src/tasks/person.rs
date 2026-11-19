@@ -116,6 +116,9 @@ pub struct Answer {
     /// The person's words go to the lead instead, and the question waits for its reply (0065).
     #[serde(default)]
     pub discuss: bool,
+    /// With Discuss, the other agents picked in the words: each gets them too (0028).
+    #[serde(default)]
+    pub to: Vec<String>,
 }
 
 /// Files the ask for the person when the giver is the chat's lead (its Supervisor, or the chat's only

@@ -25,6 +25,8 @@ pub enum Cmd {
         text: String,
         /// The agent it's sent to; none runs on the chats' account with the engine's defaults.
         agent: Option<String>,
+        /// How many agents it goes to: this one, and each other picked agent, which gets Gathr's copy (0028).
+        agents: usize,
         /// The names picked from the window's `@` list, as kept (`picks::kept`).
         picks: Option<String>,
         /// What a reply in a thread answers (0076), checked: none for a message on the main line.
@@ -33,12 +35,14 @@ pub enum Cmd {
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
     },
-    /// The person liked the agent's message `liked` (0057): `line` reaches the agent as a short message
-    /// of the person's would, into its running turn in the chat or a turn of its own.
-    Like {
+    /// Gathr's copy of the message `of`: the person's like of the agent's message (0057), or the
+    /// person's message to several agents (0028). `line` reaches the agent as a message of the
+    /// person's would, into its running turn in the chat or a turn of its own opened by `opened`.
+    Copy {
         chat: String,
-        liked: String,
+        of: String,
         line: String,
+        opened: gathr::words::Opened,
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
     },

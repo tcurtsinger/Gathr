@@ -62,10 +62,11 @@ async fn give(
     let (reply, told) = oneshot::channel();
     let task = s.chats.task(&chat, Some(&d.agent));
     let trace = t.0.clone();
-    let like = Cmd::Like {
+    let like = Cmd::Copy {
         chat,
-        liked: d.liked,
+        of: d.liked,
         line: d.line,
+        opened: gathr::words::Opened::Liked,
         trace,
         reply,
     };

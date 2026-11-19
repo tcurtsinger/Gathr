@@ -336,22 +336,26 @@ impl Task {
                 chat,
                 text,
                 agent,
+                agents,
                 picks,
                 target,
                 trace,
                 reply,
             } => {
-                let sent = self.send(chat, (text, picks, target), agent, trace).await;
+                let sent = self
+                    .send(chat, (text, picks, target), (agent, agents), trace)
+                    .await;
                 let _ = reply.send(sent);
             }
-            Cmd::Like {
+            Cmd::Copy {
                 chat,
-                liked,
+                of,
                 line,
+                opened,
                 trace,
                 reply,
             } => {
-                let _ = reply.send(self.like(chat, liked, line, trace).await);
+                let _ = reply.send(self.copy(chat, (of, line, opened), trace).await);
             }
             Cmd::Stop { chat, reply } => {
                 let _ = reply.send(self.stop(&chat).await);

@@ -269,9 +269,20 @@ impl<S: Source> Topics<S> {
                 None => Topic::broken(own, format!("PR #{pr} has no task in this chat")),
             };
         }
-        if let Some((copy, original)) = opening.and_then(|o| o.copy_of.as_ref()) {
-            let why = format!("carries message {copy}");
-            return match original {
+        if let Some(copy) = opening.and_then(|o| o.copy_of.as_ref()) {
+            let why = format!("carries message {}", copy.id);
+            // The person's message to several agents (0028) sits where it sits, whatever turn it joined.
+            if copy.role.as_deref() == Some("user") {
+                let topic = match &copy.reply {
+                    Some(r) => self.reply_of(&own, r, next),
+                    None => Topic::tied(format!("m:{}", copy.id), "copy", why.clone()),
+                };
+                return match topic.broken {
+                    true => topic,
+                    false => Topic::tied(topic.key, "copy", why),
+                };
+            }
+            return match &copy.turn {
                 Some(turn) => self.via(
                     &own,
                     self.follow_turn(turn, next),
@@ -279,7 +290,7 @@ impl<S: Source> Topics<S> {
                     why,
                     format!("turn {turn}"),
                 ),
-                None => Topic::broken(own, format!("message {copy} it carries not found")),
+                None => Topic::broken(own, format!("message {} it carries not found", copy.id)),
             };
         }
         if let Some(n) = t.task {

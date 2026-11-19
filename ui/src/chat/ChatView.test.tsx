@@ -273,6 +273,85 @@ test('in a chat with no project, picking an agent not in it sends its id, so it 
   vi.unstubAllGlobals();
 });
 
+test('every agent picked gets the message: By Send names each, and the first one’s id goes with the picks', async () => {
+  const sent = service(team);
+  await render(<Open project="p" />);
+  await input().click();
+  await userEvent.keyboard('@made-up');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{ArrowDown}{Enter}and @made-up');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{Enter}check this');
+  await expect.element(sign('To Made-up B and Made-up A')).toBeVisible();
+  expect(blue()).toEqual(['@Made-up B', '@Made-up A']);
+  await userEvent.keyboard('{Enter}');
+  const picks = [
+    { at: 0, len: 10, agent: 'b' },
+    { at: 15, len: 10, agent: 'a' },
+  ];
+  await expect
+    .poll(() => sent)
+    .toEqual([{ text: '@Made-up B and @Made-up A check this', agent: 'b', picks }]);
+  vi.unstubAllGlobals();
+});
+
+test('in a chat with no project, By Send names who joins, beside who is in it already', async () => {
+  service([], 'a');
+  await render(<Open />);
+  await input().click();
+  await userEvent.keyboard('@made-up');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{ArrowDown}{Enter}and @made-up');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}look');
+  await expect.element(sign('Made-up B and Made-up C join')).toBeVisible();
+  await userEvent.keyboard(' with @made-up');
+  await expect.element(page.getByRole('listbox', { name: 'Agents' })).toBeVisible();
+  await userEvent.keyboard('{Enter}');
+  await expect.element(sign('To Made-up A, Made-up B and Made-up C join')).toBeVisible();
+  vi.unstubAllGlobals();
+});
+
+test('Retry on a picked agent’s failed turn sends the words again to that agent alone', async () => {
+  const sent: unknown[] = [];
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (init?.method === 'POST' && path.endsWith('/messages')) {
+      sent.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ turn: 'v', status: 'running' }));
+    }
+    const picks = [
+      { at: 0, len: 10, agent: 'a' },
+      { at: 11, len: 10, agent: 'b' },
+    ];
+    const words = '@Made-up A @Made-up B check this';
+    const asked = { id: 'm', turn: 't', time: '', role: 'user', kind: 'text', body: words, picks };
+    const copy = {
+      id: 'k',
+      turn: 'u',
+      time: '',
+      role: 'gathr',
+      kind: 'text',
+      body: 'Made-up line',
+      copy_of: 'm',
+    };
+    const turns = [
+      { id: 't', status: 'done', why: null, ref: 'r', agent: 'a' },
+      { id: 'u', status: 'failed', why: 'made-up', ref: 's', agent: 'b' },
+    ];
+    return new Response(
+      JSON.stringify({ chat: 'c', messages: [asked, copy], turns, approvals: [], members: team }),
+    );
+  });
+  await render(<Open />);
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect
+    .poll(() => sent)
+    .toEqual([
+      { text: '@Made-up A @Made-up B check this', agent: 'b', picks: [{ at: 11, len: 10, agent: 'b' }] },
+    ]);
+  vi.unstubAllGlobals();
+});
+
 test('a new chat’s first message goes to the agent picked in it, and By Send says so', async () => {
   const started: unknown[] = [];
   await render(<Open id="" started={started} />);

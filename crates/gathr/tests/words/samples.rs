@@ -372,6 +372,21 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "reply: a task",
         "The person replies about your task #1 \"Write the exporter\".",
     ),
+    (
+        "reply",
+        "reply: a message, to three",
+        "The person replies to Ann's message (message <id>, <time>): \"Hi!\" They sent it to you, Ann and Lead.",
+    ),
+    (
+        "reply",
+        "reply: a task, to two",
+        "The person replies about task #1 \"Which notice text should ship?\". They sent it to you and Lead.",
+    ),
+    (
+        "picked",
+        "picked: two",
+        "The person sent this to you and Ann.",
+    ),
 ];
 
 /// Asserts that `built`, the text the real code built for the sample `name`, is that sample's text

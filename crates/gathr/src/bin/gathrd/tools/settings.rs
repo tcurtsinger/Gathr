@@ -271,7 +271,7 @@ impl Tools {
             yes: ask.yes,
             done: ask.done.unwrap_or_default(),
             text: ask.text,
-            discuss: false,
+            ..Default::default()
         };
         let (by, trace) = (caller.agent.clone(), trace(caller).0);
         let sent = self

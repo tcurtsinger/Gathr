@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import {
+  Fragment,
   type KeyboardEvent,
   type Ref,
   type SyntheticEvent,
@@ -37,8 +38,8 @@ interface Props {
   hint: string;
   /** Who "@" lists, in order; those not in the chat yet last, marked `out`. */
   people?: readonly Person[];
-  /** By Send once something is typed: who gets it, and whether it joins the chat. */
-  to?: { id: string; name: string; joins?: boolean };
+  /** By Send once something is typed: who gets it, each, and those who join the chat by it (0028). */
+  to?: readonly { id: string; name: string; joins?: boolean }[];
   /** What its field is called: "Message" at the chat's foot, "Reply" at a thread's (0076). */
   label?: string;
   /** Placed at a thread's foot: a cross and Escape close it. */
@@ -159,18 +160,14 @@ export function Composer(props: Props) {
         <ComposerToolbar>
           <ComposerActions />
           <ComposerActions>
-            {to && canSend && (
+            {!!to?.length && canSend && (
               <span className="composer-to" role="status">
-                <Face agent={{ id: to.id, name: to.name }} size={20} />
-                {to.joins ? (
-                  <span>
-                    <b>{to.name}</b> joins
-                  </span>
-                ) : (
-                  <span>
-                    To <b>{to.name}</b>
-                  </span>
-                )}
+                <span className="composer-faces">
+                  {to.map((p) => (
+                    <Face key={p.id} agent={{ id: p.id, name: p.name }} size={20} />
+                  ))}
+                </span>
+                <span className="composer-who">{sign(to)}</span>
               </span>
             )}
             {onClose && (
@@ -189,5 +186,32 @@ export function Composer(props: Props) {
         </ComposerToolbar>
       </ComposerBar>
     </Frame>
+  );
+}
+
+/** "Ann", "Ann and Bo", "Ann, Bo and Cy": each name bold. */
+function names(people: readonly { id: string; name: string }[]) {
+  return people.map((p, i) => (
+    <Fragment key={p.id}>
+      {i === 0 ? '' : i === people.length - 1 ? ' and ' : ', '}
+      <b>{p.name}</b>
+    </Fragment>
+  ));
+}
+
+/** "To Ann and Bo"; in a chat with no project, "Bo joins" or "To Ann, Bo and Cy join". */
+function sign(to: readonly { id: string; name: string; joins?: boolean }[]) {
+  const staying = to.filter((p) => !p.joins);
+  const joining = to.filter((p) => p.joins);
+  return (
+    <>
+      {staying.length > 0 && <>To {names(staying)}</>}
+      {staying.length > 0 && joining.length > 0 && ', '}
+      {joining.length > 0 && (
+        <>
+          {names(joining)} {joining.length > 1 ? 'join' : 'joins'}
+        </>
+      )}
+    </>
   );
 }

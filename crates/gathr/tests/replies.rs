@@ -8,38 +8,12 @@ mod common;
 #[path = "words/samples.rs"]
 mod samples;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use common::replay::{LetGo, escaped, read_in, turns as engine};
 use common::{TempDir, TestService, call_tool, gathr, next_live, rows, team, text, turn_on, until};
 use gathr::http::Response;
 use serde_json::{Value, json};
-
-/// Claude Code's stand-in for `n` turns of the signed-in recording, each turn in `held` waiting for
-/// `go` once its message arrives.
-fn engine(data: &Path, held: &[usize], n: usize) -> PathBuf {
-    let frames = std::fs::read_to_string(common::recording("signed_in")).unwrap();
-    let lines: Vec<&str> = frames.lines().collect();
-    let mut all = Vec::new();
-    for turn in 0..n {
-        all.push(lines[0]);
-        if held.contains(&turn) {
-            all.push(r#"{"dir":"hold"}"#);
-        }
-        all.extend(&lines[1..]);
-    }
-    let file = data.join("turns.jsonl");
-    std::fs::write(&file, all.join("\n") + "\n").unwrap();
-    file
-}
-
-/// Lets every held engine go when the test ends, passed or failed.
-struct LetGo(PathBuf);
-
-impl Drop for LetGo {
-    fn drop(&mut self) {
-        let _ = std::fs::write(&self.0, "");
-    }
-}
 
 fn history(service: &TestService, chat: &str) -> Value {
     service.call("GET", &format!("/api/chats/{chat}")).json()
@@ -100,22 +74,6 @@ fn turn_of(history: &Value, turn: &str) -> Value {
     found
         .unwrap_or_else(|| panic!("no turn {turn}: {history}"))
         .clone()
-}
-
-/// What the engine read in `turn`, joined.
-fn read_in(data: &Path, turn: &str) -> String {
-    let sql = format!(
-        "SELECT body FROM engine_raw WHERE direction = 'in' AND turn_id = '{turn}' ORDER BY id"
-    );
-    let bodies = rows(data, &sql);
-    let bodies = bodies.iter().filter_map(|r| r["body"].as_str());
-    bodies.collect::<Vec<_>>().join("\n")
-}
-
-/// Gathr's line the engine read before the person's words, as JSON escapes it in the frame.
-fn escaped(words: &str) -> String {
-    let json = serde_json::to_string(words).unwrap();
-    json.trim_matches('"').to_string()
 }
 
 fn ask_of(data: &Path, turn: &str) -> Value {

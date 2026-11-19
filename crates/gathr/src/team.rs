@@ -125,19 +125,24 @@ pub fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, 
     }
 }
 
-/// Where a message goes: its agent, and the chat's agents when sending it added one.
+/// Where a message goes: its agent, every other agent picked in it, and the chat's agents when
+/// sending it added some.
 pub struct Routed {
     pub agent: Option<String>,
+    pub others: Vec<String>,
     pub joined: Option<Vec<Member>>,
 }
 
-/// Who a message goes to (0028). In a chat with no project, an agent picked from outside the chat
-/// joins it (F8b): the chat's agent until then leads as its Supervisor, the new one is a member. A
-/// chat with one agent so far keeps no list. The `Err` is why the message can't go.
+/// Who a message goes to (0028): the agent it is sent to, and every other agent `picked` in it. In a
+/// chat with no project, the picked agents from outside it join it in one write (F8b): the chat's agent
+/// until then leads as its Supervisor, the new ones are members. A chat with one agent so far keeps
+/// no list. In a project's chat a pick outside its team refuses the send. The `Err` is why the
+/// message can't go; nothing is written then.
 pub fn route(
     conn: &mut Connection,
     chat: &str,
     sent_to: Option<&str>,
+    picked: &[String],
 ) -> Result<Result<Routed, &'static str>, Error> {
     use rusqlite::OptionalExtension;
     let team = members(conn, chat)?;
@@ -146,14 +151,38 @@ pub fn route(
         [chat],
         |r| r.get(0),
     )?;
-    let joins = sent_to.filter(|agent| plain && !team.iter().any(|m| m.agent == *agent));
-    let Some(agent) = joins else {
+    let mut others: Vec<String> = Vec::new();
+    for agent in picked {
+        if Some(agent.as_str()) != sent_to && !others.contains(agent) {
+            others.push(agent.clone());
+        }
+    }
+    let outside = |agent: &str| !team.iter().any(|m| m.agent == agent);
+    let joining: Vec<&str> = sent_to
+        .into_iter()
+        .chain(others.iter().map(String::as_str))
+        .filter(|a| outside(a))
+        .collect();
+    let besides = |others: Vec<String>, agent: &Option<String>| -> Vec<String> {
+        others
+            .into_iter()
+            .filter(|o| Some(o) != agent.as_ref())
+            .collect()
+    };
+    if joining.is_empty() || (!plain && team.is_empty()) {
         let agent = addressee(&team, sent_to);
         return Ok(agent.map(|agent| Routed {
+            others: besides(others, &agent),
             agent,
             joined: None,
         }));
-    };
+    }
+    if !plain {
+        return Ok(Err(match sent_to.is_some_and(outside) {
+            true => "the agent isn't in this chat",
+            false => "a picked agent isn't in this chat",
+        }));
+    }
     let mut seats: Vec<(String, Role)> = team.iter().map(|m| (m.agent.clone(), m.role)).collect();
     if seats.is_empty() {
         // The agent the chat has run on so far, if it still exists.
@@ -165,17 +194,22 @@ pub fn route(
                 |r| r.get(0),
             )
             .optional()?;
-        match first.filter(|first| first != agent) {
-            Some(first) => seats.push((first, Role::Member)),
-            None => {
-                return Ok(Ok(Routed {
-                    agent: Some(agent.into()),
-                    joined: None,
-                }));
-            }
-        }
+        seats.extend(
+            first
+                .filter(|f| !joining.contains(&f.as_str()))
+                .map(|f| (f, Role::Member)),
+        );
     }
-    seats.push((agent.to_string(), Role::Member));
+    seats.extend(joining.iter().map(|a| (a.to_string(), Role::Member)));
+    let agent = sent_to.map(String::from);
+    if seats.len() == 1 {
+        let agent = agent.or_else(|| Some(seats[0].0.clone()));
+        return Ok(Ok(Routed {
+            others: besides(others, &agent),
+            agent,
+            joined: None,
+        }));
+    }
     if !seats.iter().any(|(_, role)| *role == Role::Supervisor) {
         seats[0].1 = Role::Supervisor;
     }
@@ -184,8 +218,13 @@ pub fn route(
     }
     set_members(conn, chat, &seats)?;
     let joined = members(conn, chat)?;
+    let agent = match agent {
+        Some(agent) => Some(agent),
+        None => addressee(&joined, None).ok().flatten(),
+    };
     Ok(Ok(Routed {
-        agent: Some(agent.into()),
+        others: besides(others, &agent),
+        agent,
         joined: Some(joined),
     }))
 }
