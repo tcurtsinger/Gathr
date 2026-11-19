@@ -696,3 +696,29 @@ test('a step opens to what it ran, whole, and the first lines of what came back 
     },
   ]);
 });
+
+// The owner, 2026-11-19: "Pia has a second box under her???" Her turn had ended with a suite running in the background;
+// when it finished, her engine picked the work up by itself, a new turn on the same task, drawn as a second bubble.
+test('an engine’s own pick-up carries on in the bubble of the turn it continues', () => {
+  const state = round();
+  const before = ids(view(state).every);
+  // Kit's turn has ended; its engine picks the task up again, with nothing saved yet.
+  state.turns.again = turn('again', 'kit', { task: 2, answers: 'kit', opened: 'engine', status: 'running' });
+  expect(ids(view(state).every)).toEqual(before);
+  expect(custom(byId(view(state).every, 'a-kit')).line).toMatchObject({ running: true });
+  // It works and writes: the same bubble, its newest words the message.
+  state.messages.push(tool('again', 'g1', 'Shell'), said('again', 'assistant', 'Clippy is clean'));
+  expect(ids(view(state).every)).toEqual(before);
+  state.turns.again = { ...state.turns.again, status: 'done', ended: at() };
+  const kit = byId(view(state).every, 'a-kit');
+  expect(ids(view(state).every)).toEqual(before);
+  expect(text(kit)).toBe('Clippy is clean');
+  expect(custom(kit).line).toMatchObject({ running: false });
+  // The time it took covers both stretches: from when the first turn was made to when the pick-up ended.
+  const whole = Date.parse(state.turns.again.ended as string) - Date.parse(state.turns.kit.created as string);
+  expect(custom(kit).took).toBe(duration(whole));
+  // Another agent's turn that answers Kit's is its own bubble, as before.
+  state.turns.other = turn('other', 'rowan', { answers: 'kit', opened: 'engine' });
+  state.messages.push(said('other', 'assistant', 'Made-up: mine'));
+  expect(ids(view(state).every)).toContain('a-other');
+});

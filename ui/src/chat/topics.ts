@@ -93,9 +93,11 @@ export function topicsOf(
       }
       default: {
         const asked = hosts.get(g);
-        const own = g.turn ? ofTurn(g.turn) : `m:${first?.id ?? g.key}`;
+        // A block an engine's pick-up carries on stays where it began (groups.ts).
+        const turn = g.first ?? g.turn;
+        const own = turn ? ofTurn(turn) : `m:${first?.id ?? g.key}`;
         if (!asked?.length) return own;
-        if (own === `b:${g.turn}` || own.startsWith(`b:${g.turn}:`)) asking.set(own, `t:${asked[0]}`);
+        if (own === `b:${turn}` || own.startsWith(`b:${turn}:`)) asking.set(own, `t:${asked[0]}`);
         return `t:${asked[0]}`;
       }
     }
