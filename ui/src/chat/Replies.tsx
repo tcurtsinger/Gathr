@@ -71,7 +71,8 @@ export function UserMessage() {
       }
     >
       {!stop && (
-        <Bubble foot={<Foot fold={own.thread} answer={own.answer} />}>
+        // Agents' thumbs-ups, never the person's own like: no `like`, so no Like and no toggle (0057 C5).
+        <Bubble foot={<Foot fold={own.thread} agreed={own.agreed} answer={own.answer} />}>
           <div className="bubble-plain">
             <MessagePrimitive.Parts components={personParts} />
           </div>

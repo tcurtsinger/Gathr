@@ -752,17 +752,10 @@ fn a_thumbs_up_on_gathrs_copy_lands_on_the_message_it_carries() {
 }
 
 #[test]
-fn a_thumbs_up_on_its_own_the_persons_another_chats_or_a_missing_message_is_refused_with_a_reference()
- {
+fn a_thumbs_up_on_its_own_another_chats_or_a_missing_message_is_refused_with_a_reference() {
     let data = TempDir::new();
     let room = room(&data.0);
     let (lead, ann, sent) = room.lead_wrote_to_ann();
-    let history = room.history();
-    let mut all = history["messages"].as_array().unwrap().iter();
-    let persons = all.find(|m| m["role"] == "user").unwrap()["id"]
-        .as_str()
-        .unwrap()
-        .to_string();
     let elsewhere = room.service.send(
         "POST",
         "/api/chats",
@@ -778,7 +771,7 @@ fn a_thumbs_up_on_its_own_the_persons_another_chats_or_a_missing_message_is_refu
         .unwrap()
         .to_string();
 
-    let agents = "a thumbs-up goes on another agent's message.";
+    let agents = "a thumbs-up goes on the person's message or another agent's.";
     let unknown = "in this chat: use an id that read_chat or a message to you gives.";
     let nope = "nope".to_string();
     for (token, id, why) in [
@@ -786,11 +779,6 @@ fn a_thumbs_up_on_its_own_the_persons_another_chats_or_a_missing_message_is_refu
             &lead,
             &sent,
             format!("{sent} is your own message: {agents}"),
-        ),
-        (
-            &ann,
-            &persons,
-            format!("{persons} isn't an agent's message: {agents}"),
         ),
         (&ann, &theirs, format!("No message {theirs} {unknown}")),
         (&ann, &nope, format!("No message nope {unknown}")),

@@ -1,6 +1,6 @@
-//! `react`: an agent puts its thumbs-up on another agent's message in its own chat. One row and
-//! one event: it posts no message, counts no hand-off and wakes nobody, but a plan's checker's
-//! thumbs-up on the version it checks finishes that check (0062).
+//! `react`: an agent puts its thumbs-up on the person's message or another agent's in its own chat.
+//! One row and one event: it posts no message, counts no hand-off and wakes nobody, but a plan's
+//! checker's thumbs-up on the version it checks finishes that check (0062).
 
 use std::time::Instant;
 
@@ -17,15 +17,17 @@ use super::server::{Tools, caller_of};
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct React {
-    /// The message's id, as read_chat or a message to you gives it.
+    /// The message's id, as read_chat or a message to you gives it, or `person` for the person's
+    /// message your turn answers.
     message: String,
 }
 
 #[tool_router(router = react_router, vis = "pub(super)")]
 impl Tools {
     #[tool(
-        description = "Agree with another agent's message in this chat: puts your thumbs-up on it, by its id. It posts \
-                       nothing and wakes nobody. To say more than that you agree, send a message instead."
+        description = "Agree with the person's message or another agent's in this chat: puts your thumbs-up on it, by \
+                       its id, or `person` for the person's message your turn answers. It posts nothing and wakes \
+                       nobody. To say more than that you agree, send a message instead."
     )]
     async fn react(
         &self,
@@ -45,13 +47,17 @@ impl Tools {
         let (chat, from, asked) = (
             caller.chat.clone(),
             caller.agent.clone().unwrap_or_default(),
-            message.clone(),
+            message,
         );
         let giver = from.clone();
         let (added, agreed) = self
             .db(move |c| {
                 let tx = c.transaction()?;
                 gathr::archive::refuse_archived(&tx, &chat)?;
+                let asked = match asked.as_str() {
+                    "person" => gathr::reactions::persons(&tx, &on.turn)?,
+                    _ => asked,
+                };
                 let added = gathr::reactions::add(&tx, &chat, &asked, &giver, &on.trace)?;
                 let agreed = match added.new {
                     true => gathr::plans::agreed(&tx, &chat, &asked, &giver, &on.trace)?,
@@ -61,6 +67,8 @@ impl Tools {
                 Ok((added, agreed))
             })
             .await?;
+        // Named by the message it is on: `person`, or Gathr's copy, stands for that one.
+        let message = &added.message;
         if !added.new {
             return Ok(format!("{message} already has your thumbs-up."));
         }

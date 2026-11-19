@@ -375,13 +375,15 @@ answers: when something came between the two, the answered words lead the bubble
 ellipsis, 13px muted, after a 3px border line, no name. A turn that wrote no words and only sent messages has no
 block of its own: its steps are on its first message's name line. Gathr's copy of a message in the receiver's turn
 is never shown.
-A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box.
+A thumbs-up is the emoji and a count under the words it was given to, 12.5px at 450 muted, no box: an agent's, or
+the person's own, which agents can agree with too (0057 C5).
 Pointing at it or focusing it shows who gave it, as their names on one line beside the count, in a small box as tall
 as the count, so it covers no message; with no room beside it (a narrow column, a thread) it wraps under the count, in
 the flow, and what follows moves down rather than being covered. Names, never help, and never a target (the pointer
 passes through it). The person's own like counts in it: "You"
 first in the names, and the count in the attention blue on a 16% tint at 600. Where the person can like, the count
-is a toggle (`aria-pressed`): a click gives theirs or takes it back. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
+is a toggle (`aria-pressed`): a click gives theirs or takes it back. On the person's own message it is no toggle, and
+there is no Like. A plan's check that agrees is the checker's thumbs-up on the version, with no line of
 its own (0062); a question stays a reply.
 
 What nobody said is Gathr's message (0073): Gathr's face (three dots, never an initial), "Gathr" and the time
