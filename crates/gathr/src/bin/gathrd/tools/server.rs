@@ -19,11 +19,6 @@ use super::Caller;
 use crate::api::State;
 use crate::chats::Chats;
 
-/// A message longer than `KEEP_START` and `KEEP_END` together is cut in the middle, with its id to
-/// read the whole of it (0020: a tool returns what the question needs, with an id for the rest).
-/// Its end stays: agents end a message with what matters to a scan, such as "Friction: …" (G176).
-const KEEP_START: usize = 1_500;
-const KEEP_END: usize = 400;
 const DEFAULT_LIMIT: u32 = 20;
 const MOST: u32 = 100;
 
@@ -206,25 +201,10 @@ fn read(conn: &Connection, chat: &str, ask: &ReadChat) -> Result<String, String>
         (Some(_), false) => "From the start of the chat.".to_string(),
     }];
     for row in found {
-        let body = kept(&row.body, &row.id);
+        let body = gathr::text::kept(&row.body, &row.id);
         lines.push(format!("{} {}: {}", row.id, row.author, body));
     }
     Ok(lines.join("\n"))
-}
-
-/// The message as `read_chat` lists it: whole, or its start and end with what was cut between.
-fn kept(body: &str, id: &str) -> String {
-    let chars: Vec<char> = body.chars().collect();
-    if chars.len() <= KEEP_START + KEEP_END {
-        return body.to_string();
-    }
-    let start: String = chars[..KEEP_START].iter().collect();
-    let end: String = chars[chars.len() - KEEP_END..].iter().collect();
-    let cut = chars.len() - KEEP_START - KEEP_END;
-    format!(
-        "{start} [… {cut} of {} characters cut: read message {id} for all of it …] {end}",
-        chars.len()
-    )
 }
 
 /// The chat's text messages that pass `filter`, newest first, with who wrote each.

@@ -47,6 +47,7 @@ pub mod reads;
 pub mod redact;
 pub mod replies;
 pub mod roles;
+pub mod room;
 pub mod run;
 pub mod search;
 pub mod seed;

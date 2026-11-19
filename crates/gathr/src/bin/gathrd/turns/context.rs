@@ -80,6 +80,8 @@ impl Task {
             self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, after))
                 .await;
         }
+        // Its summary may have dropped what the chat said: the next turn hears the last lines (0081).
+        self.session.compacted = true;
         let Some(turn) = self.turn.as_mut() else {
             return;
         };

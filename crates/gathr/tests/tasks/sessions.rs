@@ -184,7 +184,7 @@ fn a_new_conversation_opens_with_the_agents_five_newest_other_tasks() {
     let brief = "Task #5 from Lead: Ship it\n\
         Use finish_task with done, left or blocked. Say what remains or which agent or task blocks it.";
 
-    let (opening, count) = tasks::opening(&conn, 5, "ann", brief).unwrap();
+    let (opening, count) = tasks::opening(&conn, 5, "ann", brief, false).unwrap();
     let expected = [
         FIRST,
         "Your last tasks in this chat:",
@@ -199,7 +199,7 @@ fn a_new_conversation_opens_with_the_agents_five_newest_other_tasks() {
 
     // An ask that isn't the brief: the task lost its conversation, so the brief comes too.
     let ask = "Your last turn on task #5 (Ship it) ended with no report. Use finish_task to say done, left or blocked.";
-    let (opening, _) = tasks::opening(&conn, 5, "ann", ask).unwrap();
+    let (opening, _) = tasks::opening(&conn, 5, "ann", ask, false).unwrap();
     assert_eq!(opening, [&expected.join("\n"), brief].join("\n"));
 }
 
@@ -210,7 +210,7 @@ fn an_agent_with_no_other_task_gets_the_first_line_alone() {
     task(&conn, 5, "ann", "Ship it", "ready", 99);
     task(&conn, 6, "bo", "Check it", "ready", 99);
     let brief = "Task #5 from Lead: Ship it\nUse finish_task with done, left or blocked.";
-    let (opening, count) = tasks::opening(&conn, 5, "ann", brief).unwrap();
+    let (opening, count) = tasks::opening(&conn, 5, "ann", brief, false).unwrap();
     assert_eq!((opening.as_str(), count), (FIRST, 0));
 }
 

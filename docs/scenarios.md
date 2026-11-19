@@ -625,6 +625,18 @@ Parts: 6.4, 6.5
   version, the last word's bubble that wrote the next version is a main message, and Approve's line sits under it; each hear-back of the lead's is a main message, the one that closes the ask its result; each picked agent's
   answer is a main message; Gathr's words that opened a turn (a wait's result, a carry-on, Sent back) are the quote at
   the top of its bubble, with no message of Gathr's for them
+- **Given** a team chat with Lead, Ann and Bo (0081)
+- **When** the lead's turn ends with "@Ann please check the map."
+- **Then** Ann gets one turn, answering the lead's, that reads "Lead: @Ann please check the map." and sits in the
+  thread of the lead's message. A running turn of Ann's in the chat takes the words in; a turn of hers queued there
+  takes them too, never a second turn. It counts as a hand-off, and past the limit the chat pauses and nobody is
+  woken. Words that name nobody, the lead itself, a name that isn't a member's or `bob@ann.com` wake nobody
+- **Given** the same chat, where the person, the lead and Bo have said things since Ann's last turn
+- **When** a turn of Ann's opens
+- **Then** it opens with those lines, up to 30, as `Name: words`, without Ann's own and without what opened it;
+  Bo's lines are cut to their first sentence unless they name Ann, and one line says so; in a new conversation, her
+  first turn in the chat or after a compaction, the chat's last 30 lines. The lead hears every line whole. A chat of
+  one agent hears none
 
 ### 6k. The chat says what each main message waits on
 

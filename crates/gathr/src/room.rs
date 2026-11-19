@@ -1,0 +1,193 @@
+//! What an agent hears of its team chat when its turn opens (0081, after SerenityOS's catch-up): the
+//! chat's lines as `Name: words`, with the turn's own ask. A turn that starts a new conversation hears
+//! the last 30; one that goes on in its conversation hears what came since the agent's last turn there,
+//! without its own lines and what it already read. Never the message that opened the turn, a tool row
+//! or Gathr's copy of a message. The lead hears every line whole; a member hears whole the person's
+//! lines, Gathr's, the lead's and those that name it, and another member's cut to its first sentence.
+//! A whole line is capped as `read_chat` caps it.
+
+use rusqlite::{Connection, OptionalExtension, params};
+
+use crate::Error;
+use crate::team::{self, Member, Role};
+use crate::text;
+
+/// The most lines a turn hears.
+pub const MOST: usize = 30;
+/// The most a line cut to its first sentence keeps, in characters.
+const GIST: usize = 160;
+
+const FRESH: &str = "Recent lines in this chat:";
+const SINCE: &str = "New in this chat since your last turn:";
+const CUT: &str = "(Lines not for you are cut to their first sentence: read_chat has them whole.)";
+
+/// What a turn hears, and what that costs.
+#[derive(Debug, PartialEq)]
+pub struct Heard {
+    pub text: String,
+    pub lines: usize,
+    /// Lines cut to their first sentence.
+    pub cut: usize,
+    /// The last 30 lines, as a new conversation hears them.
+    pub fresh: bool,
+}
+
+struct Line {
+    id: String,
+    role: String,
+    body: String,
+    agent: Option<String>,
+    name: Option<String>,
+}
+
+/// What `agent` hears as `turn` opens in `chat`: the last lines when `fresh` (a new conversation) or
+/// when it has no earlier turn there, else what came since its last turn. `None` in a chat of one
+/// agent, for an agent not in the chat, or with nothing to hear.
+pub fn catch_up(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    agent: &str,
+    fresh: bool,
+) -> Result<Option<Heard>, Error> {
+    let team = team::members(conn, chat)?;
+    let Some(me) = team
+        .iter()
+        .find(|m| m.agent == agent)
+        .filter(|_| team.len() > 1)
+    else {
+        return Ok(None);
+    };
+    let last: Option<i64> = conn
+        .prepare_cached(
+            "SELECT created_ts FROM turns WHERE chat_id = ?1 AND agent_id = ?2 AND id != ?3
+             AND position IS NOT NULL ORDER BY created_ts DESC LIMIT 1",
+        )?
+        .query_row(params![chat, agent, turn], |r| r.get(0))
+        .optional()?;
+    let since = last.filter(|_| !fresh);
+    let mut lines = lines(conn, (chat, turn, agent), since)?;
+    lines.reverse();
+    if lines.is_empty() {
+        return Ok(None);
+    }
+    let lead = team.iter().find(|m| m.role == Role::Supervisor);
+    let mut cut = 0;
+    let mut said = vec![match since {
+        Some(_) => SINCE.to_string(),
+        None => FRESH.to_string(),
+    }];
+    for line in &lines {
+        let words = match whole(line, me, lead, &team) {
+            true => None,
+            false => gist(&line.body),
+        };
+        cut += usize::from(words.is_some());
+        let words = words.unwrap_or_else(|| text::kept(&line.body, &line.id));
+        said.push(format!("{}: {words}", speaker(line)));
+    }
+    if cut > 0 {
+        said.push(CUT.to_string());
+    }
+    Ok(Some(Heard {
+        text: said.join("\n"),
+        lines: lines.len(),
+        cut,
+        fresh: since.is_none(),
+    }))
+}
+
+/// The chat's lines, newest first, the last 30: since `since` without the agent's own turns and what
+/// they carried, or the last of all. Never the turn's own messages or what they carry.
+fn lines(
+    conn: &Connection,
+    (chat, turn, agent): (&str, &str, &str),
+    since: Option<i64>,
+) -> Result<Vec<Line>, Error> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT m.id, m.role, m.body, t.agent_id, a.name FROM messages m
+         LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
+         WHERE m.chat_id = ?1 AND m.kind = 'text' AND m.copy_of IS NULL
+           AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
+           AND m.turn_id IS NOT ?2
+           AND m.id NOT IN (SELECT copy_of FROM messages WHERE turn_id = ?2 AND copy_of IS NOT NULL)
+           AND (?4 IS NULL OR (m.ts > ?4 AND t.agent_id IS NOT ?3 AND m.id NOT IN
+               (SELECT c.copy_of FROM messages c JOIN turns u ON u.id = c.turn_id
+                WHERE u.chat_id = ?1 AND u.agent_id = ?3 AND c.copy_of IS NOT NULL)))
+         ORDER BY m.ts DESC, m.id DESC LIMIT ?5",
+    )?;
+    let rows = stmt.query_map(params![chat, turn, agent, since, MOST as i64], |r| {
+        Ok(Line {
+            id: r.get(0)?,
+            role: r.get(1)?,
+            body: r.get(2)?,
+            agent: r.get(3)?,
+            name: r.get(4)?,
+        })
+    })?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+/// Whether a line is heard whole: by the lead every line; by a member the person's, Gathr's, the
+/// lead's, its own and one that names it.
+fn whole(line: &Line, me: &Member, lead: Option<&Member>, team: &[Member]) -> bool {
+    let by = line.agent.as_deref();
+    me.role == Role::Supervisor
+        || line.role != "assistant"
+        || by == Some(me.agent.as_str())
+        || by.is_some_and(|by| lead.is_some_and(|l| l.agent == by))
+        || team::mentioned(team, &line.body)
+            .iter()
+            .any(|m| m.agent == me.agent)
+}
+
+fn speaker(line: &Line) -> &str {
+    match line.role.as_str() {
+        "user" => "Person",
+        "gathr" => "Gathr",
+        _ => line.name.as_deref().unwrap_or("An agent"),
+    }
+}
+
+/// A line cut to its first sentence, at most 160 characters, ending "…"; `None` when that is all
+/// of it.
+fn gist(body: &str) -> Option<String> {
+    let flat = body.split_whitespace().collect::<Vec<_>>().join(" ");
+    let chars: Vec<char> = flat.chars().collect();
+    let end = chars
+        .iter()
+        .enumerate()
+        .find(|(at, c)| {
+            matches!(c, '.' | '!' | '?') && chars.get(at + 1).is_none_or(|n| n.is_whitespace())
+        })
+        .map_or(chars.len(), |(at, _)| at + 1);
+    let sentence: String = chars[..end].iter().collect();
+    let short = text::cut(&sentence, GIST, false);
+    if short.chars().count() >= chars.len() {
+        return None;
+    }
+    Some(match short.ends_with('…') {
+        true => short,
+        false => format!("{short} …"),
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gist;
+
+    #[test]
+    fn a_line_is_cut_to_its_first_sentence_or_160_characters() {
+        assert_eq!(
+            gist("The map is wrong. The river bends."),
+            Some("The map is wrong. …".into())
+        );
+        assert_eq!(gist("Done!\n\nAll of it."), Some("Done! …".into()));
+        assert_eq!(gist("One sentence only."), None);
+        assert_eq!(gist("v1.2 is out, no stop"), None);
+        let long = format!("{} and more.", "word ".repeat(40));
+        let cut = gist(&long).unwrap();
+        assert_eq!(cut.chars().count(), 160, "{cut}");
+        assert!(cut.ends_with('…'), "{cut}");
+    }
+}
