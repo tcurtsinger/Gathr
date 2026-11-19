@@ -420,11 +420,19 @@ nor is Gathr's copy of an agent's message, or what a turn that hears the person'
 What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a done task are for the agents, and
 the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
 bubble: the plan's lines, with a clipboard, in the thread of the lead's bubble that holds the version (0078): the
-lead-in "Plan v1:" and "3 findings" (a check that agrees is a thumbs-up instead) (opening to the plan's title), and
-"Plan v2:" "Approved" or "Dropped"; each opens to the whole line and Open plan (0062). A line is 13px, muted, the lead-in in
-the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for overflow.
-Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
+lead-in "Plan v2:" and "Approved" or "Dropped"; each opens to the whole line and Open plan (0062). A check that agrees
+is a thumbs-up instead, and one that left findings says them in its checker's bubble (below). A line is 13px, muted,
+the lead-in in the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for
+overflow. Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
 Keyboard focus uses the hover highlight, without an outline or ring.
+
+A plan check that left findings ends its checker's bubble with the findings chip (0078, the chat-shape mock-up's
+findings chip), in the plan chip's shape: a check-circle icon, "7 findings" (wrong and not asked for; "1 finding"), or
+"2 suggestions" for a report of suggestions only, and a chevron that turns down when open. A press or Enter opens it in
+place (`aria-expanded`) to each note of the check's newest report, in order, each on the chat's surface, 10px corners,
+8px apart, 14px: a note as the Tasks view draws one, its kind at 600 ("Wrong" in the danger colour, "Not asked for",
+"Suggestion"), its file in monospace when it names one, and its words. A press closes it. Only a plan check has it: a
+code review's notes are in the Tasks view.
 
 The size of an ask is the last piece of the person's own message's name line, in the line's style: the lead's
 16px face when the lead sized it (none when the person did), "Fix" or "Plan", and a chevron (0061). It shows once

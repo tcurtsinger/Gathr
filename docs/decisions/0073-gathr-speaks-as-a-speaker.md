@@ -60,3 +60,5 @@ Amends [0037](0037-one-timeline.md) and [0072](0072-the-chat-reads-like-a-team-c
 - Gathr's words that open a turn and draw something (a wait's result, a wake-up, a silent turn or stale tasks told, a
   carry-on, a landing hand-off, Sent back) are the quote at the top of that turn's bubble, up to three lines; Gathr
   draws no message for them until the turn has no bubble to quote them in.
+- 2026-11-19: a plan's findings are no longer Gathr's line: the chip at the end of the checker's bubble says them
+  ("3 findings") and opens to each note. A check that didn't finish or ran late keeps Gathr's line.

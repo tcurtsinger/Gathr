@@ -13,7 +13,8 @@ import { began } from '../chat/team';
 import { Face } from '../components/Face';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
-import { briefRows, noteLine } from '../tasks/model';
+import { briefRows } from '../tasks/model';
+import { Note } from '../tasks/Note';
 import { Field, Refused } from '../tasks/Question';
 import { Line, Row, TaskRow } from '../tasks/TaskList';
 import { counted, marks, type PartField, type PartMark } from './plans';
@@ -333,7 +334,9 @@ function Fields({
         <>
           <dt>Findings</dt>
           {findings.map((n) => (
-            <dd key={n.id}>{noteLine(n)}</dd>
+            <dd key={n.id}>
+              <Note note={n} />
+            </dd>
           ))}
         </>
       )}
@@ -344,7 +347,7 @@ function Fields({
             const note = answered(a.note);
             return (
               <dd key={a.note}>
-                <span>{note ? noteLine(note) : `Note ${a.note}`}</span>
+                {note ? <Note note={note} /> : <span>Note {a.note}</span>}
                 <span className="plan-said">
                   {a.changed ? 'Changed' : 'Kept'}: {a.why}
                 </span>

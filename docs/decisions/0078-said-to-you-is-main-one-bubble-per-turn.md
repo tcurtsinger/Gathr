@@ -4,7 +4,7 @@ Status: accepted (owner, 2026-11-19: the chat-shape mock-up's structure A, "Said
 plan's question 1 answered: Gathr's words that open a turn are quoted at the top of that turn's bubble). Date:
 2026-11-19.
 
-Built: yes (the rule in the service, one bubble per turn and its quote in the window, an unmarked thread seen up to the main line's mark; the findings chip and agents' own choice are later steps). Proof: `crates/gathr/tests/topics.rs`, `crates/gathr/src/topics/tests.rs`, `crates/gathr/tests/solo.rs`, `crates/gathr/tests/picked.rs`, `crates/gathr/tests/pauses.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/likes.rs`, `ui/src/chat/mains.test.tsx`, `ui/src/chat/reads.test.ts`, `ui/src/chat/Like.test.tsx`.
+Built: yes (the rule in the service, one bubble per turn and its quote in the window, an unmarked thread seen up to the main line's mark, a plan check's findings chip in the checker's bubble; agents' own choice is a later step). Proof: `crates/gathr/tests/topics.rs`, `crates/gathr/src/topics/tests.rs`, `crates/gathr/tests/solo.rs`, `crates/gathr/tests/picked.rs`, `crates/gathr/tests/pauses.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/likes.rs`, `ui/src/chat/mains.test.tsx`, `ui/src/chat/reads.test.ts`, `ui/src/chat/Like.test.tsx`, `ui/src/chat/findings.test.tsx`.
 
 Amends [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md) (the rule, the keys, a chat of one),
 [0037](0037-one-timeline.md) (a plan version no longer splits its turn), [0062](0062-a-plan-is-checked-and-approve-hands-it-out.md) (the plan's chip in
@@ -53,6 +53,14 @@ and [0077](0077-where-you-left-off.md) (a thread with no mark). Serves promise 6
   agent's main messages keep their tick on the conversation map.
 - **A thread with no mark** is seen up to the main line's mark (`reads.ts`): an update names threads anew (the lead's
   answers, a check under the version's turn), and what they held before the person last looked isn't new.
+- **A plan check's findings are a chip at the end of the checker's bubble** (2026-11-19, the build plan's PR 2), on
+  the last block of the check task's turns (`blocks.ts`, `TurnParts.tsx` `FindingsChip`), in the plan chip's shape with
+  a chevron: "7 findings" (wrong and not asked for), "1 finding", or "2 suggestions" for a report of suggestions only.
+  A press or Enter opens it in place to each note of the check's newest report, in order, as the Tasks view draws a
+  note (`ui/src/tasks/Note.tsx`: its kind, "Wrong", "Not asked for" or "Suggestion", its file in monospace, its
+  words); a press closes it. Gathr's findings line ("Plan v1:" "7 findings") is no longer drawn. A check that agrees
+  has no chip, only its thumbs-up; a check that didn't finish or ran late keeps Gathr's line. Only a plan check has
+  it: a code review's notes stay in the Tasks view and the fix's brief (the plan's question 3, settled so).
 
 ## Why
 
@@ -72,8 +80,7 @@ history is read, never stored, so the new rule needs no migration and every old 
 
 ## Not in it
 
-- The check's findings as a chip in the checker's bubble: until then they stay Gathr's line, now in the thread of
-  the lead's bubble that holds the version.
+- A code review's notes as a chip in the reviewer's bubble.
 - Agents choosing where their bubble goes (`post`).
 - The window's split of a turn at the person's message is the window's alone: the service and `gathr diag threads`
   still name the whole turn `b:<turn>`, so a check or reply the service ties to that turn sits under its first part.

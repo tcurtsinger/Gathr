@@ -152,7 +152,8 @@ Parts: 2.3
 - **When** Gathr gives the check to the reviewer
 - **Then** the version is the lead's own message in the chat, with a chip, and its tab says it is being
   checked: there is no Approve. A thumbs-up from the checker on that message agrees. Gathr's line says
-  how the check ended ("Bo agrees", "3 findings" or "Bo didn't finish"), and the chat then needs the
+  how the check ended ("Bo agrees" or "Bo didn't finish"; findings are a chip, "3 findings", at the end of the
+  checker's bubble), and the chat then needs the
   person. A check that left findings wakes the lead, who answers each in its next version, and only
   the one who objected checks that version, on those points. A check still open 10 minutes after the
   version was written reaches the person as "didn't finish"

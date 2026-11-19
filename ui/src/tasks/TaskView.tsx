@@ -5,7 +5,8 @@ import type { Failure, Task } from '../api';
 import { began } from '../chat/team';
 import { Face, GathrFace, YouFace } from '../components/Face';
 import { FailureNotice } from '../components/Notice';
-import { asker, briefRows, edited, gathrs, idle, noteLines, reported, reviewedAt } from './model';
+import { asker, briefRows, edited, gathrs, idle, reported, reviewedAt } from './model';
+import { Note } from './Note';
 import { TaskChecks } from './TaskChecks';
 import { Line, TaskState } from './TaskList';
 
@@ -67,7 +68,7 @@ export function TaskView({ task, tasks, project, name, onSettle, onReference, on
   const offers = OFFERS[task.state];
   const report = reported(task);
   const review = reviewedAt(task);
-  const notes = noteLines(task);
+  const notes = task.notes ?? [];
   const brief = [
     ...briefRows(
       task,
@@ -153,9 +154,11 @@ export function TaskView({ task, tasks, project, name, onSettle, onReference, on
             {notes.length > 0 && (
               <>
                 <dt>Notes</dt>
-                {notes.map((line, i) => (
+                {notes.map((note, i) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: two notes may read the same
-                  <dd key={i}>{line}</dd>
+                  <dd key={i}>
+                    <Note note={note} />
+                  </dd>
                 ))}
               </>
             )}
