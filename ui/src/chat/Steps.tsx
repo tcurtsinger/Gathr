@@ -1,29 +1,18 @@
 import { ChevronRight } from 'lucide-react';
-import { useContext, useEffect, useState } from 'react';
+import { createContext, useEffect, useState } from 'react';
 import { duration, type Work } from './fold';
 import { revealOpened } from './reveal';
-import { FoundContext } from './TurnParts';
 
 /**
- * Whether a turn's steps are open: closed at first (open in the agent's panel), and opened by a search hit on
- * something it wrote mid-work.
+ * The timeline's components drawn in the agent's panel (0038): only there does a message show its steps and the task
+ * it worked on (the owner's call of 2026-11-18).
  */
-export function useStepsOpen(work: Work | undefined, startOpen = false) {
-  const found = useContext(FoundContext);
-  const holds = !!found && !!work?.steps.some((s) => 'say' in s && s.say === found);
-  const [open, setOpen] = useState(holds || startOpen);
-  const [held, setHeld] = useState(holds);
-  if (holds !== held) {
-    setHeld(holds);
-    if (holds) setOpen(true);
-  }
-  return [open, setOpen] as const;
-}
+export const InPanel = createContext(false);
 
 /**
- * A turn's steps on its message's name line (0072): "· 10 steps · 6m 40s · 1 failed ›". It shows while the message
- * is pointed at or has focus, and always for a failed or refused step or an agent still working (said.css); it opens
- * the steps under the name line.
+ * A turn's steps on its message's name line in the agent's panel (0072): "· 10 steps · 6m 40s · 1 failed ›". It shows
+ * while the message is pointed at or has focus, and always for a failed or refused step or an agent still working
+ * (said.css); it opens the steps under the name line.
  */
 export function StepsButton({
   work,

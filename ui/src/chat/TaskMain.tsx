@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { briefRows } from '../tasks/model';
 import { Foot } from './Foot';
-import { MainWord } from './MainWord';
 import type { Custom } from './messages';
-import { AgentFace, Bubble, NameLine, RoleWord, Said, When, YouSaid } from './Said';
+import { AgentFace, Bubble, NameLine, Said, When, YouSaid } from './Said';
 import { useActions } from './Thread';
 
 /**
@@ -36,13 +35,7 @@ export function TaskMain({ own }: { own: Custom }) {
           <YouSaid />
         )
       }
-      line={
-        <NameLine
-          name={agent}
-          pieces={[own.role === 'supervisor' && <RoleWord key="role" />, <When key="t" time={own.time} />]}
-          state={<MainWord state={own.state} />}
-        />
-      }
+      line={<NameLine name={agent} pieces={[<When key="t" time={own.time} />]} />}
     >
       <Bubble foot={<Foot fold={own.thread} answer={own.answer} />}>
         <div className="task-main" data-more={more || undefined}>

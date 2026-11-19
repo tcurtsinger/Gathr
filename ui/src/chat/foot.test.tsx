@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { useFolds } from './folds';
-import { agents, at, members, opened, said, task, tool, turn } from './madeUp';
+import { agents, at, members, said, task, turn } from './madeUp';
 import { toThread } from './messages';
 import { type ChatState, empty } from './state';
 import { type Actions, Thread } from './Thread';
@@ -22,12 +22,14 @@ const actions: Actions = {
   approve: none,
 };
 
-/** The chat at 700 tall; with `folded`, threads handled when it opens start folded, as in the chat. */
-function View({ state, folded }: { state: ChatState; folded?: boolean }) {
+/** The chat at 700 tall; threads handled when it opens start folded, as in the chat. */
+function View({ state }: { state: ChatState }) {
   const cache = useRef(new Map());
   const threads = useFolds();
-  const view = folded ? { ...threads.folds, start: threads.start.current } : opened;
-  const timeline = toThread(state, agents, [], cache.current, view);
+  const timeline = toThread(state, agents, [], cache.current, {
+    ...threads.folds,
+    start: threads.start.current,
+  });
   threads.settle(timeline, true);
   return (
     <div style={{ height: 700, display: 'flex' }}>
@@ -45,9 +47,9 @@ function View({ state, folded }: { state: ChatState; folded?: boolean }) {
 
 /**
  * Twenty earlier exchanges, then Rowan's task: its PR, reviewed by Sol and fixed by Rowan, all settled. Its thread is
- * folded, at the foot of the chat. Rowan's PR message took `steps` steps.
+ * folded, at the foot of the chat.
  */
-function atTheFoot(steps = 3): ChatState {
+function atTheFoot(): ChatState {
   // What each turn is about, as the service names it (0075): each exchange its question; the work on the PR, task 1.
   const earlier = Array.from({ length: 20 }, (_, i) => turn(`t${i}`, 'mira', { topic: `m:q${i}` }));
   const turns = [
@@ -69,9 +71,6 @@ function atTheFoot(steps = 3): ChatState {
       { ...said('ask', 'user', 'Parse recipe pages'), id: 'ask' },
       said('ask', 'assistant', 'Rowan, over to you'),
       said('build', 'gathr', 'Task #1 from Mira: Parse recipe pages'),
-      ...Array.from({ length: steps }, (_, i) =>
-        tool('build', `b${i}`, 'Read', { input: { text: `src/part${i}.rs` } }),
-      ),
       said('build', 'assistant', 'The parser is in. PR #18 is open'),
       said('review', 'gathr', 'Task #2 from Mira: Review PR #18'),
       said('review', 'assistant', 'One problem: redirects reach private addresses'),
@@ -113,35 +112,10 @@ async function atBottom() {
 }
 
 test('a thread opened at the foot of the chat scrolls up to show above the message box', async () => {
-  const screen = await render(<View state={atTheFoot()} folded />);
+  const screen = await render(<View state={atTheFoot()} />);
   await atBottom();
   await screen.getByRole('button', { name: /3 replies/ }).click();
   const last = screen.getByText('Fixed, with a test for each');
   await expect.element(last).toBeVisible();
   await expect.poll(() => belowTheBox(last.element())).toBeLessThanOrEqual(0);
-});
-
-test("a turn's steps opened at the foot of the chat scroll up to show above the message box", async () => {
-  const screen = await render(<View state={atTheFoot()} />);
-  await atBottom();
-  const steps = screen.getByRole('button', { name: /^3 steps/ });
-  (steps.element() as HTMLElement).focus();
-  await userEvent.keyboard('{Enter}');
-  const last = () => [...document.querySelectorAll('.steps-only')].at(-1) as Element;
-  await expect.poll(() => !!last()).toBe(true);
-  await expect.poll(() => belowTheBox(last())).toBeLessThanOrEqual(0);
-});
-
-test('steps taller than the chat above the message box keep their button in view as they open', async () => {
-  const screen = await render(<View state={atTheFoot(40)} />);
-  await atBottom();
-  const steps = screen.getByRole('button', { name: /^40 steps/ });
-  (steps.element() as HTMLElement).focus();
-  await userEvent.keyboard('{Enter}');
-  const viewport = document.querySelector('.thread-viewport') as HTMLElement;
-  const top = () =>
-    Math.round(steps.element().getBoundingClientRect().top - viewport.getBoundingClientRect().top);
-  // It moved up from the foot, and stopped clear of the top fade.
-  await expect.poll(top).toBeLessThan(300);
-  await expect.poll(top).toBeGreaterThanOrEqual(32);
 });

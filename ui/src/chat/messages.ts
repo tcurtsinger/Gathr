@@ -1,7 +1,5 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Failure, Named, PickedName, ReplyTarget, Role, Task } from '../api';
-import type { Out } from '../components/Outcome';
-import type { Said as State } from '../tasks/rows';
 import type { AskSize } from './asks';
 import type { Ending } from './ends';
 import type { Work } from './fold';
@@ -47,20 +45,11 @@ export interface EventLine {
   plan?: { id: number; version: number };
 }
 
-/** A main message's state at its name line's right (0075): its word, its PR, and where a Done of an ask leads. */
-export interface MainState {
-  said: State;
-  pr?: number;
-  /** The topic of the ask's newest result: its Done scrolls there. */
-  link?: string;
-}
-
 /** Where a block sits in a team chat (0075): which main message it is about, and whether it is that one. */
 export type Place = {
   topic?: string;
   /** In its main message's thread: smaller, inside the thread's rule. */
   reply?: boolean;
-  state?: MainState;
   /** An ask's result: the ask it closes and its first line, quoted. */
   result?: { ask: string; quote: string };
   /** What Reply on it answers; none where it offers no Reply. */
@@ -103,17 +92,15 @@ export type Custom = Place & {
   time?: string;
   /** The speaker changed from the block before, so this one names it. */
   head?: boolean;
-  /** The task a member's turn works on, after its name: "on Review PR #138". */
+  /** The task a member's turn works on, after its name in the agent's panel: "on Review PR #138". */
   on?: string;
   /** That task is done, and this is its last message: a tick after it. */
   done?: boolean;
-  /** That task was cancelled or failed, and this is its last message: the word after it. */
-  out?: Out;
-  /** What the turn did before its message, as one row. */
+  /** What the turn did before its message: its steps, in the agent's panel. */
   work?: Work;
   /** It has words to show, saved or streaming. */
   text?: boolean;
-  /** How its turn ended, on its last block: a word on its name line, what the person can do under the bubble. */
+  /** How its turn ended, on its last block: what the person can do under the bubble. */
   ending?: Ending;
   approvals?: Approval[];
   /** A message that never reached the service. */
@@ -154,8 +141,13 @@ export type Custom = Place & {
 export interface Timeline {
   /** What is drawn: main messages, fold lines and the replies of open threads. */
   items: ThreadMessageLike[];
-  /** Every block, folded or not, in the same order: what the agent's panel, the marks and the New pill read. */
+  /** Every block the chat draws, folded or not, in the same order: what the marks and the New pill read. */
   all: ThreadMessageLike[];
+  /**
+   * `all` and, in their places, the blocks the chat draws nothing for (a turn with no words yet, or only steps): what
+   * the agent's panel and the faces' marks read.
+   */
+  every: ThreadMessageLike[];
   find: (message: string) => Spot | undefined;
   /** The threads whose main message is handled and all seen (0077): those start folded when the chat opens. */
   handled: Set<string>;

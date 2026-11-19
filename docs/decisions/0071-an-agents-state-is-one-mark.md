@@ -51,3 +51,6 @@ The owner's ask: every agent's state at a glance, on its face, the same everywhe
   Needs you in the attention blue, from the same function the Tasks list reads (`ui/src/tasks/rows.ts`).
 - 2026-11-18, the status line goes ([0050](0050-what-a-chat-waits-on.md)'s change, the owner's call after their look):
   the marks on the faces and Summary say each agent's state; nothing above the message box repeats it.
+- 2026-11-18, the owner's look at the name line: of the state at a main message's right, "Remove all of it". The
+  marks stay on the faces, in Summary and in the Tasks views; no message says one
+  ([0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)'s change).

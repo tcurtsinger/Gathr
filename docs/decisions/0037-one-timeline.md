@@ -76,3 +76,12 @@ panel, the conversation map and the sidebar's dots are later slices of the same 
 - A team chat is main messages in time order, each with its thread. The one timeline stands for a chat of one agent
   and for what a chat said before it became a team. Inside a thread a turn's blocks keep their order by position, and
   the person's message sent into a running turn still splits it.
+
+## Changed, 2026-11-18
+
+The owner's look at the name line: "The steps can stay inside the agent's details in the panel. We dont need them on
+the bubble." Of a working agent's live line ("Running a command") before it has said anything: "Remove it". What a
+turn did, and what the agent is doing now, are no longer in the chat: the agent's panel shows them
+([0072](0072-the-chat-reads-like-a-team-chat.md)'s change). This turns over the "Turned down" above that the timeline
+has to stand alone: a turn's steps are read in the panel. A chat of one agent has its agent's panel too, since it
+keeps its list ([0028](0028-team-chats.md)'s change of the same day). A member's task is no longer named on its blocks.

@@ -5,29 +5,15 @@ import { Button } from '@/components/ui/button';
 import type { Failure } from '../api';
 import { MarkdownText } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
-import { Outcome } from '../components/Outcome';
 import { PickedText } from '../components/PickedText';
 import { Asked } from './Asked';
 import type { Ending } from './ends';
 import { Foot } from './Foot';
 import type { Like } from './likes';
-import { MainWord } from './MainWord';
 import type { Custom } from './messages';
-import {
-  AgentFace,
-  Bubble,
-  EndRow,
-  EndWord,
-  NameLine,
-  NewWord,
-  OnTask,
-  RoleWord,
-  Said,
-  When,
-  YouSaid,
-} from './Said';
+import { AgentFace, Bubble, EndRow, NameLine, NewWord, OnTask, Said, When, YouSaid } from './Said';
 import { SizeWord } from './Size';
-import { StepsButton, useStepsOpen } from './Steps';
+import { InPanel, StepsButton } from './Steps';
 import type { Approval } from './state';
 import { Earlier, TalkMessage } from './Talk';
 import { TaskMain } from './TaskMain';
@@ -40,7 +26,7 @@ export const custom = (s: { message: { metadata: { custom: Record<string, unknow
 
 /**
  * The person's own words, beside their face, in the blue-tinted bubble (0072), with their ask's size last on the name
- * line (0061); one not sent says so, with Retry.
+ * line (0061); one not sent says why under it, with Retry.
  */
 export function UserMessage() {
   const own = useAuiState(custom);
@@ -63,10 +49,8 @@ export function UserMessage() {
           name="You"
           pieces={[
             <When key="t" time={own.tick ?? own.time} />,
-            unsent && !stop && <EndWord key="e" word="Not sent" bad />,
             size && <SizeWord key="size" size={size} onFailure={setRefused} />,
           ]}
-          state={<MainWord state={own.state} />}
         />
       }
     >
@@ -126,24 +110,25 @@ function NewLine() {
 }
 
 /**
- * A block of an agent's turn: its face and name line (with how its task or turn ended, and its steps), its words in a
- * bubble with its plan's chip, thumbs-ups, then its approvals and what the person can do about how it ended. A block
- * with nothing to show draws nothing: a turn that has just started shows as its agent's Working mark, not as an empty message.
- * A main message says its state at its name line's right; an ask's result quotes the ask (0075). A reply sits in its
- * thread, smaller.
+ * A block of an agent's turn: its face and name line (the name, the time, New), its words in a bubble with its plan's
+ * chip, thumbs-ups, then its approvals and what the person can do about how it ended. An ask's result quotes the ask
+ * (0075). A reply sits in its thread, smaller. In the agent's panel its name line also says the task it worked on and
+ * ends with its steps; the chat draws nothing for a block with no words and nothing to act on (timeline.ts).
  */
 export function Reply({ own, id }: { own: Custom; id: string }) {
-  const { agent, by, role, seat, on, done, out, work, ending, approvals, agreed, plan, asked, result } = own;
+  const { agent, by, seat, on, done, ending, approvals, agreed, plan, asked, result } = own;
   const actions = useActions();
   const jump = useJump();
-  const [open, setOpen] = useStepsOpen(work);
+  const panel = useContext(InPanel);
+  const work = panel ? own.work : undefined;
+  const [open, setOpen] = useState(false);
   const small = own.reply;
   const words = !!own.text || !!plan || !!asked?.length;
-  if (!words && !work && !approvals?.length && !ending && !out && !agreed?.length) return null;
-  // How it ended says who: a block of its own is named.
-  const named = !!agent && (own.head || !!work || !!ending?.word || !!out || !!done);
-  // Steps, and how it ended, need their line even before the agent's name is known.
-  const lined = named || !!work || !!ending?.word;
+  if (!words && !work && !approvals?.length && !ending) return null;
+  // With no words, what it holds says who it is from.
+  const named = !!agent && (own.head || !words || !!work);
+  // Steps need their line even before the agent's name is known.
+  const lined = named || !!work;
   return (
     <Said
       root
@@ -153,9 +138,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
       // With no words, the steps are all the block has: they stay shown.
       keep={!!work && (work.running || !!work.failed || !!work.refused || !words)}
       // Nothing under the name line: the face sits beside it.
-      bare={
-        !words && !ending?.act && !approvals?.length && !agreed?.length && !(work && (open || work.running))
-      }
+      bare={!words && !ending && !approvals?.length && !(work && (open || work.running))}
       face={
         named && (
           <AgentFace
@@ -173,18 +156,11 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
           <NameLine
             name={agent ?? ''}
             pieces={[
-              // In a thread the lead is named alone, as every reply is.
-              role === 'supervisor' && !small && <RoleWord key="role" />,
               <When key="t" time={own.time} />,
               small && <NewWord key="new" topic={own.topic} time={own.time} />,
-              // The smallest honest mark of an ask's result: it closes the ask it quotes.
-              result && 'Result',
-              on && <OnTask key="on" what={on} done={done} />,
-              out && <Outcome key="out" out={out} />,
-              ending?.word && <EndWord key="end" word={ending.word} bad={ending.bad} />,
+              panel && on && <OnTask key="on" what={on} done={done} />,
             ]}
             end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
-            state={<MainWord state={own.state} />}
           />
         )
       }
@@ -215,7 +191,7 @@ export function Reply({ own, id }: { own: Custom; id: string }) {
       {approvals?.map((a) => (
         <AskApproval key={a.request} approval={a} agent={agent ?? ''} actions={actions} />
       ))}
-      {ending?.act && <EndActs ending={ending} agent={by} actions={actions} />}
+      {ending && <EndActs ending={ending} agent={by} actions={actions} />}
     </Said>
   );
 }

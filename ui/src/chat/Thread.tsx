@@ -17,6 +17,7 @@ import type { Answer, Custom, SendFailure } from './messages';
 import { useOlder } from './older';
 import { AssistantMessage, UserMessage } from './Replies';
 import { type Reads, ReadsContext } from './reads';
+import { InPanel } from './Steps';
 import { useSeen } from './seen';
 import { type Box, BoxContext } from './ThreadBox';
 import { FoundContext } from './TurnParts';
@@ -222,7 +223,7 @@ export function useStable(actions: Actions): Actions {
 
 /**
  * Blocks of the timeline on their own, drawn by the same components: the agent's panel lists an agent's
- * earlier ones this way.
+ * earlier ones this way, with their steps (`InPanel`).
  */
 export function Blocks({ messages, actions }: { messages: ThreadMessageLike[]; actions: Actions }) {
   const runtime = useExternalStoreRuntime({
@@ -234,9 +235,11 @@ export function Blocks({ messages, actions }: { messages: ThreadMessageLike[]; a
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <ActionsContext value={useStable(actions)}>
-        <ThreadPrimitive.Root className="thread-messages">
-          <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
-        </ThreadPrimitive.Root>
+        <InPanel value>
+          <ThreadPrimitive.Root className="thread-messages">
+            <ThreadPrimitive.Messages>{() => <ThreadMessage />}</ThreadPrimitive.Messages>
+          </ThreadPrimitive.Root>
+        </InPanel>
       </ActionsContext>
     </AssistantRuntimeProvider>
   );

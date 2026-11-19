@@ -25,10 +25,7 @@ test('an agent’s question sits in its bubble; the answer is the person’s mes
   let { all: items } = view(state);
   expect(custom(byId(items, 'a-ask')).asked).toEqual([5]);
   // The block that asked it is the question's main message, out of the ask's thread.
-  expect(custom(byId(items, 'a-ask'))).toMatchObject({
-    topic: 't:5',
-    state: { said: { word: 'Needs you' } },
-  });
+  expect(custom(byId(items, 'a-ask'))).toMatchObject({ topic: 't:5' });
   expect(items.some((m) => m.id === 'said-5')).toBe(false);
 
   // Answered before the members' turns ran; Mira hears it after them, in a turn of her own.

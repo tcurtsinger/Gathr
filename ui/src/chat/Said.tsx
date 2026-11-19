@@ -5,7 +5,7 @@ import { Face, type FaceSize, YouFace } from '../components/Face';
 import { Reference } from '../components/Notice';
 import { useMark } from './faceMarks';
 import { useIsNew } from './reads';
-import { clock, list, roleName } from './team';
+import { clock, list } from './team';
 import './said.css';
 import './mains.css';
 
@@ -97,36 +97,22 @@ export function AgentFace({
 export const YouSaid = ({ small }: { small?: boolean }) => <YouFace size={small ? 28 : 36} />;
 
 /**
- * The name line: the name, then every other piece in one size and colour with "·" between (the role, the time, the
- * task and its tick, how the task or the turn ended), and `end` after them: the steps. A main message's `state` sits at
- * the line's right (0075).
+ * The name line (the owner's call of 2026-11-18): the name, then the time and New with "·" between, and the person's
+ * ask's size on their own message. In the agent's panel the task it worked on and its tick follow, and `end` after
+ * them: the steps.
  */
-export function NameLine({
-  name,
-  pieces,
-  end,
-  state,
-}: {
-  name: string;
-  pieces: ReactNode[];
-  end?: ReactNode;
-  state?: ReactNode;
-}) {
+export function NameLine({ name, pieces, end }: { name: string; pieces: ReactNode[]; end?: ReactNode }) {
   // Each piece is its own element: the "·" before it is drawn by said.css, so a long chat makes no node for it.
   return (
     <div className="name-line">
       <span className="name-line-name">{name}</span>
       <span className="name-line-meta">
-        {pieces.map((p) => (typeof p === 'string' ? <span key={p}>{p}</span> : p))}
+        {pieces}
         {end}
       </span>
-      {state}
     </div>
   );
 }
-
-/** The lead's role on its name line; the 360 column leaves it out (mains.css). */
-export const RoleWord = () => <span className="name-line-role">{roleName.supervisor}</span>;
 
 /** When it was said, as the clock reads. */
 export const When = ({ time }: { time?: string }) =>
@@ -137,18 +123,11 @@ export function NewWord({ topic, time }: { topic?: string; time?: string }) {
   return useIsNew(topic, time) ? <span className="name-line-new">New</span> : null;
 }
 
-/** The task a member's message works on, and a tick once it is done. */
+/** In the agent's panel, the task a member's message works on, and a tick once it is done. */
 export const OnTask = ({ what, done }: { what: string; done?: boolean }) => (
   <span className="name-line-task">
     <span className="name-line-what">on {what}</span>
     {done && <Check role="img" aria-label="Done" />}
-  </span>
-);
-
-/** How its turn ended, a word on the name line (0051): "Gathr restarted", "Needs plan"; `bad` in the danger colour. */
-export const EndWord = ({ word, bad }: { word: string; bad?: boolean }) => (
-  <span className="name-line-end" data-bad={bad || undefined}>
-    {word}
   </span>
 );
 

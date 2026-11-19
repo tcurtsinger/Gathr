@@ -42,3 +42,19 @@ Gathr speaking as itself, and questions answered in the chat, how a turn or a ta
   message: each message is an item of its own in the thread of the main message it is about, under one fold line.
   The bubble, the name line, the @Name and the quote stand. A thread folds when the chat is opened, never by itself
   while the person looks.
+
+## Changed, 2026-11-18
+
+The owner's look at the name line: "The steps can stay inside the agent's details in the panel. We dont need them on
+the bubble." "I dont need the 'on <task>' anymore because they reply to what they are on already in the thread now."
+Of the small words: only "New" stays. Of a working agent's live line before it has said anything: "Remove it".
+
+- In the chat a name line is the name, the time, and New on a reply said while the person was away; the person's own
+  message keeps its ask's size. Nothing else: no Supervisor, no task and its tick, no steps.
+- A turn's steps, the task it worked on and its tick stay on its name line in the agent's panel, opened there as
+  before (`InPanel`, `ui/src/chat/Steps.tsx`).
+- A block with no words and nothing the person can act on draws nothing in the chat and counts nowhere (a reply, a
+  new one, the New pill, the map, a search hit): a turn at work before its first word, or one that only ran steps. Its
+  face's mark says the agent works; the panel lists it. A block with an approval, a question or Retry, Continue or
+  Sign in under it still shows, with its name and time.
+- Proof: `ui/src/chat/nameLine.test.tsx`, `ui/src/chat/AgentPanel.test.tsx`, `ui/src/chat/seen.test.tsx`.

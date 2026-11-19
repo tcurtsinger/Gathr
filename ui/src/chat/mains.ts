@@ -1,8 +1,8 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Task } from '../api';
-import { mainSaid, openSaid, type Said as State, versionSaid } from '../tasks/rows';
+import { mainSaid, type Said as State } from '../tasks/rows';
 import type { Group } from './groups';
-import type { Custom, MainState } from './messages';
+import type { Custom } from './messages';
 import type { ChatState } from './state';
 
 /** A thread opened long shows this many of its newest replies under "Show N earlier replies". */
@@ -81,41 +81,27 @@ function quiet(t: Thread, state: ChatState): boolean {
   return ![...turns].some((id) => OPEN.has(state.turns[id]?.status ?? ''));
 }
 
-/** A main message's state word and whether its thread is handled: what starts folded when the chat opens. */
-export function stateOf(
-  t: Thread,
-  state: ChatState,
-  results: Map<string, string>,
-): { state?: MainState; handled: boolean } {
+/**
+ * Whether a main message's thread is handled: what starts folded when the chat opens. Its state, as the Tasks list
+ * reads it, is no longer written on the message (the owner's call of 2026-11-18).
+ */
+export function handledOf(t: Thread, state: ChatState): boolean {
   const still = quiet(t, state);
-  if (t.task) {
-    const said = mainSaid(t.task, state.tasks);
-    return { state: { said, pr: t.task.pr ?? undefined }, handled: still && ended(said) };
-  }
+  if (t.task) return still && ended(mainSaid(t.task, state.tasks));
   const g = t.main;
   if (g?.kind === 'question' || (g?.kind === 'reply' && t.topic.startsWith('t:'))) {
     const task = state.tasks.find((x) => `t:${x.number}` === t.topic);
-    const said = task && mainSaid(task, state.tasks);
-    return { state: said && { said }, handled: still && !!said && ended(said) };
+    return still && !!task && ended(mainSaid(task, state.tasks));
   }
   if (g?.kind === 'version') {
-    for (const plan of state.plans) {
-      const version = plan.versions.find((v) => v.message === g.msgs[0].id);
-      if (!version) continue;
-      const said = versionSaid(plan, version);
-      return { state: said && { said }, handled: still && version.decided != null };
-    }
+    const version = state.plans.flatMap((p) => p.versions).find((v) => v.message === g.msgs[0].id);
+    if (version) return still && version.decided != null;
   }
   if (g?.kind === 'person') {
-    const id = g.msgs[0].id;
-    const ask = state.asks.find((a) => a.id === id);
-    const open = ask?.open ?? !still;
-    return {
-      state: { said: openSaid(open), link: open ? undefined : results.get(id) },
-      handled: !open && still,
-    };
+    const ask = state.asks.find((a) => a.id === g.msgs[0].id);
+    return !(ask?.open ?? !still) && still;
   }
-  return { handled: still };
+  return still;
 }
 
 const ended = (s: State) =>
@@ -159,6 +145,6 @@ function keeps(r: ThreadMessageLike): boolean {
     !!own.approvals?.length ||
     !!own.work?.failed ||
     !!own.work?.running ||
-    !!own.ending?.bad
+    own.ending?.turn.status === 'failed'
   );
 }

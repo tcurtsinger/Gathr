@@ -9,7 +9,8 @@
 .said-face {
   padding-top: 25px;
 }
-/* A message with no words yet (an agent at work, a turn that only ran steps): its face beside its name line. */
+/* A message with no words in the agent's panel (an agent at work, a turn that only ran steps): its face beside its name
+   line. */
 .said[data-bare] {
   align-items: center;
 }
@@ -83,7 +84,7 @@
 }
 
 /* The name line: the name, then one style for everything after it ("·" with 6px each side, 12px icons on the
-   letters' centre), on one line; a long task is cut with …. */
+   letters' centre), on one line; in the agent's panel a long task is cut with …. */
 .name-line {
   display: flex;
   align-self: stretch;
@@ -151,16 +152,6 @@
   flex: none;
   margin-left: 4px;
 }
-/* How the turn or its task ended, always shown, in the words' colour; Failed and Not sent in the danger colour. */
-.name-line-meta > .name-line-end,
-.name-line-meta > .outcome {
-  color: var(--foreground);
-}
-.name-line-meta > .name-line-end[data-bad],
-.name-line-meta > .outcome[data-out="failed"] {
-  color: var(--destructive);
-}
-
 /* What the person can do about how it ended, under the bubble: why, the reference, the button. */
 .said-main > .said-end {
   display: flex;
@@ -194,8 +185,8 @@
   color: var(--destructive);
 }
 
-/* A turn's steps on its name line: shown while the message is pointed at or has keyboard focus, and always for a failed
-   step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */
+/* A turn's steps on its name line in the agent's panel: shown while the message is pointed at or has keyboard focus,
+   and always for a failed step, an agent still working, or steps opened (opacity, so the keyboard still reaches it). */
 .steps-button {
   display: flex;
   flex: none;

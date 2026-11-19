@@ -127,86 +127,6 @@
   background: color-mix(in oklab, var(--attention) 65%, transparent);
 }
 
-/* A main message's state at its name line's right: its PR, then the mark's shape and its word. */
-.name-line > .main-state {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  margin-left: auto;
-  padding-left: 10px;
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-.main-state > * + *::before {
-  content: "·";
-  padding: 0 6px;
-}
-@supports (content: "·" / "") {
-  .main-state > * + *::before {
-    content: "·" / "";
-  }
-}
-.main-state-word {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-/* One gap between every mark's drawing and its word: each mark fills its box but the tick, the ring and the square,
-   whose drawings stop 2px, 1.5px and 1px short of their right edge. Needs you is the mock-up's small dot. */
-.main-state-word > .mark {
-  --mark: 12px;
-}
-.main-state-word > .mark[data-state="needs"] {
-  --mark: 7px;
-}
-.main-state-word > .mark[data-state="working"] {
-  margin-right: -1.5px;
-}
-.main-state-word > .mark[data-state="stopped"] {
-  margin-right: -1px;
-}
-.main-state-word > svg {
-  width: 12px;
-  height: 12px;
-  margin-right: -2px;
-}
-/* Needs you is the attention blue (0071); Working reads in the words' colour beside its ring. */
-.main-state-word[data-state="you"] {
-  color: var(--attention);
-  font-weight: 550;
-}
-.main-state-word[data-state="working"] {
-  color: var(--foreground);
-}
-.main-state-word.outcome[data-out="failed"] {
-  color: var(--destructive);
-}
-.main-state-link {
-  display: inline-flex;
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-.main-state-link:hover {
-  color: var(--foreground);
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
-/*
- * Beside a state, the name line's other pieces give way: a long task is cut, never the state. The 3px each side keeps
- * a focused steps button's ring inside what is clipped.
- */
-.name-line:has(> .main-state) > .name-line-meta {
-  margin: -3px;
-  padding: 3px;
-  overflow: hidden;
-}
-
 /* A task handed out: the @Name and the title, then the first line of why, the rest behind More. */
 .said-main > .bubble:has(> .task-main),
 .said-main > .said-words:has(> .bubble > .task-main),
@@ -313,15 +233,7 @@ button.bubble-quote:hover {
   color: var(--foreground);
 }
 
-/* The 360 column (#narrow): Supervisor leaves the name line; the state, the time and the fold line keep their place. */
+/* The chat's width, which the message box reads (its `cqw`). */
 .thread-viewport {
   container: chat / inline-size;
-}
-@container chat (max-width: 480px) {
-  .name-line-role {
-    display: none;
-  }
-  .name-line-meta > .name-line-role + *::before {
-    content: none;
-  }
 }

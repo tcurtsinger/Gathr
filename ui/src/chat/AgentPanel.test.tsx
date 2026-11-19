@@ -258,6 +258,41 @@ test('a working agent: when it began, its task, its running row opened, its earl
   expect(openedTasks).toEqual([7, 9]);
 });
 
+test('steps live in the panel: a turn that only ran steps shows there, opened by pointer and keyboard, not in the chat', async () => {
+  // The reviewer's turn that read and ran, one step failed, and said nothing.
+  service({
+    history: {
+      ...history,
+      turns: [...history.turns, turn('scan', 'c', 4, { task: 8 })],
+      messages: [
+        ...history.messages,
+        tool('t5', 'scan', 'Read'),
+        tool('t6', 'scan', 'Bash', { status: 'error' }),
+      ],
+    },
+  });
+  await render(<Chat />);
+  await openFromSummary(/^Made-up Third/);
+  const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
+  const steps = earlier.getByRole('button', { name: '2 steps · 1 failed' });
+  await expect.element(steps).toBeVisible();
+  (steps.element() as HTMLButtonElement).focus();
+  await userEvent.keyboard('{Enter}');
+  await expect.element(steps).toHaveAttribute('aria-expanded', 'true');
+  await expect.element(earlier.getByRole('button', { name: /Read a file/ })).toBeVisible();
+  await steps.click();
+  await expect.element(steps).toHaveAttribute('aria-expanded', 'false');
+  // The running turn's steps, opened in Now.
+  await openFromSummary(/^Made-up Member/);
+  await expect
+    .element(panel.getByRole('region', { name: 'Now' }).getByText('Running a command'))
+    .toBeVisible();
+  // The chat draws neither: no steps, and no block for a turn that said nothing.
+  const chat = page.getByRole('main').element();
+  expect(chat.querySelectorAll('.steps-button, .work')).toHaveLength(0);
+  expect(chat.textContent).not.toMatch(/Running a command|failed/);
+});
+
 test("a cancelled task is listed in its owner's tab, and a fix Gathr gave reads as Gathr's", async () => {
   service({
     tasks: [task(7, 'b', { state: 'working', by_gathr: true }), task(12, 'b', { state: 'cancelled' })],
@@ -547,8 +582,10 @@ test('behind another tab the panel keeps its scroll and its opened rows, and not
   await other.click();
   const next = tool('t9', 'now', 'Edit', { status: 'running' });
   for (const listener of live) listener({ type: 'message', chat: 'c', message: next });
-  // A running row shows its latest step under "Working".
-  await expect.element(page.getByRole('main').getByText('Editing a file', { exact: true })).toBeVisible();
+  // The chat draws no step: another agent's words after it say the step has come.
+  const after = said('m10', 'rev', 'Made-up later note');
+  for (const listener of live) listener({ type: 'message', chat: 'c', message: after });
+  await expect.element(page.getByRole('main').getByText('Made-up later note')).toBeVisible();
   expect(scroller.querySelector('[data-slot="run-activity"][data-status="running"]')?.textContent).toContain(
     'Running a command',
   );

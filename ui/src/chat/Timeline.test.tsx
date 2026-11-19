@@ -1,4 +1,5 @@
-// The one timeline as the person uses it (0037): a turn's steps, Gathr's event lines, a long name line and the
+// The one timeline as the person uses it (0037): a turn's steps in the agent's panel, Gathr's event lines, a long name
+// line there and the
 // what a needs-you row in Summary goes to when an approval waits. Talk between agents and thumbs-ups are in TeamChat.test.tsx (0072).
 import { useRef } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -9,7 +10,7 @@ import { ChatView } from './ChatView';
 import { opened as everyThread } from './madeUp';
 import { toThread } from './messages';
 import { type ChatState, empty } from './state';
-import { type Actions, Thread } from './Thread';
+import { type Actions, Blocks, Thread } from './Thread';
 
 vi.mock('../live', () => ({ listen: () => () => {} }));
 afterEach(() => vi.unstubAllGlobals());
@@ -65,7 +66,8 @@ const task = (number: number, more: Partial<Task>): Task => ({
   ...more,
 });
 
-function View({ state, actions }: { state: ChatState; actions?: Partial<Actions> }) {
+/** The chat; with `panel`, its blocks as the agent's panel draws them, steps on their name lines (`InPanel`). */
+function View({ state, actions, panel }: { state: ChatState; actions?: Partial<Actions>; panel?: boolean }) {
   const cache = useRef(new Map());
   const none = () => {};
   const all: Actions = {
@@ -80,19 +82,16 @@ function View({ state, actions }: { state: ChatState; actions?: Partial<Actions>
     approve: none,
     ...actions,
   };
+  const timeline = toThread(state, agents, [], cache.current, everyThread);
+  if (panel) return <Blocks messages={timeline.every} actions={all} />;
   return (
     <div style={{ height: 600, display: 'flex' }}>
-      <Thread
-        messages={toThread(state, agents, [], cache.current, everyThread).items}
-        running={false}
-        actions={all}
-        empty={false}
-      />
+      <Thread messages={timeline.items} running={false} actions={all} empty={false} />
     </div>
   );
 }
 
-test('a turn’s steps open from its name line, with what it wrote between them, and a task it gave opens from there', async () => {
+test('in the agent’s panel a turn’s steps open from its name line, with what it wrote between them, and a task it gave opens', async () => {
   const state: ChatState = {
     ...empty,
     members,
@@ -107,7 +106,7 @@ test('a turn’s steps open from its name line, with what it wrote between them,
     ],
   };
   const opened: number[] = [];
-  const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} />);
+  const screen = await render(<View state={state} actions={{ openTask: (n) => opened.push(n) }} panel />);
   await expect.element(screen.getByText('Made-up final answer')).toBeVisible();
   // Folded: the remark and the steps aren't drawn.
   expect(screen.getByText('Made-up remark mid-work').query()).toBeNull();
@@ -137,7 +136,7 @@ test('a step’s chip says what it ran, cut to the column; the step opens to it 
   };
   const screen = await render(
     <div style={{ width: 520 }}>
-      <View state={state} />
+      <View state={state} panel />
     </div>,
   );
   await screen.getByRole('button', { name: '3 steps · 48s' }).click();
@@ -168,7 +167,7 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
   };
   const screen = await render(
     <div style={{ width: 520 }}>
-      <View state={state} />
+      <View state={state} panel />
     </div>,
   );
   const row = screen.getByRole('button', { name: '1 step' });
@@ -183,19 +182,6 @@ test('the keyboard opens a step: Tab reaches it from its row, Enter shows what i
   await expect
     .poll(() => [...document.querySelectorAll('.work ol p')].some((p) => p.textContent === long))
     .toBe(true);
-});
-
-test('a running turn shows its steps on its name line and what the agent is doing now under it, with no bubble yet', async () => {
-  const state: ChatState = {
-    ...empty,
-    members,
-    turns: { lead: turn('lead', 'a', 0, { status: 'running' }) },
-    messages: [tool('t1', 'lead', 'Read'), tool('t2', 'lead', 'Shell', { status: 'running' })],
-  };
-  const screen = await render(<View state={state} />);
-  await expect.element(screen.getByRole('button', { name: '2 steps' })).toBeVisible();
-  await expect.element(screen.getByText('Running a command', { exact: true })).toBeVisible();
-  expect(document.querySelector('.bubble')).toBeNull();
 });
 
 test('two answers that read the same are each the person’s own message, under the question each answers', async () => {
@@ -231,7 +217,7 @@ test('two answers that read the same are each the person’s own message, under 
   expect(errors.mock.calls.filter(([said]) => String(said).includes('same key'))).toEqual([]);
   errors.mockRestore();
 });
-test('a member’s name line stays one line however long its task is, cut with its time in view', async () => {
+test('in the agent’s panel a member’s name line stays one line however long its task is, cut with its time in view', async () => {
   const what = `Made-up task ${'with a very long title '.repeat(12)}end`;
   const state: ChatState = {
     ...empty,
@@ -240,7 +226,7 @@ test('a member’s name line stays one line however long its task is, cut with i
     tasks: [task(7, { what })],
     messages: [said('m', 'work', 'Made-up finding')],
   };
-  const screen = await render(<View state={state} />);
+  const screen = await render(<View state={state} panel />);
   await expect.element(screen.getByText('Made-up finding')).toBeVisible();
   const line = document.querySelector('.name-line') as HTMLElement;
   expect(line.textContent).toContain(`on ${what}`);

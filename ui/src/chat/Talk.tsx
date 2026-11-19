@@ -1,9 +1,10 @@
 import { MessagePrimitive } from '@assistant-ui/react';
+import { useContext, useState } from 'react';
 import { afterDraw, Foot } from './Foot';
 import type { Custom } from './messages';
 import { parts } from './Replies';
 import { AgentFace, Bubble, NameLine, NewWord, Said, When } from './Said';
-import { StepsButton, useStepsOpen } from './Steps';
+import { InPanel, StepsButton } from './Steps';
 import { useActions } from './Thread';
 import { WorkRow } from './TurnParts';
 import type { Said as Message } from './threads';
@@ -36,12 +37,16 @@ export function Earlier({ earlier }: { earlier: NonNullable<Custom['earlier']> }
   );
 }
 
-/** A message between agents (0072), an item of its own: in a thread, smaller, with the @Name of whom it is to. */
+/**
+ * A message between agents (0072), an item of its own: in a thread, smaller, with the @Name of whom it is to. In the
+ * agent's panel it carries the steps of a turn that only sent it.
+ */
 export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
   const actions = useActions();
-  const [open, setOpen] = useStepsOpen(m.work);
+  const work = useContext(InPanel) ? m.work : undefined;
+  const [open, setOpen] = useState(false);
   const name = m.from ?? 'An agent';
-  const { by, work } = m;
+  const { by } = m;
   const small = own.reply;
   return (
     <Said
