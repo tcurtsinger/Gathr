@@ -1,4 +1,5 @@
-//! A thumbs-up (Stage 3, part C): an agent agrees with another agent's message, with no message and no turn.
+//! A thumbs-up (Stage 3, part C): an agent agrees with the person's message or another agent's, with no
+//! message and no turn.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
@@ -13,8 +14,25 @@ pub struct Added {
     pub time: String,
 }
 
+/// The person's message `turn` answers: the last of theirs to reach it, itself or Gathr's copy of it
+/// (0028). Refused when the turn has none.
+pub fn persons(conn: &Connection, turn: &str) -> Result<String, Error> {
+    conn.query_row(
+        "SELECT o.id FROM messages m JOIN messages o ON o.id = COALESCE(m.copy_of, m.id)
+         WHERE m.turn_id = ?1 AND o.role = 'user' AND o.kind = 'text' ORDER BY m.ts DESC, m.rowid DESC LIMIT 1",
+        [turn],
+        |r| r.get(0),
+    )
+    .optional()?
+    .ok_or_else(|| {
+        Error::Refused(
+            "your turn answers no message of the person's: give the message's id.".into(),
+        )
+    })
+}
+
 /// Puts `agent`'s thumbs-up on `message` in `chat`, on the caller's transaction. Gathr's copy of a
-/// teammate's message stands for the message it carries.
+/// message stands for the message it carries.
 pub fn add(
     conn: &Connection,
     chat: &str,
@@ -37,15 +55,13 @@ pub fn add(
             "No message {message} in this chat: use an id that read_chat or a message to you gives."
         )));
     };
-    let agents = "a thumbs-up goes on another agent's message.";
-    if role != "assistant" {
-        return Err(Error::Refused(format!(
-            "{message} isn't an agent's message: {agents}"
-        )));
+    let goes = "a thumbs-up goes on the person's message or another agent's.";
+    if role != "assistant" && role != "user" {
+        return Err(Error::Refused(format!("{message} is Gathr's line: {goes}")));
     }
-    if author.as_deref() == Some(agent) {
+    if role == "assistant" && author.as_deref() == Some(agent) {
         return Err(Error::Refused(format!(
-            "{message} is your own message: {agents}"
+            "{message} is your own message: {goes}"
         )));
     }
     let added = conn.execute(
