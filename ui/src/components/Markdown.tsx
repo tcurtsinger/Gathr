@@ -86,6 +86,28 @@ export function preloadCodeBlock() {
   );
 }
 
+/**
+ * Words outside a message, a plan's text or a task's field, formatted as an agent's words in the chat are (the owner's
+ * call of 2026-11-19): the same plugins and the same rules (markdown.css), at the size of where they sit.
+ */
+export function Markdown({ text, className }: { text: string; className?: string }) {
+  return (
+    <Streamdown
+      mode="static"
+      className={className ? `markdown ${className}` : 'markdown'}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={components}
+      linkSafety={{ enabled: false }}
+      controls={controls}
+      tableMaxHeight={Number.POSITIVE_INFINITY}
+      plugins={plugins}
+    >
+      {text}
+    </Streamdown>
+  );
+}
+
 /** An agent's text, formatted by Streamdown as it streams (0030). */
 export function MarkdownText() {
   // A reply already finished when it's drawn parses in one pass (a chat with hundreds of them opens

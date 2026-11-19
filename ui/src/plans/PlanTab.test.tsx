@@ -555,3 +555,31 @@ test('an older version says Replaced, with no foot', async () => {
   await expect.element(screen.getByText('Replaced')).toBeVisible();
   expect(document.querySelector('footer')).toBeNull();
 });
+
+// The owner, 2026-11-19, with a plan's tab full of raw asterisks and backticks: "We need the same formatting that is
+// in the chat in the tasks / plans".
+test("a plan's text and a part's brief are formatted as an agent's words in the chat are", async () => {
+  const text =
+    'Five PRs.\n\n- **Hear-backs.** The line in `tasks/words.rs` keeps its note.\n- **CI failures.** Two.';
+  const parts = [{ ...part(1), why: 'Read `waits.rs` **first**.' }];
+  serve(plan({ versions: [version(2, { text, parts })] }));
+  const screen = await render(tab());
+  const page = screen.getByRole('region', { name: 'Plan' });
+  await expect.element(page.getByText('Hear-backs.', { exact: true })).toBeVisible();
+  const body = page.element().querySelector('.plan-text') as HTMLElement;
+  expect(body.textContent).not.toContain('**');
+  expect(body.textContent).not.toContain('`');
+  expect(
+    [...body.querySelectorAll('[data-streamdown="list-item"] [data-streamdown="strong"]')].map(
+      (s) => s.textContent,
+    ),
+  ).toEqual(['Hear-backs.', 'CI failures.']);
+  expect(body.querySelector('[data-streamdown="inline-code"]')?.textContent).toBe('tasks/words.rs');
+
+  await page.getByRole('button', { name: /Part 1/ }).click();
+  const brief = page
+    .element()
+    .querySelector('dl.task-fields:has([data-streamdown="inline-code"])') as HTMLElement;
+  expect(brief.querySelector('[data-streamdown="inline-code"]')?.textContent).toBe('waits.rs');
+  expect(brief.querySelector('[data-streamdown="strong"]')?.textContent).toBe('first');
+});
