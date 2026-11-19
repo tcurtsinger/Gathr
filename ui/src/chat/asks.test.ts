@@ -119,7 +119,8 @@ test('a sized ask’s size sits on its own message, with who sized it, and on no
     asks: [ask('m1', { size: 'repair', by: 'mira', sized_in: 'hb' })],
   });
   const items = view(state);
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb']);
+  // Gathr's words that opened the hear-back are its bubble's quote (0078).
+  expect(ids(items)).toEqual(['m1', 'a-ask', 'a-hb']);
   expect(sizes(items)).toEqual({ m1: { ask: 'm1', size: 'repair', by: mira } });
 
   const resized = chat({
@@ -142,7 +143,8 @@ test('an unsized ask not held, with no task, still shows none', () => {
   const items = view(
     chat({ tasks: [task(1, { ask: 'm9' })], asks: [ask('m9'), ask('m1', { held: false })] }),
   );
-  expect(ids(items)).toEqual(['m1', 'a-ask', 'g1', 'a-hb']);
+  // Gathr's words that opened the hear-back are its bubble's quote (0078).
+  expect(ids(items)).toEqual(['m1', 'a-ask', 'a-hb']);
   expect(sizes(items)).toEqual({});
 });
 

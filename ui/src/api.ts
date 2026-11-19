@@ -92,6 +92,8 @@ export interface Turn {
   held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
   /** The main message it sits under (0075): `t:<task>`, `m:<message>`, `r:<turn>` (a result), `b:<turn>` (its own). */
   topic?: string | null;
+  /** The ask it is the result of (0051): the result quotes it. */
+  result_of?: string | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';
@@ -595,8 +597,6 @@ export interface History {
   streaming?: { turn: string; agent: string | null; text: string }[];
   /** Agents' thumbs-ups, oldest first. */
   reactions?: Reaction[];
-  /** When its second agent joined: what came before reads as a chat of one (0075). */
-  team_since?: string | null;
   /** Where the person left off, by thread (0077); none yet for a chat not opened since. */
   reads?: Read[];
 }

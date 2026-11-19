@@ -115,10 +115,11 @@ function planned(): ChatState {
     ...empty,
     members,
     turns: {
-      // What each is about, as the service names it (0075): the ask, then the version checked and sent back.
-      ask: turn('ask', 'mira', 0, { topic: 'm:m1' }),
-      check: turn('check', 'bo', 1, { task: 2, answers: 'ask', topic: 'm:v1' }),
-      back: turn('back', 'mira', 2, { answers: 'ask', topic: 'm:v1' }),
+      // What each is about, as the service names it (0078): the lead's answer that wrote the version, its check under
+      // it, then the lead's turn the send-back opened, which wrote the next.
+      ask: turn('ask', 'mira', 0, { topic: 'b:ask' }),
+      check: turn('check', 'bo', 1, { task: 2, answers: 'ask', topic: 'b:ask' }),
+      back: turn('back', 'mira', 2, { answers: 'ask', topic: 'b:back' }),
     },
     messages: [
       message('m1', 'ask', 'user', 0, 'Add tags to notes'),
@@ -130,7 +131,7 @@ function planned(): ChatState {
       message('b1', 'check', 'gathr', 100, 'Task #2 from Mira: Check plan v1: Tags on notes'),
       {
         ...message('c1', null, 'gathr', 160, 'Bo agrees with version 1 of the plan "Tags on notes".'),
-        topic: 'm:v1',
+        topic: 'b:ask',
       },
       message(
         'sb',
@@ -142,7 +143,7 @@ function planned(): ChatState {
       message('v2', 'back', 'assistant', 210, body(2)),
       {
         ...message('ap', null, 'gathr', 500, 'Approved: version 2 of the plan "Tags on notes", 9 tasks.'),
-        topic: 'm:v2',
+        topic: 'b:back',
       },
     ],
     tasks: [
@@ -169,46 +170,39 @@ const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const text = (m: ThreadMessageLike | undefined) =>
   ((m?.content ?? []) as readonly { text?: string }[]).map((p) => p.text).join(' | ');
 
-test("a version is its own block after the lead's earlier text, headed by the lead, with its chip and thumbs-up", () => {
+/** What a block's bubble draws, in order: words, a run of steps, a plan's chip. */
+const kinds = (m: ThreadMessageLike | undefined) =>
+  custom(m).pieces?.map((p) => ('run' in p ? 'run' : 'plan' in p ? `plan v${p.plan.version}` : 'words'));
+
+test("a version is a chip in the bubble of the turn that wrote it, where it wrote it, with the bubble's thumbs-ups", () => {
   const items = view(planned());
-  const order = ids(items);
-  expect(order.indexOf('v1')).toBeGreaterThan(order.indexOf('a-ask'));
-  const earlier = custom(items.find((m) => m.id === 'a-ask')).work?.steps;
-  expect(earlier).toContainEqual(expect.objectContaining({ say: 'Reading the notes code first.' }));
-  const second = items.find((m) => m.id === 'v2');
-  expect(second?.role).toBe('assistant');
-  expect(custom(second)).toMatchObject({
-    agent: 'Mira',
-    head: true,
+  // One bubble per turn (0078): no block of the version's own.
+  expect(ids(items)).not.toContain('v1');
+  expect(ids(items)).not.toContain('v2');
+  const second = items.find((m) => m.id === 'a-back');
+  expect(custom(second)).toMatchObject({ agent: 'Mira', agreed: ['Bo'], topic: 'b:back' });
+  expect(kinds(second)).toEqual(['plan v2']);
+  expect(custom(second).pieces?.find((p) => 'plan' in p)).toMatchObject({
     plan: { plan: 3, version: 2, parts: 9 },
-    agreed: ['Bo'],
   });
   // Its words are the tab's, not the timeline's.
   expect(text(second)).toBe('');
 });
 
-test("the lead's text after the plan call is a block of its own in the ask's thread; the version is a main message", () => {
+test("the lead's words before and after the plan call stay in its one bubble, a main message", () => {
   const items = view(planned());
-  const order = ids(items);
-  // The ask's thread holds the lead's text before and after the call (before it, only steps and words said mid-work:
-  // the agent's panel shows them); the chip is its own main message after it.
-  expect(order.slice(order.indexOf('m1'), order.indexOf('a-ask-1') + 1)).toEqual(['m1', 'a-ask', 'a-ask-1']);
-  expect(order.indexOf('v1')).toBeGreaterThan(order.indexOf('a-ask-1'));
-  expect(custom(items.find((m) => m.id === 'v1'))).toMatchObject({ head: true, topic: 'm:v1' });
-  expect(custom(items.find((m) => m.id === 'v1')).reply).toBeUndefined();
-  expect(text(items.find((m) => m.id === 'a-ask-1'))).toBe('Bo checks it next.');
+  const first = items.find((m) => m.id === 'a-ask');
+  expect(ids(items)).not.toContain('a-ask-1');
+  expect(kinds(first)).toEqual(['words', 'run', 'plan v1', 'words']);
+  expect(text(first)).toBe('Reading the notes code first. | Bo checks it next.');
+  expect(custom(first)).toMatchObject({ head: true, topic: 'b:ask' });
+  expect(custom(first).reply).toBeUndefined();
 });
-test("Gathr's plan lines are kind version, each with its plan", () => {
+
+test("Gathr's plan lines are kind version, each with its plan; Sent back is the quote of the turn it opened", () => {
   const items = view(planned());
   const lines = items.flatMap((m) => custom(m).events ?? []);
   expect(lines).toEqual([
-    {
-      kind: 'version',
-      who: 'Plan v1:',
-      text: 'Sent back',
-      more: 'Split part 2',
-      plan: { id: 3, version: 1 },
-    },
     {
       kind: 'version',
       who: 'Plan v2:',
@@ -217,6 +211,7 @@ test("Gathr's plan lines are kind version, each with its plan", () => {
       plan: { id: 3, version: 2 },
     },
   ]);
+  expect(custom(items.find((m) => m.id === 'a-back')).opened).toBe('Plan v1: Sent back: Split part 2');
 });
 
 test('a check line says the outcome the version reached the person with', () => {
@@ -246,18 +241,18 @@ test('a check line says the outcome the version reached the person with', () => 
       .find((e) => e.kind === 'version')?.text;
   const unfinished = 'Plan v1 came to you before Bo finished checking it.';
   expect([findings, late, failed].map(said)).toEqual(['2 findings', unfinished, unfinished]);
-  // None of them is a thumbs-up on the version.
-  const first = (state: ChatState) => custom(view(state).find((m) => m.id === 'v1')).agreed;
+  // None of them is a thumbs-up on the bubble that holds the version.
+  const first = (state: ChatState) => custom(view(state).find((m) => m.id === 'a-ask')).agreed;
   expect([findings, late, failed].map(first)).toEqual([[], [], []]);
 });
 
-test("a check that agrees is its checker's thumbs-up on the version, with no line of its own (0072)", () => {
+test("a check that agrees is its checker's thumbs-up on the version's bubble, with no line of its own (0072)", () => {
   const items = view(planned());
-  expect(custom(items.find((m) => m.id === 'v1')).agreed).toEqual(['Bo']);
+  expect(custom(items.find((m) => m.id === 'a-ask')).agreed).toEqual(['Bo']);
   // Given once: a thumbs-up Bo also gave by hand doesn't count twice.
   const both = planned();
   both.reactions.push({ message: 'v1', agent: 'bo', time: iso(170) });
-  expect(custom(view(both).find((m) => m.id === 'v1')).agreed).toEqual(['Bo']);
+  expect(custom(view(both).find((m) => m.id === 'a-ask')).agreed).toEqual(['Bo']);
 });
 
 test("a hear-back draws no line: the plan's own lines say how its check ended", () => {
@@ -292,7 +287,7 @@ test("a hear-back draws no line: the plan's own lines say how its check ended", 
   const lines = view(state).flatMap((m) => custom(m).events ?? []);
   expect(
     lines.filter((e) => e.kind === 'task' || e.kind === 'version').map((e) => `${e.who} ${e.text}`),
-  ).toEqual(['Plan v1: 1 finding', 'Plan v1: Sent back', 'Plan v2: Approved']);
+  ).toEqual(['Plan v1: 1 finding', 'Plan v2: Approved']);
 });
 
 test('a give_task call in the same turn as the plan keeps its label', () => {

@@ -45,6 +45,7 @@ export type LiveEvent =
       created?: string;
       position?: number | null;
       topic?: string | null;
+      result_of?: string | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }

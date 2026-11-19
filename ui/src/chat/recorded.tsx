@@ -6,6 +6,7 @@ import { useFolds } from './folds';
 import { toThread } from './messages';
 import askAtWork from './recorded/ask-at-work.json';
 import askDone from './recorded/ask-done.json';
+import chatOfOne from './recorded/chat-of-one.json';
 import oldChat from './recorded/old-chat.json';
 import questionDiscussed from './recorded/question-discussed.json';
 import reviewAndFix from './recorded/review-and-fix.json';
@@ -17,6 +18,8 @@ const recorded = {
   askAtWork,
   /** The same ask once all is in: a part done, a part cancelled, the lead's hear-backs, the ask's result. */
   askDone,
+  /** A chat of one agent: two answers, and the person's reply to the first in its thread (0078). */
+  chatOfOne,
   /** A chat from before asks and `opened_by`: its turns tied by `task` and `answers` alone. */
   oldChat,
   /** A member's question the person discussed: it waits on them again. */

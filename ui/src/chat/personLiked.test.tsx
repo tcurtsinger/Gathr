@@ -36,11 +36,37 @@ const countIn = (said: HTMLElement, names: string) =>
   page.elementLocator(said).getByRole('button', { name: `Thumbs-up from ${names}` });
 const shown = (el: Element) => getComputedStyle(el).display !== 'none';
 
+/** The person's reply to `to`, in a turn of the lead's in the thread `topic`, sent a minute after the chat's last word. */
+function replied(state: ChatState, to: string, topic: string): { more: ChatState; reply: Message } {
+  const turn: Turn = {
+    id: 'made-up-reply-turn',
+    agent: state.members[0].agent,
+    status: 'done',
+    why: null,
+    ref: 'made0up2',
+    position: 99,
+    topic,
+  };
+  const reply: Message = {
+    id: 'made-up-reply',
+    turn: turn.id,
+    time: new Date(Date.parse(state.messages.at(-1)?.time ?? '') + 60_000).toISOString(),
+    role: 'user',
+    kind: 'text',
+    body: 'Made-up reply of the person',
+    reply_to: to,
+  };
+  const more = { ...state, turns: { ...state.turns, [turn.id]: turn }, messages: [...state.messages, reply] };
+  return { more, reply };
+}
+
 test("an agent's thumbs-up on the person's message: the count beside its fold line, who by pointer and keyboard", async () => {
   const { state, ask, lead, ann } = askDone();
   const like = vi.fn();
+  // The person's own follow-up to their ask gives it a thread (0078: the lead's answer is a main of its own).
+  const { more } = replied(state, ask, `m:${ask}`);
   await render(
-    <View state={{ ...state, reactions: [given(ask, ann, 1), given(ask, lead, 2)] }} actions={{ like }} />,
+    <View state={{ ...more, reactions: [given(ask, ann, 1), given(ask, lead, 2)] }} actions={{ like }} />,
   );
   const main = await vi.waitFor(() => saidWith(WORDS));
   const count = countIn(main, 'Ann and Lead');
@@ -89,43 +115,22 @@ test('the person can’t like their own message: no Like on it, and its count is
 
 test("an agent's thumbs-up on the person's reply in a thread shows under the reply", async () => {
   const { state, ask, ann } = askDone();
-  // The lead's last words in the ask's thread: the reply answers them, so it sits there too.
-  const answer = state.messages.findLast(
-    (m) => m.role === 'assistant' && m.kind === 'text' && state.turns[m.turn ?? '']?.topic === `m:${ask}`,
+  // The lead's words in its answer to the ask, a main message (0078): the reply answers them, so it sits there.
+  const asked = state.messages.find((m) => m.id === ask)?.turn as string;
+  const answer = state.messages.find(
+    (m) => m.role === 'assistant' && m.kind === 'text' && m.turn === asked,
   ) as Message;
-  const turn: Turn = {
-    id: 'made-up-reply-turn',
-    agent: state.members[0].agent,
-    status: 'done',
-    why: null,
-    ref: 'made0up2',
-    position: 99,
-    topic: `m:${ask}`,
-  };
-  const reply: Message = {
-    id: 'made-up-reply',
-    turn: turn.id,
-    time: '2026-11-18T23:00:00Z',
-    role: 'user',
-    kind: 'text',
-    body: 'Made-up reply of the person',
-    reply_to: answer.id,
-  };
-  const more: ChatState = {
-    ...state,
-    turns: { ...state.turns, [turn.id]: turn },
-    messages: [...state.messages, reply],
-    reactions: [given(reply.id, ann, 1)],
-  };
-  await render(<View state={more} />);
-  const main = await vi.waitFor(() => saidWith(WORDS));
+  const { more, reply } = replied(state, answer.id, `b:${asked}`);
+  await render(<View state={{ ...more, reactions: [given(reply.id, ann, 1)] }} />);
+  await vi.waitFor(() => saidWith(WORDS));
+  const main = document.querySelectorAll<HTMLElement>('.thread-messages > .said:not([data-reply])')[1];
   const fold = main.querySelector('.fold-line') as HTMLButtonElement;
   if (fold.getAttribute('aria-expanded') === 'false') await userEvent.click(fold);
   const said = await vi.waitFor(() => saidWith('Made-up reply of the person'));
   expect(said.hasAttribute('data-reply')).toBe(true);
   await expect.element(countIn(said, 'Ann')).toBeVisible();
-  // The main message has none of its own.
-  expect(main.querySelector('.react')).toBeNull();
+  // The main message has none of Ann's: only its check's, from Rev.
+  expect(main.querySelector('[aria-label="Thumbs-up from Ann"]')).toBeNull();
 });
 
 test("in a chat of one agent, drawn flat, the agent's thumbs-up shows under the person's message", async () => {

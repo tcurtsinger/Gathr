@@ -51,7 +51,9 @@ pub fn threads(conn: &Connection, chat: &str, schema: i64) -> Result<Value, Erro
             .chain(lines.iter().map(|(_, t)| t))
     };
     let mains: HashSet<&str> = all().map(|t| t.key.as_str()).collect();
+    let said = turns.iter().filter(|(_, t)| SAID.contains(&t.fact)).count();
     let counts = json!({
+        "said_to_person": said,
         "turns": by_fact(turns.iter().map(|(_, t)| t)),
         "tasks": by_fact(tasks.iter().map(|(_, t)| t)),
         "lines": by_fact(lines.iter().map(|(_, t)| t)),
@@ -71,6 +73,9 @@ pub fn threads(conn: &Connection, chat: &str, schema: i64) -> Result<Value, Erro
     answer["in_words"] = in_words(&answer).into();
     Ok(answer)
 }
+
+/// The facts that make a turn's bubble a main message because it is said to the person (0078).
+const SAID: [&str; 4] = ["person", "picked", "lead", "plan"];
 
 fn by_fact<'a>(topics: impl Iterator<Item = &'a Topic>) -> BTreeMap<&'static str, usize> {
     let mut counted = BTreeMap::new();
@@ -103,6 +108,11 @@ fn in_words(a: &Value) -> String {
         let facts: Vec<String> = facts.map(|(fact, n)| format!("{fact} {n}")).collect();
         out.push(format!("{kind} by what tied them: {}", facts.join(", ")));
     }
+    out.push(format!(
+        "Said to the person, each its own main message: {} turns (person: the person's message opened \
+         it; picked: their message to several agents; lead: the lead on no task; plan: it wrote a plan).",
+        c["said_to_person"]
+    ));
     out.push(format!(
         "Tied to nothing: {}, of which a link leads nowhere: {}.",
         c["tied_to_nothing"], c["broken"]

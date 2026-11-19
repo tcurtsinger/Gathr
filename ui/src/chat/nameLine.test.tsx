@@ -101,15 +101,15 @@ test('a working turn with no words is a reply in its thread from its first step;
   state.turns.rowan = { ...state.turns.rowan, status: 'running' };
   state.messages = state.messages.filter((m) => !(m.turn === 'rowan' && m.role === 'assistant'));
   state.messages.push(tool('rowan', 'rowan-run', 'Bash', { status: 'running' }));
-  const ask = `m:${state.messages[0].id}`;
+  // The thread of Mira's answer to the ask, a main message of its own (0078).
   const main = (s: ChatState) => {
     const t = toThread(s, agents, [], new Map(), opened);
-    return { t, fold: custom(t.items.find((i) => i.id === state.messages[0].id)).thread };
+    return { t, fold: custom(t.items.find((i) => i.id === 'a-ask')).thread };
   };
   const before = main(state);
   expect(before.t.items.map((i) => i.id)).toContain('a-rowan');
-  // Mira's words, Kit's and Rowan's at work.
-  expect(before.fold).toMatchObject({ topic: ask, count: 3 });
+  // Kit's words and Rowan's at work.
+  expect(before.fold).toMatchObject({ topic: 'b:ask', count: 2 });
   expect(before.t.find('rowan-run')?.id).toBe('a-rowan');
 
   const screen = await render(<View state={state} />);
@@ -124,7 +124,7 @@ test('a working turn with no words is a reply in its thread from its first step;
   await screen.rerender(<View state={streaming} />);
   await expect.element(page.getByText('Looking at the cursor')).toBeVisible();
   expect(pieces(blockOf('rowan')?.querySelector('.name-line') as Element)).toEqual(['time']);
-  expect(main(streaming).fold?.count).toBe(3);
+  expect(main(streaming).fold?.count).toBe(2);
 });
 
 test('an ended turn that only ran steps keeps its line as a reply; a turn dropped before it ran draws nothing', () => {
@@ -133,8 +133,11 @@ test('an ended turn that only ran steps keeps its line as a reply; a turn droppe
   state.messages.push(tool('rowan', 'rowan-read', 'Read'), tool('rowan', 'rowan-edit', 'Edit'));
   const t = toThread(state, agents, [], new Map(), opened);
   const pieces = custom(t.items.find((i) => i.id === 'a-rowan')).pieces;
-  expect(pieces?.map((p) => ('run' in p ? p.run.label : p.words))).toEqual(['Read 1 file, edited 1 file']);
-  expect(custom(t.items.find((i) => i.id === state.messages[0].id)).thread?.count).toBe(3);
+  expect(pieces?.map((p) => ('run' in p ? p.run.label : 'words' in p && p.words))).toEqual([
+    'Read 1 file, edited 1 file',
+  ]);
+  // In the thread of Mira's answer (0078): Rowan's line and Kit's words.
+  expect(custom(t.items.find((i) => i.id === 'a-ask')).thread?.count).toBe(2);
 
   // Stopped by Gathr for a reason of its own before it wrote or ran anything: nothing to show, nothing to act on.
   state.messages = state.messages.filter((m) => m.turn !== 'rowan' || m.role !== 'assistant');
@@ -142,7 +145,7 @@ test('an ended turn that only ran steps keeps its line as a reply; a turn droppe
   const dropped = toThread(state, agents, [], new Map(), opened);
   expect(dropped.every.map((i) => i.id)).toContain('a-rowan');
   expect(dropped.all.map((i) => i.id)).not.toContain('a-rowan');
-  expect(custom(dropped.items.find((i) => i.id === state.messages[0].id)).thread?.count).toBe(2);
+  expect(custom(dropped.items.find((i) => i.id === 'a-ask')).thread?.count).toBe(1);
 });
 
 test('a turn with no words still shows what the person can act on: Retry with why it ended, an approval, a question', async () => {

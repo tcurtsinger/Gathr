@@ -1,8 +1,10 @@
 //! The team chat behind 0075's proof: a week of a team at work on a notes app, about 2,000 messages
-//! under some 50 main messages, linked the way the service links them. The person's asks; the lead's
-//! plans, one sent back; the tasks it hands out, their reviews and Gathr's fixes after them; the
-//! person's answers to the lead's questions, a Discuss among them; agents' talk, likes, a quiet
-//! room's wake; each ask's result. Every name and word is made up.
+//! under some 70 main messages, linked the way the service links them. The person's asks; the lead's
+//! plans, one sent back and one whose check left findings; the tasks it hands out, their reviews and
+//! Gathr's fixes after them; the person's answers to the lead's questions, a Discuss among them;
+//! agents' talk, likes, a quiet room's wake, a wait the lead set; the person's message into a running
+//! turn, and one to two agents picked; each ask's result. Beside it, a chat of one agent with a reply
+//! in a thread (0078). Every name and word is made up.
 
 use rusqlite::params;
 use serde_json::json;
@@ -70,6 +72,9 @@ impl Seeder<'_> {
             a.answer,
             (None, None),
         )?;
+        if i == 7 {
+            self.sent_while_running(room, &turn)?;
+        }
         if a.plan {
             self.plans(room, &turn, &ask, a)?;
         }
@@ -85,6 +90,9 @@ impl Seeder<'_> {
             self.talk(room, (i, &ask), &given)?;
             self.wake(room, &ask, given[2])?;
         }
+        if i == 3 {
+            self.waited(room, (&turn.id, &ask))?;
+        }
         for (k, &n) in given.iter().enumerate() {
             let who = 1 + (i + k) % 3;
             self.work_on(room, (&turn.id, &ask), n, who)?;
@@ -99,6 +107,9 @@ impl Seeder<'_> {
             self.like(room, &ask)?;
         }
         self.closing(room, (&turn.id, &ask), &given)?;
+        if i == 8 {
+            self.picked(room)?;
+        }
         if i == 1 {
             let mut lines = vec![format!("{} {}", crate::asks::FIXED, a.said)];
             lines.extend(given.iter().map(|n| format!("#{n}: PR #{}", 100 + n)));
@@ -171,8 +182,9 @@ impl Seeder<'_> {
         Ok(())
     }
 
-    /// The lead's plan: a version sent back on the second planned ask, then the one approved, each
-    /// checked by the Reviewer in a turn of its own, with Gathr's lines.
+    /// The lead's plan: on the first planned ask a version whose check left findings, which the lead
+    /// hears back on and answers in the next; on the second a version sent back; then the one
+    /// approved. Each is checked by the Reviewer in a turn of its own, with Gathr's lines.
     fn plans(&mut self, room: &mut Room, turn: &Turn, ask: &str, a: &Ask) -> Result<(), Error> {
         let (lead, rev) = (room.team[0].clone(), room.team[4].clone());
         self.conn.execute(
@@ -180,7 +192,12 @@ impl Seeder<'_> {
             params![room.chat, ask, lead, self.ts],
         )?;
         let plan = self.conn.last_insert_rowid();
-        let versions = if a.said.starts_with("Import") { 2 } else { 1 };
+        let findings = a.said.starts_with("Add tags");
+        let versions = if findings || a.said.starts_with("Import") {
+            2
+        } else {
+            1
+        };
         let mut wrote = turn.id.clone();
         for n in 1..=versions {
             let title = a.said.split(',').next().unwrap_or(a.said);
@@ -236,8 +253,13 @@ impl Seeder<'_> {
                 "The parts hold together; part 2 needs part 1 first.",
                 (None, None),
             )?;
+            if findings && n < versions {
+                wrote = self.findings(room, (check, version, n), (ask, title))?;
+                continue;
+            }
+            // The plan's lines are tied by the version's own columns, not by `about` (0075).
             let agrees = format!("Ivo agrees with version {n} of the plan \"{title}\".");
-            let said = self.line(&room.chat, &agrees, &format!("m:{message}"))?;
+            let said = self.put(&room.chat, None, "gathr", &agrees, (None, None))?;
             let decided = if n < versions {
                 "sent_back"
             } else {
@@ -249,7 +271,7 @@ impl Seeder<'_> {
                         "Approved: version {n} of the plan \"{title}\", {} tasks.",
                         a.parts.len()
                     );
-                    self.line(&room.chat, &words, &format!("m:{message}"))?
+                    self.put(&room.chat, None, "gathr", &words, (None, None))?
                 }
                 _ => {
                     let back = self.turn_as(
@@ -661,6 +683,162 @@ impl Seeder<'_> {
         self.put(&room.chat, Some(&back.id), "gathr", &words, (None, None))?;
         let said = "Good numbers: the list is the slow part, so paging goes first.";
         self.put(&room.chat, Some(&back.id), "assistant", said, (None, None))?;
+        Ok(())
+    }
+
+    /// The Reviewer's check of version `n` leaves two findings; the lead hears back and says how it
+    /// answers them: the turn that writes the next version.
+    fn findings(
+        &mut self,
+        room: &mut Room,
+        (check, version, n): (i64, i64, i64),
+        (ask, title): (&str, &str),
+    ) -> Result<String, Error> {
+        let notes = [
+            (
+                "wrong",
+                Some("src/tags.rs:40"),
+                "Tags aren't saved with the note",
+            ),
+            ("unasked", None, "Coloured tags weren't asked for"),
+        ];
+        for (kind, file, says) in notes {
+            self.conn.execute(
+                "INSERT INTO review_notes (task, reviewed, kind, file, says, created_ts) VALUES (?1, 'v1', ?2, ?3, ?4, ?5)",
+                params![check, kind, file, says, self.ts],
+            )?;
+        }
+        self.conn.execute(
+            // The next version cancels the check it answers, as writing it does (0062).
+            "UPDATE tasks SET state = 'cancelled', finish = 'left', reason = 'left: 2 findings' WHERE number = ?1",
+            [check],
+        )?;
+        let words = format!("Ivo has 2 findings on version {n} of the plan \"{title}\".");
+        let line = self.put(&room.chat, None, "gathr", &words, (None, None))?;
+        self.conn.execute(
+            "UPDATE plan_versions SET check_line = ?2, sent_ts = NULL WHERE id = ?1",
+            params![version, line],
+        )?;
+        let lead = room.team[0].clone();
+        let back = self.turn_as(room, &lead, (None, None), Opened::HearBack, Some(ask))?;
+        let told = format!("The task you gave is settled:\n- #{check}: left: 2 findings");
+        self.put(&room.chat, Some(&back.id), "gathr", &told, (None, None))?;
+        self.tools(&back, 2)?;
+        let said = "Both findings hold: version 2 saves tags with the note and drops the colours.";
+        self.put(&room.chat, Some(&back.id), "assistant", said, (None, None))?;
+        Ok(back.id)
+    }
+
+    /// A wait the lead set on the ask's work ended: Gathr's words open the lead's turn.
+    fn waited(&mut self, room: &mut Room, (turn, ask): (&str, &str)) -> Result<(), Error> {
+        let lead = room.team[0].clone();
+        let woke = self.turn_as(
+            room,
+            &lead,
+            (None, Some(turn)),
+            Opened::WaitFired,
+            Some(ask),
+        )?;
+        let words = "Your wait ended: the search index is rebuilt (4m 10s).";
+        self.put(&room.chat, Some(&woke.id), "gathr", words, (None, None))?;
+        self.tools(&woke, 2)?;
+        let said = "The index is rebuilt and accents match. Sol checks the list next.";
+        self.put(&room.chat, Some(&woke.id), "assistant", said, (None, None))?;
+        Ok(())
+    }
+
+    /// The person writes again while the lead's turn runs: the turn goes on after their message.
+    fn sent_while_running(&mut self, room: &Room, turn: &Turn) -> Result<(), Error> {
+        let more = "Keep the pinned section collapsible too";
+        self.put(&room.chat, Some(&turn.id), "user", more, (None, None))?;
+        self.tools(turn, 2)?;
+        let said =
+            "Collapsible too: it folds like the other sections, and Tamsin's part covers it.";
+        self.put(&room.chat, Some(&turn.id), "assistant", said, (None, None))?;
+        Ok(())
+    }
+
+    /// The person picks two agents in one message (0028): each answers in a turn of its own.
+    fn picked(&mut self, room: &mut Room) -> Result<(), Error> {
+        let (rowan, sol) = (room.team[1].clone(), room.team[2].clone());
+        let first = self.turn_as(room, &rowan, (None, None), Opened::Person, None)?;
+        let words = "@Rowan @Sol which of you knows the spell checker's code?";
+        let sent = self.put(&room.chat, Some(&first.id), "user", words, (None, None))?;
+        let picks =
+            json!([{ "at": 0, "len": 6, "agent": rowan }, { "at": 7, "len": 4, "agent": sol }]);
+        self.conn.execute(
+            "UPDATE messages SET picks = ?2 WHERE id = ?1",
+            params![sent, picks.to_string()],
+        )?;
+        self.tools(&first, 2)?;
+        let said =
+            "I wrote its tokenizer: code blocks are skipped there, so the bug is in the list view.";
+        self.put(&room.chat, Some(&first.id), "assistant", said, (None, None))?;
+        let second = self.turn_as(room, &sol, (None, None), Opened::Picked, None)?;
+        let copy = format!("The person sent this to you and Rowan.\n\n{words}");
+        self.put(
+            &room.chat,
+            Some(&second.id),
+            "gathr",
+            &copy,
+            (None, Some(&sent)),
+        )?;
+        let said = "Not me: Rowan has it. I can take the list view after.";
+        self.put(
+            &room.chat,
+            Some(&second.id),
+            "assistant",
+            said,
+            (None, None),
+        )?;
+        Ok(())
+    }
+
+    /// A chat of one agent (0078): drawn by the same rule as a team's, each answer a main message,
+    /// and the person's reply to an older answer in that answer's thread.
+    pub(super) fn one_agent_chat(&mut self) -> Result<(), Error> {
+        let team = self.team()?;
+        let chat = self.chat("Seed: one agent")?;
+        self.conn.execute(
+            "INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES (?1, ?2, 'supervisor', ?3)",
+            params![chat, team[0], self.ts],
+        )?;
+        let mut room = Room {
+            chat,
+            team,
+            place: 0,
+        };
+        let mira = room.team[0].clone();
+        let mut answered = Vec::new();
+        for (asked, said) in [
+            (
+                "Draft the 0.4 release notes",
+                "Here is a draft: tags, faster sync, accents in search, and the export fix.",
+            ),
+            (
+                "Add the sync fix too",
+                "Added: sync no longer stalls at 99% after the laptop sleeps.",
+            ),
+        ] {
+            let turn = self.turn_as(&mut room, &mira, (None, None), Opened::Person, None)?;
+            self.put(&room.chat, Some(&turn.id), "user", asked, (None, None))?;
+            self.tools(&turn, 2)?;
+            answered.push(self.put(&room.chat, Some(&turn.id), "assistant", said, (None, None))?);
+        }
+        let turn = self.turn_as(&mut room, &mira, (None, None), Opened::Reply, None)?;
+        let reply = self.put(
+            &room.chat,
+            Some(&turn.id),
+            "user",
+            "Shorter: one line each",
+            (None, None),
+        )?;
+        self.conn.execute(
+            "UPDATE messages SET reply_to = ?2 WHERE id = ?1",
+            [&reply, &answered[0]],
+        )?;
+        let said = "Tags. Faster sync. Accents in search. Export on Windows.";
+        self.put(&room.chat, Some(&turn.id), "assistant", said, (None, None))?;
         Ok(())
     }
 

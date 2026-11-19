@@ -154,7 +154,7 @@ test('a run’s line counts what it did by kind: three kinds at most, then "and 
   ]);
   state.tasks = [...state.tasks, task(8, 'kit', 'rowan'), task(9, 'lane', 'rowan')];
   const block = toThread(state, agents, [], new Map(), opened).every.find((m) => m.id === 'a-rowan');
-  expect(custom(block).pieces?.map((p) => ('run' in p ? p.run.label : p.words))).toEqual([
+  expect(custom(block).pieces?.map((p) => ('run' in p ? p.run.label : 'words' in p && p.words))).toEqual([
     'Thought for 9s',
     0,
     'Read 1 file, edited 2 files, ran 1 command and 2 more',

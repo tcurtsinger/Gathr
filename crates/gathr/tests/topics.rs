@@ -175,7 +175,9 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
             .all(|t| t["status"] != "queued" && t["status"] != "running")
     });
 
-    let (on_ask, on_version) = (json!(format!("m:{ask}")), json!(format!("m:{version}")));
+    // 0078: what is said to the person is a main message of its own, the plan's check under the
+    // lead's bubble that holds the version.
+    let wrote_it = json!(format!("b:{lead_turn}"));
     let found = [
         ("the person's own turn", topic_of(&history, &lead_turn)),
         ("the plan check's turn", topic_of(&history, &check_turn)),
@@ -193,25 +195,205 @@ fn an_asks_plan_its_parts_and_the_leads_hearing_back_each_sit_where_they_belong(
         ),
     ];
     let want = [
-        ("the person's own turn", on_ask.clone()),
-        ("the plan check's turn", on_version.clone()),
+        ("the person's own turn", wrote_it.clone()),
+        ("the plan check's turn", wrote_it.clone()),
         ("Ann's turn on part #2", json!("t:2")),
-        ("the hear-back on the trouble", on_ask),
+        (
+            "the hear-back on the trouble",
+            json!(format!("b:{}", backs[0])),
+        ),
         ("the closing hear-back", json!(format!("r:{}", backs[1]))),
-        ("the check's line", on_version.clone()),
-        ("Approve's line", on_version.clone()),
+        ("the check's line", wrote_it.clone()),
+        ("Approve's line", wrote_it.clone()),
         ("part #2's done line", json!("t:2")),
     ];
     assert_eq!(found, want, "{history}");
+    let closing = history["turns"].as_array().unwrap().iter();
+    let closing = closing.clone().find(|t| t["id"] == backs[1].as_str());
+    assert_eq!(closing.unwrap()["result_of"], json!(ask), "{history}");
     let listed = listed(&service, &chat);
     let tasks = [1, 2, 3].map(|n| task_topic(&listed, n));
-    assert_eq!(tasks, [on_version, json!("t:2"), json!("t:3")], "{listed}");
+    assert_eq!(tasks, [wrote_it, json!("t:2"), json!("t:3")], "{listed}");
+    // The person's message holds no thread: nothing in the chat sits under it.
+    let under = json!(format!("m:{ask}"));
+    let turns = history["turns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| &t["topic"]);
+    let lines = history["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| &m["topic"]);
+    let tasks = listed["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| &t["topic"]);
+    assert!(
+        !turns.chain(lines).chain(tasks).any(|t| *t == under),
+        "something sits under the person's message: {history}"
+    );
     assert_eq!(
         listed["asks"][0]["open"], false,
         "the ask is done: {listed}"
     );
     common::record_ui(&service, &chat, "ask-done");
     common::topics_agree(&data.0, &chat);
+}
+
+/// 0078: a check that left findings sits under the lead's bubble that wrote the version, with its
+/// line; the lead's hear-back on it is a main message of its own, and the version it writes there
+/// has its check, and Approve's line, under that bubble.
+#[test]
+fn a_checks_findings_sit_under_the_version_and_the_next_version_is_a_main_of_its_own() {
+    let data = TempDir::new();
+    let (service, chat) = team_on(&data.0, "claude");
+    first_turns_hold(&data.0);
+    common::with_reviewer(&service, &chat);
+    let go = data.0.join("go");
+    let _go = LetGo(go.clone());
+    let port = service.info.port;
+    let (lead_turn, _) = send(&service, &chat, ASK);
+    let lead = common::first_token(&data.0);
+    let plan = |parts: Vec<Value>, answers: Value| json!({ "title": ASK, "text": "Notes carry tags.", "parts": parts, "answers": answers });
+    let v1 = plan(vec![part("Add the tags table")], Value::Null);
+    let wrote = text(&call_tool(port, &lead, "plan", v1));
+    assert!(wrote.starts_with("Wrote version 1 of plan #1"), "{wrote}");
+    let first_check = turn_on(&service, &chat, 1, &["running"]);
+    let rev = token(&data.0, 1);
+    let note = json!({ "kind": "wrong", "file": "src/tags.rs:12", "says": "Tags aren't saved" });
+    let left = json!({ "task": 1, "how": "left", "note": "One gap", "notes": [note] });
+    let said = text(&call_tool(port, &rev, "finish_task", left));
+    assert!(said.starts_with("Recorded: left."), "{said}");
+    std::fs::write(&go, "").unwrap();
+    let heard = until(30, "the lead's hear-back on the findings", || {
+        let sql =
+            "SELECT id FROM turns WHERE opened_by = 'hear_back' AND status IN ('running', 'done')";
+        rows(&data.0, sql)
+            .first()
+            .map(|r| r["id"].as_str().unwrap().to_string())
+    });
+
+    let answers = json!([{ "note": 1, "changed": true, "why": "Tags are saved first" }]);
+    let v2 = plan(vec![part("Save the tags first")], answers);
+    let wrote = text(&call_tool(port, &lead, "plan", v2));
+    assert!(wrote.starts_with("Wrote version 2 of plan #1"), "{wrote}");
+    until(60, "version 2 to wait on the person", || {
+        let shown = service.call("GET", "/api/plans/1").json();
+        (shown["state"] == "waiting").then_some(())
+    });
+    let approved = service.send("POST", "/api/plans/1/approve", json!({ "version": 2 }));
+    assert_eq!(approved.status, 200, "{}", approved.body);
+    let history = service.wait_for(&chat, 30, "Approve's line", |h| {
+        let messages = h["messages"].as_array().cloned().unwrap_or_default();
+        messages.iter().any(|m| {
+            m["body"]
+                .as_str()
+                .is_some_and(|b| b.starts_with("Approved:"))
+        })
+    });
+
+    let (first, next) = (json!(format!("b:{lead_turn}")), json!(format!("b:{heard}")));
+    let found = [
+        ("the turn that wrote v1", topic_of(&history, &lead_turn)),
+        ("v1's check turn", topic_of(&history, &first_check)),
+        (
+            "the findings line",
+            line_topic(&history, "Rev has 1 finding"),
+        ),
+        ("the hear-back that wrote v2", topic_of(&history, &heard)),
+        ("Approve's line", line_topic(&history, "Approved:")),
+    ];
+    let want = [
+        ("the turn that wrote v1", first.clone()),
+        ("v1's check turn", first.clone()),
+        ("the findings line", first.clone()),
+        ("the hear-back that wrote v2", next.clone()),
+        ("Approve's line", next.clone()),
+    ];
+    assert_eq!(found, want, "{history}");
+    let listed = listed(&service, &chat);
+    let checks = [1, 2].map(|n| task_topic(&listed, n));
+    assert_eq!(checks, [first, next], "{listed}");
+    common::topics_agree(&data.0, &chat);
+}
+
+/// 0078 rule 10: the lead on no task of its own speaks to the person, whatever woke it (a wait it
+/// set, a like of its message, a carry-on): each its own main message. A wait on a member's task
+/// reads in the task's thread, and a turn the engine began by itself where the turn that started
+/// its command is. The rows are written as the service writes them.
+#[test]
+fn what_the_lead_says_on_no_task_is_main_and_a_pick_up_reads_where_its_command_began() {
+    let data = TempDir::new();
+    let db = gathr::data::DataDir::new(&data.0).db();
+    std::fs::create_dir_all(&data.0).unwrap();
+    let conn = gathr::db::open(&db).unwrap();
+    conn.execute_batch(
+        "INSERT INTO accounts (id, engine, name, name_key, created_ts) VALUES ('acc', 'claude', 'A', 'a', 1);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+             ('mira', 'Mira', 'mira', 'acc', 1), ('rowan', 'Rowan', 'rowan', 'acc', 1);
+         INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Made-up team', 1);
+         INSERT INTO chat_members (chat_id, agent_id, role, added_ts) VALUES
+             ('c', 'mira', 'supervisor', 1), ('c', 'rowan', 'member', 1);
+         INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers, opened_by) VALUES
+             ('asked', 'c', 'a', 'done', 10, 'mira', NULL, NULL, 'person'),
+             ('work', 'c', 'b', 'done', 20, 'rowan', 1, 'asked', 'brief'),
+             ('waited', 'c', 'c', 'done', 30, 'mira', NULL, 'asked', 'wait_fired'),
+             ('on_wait', 'c', 'd', 'done', 40, 'rowan', 1, 'work', 'wait_fired'),
+             ('liked', 'c', 'e', 'done', 50, 'mira', NULL, NULL, 'liked'),
+             ('carry', 'c', 'f', 'done', 60, 'mira', NULL, 'waited', 'carry_on'),
+             ('picked_up', 'c', 'g', 'done', 70, 'mira', NULL, 'carry', 'engine'),
+             ('rowans_pick_up', 'c', 'h', 'done', 80, 'rowan', 1, 'on_wait', 'engine');
+         INSERT INTO tasks (number, chat_id, giver, owner, given_in, kind, what, state, created_ts, updated_ts)
+             VALUES (1, 'c', 'mira', 'rowan', 'asked', 'work', 'Sort the gravel bars', 'done', 11, 11);
+         INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, copy_of) VALUES
+             ('m1', 'c', 'asked', 10, 'user', 'text', 'Sort the gravel bars by size', NULL),
+             ('m2', 'c', 'asked', 11, 'assistant', 'text', 'Rowan takes it', NULL),
+             ('m3', 'c', 'work', 20, 'gathr', 'text', 'Task #1 from Mira: Sort the gravel bars', NULL),
+             ('m4', 'c', 'waited', 30, 'gathr', 'text', 'Your wait ended: the build is green', NULL),
+             ('m5', 'c', 'waited', 31, 'assistant', 'text', 'The build is green; Rowan goes on', NULL),
+             ('m6', 'c', 'on_wait', 40, 'gathr', 'text', 'Your wait ended: the herons moved', NULL),
+             ('m7', 'c', 'liked', 50, 'gathr', 'text', 'The person liked your message.', 'm2'),
+             ('m8', 'c', 'carry', 60, 'gathr', 'text', 'Carry on where you stopped.', NULL),
+             ('m9', 'c', 'picked_up', 70, 'assistant', 'text', 'The command ended', NULL);",
+    )
+    .unwrap();
+    drop(conn);
+
+    let service = TestService::start(&data.0);
+    let history = history(&service, "c");
+    let turns = [
+        "asked",
+        "waited",
+        "on_wait",
+        "liked",
+        "carry",
+        "picked_up",
+        "rowans_pick_up",
+    ];
+    let found = turns.map(|t| (t, topic_of(&history, t)));
+    let want = [
+        ("asked", json!("b:asked")),
+        ("waited", json!("b:waited")),
+        ("on_wait", json!("t:1")),
+        ("liked", json!("b:liked")),
+        ("carry", json!("b:carry")),
+        ("picked_up", json!("b:carry")),
+        ("rowans_pick_up", json!("t:1")),
+    ];
+    assert_eq!(found, want, "{history}");
+    let (ok, threads) = gathr(&data.0, &["diag", "threads", "--chat", "c"]);
+    assert!(ok, "{threads}");
+    let facts = threads["counts"]["turns"].clone();
+    assert_eq!(
+        (&facts["person"], &facts["lead"], &facts["nothing"]),
+        (&json!(1), &json!(3), &Value::Null),
+        "{}",
+        threads["in_words"]
+    );
+    common::topics_agree(&data.0, "c");
 }
 
 /// Scenario 6e: a part a member gives from its own task sits in that task's thread, with the turns
@@ -310,8 +492,8 @@ fn a_quiet_rooms_wake_on_one_asks_work_sits_in_that_ask() {
 }
 
 /// A chat from before 0055, its turns from before `opened_by` and asks: the upgrade keeps every
-/// rowid and the search index, and its turns are tied by `task` and `answers` alone; one with
-/// neither is its own main message.
+/// rowid and the search index. The person's message's turn and the lead's turns on no task are main
+/// messages of their own (0078), the rest tied by `task` and `answers` alone.
 #[test]
 fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
     let data = TempDir::new();
@@ -380,7 +562,12 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
     let topics = ["asked", "work", "back", "lone"].map(|t| topic_of(&history, t));
     assert_eq!(
         topics,
-        [json!("m:m1"), json!("t:1"), json!("m:m1"), json!("b:lone")],
+        [
+            json!("b:asked"),
+            json!("t:1"),
+            json!("b:back"),
+            json!("b:lone")
+        ],
         "{history}"
     );
     let listed = listed(&service, "c");
@@ -397,11 +584,11 @@ fn rows_of(conn: &rusqlite::Connection, sql: &str) -> Vec<String> {
     rows.map(|r| format!("{:?}", r.unwrap())).collect()
 }
 
-/// The PR's forced failure (0019): on the seeded team chat, a turn whose `answers` names a turn
-/// that is gone ties to nothing, `gathr diag threads` says why, and the history route's reference
-/// finds it.
+/// The PR's forced failure (0019): on the seeded team chat, a plan check whose version's turn is
+/// gone ties to nothing, its lines too, `gathr diag threads` says why, and the history route's
+/// reference finds it.
 #[test]
-fn a_turn_whose_answers_is_gone_ties_to_nothing_and_is_found_from_the_historys_reference() {
+fn a_check_whose_versions_turn_is_gone_ties_to_nothing_and_is_found_from_the_historys_reference() {
     let data = TempDir::new();
     let (ok, seeded) = gathr(&data.0, &["seed"]);
     assert!(ok, "{seeded}");
@@ -422,34 +609,47 @@ fn a_turn_whose_answers_is_gone_ties_to_nothing_and_is_found_from_the_historys_r
         )
         .unwrap();
     assert!((2_000..2_100).contains(&messages), "{messages} messages");
-    let lost: String = conn
+    // The chat's last version: its check's line and Approve's are said in no turn.
+    let (check, line): (i64, String) = conn
         .query_row(
-            "SELECT id FROM turns WHERE chat_id = ?1 AND opened_by = 'hear_back' AND task IS NULL
-             AND result_of IS NULL ORDER BY rowid LIMIT 1",
+            "SELECT t.number, v.check_line FROM plan_versions v JOIN plans p ON p.id = v.plan_id
+             JOIN tasks t ON t.checks = v.id WHERE p.chat_id = ?1 ORDER BY v.id DESC LIMIT 1",
             [&chat],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .unwrap();
-    conn.execute("UPDATE turns SET answers = 'gone' WHERE id = ?1", [&lost])
-        .unwrap();
+    conn.execute(
+        "UPDATE plan_versions SET turn_id = 'gone' WHERE check_line = ?1",
+        [&line],
+    )
+    .unwrap();
     drop(conn);
 
     let (ok, threads) = gathr(&data.0, &["diag", "threads", "--chat", &chat]);
     assert!(ok, "{threads}");
-    let turns = threads["turns"].as_array().cloned().unwrap_or_default();
-    let row = turns
-        .iter()
-        .find(|t| t["turn"] == lost.as_str())
-        .cloned()
-        .unwrap_or_default();
-    let want =
-        json!({ "topic": format!("b:{lost}"), "why": "tied to nothing: answers gone not found" });
+    let row_of = |(kind, field): (&str, &str), id: Value| {
+        let rows = threads[kind].as_array().cloned().unwrap_or_default();
+        let found = rows
+            .into_iter()
+            .find(|r| r[field] == id)
+            .unwrap_or_default();
+        json!({ "topic": found["topic"], "why": found["why"] })
+    };
+    let why = "tied to nothing: turn gone not found";
     assert_eq!(
-        json!({ "topic": row["topic"], "why": row["why"] }),
-        want,
-        "{threads}"
+        [
+            row_of(("lines", "message"), json!(line)),
+            row_of(("tasks", "task"), json!(check))
+        ],
+        [
+            json!({ "topic": format!("m:{line}"), "why": why }),
+            json!({ "topic": format!("t:{check}"), "why": why })
+        ],
+        "{}",
+        threads["in_words"]
     );
-    assert_eq!(threads["counts"]["broken"], 1, "{}", threads["in_words"]);
+    // Approve's line of the same version too: nothing else leads nowhere.
+    assert_eq!(threads["counts"]["broken"], 3, "{}", threads["in_words"]);
     common::topics_agree(&data.0, &chat);
     for fact in [
         "handed_out",
@@ -458,6 +658,9 @@ fn a_turn_whose_answers_is_gone_ties_to_nothing_and_is_found_from_the_historys_r
         "version",
         "result",
         "person",
+        "plan",
+        "lead",
+        "picked",
     ] {
         assert!(
             threads.to_string().contains(&format!("\"{fact}\"")),
@@ -479,7 +682,7 @@ fn a_turn_whose_answers_is_gone_ties_to_nothing_and_is_found_from_the_historys_r
     let (ok, trace) = gathr(&data.0, &["diag", "trace", &reference]);
     let found = trace.to_string();
     assert!(
-        ok && found.contains("gathr.chat.topics") && found.contains("answers gone not found"),
+        ok && found.contains("gathr.chat.topics") && found.contains("turn gone not found"),
         "not found from the history's reference {reference}: {trace}"
     );
 }

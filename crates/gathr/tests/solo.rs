@@ -103,8 +103,6 @@ fn a_chat_with_no_project_has_its_first_agent_as_its_lead_and_a_joiner_as_a_memb
         json!({ "text": "Start here", "agent": mira }),
     );
     assert_eq!(members(&service, &chat), [json!([mira, "supervisor"])]);
-    let shown = history(&service, &chat);
-    assert_eq!(shown["team_since"], Value::Null, "a chat of one: {shown}");
     ended(&service, &chat, first["turn"].as_str().unwrap(), "done");
 
     let picks = json!([{ "at": 0, "len": 3, "agent": bo }]);
@@ -122,8 +120,45 @@ fn a_chat_with_no_project_has_its_first_agent_as_its_lead_and_a_joiner_as_a_memb
         [json!({ "n": 2 })],
         "Mira's seat, then Bo's join in one change"
     );
-    let shown = history(&service, &chat);
-    assert!(shown["team_since"].is_string(), "a team now: {shown}");
+}
+
+/// 0078: a chat of one is drawn by the same rule as a team's. Each answer of its agent is a main
+/// message of its own, and the person's reply to an older answer, and what its turn says, sit in
+/// that answer's thread (0076).
+#[test]
+fn a_chat_of_one_has_each_answer_main_and_a_reply_in_the_thread_of_what_it_answers() {
+    let data = TempDir::new();
+    let replay = engine(&data.0, 4);
+    let (service, ids) = service_with(&data.0, &[("GATHR_REPLAY", &replay)], &["Mira"]);
+    let chat = service.new_chat();
+    let asked = |body: Value| {
+        let sent = post(&service, &chat, body);
+        let turn = sent["turn"].as_str().unwrap().to_string();
+        (turn.clone(), ended(&service, &chat, &turn, "done"))
+    };
+    let (first, shown) = asked(json!({ "text": "Plan the river walk", "agent": ids[0] }));
+    let messages = shown["messages"].as_array().cloned().unwrap_or_default();
+    let words = messages
+        .iter()
+        .find(|m| m["turn"] == first.as_str() && m["role"] == "assistant")
+        .unwrap()["id"]
+        .clone();
+    let (second, _) = asked(json!({ "text": "And the map legend?", "agent": ids[0] }));
+    let reply = json!({ "text": "Does it pass the old mill?", "agent": ids[0], "reply_to": words });
+    let (third, shown) = asked(reply);
+    let topic = |turn: &str| {
+        let turns = shown["turns"].as_array().unwrap().iter();
+        turns.clone().find(|t| t["id"] == turn).unwrap()["topic"].clone()
+    };
+    let found = [topic(&first), topic(&second), topic(&third)];
+    let want = [
+        json!(format!("b:{first}")),
+        json!(format!("b:{second}")),
+        json!(format!("b:{first}")),
+    ];
+    assert_eq!(found, want, "{shown}");
+    common::record_ui(&service, &chat, "chat-of-one");
+    common::topics_agree(&data.0, &chat);
 }
 
 #[test]
@@ -264,8 +299,6 @@ fn the_upgrade_to_0058_gives_each_chat_with_turns_and_no_list_its_latest_agent_a
             "two:mira:supervisor:10",
         ]
     );
-    let shown = gathr::store::history(&conn, "two").unwrap();
-    assert_eq!(shown["team_since"], Value::Null, "{shown}");
 }
 
 /// Mira's chat with no project and her alone on its list, and Ann's team chat `c` in no project.

@@ -3,7 +3,7 @@ import type { Message, ThinkingBody, ToolBody, Turn } from '../api';
 import { agreedCheck, planLine, versionOf } from '../plans/plans';
 import { type AskSize, changed, fixed } from './asks';
 import { ending } from './ends';
-import { fold, type Given, type Piece, type Work } from './fold';
+import { type Chip, fold, type Given, type Piece, type Work } from './fold';
 import type { Group } from './groups';
 import { blockLike, likeOpened, PERSON, saidLike, versionLike } from './likes';
 import type { Cache, Custom, EventLine, Place, SendFailure } from './messages';
@@ -23,12 +23,15 @@ export interface Heading {
   place: Place;
   /** It has a tick on the conversation map: an ask's result. */
   ticked?: boolean;
+  /** Gathr's words that opened its turn, quoted at the top of its bubble (0078). */
+  opened?: string;
 }
 
 /**
  * A block of an agent's turn: its words where it wrote them, each run of steps between them one line (the owner's call
- * of 2026-11-19). One that didn't change is the same object as on the draw before (`cache`), so the thread can tell
- * which blocks to draw again.
+ * of 2026-11-19), a plan version it wrote as its chip, and Gathr's words that opened the turn as its quote (0078). One
+ * that didn't change is the same object as on the draw before (`cache`), so the thread can tell which blocks to draw
+ * again.
  */
 export function block(
   cache: Cache,
@@ -36,7 +39,7 @@ export function block(
   state: ChatState,
   crew: Team,
   gave: Map<string, Given>,
-  { on, last: lastOfTask, head, asked, place, ticked }: Heading,
+  { on, last: lastOfTask, head, asked, place, ticked, opened }: Heading,
 ) {
   const id = group.turn;
   const turn = id ? state.turns[id] : undefined;
@@ -53,21 +56,41 @@ export function block(
   const task = state.tasks.find((t) => t.number === turn?.task);
   const end = endingOf(group, state);
   const ended = end ? `${turn?.status}|${turn?.ref}|${end.act}` : '';
-  // A tick on the map (0039): in a chat of one, the lead's reply to the person, the last block of each of its turns
-  // once it has ended; in a team, its main messages say where each piece of work began instead.
-  const lead = state.members.length > 1 ? role === 'supervisor' : true;
+  // A tick on the map (0039): in a chat of one, the agent's main messages, the last block of each of its turns once it
+  // has ended; in a team, its main messages say where each piece of work began instead.
+  const solo = state.members.length <= 1;
   const over = !['queued', 'waiting_sign_in', 'running'].includes(turn?.status ?? '');
-  const toPerson = !place.topic && group.last && !!id && lead && over && !crew.rootOf(id);
+  const toPerson = solo && !place.reply && group.last && !!id && over && !crew.rootOf(id);
   const tick = ticked
     ? (group.msgs[0]?.time ?? turn?.created)
     : toPerson
       ? (group.msgs.findLast((m) => m.kind === 'text')?.time ?? turn?.created ?? '')
       : undefined;
+  // A plan version it wrote is a chip in its place (0078). While it waits on the person, the bubble's like is the
+  // version's, which approves it, and its thumbs-ups include the checker's (0062).
+  const found = group.msgs.flatMap((m) => versionOf(state.plans, m.id) ?? []);
+  const chips = new Map(
+    found.map(({ plan, version }) => [
+      version.message as string,
+      { plan: plan.id, version: version.n, parts: version.parts },
+    ]),
+  );
+  const newest = found.at(-1);
+  const waiting =
+    newest && versionLike(state, newest.plan, newest.version.n, newest.version.message as string);
   // Only the last text's: the like sits under the bubble, after the block's final words, and an earlier text's
   // thumbs-up would read as given to those.
-  const last = group.msgs.at(-1);
-  const like = blockLike(state, group.msgs, asked ?? [], !!partial);
-  const agreed = !partial && last && (last.kind === 'text' || like) ? agreedBy(state, crew, last.id) : [];
+  const said = chips.size ? group.msgs.filter((m) => !chips.has(m.id)) : group.msgs;
+  const last = said.at(-1);
+  const like = waiting ?? blockLike(state, said, asked ?? [], !!partial);
+  const all = new Set([
+    ...(!partial && last && (last.kind === 'text' || like) ? agreedBy(state, crew, last.id) : []),
+    ...found.flatMap(({ version }) => [
+      ...agreedBy(state, crew, version.message as string),
+      ...agreedCheck(version, state, crew),
+    ]),
+  ]);
+  const agreed = all.has('You') ? ['You', ...[...all].filter((n) => n !== 'You')] : [...all];
   // In the agent's panel, a tick after the task once it is done; a blocked, stopped or held task is its owner's face's
   // mark, never a tick (0071).
   const done = !!on && lastOfTask && task?.state === 'done';
@@ -76,7 +99,9 @@ export function block(
   const answering = approvals.map((a) => `${a.request}:${a.answer?.allow}:${a.answer?.failure?.ref}`);
   // The last block's line works while its turn runs, so the turn's state is part of what it is made from.
   const status = group.last ? turn?.status : '';
-  const sig = `${parts}|${partial.length}|${status}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}`;
+  const sig = `${parts}|${partial.length}|${status}|${ended}|${answering}|${who}|${asked}|${JSON.stringify(place)}|${
+    opened
+  }|${JSON.stringify([...chips])}`;
   const hit = cache.get(group.key);
   if (hit?.sig === sig) return hit.value;
   const time = group.msgs[0]?.time ?? turn?.created;
@@ -97,7 +122,8 @@ export function block(
     like,
   };
   if (end) custom.ending = end;
-  const value = toReply(group, partial, group.last ? turn : undefined, custom, gave);
+  if (opened) custom.opened = opened;
+  const value = toReply(group, partial, group.last ? turn : undefined, custom, { gave, chips });
   cache.set(group.key, { sig, value });
   return value;
 }
@@ -135,11 +161,11 @@ function toReply(
   partial: string,
   turn: Turn | undefined,
   custom: Custom,
-  gave: Map<string, Given>,
+  { gave, chips }: { gave: Map<string, Given>; chips: Map<string, Chip> },
 ): ThreadMessageLike {
   const status = turn?.status;
   const began = group.bound ? turn?.created : undefined;
-  const { work, words, pieces } = fold(group.msgs, partial, status === 'running', gave, began);
+  const { work, words, pieces } = fold(group.msgs, partial, status === 'running', gave, began, chips);
   if (work) custom.work = work;
   if (pieces.length) custom.pieces = pieces;
   return {
@@ -163,40 +189,6 @@ export function agreedBy(state: ChatState, crew: Team, message: string): string[
   const on = state.reactions.filter((r) => r.message === message);
   const agents = on.flatMap((r) => (r.agent !== PERSON && crew.name(r.agent)) || []);
   return on.some((r) => r.agent === PERSON) ? ['You', ...agents] : agents;
-}
-
-/** A version of the lead's plan: the speaker, its chip and who gave it a thumbs-up; its words are the tab's. */
-export function versionBlock(
-  cache: Cache,
-  group: Group,
-  state: ChatState,
-  crew: Team,
-  head: boolean,
-  place: Place,
-): ThreadMessageLike {
-  const m = group.msgs[0];
-  const found = versionOf(state.plans, m.id);
-  const agent = state.turns[group.turn ?? '']?.agent;
-  const custom: Custom = {
-    ...place,
-    agent: crew.name(agent),
-    by: agent ?? undefined,
-    role: crew.role(agent),
-    seat: crew.seated(agent),
-    time: m.time,
-    head,
-    agreed: [
-      ...new Set([...agreedBy(state, crew, m.id), ...(found ? agreedCheck(found.version, state, crew) : [])]),
-    ],
-    plan: found && { plan: found.plan.id, version: found.version.n, parts: found.version.parts },
-    like: found && versionLike(state, found.plan, found.version.n, m.id),
-  };
-  return kept(cache, group.key, JSON.stringify(custom), () => ({
-    id: group.key,
-    role: 'assistant',
-    content: [],
-    metadata: { custom },
-  }));
 }
 
 // The service's words that open a turn after the person changes a size (plan_wait.rs `told`): for the agent, never
@@ -226,6 +218,16 @@ export function heard(group: Group, state: ChatState, crew: Team): EventLine[] {
   // The service's brief (tasks/words.rs `brief`) opens with the task's number and its giver.
   const brief = turn?.task != null && text.startsWith(`Task #${turn.task} from `);
   return brief ? [] : [{ kind: 'note', text }];
+}
+
+/** Gathr's lines that opened a turn as the quote at the top of its bubble (0078): "Sent back" with the person's words. */
+export function quoteOf(lines: EventLine[]): string {
+  return lines
+    .map((e) => {
+      const said = [e.who, e.text].filter(Boolean).join(' ');
+      return e.kind === 'version' && e.text === 'Sent back' && e.more ? `${said}: ${e.more}` : said;
+    })
+    .join('\n');
 }
 
 /**

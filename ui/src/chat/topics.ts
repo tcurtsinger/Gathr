@@ -28,10 +28,11 @@ function carried(state: ChatState): Carried[] {
 
 /**
  * The main message each block sits under (0075). The service names it for every turn, task and line said in no turn
- * (`topic`); the window keeps its two rules inside a turn: a turn splits where the person's message entered it, or
- * Gathr's copy of it (0028), and the blocks after take that message's topic; a message between agents that answers one
- * Gathr carried into its turn sits where what it answers sits. A turn the service hasn't named yet is its own main
- * message until it does.
+ * (`topic`); the window keeps its rules inside a turn: a turn splits where the person's message entered it, or Gathr's
+ * copy of it (0028), and what follows is a main message of its own (0078), or in the thread the person's reply is in; a
+ * message between agents that answers one Gathr carried into its turn sits where what it answers sits. A turn the
+ * service hasn't named yet is its own main message until it does. A question's block is its main message: when that
+ * block is its turn's own main message, the rest of the turn joins the question's thread, which never loses its main.
  */
 export function topicsOf(
   groups: Group[],
@@ -43,16 +44,23 @@ export function topicsOf(
   const entered = new Map<string, string>();
   const ofMessage = new Map<string, string>();
   const ofTurn = (turn: string) => entered.get(turn) ?? state.turns[turn]?.topic ?? `b:${turn}`;
+  const asking = new Map<string, string>();
   const splits = carried(state);
   // In saved order: a split applies to the blocks saved after it, and a reply after what it answers.
   for (const g of [...groups].sort((a, b) => a.at - b.at)) {
     while (splits.length && splits[0].at < g.at) {
       const { turn, of } = splits.shift() as Carried;
-      entered.set(turn, ofMessage.get(of) ?? `m:${of}`);
+      const there = ofMessage.get(of);
+      entered.set(turn, !there || there === `m:${of}` ? `b:${turn}:${of}` : there);
     }
     const topic = topicOf(g);
     topics.set(g, topic);
     for (const m of g.msgs) ofMessage.set(m.id, topic);
+  }
+  if (!asking.size) return topics;
+  for (const [g, topic] of topics) {
+    const question = asking.get(topic);
+    if (question) topics.set(g, question);
   }
   return topics;
 
@@ -69,12 +77,10 @@ export function topicsOf(
           if (g.turn) entered.set(g.turn, answered);
           return answered;
         }
-        // A person's message into a running turn: what the turn says after it is about it.
-        if (g.turn && !g.bound) entered.set(g.turn, `m:${first.id}`);
+        // A person's message into a running turn: what the turn says after it is said to them.
+        if (g.turn && !g.bound) entered.set(g.turn, `b:${g.turn}:${first.id}`);
         return `m:${first.id}`;
       }
-      case 'version':
-        return `m:${first.id}`;
       case 'question':
       case 'said':
         return `t:${g.task}`;
@@ -87,8 +93,10 @@ export function topicsOf(
       }
       default: {
         const asked = hosts.get(g);
-        if (asked?.length) return `t:${asked[0]}`;
-        return g.turn ? ofTurn(g.turn) : `m:${first?.id ?? g.key}`;
+        const own = g.turn ? ofTurn(g.turn) : `m:${first?.id ?? g.key}`;
+        if (!asked?.length) return own;
+        if (own === `b:${g.turn}` || own.startsWith(`b:${g.turn}:`)) asking.set(own, `t:${asked[0]}`);
+        return `t:${asked[0]}`;
       }
     }
   }

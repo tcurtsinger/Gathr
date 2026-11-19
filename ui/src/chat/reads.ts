@@ -21,14 +21,17 @@ export const SETTLE_MS = 300;
  */
 export interface Left {
   marks: Map<string, number>;
-  /** A thread with no mark: seen up to here. */
+  /** A thread with no mark, in a chat whose main line has none either: seen up to here. */
   floor: number;
   at: number;
 }
 
-/** Said after the person left, and before they came back: New. */
+/**
+ * Said after the person left, and before they came back: New. A thread with no mark of its own is seen up to the main
+ * line's (0078): an update can name a thread anew, and what it held before the person last looked is not new.
+ */
 export const isNew = (left: Left | undefined, topic: string, t: number) =>
-  !!left && t > (left.marks.get(topic) ?? left.floor) && t <= left.at;
+  !!left && t > (left.marks.get(topic) ?? left.marks.get('') ?? left.floor) && t <= left.at;
 
 /** What a drawn item is to the marks: its thread ('' for the main line), when it was said, and whether it is theirs. */
 interface Seen {
@@ -96,8 +99,8 @@ export class Reads {
 
   constructor(private chat: string) {}
 
-  /** Seen up to here in a thread ('' for the main line). */
-  seen = (topic: string) => this.marks.get(topic) ?? this.floor;
+  /** Seen up to here in a thread ('' for the main line); one with no mark, up to the main line's (`isNew`). */
+  seen = (topic: string) => this.marks.get(topic) ?? this.marks.get('') ?? this.floor;
 
   /** The chat's marks as its history read them. A chat with none yet is seen up to now (an old chat is not new). */
   take(rows: Read[], newest: () => number) {

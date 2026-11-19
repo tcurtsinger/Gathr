@@ -161,15 +161,16 @@ impl Source for Rows<'_> {
     }
 
     fn version(&self, id: i64) -> Option<String> {
-        let sql = "SELECT message_id FROM plan_versions WHERE id = ?1";
+        let sql = "SELECT turn_id FROM plan_versions WHERE id = ?1";
         self.one(sql, [id], |r| r.get(0))
     }
 
-    fn sent_back(&self, turn: &Turn) -> Option<String> {
-        let opening = turn.opening.as_ref()?;
-        let sql = "SELECT v.message_id FROM plan_versions v JOIN plans p ON p.id = v.plan_id
-                   WHERE p.chat_id = ?1 AND v.decided_line = ?2";
-        self.one(sql, params![self.chat, opening.id], |r| r.get(0))
+    /// By `plans_by_chat` and the versions' `(plan_id, n)`: the chat's few versions, never all.
+    fn wrote(&self, turn: &Turn) -> Option<i64> {
+        let sql = "SELECT min(v.n) FROM plans p JOIN plan_versions v ON v.plan_id = p.id
+                   WHERE p.chat_id = ?1 AND v.turn_id = ?2";
+        self.one(sql, params![self.chat, turn.id], |r| r.get(0))
+            .flatten()
     }
 
     fn is_lead(&self, agent: &str) -> bool {
