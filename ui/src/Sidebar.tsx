@@ -43,7 +43,7 @@ export function Sidebar(props: Props) {
         <span>{c.title}</span>
         {c.mark && (
           <i className="chat-mark" role="img" aria-label={WORD[FROM_SERVICE[c.mark]]}>
-            <StateMark state={FROM_SERVICE[c.mark]} size={9} />
+            <StateMark state={FROM_SERVICE[c.mark]} size={9} spin={c.mark === 'working'} />
           </i>
         )}
       </button>

@@ -431,7 +431,8 @@ nor is Gathr's copy of an agent's message, or what a turn that hears the person'
 What a task's end told isn't drawn: a hear-back's opening and Gathr's line for a done task are for the agents, and
 the end is on its member's own message (0051). Some of Gathr's lines are still one-line events, inside Gathr's
 bubble: the plan's lines, with a clipboard, in the thread of the lead's bubble that holds the version (0078): the
-lead-in "Plan v2:" and "Approved" or "Dropped"; each opens to the whole line and Open plan (0062). A check that agrees
+lead-in "Plan v2:" and "Sent back" where no turn quotes it; each opens to the whole line and Open plan (0062). The
+person's Approve or Drop has no line: the version's chip says it (below). A check that agrees
 is a thumbs-up instead, and an old chat's check that left findings says them in its checker's bubble (below). A line is 13px, muted,
 the lead-in in the foreground colour at 500, an icon first. Closed, it stays on one line, with an ellipsis (…) for
 overflow. Click or Enter opens it in place: the whole line, the reason, and Open task. Click or Enter again closes it.
@@ -577,8 +578,9 @@ under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's ha
 dot). It sits at the face's top right, 1px over its edge: 12px at 36, 10px at 28, 9px at 24, 8px at 20, cut
 out of the surface behind it by a ring of that surface's colour (2px at 36 and 28, 1.5px below), so it reads on
 any background a face is drawn on. Faces of 24px and up carry it, and the top line's at 20; 16px faces (the
-panel's tab) and Settings' faces don't. A Working mark turns once in 1.6s on the top line and on the agent's
-latest message only; elsewhere, and under reduced motion, it is still.
+panel's tab) and Settings' faces don't. A Working mark turns once in 1.6s on every face of an agent at work,
+its older messages too (the owner's call of 2026-11-19: a ring standing still read as stuck); in a face's card
+and a task's state word, and under reduced motion, it is still.
 
 Pointing at a face, or focusing the button that holds it, shows its card above it: a 10px-radius popover
 surface, the name at 13.5px/600 (and Supervisor after it, muted), then the mark at 10px and the state's word,
@@ -586,7 +588,7 @@ what and since when: "Can't run · Failed · Show cook times · 1m", "Working ·
 Free says only "Free". It is information, the one hover that shows something in the window besides who
 reacted. An archived chat shows no marks; an agent no longer in the chat has none, is off the top line, and
 its card says Removed. A chat's sidebar row shows its most pressing of Needs you, Can't run and Working as the
-same mark at 9px, still, 8px after its cut title.
+same mark at 9px, Working turning as on a face, 8px after its cut title.
 
 ### Agent panel
 
@@ -670,12 +672,14 @@ Team status appears in Summary, and each agent's detail in its panel. Progress m
 derive from real task completion, not a decorative timer. Plans have their own
 identity and tab. A typed note is never approval.
 
-A plan's version is a chip in the bubble of the lead's turn that wrote it, where the plan was written
-([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)): a button with the clipboard icon,
-"Plan · version 2" and "9 parts" in muted small type, last when the lead writes nothing after it, and the
+A plan's version is a chip in the bubble of the lead's turn that wrote it
+([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)), after the turn's words and above its
+steps line (the owner's call of 2026-11-19): a button with the clipboard icon, "Plan v2:" at 600 and where the
+version stands, "Waiting" in the accent colour while it waits on the person, then "Approved", "Dropped",
+"Checking", "Revising", or "Replaced" for an older version. The chip says the person's word on a plan, so Gathr
+says no line of its own for Approve or Drop. The
 bubble's thumbs-ups (the members' who agreed among them) under it, and the members' checks and the lead's last word in
-its thread (0080). Text the lead writes after the plan reads after the
-chip, in the same bubble. While the version waits, the bubble's like is the version's: it approves it. The chip
+its thread (0080). While the version waits, the bubble's like is the version's: it approves it. The chip
 opens the plan's tab, after the agent's tab, labelled
 "Plan v2" with a close button. The tab reads top to bottom as a task's page does, in the same classes:
 "Version 2" at the top left and, when there is more than one, the versions at the right, `v1 · v2`, muted

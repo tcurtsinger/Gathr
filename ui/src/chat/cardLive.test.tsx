@@ -68,21 +68,22 @@ const steps: [LiveEvent, (string | null)[] | null][] = [
     ["Checked Mira's answer", NARRATION, '> Working'],
   ],
   [message('ann-1', 'ann', 5, NARRATION), ["Checked Mira's answer", NARRATION, '> Working']],
-  // A step follows the words: they fold into the working line, which says them as the latest thing.
+  // A step follows the words: they stay, read as words, and the working line says the step (the owner's call of
+  // 2026-11-19: narration inside the shimmering line had to be deciphered).
   [
     message('ann-2', 'ann', 6, bash('running'), { kind: 'tool' }),
-    ["Checked Mira's answer", `> Working${NARRATION}`],
+    ["Checked Mira's answer", NARRATION, '> WorkingRunning cargo test'],
   ],
   [
     { type: 'tool', chat: 'c', message: 'ann-2', body: bash('ok') } as LiveEvent,
-    ["Checked Mira's answer", `> Working${NARRATION}`],
+    ["Checked Mira's answer", NARRATION, '> WorkingRan cargo test'],
   ],
   [
     { type: 'delta', chat: 'c', turn: 'ann', text: OBJECTION },
     [
       "Checked Mira's answer",
       'Mira: it reads every note’s tags one by one.Made-up: the filter is slow too.',
-      `> Working${NARRATION}`,
+      '> WorkingRan cargo test',
     ],
   ],
   [
@@ -90,7 +91,7 @@ const steps: [LiveEvent, (string | null)[] | null][] = [
     [
       "Checked Mira's answer",
       'Mira: it reads every note’s tags one by one.Made-up: the filter is slow too.',
-      `> Working${NARRATION}`,
+      '> WorkingRan cargo test',
     ],
   ],
   [
@@ -115,7 +116,7 @@ function read(): (string | null)[] | null {
   });
 }
 
-test('a check followed live: never blank once running, narration folds when a step follows, the message stays', async () => {
+test('a check followed live: never blank once running, the latest words read as words, the message stays', async () => {
   let state = before;
   const screen = await render(<View state={state} />);
   await expect.poll(() => document.body.textContent).toContain('one by one');

@@ -18,7 +18,7 @@ import { briefRows } from '../tasks/model';
 import { Note } from '../tasks/Note';
 import { Field, Refused } from '../tasks/Question';
 import { Line, Row, TaskRow } from '../tasks/TaskList';
-import { counted, marks, type PartField, type PartMark } from './plans';
+import { counted, marks, type PartField, type PartMark, versionWord } from './plans';
 import '../tasks/tasks.css';
 import './plans.css';
 
@@ -36,15 +36,6 @@ interface Props {
   /** Whether the plan waits on the person: the tab's dot. */
   onWaits?: (waits: boolean) => void;
 }
-
-/** The newest version's state, in a word under the title. */
-const WORD: Record<Plan['state'], string> = {
-  checking: 'Checking',
-  waiting: 'Waiting',
-  revising: 'Revising',
-  approved: 'Approved',
-  dropped: 'Dropped',
-};
 
 /** The files a catch names, as Gathr's line in the chat does; the rest are counted. */
 const NAMED = 20;
@@ -114,7 +105,7 @@ export function PlanTab(props: Props) {
   }, [asking]);
 
   if (!plan || !v) return loadFailure && <FailureNotice failure={loadFailure} onReference={onReference} />;
-  const word = newest ? WORD[plan.state] : 'Replaced';
+  const word = versionWord(plan, v.n);
   const open = ['checking', 'waiting', 'revising'].includes(plan.state);
   const waits = newest && plan.state === 'waiting';
   const drop = newest && open;

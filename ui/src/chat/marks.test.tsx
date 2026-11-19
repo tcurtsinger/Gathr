@@ -143,12 +143,19 @@ const faces = (within: string) =>
     return `${face.getAttribute('data-agent')}:${mark?.getAttribute('data-state') ?? '-'}${turns}`;
   });
 
-test('the top line shows every agent of the chat in its order, each with its mark; Working turns there and on the latest message only', async () => {
+test('the top line shows every agent of the chat in its order, each with its mark; every Working mark turns', async () => {
   service();
   await chat();
   await expect.poll(() => faces('.topline .roster')).toEqual(['a:free', 'b:working turning', 'c:cant']);
-  // A message's face carries the same mark; only the member's latest turns. One that left has none.
-  expect(faces('.thread-messages')).toEqual(['a:free', 'b:working', 'z:-', 'c:cant', 'b:working turning']);
+  // A message's face carries the same mark, turning on every one of a member at work (the owner's call of
+  // 2026-11-19: a ring standing still on an older message read as stuck). One that left has none.
+  expect(faces('.thread-messages')).toEqual([
+    'a:free',
+    'b:working turning',
+    'z:-',
+    'c:cant',
+    'b:working turning',
+  ]);
   await expect.element(page.getByRole('button', { name: /^Summary/ })).toBeVisible();
 });
 
@@ -157,7 +164,7 @@ test('an agent at work before its first word has its bubble, and its Working mar
   await chat();
   await expect
     .poll(() => faces('.thread-messages'))
-    .toEqual(['a:free', 'b:working', 'z:-', 'c:cant', 'b:working turning']);
+    .toEqual(['a:free', 'b:working turning', 'z:-', 'c:cant', 'b:working turning']);
 });
 
 test('a face’s card names the state, what and since when, by pointer and by keyboard focus', async () => {

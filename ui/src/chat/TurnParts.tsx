@@ -48,22 +48,17 @@ export function WorkRow({
   startOpen?: boolean;
 }) {
   const [open, setOpen] = useState(startOpen);
-  // The line a running row shows under "Working": what the agent last said it was doing, as SerenityOS's card shows its
-  // latest words while it works (0082); with nothing said yet, its latest step as it reads now.
-  const said = work.running && work.steps.some((step) => 'say' in step);
   const entries: RunActivityEntry[] = work.steps.map((step) => ({
     id: step.id,
     kind: 'say' in step ? 'commentary' : 'tool',
+    // The line a running row shows under "Working": its latest step, as it reads now. What the agent last said it was
+    // doing reads as words in the bubble above it, never in this line (the owner's call of 2026-11-19).
     label:
       'say' in step
-        ? said
-          ? step.say
-          : ''
-        : said
-          ? ''
-          : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
-              .filter(Boolean)
-              .join(' '),
+        ? ''
+        : [step.state === 'running' ? (step.doing ?? step.label) : step.label, step.detail]
+            .filter(Boolean)
+            .join(' '),
     content: <StepEntry step={step} onOpenTask={onOpenTask} />,
   }));
   return (
@@ -126,18 +121,17 @@ function StepEntry({ step, onOpenTask }: { step: Step; onOpenTask: (task: number
   );
 }
 
-/** A version of the lead's plan in its turn (0062): it opens the plan's tab there. */
-export function PlanChip({ version, parts, onOpen }: { version: number; parts: number; onOpen: () => void }) {
+/**
+ * A version of the lead's plan in its turn (0062): it opens the plan's tab there, and says where the version stands,
+ * "Plan v2: Waiting" in the colour of what waits on the person, then "Plan v2: Approved", so Gathr says no line of its
+ * own for the person's word (the owner's call of 2026-11-19).
+ */
+export function PlanChip({ version, state, onOpen }: { version: number; state: string; onOpen: () => void }) {
   return (
-    <button
-      type="button"
-      className="plan-chip"
-      aria-label={`Plan · version ${version}, ${counted(parts, 'part')}`}
-      onClick={onOpen}
-    >
+    <button type="button" className="plan-chip" onClick={onOpen}>
       <ClipboardList aria-hidden="true" />
-      <span>Plan · version {version}</span>
-      <small>{counted(parts, 'part')}</small>
+      <strong>Plan v{version}:</strong>
+      <span className={state === 'Waiting' ? 'waits' : undefined}>{state}</span>
     </button>
   );
 }

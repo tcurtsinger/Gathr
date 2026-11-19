@@ -80,7 +80,7 @@
   padding-left: 34px;
 }
 /* A chat's most pressing mark (0071), only for Needs you, Can't run and Working: the faces' own mark at 9px,
-   still, 8px after the title, which is cut before it. */
+   Working turning as on a face, 8px after the title, which is cut before it. */
 .chat-mark {
   display: inline-grid;
   flex: none;

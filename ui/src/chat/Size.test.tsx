@@ -28,7 +28,7 @@ const actions: Actions = {
 
 function View({ state, archived = false }: { state: ChatState; archived?: boolean }) {
   const cache = useRef(new Map());
-  const marks: ChatMarks = { still: new Map(), turning: new Map(), latest: new Map(), archived };
+  const marks: ChatMarks = { faces: new Map(), archived };
   return (
     <MarksContext value={marks}>
       <div style={{ height: 900, display: 'flex' }}>
