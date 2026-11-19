@@ -123,6 +123,10 @@ impl Tools {
                     request,
                 };
                 let (task, starts) = person::ask(c, a, &trace)?;
+                // A question is its own main message, whatever thread its turn's agent chose (0079).
+                if let Some(o) = on.as_ref().filter(|_| task.kind == Kind::Person) {
+                    gathr::topics::place::overridden(c, &chat, &o.turn, &trace, "question")?;
+                }
                 let listed = format!(
                     "Task #{} is on the person's Tasks list. Their answer wakes you here",
                     task.number

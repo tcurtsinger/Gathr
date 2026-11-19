@@ -18,6 +18,8 @@ pub struct Turn {
     pub ask: Option<String>,
     pub result_of: Option<String>,
     pub opened_by: Option<String>,
+    /// Where its agent chose its words show, with `post` (0079).
+    pub placed: Option<Placed>,
     /// The first message the person or Gathr put in it: what opened it.
     pub opening: Option<Opening>,
     /// The agent's turn before it in the chat: where a compaction's words would sit.
@@ -61,6 +63,49 @@ pub struct Answered {
     pub role: String,
     pub about: Option<String>,
     pub reply: bool,
+}
+
+/// Where an agent chose its turn's words show: the room, or where a reply to a task or message sits.
+#[derive(Clone)]
+pub enum Placed {
+    Room,
+    Under(Reply),
+}
+
+/// The schema whose turns keep where their agent chose its words show (migration 0059).
+pub const PLACED_SCHEMA: i64 = 59;
+
+/// The SQL columns that read a turn `t`'s choice of place, and the message it names, `p`.
+pub const PLACED_COLUMNS: &str = "t.placed, p.id, p.turn_id, p.role, p.about,
+     p.reply_to IS NOT NULL OR p.reply_task IS NOT NULL";
+
+/// The join `PLACED_COLUMNS` reads, after `t`.
+pub const PLACED_JOIN: &str =
+    "LEFT JOIN messages p ON t.placed LIKE 'm:%' AND p.id = substr(t.placed, 3)";
+
+/// A turn's choice of place from the six `PLACED_COLUMNS` starting at `at`.
+pub fn placed_at(r: &Row<'_>, at: usize) -> rusqlite::Result<Option<Placed>> {
+    let Some(placed) = r.get::<_, Option<String>>(at)? else {
+        return Ok(None);
+    };
+    if placed == "main" {
+        return Ok(Some(Placed::Room));
+    }
+    if let Some(n) = placed.strip_prefix("t:").and_then(|n| n.parse().ok()) {
+        return Ok(Some(Placed::Under(Reply::Task(n))));
+    }
+    let named = placed.strip_prefix("m:").unwrap_or(&placed).to_string();
+    let found: Option<String> = r.get(at + 1)?;
+    Ok(Some(Placed::Under(match found {
+        Some(id) => Reply::Message(Answered {
+            id,
+            turn: r.get(at + 2)?,
+            role: r.get(at + 3)?,
+            about: r.get(at + 4)?,
+            reply: r.get::<_, Option<bool>>(at + 5)?.unwrap_or(false),
+        }),
+        None => Reply::Gone(named),
+    })))
 }
 
 /// The SQL columns that read a reply's target, after `m` (the reply) and `r` (what it answers), then
@@ -195,7 +240,7 @@ impl Facts {
     pub fn load(conn: &Connection, chat: &str, schema: i64) -> Result<Facts, Error> {
         let recorded = schema >= TOPICS_SCHEMA;
         let mut f = Facts::default();
-        f.load_turns(conn, chat, recorded)?;
+        f.load_turns(conn, chat, schema)?;
         f.load_messages(conn, chat, schema)?;
         f.load_tasks(conn, chat)?;
         let sql = "SELECT v.id, v.n, v.turn_id, v.check_line, v.decided_line
@@ -254,11 +299,18 @@ impl Facts {
         Ok(rows)
     }
 
-    fn load_turns(&mut self, conn: &Connection, chat: &str, recorded: bool) -> Result<(), Error> {
-        let result = if recorded { "result_of" } else { "NULL" };
+    fn load_turns(&mut self, conn: &Connection, chat: &str, schema: i64) -> Result<(), Error> {
+        let result = match schema >= TOPICS_SCHEMA {
+            true => "t.result_of",
+            false => "NULL",
+        };
+        let (placed, join) = match schema >= PLACED_SCHEMA {
+            true => (PLACED_COLUMNS, PLACED_JOIN),
+            false => ("NULL, NULL, NULL, NULL, NULL, NULL", ""),
+        };
         let sql = format!(
-            "SELECT id, agent_id, task, answers, ask_id, {result}, opened_by FROM turns WHERE chat_id = ?1
-             ORDER BY created_ts, rowid"
+            "SELECT t.id, t.agent_id, t.task, t.answers, t.ask_id, {result}, t.opened_by, {placed}
+             FROM turns t {join} WHERE t.chat_id = ?1 ORDER BY t.created_ts, t.rowid"
         );
         let turns = self.read(conn, &sql, chat, |r| {
             Ok(Turn {
@@ -269,6 +321,7 @@ impl Facts {
                 ask: r.get(4)?,
                 result_of: r.get(5)?,
                 opened_by: r.get(6)?,
+                placed: placed_at(r, 7)?,
                 opening: None,
                 before: None,
             })

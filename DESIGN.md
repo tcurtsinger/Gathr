@@ -323,7 +323,9 @@ call its own words, they are the label ("Show what changed" then "git status --s
 chip is one line, cut with an ellipsis to the column it is in, never widening it, before the
 label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
 the shared tooltip. A step that kept
-nothing reads as before ("Ran a command"). A thought ([0042](docs/decisions/0042-thinking.md)) is a step
+nothing reads as before ("Ran a command"). An agent's choice of where its words show
+([0079](docs/decisions/0079-agents-choose-where-their-words-show.md)) reads "Chose where to post", and its bubble moves
+there, whole, as the choice is made. A thought ([0042](docs/decisions/0042-thinking.md)) is a step
 of its own, in order with the others: "Thought for 9s", with no chip and nothing to open; one under a
 second is left out, and thoughts are not counted in "6 steps". Thoughts with nothing between them are one
 step, with their time together. While a turn runs, the panel's Now shows all its steps opened, what it wrote

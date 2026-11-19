@@ -127,6 +127,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "merge",
         "message",
         "plan",
+        "post",
         "pr",
         "react",
         "read_chat",
@@ -293,6 +294,10 @@ fn each_turn_records_the_briefing_its_engine_was_given_and_whats_off() {
     assert!(
         briefing.contains("react to give"),
         "the briefing doesn't name the react tool: {briefing}"
+    );
+    assert!(
+        briefing.contains("post to choose where your words this turn show in a team chat;"),
+        "the briefing doesn't name the post tool: {briefing}"
     );
     assert!(
         briefing.contains("size, for the Supervisor, to record the person's ask as repair or new;"),

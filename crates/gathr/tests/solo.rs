@@ -275,7 +275,7 @@ fn the_upgrade_to_0058_gives_each_chat_with_turns_and_no_list_its_latest_agent_a
     ] {
         sql.push_str(&turn_sql(id, chat, agent, at));
     }
-    sql.push_str("PRAGMA user_version = 57;");
+    sql.push_str("ALTER TABLE turns DROP COLUMN placed; PRAGMA user_version = 57;");
     conn.execute_batch(&sql).unwrap();
     drop(conn);
 
@@ -437,7 +437,7 @@ fn a_lone_agents_briefing_names_who_worked_here_and_no_role() {
     sql.push_str("INSERT INTO chats (id, title, created_ts) VALUES ('two', 'Two', 1);");
     sql.push_str(&turn_sql("w1", "two", Some("ann"), 10));
     sql.push_str(&turn_sql("w2", "two", Some("mira"), 20));
-    sql.push_str("PRAGMA user_version = 57;");
+    sql.push_str("ALTER TABLE turns DROP COLUMN placed; PRAGMA user_version = 57;");
     conn.execute_batch(&sql).unwrap();
     drop(conn);
     sign_in_account(&data.0, "acc");

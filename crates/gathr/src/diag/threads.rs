@@ -113,6 +113,11 @@ fn in_words(a: &Value) -> String {
          it; picked: their message to several agents; lead: the lead on no task; plan: it wrote a plan).",
         c["said_to_person"]
     ));
+    if let Some(n) = c["turns"]["placed"].as_u64() {
+        out.push(format!(
+            "Placed by their agent with post: {n} turns (placed: the room, or the thread it chose)."
+        ));
+    }
     out.push(format!(
         "Tied to nothing: {}, of which a link leads nowhere: {}.",
         c["tied_to_nothing"], c["broken"]

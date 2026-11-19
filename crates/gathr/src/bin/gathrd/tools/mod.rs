@@ -17,6 +17,7 @@ mod merge;
 mod message;
 mod person;
 mod plan;
+mod post;
 mod react;
 mod server;
 mod settings;

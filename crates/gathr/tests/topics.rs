@@ -526,7 +526,7 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
          ALTER TABLE messages DROP COLUMN about;
                  DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
          ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
-         DROP TABLE reads;
+         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed;
          PRAGMA user_version = 54;",
     )
     .unwrap();

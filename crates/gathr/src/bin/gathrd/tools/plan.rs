@@ -6,6 +6,7 @@ use std::time::Instant;
 use axum::http::request::Parts;
 use gathr::plans::{self, Answer, Part, Writing};
 use gathr::tasks::{DONE_MOST, PROOF_MOST, SIZE_MOST, TITLE_MOST, WHERE_MOST};
+use gathr::topics::place;
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -123,12 +124,23 @@ impl Tools {
                     parts: &parts,
                     answers: answers.as_deref(),
                 };
-                plans::write(c, &w, &trace)
+                let wrote = plans::write(c, &w, &trace)?;
+                // A plan waits on the person: a thread its agent chose gives way to the room (0079).
+                let moved = match turn.as_deref() {
+                    Some(t) if place::overridden(c, &chat, t, &trace, "plan")? => {
+                        Some((t.to_string(), gathr::topics::of_turn(c, &chat, t)?))
+                    }
+                    _ => None,
+                };
+                Ok((wrote, moved))
             })
             .await;
-        let answer = wrote.map(|w| {
+        let answer = wrote.map(|(w, moved)| {
             let message = json!({ "type": "message", "chat": caller.chat, "message": w.message });
             self.chats.publish(message);
+            if let Some((turn, topic)) = moved {
+                self.moved(&caller, &turn, topic);
+            }
             self.chats.start(w.starts);
             w.answer
         });
