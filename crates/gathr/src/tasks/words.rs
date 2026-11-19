@@ -43,9 +43,6 @@ pub fn brief(
     giver: &str,
     carry: Option<&str>,
 ) -> Result<String, Error> {
-    if t.checks.is_some() {
-        return crate::plans::check::check_brief(conn, t, giver, carry);
-    }
     let mut lines = vec![format!("Task #{} from {giver}: {}", t.number, t.what)];
     if let Some(why) = &t.why {
         lines.push(format!("Why: {why}"));

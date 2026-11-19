@@ -82,19 +82,27 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
     (
         "role",
         "role: supervisor",
-        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.\n\
+         When you answer a point, quote its line first as \"> Name: their words\", then reply under it. Speak only as \
+         yourself, in a few lines: this is a conversation, not a report.\n\
+         After you answer, the members who took no part check it, and when one questions it you have the last word. \
+         When members disagree, make the call and give the reason. Don't pass on what members said.",
     ),
     (
         "role",
         "role: member",
         "Make the smallest change that does what was asked: no fallback, guard, abstraction or compatibility \
          nobody asked for, and remove what it replaces.\n\
-         When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+         When you only agree with another agent's message, give it a thumbs-up with react instead of replying.\n\
+         When you answer a point, quote its line first as \"> Name: their words\", then reply under it. Speak only as yourself, in a few lines: this is a conversation, not a report.\n\
+         If you disagree with the lead's call, argue your case once, in words, then follow it.",
     ),
     (
         "role",
         "role: reviewer",
-        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.",
+        "When you only agree with another agent's message, give it a thumbs-up with react instead of replying.\n\
+         When you answer a point, quote its line first as \"> Name: their words\", then reply under it. Speak only as yourself, in a few lines: this is a conversation, not a report.\n\
+         If you disagree with the lead's call, argue your case once, in words, then follow it.",
     ),
     (
         "request_brief",
@@ -148,14 +156,6 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
         "Where the task you gave stands:\n\
          - #2 Ann, Fix the note: held: done, waiting on #90 to merge\n\
          Read replies with read_chat, then continue. This turn is on your task #1: end it with finish_task.",
-    ),
-    (
-        "hear_back",
-        "hear_back: a plan check left",
-        "The task you gave is settled:\n\
-         - #1 Bo, Check plan v1: Tags on notes: left: Two gaps. Findings: note 1, wrong, src/notes.rs: The list query \
-         misses tags; note 2, unasked: Export isn't asked. Answer each in the next version's answers.\n\
-         Read replies with read_chat, then continue.",
     ),
     (
         "answered",
@@ -233,68 +233,25 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          judge: give its author a fix, or merge it with `merge`.",
     ),
     (
-        "plan_check",
-        "plan_check: first",
-        "Task #10 from Mira: Check plan v1: Tags on notes\n\
-         Check version 1 of Mira's plan \"Tags on notes\" before the person sees it. Say what is wrong or missing \
-         (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that proves \
-         nothing) and what the ask doesn't need, with file and line.\n\
+        "check",
+        "check: an answer",
+        "Check Mira's answer before the person relies on it. Don't redo the work, but where it says something was \
+         built or changed, check that part by running it and using it: reading the diff alone isn't a check, and \
+         \"it works\" with no proof is a claim without evidence.\n\
+         The person asked: Why is the list slow?\n\
+         Mira's answer, message <id>:\n\
+         The list reads every note's tags one by one.\n\
+         If it holds up, give message <id> a thumbs-up with react and write nothing. If something in it is wrong, \
+         missing or claimed without evidence, say what in a few lines with your evidence, quoting the line you answer \
+         as \"> Mira: their words\". If there's nothing to check, such as small talk, write nothing.",
+    ),
+    (
+        "check",
+        "check: a plan",
+        "Check version 1 of Mira's plan \"Tags on notes\" before the person sees it. Don't redo it: say what is wrong \
+         or missing (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that \
+         proves nothing) and what the ask doesn't need, with file and line.\n\
          The person asked: Add tags to notes\n\
-         The plan, message <id>:\n\
-         Plan: Tags on notes (version 1, 3 parts)\n\
-         Let notes carry tags, shown in the list and used to filter.\n\
-         \n\
-         1. Add the tags table (Ann)\n\
-         Why: Notes need tags\n\
-         Done when: A note carries its tags\n\
-         Proof: tests/tags.rs passes\n\
-         Where: the project's worktree, on a new branch\n\
-         Size: src/tags.rs, about 60 lines\n\
-         \n\
-         2. Show tags in the list (Bo), after part 1\n\
-         Why: Notes need tags\n\
-         Done when: A note carries its tags\n\
-         Proof: tests/tags.rs passes\n\
-         Where: the project's worktree, on a new branch\n\
-         Size: src/tags.rs, about 60 lines\n\
-         \n\
-         3. Filter by tag (Ann), after part 2 and #9\n\
-         Why: Notes need tags\n\
-         Done when: A note carries its tags\n\
-         Proof: tests/tags.rs passes\n\
-         Where: the project's worktree, on a new branch\n\
-         Size: src/tags.rs, about 60 lines\n\
-         If you agree, give message <id> a thumbs-up with react: that finishes this task. Else finish_task left, \
-         with notes: wrong, unasked or suggestion, each with its evidence in says.",
-    ),
-    (
-        "plan_check",
-        "plan_check: again",
-        "Task #2 from Mira: Check plan v2: Tags on notes\n\
-         Check version 2 of Mira's plan \"Tags on notes\" for your findings on version 1 only, with Mira's answers:\n\
-         - Note 1, wrong: src/notes.rs: The list query misses tags. Mira: changed: The list reads tags now\n\
-         - Note 2, unasked: Export isn't asked. Mira: kept: The person asked for export last week\n\
-         The plan, message <id>:\n\
-         Plan: Tags on notes (version 2, 1 part)\n\
-         Let notes carry tags, shown in the list and used to filter.\n\
-         \n\
-         1. Add the tags table (Ann)\n\
-         Why: Notes need tags\n\
-         Done when: A note carries its tags\n\
-         Proof: tests/tags.rs passes\n\
-         Where: the project's worktree, on a new branch\n\
-         Size: src/tags.rs, about 60 lines\n\
-         If the answers hold, give message <id> a thumbs-up with react: that finishes this task. Else finish_task \
-         left, with notes on what still fails.",
-    ),
-    (
-        "plan_check",
-        "plan_check: carry",
-        "Task #2 from Mira: Check plan v1: Tags on notes\n\
-         Check version 1 of Mira's plan \"Tags on notes\" before the person sees it. Say what is wrong or missing \
-         (a wrong fact or file, a missed step or caller, a part given to the wrong member, a proof that proves \
-         nothing) and what the ask doesn't need, with file and line.\n\
-         The person asked: Add folders\n\
          The plan, message <id>:\n\
          Plan: Tags on notes (version 1, 1 part)\n\
          Let notes carry tags, shown in the list and used to filter.\n\
@@ -305,10 +262,32 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          Proof: tests/tags.rs passes\n\
          Where: the project's worktree, on a new branch\n\
          Size: src/tags.rs, about 60 lines\n\
-         Continue from here: your engine closed and ended your background command. Check what is already done \
-         before repeating work.\n\
-         If you agree, give message <id> a thumbs-up with react: that finishes this task. Else finish_task left, \
-         with notes: wrong, unasked or suggestion, each with its evidence in says.",
+         If it holds up, give message <id> a thumbs-up with react and write nothing. If something in it is wrong, \
+         missing or claimed without evidence, say what in a few lines with your evidence, quoting the line you answer \
+         as \"> Mira: their words\".",
+    ),
+    (
+        "last_word",
+        "last_word: an answer",
+        "Ann and Bo questioned your answer, message <id>:\n\
+         Ann: > Mira: Done: tags show in the list.\n\
+         \n\
+         The list shows them, the filter doesn't.\n\
+         \n\
+         Bo: No test covers a note with no tags.\n\
+         This is your last word on it: look at each point, correct your answer if they're right, or say plainly why \
+         it stands. A few lines, to the person.",
+    ),
+    (
+        "last_word",
+        "last_word: a plan",
+        "Bo questioned your answer, message <id>:\n\
+         Bo: > Mira: 1. Add the tags table (Ann)\n\
+         \n\
+         Ann has no index on the note column.\n\
+         This is your last word on it: look at each point, correct your answer if they're right, or say plainly why \
+         it stands. A few lines, to the person.\n\
+         To change the plan, write its next version with plan: the person sees the newest when this turn ends.",
     ),
     (
         "sent_back",

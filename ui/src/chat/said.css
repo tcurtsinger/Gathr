@@ -262,6 +262,21 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A member's check of an answer (0080): one small grey line with its icon, before the words. */
+.checked-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+  line-height: 18px;
+}
+.checked-line svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
 /* Gathr's words that opened the turn (0078): up to three lines, cut with an ellipsis. */
 .bubble-quote[data-lines="3"] {
   display: -webkit-box;

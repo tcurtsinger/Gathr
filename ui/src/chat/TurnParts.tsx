@@ -1,5 +1,6 @@
 import {
   Bell,
+  CheckCheck,
   ChevronRight,
   CircleCheck,
   CircleCheckBig,
@@ -162,6 +163,15 @@ export function FindingsChip({ notes }: { notes: ReviewNote[] }) {
   );
 }
 
+/** A member's check of an answer (0080), first in its bubble, as SerenityOS draws it: "Checked Mira's answer". */
+export function CheckedLine({ author }: { author: string }) {
+  return (
+    <div className="checked-line">
+      <CheckCheck aria-hidden="true" />
+      <span>Checked {author}'s answer</span>
+    </div>
+  );
+}
 const ICON = {
   task: CircleCheck,
   answer: PenLine,

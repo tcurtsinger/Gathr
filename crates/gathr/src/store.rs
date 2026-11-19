@@ -177,7 +177,7 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
         "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task,
-                answers, held, result_of
+                answers, held, result_of, opened_by
          FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -202,6 +202,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "held": r.get::<_, Option<String>>(10)?,
                 // The ask it is the result of (0051): the result quotes it.
                 "result_of": r.get::<_, Option<String>>(11)?,
+                // The words that opened it (0056): a member's check of an answer draws its Checked line.
+                "opened": r.get::<_, Option<String>>(12)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
@@ -520,14 +522,15 @@ pub fn set_turn(
     .map_err(Error::from)
 }
 
-/// A turn's place in its chat (none until it starts), when it was made and the ask it is the result
-/// of, as history shows them.
-pub fn turn_place(
-    conn: &Connection,
-    id: &str,
-) -> Result<(Option<i64>, String, Option<String>), Error> {
-    let sql = "SELECT position, created_ts, result_of FROM turns WHERE id = ?1";
-    let row = |r: &rusqlite::Row<'_>| Ok((r.get(0)?, crate::ids::utc(r.get(1)?), r.get(2)?));
+/// A turn's place in its chat (none until it starts), when it was made, the ask it is the result
+/// of and the words that opened it, as history shows them.
+pub type TurnPlace = (Option<i64>, String, Option<String>, Option<String>);
+
+/// A turn's `TurnPlace`.
+pub fn turn_place(conn: &Connection, id: &str) -> Result<TurnPlace, Error> {
+    let sql = "SELECT position, created_ts, result_of, opened_by FROM turns WHERE id = ?1";
+    let row =
+        |r: &rusqlite::Row<'_>| Ok((r.get(0)?, crate::ids::utc(r.get(1)?), r.get(2)?, r.get(3)?));
     Ok(conn.prepare_cached(sql)?.query_row([id], row)?)
 }
 

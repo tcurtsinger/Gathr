@@ -148,15 +148,16 @@ Parts: 2.2
 
 Parts: 2.3
 
-- **Given** the lead has written a version of a plan with the `plan` tool
-- **When** Gathr gives the check to the reviewer
-- **Then** the version is the lead's own message in the chat, with a chip, and its tab says it is being
-  checked: there is no Approve. A thumbs-up from the checker on that message agrees. Gathr's line says
-  how the check ended ("Bo agrees" or "Bo didn't finish"; findings are a chip, "3 findings", at the end of the
-  checker's bubble), and the chat then needs the
-  person. A check that left findings wakes the lead, who answers each in its next version, and only
-  the one who objected checks that version, on those points. A check still open 10 minutes after the
-  version was written reaches the person as "didn't finish"
+- **Given** the lead has written a version of a plan with the `plan` tool, in a team with members who took no part
+- **When** the lead's turn ends and nothing else of the ask runs
+- **Then** each of those members checks it in a turn of its own, in the thread of the lead's bubble, and its tab says
+  it is being checked: there is no Approve. A member that agrees gives the version a thumbs-up and writes nothing: no
+  bubble. A member that finds something wrong says it in a few lines, quoting the line, under "Checked Mira's
+  answer". When any did, the lead is woken once with their words for its last word, and may write the next version
+  there. The newest version then reaches the person, with no second check, and the chat needs them. A version still
+  unchecked 10 minutes after it was written reaches the person as "<names> didn't finish" ([0080](decisions/0080-the-team-checks-the-leads-answer-in-the-open.md))
+- **And when** the lead answers any message of the person's in words, the same members check that answer the same
+  way, once per message; small talk gets a thumbs-up or nothing
 
 ### 2d. A plan is a record with versions and states
 
@@ -164,7 +165,7 @@ Parts: 2.1
 
 - **Given** a plan the person sent back with words
 - **When** the lead writes the next version
-- **Then** Gathr holds both versions, the words and the lead's answers. The new version is checked again
+- **Then** Gathr holds both versions and the words. The new version is checked again
   before the person sees it, and the old one reads as replaced, with the words as Sent back. From its first version a plan is in one
   state at every moment, read from its rows: checking, revising, waiting on the person, approved or
   dropped. Once approved, each part is the task it became, and opens it. A second plan for an ask keeps the first
@@ -617,11 +618,11 @@ Parts: 6.4, 6.5
 - **When** the person replies to an older answer of the agent
 - **Then** the reply and the answer to it sit in a thread under that older answer; the rest stays flat
 - **Given** a team chat (0078)
-- **When** the person asks the lead, the lead plans and its check leaves findings, the lead hears back, writes the
-  next version and later reports, and the person picks two agents with @
+- **When** the person asks the lead, the lead plans, a member questions it and the lead's last word writes the next
+  version, the lead later reports, and the person picks two agents with @
 - **Then** the lead's answer is a main message right under the person's message, whole, its plan chip in its bubble
-  where it wrote the plan; the check, its line and Approve's line sit in the thread of the bubble that holds that
-  version; each hear-back of the lead's is a main message, the one that closes the ask its result; each picked agent's
+  where it wrote the plan; the members' checks and the last word sit in the thread of the bubble that holds that
+  version, the last word's bubble that wrote the next version is a main message, and Approve's line sits under it; each hear-back of the lead's is a main message, the one that closes the ask its result; each picked agent's
   answer is a main message; Gathr's words that opened a turn (a wait's result, a carry-on, Sent back) are the quote at
   the top of its bubble, with no message of Gathr's for them
 
@@ -1211,7 +1212,7 @@ the same chat.
      [9f](#9f-a-review-by-a-different-provider)).
   3. **Plan.** The lead asks what it must, one question at a time, then writes a plan in parts
      ([2e](#2e-the-lead-asks-its-questions-first-one-at-a-time)).
-  4. **Check.** The reviewer checks the plan against the code before the person sees it
+  4. **Check.** The members who took no part check the plan against the code before the person sees it
      ([2c](#2c-no-plan-reaches-the-person-unchecked)).
   5. **Approve.** The person approves. Before that, no task could be given
      ([2b](#2b-nothing-new-is-handed-out-before-its-plan-is-approved)).
@@ -1241,7 +1242,7 @@ built:
 - That the assistant does a small thing itself, and hands on only what belongs to a specialist (1a, 1e,
   R1).
 - That a lead sizes an ask rightly, and asks only what it couldn't find for itself (2a, 2e).
-- That a reviewer's check of a plan finds what is wrong with it (2c).
+- That the members' checks of a plan find what is wrong with it (2c).
 - That an agent with only the brief does the task right, and one that was compacted finishes it right
   (3d, 8d).
 - That the default briefing is enough for each role to work as described (8g, 11a, R2).

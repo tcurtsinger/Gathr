@@ -145,8 +145,27 @@ const KEPT: &[(&str, i64, &str)] = &[
         1,
         "85ae84d5185f8c0dfe843cff0918cc4beac470ae3aafe9e2c4ce48ae88200db0",
     ),
+    (
+        "hear_back",
+        3,
+        "8946f889d56b743fea86f1cfc5e61c8b33e3816cbe6ec17319157dc667336fa8",
+    ),
+    (
+        "role",
+        2,
+        "4d7a91ab2650d7e8842e4655a884a90b4758e6fff2f976174b18a2fa7a3b8df4",
+    ),
+    (
+        "check",
+        1,
+        "757d03478711bd3a2bedd1c55876542889253142eb006211ff1a30ca20302471",
+    ),
+    (
+        "last_word",
+        1,
+        "a57edb981d9f7a821156c834bb42398b3cf6d7918fd21ad5e810cae25440f6ae",
+    ),
 ];
-
 /// Every file that asserts samples.
 const SOURCES: &[&str] = &[
     include_str!("tasks/words.rs"),

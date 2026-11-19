@@ -1,7 +1,8 @@
 //! What every turn, task and line said in no turn of a chat is about (0075): the main message it
 //! sits under. A main message is the person's message, what is said to them (0078: an answer to
 //! their message, the lead's report, a turn that wrote a plan), a task the lead hands out, a
-//! question to the person, the result of an ask, or anything nothing ties: its own. Read from what
+//! question to the person, the result of an ask, or anything nothing ties: its own. A member's check
+//! of the lead's answer and the lead's last word sit under that answer (0080). Read from what
 //! the chat records, once per chat (`load`), and resolved with maps: never a query per row.
 //!
 //! Keys: `t:<task>` (a task or question), `m:<message>` (the person's message, a main line of
@@ -233,6 +234,22 @@ impl<S: Source> Topics<S> {
         }
         if let Some(placed) = &t.placed {
             return self.placed(&own, placed, next);
+        }
+        // A member's check and the lead's last word sit in the thread of the answer checked (0080).
+        let checks = match t.opened_by.as_deref() {
+            Some("check") => Some("check"),
+            Some("last_word") => Some("last_word"),
+            _ => None,
+        };
+        if let (Some(fact), Some(a)) = (checks, &t.answers) {
+            let why = format!("checks the answer of turn {a}");
+            return self.via(
+                &own,
+                self.follow_turn(a, next),
+                fact,
+                why,
+                format!("turn {a}"),
+            );
         }
         let opening = t.opening.as_ref();
         // The person's reply (0076): in the thread of what it answers.

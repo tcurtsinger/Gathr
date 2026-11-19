@@ -28,6 +28,18 @@ fn last_briefing(args: &Path) -> String {
     std::fs::read_to_string(&last[at + 1]).unwrap()
 }
 
+/// The briefing each engine start was given, in order, read while those engines still run.
+fn briefings(args: &Path) -> Vec<String> {
+    let starts = std::fs::read_to_string(args).unwrap_or_default();
+    let read = |line: &str| -> Option<String> {
+        let start: Vec<String> = serde_json::from_str(line).ok()?;
+        let at = start
+            .iter()
+            .position(|a| a == "--append-system-prompt-file")?;
+        std::fs::read_to_string(&start[at + 1]).ok()
+    };
+    starts.lines().filter_map(read).collect()
+}
 /// Each engine start's role and role version, in order, as the start events record them.
 fn started_roles(data: &Path) -> Vec<(Value, Value)> {
     let sql = "SELECT json_extract(attrs, '$.\"gathr.role\"') AS role, \
@@ -96,14 +108,17 @@ fn each_roles_briefing_carries_its_lines_and_its_start_records_their_version() {
         ("Bo", "role: member", Role::Member),
         ("Cy", "role: reviewer", Role::Reviewer),
     ];
+    // The lead's answer is checked by the others in the open (0080): their engines may start first.
     for (n, (name, sample, role)) in each.into_iter().enumerate() {
         send(
             &service,
             &chat,
             json!({ "text": format!("@{name} hi"), "agent": ids[n] }),
         );
-        service.wait_for(&chat, 20, &format!("{name}'s turn"), |h| ended(h, n + 1));
-        let briefing = last_briefing(&args);
+        let first = format!("You are {name}, an agent");
+        let briefing = common::until(20, &format!("{name}'s engine"), || {
+            briefings(&args).into_iter().find(|b| b.starts_with(&first))
+        });
         let (first, rest) = briefing.split_once('\n').unwrap();
         assert!(
             first.starts_with(&format!("You are {name}, an agent")),
@@ -117,11 +132,14 @@ fn each_roles_briefing_carries_its_lines_and_its_start_records_their_version() {
     }
     let version = json!(gathr::words::ROLE);
     let recorded = [
-        (json!("supervisor"), version.clone()),
         (json!("member"), version.clone()),
-        (json!("reviewer"), version),
+        (json!("reviewer"), version.clone()),
+        (json!("supervisor"), version),
     ];
-    assert_eq!(started_roles(&data.0), recorded);
+    let mut started = started_roles(&data.0);
+    started.sort_by_key(|(role, _)| role.to_string());
+    started.dedup();
+    assert_eq!(started, recorded);
 }
 
 #[test]
@@ -137,7 +155,7 @@ fn a_one_agent_chats_briefing_has_no_role_lines() {
     );
     service.wait_for(&chat, 20, "Dot's turn", |h| ended(h, 1));
     let briefing = last_briefing(&args);
-    for (id, line) in roles::SHIPPED {
+    for (id, line) in roles::SHIPPED.iter().chain(&roles::UNTRIED) {
         assert!(
             !briefing.contains(line),
             "{id} is in a one-agent chat's briefing:\n{briefing}"
@@ -181,7 +199,7 @@ fn with_the_switch_set_no_briefing_has_role_lines() {
     });
     let briefing = last_briefing(&args);
     assert!(briefing.starts_with("You are Rev, an agent"), "{briefing}");
-    for (id, line) in roles::SHIPPED {
+    for (id, line) in roles::SHIPPED.iter().chain(&roles::UNTRIED) {
         assert!(
             !briefing.contains(line),
             "{id} is in Rev's briefing with the switch set:\n{briefing}"
@@ -248,6 +266,26 @@ fn the_shipped_lines_passed_the_trial() {
     );
 }
 
+/// 0080: the open check's lines ship untried, by the owner's call of 2026-11-19, and the room's next
+/// run is their trial. Every line a role gets is kept by the trial or named untried, never both, so
+/// the gate above still holds each tried line to its result.
+#[test]
+fn every_role_line_is_kept_by_the_trial_or_named_untried() {
+    let roles = [Role::Supervisor, Role::Member, Role::Reviewer];
+    let given: Vec<&str> = roles.iter().flat_map(|r| roles::lines(*r)).collect();
+    let named = |line: &str| {
+        let all = roles::SHIPPED.iter().chain(&roles::UNTRIED);
+        all.filter(|(_, l)| *l == line).count()
+    };
+    let unnamed: Vec<&str> = given.iter().copied().filter(|l| named(l) != 1).collect();
+    assert_eq!(
+        unnamed,
+        Vec::<&str>::new(),
+        "a line is neither kept nor named untried, or is both"
+    );
+    let untried: Vec<&str> = roles::UNTRIED.iter().map(|(id, _)| *id).collect();
+    assert_eq!(untried, ["L5", "L6", "L7"]);
+}
 #[test]
 fn the_gate_names_each_line_with_no_kept_result_for_its_exact_text() {
     let shipped = [

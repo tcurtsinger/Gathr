@@ -1,11 +1,10 @@
 //! `react`: an agent puts its thumbs-up on the person's message or another agent's in its own chat.
-//! One row and one event: it posts no message, counts no hand-off and wakes nobody, but a plan's
-//! checker's thumbs-up on the version it checks finishes that check (0062).
+//! One row and one event: it posts no message, counts no hand-off and wakes nobody. On the answer a
+//! member checks (0080), it is that member's whole check.
 
 use std::time::Instant;
 
 use axum::http::request::Parts;
-use gathr::tasks::Took;
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -50,7 +49,7 @@ impl Tools {
             message,
         );
         let giver = from.clone();
-        let (added, agreed) = self
+        let (added, checked) = self
             .db(move |c| {
                 let tx = c.transaction()?;
                 gathr::archive::refuse_archived(&tx, &chat)?;
@@ -59,12 +58,9 @@ impl Tools {
                     _ => asked,
                 };
                 let added = gathr::reactions::add(&tx, &chat, &asked, &giver, &on.trace)?;
-                let agreed = match added.new {
-                    true => gathr::plans::agreed(&tx, &chat, &asked, &giver, &on.trace)?,
-                    false => None,
-                };
+                let checked = gathr::open_check::checks(&tx, &on.turn, &added.message)?;
                 tx.commit()?;
-                Ok((added, agreed))
+                Ok((added, checked))
             })
             .await?;
         // Named by the message it is on: `person`, or Gathr's copy, stands for that one.
@@ -77,18 +73,9 @@ impl Tools {
         self.chats
             .publish(json!({ "type": "reaction", "chat": caller.chat, "reaction": reaction }));
         let mut said = format!("Gave {message} a thumbs-up.");
-        if let Some(a) = agreed {
-            self.chats.start(a.starts);
-            let (n, v) = (a.check, a.version);
-            // The thumbs-up is the approval: without this a checker closes its turn by saying it again.
-            let open = "Write only what is still open, not that you agree.";
-            said.push_str(&match a.took {
-                Took::Kept => format!(
-                    "\nRecorded: your check #{n} of version {v} is done when the turn running on it ends. \
-                     End it now. {open}"
-                ),
-                _ => format!("\nYour check #{n} of version {v} is done. {open}"),
-            });
+        // The thumbs-up is the check: without this a checker closes its turn by saying it agrees.
+        if checked {
+            said.push_str(" That is your whole check: end your turn now and write nothing more.");
         }
         Ok(said)
     }

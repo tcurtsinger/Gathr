@@ -305,10 +305,17 @@ fn saved(
     Ok(starts)
 }
 
-/// The chats to check at a look: those with work owed, and those whose stretch is open still.
+/// The chats to check at a look: those with work owed, those whose stretch is open still, and those
+/// with a round of the open check under way or a plan version not yet sent, whose 10 minutes run
+/// out with no write (0080).
 pub fn chats(conn: &Connection) -> Result<Vec<String>, Error> {
     let mut stmt = conn.prepare_cached(&format!(
-        "{WITH_OPEN_WORK} UNION SELECT chat_id FROM quiet WHERE since_ts IS NOT NULL"
+        "{WITH_OPEN_WORK} UNION SELECT chat_id FROM quiet WHERE since_ts IS NOT NULL
+         UNION SELECT chat_id FROM open_checks WHERE ended_ts IS NULL
+         UNION SELECT p.chat_id FROM plans p JOIN plan_versions v ON v.plan_id = p.id
+             JOIN chats c ON c.id = p.chat_id
+             WHERE v.sent_ts IS NULL AND v.decided IS NULL AND c.archived_ts IS NULL AND {}",
+        crate::plans::NEWEST
     ))?;
     let rows = stmt.query_map([], |r| r.get(0))?;
     Ok(rows.collect::<Result<_, _>>()?)

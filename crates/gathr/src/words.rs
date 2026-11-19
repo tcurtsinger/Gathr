@@ -11,7 +11,7 @@ pub const BRIEF: i64 = 3;
 pub const REVIEW_BRIEF: i64 = 1;
 pub const REQUEST_BRIEF: i64 = 2;
 pub const REPORT_ASK: i64 = 1;
-pub const HEAR_BACK: i64 = 2;
+pub const HEAR_BACK: i64 = 3;
 pub const ANSWERED: i64 = 2;
 pub const WAKE: i64 = 1;
 pub const SILENT: i64 = 1;
@@ -19,14 +19,15 @@ pub const WAIT_FIRED: i64 = 1;
 pub const STALE: i64 = 1;
 pub const LANDING: i64 = 1;
 pub const CARRY_ON: i64 = 2;
-pub const PLAN_CHECK: i64 = 1;
+pub const CHECK: i64 = 1;
+pub const LAST_WORD: i64 = 1;
 pub const SENT_BACK: i64 = 1;
 pub const RESIZED: i64 = 1;
 pub const LIKED: i64 = 1;
 pub const REPLY: i64 = 2;
 pub const PICKED: i64 = 1;
 /// A team's role lines in the briefing (`crate::roles`, 0066): no turn opens with them.
-pub const ROLE: i64 = 1;
+pub const ROLE: i64 = 2;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,8 +54,10 @@ pub enum Opened {
     Landing,
     /// An update, Stop now or a usage limit ended the turn.
     CarryOn,
-    /// A plan check's brief (0062).
-    PlanCheck,
+    /// A member checks the lead's answer (0080).
+    Check,
+    /// The lead's last word on what members questioned (0080).
+    LastWord,
     /// The person sent a plan back to its lead.
     SentBack,
     /// The person changed an ask's size (0063).
@@ -74,7 +77,7 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 22] = [
+    pub const ALL: [Opened; 23] = [
         Opened::Brief,
         Opened::ReviewBrief,
         Opened::RequestBrief,
@@ -87,7 +90,8 @@ impl Opened {
         Opened::Stale,
         Opened::Landing,
         Opened::CarryOn,
-        Opened::PlanCheck,
+        Opened::Check,
+        Opened::LastWord,
         Opened::SentBack,
         Opened::Resized,
         Opened::Liked,
@@ -113,7 +117,8 @@ impl Opened {
             Opened::Stale => "stale",
             Opened::Landing => "landing",
             Opened::CarryOn => "carry_on",
-            Opened::PlanCheck => "plan_check",
+            Opened::Check => "check",
+            Opened::LastWord => "last_word",
             Opened::SentBack => "sent_back",
             Opened::Resized => "resized",
             Opened::Liked => "liked",
@@ -141,7 +146,8 @@ impl Opened {
             Opened::Stale => Some(STALE),
             Opened::Landing => Some(LANDING),
             Opened::CarryOn => Some(CARRY_ON),
-            Opened::PlanCheck => Some(PLAN_CHECK),
+            Opened::Check => Some(CHECK),
+            Opened::LastWord => Some(LAST_WORD),
             Opened::SentBack => Some(SENT_BACK),
             Opened::Resized => Some(RESIZED),
             Opened::Liked => Some(LIKED),

@@ -94,6 +94,8 @@ export interface Turn {
   topic?: string | null;
   /** The ask it is the result of (0051): the result quotes it. */
   result_of?: string | null;
+  /** The kind of Gathr's words that opened it (0056): `check` and `last_word` are the open check's (0080). */
+  opened?: string | null;
 }
 
 export type Role = 'supervisor' | 'reviewer' | 'member';

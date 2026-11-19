@@ -1,9 +1,9 @@
 //! The lead's plan for an ask (0062): each call of the `plan` tool writes a version, posted in the
-//! chat as the lead's own message with its parts, and checked before the person sees it. A plan's
-//! state is read from its rows and its check task, never stored apart.
+//! chat as the lead's own message with its parts, and checked in the open before the person sees it
+//! (0080). A plan's state is read from its rows, never stored apart.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value, json};
 
 use crate::Error;
@@ -15,7 +15,7 @@ use crate::team::Role;
 pub(crate) mod check;
 mod decide;
 
-pub use check::{Agreed, agreed, overdue};
+pub use check::overdue;
 pub use decide::{Decided, approve, drop, send_back};
 
 /// Whether ask `?1` has an approved plan.
@@ -23,12 +23,13 @@ pub const APPROVED: &str = "EXISTS (SELECT 1 FROM plans p JOIN plan_versions v O
         WHERE p.ask_id = ?1 AND v.decided = 'approved')";
 
 /// Version `v` is its plan's newest.
-const NEWEST: &str = "v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)";
+pub(crate) const NEWEST: &str =
+    "v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)";
 
 /// The longest title.
 const TITLE_MOST: usize = 80;
 
-/// Where a plan stands, read from its newest version and that version's check.
+/// Where a plan stands, read from its newest version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum State {
@@ -58,14 +59,6 @@ pub struct Part<'a> {
     pub after_tasks: &'a [i64],
 }
 
-/// The lead's answer to one finding of the last check.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Answer {
-    pub note: i64,
-    pub changed: bool,
-    pub why: String,
-}
-
 /// The lead's `plan` call.
 pub struct Writing<'a> {
     pub chat: &'a str,
@@ -75,16 +68,14 @@ pub struct Writing<'a> {
     pub title: &'a str,
     pub text: &'a str,
     pub parts: &'a [Part<'a>],
-    pub answers: Option<&'a [Answer]>,
 }
 
-/// What writing a version did: its message, for the live socket, and the check's turn.
+/// What writing a version did: its message, for the live socket, and the turns it stops.
 #[derive(Debug)]
 pub struct Wrote {
     pub plan: i64,
     pub version: i64,
     pub n: i64,
-    pub check: i64,
     pub answer: String,
     pub message: Value,
     pub starts: Vec<Start>,
@@ -110,7 +101,7 @@ fn refused(why: impl Into<String>) -> Error {
 }
 
 /// Writes the next version of the open plan of the ask the caller's turn serves, or a new plan's
-/// first, with its message and its check, in one transaction (H2).
+/// first, with its message, in one transaction (H2).
 pub fn write(conn: &mut Connection, w: &Writing, trace: &str) -> Result<Wrote, Error> {
     let tx = conn.transaction()?;
     let wrote = write_in(&tx, w, trace)?;
@@ -141,14 +132,8 @@ fn write_in(tx: &Transaction, w: &Writing, trace: &str) -> Result<Wrote, Error> 
         }
     }
     let open = open_version(tx, &ask)?;
-    let left = match open {
-        Some((_, version, _)) => check::left_on(tx, version)?,
-        None => None,
-    };
-    let answers = w.answers.filter(|a| !a.is_empty());
-    refuse_answers(tx, open.map(|o| o.2), left.as_ref(), answers)?;
     let text = w.text.trim();
-    if let (Some((_, version, n)), None) = (open, answers) {
+    if let Some((_, version, n)) = open {
         let same: (String, String) = tx.query_row(
             "SELECT title, text FROM plan_versions WHERE id = ?1",
             [version],
@@ -156,7 +141,7 @@ fn write_in(tx: &Transaction, w: &Writing, trace: &str) -> Result<Wrote, Error> 
         )?;
         if same == (title.to_string(), text.to_string()) && read_parts(tx, version)? == parts {
             return Err(refused(format!(
-                "Version {} would be the same as version {n}: change a part, or answer the findings.",
+                "Version {} would be the same as version {n}: change a part.",
                 n + 1
             )));
         }
@@ -176,11 +161,10 @@ fn write_in(tx: &Transaction, w: &Writing, trace: &str) -> Result<Wrote, Error> 
     let body = body(tx, (title, text, n), &parts)?;
     let message = crate::store::add_message(tx, w.chat, turn, "assistant", "text", &body)?;
     let message_id = message["id"].as_str().unwrap_or_default().to_string();
-    let answers_json = answers.map(|a| json!(a).to_string());
     tx.execute(
-        "INSERT INTO plan_versions (plan_id, n, message_id, turn_id, title, text, answers, created_ts)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        params![plan, n, message_id, turn, title, text, answers_json, now],
+        "INSERT INTO plan_versions (plan_id, n, message_id, turn_id, title, text, created_ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![plan, n, message_id, turn, title, text, now],
     )?;
     let version = tx.last_insert_rowid();
     for (i, p) in parts.iter().enumerate() {
@@ -209,9 +193,6 @@ fn write_in(tx: &Transaction, w: &Writing, trace: &str) -> Result<Wrote, Error> 
         let why = format!("version {n} replaced it");
         starts.extend(check::cancel_open(tx, before, &why, trace)?);
     }
-    let on = (w.chat, w.agent, turn);
-    let (check, checker, given) = check::give(tx, on, (version, n, title), left.as_ref(), trace)?;
-    starts.extend(given);
     Event::point("gathr.plan.version")
         .trace(trace)
         .chat(w.chat)
@@ -221,18 +202,27 @@ fn write_in(tx: &Transaction, w: &Writing, trace: &str) -> Result<Wrote, Error> 
         .attr("gathr.ask.id", ask.as_str())
         .attr("gathr.message.id", message_id.as_str())
         .attr("gathr.plan.parts", parts.len())
-        .attr("gathr.task.check", check)
-        .attr("gathr.plan.checker", checker.as_str())
         .insert(tx)?;
+    // A version the lead's last word writes gets no second round (0080).
+    let last_word: bool = tx.query_row(
+        "SELECT EXISTS (SELECT 1 FROM turns WHERE id = ?1 AND opened_by = 'last_word')",
+        [turn],
+        |r| r.get(0),
+    )?;
+    let after = match last_word {
+        true => "The person sees it when this turn ends.",
+        false => {
+            "The members who took no part check it once this turn ends; the person sees it after."
+        }
+    };
     let answer = format!(
-        "Wrote version {n} of plan #{plan}, \"{title}\": {}. {checker} checks it in #{check}; the person sees it after.",
+        "Wrote version {n} of plan #{plan}, \"{title}\": {}. {after}",
         counted(parts.len())
     );
     Ok(Wrote {
         plan,
         version,
         n,
-        check,
         answer,
         message,
         starts,
@@ -330,54 +320,6 @@ fn kept_parts(conn: &Connection, chat: &str, parts: &[Part]) -> Result<Vec<Kept>
         });
     }
     Ok(kept)
-}
-
-/// H2.4, 12: `answers` go with the version after a check that left findings, and answer each.
-fn refuse_answers(
-    conn: &Connection,
-    n: Option<i64>,
-    left: Option<&check::Left>,
-    answers: Option<&[Answer]>,
-) -> Result<(), Error> {
-    let Some(left) = left else {
-        return match answers {
-            Some(_) => Err(refused(
-                "`answers` go with the version after a check that left findings.",
-            )),
-            None => Ok(()),
-        };
-    };
-    let answers = answers.unwrap_or_default();
-    let check = left.check;
-    if let Some(a) = answers
-        .iter()
-        .find(|a| !left.notes.iter().any(|(id, _)| *id == a.note))
-    {
-        return Err(refused(format!(
-            "Note {} isn't a finding of #{check}.",
-            a.note
-        )));
-    }
-    let missing: Vec<String> = left
-        .notes
-        .iter()
-        .filter(|(id, _)| !answers.iter().any(|a| a.note == *id))
-        .map(|(id, _)| id.to_string())
-        .collect();
-    if missing.is_empty() {
-        return Ok(());
-    }
-    let ids: Vec<&str> = missing.iter().map(String::as_str).collect();
-    let (notes, have) = match ids.len() {
-        1 => ("note", "has"),
-        _ => ("notes", "have"),
-    };
-    Err(refused(format!(
-        "Answer each finding of #{check}, {}'s check of version {}: {notes} {} {have} no answer.",
-        tasks::name_of(conn, &left.owner)?,
-        n.unwrap_or_default(),
-        crate::waiting::words::list(&ids)
-    )))
 }
 
 /// "1 part", "3 parts".

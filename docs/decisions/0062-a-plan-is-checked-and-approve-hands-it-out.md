@@ -1,6 +1,6 @@
 # 0062: A plan is a checked record, and Approve hands it out
 
-Status: accepted (owner, 2026-11-14, with Stage 3's spec, part H; its detail and its departures, 2026-11-15, "Approve H"; the answer on a message sent while a plan waits, "Yes, the plan's"). Date: 2026-11-15.
+Status: accepted (owner, 2026-11-14, with Stage 3's spec, part H; its detail and its departures, 2026-11-15, "Approve H"; the answer on a message sent while a plan waits, "Yes, the plan's"). Date: 2026-11-15. H4 and H4a, the one checker with its notes form and the lead's answers, were replaced by [0080](0080-the-team-checks-the-leads-answer-in-the-open.md) on 2026-11-19.
 
 Built: yes. Both of part H's PRs are built. The first: the record, the `plan` tool, the check, Approve, Send back and Drop, and a plain tab. The second: the tab's Findings, Answers and Questions, parts that open one at a time, the marks Changed, New and Removed with "Was", the plan in the needs dock above the composer, and the tab's attention dot. Proof: `crates/gathr/tests/plans/write.rs`, `crates/gathr/tests/plans/check.rs`, `crates/gathr/tests/plans/decide.rs`, `crates/gathr/tests/plan_flow.rs`, `crates/gathr/tests/archive.rs`, `crates/gathr/tests/words.rs`, `ui/src/plans/plans.test.ts`, `ui/src/plans/PlanTab.test.tsx`, `ui/src/chat/needs.test.tsx`.
 
@@ -115,3 +115,8 @@ Where the code differs from the detail the owner approved, the code stands.
   Since 2026-11-19 the check's findings line ("Plan v1: 3 findings") is no longer drawn: a chip at the end of the
   checker's bubble says "3 findings" and opens to each note; a note's kind `unasked` reads "Not asked for", in the
   plan's tab and the Tasks view too, drawn by one component (`ui/src/tasks/Note.tsx`) in place of `noteLine`.
+- [0080](0080-the-team-checks-the-leads-answer-in-the-open.md): the members who took no part check each version in the
+  open, in turns of their own, after the lead's turn ends; a thumbs-up agrees, words wake the lead once for its last
+  word, and the version reaches the person when that has ended. The check task, its checker, its notes, the `plan`
+  tool's `answers`, the `plan_check` words and Gathr's lines on how a check ended are gone; old chats keep theirs.
+  The 10 minutes stay.

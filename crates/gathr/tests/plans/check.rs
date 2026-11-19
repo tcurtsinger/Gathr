@@ -1,572 +1,476 @@
-//! H4: who checks a version, how a check agrees or objects, how its version reaches the person,
-//! and that only Gathr and the person end a check.
+//! 0080: the open check. Once per message of the person's, when the lead has answered it and the
+//! chat has gone quiet, every free member who took no part checks the answer in a turn of its own; a
+//! thumbs-up or silence wakes nobody, words wake the lead once for its last word, and a plan version
+//! reaches the person only after both.
 
 use super::*;
+use gathr::open_check;
+use serde_json::{Value, json};
 
 /// One part: Ann adds the table.
 fn one() -> Vec<Part<'static>> {
     vec![part("Ann", "Add the tags table", &[])]
 }
 
-/// `plan` from Mira's `turn` in `chat`.
-fn write_to(
-    conn: &mut Connection,
-    chat: &str,
-    turn: &str,
-    parts: &[Part],
-    answers: Option<&[Answer]>,
-) -> Wrote {
-    let w = Writing {
-        chat,
-        agent: "mira",
-        turn: Some(turn),
-        title: TITLE,
-        text: TEXT,
-        parts,
-        answers,
-    };
-    plans::write(conn, &w, T).unwrap()
+/// The round's turns the settle started, as (agent, kind of words, turn it answers).
+fn started(starts: &[Start], conn: &Connection) -> Vec<(String, String, Option<String>)> {
+    starts
+        .iter()
+        .map(|s| {
+            let kind = samples::opened(conn, &s.turn).0.unwrap_or_default();
+            (s.agent.clone(), kind, s.answers.clone())
+        })
+        .collect()
 }
 
-fn owner(conn: &Connection, task: i64) -> String {
-    tasks::get(conn, task).unwrap().unwrap().owner.unwrap()
+fn settle(conn: &mut Connection) -> Vec<Start> {
+    open_check::settle(conn, "c", T).unwrap()
 }
 
-/// The thumbs-up of `agent` on `message`, and what it did to a check.
-fn thumbs_up(conn: &mut Connection, agent: &str, message: &str) -> Option<plans::Agreed> {
-    let tx = conn.transaction().unwrap();
-    gathr::reactions::add(&tx, "c", message, agent, T).unwrap();
-    let agreed = plans::agreed(&tx, "c", message, agent, T).unwrap();
-    tx.commit().unwrap();
-    agreed
+/// `agent`'s words in `turn`.
+fn says(conn: &Connection, turn: &str, words: &str) -> String {
+    let said = gathr::store::add_message(conn, "c", turn, "assistant", "text", words).unwrap();
+    said["id"].as_str().unwrap().to_string()
 }
 
-/// The version's message.
-fn message_of(conn: &Connection, version: i64) -> String {
-    version_field(conn, version, "message_id")
+/// A turn of `agent`'s in chat `c`, created now, with `status`.
+fn turn_of(conn: &Connection, id: &str, agent: &str, status: &str) {
+    gathr::store::add_turn(conn, "c", id, T, (Some(agent), None, None), Opened::Person).unwrap();
+    set_status(conn, id, status);
 }
 
-/// Mira's turns queued, by what opened them.
-fn queued_for_mira(conn: &Connection) -> Vec<(String, String)> {
-    let sql = "SELECT u.opened_by, m.body FROM turns u JOIN messages m ON m.turn_id = u.id AND m.role = 'gathr'
-               WHERE u.agent_id = 'mira' AND u.status = 'queued' ORDER BY u.rowid";
+fn thumbs_up(conn: &Connection, agent: &str, message: &str) {
+    gathr::reactions::add(conn, "c", message, agent, T).unwrap();
+}
+
+/// Each `gathr.check.round` event's attributes, oldest first.
+fn rounds(conn: &Connection) -> Vec<Value> {
+    let sql = "SELECT json(attrs) FROM events WHERE name = 'gathr.check.round' ORDER BY ts, rowid";
     let mut stmt = conn.prepare(sql).unwrap();
-    let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
-    rows.map(Result::unwrap).collect()
+    let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+    rows.map(|a| serde_json::from_str(&a.unwrap()).unwrap())
+        .collect()
 }
 
-fn answers() -> Vec<Answer> {
-    vec![
-        Answer {
-            note: 1,
-            changed: true,
-            why: "The list reads tags now".into(),
-        },
-        Answer {
-            note: 2,
-            changed: false,
-            why: "The person asked for export last week".into(),
-        },
-    ]
+fn round(asked: i64, agreed: i64, objected: i64, silent: i64, last_word: bool) -> Value {
+    json!({ "gathr.check.asked": asked, "gathr.check.agreed": agreed, "gathr.check.objected": objected,
+            "gathr.check.silent": silent, "gathr.check.last_word": last_word })
 }
 
-/// H4.2.
+/// The attributes of the newest round's event that the check counts, without its ids.
+fn counted(conn: &Connection) -> Vec<Value> {
+    let keep = [
+        "gathr.check.asked",
+        "gathr.check.agreed",
+        "gathr.check.objected",
+        "gathr.check.silent",
+        "gathr.check.last_word",
+    ];
+    rounds(conn)
+        .into_iter()
+        .map(|mut e| {
+            e.as_object_mut()
+                .unwrap()
+                .retain(|k, _| keep.contains(&k.as_str()));
+            e
+        })
+        .collect()
+}
+
+/// The text of the turn a start queued, with the chat's message ids read as `<id>`.
+fn text_of(conn: &Connection, start: &Start) -> String {
+    let mut stmt = conn.prepare("SELECT id FROM messages").unwrap();
+    let ids: Vec<String> = stmt
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    ids.iter()
+        .fold(start.text.clone(), |t, id| t.replace(id, "<id>"))
+}
+
+/// A round begins once per message of the person's, when the lead has answered it and nothing of
+/// its ask runs or is owed, and wakes each free member who took no part and nobody else.
 #[test]
-fn the_check_goes_to_the_reviewer_else_the_free_member_that_checked_least() {
+fn a_round_wakes_each_free_member_who_took_no_part_once_the_lead_has_answered() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
-    gathr::store::add_turn(
-        &conn,
-        "c",
-        "bo-busy",
-        T,
-        (Some("bo"), None, None),
-        Opened::Person,
+    conn.execute_batch(
+        "INSERT INTO chat_members VALUES ('c', 'cy', 'member', 4);
+         INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES ('dee', 'Dee', 'dee', 'acc', 1);
+         INSERT INTO chat_members VALUES ('c', 'dee', 'member', 5);",
     )
     .unwrap();
-    set_status(&conn, "bo-busy", "running");
-    let reviewed = write_to(&mut conn, "c", "T", &one(), None);
+    // Dee is at work in this chat on something older, so isn't free.
+    turn_of(&conn, "D1", "dee", "running");
+    conn.execute(
+        "UPDATE turns SET created_ts = 0, ask_id = NULL WHERE id = 'D1'",
+        [],
+    )
+    .unwrap();
+    let ask = asked(&mut conn, "c", "T2", "Why is the list slow?");
+    says(&conn, "T2", "Looking.");
+    assert_eq!(settle(&mut conn), [], "the lead is still answering");
+
+    // Ann took part: a turn of hers on the ask since the person wrote.
+    turn_of(&conn, "A1", "ann", "done");
+    conn.execute("UPDATE turns SET ask_id = ?1 WHERE id = 'A1'", [&ask])
+        .unwrap();
+    let answer = says(&conn, "T2", "The list reads every note's tags one by one.");
+    moved(&mut conn, ("T2", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let checkers: Vec<_> = started(&starts, &conn);
     assert_eq!(
-        owner(&conn, reviewed.check),
-        "bo",
-        "the Reviewer, busy or not"
+        checkers,
+        [
+            ("bo".into(), "check".into(), Some("T2".into())),
+            ("cy".into(), "check".into(), Some("T2".into())),
+        ],
+        "Bo and Cy, free and no part of it; not Ann, Dee or Mira"
     );
+    samples::same("check: an answer", &text_of(&conn, &starts[0]));
+    assert!(starts[0].text.contains(&answer), "{}", starts[0].text);
+    assert_eq!(
+        samples::opened(&conn, &starts[0].turn),
+        (Some("check".into()), Some(gathr::words::CHECK))
+    );
+    assert_eq!(settle(&mut conn), [], "once per message");
+}
+
+/// A round needs a lead's answer that ended well, nothing open for the person, and two agents.
+#[test]
+fn no_round_starts_for_a_failed_answer_a_question_or_a_chat_of_one() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    says(&conn, "T", "Half an answer");
+    moved(&mut conn, ("T", "mira"), None, "failed");
+    assert_eq!(settle(&mut conn), [], "the answer failed");
+
+    asked(&mut conn, "c", "T2", "Which colour?");
+    says(&conn, "T2", "Which colour do you want?");
+    let q = gathr::tasks::person::Ask {
+        chat: "c",
+        giver: "mira",
+        given_in: Some("T2"),
+        parent: None,
+        what: Some("Which colour?"),
+        why: None,
+        form: None,
+        choices: Vec::new(),
+        files: Vec::new(),
+        request: None,
+    };
+    gathr::tasks::person::ask(&mut conn, q, T).unwrap();
+    moved(&mut conn, ("T2", "mira"), None, "done");
+    assert_eq!(settle(&mut conn), [], "it asked the person");
 
     conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('t2', 'Two', 1);
-         INSERT INTO chat_members VALUES ('t2', 'mira', 'supervisor', 1), ('t2', 'ann', 'member', 2),
-             ('t2', 'cy', 'member', 3);",
+        "INSERT INTO chats (id, title, created_ts) VALUES ('solo', 'Solo', 1);
+         INSERT INTO chat_members VALUES ('solo', 'mira', 'supervisor', 1);",
     )
     .unwrap();
-    asked(&mut conn, "t2", "U1", "Add tags");
-    let first = write_to(&mut conn, "t2", "U1", &one(), None);
-    assert_eq!(
-        owner(&conn, first.check),
-        "ann",
-        "both free, neither has checked: the first added"
-    );
-    let (ann_turn, _) = queued_on(&conn, first.check);
-    set_status(&conn, &ann_turn, "done");
-    asked(&mut conn, "t2", "U2", "Add folders");
-    let second = write_to(&mut conn, "t2", "U2", &one(), None);
-    assert_eq!(
-        owner(&conn, second.check),
-        "cy",
-        "Ann has checked once, Cy never"
-    );
+    asked(&mut conn, "solo", "S", "Hello");
+    gathr::store::add_message(&conn, "solo", "S", "assistant", "text", "Hi").unwrap();
+    set_status(&conn, "S", "done");
+    assert_eq!(open_check::settle(&mut conn, "solo", T).unwrap(), []);
+    let rounds: i64 = conn
+        .query_row("SELECT count(*) FROM open_checks", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(rounds, 0);
+}
 
-    // Ann has checked twice, Cy once, but Cy's check turn is queued: Ann is the free one.
-    conn.execute(
-        "INSERT INTO tasks (chat_id, giver, owner, kind, what, state, created_ts, updated_ts, checks)
-         VALUES ('t2', 'mira', 'ann', 'review', 'Check plan v1', 'done', 1, 1, ?1)",
-        [first.version],
-    )
-    .unwrap();
-    asked(&mut conn, "t2", "U3", "Add search");
-    let third = write_to(&mut conn, "t2", "U3", &one(), None);
-    assert_eq!(owner(&conn, third.check), "ann", "Cy is busy");
-
-    // Ann's findings: the next version goes to Ann again, though Cy is free and has checked less.
-    let (cy_turn, _) = queued_on(&conn, second.check);
-    set_status(&conn, &cy_turn, "done");
-    let (ann_turn, _) = queued_on(&conn, third.check);
-    let m = Moved {
-        chat: "t2",
-        turn: &ann_turn,
-        agent: Some("ann"),
-        task: Some(third.check),
-        trace: T,
-        carries_on: None,
-    };
-    tasks::turn_moved(&mut conn, &m, "running", None).unwrap();
-    let notes = [tasks::NoteSaid {
-        kind: tasks::NoteKind::Wrong,
-        file: None,
-        says: "Search needs an index",
-    }];
-    let said = Said {
-        note: Some("One gap"),
-        notes: &notes,
-        ..Said::default()
-    };
-    report(&mut conn, "ann", third.check, Finish::Left, &said).unwrap();
-    tasks::turn_moved(&mut conn, &m, "done", None).unwrap();
-    let id = note_ids(&conn, third.check)[0];
-    let answered = [Answer {
-        note: id,
-        changed: true,
-        why: "Added the index".into(),
-    }];
-    let again = write_to(&mut conn, "t2", "U3", &one(), Some(&answered));
+/// Thumbs-ups and silence end the round and wake nobody; its event counts each.
+#[test]
+fn a_thumbs_up_and_silence_wake_nobody() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    let answer = says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let (ann, bo) = (&starts[0].turn, &starts[1].turn);
+    set_status(&conn, ann, "running");
+    thumbs_up(&conn, "ann", &answer);
+    // Words after a thumbs-up are a closing line, not an objection.
+    says(&conn, ann, "Looks right.");
+    set_status(&conn, ann, "done");
+    assert_eq!(settle(&mut conn), [], "Bo is still checking");
+    assert_eq!(rounds(&conn), Vec::<Value>::new());
+    set_status(&conn, bo, "done");
+    assert_eq!(settle(&mut conn), [], "nobody is woken");
+    assert_eq!(counted(&conn), [round(2, 1, 0, 1, false)]);
+    let attrs = &rounds(&conn)[0];
     assert_eq!(
-        owner(&conn, again.check),
-        "ann",
-        "who left findings checks again"
+        (&attrs["gathr.message.id"], &attrs["gathr.turn.id"]),
+        (&json!(answer), &json!("T"))
     );
 }
 
-/// H4.9, H4.10, H4.11.
+/// Words wake the lead once, with each member's words, for its last word; then the round ends.
 #[test]
-fn a_thumbs_up_from_the_checker_on_its_version_finishes_the_check() {
+fn words_wake_the_lead_once_with_each_members_words() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    let (ann, bo) = (starts[0].turn.clone(), starts[1].turn.clone());
+    says(
+        &conn,
+        &ann,
+        "> Mira: Done: tags show in the list.\n\nThe list shows them, the filter doesn't.",
+    );
+    says(&conn, &bo, "No test covers a note with no tags.");
+    set_status(&conn, &ann, "done");
+    set_status(&conn, &bo, "done");
+    let woken = settle(&mut conn);
+    assert_eq!(
+        started(&woken, &conn),
+        [("mira".into(), "last_word".into(), Some("T".into()))]
+    );
+    samples::same("last_word: an answer", &text_of(&conn, &woken[0]));
+    assert_eq!(settle(&mut conn), [], "woken once");
+    assert_eq!(
+        rounds(&conn),
+        Vec::<Value>::new(),
+        "not over until it answers"
+    );
+    set_status(&conn, &woken[0].turn, "done");
+    assert_eq!(settle(&mut conn), []);
+    assert_eq!(counted(&conn), [round(2, 0, 2, 0, true)]);
+}
+
+/// A plan reaches the person only once its round and the lead's last word have ended; a version the
+/// last word writes is the one offered, with no second round.
+#[test]
+fn a_plan_is_offered_after_its_round_and_the_last_word_the_newest_version() {
     let dir = TempDir::new();
     let (mut conn, ask) = room(&dir);
-    let wrote = write_to(&mut conn, "c", "T", &one(), None);
+    let wrote = write(&mut conn, Some("T"), &one()).unwrap();
+    assert_eq!(
+        wrote.answer,
+        "Wrote version 1 of plan #1, \"Tags on notes\": 1 part. The members who took no part check it once this turn \
+         ends; the person sees it after."
+    );
     moved(&mut conn, ("T", "mira"), None, "done");
-    let message = message_of(&conn, wrote.version);
+    let starts = settle(&mut conn);
+    samples::same("check: a plan", &text_of(&conn, &starts[0]));
+    let (ann, bo) = (starts[0].turn.clone(), starts[1].turn.clone());
+    let refused = plans::approve(&mut conn, wrote.plan, 1, T);
+    assert_eq!(refusal(refused), "Version 1 is still being checked.");
 
-    assert!(
-        thumbs_up(&mut conn, "ann", &message).is_none(),
-        "Ann isn't the checker"
+    let message: String = version_field(&conn, wrote.version, "message_id");
+    thumbs_up(&conn, "ann", &message);
+    set_status(&conn, &ann, "done");
+    says(
+        &conn,
+        &bo,
+        "> Mira: 1. Add the tags table (Ann)\n\nAnn has no index on the note column.",
     );
-    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Ready);
-
-    let turn = begin(&mut conn, wrote.check);
-    let agreed = thumbs_up(&mut conn, "bo", &message).unwrap();
-    assert_eq!(
-        (agreed.took, agreed.check, agreed.version),
-        (tasks::Took::Kept, wrote.check, 1)
-    );
-    let check = tasks::get(&conn, wrote.check).unwrap().unwrap();
-    assert_eq!(check.report.map(|r| r.how), Some(Finish::Done));
-    assert_eq!(
-        check.state,
-        tasks::State::Working,
-        "kept until the turn ends"
-    );
-    assert_eq!(lines(&conn, "c"), Vec::<String>::new());
-
-    let starts = moved(&mut conn, (&turn, "bo"), Some(wrote.check), "done");
-    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Done);
-    let said = lines(&conn, "c");
-    assert_eq!(
-        said,
-        ["Bo agrees with version 1 of the plan \"Tags on notes\"."]
-    );
-    let line: Option<String> = version_field(&conn, wrote.version, "check_line");
-    let line_id: String = conn
-        .query_row(
-            "SELECT id FROM messages WHERE turn_id IS NULL AND role = 'gathr'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap();
-    assert_eq!(line, Some(line_id));
+    set_status(&conn, &bo, "done");
+    let woken = settle(&mut conn);
+    samples::same("last_word: a plan", &text_of(&conn, &woken[0]));
+    let last = woken[0].turn.clone();
     let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
-    assert!(sent.is_some(), "the version reached the person");
-    assert!(starts.iter().all(|s| s.agent != "mira"), "{starts:?}");
-    assert_eq!(queued_for_mira(&conn), Vec::<(String, String)>::new());
-    let heard: bool = conn
-        .query_row(
-            "SELECT heard FROM tasks WHERE number = ?1",
-            [wrote.check],
-            |r| r.get(0),
-        )
-        .unwrap();
-    assert!(heard, "the check is heard with no turn");
+    assert_eq!(sent, None, "the last word runs first");
+    assert_eq!(plan_state(&conn, "c", wrote.plan), plans::State::Checking);
 
-    assert_eq!(plan_state(&conn, "c", wrote.plan), plans::State::Waiting);
+    set_status(&conn, &last, "running");
+    let mut indexed = one();
+    indexed[0].what = "Add the tags table, indexed";
+    let newer = write(&mut conn, Some(&last), &indexed).unwrap();
+    assert_eq!(
+        newer.answer,
+        "Wrote version 2 of plan #1, \"Tags on notes\": 1 part. The person sees it when this turn ends."
+    );
+    moved(&mut conn, (&last, "mira"), None, "done");
+    assert_eq!(settle(&mut conn), [], "no second round");
+    let (first, second): (Option<i64>, Option<i64>) = (
+        version_field(&conn, wrote.version, "sent_ts"),
+        version_field(&conn, newer.version, "sent_ts"),
+    );
+    assert_eq!((first.is_some(), second.is_some()), (false, true));
     assert_eq!(
         plans::open_state(&conn, &ask).unwrap(),
         Some(plans::State::Waiting)
     );
-    let chats = gathr::store::chats(&conn, false).unwrap();
-    let c = chats
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|c| c["id"] == "c")
-        .unwrap();
-    assert_eq!(c["needs"], true);
-    let live = gathr::waiting::Live {
-        running: true,
-        ..Default::default()
-    };
-    let answer = gathr::waiting::answer(&conn, "c", &live, gathr::ids::now_us()).unwrap();
-    let plan = answer.lines.iter().find(|l| l.kind == "plan").unwrap();
-    let seen = (
-        plan.what.as_str(),
-        plan.moves,
-        plan.agent.as_deref(),
-        plan.since_us,
-    );
-    assert_eq!(
-        seen,
-        (
-            "A plan for you: Tags on notes",
-            gathr::waiting::Moves::You,
-            Some("mira"),
-            sent
-        )
-    );
-
-    // No turn on the check: it is done at once. A thumbs-up on a replaced version does nothing.
-    asked(&mut conn, "c", "T5", "Add folders");
-    let first = write_to(&mut conn, "c", "T5", &one(), None);
-    let mut changed = one();
-    changed[0].what = "Add the folders table";
-    let second = write_to(&mut conn, "c", "T5", &changed, None);
-    let replaced = message_of(&conn, first.version);
-    assert!(thumbs_up(&mut conn, "bo", &replaced).is_none());
-    let open = tasks::get(&conn, second.check).unwrap().unwrap();
-    assert_eq!(
-        (open.state, open.report.is_none()),
-        (tasks::State::Ready, true)
-    );
-    let newest = message_of(&conn, second.version);
-    let agreed = thumbs_up(&mut conn, "bo", &newest).unwrap();
-    assert_eq!(agreed.took, tasks::Took::Applied);
-    assert_eq!(task_state(&conn, second.check).0, tasks::State::Done);
-}
-
-/// H4.3, H4.7, H4.8.
-#[test]
-fn a_check_left_with_findings_wakes_the_lead_and_the_next_version_answers_each() {
-    let dir = TempDir::new();
-    let (mut conn, ask) = room(&dir);
-    let wrote = write_to(&mut conn, "c", "T", &one(), None);
-    moved(&mut conn, ("T", "mira"), None, "done");
-    let turn = begin(&mut conn, wrote.check);
-
-    let suggestion = [tasks::NoteSaid {
-        kind: tasks::NoteKind::Suggestion,
-        file: None,
-        says: "Name it labels",
-    }];
-    let only = Said {
-        note: Some("A thought"),
-        notes: &suggestion,
-        ..Said::default()
-    };
-    assert_eq!(
-        refusal(report(&mut conn, "bo", wrote.check, Finish::Left, &only)),
-        "A check that agrees gives a thumbs-up with react; left needs a wrong or unasked note."
-    );
-    findings(&mut conn, wrote.check);
-    let wrong = [tasks::NoteSaid {
-        kind: tasks::NoteKind::Wrong,
-        file: None,
-        says: "Missed a caller",
-    }];
-    let committed = Said {
-        note: Some("Two gaps"),
-        notes: &wrong,
-        commit: Some("abc1234"),
-        ..Said::default()
-    };
-    assert_eq!(
-        refusal(report(
-            &mut conn,
-            "bo",
-            wrote.check,
-            Finish::Left,
-            &committed
-        )),
-        "A plan check takes no pr, commit or signed_off: Gathr records the version you checked."
-    );
-    let done_wrong = Said {
-        notes: &wrong,
-        nothing_unasked: true,
-        ..Said::default()
-    };
-    assert_eq!(
-        refusal(report(
-            &mut conn,
-            "bo",
-            wrote.check,
-            Finish::Done,
-            &done_wrong
-        )),
-        "A done review says nothing_unasked: true and has no wrong or unasked notes. Report those as left."
-    );
-
-    moved(&mut conn, (&turn, "bo"), Some(wrote.check), "done");
-    assert_eq!(
-        task_state(&conn, wrote.check),
-        (
-            tasks::State::Blocked,
-            Some(
-                "left: Two gaps. Findings: note 1, wrong, src/notes.rs: The list query misses tags; note 2, unasked: \
-                 Export isn't asked. Answer each in the next version's answers."
-                    .into()
-            )
-        )
-    );
-    let (all, fixes): (i64, i64) = conn
-        .query_row(
-            "SELECT (SELECT count(*) FROM tasks), (SELECT count(*) FROM events WHERE name = 'gathr.review.fix')",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .unwrap();
-    assert_eq!((all, fixes), (1, 0), "no fix is given");
-    let woken = queued_for_mira(&conn);
-    assert_eq!(woken.len(), 1, "{woken:?}");
-    assert_eq!(woken[0].0, "hear_back");
-    samples::same("hear_back: a plan check left", &woken[0].1);
     assert_eq!(
         lines(&conn, "c"),
-        ["Bo has 2 findings on version 1 of the plan \"Tags on notes\"."]
+        Vec::<String>::new(),
+        "Gathr says no line"
     );
-    let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
-    assert_eq!(sent, None);
-    assert_eq!(plan_state(&conn, "c", wrote.plan), plans::State::Revising);
-    assert_eq!(
-        plans::open_state(&conn, &ask).unwrap(),
-        Some(plans::State::Revising)
-    );
-
-    let hear: String = conn
-        .query_row(
-            "SELECT id FROM turns WHERE agent_id = 'mira' AND status = 'queued'",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap();
-    set_status(&conn, &hear, "running");
-    assert_eq!(
-        refusal(write(&mut conn, Some(&hear), &one(), None)),
-        "Answer each finding of #1, Bo's check of version 1: notes 1 and 2 have no answer."
-    );
-    let next = write(&mut conn, Some(&hear), &one(), Some(&answers())).unwrap();
-    assert_eq!(owner(&conn, next.check), "bo");
-    let (_, brief) = queued_on(&conn, next.check);
-    samples::same("plan_check: again", &sampled(&conn, &brief));
-    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Cancelled);
-    let checks = checks_of(&conn, wrote.plan);
-    assert_eq!(
-        checks,
-        [
-            (
-                "findings".into(),
-                "The list query misses tags | Export isn't asked.".into()
-            ),
-            ("null".into(), String::new())
-        ],
-        "version 1's check objected, and being replaced doesn't undo that; version 2's is being checked"
-    );
+    assert_eq!(counted(&conn), [round(2, 1, 1, 0, true)]);
 }
 
-/// Each version's check outcome as `GET /api/plans/<plan>` gives it, with what its notes say.
-fn checks_of(conn: &Connection, plan: i64) -> Vec<(String, String)> {
-    let plan = plans::get(conn, plan).unwrap().unwrap();
-    let versions = plan["versions"].as_array().unwrap();
-    let check = |v: &serde_json::Value| {
-        let notes = v["check"]["notes"].as_array().unwrap();
-        let says: Vec<&str> = notes.iter().map(|n| n["says"].as_str().unwrap()).collect();
-        (
-            v["check"]["outcome"].to_string().replace('"', ""),
-            says.join(" | "),
-        )
-    };
-    versions.iter().map(check).collect()
-}
-
-/// The person's cancel after findings: the check still objected and the lead still revises.
+/// A plan with nobody free to check it reaches the person as the lead's turn ends.
 #[test]
-fn a_check_cancelled_after_its_findings_still_has_them() {
+fn a_plan_nobody_can_check_reaches_the_person_at_once() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
-    let wrote = write_to(&mut conn, "c", "T", &one(), None);
+    turn_of(&conn, "A0", "ann", "running");
+    turn_of(&conn, "B0", "bo", "queued");
+    conn.execute(
+        "UPDATE turns SET created_ts = 0 WHERE id IN ('A0', 'B0')",
+        [],
+    )
+    .unwrap();
+    let wrote = write(&mut conn, Some("T"), &one()).unwrap();
     moved(&mut conn, ("T", "mira"), None, "done");
-    let turn = begin(&mut conn, wrote.check);
-    findings(&mut conn, wrote.check);
-    moved(&mut conn, (&turn, "bo"), Some(wrote.check), "done");
-    tasks::cancel(&mut conn, None, wrote.check, "Not needed", T).unwrap();
-    assert_eq!(task_state(&conn, wrote.check).0, tasks::State::Cancelled);
-    assert_eq!(
-        (
-            plan_state(&conn, "c", wrote.plan),
-            checks_of(&conn, wrote.plan)[0].0.as_str()
-        ),
-        (plans::State::Revising, "findings")
-    );
-}
-
-/// H4.11, H4.12.
-#[test]
-fn a_check_that_fails_or_runs_late_reaches_the_person() {
-    let dir = TempDir::new();
-    let (mut conn, _) = room(&dir);
-    let wrote = write_to(&mut conn, "c", "T", &one(), None);
-    moved(&mut conn, ("T", "mira"), None, "done");
-    let turn = begin(&mut conn, wrote.check);
-    moved(&mut conn, (&turn, "bo"), Some(wrote.check), "failed");
-    let late = "Bo didn't finish checking version 1 of the plan \"Tags on notes\".";
-    assert_eq!(lines(&conn, "c"), [late]);
+    assert_eq!(settle(&mut conn), []);
     let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
     assert!(sent.is_some());
-    assert_eq!(queued_for_mira(&conn), Vec::<(String, String)>::new());
+    assert_eq!(counted(&conn), [round(0, 0, 0, 0, false)]);
+}
 
-    asked(&mut conn, "c", "T6", "Add folders");
-    let open = write_to(&mut conn, "c", "T6", &one(), None);
-    let written: i64 = version_field(&conn, open.version, "created_ts");
+/// Ten minutes after a version, it reaches the person though its round still runs, once.
+#[test]
+fn a_version_still_being_checked_after_ten_minutes_reaches_the_person() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    let wrote = write(&mut conn, Some("T"), &one()).unwrap();
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    set_status(&conn, &starts[0].turn, "done");
+    set_status(&conn, &starts[1].turn, "running");
+    let written: i64 = version_field(&conn, wrote.version, "created_ts");
     let ten = 600_000_000;
     assert_eq!(
         plans::overdue(&mut conn, "c", written + ten - 1_000_000, ten, T).unwrap(),
         0
     );
-    assert_eq!(lines(&conn, "c"), [late]);
     assert_eq!(
         plans::overdue(&mut conn, "c", written + ten, ten, T).unwrap(),
         1
     );
-    assert_eq!(lines(&conn, "c"), [late, late]);
-    let sent: Option<i64> = version_field(&conn, open.version, "sent_ts");
+    let late = "Bo didn't finish checking version 1 of the plan \"Tags on notes\".";
+    assert_eq!(lines(&conn, "c"), [late]);
+    let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
     assert!(sent.is_some());
     let checked = events(&conn, "checked");
     assert_eq!(
         checked
             .last()
             .map(|e| (&e["gathr.plan.outcome"], &e["gathr.plan.sent"])),
-        Some((&serde_json::json!("late"), &serde_json::json!(true)))
+        Some((&json!("late"), &json!(true)))
     );
     assert_eq!(
         plans::overdue(&mut conn, "c", written + 2 * ten, ten, T).unwrap(),
         0
     );
-    let message = message_of(&conn, open.version);
-    thumbs_up(&mut conn, "bo", &message).unwrap();
-    assert_eq!(task_state(&conn, open.check).0, tasks::State::Done);
-    assert_eq!(lines(&conn, "c"), [late, late], "the line isn't said twice");
-
-    conn.execute_batch(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c3', 'Three', 1);
-         INSERT INTO chat_members VALUES ('c3', 'mira', 'supervisor', 1), ('c3', 'ann', 'member', 2),
-             ('c3', 'bo', 'reviewer', 3);",
-    )
-    .unwrap();
-    asked(&mut conn, "c3", "T7", "Add search");
-    let archived = write_to(&mut conn, "c3", "T7", &one(), None);
-    gathr::archive::archive(&mut conn, "c3", T).unwrap();
-    assert_eq!(task_state(&conn, archived.check).0, tasks::State::Cancelled);
-    let said = lines(&conn, "c3");
-    assert!(said.iter().all(|l| !l.contains("plan")), "{said:?}");
-    let line: Option<String> = version_field(&conn, archived.version, "check_line");
-    assert_eq!(line, None);
+    set_status(&conn, &starts[1].turn, "done");
+    assert_eq!(settle(&mut conn), []);
+    assert_eq!(lines(&conn, "c"), [late], "the line isn't said twice");
 }
 
-/// H4.3, H4.6's carry.
+fn topic(conn: &Connection, turn: &str) -> Option<String> {
+    gathr::topics::of_turn(conn, "c", turn).unwrap()
+}
+
+/// Where each turn of a round sits (0075): in the thread of the answer it checks, the lead's last
+/// word too, unless the last word writes a version, which is a main message of its own.
 #[test]
-fn a_check_is_ended_only_by_gathr_or_the_person() {
+fn a_rounds_turns_sit_in_the_thread_of_the_answer() {
     let dir = TempDir::new();
     let (mut conn, _) = room(&dir);
-    let wrote = write_to(&mut conn, "c", "T", &one(), None);
-    let check = wrote.check;
-    let edit = tasks::Edit {
-        chat: "c",
-        by: Some("mira"),
-        task: check,
-        what: Some("Check it all"),
-        ..Default::default()
-    };
+    says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    let starts = settle(&mut conn);
+    for s in &starts {
+        says(&conn, &s.turn, "The filter is missing.");
+        set_status(&conn, &s.turn, "done");
+    }
+    let last = settle(&mut conn)[0].turn.clone();
+    let all = [&starts[0].turn, &starts[1].turn, &last];
+    let topics: Vec<_> = all.iter().map(|t| topic(&conn, t)).collect();
+    assert_eq!(topics, vec![Some("b:T".to_string()); 3]);
+    let facts = gathr::topics::Topics::of_chat(&conn, "c").unwrap();
+    let facts: Vec<_> = all.iter().map(|t| facts.turn(t).unwrap().fact).collect();
+    assert_eq!(facts, ["check", "check", "last_word"]);
+
+    // A last word that writes the next version: the version is its own main message.
+    asked(&mut conn, "c", "U", "Plan the export");
+    write(&mut conn, Some("U"), &one()).unwrap();
+    moved(&mut conn, ("U", "mira"), None, "done");
+    for s in settle(&mut conn) {
+        says(&conn, &s.turn, "Part 1 is the wrong member's.");
+        set_status(&conn, &s.turn, "done");
+    }
+    let last = settle(&mut conn)[0].turn.clone();
+    set_status(&conn, &last, "running");
+    let mut changed = one();
+    changed[0].to = "Bo";
+    write(&mut conn, Some(&last), &changed).unwrap();
+    assert_eq!(topic(&conn, &last), Some(format!("b:{last}")));
+}
+
+/// A plan checked the old way (0062) still reads: its check task, its findings and Gathr's line.
+#[test]
+fn a_plan_checked_the_old_way_still_reads() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    let wrote = write(&mut conn, Some("T"), &one()).unwrap();
+    conn.execute(
+        "INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, finish, finish_ts, created_ts, updated_ts,
+                            given_in, checks, in_passing)
+         VALUES (5, 'c', 'mira', 'bo', 'review', 'Check plan v1: Tags on notes', 'blocked', 'left', 1, 1, 1, 'T', ?1, 1)",
+        [wrote.version],
+    )
+    .unwrap();
+    let message: String = version_field(&conn, wrote.version, "message_id");
+    conn.execute(
+        "INSERT INTO review_notes (task, reviewed, kind, file, says, created_ts) VALUES (5, ?1, 'wrong', NULL, 'Misses a caller', 1)",
+        [&message],
+    )
+    .unwrap();
+    let line = gathr::store::say(
+        &conn,
+        "c",
+        "Bo has 1 finding on version 1 of the plan \"Tags on notes\".",
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE plan_versions SET check_line = ?2 WHERE id = ?1",
+        params![wrote.version, line["id"].as_str()],
+    )
+    .unwrap();
+    let plan = plans::get(&conn, wrote.plan).unwrap().unwrap();
+    let check = &plan["versions"][0]["check"];
     assert_eq!(
-        refusal(tasks::edit(&mut conn, &edit, T)),
-        format!("Task #{check} is a plan check: Gathr writes it.")
-    );
-    assert_eq!(
-        refusal(tasks::cancel(
-            &mut conn,
-            Some("mira"),
-            check,
-            "not needed",
-            T
-        )),
-        format!(
-            "Task #{check} is plan #{}'s check: Gathr ends it when a newer version is written or the plan is decided.",
-            wrote.plan
+        (
+            &check["outcome"],
+            &check["notes"][0]["says"],
+            &plan["state"]
+        ),
+        (
+            &json!("findings"),
+            &json!("Misses a caller"),
+            &json!("revising")
         )
     );
-    assert_eq!(lines(&conn, "c"), Vec::<String>::new());
-    let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
-    assert_eq!(sent, None);
+    let topics = gathr::topics::Topics::of_chat(&conn, "c").unwrap();
+    assert_eq!(topics.task(5).map(|t| t.key), Some("b:T".to_string()));
+    let said = topics.line(&topics.src.lines[0]);
+    assert_eq!(said.key, "b:T");
+}
 
-    tasks::cancel(&mut conn, None, check, "I'll read it now", T).unwrap();
-    assert_eq!(
-        lines(&conn, "c"),
-        ["Bo didn't finish checking version 1 of the plan \"Tags on notes\"."]
-    );
-    let sent: Option<i64> = version_field(&conn, wrote.version, "sent_ts");
-    assert!(sent.is_some());
-    assert_eq!(
-        checks_of(&conn, wrote.plan),
-        [("unfinished".to_string(), String::new())],
-        "cancelled by the person with no report"
-    );
-    let restart = format!("Task #{check} is a plan check: a new version gets a new check.");
-    assert_eq!(
-        refusal(tasks::restart(&mut conn, Some("mira"), check, T)),
-        restart
-    );
-    assert_eq!(refusal(tasks::restart(&mut conn, None, check, T)), restart);
-
-    asked(&mut conn, "c", "T8", "Add folders");
-    let held = write_to(&mut conn, "c", "T8", &one(), None);
-    let turn = begin(&mut conn, held.check);
-    let command = [("cmd-1".to_string(), "cargo test".to_string())];
-    gathr::background::set(&conn, ("c", Some("bo")), &command, Some(&turn)).unwrap();
-    moved(&mut conn, (&turn, "bo"), Some(held.check), "done");
-    assert_eq!(task_state(&conn, held.check).0, tasks::State::Held);
-    tasks::engine_gone(&mut conn, ("c", Some("bo"))).unwrap();
-    let (_, brief) = queued_on(&conn, held.check);
-    samples::same("plan_check: carry", &sampled(&conn, &brief));
+/// An upgrade starts no round for a message the person sent before it: migration 0060 counts each
+/// as had, so a quiet team chat isn't checked days after its answer.
+#[test]
+fn an_upgrade_starts_no_round_for_an_older_message() {
+    let dir = TempDir::new();
+    let (mut conn, _) = room(&dir);
+    says(&conn, "T", "Done: tags show in the list.");
+    moved(&mut conn, ("T", "mira"), None, "done");
+    conn.execute_batch("DROP TABLE open_checks; PRAGMA user_version = 59;")
+        .unwrap();
+    drop(conn);
+    let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
+    assert_eq!(settle(&mut conn), []);
+    let rounds: i64 = conn
+        .query_row(
+            "SELECT count(*) FROM open_checks WHERE answer IS NULL",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(rounds, 1, "the old message counts as had");
 }

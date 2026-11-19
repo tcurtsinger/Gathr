@@ -101,8 +101,10 @@ pub fn shape(file: &Value) -> Vec<String> {
             "copies" => each(v, |k, v| {
                 ["claude", "codex"].contains(&k) && is(v, is_version)
             }),
+            // `plan_check` went with the one-checker plan check (0080): the trial of 2026-11-16 has it.
             "words" => each(v, |k, v| {
-                (k == "role" || gathr::words::Opened::ALL.iter().any(|o| o.as_str() == k))
+                (["role", "plan_check"].contains(&k)
+                    || gathr::words::Opened::ALL.iter().any(|o| o.as_str() == k))
                     && v.is_u64()
             }),
             "spent" => v.is_u64(),

@@ -162,10 +162,9 @@ pub fn settle(tx: &Transaction, t: &Task, trace: &str) -> Result<Vec<Start>, Err
         Some(Finish::Left) => {
             asked(0)?;
             let left = note.as_deref().unwrap_or("it isn't said what");
-            // A plan check's findings go to its lead, to answer in the next version (0062).
+            // An old plan check's findings went to its lead, never to a fix (0062).
             if t.checks.is_some() {
-                let findings = crate::plans::check::findings(tx, task)?;
-                let why = format!("left: {} {findings}", words::sentence(left));
+                let why = format!("left: {}", words::sentence(left));
                 set(tx, task, State::Blocked, Some(&why), trace)?;
                 return Ok(Vec::new());
             }

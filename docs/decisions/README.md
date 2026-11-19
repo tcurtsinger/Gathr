@@ -89,3 +89,4 @@ fails in CI when the two differ.
 | 0077 | [Where you left off](0077-where-you-left-off.md) | accepted | yes |
 | 0078 | [Said to you is main, one bubble per turn](0078-said-to-you-is-main-one-bubble-per-turn.md) | accepted | yes |
 | 0079 | [Agents choose where their words show](0079-agents-choose-where-their-words-show.md) | accepted | yes |
+| 0080 | [The team checks the lead's answer in the open](0080-the-team-checks-the-leads-answer-in-the-open.md) | accepted | yes |

@@ -92,6 +92,8 @@ fn pause_sets_the_flag_in_the_scheduler() {
 
 **Gathr's words to agents are held by kept samples** ([0056](decisions/0056-gathr-records-which-words-opened-each-turn.md)). A change to a kind's main form changes its sample in `crates/gathr/tests/words/samples.rs` and raises its version in `crates/gathr/src/words.rs`, with a new row in `KEPT` in `crates/gathr/tests/words.rs`; a new main form comes with its sample.
 
+**A service test starts with nobody to check the lead's answer** (`GATHR_OPEN_CHECK=off`, set by `tests/common` and read only in a debug build): a team answer then starts no check turns a test didn't ask for. A test of the open check itself sets it `on` ([0080](decisions/0080-the-team-checks-the-leads-answer-in-the-open.md)).
+
 ## The trial
 
 A test that runs real Claude Code and Codex, to tell whether a line of Gathr's words to agents changes what they do ([0066](decisions/0066-role-text-tried-on-real-engines.md)). A replay can't show that. It is for builders, never for the app: `crates/gathr/tests/trial.rs` and `tests/trial/` are `#[ignore]` tests, so `cargo nextest run` and CI skip them (`.config/nextest.toml` runs no ignored test unless asked), and nothing of it ships in Gathr.
