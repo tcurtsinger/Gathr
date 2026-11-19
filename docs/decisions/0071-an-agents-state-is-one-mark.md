@@ -49,3 +49,5 @@ The owner's ask: every agent's state at a glance, on its face, the same everywhe
 
 - A main message says its state at its name line's right in the marks' shapes and words: Working with its ring,
   Needs you in the attention blue, from the same function the Tasks list reads (`ui/src/tasks/rows.ts`).
+- 2026-11-18, the status line goes ([0050](0050-what-a-chat-waits-on.md)'s change, the owner's call after their look):
+  the marks on the faces and Summary say each agent's state; nothing above the message box repeats it.

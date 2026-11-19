@@ -1,5 +1,13 @@
 import { Folder } from 'lucide-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,10 +40,11 @@ import { useFolds } from './folds';
 import { useLatest, useTarget } from './found';
 import { activity, type Glance, glances } from './glance';
 import { type Custom, type SendFailure, toThread } from './messages';
+import { NewPill } from './NewPill';
 import { type PauseAction, type Run, runOf } from './pauses';
+import { type Fresh, useReads } from './reads';
 import { addressed, nameable, unnamed } from './recipient';
 import { type Opened, useReplying } from './replying';
-import { StatusLine } from './StatusLine';
 import { Summary } from './Summary';
 import { running, unanswered } from './state';
 import { type Actions, Thread, useStable } from './Thread';
@@ -117,11 +126,21 @@ export function ChatView(props: Props) {
   const { projects, onProject, onNewProject, onStart, headerEnd, pauses, onPause } = props;
   const archived = !!chat.archived;
   const { onRestore, restoreFailure } = props;
-  const { state, loaded, loadFailure, failed, send, attempt, approve, reload } = useChat(
-    chat.id,
-    unsent,
-    onUnsent,
-  );
+  const {
+    state,
+    loaded,
+    reads: rows,
+    loadFailure,
+    failed,
+    send,
+    attempt,
+    approve,
+    reload,
+  } = useChat(chat.id, unsent, onUnsent);
+  // Where the person left off (0077): read with the history, before the chat is drawn from it.
+  const reads = useReads(chat.id);
+  if (loaded && rows) reads.take(rows, () => lastSaid(state));
+  const drawnFrom = useSyncExternalStore(reads.subscribeDrawn, () => reads.now);
   const turn = running(state);
   const run = runOf(pauses, chat.id);
   const act = (action: PauseAction, scope: PauseScope) => attempt(action, () => onPause(action, scope));
@@ -135,15 +154,31 @@ export function ChatView(props: Props) {
   const cache = useRef(new Map());
   const { removed = NONE } = props;
   const named = useMemo(() => [...agents, ...removed], [agents, removed]);
-  const threads = useFolds();
+  const threads = useFolds(reads);
+  reads.onFold = threads.drop;
   const { folds, start } = threads;
+  // The person's folds kept by the service, under what this window opened or folded while the chat is open.
+  const open = useMemo(
+    () => new Map([...[...drawnFrom.folds].map(([t, folded]) => [t, !folded] as const), ...folds.open]),
+    [drawnFrom.folds, folds.open],
+  );
   // The reply being typed in a thread (0076): its box is drawn at that thread's foot.
   const answering = useState<Opened>();
   const replying = answering[0]?.answer.topic;
   const timeline = useMemo(
-    () => toThread(state, named, failed, cache.current, { ...folds, start: start.current, replying }),
-    [state, named, failed, folds, start, replying],
+    () =>
+      toThread(state, named, failed, cache.current, {
+        open,
+        earlier: folds.earlier,
+        start: start.current,
+        replying,
+        left: drawnFrom.left,
+        seen: reads.seen,
+      }),
+    [state, named, failed, open, folds.earlier, start, replying, drawnFrom.left, reads],
   );
+  reads.timeline = timeline;
+  if (loaded) reads.baseline(() => timeline.all.flatMap((m) => (m.metadata?.custom as Custom)?.topic ?? []));
   threads.settle(timeline, loaded);
   const { answers } = props;
   const chatTasks = state.tasks;
@@ -182,18 +217,23 @@ export function ChatView(props: Props) {
   const [summary, setSummary] = useState(false);
   const hit = useTarget(props.found, loaded, timeline, props.onFound);
   threads.open(hit);
-  // What the status line went to, until a search hit is opened after it.
+  // What the pill or Summary went to, until a search hit is opened after it.
   const { target, pick: setShown } = useLatest(hit);
   /** Shows the block that holds what is needed, opening the thread it waits in, as a search hit does. */
-  const show = (holds: (own: Custom) => boolean, card?: string) => {
-    const item = timeline.all.find((m) => holds((m.metadata?.custom ?? {}) as Custom));
+  const show = (holds: (own: Custom, id: string) => boolean, card?: string) => {
+    const item = timeline.all.find((m) => holds((m.metadata?.custom ?? {}) as Custom, m.id as string));
     if (!item) return;
     const topic = (item.metadata?.custom as Custom | undefined)?.topic;
     if (topic && !timeline.items.includes(item)) threads.reveal(topic);
     setShown({ id: item.id as string, card, at: performance.now() });
   };
+  /** The New pill goes to the oldest block not seen: opened where it waits, centred, and seen. */
+  const goTo = ({ id, mark, t }: Fresh) => {
+    reads.see(mark, t);
+    show((_, at) => at === id);
+  };
   // What the person is needed for, the oldest first: an approval where it was asked, else the plan waiting, else
-  // the question. "needs you" on the status line goes there; with none of them here, the line only opens its list.
+  // the question. A needs-you agent's row in Summary goes there; with none of them here, it opens the agent.
   const approval = state.approvals.find(unanswered);
   const plan = state.plans.find((p) => p.state === 'waiting');
   const question = state.tasks
@@ -205,6 +245,7 @@ export function ChatView(props: Props) {
       show((own) => !!own.approvals?.some((a) => a.request === approval.request), approval.request);
     else if (plan && newest) props.onOpenPlan?.(plan.id, newest.n);
     else if (question) show((own) => !!own.asked?.includes(question.number));
+    return !!(approval || (plan && newest) || question);
   };
 
   useFirstTokenReport(state.partial);
@@ -385,6 +426,8 @@ export function ChatView(props: Props) {
                 pauses={pauses}
                 onPause={act}
                 onOpenAgent={actions.openAgent}
+                waiting={waiting}
+                onNeeds={toNeed}
               />
             )}
             {headerEnd}
@@ -401,6 +444,7 @@ export function ChatView(props: Props) {
               onTarget={props.onFound}
               questions={questions}
               box={reply.box}
+              reads={reads}
               empty={loaded && state.messages.length === 0 && failed.length === 0}
               after={!archived && <RunLine run={run} members={state.members} />}
               header={
@@ -449,14 +493,8 @@ export function ChatView(props: Props) {
                 </>
               ) : (
                 <>
-                  {!fresh && (
-                    <StatusLine
-                      crew={crew}
-                      waiting={waiting}
-                      onOpenAgent={actions.openAgent}
-                      onNeeds={approval || plan || question ? toNeed : undefined}
-                    />
-                  )}
+                  {!fresh && <NewPill onGo={goTo} />}
+
                   <Composer
                     draft={draft}
                     picks={picks}
@@ -478,6 +516,15 @@ export function ChatView(props: Props) {
       </FaceCards>
     </MarksContext>
   );
+}
+
+/** When the chat's newest message or task was said, in ms: an old chat with no marks is seen up to here (0077). */
+function lastSaid(state: { messages: { time: string }[]; tasks: { created_us: number }[] }): number {
+  const times = [
+    ...state.messages.map((m) => Date.parse(m.time)),
+    ...state.tasks.map((t) => t.created_us / 1000),
+  ];
+  return Math.max(0, ...times.filter((t) => !Number.isNaN(t)));
 }
 
 /** The quiet line after the latest content while the chat isn't running (the prototype's run note). */

@@ -2,7 +2,7 @@ import { TOP } from './found';
 
 /**
  * After a press opens something in place under `opener` (a turn's steps, a thread, an ask's sizes), scrolls the chat
- * so `block`, which holds what opened, ends above the message box and its fade, as far as that keeps the opener in
+ * so `block`, which holds what opened, ends above the message box, as far as that keeps the opener in
  * view. Again as the opening's motion ends: it grows the block. Outside the chat (an agent's panel) it does nothing.
  */
 export function revealOpened(opener: Element, block: Element) {
@@ -14,8 +14,7 @@ export function revealOpened(opener: Element, block: Element) {
     const view = viewport.getBoundingClientRect();
     const footer = viewport.querySelector('.thread-footer');
     if (!footer) return;
-    const fade = Number.parseFloat(getComputedStyle(footer, '::before').height) || 0;
-    const below = block.getBoundingClientRect().bottom - (footer.getBoundingClientRect().top - fade);
+    const below = block.getBoundingClientRect().bottom - footer.getBoundingClientRect().top;
     const room = openerAt - viewport.scrollTop - view.top - TOP;
     if (below > 0 && room > 0) viewport.scrollTop += Math.min(below, room);
   };

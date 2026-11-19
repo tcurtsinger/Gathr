@@ -4,7 +4,7 @@ import type { Mark } from '../components/marks';
 
 /**
  * A task's state on its line (a row, a task's view), in the chat's words; the same for a main message in the chat
- * (0075), so the chat, the Tasks list and the status line never disagree.
+ * (0075), so the chat, the Tasks list and Summary never disagree.
  */
 export type Said =
   /** It waits on the person, in the attention colour: "Waiting" on a row, "Needs you" in the chat. */
@@ -47,7 +47,7 @@ export function said(t: Task, tasks: Task[]): Said {
       return { word: 'Not started' };
     case 'held': {
       if (merging(t)) return { icon: 'merge' };
-      // On what, as the status line says it, when it is one thing.
+      // On what, in the window's words, when it is one thing.
       const on = t.waiting_on?.length === 1 ? inWords(t.waiting_on[0]) : undefined;
       return on ? { mark: 'waiting', on } : { mark: 'waiting' };
     }

@@ -29,6 +29,7 @@ import {
 } from './messages';
 import { place as inOrder } from './order';
 import { heardTurns, questions } from './questions';
+import { isNew } from './reads';
 import type { ChatState } from './state';
 import { team } from './team';
 import { talks } from './threads';
@@ -136,6 +137,7 @@ export function drawn(
     : Number.POSITIVE_INFINITY;
   const flat = isTeam ? groups.filter((g) => timeOf(g, state) < since) : groups;
   const run: { speaker?: string } = {};
+  let newLined = false;
   // Drawn flat, but a reply to an older message makes a thread under it (0076).
   const under = flatThreads(flat);
   const inThread = new Set([...under.values()].flat());
@@ -150,6 +152,7 @@ export function drawn(
     }
     const item = draw(g, answer ? { answer } : {}, run);
     if (!item) continue;
+    newLineAbove(item);
     items.push(item);
     all.push(item);
     spots.set(g, { id: item.id as string });
@@ -206,11 +209,14 @@ export function drawn(
     }
     const replyItems = drawnReplies.map((r) => r.item);
     const count = replyItems.length;
+    const times = replyItems
+      .flatMap((r) => (r.role === 'user' ? [] : [timeIn(r)]))
+      .filter((t) => !Number.isNaN(t));
     // The main message's own row holds its thread's fold line (0076): it is drawn knowing how its thread stands.
     const drawMain = (done: boolean) => {
       // Folded when the chat opened with it handled, or the person's own fold; open otherwise.
       const open = view?.open.get(t.topic) ?? (view?.start ? !view.start.has(t.topic) : !done);
-      const thread = count ? { topic: t.topic, open, count } : undefined;
+      const thread = count ? { topic: t.topic, open, count, times } : undefined;
       if (t.task) {
         const answer = threadAnswer(t, undefined, state);
         return { open, item: taskBlock(t, { ...mainPlace, thread, answer }) };
@@ -221,8 +227,11 @@ export function drawn(
       const answer = g.kind === 'person' && !count ? undefined : threadAnswer({ ...t, main: g }, own, state);
       return { open, item: draw(g, { ...mainPlace, thread, answer }, {}, !!ask) };
     };
-    // A turn that ended needing the person (Retry, Continue, Sign in) keeps its thread from being handled.
-    let done = settled && !replyItems.some(needsYou);
+    // A turn that ended needing the person (Retry, Continue, Sign in) keeps its thread from being handled; a reply the
+    // person hasn't seen keeps it open (0077).
+    const seen = view?.seen;
+    const unseen = !!seen && times.some((x) => x > seen(t.topic));
+    let done = settled && !replyItems.some(needsYou) && !unseen;
     let { open, item: main } = drawMain(done);
     if (!main) return;
     if (done && needsYou(main)) {
@@ -232,12 +241,16 @@ export function drawn(
     if (!main) return;
     if (done) handled.add(t.topic);
     if (t.task) taskMains.set(t.task.number, main.id as string);
+    newLineAbove(main);
     items.push(main);
     all.push(main);
     if (mainGroup) spots.set(mainGroup, { id: main.id as string });
     if (!count) return boxFor(t.topic);
     all.push(...replyItems);
-    const { shown, hid } = open ? newest(replyItems, !!view?.earlier.has(t.topic)) : { shown: [], hid: 0 };
+    const fresh = (r: ThreadMessageLike) => r.role !== 'user' && isNew(view?.left, t.topic, timeIn(r));
+    const { shown, hid } = open
+      ? newest(replyItems, !!view?.earlier.has(t.topic), fresh)
+      : { shown: [], hid: 0 };
     if (hid) {
       const earlier = { topic: t.topic, n: hid };
       items.push(
@@ -254,6 +267,20 @@ export function drawn(
     for (const { g, item } of drawnReplies)
       spots.set(g, { id: item.id as string, ...(!showing.has(item) && { topic: t.topic }) });
     boxFor(t.topic);
+  }
+
+  /** The New line above the first main message said while the person was away (0077): never above their own. */
+  function newLineAbove(main: ThreadMessageLike) {
+    if (newLined || main.role === 'user' || !isNew(view?.left, '', timeIn(main))) return;
+    newLined = true;
+    items.push(
+      kept(cache, 'new-line', 'new-line', () => ({
+        id: 'new-line',
+        role: 'assistant',
+        content: [],
+        metadata: { custom: { newLine: true } satisfies Custom },
+      })),
+    );
   }
 
   /** The message box at the foot of the thread it is open for (0076), after its last reply shown. */
@@ -326,3 +353,7 @@ export function drawn(
     return stand.length ? spots.get(stand[0]) : undefined;
   }
 }
+
+/** When a drawn block was said, in ms: what the marks of what is seen compare (0077). */
+const timeIn = (item: ThreadMessageLike) =>
+  Date.parse((item.metadata?.custom as Custom | undefined)?.time ?? '');

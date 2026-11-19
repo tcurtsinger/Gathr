@@ -2,7 +2,7 @@ import { MessagePrimitive } from '@assistant-ui/react';
 import { afterDraw, Foot } from './Foot';
 import type { Custom } from './messages';
 import { parts } from './Replies';
-import { AgentFace, Bubble, NameLine, Said, When } from './Said';
+import { AgentFace, Bubble, NameLine, NewWord, Said, When } from './Said';
 import { StepsButton, useStepsOpen } from './Steps';
 import { useActions } from './Thread';
 import { WorkRow } from './TurnParts';
@@ -62,7 +62,10 @@ export function TalkMessage({ own, said: m }: { own: Custom; said: Message }) {
       line={
         <NameLine
           name={name}
-          pieces={[<When key="t" time={m.time} />]}
+          pieces={[
+            <When key="t" time={m.time} />,
+            small && <NewWord key="new" topic={own.topic} time={own.time} />,
+          ]}
           end={work && <StepsButton work={work} open={open} onOpen={setOpen} />}
         />
       }

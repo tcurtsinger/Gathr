@@ -1,6 +1,7 @@
 // A search hit opened in its chat (plans/search.md): drawn and centred with only the pages it needs, and
 // neither a stream nor a new turn pulls the view away from it.
 import { afterEach, expect, test, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { History } from '../api';
 import type { LiveEvent } from '../live';
@@ -203,10 +204,11 @@ test('a reply that says the same thing twice opens at the passage the hit is', a
   expect(passages.indexOf(hit)).toBe(1);
 });
 
-test('a hit opened after the line showed an approval stays where it is once it is done', async () => {
-  // The long chat, its latest turn waiting on an approval.
+test('a hit opened after Summary showed an approval stays where it is once it is done', async () => {
+  // The long chat with a second agent, so it has Summary; its latest turn waiting on an approval.
   const asking = {
     ...long,
+    members: [...long.members, { agent: 'b', name: 'Made-up Member', role: 'member' as const }],
     messages: [...long.messages, text('uq', 'tq', 'user', 'Made-up ask to run')],
     turns: [...long.turns, { ...done('tq', 'a', turns), status: 'running' }],
     approvals: [{ turn: 'tq', request_id: 'q1', tool: 'Bash', input: { command: 'made-up --cmd' } }],
@@ -216,7 +218,11 @@ test('a hit opened after the line showed an approval stays where it is once it i
   );
   const onFound = vi.fn();
   const shown = await render(<Chat onFound={onFound} />);
-  await shown.getByRole('button', { name: /needs you$/ }).click();
+  await shown.getByRole('button', { name: /^Summary: Made-up Agent needs you/ }).click();
+  await page
+    .getByRole('dialog', { name: 'Summary' })
+    .getByRole('button', { name: /^Made-up Agent / })
+    .click();
   await expect
     .poll(() => document.querySelector('[data-search-hit]')?.getAttribute('data-approval'))
     .toBe('q1');

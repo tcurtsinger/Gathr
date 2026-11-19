@@ -137,16 +137,18 @@ export function askOf(
 }
 
 /**
- * Which of an open thread's replies show: all of a short one; of a long one its newest, and any that holds an
- * approval waiting, a failed step or a running turn, behind "Show N earlier replies" for the rest.
+ * Which of an open thread's replies show: all of a short one; of a long one its newest, every one said while the person
+ * was away (`fresh`, 0077), and any that holds an approval waiting, a failed step or a running turn, behind "Show N
+ * earlier replies" for the rest.
  */
 export function newest(
   replies: ThreadMessageLike[],
   earlier: boolean,
+  fresh: (r: ThreadMessageLike) => boolean = () => false,
 ): { shown: ThreadMessageLike[]; hid: number } {
   if (earlier || replies.length <= NEWEST) return { shown: replies, hid: 0 };
   const from = replies.length - NEWEST;
-  const shown = replies.filter((r, i) => i >= from || keeps(r));
+  const shown = replies.filter((r, i) => i >= from || keeps(r) || fresh(r));
   return { shown, hid: replies.length - shown.length };
 }
 

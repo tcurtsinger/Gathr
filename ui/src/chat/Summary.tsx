@@ -9,7 +9,7 @@ import {
   SquareMinusIcon,
 } from 'lucide-react';
 import { Popover } from 'radix-ui';
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -17,14 +17,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { PauseScope, Pauses } from '../api';
-import { Face } from '../components/Face';
+import type { PauseScope, Pauses, Waiting } from '../api';
+import { Face, GathrFace } from '../components/Face';
 import { IconButton } from '../components/IconButton';
+import { CANT_READ, cardLine, since } from '../components/marks';
 import { useMarks } from './faceMarks';
 import { counts, type Glance, headline } from './glance';
 import { agentPause, type PauseAction } from './pauses';
 import { currentRound, type Round, type StepState } from './plan';
 import type { ChatState } from './state';
+import { inWords } from './statusWords';
 import './summary.css';
 
 interface Props {
@@ -37,16 +39,20 @@ interface Props {
   onPause: (action: PauseAction, scope: PauseScope) => void;
   /** Opens an agent's panel in the workspace. */
   onOpenAgent: (agent: string) => void;
+  /** The service's answer: Gathr's own waits, and which running turn is silent since when (0050, 0052). */
+  waiting?: Waiting;
+  /** Goes to what the person is needed for, if the chat holds it: false when it holds nothing to go to. */
+  onNeeds?: () => boolean;
 }
 
 /**
  * The team at a glance (DESIGN.md "Summary", 0038). Its button in the top line is every agent of the chat in the
  * chat's order, apart, each with its state's mark (0071). It opens a popover: the Supervisor's current round as
- * Plan, then every agent on one line. A step or an agent opens that agent's panel. Escape or a press outside closes
- * it.
+ * Plan, then every agent on one line, and Gathr's own waits after them. A step or an agent opens that agent's panel;
+ * an agent that needs the person goes to what it needs them for. Escape or a press outside closes it.
  */
 export function Summary(props: Props) {
-  const { state, team, open, onOpen, pauses, onPause, onOpenAgent } = props;
+  const { state, team, open, onOpen, pauses, onPause, onOpenAgent, waiting, onNeeds } = props;
   const round = useMemo(() => currentRound(state), [state]);
   const said = headline(team);
   const label = said ? `Summary: ${said}` : 'Summary';
@@ -59,6 +65,11 @@ export function Summary(props: Props) {
     went.current = true;
     onOpen(false);
     onOpenAgent(agent);
+  };
+  const press = (g: Glance) => {
+    if (g.standing !== 'needs' || !onNeeds?.()) return go(g.member.agent);
+    went.current = true;
+    onOpen(false);
   };
   return (
     <Popover.Root open={open} onOpenChange={onOpen}>
@@ -99,39 +110,7 @@ export function Summary(props: Props) {
           <h3>
             Team<small className="summary-note">{counts(team)}</small>
           </h3>
-          <div className="summary-team">
-            {team.map((g) => (
-              <button
-                type="button"
-                className="agent-row"
-                key={g.member.agent}
-                onClick={() => go(g.member.agent)}
-              >
-                <Face
-                  agent={{ id: g.member.agent, name: g.member.name }}
-                  size={24}
-                  mark={marks?.archived ? undefined : { state: g.standing }}
-                />
-                <span className="agent-name">{g.member.name}</span>
-                <span className="agent-doing" data-standing={g.standing}>
-                  {g.doing}
-                </span>
-                <span className="agent-count">
-                  {g.total > 0 && (
-                    // "1/2" would be read out as a half.
-                    <>
-                      <span aria-hidden="true">
-                        {g.done}/{g.total}
-                      </span>
-                      <span className="visually-hidden">
-                        {g.done} of {g.total} {g.total === 1 ? 'task' : 'tasks'} done
-                      </span>
-                    </>
-                  )}
-                </span>
-              </button>
-            ))}
-          </div>
+          <Team team={team} waiting={waiting} archived={!!marks?.archived} onPress={press} />
           <footer className="summary-foot">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -159,6 +138,87 @@ export function Summary(props: Props) {
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/**
+ * One row for each agent: its face and mark, its name, what it is doing, and its tasks done; a silent turn says for how
+ * long it has made no progress. Then one for each of Gathr's own waits, with Gathr's face, in its card's words; they
+ * open nothing. Counted each second.
+ */
+function Team({
+  team,
+  waiting,
+  archived,
+  onPress,
+}: {
+  team: Glance[];
+  waiting?: Waiting;
+  archived: boolean;
+  onPress: (g: Glance) => void;
+}) {
+  const silent = new Map(
+    (waiting?.lines ?? []).flatMap((l) => (l.agent && l.silent_us ? [[l.agent, l.silent_us / 1000]] : [])),
+  );
+  const own = waiting?.gathr ?? [];
+  const [now, setNow] = useState(Date.now);
+  const ticks = silent.size > 0 || own.length > 0;
+  useEffect(() => {
+    if (!ticks) return;
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, [ticks]);
+  return (
+    <div className="summary-team">
+      {team.map((g) => {
+        const quiet = silent.get(g.member.agent);
+        return (
+          <button type="button" className="agent-row" key={g.member.agent} onClick={() => onPress(g)}>
+            <Face
+              agent={{ id: g.member.agent, name: g.member.name }}
+              size={24}
+              mark={archived ? undefined : { state: g.standing }}
+            />
+            <span className="agent-name">{g.member.name}</span>
+            <span className="agent-doing" data-standing={g.standing}>
+              {quiet === undefined || g.doing.includes('silent')
+                ? g.doing
+                : `${g.doing} · silent ${since(now - quiet)}`}
+            </span>
+            <span className="agent-count">
+              {g.total > 0 && (
+                // "1/2" would be read out as a half.
+                <>
+                  <span aria-hidden="true">
+                    {g.done}/{g.total}
+                  </span>
+                  <span className="visually-hidden">
+                    {g.done} of {g.total} {g.total === 1 ? 'task' : 'tasks'} done
+                  </span>
+                </>
+              )}
+            </span>
+          </button>
+        );
+      })}
+      {own.map((o) => {
+        const what = o.name ? `${o.name}: ${o.what}` : inWords(o.what);
+        // The time at the row's end, where an agent's tasks are, so a long what is cut and never the time.
+        const began = o.since_us === null ? undefined : o.since_us / 1000;
+        return (
+          <div className="agent-row" key={`${o.kind}:${o.name}:${o.what}`}>
+            <GathrFace size={24} />
+            <span className="agent-name">Gathr</span>
+            <span className="agent-doing" data-standing={o.state}>
+              {cardLine(o.state, [what, o.failing ? CANT_READ : undefined])}
+            </span>
+            <span className="agent-count">
+              {began !== undefined && since(now - began, o.state === 'working')}
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

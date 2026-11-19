@@ -10,7 +10,7 @@ const ABOVE = 20;
 export const TOP = 32;
 
 /**
- * A search hit opened in the chat (plans/search.md), or an approval the status line goes to: draws the pages
+ * A search hit opened in the chat (plans/search.md), or an approval Summary goes to: draws the pages
  * up to it, centres it and tints it, then holds the view there, so neither a stream nor a new turn pulls
  * it to the bottom, until the person scrolls back to the bottom or sends a message. A tick of the
  * conversation map opens its message the same way, at the top of the view and untinted (0039).
@@ -140,7 +140,7 @@ function place(viewport: HTMLElement, block: Element, top?: boolean) {
 }
 
 /**
- * The target picked last, of one picked here (a tick, the status line's "needs you") and one handed down (a search hit).
+ * The target picked last, of one picked here (a tick, the New pill, a needs-you row in Summary) and one handed down (a search hit).
  * A newer one from above drops the one picked here: when that hit is done and cleared, the view stays on
  * it instead of going back to what was picked before it.
  */

@@ -42,6 +42,7 @@ pub mod projects;
 pub mod pushes;
 pub mod quiet;
 pub mod reactions;
+pub mod reads;
 pub mod redact;
 pub mod replies;
 pub mod roles;

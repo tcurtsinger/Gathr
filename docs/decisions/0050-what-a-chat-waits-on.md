@@ -2,7 +2,7 @@
 
 Status: accepted (owner, 2026-11-13, with Stage 2's spec; the line's place is the owner's pick). Date: 2026-11-13.
 
-Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `crates/gathr/tests/merge/lands.rs` (a landing's failing looks), `ui/src/chat/StatusLine.test.tsx`.
+Built: yes. Proof: `crates/gathr/tests/waiting.rs`, `crates/gathr/tests/messages.rs`, `crates/gathr/tests/merge/lands.rs` (a landing's failing looks), `ui/src/chat/Summary.test.tsx`, `ui/src/chat/needs.test.tsx`.
 
 Serves promise 6 of [the charter](../charter.md#the-promises): the room explains itself (parts 6.1 and 6.2 of [the truth map](../truth-map.md)).
 
@@ -31,9 +31,9 @@ Serves promise 6 of [the charter](../charter.md#the-promises): the room explains
   own chat; and `gathr diag waiting --chat <id>`, from the service when it runs and from the database when it
   doesn't, where what only the service knew is said as it was when it stopped and nothing is said to move by
   itself.
-- **In the window, the status line above the message box** (changed 2026-11-17, below): how the team stands,
-  from each agent's state in this answer, and a row for each agent that isn't free. The lines stay for the
-  API, the `waiting` tool and `gathr diag waiting`.
+- **In the window, the faces' marks and Summary** (changed 2026-11-17 and 2026-11-18, below): how the team stands,
+  from each agent's state in this answer, with Gathr's own waits and a silent turn in Summary. The lines stay for
+  the API, the `waiting` tool and `gathr diag waiting`.
 - **Summary and the agent panel keep what they work out** (who needs you, who works and on what). The words for
   an agent that does neither ("Waiting for CI on #157", "Held", "Paused", "Usage limit until 14:05") are the
   answer's, and the window's own working-out of them is gone.
@@ -56,7 +56,7 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   is already there.
 - **Push the whole answer live.** It changes with every turn; one small message and a request when a window
   shows that chat costs less and can't arrive out of order.
-- **A new screen.** The line and a popover say it where the person already looks.
+- **A new screen.** The faces and Summary say it where the person already looks.
 
 ## Changes
 
@@ -91,8 +91,16 @@ a wait whose look kept failing, or a PR that sat reviewed. Agents couldn't ask a
   working"; it is never counted as an agent ("2 agents and Gathr are working"). A row's time is never cut away: a
   long what is cut instead. The list has a row for each after the agents', in the same row with Gathr's mark, opening nothing:
   no screen shows an update, a landing or a command's output. The lines and the words agents read don't change.
+- 2026-11-18, the status line goes (the owner's call after their look at the test window). Their words, shortened:
+  they don't like the band above the message box that cuts messages off, and "Why do we need statuses in multiple
+  places. We have the states on the agent pics, and the status panel. Why can't we utilize those things for these."
+  The faces' marks (0071) and Summary say how the team stands; what only the line's list said moves to Summary's
+  Team: a row for each of Gathr's own waits, after the agents', in the same words and opening nothing, and a silent
+  turn's "silent 12m" on its agent's row. Who needs you is the mark and Summary's row, which goes to what is needed
+  ([0037](0037-one-timeline.md)'s change). The answer, the tool and `gathr diag waiting` don't change. A chat of one
+  agent has no Summary: there the mark on the agent's face says it, and Gathr's own waits are in `gathr diag waiting`.
 
 ## Amended by [0075](0075-a-team-chat-is-main-messages-each-with-its-thread.md)
 
-- A task's main message in the chat says what it waits on in the status line's words ("Waiting on PR #22 checks"),
+- A task's main message in the chat says what it waits on in the window's words ("Waiting on PR #22 checks"),
   when it waits on one thing, and so does its row in the Tasks list: one function for both.

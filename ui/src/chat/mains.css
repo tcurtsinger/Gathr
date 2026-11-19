@@ -1,10 +1,9 @@
 /*
  * A team chat as main messages, each with its thread (0075, the threads mock-up as picked).
  *
- * The words are as wide as the message box: a main message's bubble starts at the box's left edge and a full one ends
- * at its right edge, and its face hangs in a gutter left of that width. Where the pane leaves no room beside the
- * column for it (a narrow pane, the 360 column), the column's left padding makes the room, and the box moves in with
- * the words, so the two stay the same width at every size.
+ * A main message's bubble starts at the column's left edge and a full one ends at its right edge, and its face hangs in
+ * a gutter left of that width. Where the pane leaves no room beside the column for it (a narrow pane, the 360 column),
+ * the column's left padding makes the room.
  */
 .thread-viewport > .thread-column {
   --gutter: 48px;
@@ -13,29 +12,55 @@
 .thread-messages > .said:not([data-reply]) {
   margin-left: calc(-1 * var(--gutter));
 }
-/* The faces scroll under the message box and the top fade too: both reach over the gutter. */
-.thread-column > .thread-footer {
-  box-shadow: calc(-1 * var(--gutter)) 0 0 var(--background);
-}
+/* The top fade reaches over the gutter, as the faces scroll under it. */
 .thread-viewport > .thread-column::before {
   margin-left: calc(-1 * var(--gutter));
+}
+/*
+ * The message box is wider than every message and its face (the owner's call of 2026-11-18): it starts 8px left of
+ * the faces and ends as far past the words, centred as the column is; where the pane is narrower, it takes the width
+ * there is, 16px in from each side. Its footer takes back the column's margins and padding, so it spans the scroller and
+ * covers what scrolls beside and under the box.
+ */
+.thread-viewport > .thread-column:not([data-empty]) > .thread-footer {
+  --side: max(0px, (100cqw - 42rem) / 2);
+  --box: min(42rem - 32px + 2 * (var(--gutter) + 8px), 100% - 32px);
+  margin-right: calc(-1 * (var(--side) + 16px));
+  margin-left: calc(-1 * max(var(--side) + 16px, 16px + var(--gutter)));
 }
 
 /*
  * A thread's items: "Show earlier", each reply and the reply box, each an item of the chat's list, joined by one
  * rule at the main message's left edge. Its replies sit 13px in (the rule and 12px).
+ *
+ * Each item draws the rule beside itself and up through the space above it, to where the item above ends, never over
+ * it: the border is see-through in the dark theme, so a piece drawn twice reads brighter and thicker. The space above
+ * is the list's 20px gap and the item's own -6px margin (the reply box's 0), less the 14px a message with the row under
+ * its bubble gives back (said.css).
  */
 .thread-messages > [data-thread-item],
 .thread-messages > .said[data-reply] {
+  --above: 14px;
   position: relative;
   margin-top: -6px;
   padding-left: 13px;
+}
+.thread-messages > .thread-box {
+  --above: 20px;
+}
+.thread-messages
+  > .said:has(> .said-main > .said-words > .said-foot)
+  + :is(.said[data-reply], [data-thread-item]) {
+  --above: 0px;
+}
+.thread-messages > .said:has(> .said-main > .said-words > .said-foot) + .thread-box[data-thread-item] {
+  --above: 6px;
 }
 .thread-messages > [data-thread-item]::before,
 .thread-messages > .said[data-reply]::before {
   content: "";
   position: absolute;
-  top: -14px;
+  top: calc(-1 * var(--above));
   bottom: 0;
   left: 0;
   border-left: 1px solid var(--border);
@@ -76,6 +101,30 @@
 }
 .fold-line[aria-expanded="true"] .fold-chevron {
   rotate: 90deg;
+}
+/* Where the person left off (0077): new replies in a folded thread, a reply said while they were away, and the line
+   above the first main message said then, all in the attention blue. */
+.fold-line[data-new],
+.fold-line[data-new]:hover,
+.name-line-meta > .name-line-new {
+  color: var(--attention);
+  font-weight: 550;
+}
+.thread-messages > .new-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 -4px;
+  color: var(--attention);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+}
+.new-line::before {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: color-mix(in oklab, var(--attention) 65%, transparent);
 }
 
 /* A main message's state at its name line's right: its PR, then the mark's shape and its word. */

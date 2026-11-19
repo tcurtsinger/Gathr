@@ -3,6 +3,7 @@ import { MessageActions } from '../components/MessageActions';
 import type { Like } from './likes';
 import type { Answer, Fold } from './messages';
 import { liking } from './Replies';
+import { useUnseen } from './reads';
 import { revealOpened } from './reveal';
 import { Reactions } from './Said';
 import { useActions } from './Thread';
@@ -40,18 +41,20 @@ export function Foot({
 }
 
 /**
- * A main message's fold line (0075): folded, how many replies; open, "Collapse replies" (the owner's words). A press
- * folds or opens the thread; the line stays where it was, so nothing above it moves, and what opens at the foot of
- * the chat scrolls up to show above the message box.
+ * A main message's fold line (0075): folded, how many replies, or in the attention blue how many are new (0077); open,
+ * "Collapse replies" (the owner's words). A press folds or opens the thread; the line stays where it was, so nothing
+ * above it moves, and what opens at the foot of the chat scrolls up to show above the message box.
  */
 function FoldLine({ fold }: { fold: Fold }) {
   const actions = useActions();
   const { count, open, topic } = fold;
+  const fresh = useUnseen(topic, open ? undefined : fold.times);
   return (
     <button
       type="button"
       className="fold-line"
       aria-expanded={open}
+      data-new={fresh > 0 || undefined}
       onClick={(e) => {
         const line = e.currentTarget;
         const item = line.closest('.thread-messages > *') as Element;
@@ -68,7 +71,7 @@ function FoldLine({ fold }: { fold: Fold }) {
       }}
     >
       <ChevronRight className="fold-chevron" aria-hidden="true" />
-      {open ? 'Collapse replies' : count === 1 ? '1 reply' : `${count} replies`}
+      {open ? 'Collapse replies' : fresh ? replies(fresh, ' new') : replies(count)}
     </button>
   );
 }
@@ -95,3 +98,5 @@ function lastOf(item: Element): Element {
     last = next;
   return last;
 }
+
+const replies = (n: number, what = '') => (n === 1 ? `1${what} reply` : `${n}${what} replies`);
