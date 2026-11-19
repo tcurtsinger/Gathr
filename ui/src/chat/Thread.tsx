@@ -156,12 +156,13 @@ export function Thread(props: Props) {
                       </div>
                       {after}
                       {/*
-                        A plain block, not the runtime's ViewportFooter: that one counts its height and its top margin as a
-                        content inset, as for a footer laid over the messages, and takes a view that close to the foot as at
-                        it. This one is in the flow, and its auto margin was measured while the chat was still empty, so a
-                        view hundreds of pixels up read as at the foot and followed the next growth there: the reply box.
+                        The runtime's footer counts its height and its top margin as how close to the foot still reads as
+                        at the foot. So the footer has no margin of its own: this spacer pushes it down a short chat. An auto
+                        margin was measured once, on the empty chat, as most of the view's height, and a view that far up
+                        followed the next growth to the foot: the reply box.
                       */}
-                      <div className="thread-footer">
+                      <div className="thread-spacer" />
+                      <ThreadPrimitive.ViewportFooter className="thread-footer">
                         <ThreadPrimitive.ScrollToBottom asChild>
                           <IconButton
                             aria-label="Scroll to bottom"
@@ -172,7 +173,7 @@ export function Thread(props: Props) {
                           </IconButton>
                         </ThreadPrimitive.ScrollToBottom>
                         {children}
-                      </div>
+                      </ThreadPrimitive.ViewportFooter>
                     </div>
                   </ThreadPrimitive.Viewport>
                   <ChatMap ticks={ticks} viewport={viewport} onJump={onJump} />

@@ -55,13 +55,19 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin-top: auto;
   padding-bottom: 20px;
   background: var(--background);
 }
+/* Pushes the footer to the foot of a short chat. Not a margin on the footer: the runtime reads that as part of the
+   footer's height (Thread.tsx). */
+.thread-spacer {
+  flex: 1;
+}
 .thread-column[data-empty] .thread-footer {
   position: relative;
-  margin-top: 0;
+}
+.thread-column[data-empty] > .thread-spacer {
+  display: none;
 }
 /*
  * Canvas fades where more of the chat lies past the top edge or behind the composer (DESIGN.md).
