@@ -24,6 +24,7 @@ mod merging;
 mod models;
 mod pauses;
 mod projects;
+mod reads;
 mod routes;
 mod search;
 mod serve;

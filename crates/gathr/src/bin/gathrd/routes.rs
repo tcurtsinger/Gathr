@@ -94,6 +94,7 @@ async fn history(
         crate::team::with_folders(conn, &data, &id, &mut history)?;
         gathr::context::on_members(conn, &id, &mut history)?;
         gathr::reactions::on_history(conn, &id, &mut history)?;
+        gathr::reads::on_history(conn, &id, &mut history)?;
         Ok(history)
     })
     .await?;

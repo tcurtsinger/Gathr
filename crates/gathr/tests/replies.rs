@@ -345,6 +345,7 @@ fn the_upgrade_from_0055_keeps_every_rowid_and_the_search_index() {
              ('m1', 'c', 't1', 10, 'user', 'text', 'Where do the herons nest'),
              ('m2', 'c', 't1', 11, 'assistant', 'text', 'Herons nest by the weir');
          ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
+         DROP TABLE reads;
          PRAGMA user_version = 55;",
     )
     .unwrap();
