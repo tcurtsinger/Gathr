@@ -17,6 +17,8 @@ export interface Group {
   last?: boolean;
   /** A message to an agent: the block its turn was writing when it was sent. */
   root?: Group;
+  /** The turn it began in, when an engine's own pick-up of that turn's work carries it on: `turn` is the pick-up. */
+  first?: string;
   /** A question that is a block of its own, or the person's answer or Discuss to it, which has no message. */
   task?: number;
   text?: string;
@@ -25,6 +27,20 @@ export interface Group {
 
 const ended = new Set(['stopped', 'waiting_sign_in', 'failed']);
 export const hasEnding = (t: Turn) => ended.has(t.status);
+
+/**
+ * The turn whose block a turn's messages go in: its own, or for an engine's own pick-up (its engine went on with the
+ * work by itself, when a command it left running ended) the turn of the same agent it carries on. One piece of work
+ * reads as one message (the owner's call of 2026-11-19).
+ */
+function blockOf(turns: ChatState['turns']) {
+  const of = (id: string, hops = 0): string => {
+    const t = turns[id];
+    const before = t?.opened === 'engine' && t.answers ? turns[t.answers] : undefined;
+    return before && before.agent === t?.agent && hops < 50 ? of(before.id, hops + 1) : id;
+  };
+  return of;
+}
 
 /**
  * The chat's saved messages as blocks, in saved order (0037). A turn is one block where it began: its words and the
@@ -48,38 +64,57 @@ export function grouped(state: ChatState): Group[] {
   // Each turn's latest saved message, of any kind.
   const latest = new Map<string, number>();
   const persons = new Set(state.messages.filter((m) => m.role === 'user').map((m) => m.id));
+  const blockTurn = blockOf(state.turns);
+  /** A pick-up's message lands in the block of the turn it carries on, which is then the pick-up's to end. */
+  const carryOn = (g: Group, turn: string) => {
+    if (g.turn === turn) return;
+    g.first ??= g.turn ?? undefined;
+    g.turn = turn;
+  };
   state.messages.forEach((m, at) => {
     const bound = !!m.turn && !latest.has(m.turn);
     if (m.turn) latest.set(m.turn, at);
     const one = { turn: m.turn, msgs: [m], at };
+    const key = m.turn ? blockTurn(m.turn) : '';
+    const going = open.get(key);
     if (m.role === 'user') {
       groups.push({ ...one, key: m.id, kind: 'person', bound });
-      if (m.turn) open.delete(m.turn);
+      open.delete(key);
     } else if (m.role === 'gathr') {
       if (!m.copy_of) groups.push({ ...one, key: m.id, kind: 'gathr', bound });
       // Gathr's copy of the person's message splits the turn it entered as theirs does (0028); it draws nothing.
-      else if (m.turn && persons.has(m.copy_of)) open.delete(m.turn);
+      else if (m.turn && persons.has(m.copy_of)) open.delete(key);
     } else if (m.to) {
-      groups.push({ ...one, key: m.id, kind: 'to', bound: false, root: open.get(m.turn ?? '') });
-    } else if (m.turn && open.has(m.turn)) open.get(m.turn)?.msgs.push(m);
-    else if (m.turn) {
-      const g = { ...reply(m.turn, at), msgs: [m] };
+      groups.push({ ...one, key: m.id, kind: 'to', bound: false, root: going });
+    } else if (m.turn && going) {
+      going.msgs.push(m);
+      carryOn(going, m.turn);
+    } else if (m.turn) {
+      const g = { ...reply(key, at), msgs: [m] };
+      carryOn(g, m.turn);
       groups.push(g);
-      open.set(m.turn, g);
+      open.set(key, g);
     } else groups.push({ ...one, key: `a-${m.id}`, kind: 'reply', bound: false });
   });
   // A turn running, or with streaming text, a notice or an approval, but no reply since its latest message still
   // has one, right after that message: a running one shows as its agent at work from its start.
   const waiting = new Set(state.approvals.map((a) => a.turn));
+  const made = (id: string | null | undefined) => state.turns[id ?? '']?.created ?? '';
   for (const t of Object.values(state.turns)) {
-    const last = open.get(t.id) ?? groups.findLast((g) => g.turn === t.id && g.kind !== 'to');
+    const key = blockTurn(t.id);
+    const last =
+      open.get(key) ?? groups.findLast((g) => g.kind !== 'to' && !!g.turn && blockTurn(g.turn) === key);
     if (last?.kind === 'reply') {
       last.last = true;
+      // A pick-up with nothing saved yet takes the block over: it is the turn at work there now.
+      if (key !== t.id && made(t.id) >= made(last.turn)) carryOn(last, t.id);
       continue;
     }
     if (!(t.status === 'running' || state.partial[t.id] || hasEnding(t) || waiting.has(t.id))) continue;
     const after = latest.get(t.id);
-    groups.push({ ...reply(t.id, after === undefined ? Number.POSITIVE_INFINITY : after + 0.5), last: true });
+    const g = { ...reply(key, after === undefined ? Number.POSITIVE_INFINITY : after + 0.5), last: true };
+    carryOn(g, t.id);
+    groups.push(g);
   }
   return groups;
 }

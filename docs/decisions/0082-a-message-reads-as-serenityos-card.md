@@ -30,6 +30,11 @@ promise 6 of [the charter](../charter.md#the-promises).
   come, and under "Working" the line shows its latest step. (As first built the newest words moved into that line
   once a step followed; the owner, the same day: "I have to decipher out of the shimmering stuff".) The bubble shows
   from the moment the turn runs and never blanks.
+- **An engine's own pick-up carries on in the same bubble** (the owner's call of 2026-11-19, on seeing "a second box"
+  under an agent whose turn had ended with a command running in the background): when the engine goes on with the
+  work by itself, Gathr records a new turn (`opened` is `engine`) answering that agent's turn before it, and the
+  window draws its steps and words in that turn's bubble, where it began, back at work; the time taken runs from
+  when the first turn was made (`groups.ts` `blockOf`).
 - **The name line**: the name, then the agent's title in grey, then the time, New, and once its turn is done a tick
   and how long it took ("14s", "4m 12s"), from when the turn was made to when it ended, as the working line counts.
   Gathr keeps no title of an agent's own, so the title is its role in a team: "Lead" and "Reviewer"; a member's says
