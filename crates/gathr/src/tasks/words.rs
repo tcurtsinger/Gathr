@@ -193,3 +193,35 @@ pub fn wait_name(
         _ => "a check".to_string(),
     })
 }
+
+/// A task in list_tasks, including its state and review head.
+pub fn listed_line(conn: &Connection, t: &Task) -> Result<String, Error> {
+    let owner = owner_name(conn, t.owner.as_deref())?;
+    let reason = t
+        .reason
+        .as_ref()
+        .map_or(String::new(), |r| format!(" ({r})"));
+    let state = t.state.as_str();
+    // A review says which commit it is of, and where its PR is now once that has moved past it (G42).
+    let short = |commit: &str| commit.get(..7).unwrap_or(commit).to_string();
+    let review = match (&t.reviewed, t.kind) {
+        (Some(reviewed), Kind::Review) => {
+            let at = short(reviewed);
+            match (t.outdated, t.pr, &t.pr_head) {
+                (true, Some(pr), Some(head)) => {
+                    format!(
+                        " [reviewed at {at}, out of date: #{pr} is at {}]",
+                        short(head)
+                    )
+                }
+                (true, ..) => format!(" [reviewed at {at}, out of date]"),
+                _ => format!(" [reviewed at {at}]"),
+            }
+        }
+        _ => String::new(),
+    };
+    Ok(format!(
+        "#{} {owner} {state}{reason}{review}: {}",
+        t.number, t.what
+    ))
+}

@@ -188,7 +188,8 @@ pub fn set(
          VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT (task, agent_id) DO UPDATE SET account_id = ?4, session_id = ?5,
              used = CASE WHEN session_id = ?5 THEN used END,
-             told = CASE WHEN session_id = ?5 THEN told ELSE 0 END",
+             told = CASE WHEN session_id = ?5 THEN told ELSE 0 END,
+             summed = CASE WHEN session_id = ?5 AND account_id = ?4 THEN summed ELSE 0 END",
         params![task, agent, chat, account, session],
     )?;
     Ok(())
@@ -201,6 +202,51 @@ pub fn used(conn: &Connection, task: i64, agent: &str, used: i64) -> Result<(), 
         params![task, agent, used],
     )?;
     Ok(())
+}
+
+/// Every row pointing at the compacted conversation keeps the marker until its next opening.
+pub fn summed(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    account: &str,
+    session: &str,
+    summed: bool,
+) -> Result<(), Error> {
+    let args = params![chat, agent, account, session, summed];
+    conn.execute(
+        "UPDATE task_sessions SET summed = ?5
+         WHERE chat_id = ?1 AND agent_id = ?2 AND account_id = ?3 AND session_id = ?4",
+        args,
+    )?;
+    conn.execute(
+        "UPDATE engine_sessions SET summed = ?5
+         WHERE chat_id = ?1 AND agent_key = ?2 AND account_id = ?3 AND session_id = ?4",
+        args,
+    )?;
+    Ok(())
+}
+
+/// Consume the marker only when opening the conversation that compacted.
+pub fn take_summed(
+    conn: &Connection,
+    chat: &str,
+    agent: &str,
+    account: &str,
+    session: &str,
+) -> Result<bool, Error> {
+    let found: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM task_sessions WHERE chat_id = ?1 AND agent_id = ?2
+             AND account_id = ?3 AND session_id = ?4 AND summed = 1)
+         OR EXISTS (SELECT 1 FROM engine_sessions WHERE chat_id = ?1 AND agent_key = ?2
+             AND account_id = ?3 AND session_id = ?4 AND summed = 1)",
+        params![chat, agent, account, session],
+        |r| r.get(0),
+    )?;
+    if found {
+        summed(conn, chat, agent, account, session, false)?;
+    }
+    Ok(found)
 }
 
 /// Whether `task`'s conversation was told it nears compaction, as `context::tell_soon` and

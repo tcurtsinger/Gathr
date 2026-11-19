@@ -37,7 +37,7 @@ pub use prs::{Seen, pr_looked, with_prs};
 pub use recover::recover;
 pub use report::{Finish, Report, Said, Took, finish};
 
-pub use words::{name_of, opening, owner_name, sentence, wait_name};
+pub use words::{listed_line, name_of, opening, owner_name, sentence, wait_name};
 
 /// The longest `what` of a question for the person: one line, read at a glance.
 pub const WHAT_MOST: usize = 200;

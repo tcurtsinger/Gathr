@@ -235,7 +235,7 @@ impl Tools {
                 let others = tasks::list(c, &chat)?
                     .into_iter()
                     .filter(|t| t.number != task.number && !t.state.settled())
-                    .map(|t| line(c, &t))
+                    .map(|t| tasks::listed_line(c, &t))
                     .collect::<Result<Vec<_>, _>>()?;
                 let state = match task.state {
                     // A task waiting for its plan (0063) waits on no task.
@@ -500,7 +500,9 @@ impl Tools {
                 let open = tasks::list(c, &chat)?
                     .into_iter()
                     .filter(|t| !t.state.settled() || mine(t));
-                let mut lines: Vec<String> = open.map(|t| line(c, &t)).collect::<Result<_, _>>()?;
+                let mut lines: Vec<String> = open
+                    .map(|t| tasks::listed_line(c, &t))
+                    .collect::<Result<_, _>>()?;
                 if lines.is_empty() {
                     lines.push("No open tasks.".into());
                 }
@@ -659,37 +661,6 @@ impl Tools {
 
 fn trace_of(caller: &Caller) -> String {
     caller.trace().unwrap_or_else(gathr::ids::trace_id)
-}
-
-fn line(conn: &Connection, t: &tasks::Task) -> Result<String, Error> {
-    let owner = tasks::owner_name(conn, t.owner.as_deref())?;
-    let reason = t
-        .reason
-        .as_ref()
-        .map_or(String::new(), |r| format!(" ({r})"));
-    let state = t.state.as_str();
-    // A review says which commit it is of, and where its PR is now once that has moved past it (G42).
-    let short = |commit: &str| commit.get(..7).unwrap_or(commit).to_string();
-    let review = match (&t.reviewed, t.kind) {
-        (Some(reviewed), Kind::Review) => {
-            let at = short(reviewed);
-            match (t.outdated, t.pr, &t.pr_head) {
-                (true, Some(pr), Some(head)) => {
-                    format!(
-                        " [reviewed at {at}, out of date: #{pr} is at {}]",
-                        short(head)
-                    )
-                }
-                (true, ..) => format!(" [reviewed at {at}, out of date]"),
-                _ => format!(" [reviewed at {at}]"),
-            }
-        }
-        _ => String::new(),
-    };
-    Ok(format!(
-        "#{} {owner} {state}{reason}{review}: {}",
-        t.number, t.what
-    ))
 }
 
 /// The task a report is on: the one named, else the turn's, else the caller's one open task.

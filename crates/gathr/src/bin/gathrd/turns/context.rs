@@ -81,7 +81,7 @@ impl Task {
                 .await;
         }
         // Its summary may have dropped what the chat said: the next turn hears the last lines (0081).
-        self.session.compacted = true;
+        self.summed(true).await;
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
