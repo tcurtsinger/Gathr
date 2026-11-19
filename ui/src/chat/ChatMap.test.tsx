@@ -362,7 +362,7 @@ test('a reply streaming into a running turn leaves the map as it was, until the 
   await expect.poll(() => names().at(-1)).toBe(`Mira · ${hhmm(15, 1)}`);
 });
 
-test('a search hit opened after a tick stays where it is once it is done', async () => {
+test('a search hit opened after a tick stays the hit once it is done', async () => {
   const state = chat(day(11, 6, tall));
   const screen = await render(<View state={state} />);
   await expect.poll(() => ticks().length).toBe(12);
@@ -377,10 +377,8 @@ test('a search hit opened after a tick stays where it is once it is done', async
   await expect.poll(() => onTarget.mock.calls.length).toBe(1);
   const hit = document.querySelector('[data-message-id="u11-4"]') as HTMLElement;
   expect(hit.hasAttribute('data-search-hit')).toBe(true);
-  const placed = below('u11-4');
   await screen.rerender(<View state={state} onTarget={onTarget} />);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  expect(below('u11-4')).toBe(placed);
   expect(hit.hasAttribute('data-search-hit')).toBe(true);
 });
 

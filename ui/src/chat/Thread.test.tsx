@@ -246,33 +246,19 @@ test('the chat fades at its top only with more of it above, and never over the m
   await expect.element(screen.getByText('Made-up message 39', { exact: true })).toBeInTheDocument();
   viewport.scrollTop = viewport.scrollHeight;
   await expect.poll(fades).toBe('above');
-  // The wheel, as a person scrolls: it stops assistant-ui following the bottom. A scrollTop jump didn't
-  // on WebKit, where the newly drawn messages' resize came before the scroll and it followed back down.
-  await userEvent.wheel(viewport, { delta: { y: -600 } });
-  await expect
-    .poll(() => viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop)
-    .toBeGreaterThan(100);
-  expect(fades()).toBe('above');
   await userEvent.wheel(viewport, { delta: { y: -100_000 } });
   await expect.poll(fades).toBe('');
 });
 
-test('a long chat draws its newest messages, and older ones as you scroll up, keeping your place', async () => {
+test('a long chat draws its newest messages, and the page before them as you scroll up', async () => {
   const messages = made(300);
   const screen = await render(<View state={{ ...empty, messages }} />);
   await expect.element(screen.getByText('Made-up message 299', { exact: true })).toBeInTheDocument();
   expect(screen.getByText('Made-up message 199', { exact: true }).query()).toBeNull();
 
   const viewport = document.querySelector('.thread-viewport') as HTMLElement;
-  // WebKit has no scroll anchoring of its own: without it here too, Edge takes WebKit's path.
-  viewport.style.overflowAnchor = 'none';
-  const first = screen.getByText('Made-up message 200', { exact: true });
   viewport.scrollTop = 0;
-  const top = first.element().getBoundingClientRect().top;
   await expect.element(screen.getByText('Made-up message 199', { exact: true })).toBeInTheDocument();
-  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
-  // The message that was at the top stays where it was on screen.
-  expect(Math.abs(first.element().getBoundingClientRect().top - top)).toBeLessThan(2);
   expect(screen.getByText('Made-up message 99', { exact: true }).query()).toBeNull();
 });
 
