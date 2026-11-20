@@ -54,7 +54,7 @@ export function QuestionCard(props: {
         <Markdown className="room-body" text={q.question} names={people.names} />
         {open ? (
           <div className="room-asks">
-            <Button type="button" variant="outline" size="sm" onClick={() => onOpen(q.id)}>
+            <Button type="button" variant="outline" size="sm" data-answer={q.id} onClick={() => onOpen(q.id)}>
               Answer
             </Button>
           </div>
@@ -125,11 +125,15 @@ export function Questions(props: {
           role="dialog"
           aria-label="Questions"
           onOpenAutoFocus={(e) => {
-            const item = document.querySelector(`[data-question="${at}"]`);
-            if (!item) return;
+            if (show(at)) e.preventDefault();
+          }}
+          // Radix dismisses on the click after a card's Answer has set the question. That click isn't a click away:
+          // it moves the open panel to its question, even when that is already the one set.
+          onInteractOutside={(e) => {
+            const answer = e.target instanceof HTMLElement && e.target.closest<HTMLElement>('[data-answer]');
+            if (!answer) return;
             e.preventDefault();
-            item.scrollIntoView({ block: 'nearest' });
-            item.querySelector<HTMLElement>('button, textarea')?.focus();
+            show(Number(answer.dataset.answer));
           }}
         >
           <h3>Questions</h3>
@@ -148,6 +152,14 @@ export function Questions(props: {
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/** Scrolls the panel to a question and puts the cursor in its answer; null while it isn't shown. */
+function show(at: number | null | undefined) {
+  const item = document.querySelector(`[data-question="${at}"]`);
+  item?.scrollIntoView({ block: 'nearest' });
+  item?.querySelector<HTMLElement>('button, textarea')?.focus();
+  return item;
 }
 
 /** A choice answers at once, with any words typed; the words alone answer with Send. */
