@@ -28,6 +28,15 @@ pub fn cut(line: &str, limit: usize, more: bool) -> String {
     format!("{}…", line[..end].trim_end())
 }
 
+/// Names in a sentence: "Ann", "Ann and Bo", "Ann, Bo and Cy".
+pub fn list(names: &[&str]) -> String {
+    match names {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [most @ .., last] => format!("{} and {last}", most.join(", ")),
+    }
+}
+
 /// A message longer than `KEEP_START` and `KEEP_END` together is cut in the middle, with its id to
 /// read the whole of it (0020: a tool returns what the question needs, with an id for the rest).
 /// Its end stays: agents end a message with what matters to a scan, such as "Friction: …" (G176).

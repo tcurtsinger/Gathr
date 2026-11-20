@@ -1,7 +1,7 @@
 //! Deleting a project or an agent (0069): what a delete takes with it, in the counts the confirm
-//! shows and the delete then does; an agent's removal in one transaction (its tasks cancelled, its
-//! seats given up with the lead passed on, its row kept as removed); and a project's rows, with its
-//! own folders recorded for the sweep. Chats go through a chat's own delete, in the service.
+//! shows and the delete then does; an agent's removal in one transaction (its seats given up with
+//! the lead passed on, its row kept as removed); and a project's rows, with its own folders
+//! recorded for the sweep. Chats go through a chat's own delete, in the service.
 
 use std::path::{Path, PathBuf};
 
@@ -11,10 +11,9 @@ use serde::Serialize;
 use crate::Error;
 use crate::event::Event;
 use crate::folders::{self, SHARED};
-use crate::tasks::Start;
 use crate::team::{Member, Role};
 
-/// Why a deleted agent's tasks, turns and waits ended.
+/// Why a deleted agent's turns ended.
 pub const WHY: &str = "its agent was deleted";
 
 /// What a delete takes with it.
@@ -23,17 +22,14 @@ pub struct Plan {
     /// The chats deleted, archived ones too.
     pub chats: Vec<String>,
     pub projects: Vec<String>,
-    /// The agent's tasks cancelled in chats that stay, and the person's questions it asked there.
-    pub tasks: Vec<i64>,
     /// Who leads where the agent led, by name, each once.
     pub leads: Vec<String>,
 }
 
-/// The confirm's counts (and the delete's answer): `{chats, tasks, projects, leads}`.
+/// The confirm's counts (and the delete's answer): `{chats, projects, leads}`.
 #[derive(Debug, Serialize)]
 pub struct Counts {
     pub chats: usize,
-    pub tasks: usize,
     pub projects: usize,
     pub leads: Vec<String>,
 }
@@ -42,7 +38,6 @@ impl Plan {
     pub fn counts(&self) -> Counts {
         Counts {
             chats: self.chats.len(),
-            tasks: self.tasks.len(),
             projects: self.projects.len(),
             leads: self.leads.clone(),
         }
@@ -63,7 +58,7 @@ pub fn project_plan(conn: &Connection, project: &str) -> Result<Plan, Error> {
 }
 
 /// An agent's delete: the projects and chats it is the only agent of (a chat with no members by its
-/// turns), the tasks it leaves, and who leads after it. A chat with no project and the agent alone on
+/// turns), and who leads after it. A chat with no project and the agent alone on
 /// its list where another agent spoke stays, as it did before such a chat kept a list (0028).
 pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
     let projects = strings(
@@ -96,20 +91,6 @@ pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
             chats.push(chat);
         }
     }
-    let staying = |chat: &String| !chats.contains(chat);
-    let mut tasks = Vec::new();
-    let mut stmt = conn.prepare(
-        "SELECT number, chat_id FROM tasks WHERE state NOT IN ('done', 'cancelled')
-         AND (owner = ?1 OR (kind = 'person' AND giver = ?1)) ORDER BY number",
-    )?;
-    for row in stmt.query_map([agent], |r| {
-        Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
-    })? {
-        let (task, chat) = row?;
-        if staying(&chat) {
-            tasks.push(task);
-        }
-    }
     let mut leads = Vec::new();
     for (_, team) in teams(conn, agent, &projects, &chats)? {
         if let Some(next) = next_lead(&team, agent).filter(|m| !leads.contains(&m.name)) {
@@ -119,7 +100,6 @@ pub fn agent_plan(conn: &Connection, agent: &str) -> Result<Plan, Error> {
     Ok(Plan {
         chats,
         projects,
-        tasks,
         leads,
     })
 }
@@ -168,30 +148,23 @@ fn next_lead<'a>(team: &'a [Member], agent: &str) -> Option<&'a Member> {
         .flatten()
 }
 
-/// What an agent's removal did: its plan, the turns what followed its tasks starts, and the teams
-/// it left (`chats` with their members now, `projects` by id).
+/// What an agent's removal did: its plan, and the teams it left (`chats` with their members now,
+/// `projects` by id).
 #[derive(Debug, Default)]
 pub struct Removed {
     pub plan: Plan,
-    pub starts: Vec<Start>,
     pub chats: Vec<(String, Vec<Member>)>,
     pub projects: Vec<String>,
 }
 
-/// Removes `agent` in one transaction (0069): its open tasks cancelled (all first, then what
-/// follows them), its queued turns stopped, its waits ended and its pauses gone; it leaves every team
-/// it isn't the only agent of, the next agent leading where it led; its row stays, marked removed.
-/// What it was the only agent of stays for the service to delete, so a second call finds it again.
-pub fn remove_agent(conn: &mut Connection, agent: &str, trace: &str) -> Result<Removed, Error> {
+/// Removes `agent` in one transaction (0069): its queued turns stopped and its pauses gone; it
+/// leaves every team it isn't the only agent of, the next agent leading where it led; its row stays,
+/// marked removed. What it was the only agent of stays for the service to delete, so a second call
+/// finds it again.
+pub fn remove_agent(conn: &mut Connection, agent: &str) -> Result<Removed, Error> {
     let tx = conn.transaction()?;
     let plan = agent_plan(&tx, agent)?;
-    let mut starts = crate::tasks::cancel_all(&tx, &plan.tasks, WHY, trace)?;
     let now = crate::ids::now_us();
-    tx.execute(
-        "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = ?3
-         WHERE agent_id = ?1 AND state IN ('open', 'met')",
-        params![agent, now, WHY],
-    )?;
     tx.execute(
         "DELETE FROM pauses WHERE scope = 'agent' AND target = ?1",
         [agent],
@@ -219,17 +192,14 @@ pub fn remove_agent(conn: &mut Connection, agent: &str, trace: &str) -> Result<R
             }
         }
     }
-    // Last, so a turn what followed queued for it never starts.
     tx.execute(
         "UPDATE turns SET status = 'stopped', why = ?2, ended_ts = ?3, held = NULL
          WHERE agent_id = ?1 AND status IN ('queued', 'waiting_sign_in')",
         params![agent, WHY, now],
     )?;
-    starts.retain(|s| s.agent != agent);
     crate::agents::mark_removed(&tx, agent)?;
     tx.commit()?;
     removed.plan = plan;
-    removed.starts = starts;
     Ok(removed)
 }
 

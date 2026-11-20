@@ -8,22 +8,11 @@ use std::sync::{Arc, Mutex};
 
 mod board;
 pub mod briefing;
-mod checks;
-mod coord;
-mod diag;
-mod friction;
 mod github;
 mod hook;
-mod merge;
-mod message;
 mod person;
-mod plan;
-mod post;
 mod react;
 mod server;
-mod settings;
-mod size;
-mod waiting;
 
 pub use hook::{HOOK_PATH, PUSH_PATH, routes as hook_routes};
 pub use server::{names, service};
@@ -45,12 +34,11 @@ pub struct Caller {
     turn: Arc<Mutex<Option<OnTurn>>>,
 }
 
-/// The engine's turn: its trace, its id and the task it works on.
+/// The engine's turn: its trace and its id.
 #[derive(Clone)]
 pub struct OnTurn {
     pub trace: String,
     pub turn: String,
-    pub task: Option<i64>,
 }
 
 impl Caller {
@@ -62,18 +50,6 @@ impl Caller {
     /// The engine's turn, or the last one it ran.
     pub fn on(&self) -> Option<OnTurn> {
         self.turn.lock().expect("never poisoned").clone()
-    }
-
-    /// Where a held turn writes (0063 I2.3): its worktree, refused, and its own folder and Shared,
-    /// each when it was given it (`turns/workspace.rs`).
-    pub fn place(&self) -> gathr::hold::Place<'_> {
-        let shared = |f: &&PathBuf| f.file_name().is_some_and(|n| n == gathr::folders::SHARED);
-        let beside = self.folders.iter().skip(1);
-        gathr::hold::Place {
-            worktree: &self.cwd,
-            own: beside.clone().find(|f| !shared(f)).map(PathBuf::as_path),
-            shared: beside.clone().find(shared).map(PathBuf::as_path),
-        }
     }
 }
 
@@ -112,8 +88,6 @@ pub struct Pass {
     pub token: String,
     pub briefing: PathBuf,
     pub briefing_chars: usize,
-    /// The role the briefing named, and the version of its lines when it gave them (0066).
-    pub role: Option<(gathr::team::Role, Option<i64>)>,
     turn: Arc<Mutex<Option<OnTurn>>>,
     passes: Arc<Passes>,
 }
@@ -148,14 +122,12 @@ impl Pass {
             token,
             briefing: file,
             briefing_chars: briefing.chars().count(),
-            role: None,
             turn,
             passes: passes.clone(),
         })
     }
 
-    /// The engine's turn from now, so its tool calls are recorded on that turn's trace, and a task
-    /// it gives was given in that turn.
+    /// The engine's turn from now, so its tool calls are recorded on that turn's trace.
     pub fn on_turn(&self, on: OnTurn) {
         *self.turn.lock().expect("never poisoned") = Some(on);
     }

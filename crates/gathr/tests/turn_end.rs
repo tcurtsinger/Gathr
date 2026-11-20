@@ -71,25 +71,6 @@ fn a_notices_result_doesnt_end_the_turn_it_arrives_in() {
     assert_eq!(replies, ["Hi!"], "{history}");
 }
 
-/// A turn that ends well with no reply and no tool run did nothing: it fails, with a reference,
-/// so its task isn't taken for done.
-#[test]
-fn a_turn_that_ends_with_nothing_said_fails() {
-    let data = TempDir::new();
-    let rows = rows();
-    let result = json!({ "type": "result", "subtype": "success", "is_error": false, "num_turns": 1,
-        "result": "", "session_id": "a404d9af-ce93-4b65-bb15-1b300040a9f1",
-        "usage": { "input_tokens": 3, "output_tokens": 0 } });
-    let played = vec![rows[0].clone(), rows[1].clone(), out(result)];
-    let history = one_turn(&data.0, &written(&data.0, played));
-
-    let turn = &history["turns"][0];
-    assert_eq!(turn["status"], "failed", "{history}");
-    let why = turn["why"].as_str().unwrap_or_default();
-    assert!(why.contains("no reply"), "{history}");
-    assert!(turn["ref"].is_string(), "{history}");
-}
-
 /// A turn a restart cut didn't fail: its message reached the agent, which carries on. It reads stopped, cut by
 /// the restart (`end`), and its reference leads to the cut. On no task, it carries on all the same.
 #[test]

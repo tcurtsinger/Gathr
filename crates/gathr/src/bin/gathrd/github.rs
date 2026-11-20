@@ -2,7 +2,6 @@
 //! bringing a PR up to date with its base, made host-side with the service's own `gh` login, so an
 //! engine's sandbox needs none. Each runs fixed arguments in the chat's project's own folder (its
 //! `origin` is the repository), never one an agent names, and nothing passes a command through.
-//! Merging stays `merge` (0043 C4).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,7 +12,6 @@ use rusqlite::OptionalExtension;
 use serde_json::Value;
 
 use crate::chats::Chats;
-use crate::merging::By;
 use crate::tools::Caller;
 
 /// What a run's failed jobs show at most: their logs' last lines, and their first annotations.
@@ -83,87 +81,14 @@ pub async fn failures(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<St
         ));
     }
     let mut said = vec![format!("Failed checks on #{pr}'s head {}:", short(&head))];
-    said.extend(each_failed(&failed, (&repo, None), false).await?);
+    said.extend(each_failed(&failed, &repo).await);
     record(chats, caller, "failures", pr, &head);
     Ok(said.join("\n"))
 }
 
-/// The failed checks at `commit`, as `failures` says them, for a turn woken by CI that failed
-/// there: read for that commit, never for a head pushed since, in `repo` (`owner/name`) or else the
-/// folder's own repository. None when none failed. Any read that fails fails it.
-pub async fn failed_at(
-    (dir, repo): (&Path, Option<&str>),
-    commit: &str,
-) -> Result<Option<String>, String> {
-    let named = repo.unwrap_or("{owner}/{repo}");
-    let at = |what: &str| format!("repos/{named}/commits/{commit}/{what}?per_page=100");
-    let (runs, statuses) = (at("check-runs"), at("status"));
-    // In the shape `gh pr view` gives a PR's checks, so each reads as it does there.
-    let runs = [
-        "api",
-        "--paginate",
-        &runs,
-        "--jq",
-        ".check_runs[] | {name, conclusion: (.conclusion // \"\" | ascii_upcase), detailsUrl: .details_url}",
-    ];
-    let statuses = [
-        "api",
-        "--paginate",
-        &statuses,
-        "--jq",
-        ".statuses[] | {context, state: (.state | ascii_upcase), targetUrl: .target_url}",
-    ];
-    let (runs, statuses) = tokio::join!(gh(&runs, dir), gh(&statuses, dir));
-    let both = format!("{}\n{}", runs?, statuses?);
-    let checks: Vec<Value> = both
-        .lines()
-        .filter_map(|l| serde_json::from_str(l.trim()).ok())
-        .collect();
-    let failed: Vec<&Value> = checks.iter().filter(|c| outcome(c).is_some()).collect();
-    if failed.is_empty() {
-        return Ok(None);
-    }
-    let mut said = vec![format!("Failed checks at {}:", short(commit))];
-    said.extend(each_failed(&failed, (dir, repo), true).await?);
-    Ok(Some(said.join("\n")))
-}
-
-/// A PR's branch, head and the files it changes, for a turn on its task: its head, and the words.
-pub async fn changes(dir: &Path, pr: i64) -> Result<(String, String), String> {
-    let view = view(pr, dir).await?;
-    let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
-    let head = text("headRefOid");
-    let files = view["files"].as_array().cloned().unwrap_or_default();
-    let mut said = vec![format!(
-        "#{pr} is {} at {}, into {}, and changes {}:",
-        text("headRefName"),
-        short(&head),
-        text("baseRefName"),
-        match files.len() {
-            1 => "1 file".to_string(),
-            n => format!("{n} files"),
-        }
-    )];
-    for file in &files {
-        said.push(format!(
-            "- {} (+{} -{})",
-            file["path"].as_str().unwrap_or("?"),
-            file["additions"].as_i64().unwrap_or(0),
-            file["deletions"].as_i64().unwrap_or(0)
-        ));
-    }
-    Ok((head, said.join("\n")))
-}
-
 /// Each failed check: its log's last lines and its annotations when it ran on GitHub Actions, else
-/// its link. `strict`: a log or annotations that can't be read fail it; else the log says so and
-/// the annotations are left out, as the tool's best effort.
-async fn each_failed(
-    failed: &[&Value],
-    (dir, repo): (&Path, Option<&str>),
-    strict: bool,
-) -> Result<Vec<String>, String> {
-    let named = repo.unwrap_or("{owner}/{repo}");
+/// its link. A log that can't be read says so, and annotations that can't are left out.
+async fn each_failed(failed: &[&Value], dir: &Path) -> Vec<String> {
     let mut said = Vec::new();
     for check in failed {
         // A check run names itself and its page; a commit status (`StatusContext`) its context and
@@ -185,18 +110,14 @@ async fn each_failed(
             said.push(format!("Not a GitHub Actions job: see {url}"));
             continue;
         };
-        let mut log = vec!["run", "view", "--job", &job, "--log-failed"];
-        log.extend(repo.map(|r| ["-R", r]).into_iter().flatten());
+        let log = ["run", "view", "--job", &job, "--log-failed"];
         said.push(match gh(&log, dir).await {
             Ok(log) => last_lines(&log),
-            Err(why) if strict => return Err(format!("{name}'s log wasn't read: {why}")),
             Err(why) => format!("Its log wasn't read: {why}"),
         });
-        let path = format!("repos/{named}/check-runs/{job}/annotations");
-        let found = match gh(&["api", &path], dir).await {
-            Ok(found) => found,
-            Err(why) if strict => return Err(format!("{name}'s annotations weren't read: {why}")),
-            Err(_) => continue,
+        let path = format!("repos/{{owner}}/{{repo}}/check-runs/{job}/annotations");
+        let Ok(found) = gh(&["api", &path], dir).await else {
+            continue;
         };
         let found: Value = serde_json::from_str(&found).unwrap_or_default();
         for note in found.as_array().into_iter().flatten().take(ANNOTATIONS) {
@@ -209,12 +130,12 @@ async fn each_failed(
             said.push(cut(&format!("annotation {at}: {message}")));
         }
     }
-    Ok(said)
+    said
 }
 
-/// Brings the PR up to date with its base, as GitHub's "Update branch" does, for its reviewer: only
-/// while its head is still `expected` and it's open into the default branch, so it never updates a
-/// head that moved, a closed PR or one retargeted since. Says the head before and after.
+/// Brings the PR up to date with its base, as GitHub's "Update branch" does: only while its head is
+/// still `expected` and it's open into the default branch, so it never updates a head that moved, a
+/// closed PR or one retargeted since. Says the head before and after.
 pub async fn update(
     chats: &Arc<Chats>,
     caller: &Caller,
@@ -222,15 +143,8 @@ pub async fn update(
     expected: &str,
 ) -> Result<String, String> {
     let repo = project_folder(chats, caller).await?;
-    reviewer(chats, caller, pr).await?;
-    let by = By {
-        chat: caller.chat.clone(),
-        agent: caller.agent.clone(),
-        trace: caller.trace().unwrap_or_else(gathr::ids::trace_id),
-        landed: false,
-    };
     let (head, now, base) =
-        bring_up_to_date(chats, &repo, &by, pr, expected, update_wait()).await?;
+        bring_up_to_date(chats, &repo, caller, pr, expected, update_wait()).await?;
     Ok(match now == head {
         true => format!(
             "Asked GitHub to update #{pr} from {} with {base}: its new head isn't shown yet. Read it again with `pr`.",
@@ -244,13 +158,12 @@ pub async fn update(
     })
 }
 
-/// The update itself, in whoever's place it's made: the reviewer's with `update_pr`, or Gathr's
-/// own, landing the PR (0049). Waits up to `wait` for GitHub to show the new head. The head
-/// before, the head after (the same one when it isn't shown yet) and the base.
-pub async fn bring_up_to_date(
+/// The update itself. Waits up to `wait` for GitHub to show the new head. The head before, the head
+/// after (the same one when it isn't shown yet) and the base.
+async fn bring_up_to_date(
     chats: &Arc<Chats>,
     repo: &Path,
-    by: &By,
+    by: &Caller,
     pr: i64,
     expected: &str,
     wait: Duration,
@@ -307,13 +220,12 @@ pub async fn bring_up_to_date(
         return Err(changed(pr, &last, default));
     }
     let event = Event::point("gathr.github.update")
-        .trace(&by.trace)
+        .trace(&by.trace().unwrap_or_else(gathr::ids::trace_id))
         .chat(&by.chat)
         .ok()
         .attr("pr", pr)
         .attr("requested_head", head.clone())
         .attr("returned_head", now.clone())
-        .attr("landed", by.landed)
         .attr("gen_ai.agent.id", by.agent.clone());
     chats.writer.record(event);
     Ok((head, now, base))
@@ -412,33 +324,6 @@ pub async fn folder_of(chats: &Arc<Chats>, chat: &str) -> Result<Option<PathBuf>
         .await;
     match found {
         Some(Ok(folder)) => Ok(folder.map(PathBuf::from)),
-        Some(Err(e)) => Err(e.to_string()),
-        None => Err("the database didn't answer".into()),
-    }
-}
-
-/// The caller owns a review of the PR in the chat: only its reviewer updates it.
-async fn reviewer(chats: &Arc<Chats>, caller: &Caller, pr: i64) -> Result<(), String> {
-    let (chat, agent) = (
-        caller.chat.clone(),
-        caller.agent.clone().unwrap_or_default(),
-    );
-    let found = chats
-        .writer
-        .call(move |c| {
-            c.query_row(
-                "SELECT EXISTS (SELECT 1 FROM tasks WHERE chat_id = ?1 AND kind = 'review'
-                     AND pr = ?2 AND owner = ?3)",
-                rusqlite::params![chat, pr, agent],
-                |r| r.get::<_, bool>(0),
-            )
-        })
-        .await;
-    match found {
-        Some(Ok(true)) => Ok(()),
-        Some(Ok(false)) => Err(format!(
-            "only #{pr}'s reviewer updates it, and you have no review of it here"
-        )),
         Some(Err(e)) => Err(e.to_string()),
         None => Err("the database didn't answer".into()),
     }

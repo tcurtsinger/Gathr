@@ -1,5 +1,5 @@
-//! Service-side approvals (0029): git pushes and Codex wait checks use the same active-turn
-//! question and response path. Claude wait checks have already passed its native PreToolUse ask.
+//! Service-side approvals (0029): a git push from an agent's worktree asks the person on the
+//! engine's active turn.
 
 use gathr::agents::Approvals;
 use gathr::event::Event;
@@ -9,11 +9,8 @@ use tokio::sync::oneshot;
 use super::Task;
 
 impl Task {
-    /// Full bypasses both asks. A push that isn't risky never asks, and one that is inherits an
-    /// allowed push command; a check does not.
-    /// In Auto a check was the engine's own to judge before the call reached Gathr: Claude Code's
-    /// classifier, Codex's automatic reviewer. Else Claude checks use its native hook, and Codex
-    /// checks ask here before being stored.
+    /// Full never asks. A push that isn't risky never asks, and one that is inherits an allowed
+    /// push command.
     pub(super) async fn ask_service(
         &mut self,
         kind: &'static str,
@@ -21,11 +18,10 @@ impl Task {
         input: Value,
         reply: oneshot::Sender<bool>,
     ) {
-        let native_hook =
-            kind == "check" && self.assigned.as_ref().is_some_and(|a| a.engine == "claude");
-        let approvals = self.assigned.as_ref().map(|a| a.approvals);
-        let full = approvals == Some(Approvals::Full);
-        let auto = kind == "check" && approvals == Some(Approvals::Auto);
+        let full = self
+            .assigned
+            .as_ref()
+            .is_some_and(|a| a.approvals == Approvals::Full);
         let turn = self.turn.as_mut().filter(|t| t.ids.chat == chat);
         let trace = turn.as_ref().map(|t| t.ids.trace.clone());
         let event = Event::point(&format!("gathr.approvals.{kind}"))
@@ -33,31 +29,10 @@ impl Task {
             .chat(chat)
             .attr("gen_ai.agent.id", self.agent.clone())
             .attr("remote", input["remote"].as_str().map(String::from));
-        // One known read-only command alone runs without asking, for every engine (0043 C11).
-        let read_only = input["command"]
-            .as_str()
-            .and_then(gathr::approvals::read_only_check);
-        if let Some(rule) = read_only.filter(|_| kind == "check") {
-            self.record(event.ok().attr("allowed_by", format!("read-only: {rule}")));
-            let _ = reply.send(true);
-            return;
-        }
-        // Claude already asked through its native hook. Keep that path valid even if its
-        // completed turn ended just before the MCP request reached us.
-        if native_hook || auto {
-            let by = match (auto, native_hook) {
-                (true, true) => "Claude Code auto mode",
-                (true, false) => "Codex auto review",
-                _ => "Claude Code PreToolUse",
-            };
-            self.record(event.ok().attr("allowed_by", by));
-            let _ = reply.send(true);
-            return;
-        }
         // An ordinary push goes through (the owner's "Ask only for risky pushes"); `risk` is why
         // the hook found one risky.
         let risk = input["risk"].as_str().map(String::from);
-        if kind == "push" && risk.is_none() {
+        if risk.is_none() {
             self.record(event.ok().attr("allowed_by", "an ordinary push"));
             let _ = reply.send(true);
             return;
@@ -69,7 +44,7 @@ impl Task {
             let _ = reply.send(false);
             return;
         };
-        if full || (kind == "push" && turn.push_allowed) {
+        if full || turn.push_allowed {
             let by = if full {
                 "full"
             } else {
@@ -80,25 +55,13 @@ impl Task {
             return;
         }
         let request_id = format!("gathr-{kind}-{}", gathr::ids::uuid());
-        let (tool, why) = match kind {
-            "check" => (
-                "wait check".to_string(),
-                "Gathr runs this check in sh (Git Bash on Windows), outside the engine sandbox"
-                    .to_string(),
-            ),
-            // 0043: once per project and command; the project's own files didn't name these.
-            "checks" => (
-                "project checks".to_string(),
-                "Gathr runs these on every PR's head in this project, and the project's files don't name them"
-                    .to_string(),
-            ),
-            _ => {
-                let risk = risk.unwrap_or_default();
-                let why = format!("{} {risk}", gathr::approvals::GATHR_ASKS);
-                ("git push".to_string(), why)
-            }
-        };
-        let asked = (tool.clone(), input.clone(), Some(why.to_string()));
+        let why = format!(
+            "{} {}",
+            gathr::approvals::GATHR_ASKS,
+            risk.unwrap_or_default()
+        );
+        let tool = "git push".to_string();
+        let asked = (tool.clone(), input.clone(), Some(why.clone()));
         turn.approvals.insert(request_id.clone(), asked);
         turn.service_approvals
             .insert(request_id.clone(), (kind, reply));

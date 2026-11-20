@@ -6,7 +6,7 @@
 //! removes them: an engine still running in one keeps it until a later sweep.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Router;
@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 use crate::api::{State, Trace};
 use crate::routes::{Answer, Fail, db, known};
 
-/// How long a delete waits for the chat's engines and wait checks to end before removing what it can.
+/// How long a delete waits for the chat's engines to end before removing what it can.
 const EXIT_WAIT: Duration = Duration::from_secs(35);
 
 pub fn routes() -> Router<Arc<State>> {
@@ -45,21 +45,14 @@ async fn archive_chat(
     Ok(Json(json!({ "archived": true, "ended": ended })))
 }
 
-/// Archives the chat: ends its work and starts what follows in other chats. Windows are told by the
-/// caller: a delete tells them only "deleted", so an open chat never passes through Archived.
+/// Archives the chat: ends its work. Windows are told by the caller: a delete tells them only
+/// "deleted", so an open chat never passes through Archived.
 async fn archive_now(s: &Arc<State>, t: &Trace, chat: &str, error: &'static str) -> Answer {
     let (id, trace) = (chat.to_string(), t.0.clone());
-    let follows = Arc::new(Mutex::new(Vec::new()));
-    let found = follows.clone();
     let ended = db(s, t, error, move |c| {
-        let mut ended = archive::archive(c, &id, &trace)?;
-        *found.lock().expect("never poisoned") = std::mem::take(&mut ended.starts);
-        Ok(json!(ended))
+        Ok(json!(archive::archive(c, &id, &trace)?))
     })
     .await?;
-    s.chats.start(std::mem::take(
-        &mut *follows.lock().expect("never poisoned"),
-    ));
     s.chats.end_chat(chat, false).await;
     s.chats.pauses_changed().await;
     crate::chat_state::changed(&s.chats, chat, &t.0).await;
@@ -119,7 +112,6 @@ pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>
     // Nothing may still run in its worktrees when they're removed.
     let ended = async {
         s.chats.end_chat(&chat, true).await;
-        s.chats.checks_ended(&chat).await;
     };
     let exited = tokio::time::timeout(EXIT_WAIT, ended).await;
     s.chats.pauses_changed().await;
@@ -133,7 +125,7 @@ pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>
     let mut left = remove_files(&s, &chat, project, files).await;
     left.extend(crate::cleanup::sweep(&s.chats, Some(&chat)).await);
     if exited.is_err() {
-        left.insert(0, "An engine or wait check is still running".into());
+        left.insert(0, "An engine is still running".into());
     }
     let mut event = Event::point("gathr.chat.files")
         .trace(&t.0)

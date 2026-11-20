@@ -15,15 +15,13 @@ pub struct Facts {
     title: String,
     name: Option<String>,
     /// Named in a chat of two or more only.
-    pub role: Option<Role>,
+    role: Option<Role>,
     others: Vec<String>,
     team: bool,
     /// The agent's folder and the project it's a worktree of.
     worktree: Option<(PathBuf, String)>,
     /// The agent's own folder and its project's Shared (0034).
     own: Option<(PathBuf, PathBuf)>,
-    /// A room chat, briefed with `ROOM` instead of the old team's tools and rules.
-    room: bool,
 }
 
 pub fn facts(
@@ -73,7 +71,6 @@ pub fn facts(
         team: !members.is_empty(),
         worktree,
         own,
-        room: gathr::room::is_room(conn, chat)?,
     })
 }
 
@@ -137,9 +134,6 @@ pub fn text(facts: &Facts) -> String {
         "{who} in Gathr, in the chat \"{}\"{role}.",
         facts.title
     )];
-    if let Some(role) = facts.role.filter(|_| !facts.room) {
-        lines.extend(gathr::roles::lines(role).into_iter().map(String::from));
-    }
     if !facts.others.is_empty() {
         // A team chat's turn opens with what the chat said since the agent's last turn (0081).
         let (lead, heard) = match facts.team {
@@ -161,15 +155,6 @@ pub fn text(facts: &Facts) -> String {
             folder.display()
         ));
     }
-    if facts.worktree.is_some() && !facts.room {
-        // Gathr reaches GitHub with its own sign-in, which an engine's sandbox may not have (0046).
-        lines.push(
-            "For this project's PRs use Gathr's pr, ci_failures and update_pr, not your own gh: Gathr asks \
-             GitHub for you. Gathr merges a PR once its review is done and its checks passed; by hand, \
-             merge only with merge."
-                .to_string(),
-        );
-    }
     if let Some((own, shared)) = &facts.own {
         lines.push(format!(
             "Your own folder is \"{}\": keep test data, builds and notes there. The team's shared \
@@ -189,34 +174,9 @@ pub fn text(facts: &Facts) -> String {
         "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
         off().join(", ")
     );
-    if facts.room {
-        if facts.team && !facts.others.is_empty() {
-            lines.push(ROOM_TEAM.to_string());
-        }
-        lines.extend([ROOM.to_string(), unavailable]);
-        return lines.join("\n");
+    if facts.team && !facts.others.is_empty() {
+        lines.push(ROOM_TEAM.to_string());
     }
-    lines.extend([
-        // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
-        "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
-         earlier messages and other agents' replies; give_task, edit_task, finish_task, list_tasks, \
-         cancel_task and restart_task for tasks; message to reach one member of a team chat now; react to give \
-         the person's message or another agent's your thumbs-up, by its id; post to choose where your words this turn \
-         show in a team chat; size, for the Supervisor, to record the person's ask as \
-         repair or new; plan, for the Supervisor, to write the plan for a new ask; wait and \
-         end_wait instead of polling in a loop; waiting for what this chat waits on and where each agent \
-         stands; diag for Gathr's own record of what went wrong (health, failures, trace with a reference); \
-         ask_person for anything you need from the person."
-            .to_string(),
-        "End a task turn with finish_task. Assign work with give_task and ask the person with ask_person. Writing it in chat does not create a task."
-            .to_string(),
-        "To reach a member of a team chat, write @Name in your words: they get them when your turn ends. message \
-         reaches one now, while you work. Work to be done and heard back on is a task."
-            .to_string(),
-        "When something in Gathr gets in your way (a tool that refuses wrongly, a lost message, a wrong status), say so \
-         with report_friction, once for each thing."
-            .to_string(),
-        unavailable,
-    ]);
+    lines.extend([ROOM.to_string(), unavailable]);
     lines.join("\n")
 }

@@ -9,20 +9,15 @@ mod api;
 mod app_update;
 mod archive;
 mod board;
-mod changes;
 mod chat_state;
 mod chats;
-mod check_runs;
 mod cleanup;
-mod coord;
 mod copies;
 mod deletes;
 mod github;
-mod landing;
 mod likes;
 mod logs;
 mod mentions;
-mod merging;
 mod models;
 mod pauses;
 mod projects;
@@ -118,12 +113,11 @@ fn start(
     let conn =
         db::open(&data.db()).map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let early_lines = crash_log.take();
-    gathr::tasks::touched::watch(&conn)
-        .map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
+    chat_state::watch(&conn).map_err(|e| Error::Other(format!("the database didn't open: {e}")))?;
     let live = tokio::sync::broadcast::channel(4096).0;
     let states = Arc::new(chat_state::States::new(live.clone()));
-    let (moved, quiet) = tokio::sync::mpsc::unbounded_channel();
-    let after = coord::live_tasks(live.clone(), states.clone(), moved);
+    let (moved, changed) = tokio::sync::mpsc::unbounded_channel();
+    let after = chat_state::after_write(moved);
     let writer = Writer::start(conn, crash_log.clone(), after);
     logs::install(writer.clone(), crash_log.clone());
     if !early_lines.is_empty() {
@@ -135,7 +129,7 @@ fn start(
     let served = runtime.block_on(serve(
         data,
         (writer, live, states),
-        quiet,
+        changed,
         port,
         ui,
         early_lines.len(),
@@ -189,7 +183,7 @@ async fn serve(
         tokio::sync::broadcast::Sender<serde_json::Value>,
         Arc<chat_state::States>,
     ),
-    quiet: tokio::sync::mpsc::UnboundedReceiver<String>,
+    changed: tokio::sync::mpsc::UnboundedReceiver<String>,
     port: Option<u16>,
     ui: PathBuf,
     early_lines: usize,
@@ -245,13 +239,12 @@ async fn serve(
     );
     writer.record(health_event(data, port, early_lines));
     chats.pick_account().await;
-    coord::recover(&chats).await;
-    check_runs::recover(&chats).await;
+    recover(&chats).await;
     // Before the queues fill: what a pause holds stays held after a restart.
     chats.pauses_changed().await;
     chats.take_over().await;
-    tokio::spawn(coord::quiet::run(chats.clone(), quiet));
-    tokio::spawn(coord::run(chats.clone()));
+    tokio::spawn(chat_state::run(chats.clone(), changed));
+    tokio::spawn(cleanup::every(chats.clone()));
     tokio::spawn(updates::run(updates.clone(), chats.clone()));
     tokio::spawn(updates::run(codex_updates.clone(), chats.clone()));
     app.started(started);
@@ -309,6 +302,23 @@ async fn serve(
     }
     writer.close().await;
     Ok(app.handing_over())
+}
+
+/// At start, before the turns left waiting are taken over: turns cut off by the stop carry on. When
+/// that fails, they stay running for the next start, and the error has a reference.
+async fn recover(chats: &chats::Chats) {
+    let recovered = chats.writer.call(gathr::carry::recover).await;
+    let event = Event::point("gathr.turn.recover");
+    match recovered {
+        Some(Ok(n)) => chats.writer.record(event.ok().attr("gathr.turn.cut", n)),
+        Some(Err(e)) => chats.writer.record(
+            event
+                .trace(&ids::trace_id())
+                .error("sqlite")
+                .attr("why", e.to_string()),
+        ),
+        None => {}
+    }
 }
 
 /// The room's dev services and their UIs (AGENTS.md): a service with no port asked never keeps one

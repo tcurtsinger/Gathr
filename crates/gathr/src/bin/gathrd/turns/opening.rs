@@ -20,14 +20,12 @@ impl Task {
             pass.on_turn(crate::tools::OnTurn {
                 trace: ids.trace.clone(),
                 turn: ids.turn.clone(),
-                task: ids.task,
             });
         }
         // What Gathr gave the turn, in characters with a rough token estimate (0020: the engines
         // report totals only, so the parts are Gathr's own count, labelled an estimate).
         let briefing = self.pass.as_ref().map_or(0, |p| p.briefing_chars);
         let estimate = |chars: usize| chars.div_ceil(4);
-        let role = self.pass.as_ref().and_then(|p| p.role);
         self.record(
             Event::point(&format!("invoke_agent {}", self.engine_name()))
                 .attr("gathr.context.briefing.chars", briefing)
@@ -35,8 +33,6 @@ impl Task {
                 .attr("gathr.context.ask.chars", ask_chars)
                 .attr("gathr.context.ask.tokens_estimate", estimate(ask_chars))
                 .attr("gathr.tools.off", crate::tools::briefing::off())
-                .attr("gathr.role", role.map(|(r, _)| r.as_str()))
-                .attr("gathr.role.version", role.and_then(|(_, v)| v))
                 .trace(&ids.trace)
                 .chat(&ids.chat)
                 .span("start", &span)
@@ -66,14 +62,10 @@ impl Task {
             service_approvals: HashMap::new(),
             push_allowed: false,
             stopping: false,
-            carried: false,
-            waits: None,
-            stop_why: None,
             save_failed: None,
             signed_out: false,
             tools_started: 0,
             engine_began: false,
-            said: false,
             compacted: false,
             restore_pending: false,
             limited: false,
@@ -98,7 +90,6 @@ impl Task {
             turn: ulid(now_us()),
             trace: gathr::ids::trace_id(),
             agent: self.agent.clone(),
-            task: None,
             answers: None,
             person: true,
         };
@@ -112,7 +103,7 @@ impl Task {
                     &row.chat,
                     &row.turn,
                     &row.trace,
-                    (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                    (row.agent.as_deref(), row.answers.as_deref()),
                     opened,
                 )?;
                 store::move_message(conn, &id, &row.turn)

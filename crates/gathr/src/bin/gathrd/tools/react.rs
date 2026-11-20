@@ -51,7 +51,9 @@ impl Tools {
         );
         let giver = from.clone();
         let (added, checked) = self
-            .db(move |c| {
+            .chats
+            .writer
+            .call(move |c| {
                 let tx = c.transaction()?;
                 gathr::archive::refuse_archived(&tx, &chat)?;
                 let asked = match asked.as_str() {
@@ -62,9 +64,11 @@ impl Tools {
                 let added = gathr::reactions::add(&tx, &chat, &asked, &giver, &on.trace)?;
                 let checked = gathr::open_check::checks(&tx, &on.turn, &added.message)?;
                 tx.commit()?;
-                Ok((added, checked))
+                Ok::<_, gathr::Error>((added, checked))
             })
-            .await?;
+            .await
+            .unwrap_or_else(|| Err(gathr::Error::Other("the database didn't answer".into())))
+            .map_err(|e| e.to_string())?;
         // Named by the message it is on: `person`, `answer`, or Gathr's copy, stands for that one.
         let message = &added.message;
         if !added.new {

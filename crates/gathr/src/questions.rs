@@ -1,6 +1,5 @@
-//! Questions an agent of a room chat asks the person (`ask_person`): open until the person answers with
-//! one of its choices, their own words or both, and the answer starts the asking agent's turn. Older
-//! chats keep theirs as tasks (`tasks::person`).
+//! Questions an agent asks the person (`ask_person`): open until the person answers with one of its
+//! choices, their own words or both, and the answer starts the asking agent's turn.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
@@ -89,7 +88,7 @@ pub fn answer(
         said.join(". ")
     );
     // The person's own act, as a pick of several agents is: a pause never holds the turn it opens.
-    let start = Start::queue(conn, (chat, agent), (None, None), Opened::Picked, text)?;
+    let start = Start::queue(conn, (chat, agent), None, Opened::Picked, text)?;
     let sql = format!("{SELECT} WHERE q.id = ?1");
     let answered = conn.prepare_cached(&sql)?.query_row([id], row)?;
     Ok((answered, start))

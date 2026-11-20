@@ -2,16 +2,77 @@
 //! person. Worked out on the writer's thread, so changes go out in the order they happened, and
 //! sent live as `chat_state` only when it differs from what the windows were last told.
 
-use std::collections::HashMap;
-use std::sync::Mutex;
+use std::collections::{BTreeSet, HashMap};
+use std::sync::{Arc, Mutex};
 
 use gathr::Error;
 use gathr::event::Event;
-use gathr::ids::now_us;
 use gathr::store::{self, ChatState};
 use rusqlite::Connection;
 use serde_json::{Value, json};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
+
+/// Notes, on the writer's connection, each chat whose state a write may have changed: a turn added
+/// or moved, a question asked or answered. Temporary triggers note it in the same transaction, so
+/// whichever code made the change, it's noted, and a change rolled back notes nothing.
+pub fn watch(conn: &Connection) -> Result<(), Error> {
+    conn.execute_batch(
+        "CREATE TEMP TABLE touched (chat_id TEXT PRIMARY KEY);
+         CREATE TEMP TRIGGER turn_added AFTER INSERT ON turns
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER turn_moved AFTER UPDATE OF status ON turns
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER question_asked AFTER INSERT ON questions
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;
+         CREATE TEMP TRIGGER question_answered AFTER UPDATE OF answered_ts ON questions
+             BEGIN INSERT OR IGNORE INTO touched VALUES (NEW.chat_id); END;",
+    )?;
+    Ok(())
+}
+
+/// Runs after each write: names each chat it noted on `changed`, to have its state worked out again.
+pub fn after_write(
+    changed: mpsc::UnboundedSender<String>,
+) -> impl FnMut(&mut Connection) + Send + 'static {
+    move |conn| {
+        let taken = (|| -> Result<Vec<String>, Error> {
+            let mut stmt = conn.prepare_cached("SELECT chat_id FROM temp.touched")?;
+            let chats: Vec<String> = stmt
+                .query_map([], |r| r.get(0))?
+                .collect::<Result<_, _>>()?;
+            if !chats.is_empty() {
+                conn.execute("DELETE FROM temp.touched", [])?;
+            }
+            Ok(chats)
+        })();
+        match taken {
+            Ok(chats) => chats.into_iter().for_each(|chat| {
+                let _ = changed.send(chat);
+            }),
+            Err(e) => {
+                let event = Event::point("gathr.chat.state").trace(&gathr::ids::trace_id());
+                let _ = event
+                    .error("sqlite")
+                    .attr("why", e.to_string())
+                    .insert(conn);
+            }
+        }
+    }
+}
+
+/// Works out each chat the writer names, for as long as the service runs.
+pub async fn run(chats: Arc<crate::chats::Chats>, mut named: mpsc::UnboundedReceiver<String>) {
+    while let Some(chat) = named.recv().await {
+        // One write can name a chat many times over.
+        let mut all = BTreeSet::from([chat]);
+        while let Ok(chat) = named.try_recv() {
+            all.insert(chat);
+        }
+        for chat in all {
+            changed(&chats, &chat, &gathr::ids::trace_id()).await;
+        }
+    }
+}
 
 /// Tells every window when the chat started or stopped working, or needing the person. A failure
 /// is recorded on `trace`, so the turn's or the request's reference finds it.
@@ -32,9 +93,8 @@ pub struct States {
 
 #[derive(Default)]
 struct Known {
-    /// Turns with an approval waiting, each with its chat and when its approvals began waiting:
-    /// approvals are in no table.
-    asking: HashMap<String, (String, i64)>,
+    /// Turns with an approval waiting, each with its chat: approvals are in no table.
+    asking: HashMap<String, String>,
     /// What the windows were last told of each chat that works, needs the person or has a mark.
     sent: HashMap<String, ChatState>,
 }
@@ -47,34 +107,19 @@ impl States {
         }
     }
 
-    /// Notes whether the turn has an approval waiting. What the chat waits on may have changed.
+    /// Notes whether the turn has an approval waiting.
     pub fn asking(&self, turn: &str, chat: &str, open: bool) {
         let mut known = self.known.lock().expect("never poisoned");
-        let was = known.asking.contains_key(turn);
-        // The time stays while one stays open; one asked after an answer is new (0058).
         if open {
-            let asked = known.asking.entry(turn.to_string());
-            asked.or_insert_with(|| (chat.to_string(), now_us()));
+            known.asking.insert(turn.to_string(), chat.to_string());
         } else {
             known.asking.remove(turn);
         }
-        if was != open {
-            let _ = self.live.send(json!({ "type": "waiting", "chat": chat }));
-        }
-    }
-
-    /// The chat's turns with an approval waiting, each with when its approvals began waiting.
-    pub fn asking_in(&self, chat: &str) -> HashMap<String, i64> {
-        let known = self.known.lock().expect("never poisoned");
-        let turns = known.asking.iter().filter(|(_, (c, _))| c == chat);
-        turns
-            .map(|(turn, (_, since))| (turn.clone(), *since))
-            .collect()
     }
 
     /// Whether an approval waits in the chat.
     fn asked(known: &Known, chat: &str) -> bool {
-        known.asking.values().any(|(c, _)| c == chat)
+        known.asking.values().any(|c| c == chat)
     }
 
     /// Adds the approvals waiting to the list's rows, as `chat_state` counts them.

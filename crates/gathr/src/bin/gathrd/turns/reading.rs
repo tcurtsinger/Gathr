@@ -11,8 +11,6 @@ use serde_json::{Value, json};
 
 use super::{OpenTool, Queued, Task, login_stamp};
 
-const EMPTY: &str = "the engine ended the turn with no reply and no tool call";
-
 /// A tool message's body: `input` only when the step kept what it ran (0041).
 fn tool_body(
     tool: &str,
@@ -131,7 +129,6 @@ impl Task {
         ) && let Some(turn) = self.turn.as_mut()
         {
             turn.progress_at = std::time::Instant::now();
-            turn.said = true;
         }
         // A thought is over once words or a tool follow, whether or not its end was said. One
         // whose start is still held was over before anyone could have seen it.
@@ -165,23 +162,18 @@ impl Task {
                 self.check_mode(&permission_mode);
                 let account = self.assigned.as_ref().map(|a| a.account.clone());
                 let (account, agent) = (account.unwrap_or_default(), self.agent.clone());
-                let task = self.session.init(&session_id);
-                let turn = self.turn.as_ref().map(|t| t.ids.turn.clone());
+                self.session.init(&session_id);
                 let saved = self
                     .chats
                     .writer
                     .call(move |conn| {
-                        let (agent, id) = (agent.as_deref(), &session_id);
-                        store::set_engine_session(conn, &chat, agent, id, &account)?;
-                        // The conversation the turn ran in: what it hears next counts from it (0084).
-                        let ran = "UPDATE turns SET session_id = ?2 WHERE id = ?1";
-                        conn.execute(ran, rusqlite::params![turn, id])?;
-                        match (task, agent) {
-                            (Some(task), Some(agent)) => {
-                                gathr::sessions::set(conn, task, agent, &chat, &account, id)
-                            }
-                            _ => Ok(()),
-                        }
+                        store::set_engine_session(
+                            conn,
+                            &chat,
+                            agent.as_deref(),
+                            &session_id,
+                            &account,
+                        )
                     })
                     .await;
                 if let Some(Err(e)) = saved {
@@ -345,19 +337,18 @@ impl Task {
     }
 
     /// A streamed piece of the running turn's words as it is sent: none while what came may still be
-    /// a REPLY line in a room chat (`room::start`). The piece that tells sends all that came, past that
-    /// line, and from then each piece names the message the words sit under, as they are saved.
+    /// a REPLY line (`room::start`). The piece that tells sends all that came, past that line, and
+    /// from then each piece names the message the words sit under, as they are saved.
     async fn reply_delta(&mut self, text: String) -> Option<String> {
-        let room = self.assigned.as_ref().is_some_and(|a| a.room);
         let turn = self.turn.as_mut()?;
         turn.partial.push_str(&text);
         if turn.reply.is_some() {
             return Some(text);
         }
-        let skip = match room.then(|| gathr::room::start(&turn.partial)) {
-            Some(gathr::room::Start::Undecided) => return None,
-            Some(gathr::room::Start::Reply(rest)) => Some(turn.partial.len() - rest.len()),
-            _ => None,
+        let skip = match gathr::room::start(&turn.partial) {
+            gathr::room::Start::Undecided => return None,
+            gathr::room::Start::Reply(rest) => Some(turn.partial.len() - rest.len()),
+            gathr::room::Start::Main => None,
         };
         let id = turn.ids.turn.clone();
         let to = match skip {
@@ -581,12 +572,6 @@ impl Task {
             return self.try_next().await;
         }
         self.idle_since = std::time::Instant::now();
-        // Nothing said and no tool run is no work done: its task isn't taken for done (G167).
-        let empty = end.ok && !turn.said && !turn.engine_began && !turn.stopping;
-        // A like asks the agent to end without replying when it has nothing to add (0057): that is done,
-        // as is any turn in a room chat that has nothing to add.
-        let room = self.assigned.as_ref().is_some_and(|a| a.room);
-        let empty = empty && !room && !self.opened_by_like(&turn.ids.turn).await;
         // A compaction that ends without one failed, whatever the engine said (K4).
         let compaction = self.compactions.contains(&turn.ids.turn);
         let not_compacted = compaction && !turn.compacted && !turn.stopping && !turn.signed_out;
@@ -595,21 +580,18 @@ impl Task {
             _ if turn.signed_out => "waiting_sign_in",
             _ if turn.stopping => "stopped",
             _ if not_compacted => "failed",
-            _ if empty => "failed",
             _ if end.ok => "done",
             _ => "failed",
         };
         let why = match status {
             "failed" if turn.save_failed.is_some() => turn.save_failed.clone(),
             "failed" if not_compacted => Some(self.not_compacted(&turn.ids, &end).await),
-            "failed" if empty => Some(EMPTY.to_string()),
             "failed" => Some(
                 end.message
                     .clone()
                     .or(end.reason.clone())
                     .unwrap_or_else(|| end.subtype.clone()),
             ),
-            "stopped" => turn.stop_why.clone(),
             _ => None,
         };
         let mut event = Event::point(&format!("invoke_agent {}", self.engine_name()))
@@ -654,15 +636,8 @@ impl Task {
                 self.refused = Some((folder, stamp, std::time::Instant::now()));
             }
         }
-        if status == "failed" {
-            self.tell_again(&turn.ids).await;
-        }
         self.compaction_ended(&turn.ids.turn);
-        match (status == "stopped", turn.waits, turn.carried) {
-            (true, Some(waits), _) => self.end_waiting(&turn.ids, why.as_deref(), waits).await,
-            (true, None, true) => self.end_carried(&turn.ids, why.as_deref()).await,
-            _ => self.set_turn(&turn.ids, status, why.as_deref()).await,
-        }
+        self.set_turn(&turn.ids, status, why.as_deref()).await;
         let ids = turn.ids;
         let ended = crate::mentions::Ended {
             chat: ids.chat,

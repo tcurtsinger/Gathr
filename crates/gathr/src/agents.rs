@@ -179,6 +179,16 @@ pub fn list(conn: &Connection) -> Result<Vec<Agent>, Error> {
     Ok(agents)
 }
 
+/// An agent's name, or "a deleted agent".
+pub fn name_of(conn: &Connection, agent: &str) -> Result<String, Error> {
+    let name: Option<String> = conn
+        .query_row("SELECT name FROM agents WHERE id = ?1", [agent], |r| {
+            r.get(0)
+        })
+        .optional()?;
+    Ok(name.unwrap_or_else(|| "a deleted agent".to_string()))
+}
+
 pub fn get(conn: &Connection, id: &str) -> Result<Option<Agent>, Error> {
     let found = conn
         .query_row(&format!("{COLUMNS} AND id = ?1"), [id], row)
@@ -298,13 +308,6 @@ pub fn update(conn: &Connection, agent: &Agent, removing: &HashSet<String>) -> S
 pub fn name(conn: &Connection, id: &str) -> Result<Option<String>, Error> {
     let sql = "SELECT name FROM agents WHERE id = ?1";
     Ok(conn.query_row(sql, [id], |r| r.get(0)).optional()?)
-}
-
-/// Whether the agent was removed (0069).
-pub fn is_removed(conn: &Connection, id: &str) -> Result<bool, Error> {
-    let sql = "SELECT removed_ts IS NOT NULL FROM agents WHERE id = ?1";
-    let found = conn.query_row(sql, [id], |r| r.get(0)).optional()?;
-    Ok(found.unwrap_or(false))
 }
 
 /// A removed agent, as the window names its old messages and draws its face on them.

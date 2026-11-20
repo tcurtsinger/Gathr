@@ -36,10 +36,8 @@ The facts about building, checking, releasing and diagnosing Gathr. The rules ar
   - `diag health`: the service now, the database, the last start-up check and the crash log. It answers even when the service or the database won't start.
   - `diag trace <ref>`: everything behind an error's reference, in order.
   - `diag failures --since 24h`: failures grouped by cause, with references.
-  - `diag waiting --chat <id>`: what the chat waits on, each line with who can end it and since when.
   - `diag query "<sql>"`: read-only SQL, up to 1,000 rows. Use the `event_log` view: it shows `attrs` as JSON, a readable `time` and each row's `ref`.
-  - `diag words --since 7d`: turns by the words that opened them, each kind's no-tool turns, refused reports and missing reports.
-  - `diag threads --chat <id>`: each turn, task and line's main message, and the fact that tied it or why none did.
+  - `diag words --since 7d`: turns by the words that opened them, and each kind's no-tool turns.
   - `diag turn <ref> --raw`: the turns behind a reference, with every engine frame in and out of each, redacted.
   - `diag bundle`: health, a day's failures, recent events and engine frames (no bodies) in one file under `<data>/bundles`.
   - `diag health` also shows each account's sign-in state, the messages held on the chats' account, and each chat that works or needs the person.

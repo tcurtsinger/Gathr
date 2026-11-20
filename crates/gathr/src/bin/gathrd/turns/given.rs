@@ -1,7 +1,7 @@
-//! Turns Gathr starts for an agent (0010): a task's, a wake-up or a hear-back. Its ask is Gathr's
-//! message, never the person's, and it queues behind what the agent is doing, never steered into a
-//! turn under way. Every start passes the gate. Both are saved already, with the change that
-//! called for them.
+//! Turns Gathr starts for an agent (0010): a check, a last word, a carry-on, the person's answer to
+//! a question. Its ask is Gathr's message, never the person's, and it queues behind what the agent
+//! is doing, never steered into a turn under way. Every start passes the gate. Both are saved
+//! already, with the change that called for them.
 
 use gathr::event::Event;
 use gathr::store::Start;
@@ -16,7 +16,6 @@ impl Task {
             turn: start.turn,
             trace: start.trace,
             agent: Some(start.agent),
-            task: start.task,
             answers: start.answers,
             person: false,
         };
@@ -28,14 +27,9 @@ impl Task {
         let event = Event::point("gathr.chat.give")
             .trace(&ids.trace)
             .chat(&ids.chat);
-        let event = match ids.task {
-            Some(task) => event.task(task),
-            None => event,
-        };
-        // The turn, as saved, goes out before its message: a window tells a task's brief by its
-        // turn's task, and drew it as a line until the turn came.
+        // The turn, as saved, goes out before its message.
         let saved = json!({ "type": "turn", "turn": ids.turn, "status": "queued",
-            "agent": ids.agent, "task": ids.task, "answers": ids.answers });
+            "agent": ids.agent, "answers": ids.answers });
         self.publish_turn(&ids, saved).await;
         self.publish(&ids.chat, json!({ "type": "message", "message": message }));
         self.record(
@@ -54,40 +48,15 @@ impl Task {
     }
 
     /// Why a turn may not start now (0010's gate), or `None`: its chat is archived or deleted
-    /// (F11), its task was cancelled while it was queued, or its task may not start. Pauses and
-    /// usage holds keep it queued instead (`holds`).
+    /// (F11). Pauses and usage holds keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
-        let (chat, task, turn) = (ids.chat.clone(), ids.task, ids.turn.clone());
+        let chat = ids.chat.clone();
         let asked = self
             .chats
             .writer
-            .call(move |conn| why_not(conn, &chat, task, &turn))
+            .call(move |conn| why_not(conn, &chat))
             .await;
         unread(asked)
-    }
-
-    /// The turn as the runner takes it to send it (0059), with its ask read again while its task
-    /// hasn't started: what its giver's edit made it, which the queue keeps for a turn the engine
-    /// refuses. The gate is asked again in the same write: a cancel, or an edit that made the task
-    /// wait, since the gate is why the turn must be dropped.
-    pub(super) async fn ask_now(&mut self, next: &Queued) -> Result<Queued, String> {
-        let (chat, task, turn) = (next.ids.chat.clone(), next.ids.task, next.ids.turn.clone());
-        let read = self
-            .chats
-            .writer
-            .call(move |conn| match why_not(conn, &chat, task, &turn)? {
-                Some(why) => Ok(Err(why)),
-                None => Ok(Ok(gathr::tasks::claim_ask(conn, &turn)?)),
-            })
-            .await;
-        let ask = read_or_why(read)??.unwrap_or_else(|| next.text.clone());
-        if let Some(queued) = self.queue.iter_mut().find(|q| q.ids.turn == next.ids.turn) {
-            queued.text.clone_from(&ask);
-        }
-        Ok(Queued {
-            text: ask,
-            ..next.clone()
-        })
     }
 
     /// Drops a turn its gate refuses, wherever it's asked: it ends `stopped` with why, live.
@@ -100,12 +69,12 @@ impl Task {
     /// so archiving can't fall between them (F1): `None` once saved, else why it may not wait,
     /// and the turn isn't touched. A turn that ended meanwhile keeps its end.
     pub(super) async fn hold(&self, ids: &Ids, status: &'static str) -> Option<String> {
-        let (chat, task, turn) = (ids.chat.clone(), ids.task, ids.turn.clone());
+        let (chat, turn) = (ids.chat.clone(), ids.turn.clone());
         let asked = self
             .chats
             .writer
             .call(move |conn| {
-                if let Some(why) = why_not(conn, &chat, task, &turn)? {
+                if let Some(why) = why_not(conn, &chat)? {
                     return Ok(Some(why));
                 }
                 let saved = gathr::store::set_turn(conn, &turn, status, None)?;
@@ -116,32 +85,19 @@ impl Task {
     }
 }
 
-fn why_not(
-    conn: &mut rusqlite::Connection,
-    chat: &str,
-    task: Option<i64>,
-    turn: &str,
-) -> Result<Option<String>, gathr::Error> {
+fn why_not(conn: &mut rusqlite::Connection, chat: &str) -> Result<Option<String>, gathr::Error> {
     match gathr::archive::archived(conn, chat) {
-        Ok(Some(_)) => return Ok(Some("its chat is archived".to_string())),
-        Err(gathr::Error::Refused(_)) => return Ok(Some("its chat was deleted".into())),
-        Err(e) => return Err(e),
-        Ok(None) => {}
+        Ok(Some(_)) => Ok(Some("its chat is archived".to_string())),
+        Err(gathr::Error::Refused(_)) => Ok(Some("its chat was deleted".into())),
+        Err(e) => Err(e),
+        Ok(None) => Ok(None),
     }
-    if let Some(why) = gathr::tasks::stop_why(conn, turn)? {
-        return Ok(Some(why));
-    }
-    task.map_or(Ok(None), |task| gathr::tasks::may_start(conn, task))
 }
 
 fn unread(asked: Option<Result<Option<String>, gathr::Error>>) -> Option<String> {
-    read_or_why(asked).unwrap_or_else(Some)
-}
-
-fn read_or_why<T>(asked: Option<Result<T, gathr::Error>>) -> Result<T, String> {
     match asked {
-        Some(Ok(read)) => Ok(read),
-        Some(Err(e)) => Err(format!("its chat or task wasn't read: {e}")),
-        None => Err("its chat or task wasn't read: the database didn't answer".into()),
+        Some(Ok(read)) => read,
+        Some(Err(e)) => Some(format!("its chat wasn't read: {e}")),
+        None => Some("its chat wasn't read: the database didn't answer".into()),
     }
 }

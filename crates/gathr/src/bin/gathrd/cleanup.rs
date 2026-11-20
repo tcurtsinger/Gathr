@@ -1,13 +1,12 @@
 //! Gathr removes what it made for agents' work (0034): an engine's temporary files once it has
 //! closed, a chat's worktrees once it's archived (Restore checks them out again from their
-//! branches, which stay), and all of its folders once it's deleted. A task's finished PR also
-//! removes its recorded worktrees and local branch, once clean and no longer in use (0043 C10).
-//! Never a folder a running engine or wait check uses, nor, while the chat is only archived, a
-//! worktree with changes not committed: each is skipped, recorded once with a reference, and tried
-//! again at the next sweep, which runs with the service's looks (0010).
+//! branches, which stay), and all of its folders once it's deleted. Never a folder a running engine
+//! uses, nor, while the chat is only archived, a worktree with changes not committed: each is
+//! skipped, recorded once with a reference, and tried again at the next sweep, every two minutes.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use gathr::event::Event;
 use gathr::folders::{self, Clean};
@@ -16,8 +15,22 @@ use gathr::worktree;
 
 use crate::chats::Chats;
 
-mod prs;
-pub use prs::queue;
+/// How often the sweep runs, unless `GATHR_WAIT_EVERY_MS` says (dev and tests only).
+const EVERY: Duration = Duration::from_secs(120);
+
+/// Sweeps now, then every two minutes, for as long as the service runs.
+pub async fn every(chats: Arc<Chats>) {
+    let ms = std::env::var("GATHR_WAIT_EVERY_MS").ok();
+    let every = ms
+        .and_then(|ms| ms.parse().ok())
+        .map_or(EVERY, Duration::from_millis);
+    let mut tick = tokio::time::interval(every);
+    tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        tick.tick().await;
+        sweep(&chats, None).await;
+    }
+}
 
 /// One sweep at a time, and none while an engine's folders are made: an archive's and the looks'
 /// would remove the same folder at once, and a sweep could remove a folder made again meanwhile.
@@ -84,14 +97,11 @@ async fn run(chats: &Arc<Chats>, chat: Option<&str>, paths: Option<Vec<PathBuf>>
         }
         None => return Vec::new(),
     };
-    let env = gathr::run::fresh().await;
-    let mut left = match paths {
-        Some(_) => Vec::new(),
-        None => prs::sweep(chats, &env, chat).await,
-    };
     if found.is_empty() {
-        return left;
+        return Vec::new();
     }
+    let env = gathr::run::fresh().await;
+    let mut left = Vec::new();
     for clean in found {
         // Not on the chat's own record: a delete removes that, and the reference must still find it.
         let event = |name: &str| {
@@ -155,15 +165,8 @@ async fn still_due(chats: &Chats, path: &Path) -> Result<bool, String> {
 /// Why one folder can't go yet: the error kind and the reason.
 async fn blocked(chats: &Chats, clean: &Clean, env: &Vars) -> Result<(), (&'static str, String)> {
     let path = &clean.path;
-    let checked = clean.kind != "scratch"
-        && (chats.checking().into_iter()).any(|(chat, agent)| {
-            clean.chat.as_ref() == Some(&chat) && clean.agent.as_ref() == Some(&agent)
-        });
-    if checked || chats.passes.using(path) {
-        let why = format!(
-            "{} is in use by a running engine or wait check",
-            path.display()
-        );
+    if chats.passes.using(path) {
+        let why = format!("{} is in use by a running engine", path.display());
         return Err(("in_use", why));
     }
     // A folder that leads into the data folder now (its agent folder became a link) is never

@@ -1,15 +1,8 @@
-//! Which conversation each turn runs in (0055): a member's task in its own, kept in
-//! `task_sessions`; every other turn in the agent's latest. An engine holds one conversation, so a
-//! turn on another closes it first, the gentle way.
-
-use std::collections::HashMap;
+//! The conversation each turn runs in: the agent's latest in the chat. An engine resumes it when it
+//! opens again, and a refused resume opens a new one.
 
 use gathr::event::Event;
-use gathr::ids::now_us;
 use gathr::redact::redact;
-use gathr::sessions::{Conversation, Key};
-use rusqlite::OptionalExtension;
-use serde_json::json;
 
 use super::{Assignment, Ids, Queued, Task};
 
@@ -18,281 +11,57 @@ use super::{Assignment, Ids, Queued, Task};
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
     pub id: Option<String>,
-    /// The task it was opened for: each Init writes that task's row (N5).
-    pub task: Option<i64>,
     /// It resumed `id` and no Init has come yet: a turn that fails now was refused the id (N8).
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
-    /// The head each conversation was told of each PR, by its session id and PR: not told again
-    /// while it stands, whichever task's turn runs in it.
-    pub told_heads: HashMap<(String, i64), String>,
-    /// Heads told before the engine said its session: kept under it at its Init.
-    pub told_unsaid: Vec<(i64, String)>,
 }
 
 impl Session {
-    /// The engine said its session: the task whose row takes it (N5).
-    pub fn init(&mut self, id: &str) -> Option<i64> {
-        let id = self.id.get_or_insert_with(|| id.to_string());
-        for (pr, head) in self.told_unsaid.drain(..) {
-            self.told_heads.insert((id.clone(), pr), head);
-        }
+    /// The engine said its session.
+    pub fn init(&mut self, id: &str) {
+        self.id.get_or_insert_with(|| id.to_string());
         self.resuming = false;
-        self.task
-    }
-}
-
-pub(super) fn task_of(choice: &Conversation) -> Option<i64> {
-    match choice {
-        Conversation::Latest => None,
-        Conversation::New(task) | Conversation::Resume { task, .. } => Some(*task),
     }
 }
 
 impl Task {
-    /// The turn's key and the conversation it gives (N1, N2). With no account yet, or a turn the
-    /// database can't place, it runs on Latest, as every turn did before.
-    pub(super) async fn conversation(
-        &self,
-        ids: &Ids,
-        assigned: Option<&Assignment>,
-    ) -> (Key, Conversation) {
-        let latest = (Key::Latest, Conversation::Latest);
-        let (Some(agent), Some(assigned)) = (ids.agent.clone(), assigned.filter(|a| !a.room))
-        else {
-            return latest;
+    /// The session a start resumes: the agent's latest in the chat.
+    pub(super) async fn resumes(&self, assigned: &Assignment) -> Option<String> {
+        let a = assigned.clone();
+        let read = move |conn: &mut rusqlite::Connection| {
+            gathr::store::engine_session(conn, &a.chat, a.agent.as_deref(), &a.account)
         };
-        let (turn, account) = (ids.turn.clone(), assigned.account.clone());
-        let chose = self.chats.writer.call(move |conn| {
-            let key = gathr::sessions::want(conn, &turn)?;
-            let chose = gathr::sessions::choose(conn, &agent, &account, key.clone())?;
-            Ok::<_, gathr::Error>((key, chose))
-        });
-        match chose.await {
-            Some(Ok(found)) => found,
-            failed => {
-                self.saved_row(failed.map(|r| r.map(|_| ())));
-                latest
-            }
-        }
+        self.chats
+            .writer
+            .call(read)
+            .await
+            .and_then(Result::ok)
+            .flatten()
     }
 
-    /// A running engine closes when the turn is on another conversation than the one it opened
-    /// (N3): the turn waits, first in the queue, with its status. Under a background command, which
-    /// the close would end, the turn runs where the engine is (N4).
-    pub(super) async fn switch(
-        &mut self,
-        next: &Queued,
-        choice: &Conversation,
-    ) -> Option<&'static str> {
-        let other = match choice {
-            Conversation::Latest => false,
-            Conversation::New(_) => true,
-            Conversation::Resume { session, .. } => self.session.id.as_ref() != Some(session),
-        };
-        if self.engine.is_none() || !other {
-            return None;
-        }
-        if self.background == 0 {
-            self.close("the next turn is on another task").await;
-            return Some(self.hold_back(next, "queued").await);
-        }
-        let open = self.session.id.clone();
-        let event = Event::point("gathr.session.kept")
-            .trace(&next.ids.trace)
-            .chat(&next.ids.chat)
-            .ok()
-            .attr("gathr.task.id", task_of(choice))
-            .attr("session", open.clone())
-            .attr("why", "background");
-        self.record(event);
-        // A new task's later turns come back to the conversation that holds its first; a resumed
-        // task's row stays its own.
-        if let (Conversation::New(task), Some(open), Some(agent), Some(a)) =
-            (choice, open, next.ids.agent.clone(), self.assigned.as_ref())
-        {
-            let (task, chat, account) = (*task, a.chat.clone(), a.account.clone());
-            let set = move |c: &mut rusqlite::Connection| {
-                gathr::sessions::set(c, task, &agent, &chat, &account, &open)
-            };
-            self.saved_row(self.chats.writer.call(set).await);
-        }
-        None
-    }
-
-    /// The session a start resumes: the chosen task's, none for a new one, or the agent's latest
-    /// in the chat, as before.
-    pub(super) async fn resumes(
-        &self,
-        assigned: &Assignment,
-        choice: &Conversation,
-    ) -> Option<String> {
-        match choice {
-            Conversation::New(_) => None,
-            Conversation::Resume { session, .. } => Some(session.clone()),
-            Conversation::Latest => {
-                let a = assigned.clone();
-                let read = move |conn: &mut rusqlite::Connection| {
-                    gathr::store::engine_session(conn, &a.chat, a.agent.as_deref(), &a.account)
-                };
-                self.chats
-                    .writer
-                    .call(read)
-                    .await
-                    .and_then(Result::ok)
-                    .flatten()
-            }
-        }
-    }
-
-    /// The engine started in `resumed` (none: a new one): what it was opened for, and the context
-    /// shown follows a task's conversation (N7). Latest leaves it as it is.
-    pub(super) async fn opened(&mut self, choice: &Conversation, resumed: Option<String>) {
+    /// The engine started in `resumed` (none: a new one).
+    pub(super) fn opened(&mut self, resumed: Option<String>) {
         self.session.resuming = resumed.is_some();
         self.session.id = resumed;
-        self.session.told_unsaid.clear();
-        self.session.task = task_of(choice);
-        let from = match choice {
-            Conversation::Latest => return,
-            Conversation::New(_) => None,
-            Conversation::Resume { task, session, .. } => Some((*task, session.clone())),
-        };
-        let (Some(agent), Some(chat)) = (self.agent.clone(), self.assigned.as_ref()) else {
-            return;
-        };
-        let chat = chat.chat.clone();
-        let (c, a) = (chat.clone(), agent.clone());
-        let switched = move |conn: &mut rusqlite::Connection| {
-            let from = from
-                .as_ref()
-                .map(|(task, session)| (*task, session.as_str()));
-            gathr::context::switched(conn, &c, &a, from)
-        };
-        match self.chats.writer.call(switched).await {
-            Some(Ok(context)) => self.publish(
-                &chat,
-                json!({ "type": "context", "agent": agent, "context": context }),
-            ),
-            failed => self.record(
-                Event::point("gathr.context.fill")
-                    .chat(&chat)
-                    .error("sqlite")
-                    .attr("why", format!("{failed:?}")),
-            ),
-        }
     }
 
-    /// What a turn is sent before its ask, never saved: what the team chat said that the agent
-    /// hasn't heard (0081) and its task's questions to the person, and in a new conversation's first
-    /// turn, the opening (N6) before that.
+    /// What a turn is sent before its ask, never saved: what the chat said that the agent hasn't
+    /// heard (0081). A new conversation, or one a compaction summed up, hears the chat's last lines.
     pub(super) async fn opening(
         &mut self,
         next: &Queued,
-        choice: &Conversation,
         fresh: bool,
         text: String,
     ) -> (String, bool) {
-        let room = self.assigned.as_ref().is_some_and(|a| a.room);
-        let text = match room {
-            true => text,
-            false => self.held_start(&next.ids, text).await,
-        };
         if self.compactions.contains(&next.ids.turn) {
             return (text, false);
         }
-        // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
         let summed = self.summed(None, &next.ids).await;
-        // A room chat's turn opens with what the room said since the agent's last turn, and nothing else.
-        if room {
-            let (heard, _) = self.heard(&next.ids, new || summed, None).await;
-            let said = [heard, Some(text)].into_iter().flatten();
-            return (said.collect::<Vec<_>>().join("\n\n"), summed);
-        }
-        // An engine opened again on a task's conversation goes on from that conversation's last turn.
-        let resumed = match choice {
-            Conversation::Resume { session, .. } if fresh => Some(session.clone()),
-            _ => None,
-        };
-        let (heard, asked) = self.heard(&next.ids, new || summed, resumed).await;
-        let github = self.github_opening(&next.ids, choice, new || summed).await;
-        let (text, restored) = if summed {
-            self.recalled(&next.ids, text).await
-        } else {
-            (text, false)
-        };
-        let said = [heard.clone(), asked, github, Some(text)];
-        let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
-        let late = self.late(&next.ids, heard.is_some()).await;
-        let first = |text: String| match &late {
-            Some(late) => format!("{late}\n\n{text}"),
-            None => text,
-        };
-        let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
-        else {
-            return (first(text), restored);
-        };
-        let (task, ask, lines) = (*task, next.text.clone(), heard.is_some());
-        let made = self
-            .chats
-            .writer
-            .call(move |c| gathr::tasks::opening(c, task, &agent, &ask, lines))
-            .await;
-        let event = Event::point("gathr.session.opening")
-            .trace(&next.ids.trace)
-            .chat(&next.ids.chat)
-            .attr("gathr.task.id", task);
-        let Some(Ok((opening, count))) = made else {
-            self.record(event.error("sqlite").attr("why", format!("{made:?}")));
-            return (first(text), restored);
-        };
-        let chars = opening.chars().count();
-        let event = event.ok().attr("gathr.task.count", count);
-        self.record(event.attr("gathr.message.chars", chars));
-        (first(format!("{opening}\n\n{text}")), restored)
-    }
-
-    async fn recalled(&self, ids: &Ids, text: String) -> (String, bool) {
-        let (turn, chat, agent) = (ids.turn.clone(), ids.chat.clone(), ids.agent.clone());
-        let (task, ask) = (
-            ids.task,
-            text.lines().next().unwrap_or_default().to_string(),
-        );
-        let read = self
-            .chats
-            .writer
-            .call(move |c| {
-                let mut lines = vec!["Your conversation was compacted.".to_string()];
-                if let Some(plan) = gathr::plans::recall(c, &turn)? {
-                    lines.push(plan);
-                }
-                lines.push(gathr::tasks::listed(c, &chat, agent.as_deref())?);
-                if let Some(task) = task {
-                    let t = gathr::tasks::get(c, task)?
-                        .ok_or(gathr::Error::Refused(format!("No task #{task}")))?;
-                    let giver = gathr::tasks::owner_name(c, t.giver.as_deref())?;
-                    let brief = gathr::tasks::task_brief(c, &t, &giver, t.carry.as_deref())?;
-                    if brief.lines().next() != Some(ask.as_str()) {
-                        lines.push(brief);
-                    }
-                }
-                Ok::<_, gathr::Error>(lines.join("\n"))
-            })
-            .await;
-        let event = Event::point("gathr.context.recalled")
-            .trace(&ids.trace)
-            .chat(&ids.chat);
-        match read {
-            Some(Ok(recalled)) => {
-                self.record(event.ok().attr("chars", recalled.chars().count()));
-                (format!("{recalled}\n\n{text}"), true)
-            }
-            failed => {
-                self.record(event.error("sqlite").attr("why", format!("{failed:?}")));
-                (text, false)
-            }
-        }
+        let heard = self.heard(&next.ids, new || summed).await;
+        let said = [heard, Some(text)].into_iter().flatten();
+        (said.collect::<Vec<_>>().join("\n\n"), summed)
     }
 
     /// Read the pending marker, or set it after compaction and clear it after a restored send.
@@ -333,28 +102,6 @@ impl Task {
         }
     }
 
-    /// How long ago a turn opened by Gathr's words was queued, when it starts 2 minutes or more
-    /// after: its words were written then. With `lines`, the chat's lines below say what changed.
-    /// A reply or a pick has Gathr's line, but the person wrote its ask.
-    async fn late(&self, ids: &Ids, lines: bool) -> Option<String> {
-        if ids.person {
-            return None;
-        }
-        let turn = ids.turn.clone();
-        let queued = move |c: &mut rusqlite::Connection| {
-            let sql = "SELECT created_ts FROM turns WHERE id = ?1 AND opened_version IS NOT NULL";
-            c.query_row(sql, [turn], |r| r.get::<_, i64>(0)).optional()
-        };
-        match self.chats.writer.call(queued).await {
-            Some(Ok(queued)) => gathr::words::late(now_us() - queued?, lines),
-            failed => {
-                let event = Event::point("gathr.session.late").trace(&ids.trace);
-                self.record(event.error("sqlite").attr("why", format!("{failed:?}")));
-                None
-            }
-        }
-    }
-
     /// The turn failed before any Init on an engine that resumed a conversation: the engine
     /// refused it (N8). This agent's rows holding it go, the engine closes, and the turn goes back
     /// first in the queue, once, to start new. Whether it did.
@@ -376,7 +123,6 @@ impl Task {
             .chat(&ids.chat)
             .error("resume_failed")
             .attr("session", session)
-            .attr("gathr.task.id", self.session.task)
             .attr("why", redact(why.trim()));
         self.record(event);
         // The refused engine is exiting, or ended its turn and waits for input: the retry must not

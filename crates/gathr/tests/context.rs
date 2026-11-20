@@ -559,46 +559,6 @@ fn a_window_seen_with_no_model_named_never_sets_the_point() {
     );
 }
 
-/// K3: a turn whose agent's last call filled 75% of where it compacts is told to save its notes.
-#[test]
-fn a_turn_near_the_compaction_point_is_told_to_save_its_notes() {
-    let data = TempDir::new();
-    let service = TestService::with_engine(
-        &data.0,
-        &[("GATHR_REPLAY", &common::recording("signed_in"))],
-    );
-    let account = service.signed_in(&data.0);
-    let ann = agent(&service, &account, Some(OPUS));
-    let chat = service.new_chat();
-    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
-    db.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, used, window, window_of, ran, updated_ts)
-         VALUES (?1, ?2, 380000, 1000000, ?3, ?4, 1)",
-        rusqlite::params![chat, ann, format!("{account}:claude:{OPUS}"), RUNS],
-    )
-    .unwrap();
-    let sent = service.send(
-        "POST",
-        &format!("/api/chats/{chat}/messages"),
-        json!({ "text": "Hi", "agent": ann }),
-    );
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    service.wait_for(&chat, 10, "the turn's end", |h| {
-        h["turns"][0]["status"] == "done"
-    });
-    let sql = "SELECT body FROM engine_raw WHERE direction = 'in' AND frame_type = 'user'";
-    let (ok, rows) = common::gathr(&data.0, &["diag", "query", sql]);
-    assert!(ok, "{rows}");
-    let first = rows["rows"][0]["body"].as_str().unwrap();
-    assert!(
-        first.contains("Your conversation is close to its compaction point"),
-        "{first}"
-    );
-    let sql = "SELECT name FROM event_log WHERE name = 'gathr.context.soon'";
-    let (_, told) = common::gathr(&data.0, &["diag", "query", sql]);
-    assert_eq!(told["rows"].as_array().unwrap().len(), 1, "{told}");
-}
-
 /// Compact (K4) for the agent's conversation in the chat.
 fn compact(service: &TestService, chat: &str, agent: &str) -> gathr::http::Response {
     let path = format!("/api/chats/{chat}/agents/{agent}/compact");

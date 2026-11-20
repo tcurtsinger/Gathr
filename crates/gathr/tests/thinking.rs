@@ -57,7 +57,6 @@ fn service_with(
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
-    common::old_chat(data, &chat);
     (service, chat, agent)
 }
 
@@ -206,17 +205,6 @@ fn a_thought_cut_off_is_stopped_and_found_from_the_turns_reference() {
     assert_eq!(events.len(), 1, "{events:?}");
     assert_eq!(events[0]["status"], "error", "{events:?}");
     assert_eq!(events[0]["error_type"], "stopped", "{events:?}");
-}
-
-/// G167: thinking is no reply and no tool call, so the turn did nothing.
-#[test]
-fn a_turn_that_only_thought_still_fails_as_empty() {
-    let data = TempDir::new();
-    let (service, chat, agent) = service(&data.0, "claude", "thinking_only");
-    let (history, _) = one_turn(&service, &chat, &agent, "failed");
-    let why = history["turns"][0]["why"].as_str().unwrap_or_default();
-    assert!(why.contains("no reply and no tool call"), "{history}");
-    assert_eq!(thoughts(&history)[0]["body"]["status"], "done", "{history}");
 }
 
 /// A count that arrives while the agent's own tool runs opens no thought: it may be a

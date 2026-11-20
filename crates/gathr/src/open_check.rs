@@ -1,8 +1,7 @@
 //! The open check (0080), ported from SerenityOS's room checks: once per message of the person's,
-//! when the chat's lead has answered it and nothing of its ask runs or is owed, every free member
+//! when the chat's lead has answered it and no turn of the chat is still to end, every free member
 //! who took no part reads the answer in a turn of its own. A thumbs-up on the answer or silence
-//! wakes nobody; words wake the lead once, for its last word, with each member's words. A plan
-//! version reaches the person when its round, and any last word, has ended.
+//! wakes nobody; words wake the lead once, for its last word, with each member's words.
 
 mod words;
 
@@ -12,7 +11,6 @@ use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
 use crate::store::Start;
-use crate::tasks::SETTLED;
 use crate::team::Role;
 use crate::words::Opened;
 
@@ -20,8 +18,7 @@ use crate::words::Opened;
 const BUSY: &str = "('queued', 'waiting_sign_in', 'running')";
 
 /// What a lead's turn opened by these never says to the person, so it answers nothing (0078).
-const NOT_AN_ANSWER: &str =
-    "('wake', 'silent', 'stale', 'engine', 'compaction', 'check', 'last_word')";
+const NOT_AN_ANSWER: &str = "('engine', 'compaction', 'check', 'last_word')";
 
 /// A round under way, as its row keeps it.
 struct Round {
@@ -89,11 +86,7 @@ pub fn answer_of(conn: &Connection, turn: &str) -> Result<String, Error> {
 }
 
 /// Gathr's calls that only report or place: words followed by nothing else are still the message.
-const NOT_A_STEP: [&str; 3] = [
-    "mcp__gathr__react",
-    "mcp__gathr__finish_task",
-    "mcp__gathr__post",
-];
+const NOT_A_STEP: [&str; 1] = ["mcp__gathr__react"];
 
 /// A turn's message, as the window draws it (0082, `ui/src/chat/fold.ts`): the words it wrote after
 /// its last step, else its last words. Words before a later step are narration, which no agent hears.
@@ -151,49 +144,32 @@ fn under_way(tx: &Transaction, chat: &str) -> Result<Vec<Round>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
-type Asked = (String, String, Option<String>);
-
-/// The chat's newest message of the person's: theirs, or the words they sent a plan back with.
-/// Its id, its turn and the ask it serves (none in a room chat).
-fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<Asked>, Error> {
-    let sql = "SELECT m.id, m.turn_id, u.ask_id FROM messages m JOIN turns u ON u.id = m.turn_id
-               WHERE m.chat_id = ?1 AND (m.role = 'user' OR (m.role = 'gathr' AND u.opened_by = 'sent_back'))
+/// The chat's newest message of the person's: its id and its turn.
+fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<(String, String)>, Error> {
+    let sql = "SELECT m.id, m.turn_id FROM messages m
+               WHERE m.chat_id = ?1 AND m.role = 'user' AND m.turn_id IS NOT NULL
                ORDER BY m.ts DESC, m.rowid DESC LIMIT 1";
     let row = tx
         .prepare_cached(sql)?
-        .query_row([chat], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+        .query_row([chat], |r| Ok((r.get(0)?, r.get(1)?)))
         .optional()?;
     Ok(row)
 }
 
-/// The round owed the person's newest message: none while its ask has a turn to end or work or a
-/// question open, while the lead's newest answer to it hasn't ended well, or once it had its round.
-/// A room chat has no asks or tasks: there, none while any turn of the chat is still to end.
+/// The round owed the person's newest message: none while any turn of the chat is still to end,
+/// while the lead's newest answer to it hasn't ended well, or once it had its round.
 fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
-    let Some((asked, asked_turn, ask)) = newest_asked(tx, chat)? else {
+    let Some((asked, asked_turn)) = newest_asked(tx, chat)? else {
         return Ok(None);
     };
-    let room = crate::room::is_room(tx, chat)?;
-    if ask.is_none() && !room {
-        return Ok(None);
-    }
     let had: bool = tx
         .prepare_cached(
             "SELECT EXISTS (SELECT 1 FROM open_checks WHERE chat_id = ?1 AND asked = ?2)",
         )?
         .query_row([chat, &asked], |r| r.get(0))?;
-    let open = match room {
-        true => format!("SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND status IN {BUSY})"),
-        false => format!(
-            "SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND ask_id = ?2 AND status IN {BUSY})
-                 OR EXISTS (SELECT 1 FROM tasks WHERE chat_id = ?1 AND ask_id = ?2 AND state NOT IN {SETTLED})"
-        ),
-    };
-    let mut open = tx.prepare_cached(&open)?;
-    let open: bool = match room {
-        true => open.query_row([chat], |r| r.get(0))?,
-        false => open.query_row(params![chat, ask], |r| r.get(0))?,
-    };
+    let open =
+        format!("SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND status IN {BUSY})");
+    let open: bool = tx.prepare_cached(&open)?.query_row([chat], |r| r.get(0))?;
     let members = crate::team::members(tx, chat)?;
     let Some(lead) = members.iter().find(|m| m.role == Role::Supervisor) else {
         return Ok(None);
@@ -207,13 +183,13 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
         |r| r.get(0),
     )?;
     let sql = format!(
-        "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2 AND ask_id IS ?3 AND task IS NULL
-           AND (opened_by IS NULL OR opened_by NOT IN {NOT_AN_ANSWER}) AND created_ts >= ?4
+        "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2
+           AND (opened_by IS NULL OR opened_by NOT IN {NOT_AN_ANSWER}) AND created_ts >= ?3
          ORDER BY created_ts DESC, rowid DESC LIMIT 1"
     );
     let newest: Option<(String, String)> = tx
         .prepare_cached(&sql)?
-        .query_row(params![chat, lead.agent, ask, since], |r| {
+        .query_row(params![chat, lead.agent, since], |r| {
             Ok((r.get(0)?, r.get(1)?))
         })
         .optional()?;
@@ -248,18 +224,19 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
 }
 
 /// Service tests of other parts run with nobody to check (`GATHR_OPEN_CHECK=off`, read only in a
-/// debug build, as `roles::without`): rounds still end and send plans, with no turns of their own.
+/// debug build): rounds still end, with no turns of their own.
 fn nobody_checks() -> bool {
     cfg!(debug_assertions) && std::env::var_os("GATHR_OPEN_CHECK").is_some_and(|v| v == "off")
 }
 
-/// The message of `turn` that is its answer: the newest plan version it wrote, else its last words.
+/// The message of `turn` that is its answer: its last words.
 fn answer_in(tx: &Transaction, turn: &str) -> Result<Option<String>, Error> {
-    let sql = "SELECT coalesce(
-                   (SELECT message_id FROM plan_versions WHERE turn_id = ?1 ORDER BY n DESC LIMIT 1),
-                   (SELECT id FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND kind = 'text'
-                      AND trim(body) != '' ORDER BY ts DESC, rowid DESC LIMIT 1))";
-    Ok(tx.prepare_cached(sql)?.query_row([turn], |r| r.get(0))?)
+    let sql = "SELECT id FROM messages WHERE turn_id = ?1 AND role = 'assistant' AND kind = 'text'
+                 AND trim(body) != '' ORDER BY ts DESC, rowid DESC LIMIT 1";
+    Ok(tx
+        .prepare_cached(sql)?
+        .query_row([turn], |r| r.get(0))
+        .optional()?)
 }
 
 /// Records the round and queues each checker's turn, answering the answer's turn so it sits in its
@@ -280,9 +257,8 @@ fn begin(tx: &Transaction, chat: &str, due: &Due, trace: &str) -> Result<Vec<Sta
         end(tx, chat, &round, &Counts::default(), trace)?;
         return Ok(Vec::new());
     }
-    let room = crate::room::is_room(tx, chat)?;
-    let text = words::check(tx, (&due.asked, &due.answer), &due.lead, room)?;
-    let on = (None, Some(due.answer_turn.as_str()));
+    let text = words::check(tx, (&due.asked, &due.answer), &due.lead)?;
+    let on = Some(due.answer_turn.as_str());
     due.checkers
         .iter()
         .map(|agent| Start::queue(tx, (chat, agent), on, Opened::Check, text.clone()))
@@ -337,8 +313,8 @@ fn advance(tx: &Transaction, chat: &str, round: &Round, trace: &str) -> Result<V
                 [&round.answer_turn],
                 |r| r.get(0),
             )?;
-            let text = words::last_word(tx, &round.answer, &counts.objected)?;
-            let on = (None, Some(round.answer_turn.as_str()));
+            let text = words::last_word(tx, &counts.objected)?;
+            let on = Some(round.answer_turn.as_str());
             let start = Start::queue(tx, (chat, &lead), on, Opened::LastWord, text)?;
             tx.execute(
                 "UPDATE open_checks SET last_word = ?2 WHERE id = ?1",
@@ -357,23 +333,13 @@ fn advance(tx: &Transaction, chat: &str, round: &Round, trace: &str) -> Result<V
     Ok(Vec::new())
 }
 
-/// The person has written again, or decided the plan the answer is: a last word would answer
-/// nothing they still wait on.
+/// The person has written again: a last word would answer nothing they still wait on.
 fn moot(tx: &Transaction, chat: &str, round: &Round) -> Result<bool, Error> {
-    let newest = newest_asked(tx, chat)?.map(|(id, ..)| id);
-    if newest.as_deref() != Some(round.asked.as_str()) {
-        return Ok(true);
-    }
-    let sql =
-        "SELECT EXISTS (SELECT 1 FROM plan_versions v JOIN plan_versions w ON w.plan_id = v.plan_id
-               WHERE v.message_id = ?1 AND w.decided IN ('approved', 'dropped'))";
-    Ok(tx
-        .prepare_cached(sql)?
-        .query_row([&round.answer], |r| r.get(0))?)
+    let newest = newest_asked(tx, chat)?.map(|(id, _)| id);
+    Ok(newest.as_deref() != Some(round.asked.as_str()))
 }
 
-/// Ends the round: the newest unsent version of its ask's plan reaches the person, and one event
-/// says how the round went.
+/// Ends the round, with one event that says how it went.
 fn end(
     tx: &Transaction,
     chat: &str,
@@ -381,20 +347,9 @@ fn end(
     counts: &Counts,
     trace: &str,
 ) -> Result<(), Error> {
-    let now = now_us();
     tx.execute(
         "UPDATE open_checks SET ended_ts = ?2 WHERE id = ?1",
-        params![round.id, now],
-    )?;
-    let sent = tx.execute(
-        &format!(
-            "UPDATE plan_versions SET sent_ts = ?2 WHERE id IN (
-                 SELECT v.id FROM plan_versions v JOIN plans p ON p.id = v.plan_id
-                 WHERE p.ask_id = (SELECT ask_id FROM turns WHERE id = ?1) AND {} AND v.decided IS NULL
-                   AND v.sent_ts IS NULL)",
-            crate::plans::NEWEST
-        ),
-        params![round.answer_turn, now],
+        params![round.id, now_us()],
     )?;
     Event::point("gathr.check.round")
         .trace(trace)
@@ -407,7 +362,6 @@ fn end(
         .attr("gathr.check.objected", counts.objected.len())
         .attr("gathr.check.silent", counts.silent)
         .attr("gathr.check.last_word", round.last_word.is_some())
-        .attr("gathr.plan.sent", sent > 0)
         .insert(tx)?;
     Ok(())
 }

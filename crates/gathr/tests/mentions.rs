@@ -110,17 +110,6 @@ impl Room {
         std::fs::write(file, "").unwrap();
     }
 
-    /// The lead's text message in `turn`.
-    fn words_in(&self, turn: &str) -> Value {
-        let history = self.history();
-        let mut messages = history["messages"].as_array().unwrap().iter();
-        let found = messages
-            .rfind(|m| m["turn"] == turn && m["role"] == "assistant" && m["kind"] == "text");
-        found
-            .unwrap_or_else(|| panic!("no words in {turn}: {history}"))
-            .clone()
-    }
-
     /// Gathr's messages in `turn`.
     fn told_in(&self, turn: &Value) -> Vec<Value> {
         let history = self.history();
@@ -131,59 +120,6 @@ impl Room {
 }
 
 const WORDS: &str = "@Ann please check the map.";
-
-#[test]
-fn a_mention_wakes_the_named_member_once_with_the_senders_words_in_its_thread() {
-    let data = TempDir::new();
-    let room = room(&data.0, WORDS, 2, false);
-    let asked = room.say_in(&room.chat.clone(), &room.lead, "Plan the walk");
-    room.mentions_once(1);
-    let history = room.quiet();
-
-    let anns = room.turns_of(&room.ann);
-    assert_eq!(anns.len(), 1, "{history}");
-    assert_eq!(anns[0]["answers"], asked.as_str(), "{history}");
-    assert_eq!(
-        common::opened(&data.0, &anns[0]["id"]),
-        (json!("teammate"), Value::Null)
-    );
-    let named = room.words_in(&asked);
-    let told = room.told_in(&anns[0]["id"]);
-    assert_eq!(told.len(), 1, "{told:?}");
-    assert_eq!(
-        (&told[0]["body"], &told[0]["copy_of"]),
-        (&json!(format!("Lead: {WORDS}")), &named["id"]),
-        "{told:?}"
-    );
-    // Ann's own words name only Ann: nobody is woken by them, the lead least of all.
-    assert_eq!(room.turns_of(&room.lead).len(), 1, "{history}");
-    let woken = room.mentions();
-    assert_eq!(woken.len(), 1, "{woken:?}");
-    assert_eq!(
-        (
-            &woken[0]["from"],
-            &woken[0]["to"],
-            &woken[0]["delivered"],
-            &woken[0]["message"]
-        ),
-        (
-            &json!(room.lead),
-            &json!(room.ann),
-            &json!("queued"),
-            &named["id"]
-        ),
-        "{woken:?}"
-    );
-    assert_eq!(woken[0]["depth"], 1, "{woken:?}");
-    // Ann reads the words once: as what opened her turn, never again as a line of the chat.
-    let read = common::replay::read_in(&data.0, anns[0]["id"].as_str().unwrap());
-    assert_eq!(read.matches("please check the map").count(), 1, "{read}");
-    // In the thread of the message that named her: where the lead's turn sits.
-    let lead_turn = &room.turns_of(&room.lead)[0];
-    assert_eq!(anns[0]["topic"], lead_turn["topic"], "{history}");
-    assert_eq!(anns[0]["topic"], json!(format!("b:{asked}")));
-    common::topics_agree(&data.0, &room.chat);
-}
 
 #[test]
 fn a_member_mid_turn_takes_the_mention_in_that_turn() {

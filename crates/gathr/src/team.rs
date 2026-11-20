@@ -109,22 +109,6 @@ pub fn set_members(
     Ok(())
 }
 
-/// The chat's agent with this name, ignoring case.
-pub fn agent_named(conn: &Connection, chat: &str, name: &str) -> Result<String, Error> {
-    let members = members(conn, chat)?;
-    let wanted = name.trim().trim_start_matches('@').to_lowercase();
-    match members.iter().find(|m| m.name.to_lowercase() == wanted) {
-        Some(m) => Ok(m.agent.clone()),
-        None => {
-            let names: Vec<&str> = members.iter().map(|m| m.name.as_str()).collect();
-            Err(Error::Refused(format!(
-                "no agent {name} in this chat: its agents are {}",
-                names.join(", ")
-            )))
-        }
-    }
-}
-
 /// Where a message goes: its agent, every other agent picked in it, and the chat's agents when
 /// sending it added some.
 pub struct Routed {

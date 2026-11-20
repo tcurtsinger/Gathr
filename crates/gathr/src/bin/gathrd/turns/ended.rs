@@ -1,5 +1,4 @@
-//! A chat archived or deleted (F11, 0010): the database part already ended its tasks, waits and
-//! queued turns, so each agent's queue drops that chat's turns, interrupts the one it runs there and
+//! A chat archived or deleted (F11, 0010): the database part already ended its queued turns, so each agent's queue drops that chat's turns, interrupts the one it runs there and
 //! ends its engine's background commands by the engine's own stop. For a delete, the engine also
 //! closes the gentle way, so the chat's worktrees can go once it has exited.
 
@@ -19,7 +18,7 @@ impl Task {
                 .chats
                 .writer
                 .call(move |conn| gathr::background::of(conn, &c, agent.as_deref()));
-            for (id, _, _) in commands.await.and_then(Result::ok).unwrap_or_default() {
+            for (id, _) in commands.await.and_then(Result::ok).unwrap_or_default() {
                 let request = frames::stop_task(&format!("end-chat-{}", span_id()), &id);
                 let _ = self.write(&request, None).await;
             }

@@ -1,27 +1,17 @@
-//! `ask_person` (F9, 0010): the one tool for anything an agent needs from the person. In a room chat
-//! it stores a question of its own (`gathr::questions`). In an older chat, from the chat's Supervisor
-//! it lands on the person's Tasks list; from a member it goes to the Supervisor first, who checks it.
-//! Files named with it are copied when it's given.
+//! `ask_person` (F9, 0010): the one tool for anything an agent needs from the person. It stores a
+//! question of its own (`gathr::questions`).
 
-use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use axum::http::request::Parts;
 use gathr::Error;
-use gathr::tasks::person::{self, Ask, Choice, File, Form};
-use gathr::tasks::{self, Kind};
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde_json::json;
 
-use super::Caller;
 use super::server::{Tools, caller_of};
-
-/// The most files with one task, and the largest: pages and plans, not builds.
-const FILES_MOST: usize = 5;
-const FILE_BYTES_MOST: u64 = 10 * 1024 * 1024;
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct AskPerson {
@@ -29,17 +19,8 @@ pub struct AskPerson {
     what: Option<String>,
     /// Why, and what the person needs to know to answer.
     why: Option<String>,
-    /// `done` (something to do), `yesno`, `choice` (one), `choices` (any number) or `text`.
-    /// Unset: `choice` with choices, `text` for a question ending in ?, else `done`.
-    form: Option<String>,
     /// For a choice: your pick first, each with a few words on it.
     choices: Option<Vec<ChoiceIn>>,
-    /// Files the person reads beside it (a design's pages, a plan): paths in your worktree, your own
-    /// folder or Shared, relative to your worktree or absolute. At most 5, each up to 10 MB.
-    #[schemars(length(max = FILES_MOST))]
-    files: Option<Vec<String>>,
-    /// Supervisor only: the member's request this files. Unset, the request this turn works on.
-    for_task: Option<i64>,
 }
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
@@ -50,10 +31,9 @@ pub struct ChoiceIn {
 
 #[tool_router(router = person_router, vis = "pub(super)")]
 impl Tools {
-    #[tool(
-        description = "Ask the person for input or action. The answer wakes you here. In an older team chat, \
-                       only the Supervisor gives them tasks; member requests go to the Supervisor for review."
-    )]
+    /// `what` with `why` below it and the choices, nothing else. The window hears the chat's
+    /// questions whole, and the chat now needs the person.
+    #[tool(description = "Ask the person for input or action. The answer wakes you here.")]
     async fn ask_person(
         &self,
         Parameters(ask): Parameters<AskPerson>,
@@ -61,124 +41,6 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let chat = caller.chat.clone();
-        let room = self
-            .chats
-            .writer
-            .call(move |c| gathr::room::is_room(c, &chat));
-        if let Some(Ok(true)) = room.await {
-            return Ok(self.ask_in_room(&caller, ask, started).await);
-        }
-        let folder = self
-            .chats
-            .data
-            .path()
-            .join("task-files")
-            .join(gathr::ids::uuid());
-        let (paths, folders, to) = (
-            ask.files.clone().unwrap_or_default(),
-            caller.folders.clone(),
-            folder.clone(),
-        );
-        let copied = tokio::task::spawn_blocking(move || copy_files(&paths, &folders, &to)).await;
-        let files = match copied.unwrap_or_else(|e| Err(e.to_string())) {
-            Ok(files) => files,
-            Err(why) => {
-                let _ = std::fs::remove_dir_all(&folder);
-                return Ok(self.respond(&caller, "ask_person", started, Err(why)).await);
-            }
-        };
-        let on = caller.on();
-        let (chat, giver) = (
-            caller.chat.clone(),
-            caller.agent.clone().unwrap_or_default(),
-        );
-        let trace = on
-            .as_ref()
-            .map_or_else(gathr::ids::trace_id, |o| o.trace.clone());
-        let asked = self
-            .db(move |c| {
-                let form = match ask.form.as_deref() {
-                    Some(name) => Some(Form::named(name).ok_or_else(|| {
-                        Error::Refused(format!(
-                            "{name} isn't a form: done, yesno, choice, choices or text"
-                        ))
-                    })?),
-                    None => None,
-                };
-                let current = on.as_ref().and_then(|o| o.task);
-                let request = match (ask.for_task, current) {
-                    (Some(n), _) => Some(n),
-                    (None, Some(n)) => tasks::get(c, n)?
-                        .filter(|t| t.kind == Kind::PersonRequest)
-                        .map(|t| t.number),
-                    (None, None) => None,
-                };
-                let choices = ask.choices.unwrap_or_default();
-                let a = Ask {
-                    chat: &chat,
-                    giver: &giver,
-                    given_in: on.as_ref().map(|o| o.turn.as_str()),
-                    parent: current,
-                    what: ask.what.as_deref(),
-                    why: ask.why.as_deref(),
-                    form,
-                    choices: choices
-                        .into_iter()
-                        .map(|c| Choice {
-                            label: c.label,
-                            detail: c.detail,
-                        })
-                        .collect(),
-                    files,
-                    request,
-                };
-                let (task, starts) = person::ask(c, a, &trace)?;
-                // A question is its own main message, whatever thread its turn's agent chose (0079).
-                if let Some(o) = on.as_ref().filter(|_| task.kind == Kind::Person) {
-                    gathr::topics::place::overridden(c, &chat, &o.turn, &trace, "question")?;
-                }
-                let listed = format!(
-                    "Task #{} is on the person's Tasks list. Their answer wakes you here",
-                    task.number
-                );
-                let said = match (
-                    &task.owner,
-                    task.request
-                        .map(|r| tasks::get(c, r))
-                        .transpose()?
-                        .flatten(),
-                ) {
-                    (None, None) => format!("{listed}."),
-                    (None, Some(r)) => format!(
-                        "{listed}, and reaches {}.",
-                        tasks::owner_name(c, r.giver.as_deref())?
-                    ),
-                    (Some(lead), _) => format!(
-                        "{} checks request #{} first. The person's answer comes back to you here.",
-                        tasks::name_of(c, lead)?,
-                        task.number
-                    ),
-                };
-                Ok((said, starts))
-            })
-            .await;
-        if asked.is_err() {
-            let _ = std::fs::remove_dir_all(&folder);
-        }
-        Ok(self.answer(&caller, "ask_person", started, asked).await)
-    }
-}
-
-impl Tools {
-    /// In a room chat a question has its own home (`gathr::questions`): `what` with `why` below it and the
-    /// choices, nothing else. The window hears the chat's questions whole, and the chat now needs the person.
-    async fn ask_in_room(
-        &self,
-        caller: &Caller,
-        ask: AskPerson,
-        started: Instant,
-    ) -> CallToolResult {
         let (chat, agent) = (
             caller.chat.clone(),
             caller.agent.clone().unwrap_or_default(),
@@ -214,49 +76,6 @@ impl Tools {
         let trace = caller.trace().unwrap_or_else(gathr::ids::trace_id);
         crate::chat_state::changed(&self.chats, &caller.chat, &trace).await;
         let said = said.map_err(|e| e.to_string());
-        self.respond(caller, "ask_person", started, said).await
+        Ok(self.respond(&caller, "ask_person", started, said).await)
     }
-}
-
-/// Copies the named files, each inside one of the folders the engine writes without asking (its
-/// worktree first, its own folder, Shared), into `to`: the person reads what the agent meant even
-/// after its worktree moves on. A relative path is read from the worktree.
-fn copy_files(paths: &[String], folders: &[PathBuf], to: &Path) -> Result<Vec<File>, String> {
-    if paths.len() > FILES_MOST {
-        return Err(format!("at most {FILES_MOST} files"));
-    }
-    let root = folders
-        .first()
-        .map_or(Path::new(""), PathBuf::as_path)
-        .canonicalize()
-        .map_err(|e| format!("your folder can't be read: {e}"))?;
-    let beside = folders.iter().skip(1).filter_map(|f| f.canonicalize().ok());
-    let roots: Vec<PathBuf> = std::iter::once(root.clone()).chain(beside).collect();
-    let mut files = Vec::new();
-    for (i, path) in paths.iter().enumerate() {
-        let found: PathBuf = root.join(path);
-        let found = found
-            .canonicalize()
-            .map_err(|_| format!("{path} isn't there"))?;
-        let meta = std::fs::metadata(&found).map_err(|e| format!("{path}: {e}"))?;
-        if !roots.iter().any(|r| found.starts_with(r)) || !meta.is_file() {
-            return Err(format!("{path} isn't a file in your folders"));
-        }
-        if meta.len() > FILE_BYTES_MOST {
-            return Err(format!("{path} is over 10 MB"));
-        }
-        let name = found
-            .file_name()
-            .map_or_else(|| format!("file-{i}"), |n| n.to_string_lossy().into_owned());
-        let copy = to.join(format!("{i}-{name}"));
-        std::fs::create_dir_all(to)
-            .and_then(|_| std::fs::copy(&found, &copy))
-            .map_err(|e| format!("{path} wasn't copied: {e}"))?;
-        files.push(File {
-            name,
-            size: meta.len(),
-            path: copy.display().to_string(),
-        });
-    }
-    Ok(files)
 }

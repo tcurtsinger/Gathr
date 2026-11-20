@@ -111,37 +111,18 @@ pub fn mode(approvals: Approvals) -> &'static str {
     }
 }
 
-/// What the hook's address ends in for an engine in auto mode.
-pub const AUTO_QUERY: &str = "auto";
-/// What it ends in for an engine in Full, whose hook answers only the hold (0063).
-pub const FULL_QUERY: &str = "full";
-
-/// `SETTINGS`, plus Gathr's hook at `hook`, if there is one, before each file write and command,
-/// and each `wait` (its check is a command Gathr runs) (0029). It asks with the engine's own token,
-/// and a hook that fails blocks the call, so a Gathr that can't answer never lets a push through.
-/// In Full, the hook is only before file writes, for the hold (0063), and a Gathr that can't
-/// answer lets the write go on, as Full does without it.
+/// `SETTINGS`, plus Gathr's hook at `hook`, if there is one, before each file write and command
+/// (0029). It asks with the engine's own token, and a hook that fails blocks the call, so a Gathr
+/// that can't answer never lets a push through. Full never asks, so it has no hook.
 fn settings(approvals: Approvals, hook: Option<&str>) -> String {
     let mut settings: serde_json::Value = serde_json::from_str(SETTINGS).expect("SETTINGS is JSON");
-    if let Some(hook) = hook {
+    if let Some(hook) = hook.filter(|_| approvals != Approvals::Full) {
         let auth = format!("Bearer ${TOKEN_VAR}");
-        // The hook leaves a wait's check to auto mode's classifier, so it's told the mode.
-        let (hook, matcher) = match approvals {
-            Approvals::Auto => (format!("{hook}?{AUTO_QUERY}"), None),
-            Approvals::Full => (
-                format!("{hook}?{FULL_QUERY}"),
-                Some("Write|Edit|NotebookEdit"),
-            ),
-            _ => (hook.to_string(), None),
-        };
-        let mut entry = serde_json::json!({ "type": "http", "url": hook, "timeout": 30,
-            "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR] });
-        if matcher.is_none() {
-            entry["onFailure"] = "block".into();
-        }
-        let all = format!("Write|Edit|NotebookEdit|Bash|PowerShell|{WAIT_TOOL}");
+        let entry = serde_json::json!({ "type": "http", "url": hook, "timeout": 30,
+            "headers": { "Authorization": auth }, "allowedEnvVars": [TOKEN_VAR],
+            "onFailure": "block" });
         settings["hooks"] = serde_json::json!({ "PreToolUse": [{
-            "matcher": matcher.map_or(all, String::from), "hooks": [entry] }] });
+            "matcher": "Write|Edit|NotebookEdit|Bash|PowerShell", "hooks": [entry] }] });
     }
     settings.to_string()
 }
@@ -200,21 +181,12 @@ pub const TOKEN_VAR: &str = "GATHR_AGENT_TOKEN";
 /// Where the worktree's `pre-push` hook asks Gathr, with the token above (0029).
 pub const PUSH_VAR: &str = "GATHR_PUSH_URL";
 
-/// The tool whose check is a command Gathr runs: never on the allow list, so in auto mode Claude
-/// Code's own classifier reads the call, and Gathr's hook answers for it in the other modes (0029).
-pub const WAIT_TOOL: &str = "mcp__gathr__wait";
-
-/// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking but
-/// for `wait`, and the briefing in `briefing`, a file for the same reason as the token (0005, 0021).
+/// Gathr's tools (`tools`, by name) at `url` with the engine's token, allowed without asking, and
+/// the briefing in `briefing`, a file for the same reason as the token (0005, 0021).
 pub fn given(url: &str, briefing: &Path, tools: &[String]) -> Vec<String> {
     let allowed: Vec<String> = tools
         .iter()
         .map(|name| format!("mcp__gathr__{name}"))
-        .collect();
-    let allowed: Vec<&str> = allowed
-        .iter()
-        .map(String::as_str)
-        .filter(|name| *name != WAIT_TOOL)
         .collect();
     let auth = format!("Bearer ${{{TOKEN_VAR}}}");
     let servers = serde_json::json!({ "mcpServers": { "gathr": {
@@ -418,32 +390,6 @@ fn usable(answer: &str) -> (Option<String>, Result<(), String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// The hook leaves a wait's check to the classifier only when told the engine is in auto mode;
-    /// Full's hook answers only the hold, for file writes, and a Gathr that can't answer lets them
-    /// go on (0063).
-    #[test]
-    fn only_an_auto_engines_hook_address_says_auto() {
-        let entry = |approvals| {
-            let settings: serde_json::Value =
-                serde_json::from_str(&settings(approvals, Some("http://x/hook"))).unwrap();
-            settings["hooks"]["PreToolUse"][0].clone()
-        };
-        let url = |approvals| entry(approvals)["hooks"][0]["url"].clone();
-        assert_eq!(url(Approvals::Auto), "http://x/hook?auto");
-        assert_eq!(url(Approvals::Edits), "http://x/hook");
-        assert_eq!(url(Approvals::Ask), "http://x/hook");
-        let full = entry(Approvals::Full);
-        assert_eq!(
-            (&full["hooks"][0]["url"], &full["matcher"]),
-            (
-                &serde_json::json!("http://x/hook?full"),
-                &serde_json::json!("Write|Edit|NotebookEdit")
-            ),
-            "{full}"
-        );
-        assert_eq!(full["hooks"][0].get("onFailure"), None, "{full}");
-    }
 
     #[test]
     fn a_version_is_usable_from_the_oldest_proven_one_on_compared_by_number() {

@@ -1,8 +1,8 @@
-//! A reply the person typed in a thread (0076): the message or task it answers, checked when it is
-//! sent, kept on the reply (`messages.reply_to`, `reply_task`), and told to the agent in one line of
-//! Gathr's before the person's words.
+//! A reply the person typed under a message (0076): the message it answers, checked when it is sent,
+//! kept on the reply (`messages.reply_to`), and told to the agent in one line of Gathr's before the
+//! person's words.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension};
 use serde::Deserialize;
 
 use crate::Error;
@@ -10,16 +10,15 @@ use crate::Error;
 /// How much of the message replied to the agent reads.
 const WORDS_MOST: usize = 200;
 
-/// What a reply answers: a message, or a task (a task's message has no message of its own).
+/// What a reply answers.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 pub struct Target {
     pub reply_to: Option<String>,
-    pub reply_task: Option<i64>,
 }
 
 impl Target {
     pub fn is_reply(&self) -> bool {
-        self.reply_to.is_some() || self.reply_task.is_some()
+        self.reply_to.is_some()
     }
 }
 
@@ -28,23 +27,8 @@ fn refused(why: impl Into<String>) -> Error {
 }
 
 /// The target, checked against `chat`: a text message of it (Gathr's copy of a message stands for
-/// the message it carries, as a like's does) or a task of it. Anything else is refused with why.
+/// the message it carries, as a like's does). Anything else is refused with why.
 pub fn check(conn: &Connection, chat: &str, target: &Target) -> Result<Target, Error> {
-    if let (Some(_), Some(_)) = (&target.reply_to, target.reply_task) {
-        return Err(refused(
-            "A reply answers one message or one task, not both.",
-        ));
-    }
-    if let Some(n) = target.reply_task {
-        let sql = "SELECT 1 FROM tasks WHERE number = ?1 AND chat_id = ?2";
-        let found: Option<i64> = conn
-            .query_row(sql, params![n, chat], |r| r.get(0))
-            .optional()?;
-        return match found {
-            Some(_) => Ok(target.clone()),
-            None => Err(refused(format!("No task #{n} in this chat."))),
-        };
-    }
     let Some(id) = &target.reply_to else {
         return Ok(Target::default());
     };
@@ -63,7 +47,6 @@ pub fn check(conn: &Connection, chat: &str, target: &Target) -> Result<Target, E
         ))),
         Some((original, _)) => Ok(Target {
             reply_to: Some(original),
-            reply_task: None,
         }),
     }
 }
@@ -115,16 +98,15 @@ struct Sent {
 fn sent(conn: &Connection, message: &str) -> Result<Option<Sent>, Error> {
     let found = conn
         .query_row(
-            "SELECT m.reply_to, m.reply_task, t.agent_id, m.picks FROM messages m
+            "SELECT m.reply_to, t.agent_id, m.picks FROM messages m
              LEFT JOIN turns t ON t.id = m.turn_id WHERE m.id = ?1 AND m.role = 'user'",
             [message],
             |r| {
                 let target = Target {
                     reply_to: r.get(0)?,
-                    reply_task: r.get(1)?,
                 };
-                let agent: Option<String> = r.get(2)?;
-                let picks: Option<String> = r.get(3)?;
+                let agent: Option<String> = r.get(1)?;
+                let picks: Option<String> = r.get(2)?;
                 let mut everyone: Vec<String> = agent.iter().cloned().collect();
                 for picked in crate::picks::agents(picks.as_deref()) {
                     if !everyone.contains(&picked) {
@@ -144,7 +126,7 @@ fn sent(conn: &Connection, message: &str) -> Result<Option<Sent>, Error> {
 
 /// Gathr's line for `reader` before the person's words: what the reply `target` answers, then who
 /// else of `everyone` got it; none when it answers nothing and went to `reader` alone.
-pub fn said_to(
+fn said_to(
     conn: &Connection,
     target: &Target,
     reader: Option<&str>,
@@ -177,7 +159,7 @@ fn answered(
     target: &Target,
     reader: Option<&str>,
 ) -> Result<Option<String>, Error> {
-    let (to, task) = (target.reply_to.clone(), target.reply_task);
+    let to = target.reply_to.clone();
     let reader = reader.map(String::from);
     let whose = |agent: Option<String>| -> Result<String, Error> {
         Ok(match agent {
@@ -189,22 +171,6 @@ fn answered(
             None => String::new(),
         })
     };
-    if let Some(n) = task {
-        let sql = "SELECT what, owner FROM tasks WHERE number = ?1";
-        let task: Option<(String, Option<String>)> = conn
-            .query_row(sql, [n], |r| Ok((r.get(0)?, r.get(1)?)))
-            .optional()?;
-        let Some((what, owner)) = task else {
-            return Ok(None);
-        };
-        let whose = match whose(owner)? {
-            w if w.is_empty() => String::new(),
-            w => format!("{w} "),
-        };
-        return Ok(Some(format!(
-            "The person replies about {whose}task #{n} \"{what}\"."
-        )));
-    }
     let Some(to) = to else {
         return Ok(None);
     };

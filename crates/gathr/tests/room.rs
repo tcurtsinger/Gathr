@@ -9,8 +9,8 @@ mod common;
 
 use std::path::Path;
 
-use common::replay::{LetGo, escaped, read_in, turns as engine};
-use common::{TempDir, TestService, call_tool, rows, team, text, until};
+use common::replay::{escaped, read_in, turns as engine};
+use common::{TempDir, TestService, rows, team, until};
 use serde_json::{Value, json};
 
 /// Made-up lines written straight into the chat, as turns that ran before would have left them.
@@ -250,42 +250,6 @@ fn the_lead_hears_what_came_since_its_last_turn_whole_without_its_own_or_the_ope
         (&counted["lines"], &counted["fresh"], &counted["cut"]),
         (&json!(2), &json!(false), &json!(0)),
         "{counted}"
-    );
-}
-
-/// 0055 stays: a member's task opens a new conversation, which now hears the chat's recent lines,
-/// its own among them, between what the conversation is and its brief.
-#[test]
-fn a_members_task_in_a_new_conversation_hears_the_recent_lines_its_own_too() {
-    let data = TempDir::new();
-    let go = data.0.join("go");
-    let _go = LetGo(go.clone());
-    let (service, chat, _) = team(&data.0, &engine(&data.0, &[0], 4), &[]);
-    let ann = member(&service, &chat, "Ann");
-    let mut seed = Seed::new(&data.0, &chat);
-    seed.agent_says(&ann, "I drew the map.");
-    let path = format!("/api/chats/{chat}/messages");
-    let sent = service.send("POST", &path, json!({ "text": "Walk plan" }));
-    assert_eq!(sent.status, 200, "{}", sent.body);
-    let port = service.info.port;
-    let lead = common::first_token(&data.0);
-    common::fix_it(port, &lead);
-    let work = common::briefed(json!({ "to": "Ann", "what": "Check the map" }));
-    let given = text(&call_tool(port, &lead, "give_task", work));
-    assert!(given.starts_with("Task #1 for Ann"), "{given}");
-    let turn = common::turn_on(&service, &chat, 1, &["running", "done"]);
-
-    let opening = "This is a new conversation for task #1. Your earlier turns in this chat aren't in it, only its \
-                   recent lines below: read_chat and list_tasks have the rest.\n\n\
-                   Recent lines in this chat:\n\
-                   Ann: I drew the map.\n\
-                   Person: Walk plan";
-    let read = read_once(&data.0, &turn, opening);
-    assert!(
-        read.contains(&escaped(&format!(
-            "{opening}\n\nTask #1 from Lead: Check the map"
-        ))),
-        "the brief after the lines: {read}"
     );
 }
 

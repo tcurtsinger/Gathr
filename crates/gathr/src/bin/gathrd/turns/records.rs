@@ -142,94 +142,21 @@ impl Task {
         self.unsaved.extend(kept);
     }
 
-    /// Saves the turn's status, with what it moves, and sends it live. The update is built from
-    /// what this task holds, not from the write: a failed write still names the turn's agent, so
-    /// Retry goes to it.
+    /// Saves the turn's status and sends it live. The update is built from what this task holds,
+    /// not from the write: a failed write still names the turn's agent, so Retry goes to it.
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
-        self.move_turn(ids, ids.task, status, why, None).await;
-    }
-
-    /// A turn stopped with its carry-on waiting (Stop now, a usage limit): it ends `stopped`, and
-    /// its task stays as it was, saying why nothing runs on it (`waits`). Nobody is told it
-    /// settled: its giver hears how the carry-on ends (0047).
-    pub(super) async fn end_waiting(&self, ids: &Ids, why: Option<&str>, waits: &str) {
-        self.move_turn(ids, ids.task, "stopped", why, Some(waits))
-            .await;
-    }
-
-    /// A turn an update stopped, its carry-on saved: it ends `stopped` and its task isn't settled,
-    /// so nobody is told it stopped while the carry-on works on it (0032).
-    pub(super) async fn end_carried(&self, ids: &Ids, why: Option<&str>) {
-        self.move_turn(ids, None, "stopped", why, None).await;
-    }
-
-    async fn move_turn(
-        &self,
-        ids: &Ids,
-        task: Option<i64>,
-        status: &str,
-        why: Option<&str>,
-        carries_on: Option<&str>,
-    ) {
-        // A turn the engine began itself never passes the runner's start (0063 I2a.2).
-        let began = self
-            .turn
-            .as_ref()
-            .filter(|t| t.ids.turn == ids.turn && t.engine_began);
-        if status == "running" && began.is_some() {
-            self.look_before(ids).await;
-        }
-        self.save_status(ids, (task, carries_on), status, why).await;
-        self.announce_turn(ids, status, why).await;
-        if matches!(status, "done" | "failed" | "stopped") {
-            self.look_after(ids).await;
-        }
-    }
-
-    /// Saves a turn's status, then what it moves (its task, its giver's hear-back, waits on its
-    /// agent) in the same transaction, and starts the turns that calls for. A failure is recorded.
-    async fn save_status(
-        &self,
-        ids: &Ids,
-        (task, carries_on): (Option<i64>, Option<&str>),
-        status: &str,
-        why: Option<&str>,
-    ) {
-        let (i, carries_on) = (ids.clone(), carries_on.map(String::from));
-        let (status, why) = (status.to_string(), why.map(String::from));
+        self.note_asking(ids);
+        let (turn, status_saved, why_saved) =
+            (ids.turn.clone(), status.to_string(), why.map(String::from));
         let saved = self
             .chats
             .writer
-            .call(move |conn: &mut rusqlite::Connection| {
-                let tx = conn.transaction()?;
-                store::set_turn(&tx, &i.turn, &status, why.as_deref())?;
-                // A room chat has no tasks, hear-backs or waits for a turn to move.
-                if gathr::room::is_room(&tx, &i.chat)? {
-                    tx.commit()?;
-                    return Ok(Vec::new());
-                }
-                let m = gathr::tasks::Moved {
-                    chat: &i.chat,
-                    turn: &i.turn,
-                    agent: i.agent.as_deref(),
-                    task,
-                    trace: &i.trace,
-                    carries_on: carries_on.as_deref(),
-                };
-                let starts = gathr::tasks::turn_moved_in(&tx, &m, &status, why.as_deref())?;
-                tx.commit()?;
-                Ok::<_, gathr::Error>(starts)
-            });
-        match saved.await {
-            Some(Ok(starts)) => self.chats.start(starts),
-            Some(Err(e)) => {
-                let event = Event::point("gathr.turn.status").trace(&ids.trace);
-                self.chats
-                    .writer
-                    .record(event.error("sqlite").attr("why", e.to_string()));
-            }
-            None => {}
+            .call(move |conn| store::set_turn(conn, &turn, &status_saved, why_saved.as_deref()));
+        if let Some(Err(e)) = saved.await {
+            let event = Event::point("gathr.turn.status").trace(&ids.trace);
+            self.record(event.error("sqlite").attr("why", e.to_string()));
         }
+        self.announce_turn(ids, status, why).await;
     }
 
     /// Sends a turn's status live, once it's saved: what pauses wait on may have changed with it.
@@ -238,7 +165,7 @@ impl Task {
         let reference = gathr::ids::reference(&ids.trace);
         let update = json!({ "type": "turn", "turn": ids.turn, "status": status,
             "agent": ids.agent, "why": why, "end": gathr::ends::word(status, why), "ref": reference,
-            "task": ids.task, "answers": ids.answers });
+            "answers": ids.answers });
         self.publish_turn(ids, update).await;
         self.chat_state(ids).await;
     }
@@ -246,26 +173,15 @@ impl Task {
     /// Sends a turn's change live with when it was made and its place once started, read from
     /// its row, so a window following live shows and orders it as a reload would (0028).
     pub(super) async fn publish_turn(&self, ids: &Ids, mut update: Value) {
-        let (turn, chat) = (ids.turn.clone(), ids.chat.clone());
-        let place = self.chats.writer.call(move |c| {
-            let place = store::turn_place(c, &turn)?;
-            // A room chat has replies instead of the old threads.
-            let topic = match gathr::room::is_room(c, &chat)? {
-                true => None,
-                false => gathr::topics::of_turn(c, &chat, &turn)?,
-            };
-            Ok::<_, gathr::Error>((place, topic))
-        });
+        let turn = ids.turn.clone();
+        let place = self.chats.writer.call(move |c| store::turn_place(c, &turn));
         match place.await {
-            Some(Ok(((position, created, result_of, opened, ended), topic))) => {
+            Some(Ok((position, created, opened, ended))) => {
                 update["position"] = json!(position);
                 update["created"] = json!(created);
                 // When it ended: the window's name line says how long it took (0082).
                 update["ended"] = json!(ended);
-                update["result_of"] = json!(result_of);
                 update["opened"] = json!(opened);
-                // What it is about (0075): read when its status goes out, never per streamed word.
-                update["topic"] = json!(topic);
             }
             Some(Err(e)) => {
                 let event = Event::point("gathr.turn.status").trace(&ids.trace);
