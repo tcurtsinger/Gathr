@@ -66,6 +66,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "b95544be05abcd329423d20e52e3a88d044d3f4f1346b316cd4e4804be7c31e9",
     ),
     (
+        "wake",
+        2,
+        "6dbf06ca487691e3b49790ae9e6791047483b7b0138964eefbe67853b7c56545",
+    ),
+    (
         "silent",
         1,
         "2ae5593c12f7ecbf7cd1b8b051e2168b0bfd02032b937e01642a6398f31a1921",

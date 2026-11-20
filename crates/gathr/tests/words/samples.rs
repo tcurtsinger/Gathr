@@ -187,6 +187,12 @@ pub const SAMPLES: &[(&str, &str, &str)] = &[
          - #1 (Ann) is ready, and no turn is on it, for under a minute\n\
          Move it on: give, restart or cancel work, or ask the person. If nothing can be done, say why.",
     ),
+    ("wake", "wake: late", "Gathr queued this turn 3 min ago."),
+    (
+        "wake",
+        "wake: late, lines",
+        "Gathr queued this turn 2 h 5 min ago. The chat's lines below say what changed since.",
+    ),
     (
         "silent",
         "silent: on a task",

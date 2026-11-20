@@ -5,8 +5,10 @@
 use std::collections::HashMap;
 
 use gathr::event::Event;
+use gathr::ids::now_us;
 use gathr::redact::redact;
 use gathr::sessions::{Conversation, Key};
+use rusqlite::OptionalExtension;
 use serde_json::json;
 
 use super::{Assignment, Ids, Queued, Task};
@@ -211,9 +213,14 @@ impl Task {
         };
         let said = [heard.clone(), asked, github, Some(text)];
         let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
+        let late = self.late(&next.ids, heard.is_some()).await;
+        let first = |text: String| match &late {
+            Some(late) => format!("{late}\n\n{text}"),
+            None => text,
+        };
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
-            return (text, restored);
+            return (first(text), restored);
         };
         let (task, ask, lines) = (*task, next.text.clone(), heard.is_some());
         let made = self
@@ -227,12 +234,12 @@ impl Task {
             .attr("gathr.task.id", task);
         let Some(Ok((opening, count))) = made else {
             self.record(event.error("sqlite").attr("why", format!("{made:?}")));
-            return (text, restored);
+            return (first(text), restored);
         };
         let chars = opening.chars().count();
         let event = event.ok().attr("gathr.task.count", count);
         self.record(event.attr("gathr.message.chars", chars));
-        (format!("{opening}\n\n{text}"), restored)
+        (first(format!("{opening}\n\n{text}")), restored)
     }
 
     async fn recalled(&self, ids: &Ids, text: String) -> (String, bool) {
@@ -311,6 +318,28 @@ impl Task {
                         .attr("why", format!("{failed:?}")),
                 );
                 false
+            }
+        }
+    }
+
+    /// How long ago a turn opened by Gathr's words was queued, when it starts 2 minutes or more
+    /// after: its words were written then. With `lines`, the chat's lines below say what changed.
+    /// A reply or a pick has Gathr's line, but the person wrote its ask.
+    async fn late(&self, ids: &Ids, lines: bool) -> Option<String> {
+        if ids.person {
+            return None;
+        }
+        let turn = ids.turn.clone();
+        let queued = move |c: &mut rusqlite::Connection| {
+            let sql = "SELECT created_ts FROM turns WHERE id = ?1 AND opened_version IS NOT NULL";
+            c.query_row(sql, [turn], |r| r.get::<_, i64>(0)).optional()
+        };
+        match self.chats.writer.call(queued).await {
+            Some(Ok(queued)) => gathr::words::late(now_us() - queued?, lines),
+            failed => {
+                let event = Event::point("gathr.session.late").trace(&ids.trace);
+                self.record(event.error("sqlite").attr("why", format!("{failed:?}")));
+                None
             }
         }
     }
