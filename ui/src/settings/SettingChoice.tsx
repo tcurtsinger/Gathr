@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from 'react';
 import { api, type Failure, type Settings } from '../api';
+import { Dropdown } from '../components/Dropdown';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
 import { useNewestWins } from '../newest';
@@ -52,16 +53,17 @@ export function SettingChoice({ field, label, help, choices, other, onReference 
             <label htmlFor={field}>{label}</label>
             <Help label={help.label}>{help.text}</Help>
           </span>
-          <select id={field} value={saved ?? NONE} onChange={(e) => pick(e.target.value)}>
-            {saved !== null && !choices.some((c) => c.value === saved) && (
-              <option value={saved}>{other(saved)}</option>
-            )}
-            {choices.map((c) => (
-              <option key={c.value ?? NONE} value={c.value ?? NONE}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            id={field}
+            value={String(saved ?? NONE)}
+            onChange={pick}
+            choices={[
+              ...(saved !== null && !choices.some((c) => c.value === saved)
+                ? [{ value: String(saved), label: other(saved) }]
+                : []),
+              ...choices.map((c) => ({ value: String(c.value ?? NONE), label: c.label })),
+            ]}
+          />
         </div>
       )}
     </>

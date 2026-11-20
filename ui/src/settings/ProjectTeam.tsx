@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useId } from 'react';
 import type { Agent, Role } from '../api';
+import { Dropdown } from '../components/Dropdown';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import type { Seat } from './Projects';
@@ -56,18 +57,13 @@ export function Team({ seats, agents, onChange }: Props) {
             <Face agent={agents.find((a) => a.id === agent) ?? { id: agent, name: name(agent) }} size={24} />
             {name(agent)}
           </span>
-          <select
+          <Dropdown
             aria-label={`Role of ${name(agent)}`}
             disabled={role === 'supervisor'}
             value={role}
-            onChange={(e) => setRole(agent, e.target.value as Role)}
-          >
-            {roles.map((r) => (
-              <option key={r} value={r}>
-                {roleName[r]}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setRole(agent, v as Role)}
+            choices={roles.map((r) => ({ value: r, label: roleName[r] }))}
+          />
           <IconButton
             type="button"
             aria-label={`Remove ${name(agent)}`}
@@ -78,22 +74,15 @@ export function Team({ seats, agents, onChange }: Props) {
           </IconButton>
         </div>
       ))}
-      <select
+      <Dropdown
         aria-label="Add agent"
         className="project-add"
         value=""
+        placeholder="Add agent"
         disabled={seats.length >= MOST || others.length === 0}
-        onChange={(e) => add(e.target.value)}
-      >
-        <option value="" disabled>
-          Add agent
-        </option>
-        {others.map((a) => (
-          <option key={a.id} value={a.id}>
-            {a.name}
-          </option>
-        ))}
-      </select>
+        onChange={add}
+        choices={others.map((a) => ({ value: a.id, label: a.name }))}
+      />
     </fieldset>
   );
 }

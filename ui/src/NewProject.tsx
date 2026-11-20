@@ -2,6 +2,7 @@ import { type FormEvent, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Agent, api, type Failure, type Project } from './api';
 import { Dialog } from './components/Dialog';
+import { Dropdown } from './components/Dropdown';
 import { Notice } from './components/Notice';
 import { Switch } from './components/Switch';
 import './new-project.css';
@@ -87,29 +88,27 @@ export function NewProject({ open, agents, projects, onClose, onCreated, onRefer
         </fieldset>
         {team.length > 1 && (
           <>
-            <label className="agent-field">
-              Supervisor
-              <select value={supervisor} onChange={(e) => setLead(e.target.value)}>
-                {team.map((id) => (
-                  <option key={id} value={id}>
-                    {nameOf(id)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="agent-field">
-              Reviewer
-              <select value={reviewer} onChange={(e) => setReviewer(e.target.value)}>
-                <option value="">None</option>
-                {team
-                  .filter((id) => id !== supervisor)
-                  .map((id) => (
-                    <option key={id} value={id}>
-                      {nameOf(id)}
-                    </option>
-                  ))}
-              </select>
-            </label>
+            <div className="agent-field">
+              <label htmlFor="new-project-supervisor">Supervisor</label>
+              <Dropdown
+                id="new-project-supervisor"
+                value={supervisor}
+                onChange={setLead}
+                choices={team.map((id) => ({ value: id, label: nameOf(id) }))}
+              />
+            </div>
+            <div className="agent-field">
+              <label htmlFor="new-project-reviewer">Reviewer</label>
+              <Dropdown
+                id="new-project-reviewer"
+                value={reviewer}
+                onChange={setReviewer}
+                choices={[
+                  { value: '', label: 'None' },
+                  ...team.filter((id) => id !== supervisor).map((id) => ({ value: id, label: nameOf(id) })),
+                ]}
+              />
+            </div>
           </>
         )}
         {failure && (

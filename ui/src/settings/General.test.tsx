@@ -1,6 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { followTheme } from '../theme';
 import { General } from './General';
@@ -25,6 +25,12 @@ function service(on: boolean, puts: (boolean | 'fail')[], sent: unknown[]) {
 }
 afterEach(() => vi.unstubAllGlobals());
 
+/** Picks a Theme as a person does. */
+const pick = async (theme: { click: () => Promise<void> }, choice: string) => {
+  await theme.click();
+  await page.getByRole('option', { name: choice, exact: true }).click();
+};
+
 /** Writes the window's Theme cookie as any port of this host could. */
 function cookie(value: string) {
   // biome-ignore lint/suspicious/noDocumentCookie: the test plays a window on another port.
@@ -48,9 +54,9 @@ test('Theme applies at once, is kept for the next start, and System follows the 
   const systemLight = matchMedia('(prefers-color-scheme: light)').matches;
   const screen = await render(<General onReference={() => {}} />);
   const theme = screen.getByRole('combobox', { name: 'Theme' });
-  await expect.element(theme).toHaveValue('system');
+  await expect.element(theme).toHaveTextContent('System');
 
-  await userEvent.selectOptions(theme, systemLight ? 'Dark' : 'Light');
+  await pick(theme, systemLight ? 'Dark' : 'Light');
   expect(light()).toBe(!systemLight);
 
   // A new start: the class comes from what was kept, before any screen draws.
@@ -59,9 +65,9 @@ test('Theme applies at once, is kept for the next start, and System follows the 
   expect(light()).toBe(!systemLight);
   await screen.rerender(<General key="again" onReference={() => {}} />);
   const kept = screen.getByRole('combobox', { name: 'Theme' });
-  await expect.element(kept).toHaveValue(systemLight ? 'dark' : 'light');
+  await expect.element(kept).toHaveTextContent(systemLight ? 'Dark' : 'Light');
 
-  await userEvent.selectOptions(kept, 'System');
+  await pick(kept, 'System');
   expect(light()).toBe(systemLight);
 });
 
@@ -75,8 +81,8 @@ test('the desktop window title bar takes Theme at start and on each change, and 
   followTheme();
   const screen = await render(<General onReference={() => {}} />);
   const theme = screen.getByRole('combobox', { name: 'Theme' });
-  await userEvent.selectOptions(theme, 'Light');
-  await userEvent.selectOptions(theme, 'System');
+  await pick(theme, 'Light');
+  await pick(theme, 'System');
   const set = (value: string | null) => ['plugin:window|set_theme', { value }];
   expect(calls).toEqual([set('dark'), set('light'), set(null)]);
 });

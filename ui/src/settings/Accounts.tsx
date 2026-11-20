@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { type Account, api, type Failure } from '../api';
 import { ConfirmRemove } from '../components/ConfirmRemove';
+import { Dropdown } from '../components/Dropdown';
 import { FailureNotice } from '../components/Notice';
 import { listen } from '../live';
 import { SignInFailed, SignInWaiting } from './SignIn';
@@ -116,16 +117,16 @@ function AccountForm({ account, onClose, onFailure }: FormProps) {
   return (
     <form className="account-form" aria-labelledby={title} onSubmit={submit}>
       <h4 id={title}>{account ? 'Rename account' : 'Add account'}</h4>
-      <label>
-        Engine
-        <select value={engine} disabled={!!account} onChange={(e) => setEngine(e.target.value)}>
-          {engines.map(([id, label]) => (
-            <option key={id} value={id}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="account-field">
+        <label htmlFor={`${title}engine`}>Engine</label>
+        <Dropdown
+          id={`${title}engine`}
+          value={engine}
+          disabled={!!account}
+          onChange={setEngine}
+          choices={engines.map(([id, label]) => ({ value: id, label }))}
+        />
+      </div>
       <label>
         Name
         <input

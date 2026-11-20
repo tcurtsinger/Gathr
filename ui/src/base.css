@@ -16,27 +16,22 @@ body {
 }
 button:where(:not([data-slot])),
 input:where(:not([data-slot])),
-select:where(:not([data-slot])),
 textarea:where(:not([data-slot])) {
   font: inherit;
   color: inherit;
 }
-button:where(:not([data-slot])),
-select:where(:not([data-slot])) {
-  cursor: pointer;
-}
 button:where(:not([data-slot])) {
+  cursor: pointer;
   min-height: 32px;
   padding: 6px 10px;
   border: 0;
   border-radius: 7px;
   background: transparent;
 }
-button:where(:not([data-slot])):hover,
-select:where(:not([data-slot])):hover {
+button:where(:not([data-slot])):hover {
   background: var(--raised);
 }
-:is(button, select):disabled {
+button:disabled {
   opacity: 0.5;
   cursor: default;
 }
@@ -51,8 +46,7 @@ button.link {
 button.link:hover {
   background: transparent;
 }
-input:where(:not([data-slot])),
-select:where(:not([data-slot])) {
+input:where(:not([data-slot])) {
   min-width: 0;
   padding: 7px 10px;
   background: var(--canvas);
@@ -81,7 +75,6 @@ dialog:modal {
 }
 @media (max-width: 767px) {
   button,
-  select,
   input {
     min-height: 44px;
   }

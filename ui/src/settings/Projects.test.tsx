@@ -1,5 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import '../theme.css';
 import type { Agent, Project } from '../api';
@@ -76,22 +77,26 @@ test('the team keeps one Supervisor and at least one agent; a new Supervisor or 
   const screen = await render(<Projects start="p" onReference={() => {}} />);
   const role = (name: string) => screen.getByRole('combobox', { name: `Role of ${name}` });
   const remove = (name: string) => screen.getByRole('button', { name: `Remove ${name}` });
+  const pick = async (field: ReturnType<typeof role>, choice: string) => {
+    await field.click();
+    await page.getByRole('option', { name: choice, exact: true }).click();
+  };
 
   // The Supervisor isn't demoted directly: another is picked in its place.
   await expect.element(role('Made-up Lead')).toBeDisabled();
-  await role('Made-up Member').selectOptions('supervisor');
-  await expect.element(role('Made-up Lead')).toHaveValue('member');
+  await pick(role('Made-up Member'), 'Supervisor');
+  await expect.element(role('Made-up Lead')).toHaveTextContent('Member');
   await expect.element(role('Made-up Member')).toBeDisabled();
 
   // One Reviewer: a second one makes the first a Member.
-  await screen.getByRole('combobox', { name: 'Add agent' }).selectOptions('c');
-  await role('Made-up Third').selectOptions('reviewer');
-  await role('Made-up Lead').selectOptions('reviewer');
-  await expect.element(role('Made-up Third')).toHaveValue('member');
+  await pick(screen.getByRole('combobox', { name: 'Add agent' }), 'Made-up Third');
+  await pick(role('Made-up Third'), 'Reviewer');
+  await pick(role('Made-up Lead'), 'Reviewer');
+  await expect.element(role('Made-up Third')).toHaveTextContent('Member');
 
   // Removing the Supervisor makes the next agent it; the last agent stays.
   await remove('Made-up Member').click();
-  await expect.element(role('Made-up Lead')).toHaveValue('supervisor');
+  await expect.element(role('Made-up Lead')).toHaveTextContent('Supervisor');
   await remove('Made-up Third').click();
   await expect.element(remove('Made-up Lead')).toBeDisabled();
 

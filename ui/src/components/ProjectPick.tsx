@@ -1,5 +1,6 @@
 import { Folder } from 'lucide-react';
 import type { Project } from '../api';
+import { Dropdown } from './Dropdown';
 import './project-pick.css';
 
 /** A new chat's project, picked above the message box before its first message; '' for none. */
@@ -15,21 +16,18 @@ export function ProjectPick({
   onNewProject: () => void;
 }) {
   return (
-    <label className="project-pick">
+    <div className="project-pick">
       <Folder aria-hidden="true" />
-      <select
+      <Dropdown
         aria-label="Project"
         value={project ?? ''}
-        onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
-      >
-        <option value="">No project</option>
-        {projects.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-        <option value="new">New project</option>
-      </select>
-    </label>
+        onChange={(v) => (v === 'new' ? onNewProject() : onProject(v))}
+        choices={[
+          { value: '', label: 'No project' },
+          ...projects.map((p) => ({ value: p.id, label: p.name })),
+          { value: 'new', label: 'New project' },
+        ]}
+      />
+    </div>
   );
 }
