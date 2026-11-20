@@ -74,6 +74,7 @@ fn room() -> Room {
         .as_str()
         .unwrap()
         .to_string();
+    common::old_chat(&data.0, &chat);
     let sent = service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),

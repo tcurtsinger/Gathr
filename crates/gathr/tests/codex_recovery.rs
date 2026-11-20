@@ -84,6 +84,7 @@ fn setup(data: &Path, file: &Path, mode: &str) -> (TestService, String) {
         "/api/chats",
         json!({"members":[{"agent":agent["id"],"role":"supervisor"}]}),
     );
+    common::old_chat(data, made.json()["id"].as_str().unwrap());
     (service, made.json()["id"].as_str().unwrap().to_string())
 }
 
@@ -472,6 +473,7 @@ fn lead_gives_ann_a_task(
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(data, &chat);
     let sent = service.send(
         "POST",
         &format!("/api/chats/{chat}/messages"),

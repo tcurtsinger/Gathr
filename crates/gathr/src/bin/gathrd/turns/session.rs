@@ -59,7 +59,8 @@ impl Task {
         assigned: Option<&Assignment>,
     ) -> (Key, Conversation) {
         let latest = (Key::Latest, Conversation::Latest);
-        let (Some(agent), Some(assigned)) = (ids.agent.clone(), assigned) else {
+        let (Some(agent), Some(assigned)) = (ids.agent.clone(), assigned.filter(|a| !a.room))
+        else {
             return latest;
         };
         let (turn, account) = (ids.turn.clone(), assigned.account.clone());
@@ -192,13 +193,23 @@ impl Task {
         fresh: bool,
         text: String,
     ) -> (String, bool) {
-        let text = self.held_start(&next.ids, text).await;
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
+        let text = match room {
+            true => text,
+            false => self.held_start(&next.ids, text).await,
+        };
         if self.compactions.contains(&next.ids.turn) {
             return (text, false);
         }
         // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
         let summed = self.summed(None, &next.ids).await;
+        // A room chat's turn opens with what the room said since the agent's last turn, and nothing else.
+        if room {
+            let (heard, _) = self.heard(&next.ids, new || summed, None).await;
+            let said = [heard, Some(text)].into_iter().flatten();
+            return (said.collect::<Vec<_>>().join("\n\n"), summed);
+        }
         // An engine opened again on a task's conversation goes on from that conversation's last turn.
         let resumed = match choice {
             Conversation::Resume { session, .. } if fresh => Some(session.clone()),

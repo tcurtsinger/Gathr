@@ -36,10 +36,15 @@ fn plan_check_us() -> i64 {
     ms.map_or(PLAN_CHECK_US, |ms| ms * 1000)
 }
 
-/// Looks at one chat now.
+/// Looks at one chat now. A room chat has none of this: its check runs from each turn's end
+/// (`mentions.rs`).
 pub async fn check(chats: &Arc<Chats>, chat: &str) {
+    let trace = trace_id();
+    if room(chats, chat).await {
+        return crate::chat_state::changed(chats, chat, &trace).await;
+    }
     let live = super::live_now(chats, chat);
-    let (trace, id) = (trace_id(), chat.to_string());
+    let id = chat.to_string();
     let t = trace.clone();
     let checked = chats
         .writer
@@ -120,6 +125,9 @@ pub async fn silent(
     quiet_ms: i64,
     trace: String,
 ) {
+    if room(&chats, &chat).await {
+        return;
+    }
     let (id, t) = (chat.clone(), trace.clone());
     let told = chats
         .writer
@@ -131,8 +139,15 @@ pub async fn silent(
     );
 }
 
+/// Whether `chat` is a room chat; one that can't be read is taken for an old one.
+async fn room(chats: &Chats, chat: &str) -> bool {
+    let id = chat.to_string();
+    let read = chats.writer.call(move |c| gathr::room::is_room(c, &id));
+    matches!(read.await, Some(Ok(true)))
+}
+
 /// Queues the turns a change called for; a failure is recorded with its chat.
-fn started(
+pub(crate) fn started(
     chats: &Arc<Chats>,
     changed: Option<Result<Vec<Start>, gathr::Error>>,
     (name, chat, trace): (&str, &str, &str),

@@ -147,6 +147,7 @@ fn another_chats_events_dont_come_back() {
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat_b = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(&data.0, &chat_b);
 
     let lead_a = lead_turn(&service, &data.0, &chat_a, 0);
     let lead_b = lead_turn(&service, &data.0, &chat_b, 1);

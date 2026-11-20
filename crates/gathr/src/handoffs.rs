@@ -65,7 +65,11 @@ pub fn record(conn: &Connection, chat: &str, from: &str, to: &str) -> Result<Cou
         [chat],
         |r| r.get(0),
     )?;
-    let task: Option<i64> = conn.query_row(&settled, [chat], |r| r.get(0))?;
+    // A room chat has no tasks: only the person's words start a chain over.
+    let task: Option<i64> = match crate::room::is_room(conn, chat)? {
+        true => None,
+        false => conn.query_row(&settled, [chat], |r| r.get(0))?,
+    };
     let since = person.max(task).unwrap_or(0);
     let chain: Option<i64> = conn.query_row(
         "SELECT max(depth) FROM handoffs WHERE chat_id = ?1 AND to_agent = ?2 AND created_ts > ?3",

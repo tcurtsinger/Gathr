@@ -391,6 +391,7 @@ fn a_plan_or_a_question_keeps_the_turn_in_the_room_whatever_it_chose() {
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let other = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(&data.0, &other);
     let (writing, other_ask) = send(&service, &other, json!({ "text": "Made-up ask: add tags" }));
     let planner = token(&data.0, 1);
     turn_is(&service, &other, &writing, "running");
@@ -449,15 +450,10 @@ fn the_upgrade_from_0058_keeps_every_rowid_the_search_index_and_each_turns_place
              ('m1', 'c', 'asked', 10, 'user', 'text', 'Count the herons by the weir'),
              ('m2', 'c', 'asked', 11, 'assistant', 'text', 'Rowan counts them'),
              ('m3', 'c', 'work', 20, 'gathr', 'text', 'Task #1 from Mira: Count the herons'),
-             ('m4', 'c', 'work', 21, 'assistant', 'text', 'Nine herons');
-         ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed;
-         PRAGMA user_version = 58;",
+             ('m4', 'c', 'work', 21, 'assistant', 'text', 'Nine herons');",
     )
     .unwrap();
+    common::old::back_to(&conn, 58);
     let rowids = "SELECT group_concat(rowid || ':' || id) FROM messages";
     let searched =
         "SELECT group_concat(rowid) FROM message_search WHERE message_search MATCH 'herons'";

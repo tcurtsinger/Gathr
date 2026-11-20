@@ -203,6 +203,11 @@ impl Task {
             .call(move |conn: &mut rusqlite::Connection| {
                 let tx = conn.transaction()?;
                 store::set_turn(&tx, &i.turn, &status, why.as_deref())?;
+                // A room chat has no tasks, hear-backs or waits for a turn to move.
+                if gathr::room::is_room(&tx, &i.chat)? {
+                    tx.commit()?;
+                    return Ok(Vec::new());
+                }
                 let m = gathr::tasks::Moved {
                     chat: &i.chat,
                     turn: &i.turn,
@@ -244,7 +249,11 @@ impl Task {
         let (turn, chat) = (ids.turn.clone(), ids.chat.clone());
         let place = self.chats.writer.call(move |c| {
             let place = store::turn_place(c, &turn)?;
-            let topic = gathr::topics::of_turn(c, &chat, &turn)?;
+            // A room chat has replies instead of the old threads.
+            let topic = match gathr::room::is_room(c, &chat)? {
+                true => None,
+                false => gathr::topics::of_turn(c, &chat, &turn)?,
+            };
             Ok::<_, gathr::Error>((place, topic))
         });
         match place.await {

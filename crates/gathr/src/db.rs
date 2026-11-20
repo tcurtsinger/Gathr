@@ -72,6 +72,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0062_turn_session.sql"),
     include_str!("../migrations/0063_summed_sessions.sql"),
     include_str!("../migrations/0064_board_lines.sql"),
+    include_str!("../migrations/0065_chat_room.sql"),
     include_str!("../migrations/0066_agent_picture.sql"),
 ];
 

@@ -275,14 +275,8 @@ fn the_upgrade_to_0058_gives_each_chat_with_turns_and_no_list_its_latest_agent_a
     ] {
         sql.push_str(&turn_sql(id, chat, agent, at));
     }
-    sql.push_str(
-        "ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 57;",
-    );
     conn.execute_batch(&sql).unwrap();
+    common::old::back_to(&conn, 57);
     drop(conn);
 
     let conn = gathr::db::open(&db).unwrap();
@@ -443,14 +437,8 @@ fn a_lone_agents_briefing_names_who_worked_here_and_no_role() {
     sql.push_str("INSERT INTO chats (id, title, created_ts) VALUES ('two', 'Two', 1);");
     sql.push_str(&turn_sql("w1", "two", Some("ann"), 10));
     sql.push_str(&turn_sql("w2", "two", Some("mira"), 20));
-    sql.push_str(
-        "ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 57;",
-    );
     conn.execute_batch(&sql).unwrap();
+    common::old::back_to(&conn, 57);
     drop(conn);
     sign_in_account(&data.0, "acc");
     let args = data.0.join("engine-args.jsonl");
