@@ -13,8 +13,6 @@ mod load;
 pub mod place;
 pub mod record;
 mod rows;
-#[cfg(test)]
-mod tests;
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};

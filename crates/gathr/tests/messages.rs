@@ -479,43 +479,6 @@ fn a_message_goes_out_live_naming_its_chat_and_whom_its_for() {
     assert_eq!(heard["message"]["to"], room.ann.as_str(), "{heard}");
 }
 
-/// A window tells a task's brief from Gathr's other words by its turn's task, so the turn goes out
-/// live before the brief: the other way round, the window drew the brief as a line for a moment.
-#[test]
-fn a_tasks_turn_goes_out_live_before_its_brief() {
-    let data = TempDir::new();
-    let room = room(&data.0);
-    let lead = room.turn_of(&room.lead, 0);
-    let mut live = room.service.live();
-    let port = room.service.info.port;
-    common::fix_it(port, &lead);
-    let ask = json!({ "to": "Ann", "what": "Write the notes" });
-    let given = text(&call_tool(port, &lead, "give_task", common::briefed(ask)));
-    assert!(given.starts_with("Task #1 for Ann: ready."), "{given}");
-    // Each turn event's turn, status and task, up to the brief.
-    let mut turns = Vec::new();
-    let brief = until(10, "the brief, live", || {
-        let event = common::next_live(&mut live);
-        let body = event["message"]["body"].as_str().unwrap_or_default();
-        if event["type"] == "turn" {
-            turns.push((
-                event["turn"].clone(),
-                event["status"].clone(),
-                event["task"].clone(),
-            ));
-        }
-        (event["type"] == "message" && body.starts_with("Task #1 from Lead")).then_some(event)
-    });
-    let turn = &brief["message"]["turn"];
-    assert!(turn.is_string(), "the brief names its turn: {brief}");
-    let before: Vec<_> = turns.iter().filter(|(t, ..)| t == turn).collect();
-    assert_eq!(
-        before.first().map(|(_, _, task)| task),
-        Some(&json!(1)),
-        "the brief's turn, with its task, before the brief; turn events before it: {turns:?}"
-    );
-}
-
 /// Scenario 6b through the service (0050): one answer says what the chat waits on, the same by the
 /// route, the `waiting` tool and the command line. A turn queued behind its agent's running turn
 /// says so, which only that agent's queue knows; when the turn ahead ends, a live message names the

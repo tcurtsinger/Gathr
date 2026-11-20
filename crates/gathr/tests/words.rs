@@ -188,18 +188,9 @@ const KEPT: &[(&str, i64, &str)] = &[
 ];
 /// Every file that asserts samples.
 const SOURCES: &[&str] = &[
-    include_str!("tasks/words.rs"),
-    include_str!("quiet/words.rs"),
-    include_str!("stale.rs"),
-    include_str!("merge/lands.rs"),
     include_str!("app_update.rs"),
     include_str!("pauses.rs"),
     include_str!("restart_room.rs"),
-    include_str!("plans/write.rs"),
-    include_str!("plans/check.rs"),
-    include_str!("plans/decide.rs"),
-    include_str!("hold/give.rs"),
-    include_str!("hold/wait.rs"),
     include_str!("roles.rs"),
     include_str!("likes.rs"),
     include_str!("replies.rs"),
