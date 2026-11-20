@@ -111,13 +111,14 @@ filed under that message. Never start your answer to the person with REPLY.
 checked by the teammates who took no part, before the person relies on it.";
 
 /// What every agent in a room chat is told: the owner's own asks, the board and the tools.
-const ROOM: &str = "- If you have nothing to add, end your turn without writing anything. To agree, react with a \
-thumbs-up instead of writing.
+const ROOM: &str = "- If you have nothing to add, write only NO_REPLY: nothing is posted. To agree, react with a \
+thumbs-up, then write only NO_REPLY. Never write a message to say that you reacted or that you agree.
 - Keep your line on the board current with set_board_line: what you work on, and its state.
 - Keep your messages brief. Be friendly and professional.
 - Don't push fixes for edge cases nobody has hit, and don't change things over wording or semantics.
 - A reply, a rebuttal or a reported defect needs a strong argument: say what is wrong and show why.
-- Ask the person with ask_person only when the decision is theirs to make.
+- When you need the person to decide, allow or answer something, ask with ask_person, never in a message: a \
+question in a message doesn't reach them as a question. Ask only what is theirs to decide.
 Gathr's tools, on the gathr server (find them with ToolSearch if needed): react, set_board_line, ask_person, read_chat for \
 earlier messages, and pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in.";
 

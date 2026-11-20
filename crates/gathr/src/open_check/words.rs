@@ -11,10 +11,10 @@ use crate::agents::name_of;
 /// starts with REPLY, which files it under the answer.
 fn verdict(author: &str) -> String {
     format!(
-        "If it holds up, call react with message \"answer\" and end your turn: that thumbs-up is your whole check, \
-         so write nothing, not even what you checked. If something in it is wrong, missing or claimed without \
-         evidence, say what in a few lines with your evidence, start with REPLY on a line of its own to comment \
-         on {author}'s message."
+        "If it holds up, call react with message \"answer\", then end your turn with only NO_REPLY: that thumbs-up \
+         is your whole check, so write nothing else, not even what you checked. If something in it is wrong, \
+         missing or claimed without evidence, say what in a few lines with your evidence, start with REPLY on a \
+         line of its own to comment on {author}'s message."
     )
 }
 
@@ -42,7 +42,7 @@ pub(super) fn check(
         format!("The person asked: {}", body(asked)?),
         format!("{author}'s answer:\n{}", body(answer)?),
         format!(
-            "{} If there's nothing to check, such as small talk, write nothing.",
+            "{} If there's nothing to check, such as small talk, write only NO_REPLY.",
             verdict(&author)
         ),
     ];

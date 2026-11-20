@@ -1,7 +1,8 @@
 //! A room chat's turns (0065), through a real service on Claude Code's replay stand-in: who gets a
 //! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
 //! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
-//! a REPLY sits under the message it answers. Each
+//! a REPLY sits under the message it answers; NO_REPLY posts nothing, and a check that reacts and
+//! writes it closes. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
 //! given.
 
@@ -15,11 +16,25 @@ use serde_json::{Value, json};
 
 /// Claude Code's stand-in saying each of `turns` in turn instead of "Hi!".
 fn saying(dir: &Path, turns: &[&str]) -> PathBuf {
+    saying_held(dir, turns, None)
+}
+
+/// As `saying`, with the turn at `held` held once its message is read, until the test lets it go.
+fn saying_held(dir: &Path, turns: &[&str], held: Option<usize>) -> PathBuf {
     let frames = std::fs::read_to_string(common::recording("signed_in")).unwrap();
     let frames = frames.trim_end();
     let said: Vec<String> = turns
         .iter()
-        .map(|words| frames.replace("Hi!", &escaped(&escaped(words))))
+        .enumerate()
+        .map(|(at, words)| {
+            let turn = frames.replace("Hi!", &escaped(&escaped(words)));
+            match (held == Some(at), turn.split_once('\n')) {
+                (true, Some((read, rest))) => {
+                    format!("{read}\n{{\"dir\":\"hold\",\"line\":\"take\"}}\n{rest}")
+                }
+                _ => turn,
+            }
+        })
         .collect();
     let file = dir.join("saying.jsonl");
     std::fs::write(&file, said.join("\n") + "\n").unwrap();
@@ -302,4 +317,97 @@ fn a_reply_sits_under_the_message_that_woke_it_and_one_level_deep() {
     );
     let answered: Vec<&Value> = deltas.iter().map(|d| &d["reply_to"]).collect();
     assert_eq!(answered, [&Value::Null, &main, &main], "{deltas:?}");
+}
+
+#[test]
+fn no_reply_posts_nothing_and_ends_done_and_words_after_it_post_without_it() {
+    let data = TempDir::new();
+    let replay = saying(&data.0, &["NO_REPLY.", "NO_REPLY\nThe map holds."]);
+    let room = room(&data.0, &replay);
+    let mut live = room.service.live();
+    room.say("Anything to add?", None);
+    room.quiet(1);
+    room.say("And now?", None);
+    let mut deltas = Vec::new();
+    let posted = loop {
+        let event = common::next_live(&mut live);
+        match (event["type"].as_str(), &event["message"]) {
+            (Some("delta"), _) => deltas.push(event["text"].clone()),
+            (Some("message"), m) if m["role"] == "assistant" && m["kind"] == "text" => {
+                break m.clone();
+            }
+            _ => {}
+        }
+    };
+    let history = room.quiet(2);
+
+    // The first turn ended done with nothing posted, live or kept; the second posted its words
+    // after NO_REPLY as a main message, and NO_REPLY never streamed.
+    assert_eq!(history["turns"][0]["status"], "done", "{history}");
+    assert_eq!(posted["body"], "The map holds.", "{posted}");
+    let said = agents_words(&history);
+    let want = [(json!(room.lead), json!("The map holds."), Value::Null)];
+    assert_eq!(said, want, "{history}");
+    assert!(
+        deltas
+            .iter()
+            .all(|d| !d.as_str().unwrap().contains("NO_REPLY")),
+        "{deltas:?}"
+    );
+}
+
+#[test]
+fn a_check_that_reacts_and_writes_no_reply_closes_and_posts_nothing() {
+    let data = TempDir::new();
+    // Ann's first turn is a warm-up, so her check is her second: a thumbs-up, then NO_REPLY.
+    let replay = saying_held(&data.0, &["The map is ready.", "NO_REPLY"], Some(1));
+    let on = [("GATHR_OPEN_CHECK", Path::new("on"))];
+    let (service, chat, lead) = common::team(&data.0, &replay, &on);
+    let _go = common::replay::LetGo(data.0.join("go"));
+    let history = |service: &TestService| service.call("GET", &format!("/api/chats/{chat}")).json();
+    let members = history(&service)["members"].as_array().unwrap().clone();
+    let ann = members.iter().find(|m| m["name"] == "Ann").unwrap()["agent"].clone();
+    let say = |words: &str, agent: Value| {
+        let path = format!("/api/chats/{chat}/messages");
+        let sent = service.send("POST", &path, json!({ "text": words, "agent": agent }));
+        assert_eq!(sent.status, 200, "{}", sent.body);
+    };
+    let ended = |n: usize| {
+        move |h: &Value| {
+            let turns = h["turns"].as_array().cloned().unwrap_or_default();
+            turns.len() == n && turns.iter().all(|t| t["status"] == "done")
+        }
+    };
+    say("Warm up", ann.clone());
+    service.wait_for(&chat, 30, "Ann's warm-up", ended(1));
+    say("Draw the map", Value::Null);
+    let checking = |h: &Value| h["turns"].as_array().is_some_and(|t| t.len() == 3);
+    service.wait_for(&chat, 30, "Ann's check", checking);
+    let token = common::nth(&data.0.join("env.jsonl"), 0)["GATHR_AGENT_TOKEN"].clone();
+    let ask = json!({ "message": "answer" });
+    let given = common::call_tool(service.info.port, token.as_str().unwrap(), "react", ask);
+    assert!(
+        common::text(&given)
+            .ends_with("That is your whole check: end your turn with only NO_REPLY."),
+        "{given}"
+    );
+    std::fs::write(data.0.join("go"), "").unwrap();
+    service.wait_for(&chat, 30, "every turn done", ended(3));
+
+    let closed = || {
+        let ended = rows(
+            &data.0,
+            "SELECT count(*) AS n FROM open_checks WHERE ended_ts IS NOT NULL",
+        );
+        (ended[0]["n"] == 1).then_some(())
+    };
+    common::until(10, "the check closed", closed);
+    let history = history(&service);
+    assert_eq!(history["turns"].as_array().unwrap().len(), 3, "{history}");
+    let said = agents_words(&history);
+    let want = [
+        (ann.clone(), json!("The map is ready."), Value::Null),
+        (json!(lead), json!("The map is ready."), Value::Null),
+    ];
+    assert_eq!(said, want, "{history}");
 }
