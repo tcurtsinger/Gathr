@@ -1,6 +1,5 @@
-//! Gathr's copy of a message reaching an agent for the person: their like of its message (0057), or
-//! their message to several agents, for each agent but the one it was sent to (0028). As a message of
-//! theirs would: into the agent's running turn in the chat, else a turn of its own that a pause never
+//! Gathr's copy of a message reaching an agent for the person: their message to several agents, for
+//! each agent but the one it was sent to (0028). As a message of theirs would: into the agent's running turn in the chat, else a turn of its own that a pause never
 //! holds and an update does. The chat draws no bubble for a copy, and nothing that looks for the
 //! person's message of a turn (Retry, asks, the quiet check) finds one there: the window's Retry
 //! finds the message it carries.
@@ -24,14 +23,6 @@ impl Task {
             .filter(|t| !self.compactions.contains(&t.ids.turn))
             .filter(|_| self.chats.updating().is_none())
             .map(|t| t.ids.clone())
-    }
-
-    /// Whether a like opened the turn: one that then says nothing did what its line asked.
-    pub(super) async fn opened_by_like(&self, turn: &str) -> bool {
-        let id = turn.to_string();
-        let sql = "SELECT opened_by IS 'liked' FROM turns WHERE id = ?1";
-        let read = move |c: &mut rusqlite::Connection| c.query_row(sql, [&id], |r| r.get(0));
-        matches!(self.chats.writer.call(read).await, Some(Ok(true)))
     }
 
     pub(super) async fn copy(
@@ -72,7 +63,6 @@ impl Task {
             turn: ulid(now_us()),
             trace,
             agent,
-            task: None,
             answers: None,
             person: true,
         };
@@ -80,7 +70,7 @@ impl Task {
         // The turn and the copy that opens it are one write, as the person's message and its turn are.
         let saved = self.chats.writer.call(move |conn| {
             let tx = conn.transaction()?;
-            let on = (row.agent.as_deref(), None, None);
+            let on = (row.agent.as_deref(), None);
             store::add_turn(&tx, &row.chat, &row.turn, &row.trace, on, opened)?;
             let message = store::add_copy(&tx, &row.chat, &row.turn, &text, &of)?;
             tx.commit()?;

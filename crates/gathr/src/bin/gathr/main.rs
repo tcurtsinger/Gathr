@@ -33,8 +33,7 @@ enum Command {
     Diag(Diag),
     /// Starts the service if it isn't running, and prints a link that signs a browser in once.
     Open,
-    /// Adds made-up chats: 500 messages, 50 tool calls in a turn, a 20,000-word answer, a team at
-    /// work of 2,000 messages.
+    /// Adds made-up chats: 500 messages, 50 tool calls in a turn, a 20,000-word answer.
     Seed,
     /// Starts the service on a data folder and port; Ctrl+C stops it and everything it started.
     Dev {
@@ -67,12 +66,6 @@ enum Diag {
         #[arg(long, default_value = "30d")]
         since: String,
     },
-    /// What a chat waits on: from the service when it runs, else from the database, where what
-    /// only the service knew is said as it was when it stopped.
-    Waiting {
-        #[arg(long)]
-        chat: String,
-    },
     /// Read-only SQL over the database, up to 1,000 rows. The `event_log` view shows events readably.
     Query { sql: String },
     /// The turns behind a reference: how each ended and its events.
@@ -84,16 +77,11 @@ enum Diag {
     },
     /// Writes health, recent failures, events and engine frames (no bodies) to one file to share.
     Bundle,
-    /// Turns by the words that opened them: with no tool call, finish_task turned away, no report.
+    /// Turns by the words that opened them, and those with no tool call.
     Words {
         /// How far back: 24h, 7d, 30d.
         #[arg(long, default_value = "7d")]
         since: String,
-    },
-    /// Where each turn, task and line of a chat belongs, and the recorded fact that tied it.
-    Threads {
-        #[arg(long)]
-        chat: String,
     },
 }
 
@@ -119,7 +107,7 @@ fn main() -> ExitCode {
     // A person reads `dev`; agents read the rest as JSON unless they ask for text.
     let text = cli.text || matches!(cli.command, Command::Dev { .. });
     let show = |answer: &Value| match (text, answer["in_words"].as_str()) {
-        // An answer that is already written in words (`diag waiting`).
+        // An answer that is already written in words (`diag words`).
         (true, Some(words)) => words.to_string(),
         (true, None) => text::render(answer),
         (false, _) => answer.to_string(),
@@ -151,12 +139,11 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
     match diag {
         Diag::Health => return Ok(diag::health(data, None)),
         Diag::Bundle => return diag::bundle(data),
-        Diag::Waiting { chat } => return diag::waiting(data, &chat),
         _ => {}
     }
     let (conn, schema) = db::open_read_only(&data.db())?;
     match diag {
-        Diag::Health | Diag::Bundle | Diag::Waiting { .. } => unreachable!("answered above"),
+        Diag::Health | Diag::Bundle => unreachable!("answered above"),
         Diag::Turn { reference, raw } => diag::turn(&conn, &reference, raw, schema),
         Diag::Trace { reference } => diag::trace(&conn, &reference, None),
         Diag::Failures { since } => {
@@ -169,7 +156,6 @@ fn run_diag(data: &DataDir, diag: Diag) -> Result<Value, Error> {
         Diag::Words { since } => {
             diag::words(&conn, schema, ids::now_us() - diag::parse_since(&since)?)
         }
-        Diag::Threads { chat } => diag::threads(&conn, &chat, schema),
     }
 }
 
@@ -189,6 +175,6 @@ pub fn run_seed(data: &DataDir) -> Result<Value, Error> {
         other => other,
     })?;
     let started = std::time::Instant::now();
-    let made = seed::seed(&mut db::open(&data.db())?, &data.path().join("task-files"))?;
+    let made = seed::seed(&mut db::open(&data.db())?)?;
     Ok(json!({ "seeded": made, "ms": started.elapsed().as_millis() as u64 }))
 }

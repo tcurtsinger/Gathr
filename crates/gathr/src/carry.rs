@@ -6,8 +6,9 @@
 use rusqlite::{Connection, params};
 
 use crate::Error;
+use crate::event::Event;
 use crate::ids::now_us;
-use crate::tasks::Start;
+use crate::store::Start;
 use crate::words::Opened;
 
 /// What every carry-on ends with.
@@ -42,42 +43,41 @@ pub struct Saved {
 }
 
 /// Saves a carry-on for every turn that runs, and for every agent with no turn running whose
-/// engine runs background commands: each on the same task, answering the turn it carries on from.
-/// One transaction, so all of them or none.
+/// engine runs background commands: each answering the turn it carries on from. One transaction,
+/// so all of them or none.
 pub fn save_all(conn: &mut Connection, by: &str) -> Result<Vec<Saved>, Error> {
     let tx = conn.transaction()?;
-    // Each place's background commands: how many, and the turn and task of the newest.
-    let commands: Vec<(Place, usize, String, Option<i64>)> = {
+    // Each place's background commands: how many, and the turn of the newest.
+    let commands: Vec<(Place, usize, String)> = {
         let mut stmt = tx.prepare(
-            "SELECT s.chat_id, s.agent_id, count(*), b.turn_id, s.task, max(b.started_ts)
+            "SELECT s.chat_id, s.agent_id, count(*), b.turn_id, max(b.started_ts)
              FROM background b JOIN turns s ON s.id = b.turn_id GROUP BY s.chat_id, s.agent_id",
         )?;
         let rows = stmt.query_map([], |r| {
             let count: i64 = r.get(2)?;
-            Ok(((r.get(0)?, r.get(1)?), count as usize, r.get(3)?, r.get(4)?))
+            Ok(((r.get(0)?, r.get(1)?), count as usize, r.get(3)?))
         })?;
         rows.collect::<Result<_, _>>()?
     };
-    let running: Vec<(Place, String, Option<i64>)> = {
+    let running: Vec<(Place, String)> = {
         let mut stmt =
-            tx.prepare("SELECT chat_id, agent_id, id, task FROM turns WHERE status = 'running'")?;
-        let rows = stmt.query_map([], |r| Ok(((r.get(0)?, r.get(1)?), r.get(2)?, r.get(3)?)))?;
+            tx.prepare("SELECT chat_id, agent_id, id FROM turns WHERE status = 'running'")?;
+        let rows = stmt.query_map([], |r| Ok(((r.get(0)?, r.get(1)?), r.get(2)?)))?;
         rows.collect::<Result<_, _>>()?
     };
-    let save = |place: &Place, turn: &str, task: Option<i64>, ended: String| {
-        let on = (task, Some(turn));
+    let save = |place: &Place, turn: &str, ended: String| {
         Start::save(
             &tx,
             (&place.0, place.1.as_deref()),
-            on,
+            Some(turn),
             Opened::CarryOn,
             &said(by, &ended),
         )
     };
     let mut saved = Vec::new();
-    for (place, turn, task) in &running {
+    for (place, turn) in &running {
         let count = commands.iter().find(|c| c.0 == *place).map_or(0, |c| c.1);
-        let (carry_on, ..) = save(place, turn, *task, ended(true, count))?;
+        let (carry_on, ..) = save(place, turn, ended(true, count))?;
         let answers = turn.clone();
         saved.push(Saved {
             carry_on,
@@ -85,9 +85,9 @@ pub fn save_all(conn: &mut Connection, by: &str) -> Result<Vec<Saved>, Error> {
             ran: true,
         });
     }
-    for (place, count, turn, task) in &commands {
+    for (place, count, turn) in &commands {
         if !running.iter().any(|r| r.0 == *place) {
-            let (carry_on, ..) = save(place, turn, *task, ended(false, *count))?;
+            let (carry_on, ..) = save(place, turn, ended(false, *count))?;
             let answers = turn.clone();
             saved.push(Saved {
                 carry_on,
@@ -102,28 +102,65 @@ pub fn save_all(conn: &mut Connection, by: &str) -> Result<Vec<Saved>, Error> {
 
 /// At a start, for `turn`, still running when the service stopped: one carry-on waits for it. One
 /// an update or Stop now saved before the stop stays as it is, with its words and holds; else one
-/// is saved now, on the same task, answering it.
+/// is saved now, answering it.
 pub fn restarted(conn: &Connection, turn: &str) -> Result<(), Error> {
-    let (chat, agent, task, pending): (String, Option<String>, Option<i64>, bool) = conn
-        .query_row(
-            "SELECT chat_id, agent_id, task, EXISTS (SELECT 1 FROM turns c WHERE c.answers = t.id
+    let (chat, agent, pending): (String, Option<String>, bool) = conn.query_row(
+        "SELECT chat_id, agent_id, EXISTS (SELECT 1 FROM turns c WHERE c.answers = t.id
                 AND c.opened_by = 'carry_on' AND c.status IN ('queued', 'waiting_sign_in'))
          FROM turns t WHERE id = ?1",
-            [turn],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-        )?;
+        [turn],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?;
     if !pending {
         let said = said(RESTART, &ended(true, 0));
-        let on = (task, Some(turn));
-        Start::save(conn, (&chat, agent.as_deref()), on, Opened::CarryOn, &said)?;
+        Start::save(
+            conn,
+            (&chat, agent.as_deref()),
+            Some(turn),
+            Opened::CarryOn,
+            &said,
+        )?;
     }
     Ok(())
 }
 
+/// The service started: each turn the stop cut off is cut, with the steps it left running, and
+/// carries on in one carry-on (0010, 0032); background commands ended with their engines. All in
+/// one transaction: when it fails, nothing is cut and the next start tries again. How many turns
+/// were cut.
+pub fn recover(conn: &mut Connection) -> Result<usize, Error> {
+    let mut tx = conn.transaction()?;
+    let trace = crate::ids::trace_id();
+    let running: Vec<(String, String)> = {
+        let mut stmt = tx.prepare("SELECT id, chat_id FROM turns WHERE status = 'running'")?;
+        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?;
+        rows.collect::<Result<_, _>>()?
+    };
+    for (turn, chat) in &running {
+        // Each in its own savepoint: one that fails leaves nothing, and is recorded.
+        let saved = {
+            let point = tx.savepoint()?;
+            restarted(&point, turn).and_then(|()| Ok(point.commit()?))
+        };
+        if let Err(e) = saved {
+            Event::point("gathr.turn.carry_on")
+                .trace(&trace)
+                .chat(chat)
+                .error("sqlite")
+                .attr("gathr.turn.id", turn.as_str())
+                .attr("why", e.to_string())
+                .insert(&tx)?;
+        }
+    }
+    crate::store::cut_running(&tx)?;
+    crate::background::clear(&tx)?;
+    tx.commit()?;
+    Ok(running.len())
+}
+
 /// Before the hand-over: a carry-on stands only for a turn the update stopped, or one still running
 /// that the hand-over cuts off. A turn that ended by itself after its carry-on was saved (done, or
-/// failed) settled its task as any turn does, so its carry-on is ended unstarted: it would only
-/// repeat the work, or work on a task that failed. How many were ended.
+/// failed) has its carry-on ended unstarted: it would only repeat the work. How many were ended.
 pub fn drop_unneeded(conn: &mut Connection, saved: &[Saved]) -> Result<usize, Error> {
     let tx = conn.transaction()?;
     let mut dropped = 0;

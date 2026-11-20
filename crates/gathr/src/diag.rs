@@ -9,10 +9,6 @@ use crate::crash_log::CrashLog;
 use crate::data::{DataDir, ServiceInfo};
 use crate::{Error, db, http};
 
-mod threads;
-
-pub use threads::threads;
-
 /// The most rows `query` returns.
 pub const QUERY_CAP: usize = 1000;
 /// The schema from which turns record the words that opened them (migration 0043).
@@ -20,8 +16,8 @@ const OPENED_SCHEMA: i64 = 43;
 const CRASH_LINES: usize = 20;
 
 /// The service now, the database, the last start-up health check and the crash log's last lines.
-/// Answers even when the service is down or the database won't open. With a `chat`, the open
-/// tasks, waits, held turns and busy chats are that chat's alone.
+/// Answers even when the service is down or the database won't open. With a `chat`, the held
+/// turns and busy chats are that chat's alone.
 pub fn health(data: &DataDir, chat: Option<&str>) -> Value {
     let opened = db::open_read_only(&data.db());
     let held = match &opened {
@@ -30,12 +26,6 @@ pub fn health(data: &DataDir, chat: Option<&str>) -> Value {
     };
     let accounts = match &opened {
         Ok((conn, _)) => accounts(data, conn, held),
-        Err(_) => Value::Null,
-    };
-    let coordination = match &opened {
-        Ok((conn, _)) => {
-            coordination(conn, chat).unwrap_or_else(|e| json!({ "why": e.to_string() }))
-        }
         Err(_) => Value::Null,
     };
     let service = service_now(data);
@@ -55,7 +45,6 @@ pub fn health(data: &DataDir, chat: Option<&str>) -> Value {
     json!({
         "service": service,
         "accounts": accounts,
-        "coordination": coordination,
         "chats": chats,
         "database": database,
         "crash_log": { "path": crash_log.path(), "last_lines": crash_log.last_lines(CRASH_LINES) },
@@ -143,50 +132,6 @@ fn service_now(data: &DataDir) -> Value {
             json!({ "running": false, "why": format!("nothing answers on port {}: {e}", info.port) })
         }
     }
-}
-
-/// What a chat waits on (0050): from the running service, which knows what no table holds; else
-/// from the database, where what only the service knew is said as it was when it stopped.
-pub fn waiting(data: &DataDir, chat: &str) -> Result<Value, Error> {
-    let path = format!("/api/chats/{chat}/waiting");
-    if let Ok(info) = ServiceInfo::read(data)
-        && let Ok(answered) = http::call(info.port, &info.token, "GET", &path)
-        && answered.status == 200
-    {
-        return Ok(answered.json());
-    }
-    let (conn, _) = db::open_read_only(&data.db())?;
-    let known: bool = conn.query_row(
-        "SELECT EXISTS (SELECT 1 FROM chats WHERE id = ?1)",
-        [chat],
-        |r| r.get(0),
-    )?;
-    if !known {
-        return Err(Error::Other(format!("there's no chat {chat}")));
-    }
-    let now = crate::ids::now_us();
-    let stopped = crate::waiting::Live::default();
-    let answer = crate::waiting::answer(&conn, chat, &stopped, now)?;
-    Ok(crate::waiting::shown(&answer, now, "database"))
-}
-
-/// Open tasks and waits (0010): each task's state and why, each wait's failing looks.
-fn coordination(conn: &Connection, chat: Option<&str>) -> Result<Value, Error> {
-    let tasks = of_chat(
-        conn,
-        "SELECT number AS task, chat_id AS chat, owner, state, reason FROM tasks
-         WHERE state NOT IN ('done', 'cancelled') AND (?1 IS NULL OR chat_id = ?1) ORDER BY number",
-        chat,
-    )?;
-    let waits = of_chat(
-        conn,
-        "SELECT id AS wait, chat_id AS chat, agent_id AS agent, task, kind, target, failures,
-                last_error, strftime('%Y-%m-%dT%H:%M:%fZ', until_ts / 1000000.0, 'unixepoch') AS until
-         FROM waits WHERE state = 'open' AND part_of IS NULL AND (?1 IS NULL OR chat_id = ?1)
-         ORDER BY created_ts",
-        chat,
-    )?;
-    Ok(json!({ "tasks": tasks, "waits": waits }))
 }
 
 /// Messages waiting to be sent: for a sign-in, or behind a turn under way.
@@ -346,8 +291,7 @@ pub fn turn(conn: &Connection, reference: &str, raw: bool, schema: i64) -> Resul
 }
 
 /// The turns made since `since_us`, by the words that opened them and their version: each kind's
-/// turns with no tool call, `finish_task` calls turned away and task turns that ended with no
-/// report. A database at a `schema` from before turns recorded their words has nothing to count.
+/// turns, and those with no tool call. A database at a `schema` from before turns recorded their words has nothing to count.
 pub fn words(conn: &Connection, schema: i64, since_us: i64) -> Result<Value, Error> {
     let since = crate::ids::utc(since_us);
     if schema < OPENED_SCHEMA {
@@ -360,17 +304,13 @@ pub fn words(conn: &Connection, schema: i64, since_us: i64) -> Result<Value, Err
     let wide = kinds.iter().map(|k| k.kind.len()).max().unwrap_or(0).max(4);
     let mut lines = vec![
         format!("Turns since {since}, by the words that opened them"),
-        format!(
-            "{:<wide$}  version  turns  no tool  finish refused  no report",
-            "kind"
-        ),
+        format!("{:<wide$}  version  turns  no tool", "kind"),
     ];
     for k in &kinds {
         let version = k.version.map_or("-".to_string(), |v| v.to_string());
-        let (turns, none, refused, unreported) =
-            (k.turns, k.no_tool, k.finish_refused, k.no_report);
+        let (turns, none) = (k.turns, k.no_tool);
         lines.push(format!(
-            "{:<wide$}  {version:>7}  {turns:>5}  {none:>7}  {refused:>14}  {unreported:>9}",
+            "{:<wide$}  {version:>7}  {turns:>5}  {none:>7}",
             k.kind
         ));
     }

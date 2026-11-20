@@ -1,5 +1,5 @@
 //! The person's message reaching the agent it is sent to: into the agent's running turn in the chat,
-//! else a turn of its own. A reply in a thread (0076) keeps what it answers; sent to several agents
+//! else a turn of its own. A reply under a message (0076) keeps what it answers; sent to several agents
 //! (0028), each other one gets Gathr's copy (`liked.rs`). Each agent reads Gathr's line naming what a
 //! reply answers and who else got it before the person's words.
 
@@ -52,7 +52,6 @@ impl Task {
             turn: ulid(now_us()),
             trace,
             agent,
-            task: None,
             answers: None,
             person: true,
         };
@@ -62,7 +61,7 @@ impl Task {
         // two would see the person's turn move the chat, and not that they wrote (0052).
         let saved = self.chats.writer.call(move |conn| {
             let tx = conn.transaction()?;
-            let of = (row.agent.as_deref(), row.task, row.answers.as_deref());
+            let of = (row.agent.as_deref(), row.answers.as_deref());
             store::add_turn(&tx, &row.chat, &row.turn, &row.trace, of, opened)?;
             let (chat, turn, picks) = (&row.chat, &row.turn, picks.as_deref());
             let message = match replying.is_reply() {
@@ -90,7 +89,6 @@ impl Task {
                 .attr("gathr.turn.id", ids.turn.clone())
                 .attr("gathr.message.chars", text.chars().count())
                 .attr("gathr.reply.to", json!(target.reply_to))
-                .attr("gathr.reply.task", json!(target.reply_task))
                 .attr("gathr.send.agents", agents),
         );
         let queued = Queued {

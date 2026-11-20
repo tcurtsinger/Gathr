@@ -26,7 +26,6 @@ impl Task {
             turn: ulid(now_us()),
             trace,
             agent: self.agent.clone(),
-            task: None,
             answers: None,
             person: true,
         };
@@ -51,7 +50,7 @@ impl Task {
         }
         let row = ids.clone();
         let added = self.chats.writer.call(move |conn| {
-            let by = (row.agent.as_deref(), None, None);
+            let by = (row.agent.as_deref(), None);
             store::add_turn(
                 conn,
                 &row.chat,

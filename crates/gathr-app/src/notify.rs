@@ -82,15 +82,13 @@ fn tick(
         answer.filter(|a| a.status == 200).map(|a| a.json())
     };
     let now = notice::read(get("/api/chats").as_ref(), get("/api/pauses").as_ref())?;
-    let read = |path: String| get(&path).unwrap_or(Value::Null);
     let (state, notices) = notice::decide(
         last,
         start,
         &now,
         front(app),
         visited.swap(false, Ordering::SeqCst),
-        |chat| read(format!("/api/chats/{chat}/waiting")),
-        |chat| read(format!("/api/chats/{chat}")),
+        |chat| get(&format!("/api/chats/{chat}")).unwrap_or(Value::Null),
     );
     for notice in notices {
         tell(app, notice, shown, next, since);

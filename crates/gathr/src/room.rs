@@ -1,12 +1,12 @@
-//! What an agent hears of its team chat when its turn opens (0081, after SerenityOS's catch-up): the
+//! What an agent hears of its chat when its turn opens (0081, after SerenityOS's catch-up): the
 //! chat's lines as `Name: words`, with the turn's own ask. A turn that starts a new conversation hears
-//! the last 30; one that goes on in its conversation hears what came since that conversation last ran,
+//! the last 30; one that goes on in its conversation hears what came since the agent's last turn,
 //! without the lines it said and read there. Never the message that opened the turn, a tool row
 //! or Gathr's copy of a message. The lead hears every line whole; a member hears whole the person's
 //! lines, Gathr's, the lead's and those that name it, and another member's cut to its first sentence.
 //! A whole line is capped as `read_chat` caps it.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use crate::Error;
 use crate::team::{self, Member, Role};
@@ -14,14 +14,6 @@ use crate::text;
 
 /// The word an agent starts its words with, on a line of its own, when they answer a teammate.
 pub const REPLY: &str = "REPLY";
-
-/// Whether `chat` is a room chat: the small team model, with none of the task machinery. Every chat
-/// made since 0065 is one; older chats run as they did until they are cut.
-pub fn is_room(conn: &Connection, chat: &str) -> Result<bool, Error> {
-    let sql = "SELECT room FROM chats WHERE id = ?1";
-    let room = conn.prepare_cached(sql)?.query_row([chat], |r| r.get(0));
-    Ok(room.optional()?.unwrap_or(false))
-}
 
 /// How the start of an agent's words reads, as far as it has come.
 #[derive(Debug, PartialEq)]
@@ -43,13 +35,12 @@ pub fn start(words: &str) -> Start<'_> {
     }
 }
 
-/// An agent's saved words in a room chat: without REPLY, and with what they answer when they start
-/// with it. That is the teammate's message that woke the turn, the latest from another agent that
-/// reached it, or, when that one is itself a reply, the message it sits under. Woken by the person,
-/// a REPLY is a main message. Other chats keep the words as written.
+/// An agent's saved words: without REPLY, and with what they answer when they start with it. That
+/// is the teammate's message that woke the turn, the latest from another agent that reached it, or,
+/// when that one is itself a reply, the message it sits under. Woken by the person, a REPLY is a
+/// main message.
 pub fn words<'a>(
     conn: &Connection,
-    chat: &str,
     turn: &str,
     words: &'a str,
 ) -> Result<(&'a str, Option<String>), Error> {
@@ -58,9 +49,6 @@ pub fn words<'a>(
         Start::Undecided if words.trim() == REPLY => "",
         _ => return Ok((words, None)),
     };
-    if !is_room(conn, chat)? {
-        return Ok((words, None));
-    }
     Ok((rest.trim_start(), reply_to(conn, turn)?))
 }
 
@@ -107,37 +95,31 @@ struct Line {
     name: Option<String>,
 }
 
-/// The agent's started turns in `chat` but `turn`, in the conversation `turn` runs in: when the engine
-/// opened again on a task's conversation (`?4`), the turns that ran in it, else every one, as the
-/// engine already open ran the last of them.
+/// The agent's started turns in `chat` but `turn`.
 const MINE: &str = "WITH mine AS (SELECT u.id, u.created_ts FROM turns u
-    WHERE u.chat_id = ?1 AND u.id != ?2 AND u.agent_id = ?3 AND u.position IS NOT NULL
-      AND (?4 IS NULL OR u.session_id = ?4)) ";
+    WHERE u.chat_id = ?1 AND u.id != ?2 AND u.agent_id = ?3 AND u.position IS NOT NULL) ";
 
-/// When `agent`'s conversation last ran a turn in `chat` before `turn`: the conversation it resumed,
-/// `resumed`, when its engine opened again on a task's; else the one open. `None` when it never did.
+/// When `agent` last ran a turn in `chat` before `turn`. `None` when it never did.
 pub fn last_ran(
     conn: &Connection,
     chat: &str,
     turn: &str,
     agent: &str,
-    resumed: Option<&str>,
 ) -> Result<Option<i64>, Error> {
     let sql = format!("{MINE}SELECT max(created_ts) FROM mine");
     Ok(conn
         .prepare_cached(&sql)?
-        .query_row(params![chat, turn, agent, resumed], |r| r.get(0))?)
+        .query_row(params![chat, turn, agent], |r| r.get(0))?)
 }
 
-/// What `agent` hears as `turn` opens in `chat`: what came since `since` (`last_ran`), with its own
-/// lines said in other conversations than `resumed`, or the last lines with none. `None` in a chat
-/// of one agent, for an agent not in the chat, or with nothing to hear.
+/// What `agent` hears as `turn` opens in `chat`: what came since `since` (`last_ran`), or the last
+/// lines with none. `None` in a chat of one agent, for an agent not in the chat, or with nothing to
+/// hear.
 pub fn catch_up(
     conn: &Connection,
     chat: &str,
     (turn, agent): (&str, &str),
     since: Option<i64>,
-    resumed: Option<&str>,
 ) -> Result<Option<Heard>, Error> {
     let team = team::members(conn, chat)?;
     let Some(me) = team
@@ -147,7 +129,7 @@ pub fn catch_up(
     else {
         return Ok(None);
     };
-    let mut lines = lines(conn, (chat, turn, agent), since, resumed)?;
+    let mut lines = lines(conn, (chat, turn, agent), since)?;
     lines.reverse();
     if lines.is_empty() {
         return Ok(None);
@@ -186,7 +168,6 @@ fn lines(
     conn: &Connection,
     (chat, turn, agent): (&str, &str, &str),
     since: Option<i64>,
-    resumed: Option<&str>,
 ) -> Result<Vec<Line>, Error> {
     let sql = format!(
         "{MINE}SELECT m.id, m.role, m.body, t.agent_id, a.name FROM messages m
@@ -200,14 +181,14 @@ fn lines(
            AND NOT EXISTS (SELECT 1 FROM turns u JOIN turns k ON k.answers = u.answers
                            WHERE u.id = ?2 AND u.opened_by = 'last_word' AND k.opened_by = 'check'
                              AND k.id = m.turn_id)
-           AND (?5 IS NULL OR (m.ts > ?5 AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
+           AND (?4 IS NULL OR (m.ts > ?4 AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
                AND m.id NOT IN (SELECT c.copy_of FROM messages c JOIN mine u ON u.id = c.turn_id
                                 WHERE c.copy_of IS NOT NULL)))
-         ORDER BY m.ts DESC, m.id DESC LIMIT ?6"
+         ORDER BY m.ts DESC, m.id DESC LIMIT ?5"
     );
     let mut stmt = conn.prepare_cached(&sql)?;
     let rows = stmt.query_map(
-        params![chat, turn, agent, resumed, since, MOST as i64],
+        params![chat, turn, agent, since, MOST as i64],
         |r| {
             Ok(Line {
                 id: r.get(0)?,

@@ -1,8 +1,6 @@
 //! Archiving and deleting a chat (F11, 0010). Archiving ends the chat's work in one transaction and
-//! one event: its open tasks are cancelled with why, its waits end, its queued turns stop and its
-//! pause goes, and a task elsewhere that can't go on without one of them is cancelled too. The
-//! service interrupts a turn still running. Deleting takes an archived chat and removes its rows;
-//! its files are the service's to remove.
+//! one event: its queued turns stop and its pause goes. The service interrupts a turn still running.
+//! Deleting takes an archived chat and removes its rows; its files are the service's to remove.
 
 use std::path::PathBuf;
 
@@ -12,7 +10,6 @@ use serde::Serialize;
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
-use crate::tasks::Start;
 
 /// When the chat was archived; none while it's in the list. Refused when there's no such chat.
 pub fn archived(conn: &Connection, chat: &str) -> Result<Option<i64>, Error> {
@@ -35,13 +32,8 @@ pub fn refuse_archived(conn: &Connection, chat: &str) -> Result<(), Error> {
 /// What archiving ended.
 #[derive(Debug, Default, Serialize)]
 pub struct Ended {
-    pub tasks: usize,
-    pub waits: usize,
     /// Queued turns stopped, by id.
     pub turns: Vec<String>,
-    /// Turns in other chats on what followed: a task there blocked on, or after, one ended here.
-    #[serde(skip)]
-    pub starts: Vec<Start>,
 }
 
 pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, Error> {
@@ -54,14 +46,12 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
         "UPDATE chats SET archived_ts = ?2 WHERE id = ?1",
         params![chat, now],
     )?;
-    let ended = end_work(&tx, chat, now, trace)?;
+    let ended = end_work(&tx, chat, now)?;
     let folders = crate::folders::due(&tx, chat, false)?;
     Event::point("gathr.chat.archive")
         .trace(trace)
         .chat(chat)
         .ok()
-        .attr("gathr.task.cancelled", ended.tasks)
-        .attr("gathr.wait.ended", ended.waits)
         .attr("gathr.turn.stopped", ended.turns.len())
         .attr("gathr.folder.due", folders)
         .insert(&tx)?;
@@ -69,32 +59,9 @@ pub fn archive(conn: &mut Connection, chat: &str, trace: &str) -> Result<Ended, 
     Ok(ended)
 }
 
-/// Every open task cancelled (the person's too: they archived it), with no hear-backs, as nothing
-/// starts in the chat any more, while a task in another chat that can't go on without one is
-/// cancelled too; open waits ended; queued turns stopped; its pause gone.
-fn end_work(conn: &Transaction, chat: &str, now: i64, trace: &str) -> Result<Ended, Error> {
+/// Queued turns stopped; its pause gone.
+fn end_work(conn: &Transaction, chat: &str, now: i64) -> Result<Ended, Error> {
     const WHY: &str = "its chat was archived";
-    let open: Vec<i64> = {
-        let mut stmt = conn.prepare(
-            "SELECT number FROM tasks WHERE chat_id = ?1 AND state NOT IN ('done', 'cancelled')",
-        )?;
-        let rows = stmt.query_map([chat], |r| r.get(0))?;
-        rows.collect::<Result<_, _>>()?
-    };
-    for &task in &open {
-        crate::tasks::cancelled_with(conn, task, WHY, trace)?;
-    }
-    // Once all are cancelled, so what follows moves only tasks in other chats.
-    let mut starts = Vec::new();
-    for &task in &open {
-        starts.extend(crate::tasks::followed(conn, task, trace)?);
-    }
-    starts.retain(|s| s.chat != chat);
-    let waits = conn.execute(
-        "UPDATE waits SET state = 'cancelled', ended_ts = ?2, line = ?3
-         WHERE chat_id = ?1 AND state IN ('open', 'met')",
-        params![chat, now, WHY],
-    )?;
     let turns: Vec<String> = {
         let mut stmt = conn.prepare(
             "UPDATE turns SET status = 'stopped', why = ?2, ended_ts = ?3, held = NULL
@@ -107,12 +74,7 @@ fn end_work(conn: &Transaction, chat: &str, now: i64, trace: &str) -> Result<End
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1",
         [chat],
     )?;
-    Ok(Ended {
-        tasks: open.len(),
-        waits,
-        turns,
-        starts,
-    })
+    Ok(Ended { turns })
 }
 
 pub fn unarchive(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Error> {
@@ -128,8 +90,8 @@ pub fn unarchive(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), E
     Ok(())
 }
 
-/// Removes an archived chat's rows: its messages, turns and engine frames, tasks and waits, team,
-/// sessions and events. Answers the folders of its tasks' files.
+/// Removes an archived chat's rows: its messages, turns and engine frames, team, sessions and
+/// events, and what the old team machinery kept of it. Answers the folders of its old tasks' files.
 pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<PathBuf>, Error> {
     let tx = conn.transaction()?;
     if archived(&tx, chat)?.is_none() {
@@ -137,6 +99,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
     }
     let files = task_files(&tx, chat)?;
     crate::folders::due(&tx, chat, true)?;
+    // The old machinery's tables stay until a migration drops them, and their rows point at the chat.
     let of_tasks = "(SELECT number FROM tasks WHERE chat_id = ?1)";
     let of_turns = "(SELECT id FROM turns WHERE chat_id = ?1)";
     for sql in [
@@ -151,7 +114,6 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
         format!("DELETE FROM task_after WHERE task IN {of_tasks} OR after_task IN {of_tasks}"),
-        // `finish_task` may name a task in another chat as the one it's blocked on.
         format!(
             "UPDATE tasks SET blocked_on = NULL WHERE blocked_on IN {of_tasks} AND chat_id != ?1"
         ),
@@ -161,7 +123,6 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM open_checks WHERE chat_id = ?1".into(),
         format!("DELETE FROM review_notes WHERE task IN {of_tasks}"),
         "DELETE FROM task_sessions WHERE chat_id = ?1".into(),
-        // A landed change's record outlives its chat (0054).
         "DELETE FROM changes WHERE chat_id = ?1 AND landed_ts IS NULL".into(),
         "DELETE FROM plan_parts WHERE version_id IN
              (SELECT v.id FROM plan_versions v JOIN plans p ON p.id = v.plan_id WHERE p.chat_id = ?1)"
@@ -189,14 +150,17 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
     Ok(files)
 }
 
-/// The folders the chat's tasks' files were copied into.
+/// The folders the chat's old tasks' files were copied into.
 fn task_files(conn: &Connection, chat: &str) -> Result<Vec<PathBuf>, Error> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT json_extract(f.value, '$.path') FROM tasks t, json_each(t.files) f
+         WHERE t.chat_id = ?1 AND json_valid(t.files)",
+    )?;
+    let paths = stmt.query_map([chat], |r| r.get::<_, Option<String>>(0))?;
     let mut folders = Vec::new();
-    for task in crate::tasks::list(conn, chat)? {
-        for file in task.files {
-            if let Some(folder) = std::path::Path::new(&file.path).parent() {
-                folders.push(folder.to_path_buf());
-            }
+    for path in paths {
+        if let Some(folder) = path?.as_deref().and_then(|p| std::path::Path::new(p).parent()) {
+            folders.push(folder.to_path_buf());
         }
     }
     folders.sort();

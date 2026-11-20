@@ -165,67 +165,6 @@ pub fn moved(conn: &Connection, agent: &str, set: &str, ran: &str) -> Result<(),
     Ok(())
 }
 
-/// The line a turn is given once its agent's conversation nears where it compacts (K3).
-pub const SOON: &str = "Your conversation is close to its compaction point: when it compacts, earlier detail goes. \
-    Write down what you still need (your notes, the task, the plan) in your own folder now.";
-
-/// Whether the agent's next turn in `chat` gets `SOON`: its last call filled 75% of where it compacts,
-/// and it hasn't been told since its last compaction. Marked told when it does.
-pub fn tell_soon(conn: &Connection, chat: &str, agent: &str, set: &str) -> Result<bool, Error> {
-    let found: Option<(Option<i64>, bool)> = conn
-        .query_row(
-            "SELECT used, told FROM agent_context WHERE chat_id = ?1 AND agent_id = ?2",
-            params![chat, agent],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .optional()?;
-    let Some((Some(used), false)) = found else {
-        return Ok(false);
-    };
-    let Some((at, _)) = point_for(conn, chat, agent, set)? else {
-        return Ok(false);
-    };
-    if used * 4 < at * 3 {
-        return Ok(false);
-    }
-    conn.execute(
-        "UPDATE agent_context SET told = 1 WHERE chat_id = ?1 AND agent_id = ?2",
-        params![chat, agent],
-    )?;
-    Ok(true)
-}
-
-/// Told again after the conversation compacts, or a turn fails.
-pub fn untold(conn: &Connection, chat: &str, agent: &str) -> Result<(), Error> {
-    conn.execute(
-        "UPDATE agent_context SET told = 0 WHERE chat_id = ?1 AND agent_id = ?2",
-        params![chat, agent],
-    )?;
-    Ok(())
-}
-
-/// The agent's engine opens another conversation than the one shown (0055, N7): a new one has no
-/// fill yet and hasn't been told; a session resumed for a task brings both back from its row. Its
-/// context as now shown.
-pub fn switched(
-    conn: &Connection,
-    chat: &str,
-    agent: &str,
-    resumed: Option<(i64, &str)>,
-) -> Result<Value, Error> {
-    let row = match resumed {
-        Some((task, session)) => crate::sessions::context_of(conn, task, agent, session)?,
-        None => None,
-    };
-    let (used, told) = row.unwrap_or((None, false));
-    conn.execute(
-        "INSERT INTO agent_context (chat_id, agent_id, used, told, updated_ts) VALUES (?1, ?2, ?3, ?4, ?5)
-         ON CONFLICT (chat_id, agent_id) DO UPDATE SET used = ?3, told = ?4, updated_ts = ?5",
-        params![chat, agent, used, told, now_us()],
-    )?;
-    Ok(of(conn, chat, agent)?.unwrap_or(Value::Null))
-}
-
 /// Each member of a chat's history with how full its context is (`context`, null before its first call).
 pub fn on_members(conn: &Connection, chat: &str, history: &mut Value) -> Result<(), Error> {
     let Some(members) = history["members"].as_array_mut() else {
@@ -395,31 +334,6 @@ mod tests {
             at.map(|(at, _)| at),
             Some(160_000),
             "the same model keeps it"
-        );
-    }
-
-    #[test]
-    fn the_save_notes_line_comes_once_at_75_percent_and_again_after_a_compaction() {
-        let (_dir, conn) = db();
-        window(&conn, "c", "ann", 1_000_000, OPUS, RAN).unwrap();
-        filled(&conn, "c", "ann", 370_000).unwrap();
-        assert!(
-            !tell_soon(&conn, "c", "ann", OPUS).unwrap(),
-            "under 75% of 500K"
-        );
-        filled(&conn, "c", "ann", 380_000).unwrap();
-        assert!(tell_soon(&conn, "c", "ann", OPUS).unwrap());
-        assert!(!tell_soon(&conn, "c", "ann", OPUS).unwrap(), "told once");
-        untold(&conn, "c", "ann").unwrap();
-        assert!(
-            tell_soon(&conn, "c", "ann", OPUS).unwrap(),
-            "told again after a compaction"
-        );
-        set_auto_compact(&conn, None).unwrap();
-        untold(&conn, "c", "ann").unwrap();
-        assert!(
-            !tell_soon(&conn, "c", "ann", OPUS).unwrap(),
-            "no point of its own to tell of"
         );
     }
 }

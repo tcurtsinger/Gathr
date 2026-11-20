@@ -20,7 +20,6 @@ impl Task {
             pass.on_turn(crate::tools::OnTurn {
                 trace: ids.trace.clone(),
                 turn: ids.turn.clone(),
-                task: ids.task,
             });
         }
         // What Gathr gave the turn, in characters with a rough token estimate (0020: the engines
@@ -66,14 +65,10 @@ impl Task {
             service_approvals: HashMap::new(),
             push_allowed: false,
             stopping: false,
-            carried: false,
-            waits: None,
-            stop_why: None,
             save_failed: None,
             signed_out: false,
             tools_started: 0,
             engine_began: false,
-            said: false,
             compacted: false,
             restore_pending: false,
             limited: false,
@@ -98,7 +93,6 @@ impl Task {
             turn: ulid(now_us()),
             trace: gathr::ids::trace_id(),
             agent: self.agent.clone(),
-            task: None,
             answers: None,
             person: true,
         };
@@ -112,7 +106,7 @@ impl Task {
                     &row.chat,
                     &row.turn,
                     &row.trace,
-                    (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                    (row.agent.as_deref(), row.answers.as_deref()),
                     opened,
                 )?;
                 store::move_message(conn, &id, &row.turn)

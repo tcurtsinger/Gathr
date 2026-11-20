@@ -1,4 +1,4 @@
-//! Another agent's message to this one (plans/agent-messages.md): it wakes the agent at most once.
+//! Another agent's message to this one, `@Name` in its words (0081): it wakes the agent at most once.
 //! Into the turn the agent runs in the chat, read as the person's message sent into a turn is;
 //! else into its turn queued there that hasn't started; else one turn of its own, answering the
 //! sender's, which a pause holds as it holds every turn Gathr queues.
@@ -59,7 +59,7 @@ impl Task {
             .chats
             .writer
             .call(move |conn| {
-                let on = (None, Some(answers.as_str()));
+                let on = Some(answers.as_str());
                 Start::queue(conn, (&c, &agent), on, Opened::Teammate, text)
             })
             .await;
@@ -71,7 +71,6 @@ impl Task {
             turn: start.turn.clone(),
             trace: start.trace.clone(),
             agent: None,
-            task: None,
             answers: None,
             person: false,
         };
@@ -81,7 +80,6 @@ impl Task {
             turn: start.turn.clone(),
             trace: start.trace.clone(),
             agent: Some(start.agent.clone()),
-            task: None,
             answers: start.answers.clone(),
             person: false,
         };

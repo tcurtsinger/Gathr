@@ -22,10 +22,6 @@ use gathr::words::Opened;
 
 /// Who stops a scope's turns when the person presses Stop now.
 pub const STOP_NOW: &str = "Stop now";
-/// Why nothing runs on a task whose turn the person stopped.
-const STOPPED: &str = "Stopped by you. Carries on at Restart";
-/// Why nothing runs on a task whose turn a usage limit cut off.
-const LIMITED: &str = "The account is out of usage. Carries on when it is back";
 
 impl Running {
     /// For how long it has made no progress (text, or a tool starting or ending), once that is
@@ -95,7 +91,7 @@ impl Task {
             self.record(event.attr("why", e.to_string()));
         }
         let update = json!({ "type": "turn", "turn": ids.turn, "status": "queued", "held": held,
-            "why": why, "agent": ids.agent, "task": ids.task, "answers": ids.answers });
+            "why": why, "agent": ids.agent, "answers": ids.answers });
         self.publish_turn(ids, update).await;
     }
 
@@ -186,22 +182,18 @@ impl Task {
             return true;
         }
         let said = format!("The account's usage limit interrupted your turn. {CHECK_FIRST}");
-        // The carry-on first: with it saved the turn's task stays as it was, and nobody is told
-        // it stopped while the carry-on waits for the account (0047).
-        match self.carry_on(ids, said).await {
-            true => self.end_waiting(ids, Some(why), LIMITED).await,
-            false => self.set_turn(ids, "stopped", Some(why)).await,
-        }
+        self.carry_on(ids, said).await;
+        self.set_turn(ids, "stopped", Some(why)).await;
         true
     }
 
-    /// Queues a turn that carries on from `ids` in the same session, on the same task: for its
-    /// agent, or for none in a chat sent to no agent. Whether it was saved.
+    /// Queues a turn that carries on from `ids` in the same session: for its agent, or for none in
+    /// a chat sent to no agent. Whether it was saved.
     async fn carry_on(&mut self, ids: &Ids, text: String) -> bool {
         let (chat, agent) = (ids.chat.clone(), ids.agent.clone());
-        let (task, answers, said) = (ids.task, ids.turn.clone(), text.clone());
+        let (answers, said) = (ids.turn.clone(), text.clone());
         let saved = self.chats.writer.call(move |c| {
-            let on = (task, Some(answers.as_str()));
+            let on = Some(answers.as_str());
             Start::save(c, (&chat, agent.as_deref()), on, Opened::CarryOn, &said)
         });
         match saved.await {
@@ -211,7 +203,6 @@ impl Task {
                     turn,
                     trace,
                     agent: ids.agent.clone(),
-                    task,
                     answers: Some(ids.turn.clone()),
                     person: false,
                 };
@@ -233,8 +224,8 @@ impl Task {
     /// background commands there are ended by its own stop, and a carry-on naming them waits for
     /// Restart. The scope is already paused, stopped, so nothing else starts. An update stops the
     /// same way with its carry-ons saved before (`carried`: the turns they answer, `gathr::carry`):
-    /// none is saved here for those, and such a turn's end leaves its task to its carry-on. A turn
-    /// the update saved none for (it started as the update began) is carried on as Stop now does.
+    /// none is saved here for those. A turn the update saved none for (it started as the update
+    /// began) is carried on as Stop now does.
     pub(super) async fn stop_now(
         &mut self,
         scope: String,
@@ -262,7 +253,7 @@ impl Task {
             .writer
             .call(move |conn| gathr::background::of(conn, &c, agent.as_deref()));
         let commands = commands.await.and_then(Result::ok).unwrap_or_default();
-        for (id, _, _) in &commands {
+        for (id, _) in &commands {
             let request = frames::stop_task(&format!("stop-now-{}", span_id()), id);
             let _ = self.write(&request, None).await;
         }
@@ -274,17 +265,14 @@ impl Task {
         let saved = |turn: &str| carried.as_ref().is_some_and(|c| c.contains(turn));
         let carried = match &running {
             Some(ids) => saved(&ids.turn),
-            None => commands.iter().any(|(_, turn, _)| saved(turn)),
+            None => commands.iter().any(|(_, turn)| saved(turn)),
         };
-        if let Some(turn) = self.turn.as_mut().filter(|t| carried && !t.stopping) {
-            turn.carried = true;
-        }
         if running.is_some() {
             self.interrupt(&chat).await;
         }
         let turn_ended = running.is_some();
         let ids = running.or_else(|| {
-            let (_, turn, task) = commands.first()?;
+            let (_, turn) = commands.first()?;
             let trace = gathr::ids::trace_id();
             let (agent, chat) = (self.agent.clone(), chat.clone());
             Some(Ids {
@@ -292,7 +280,6 @@ impl Task {
                 turn: turn.clone(),
                 trace,
                 agent,
-                task: *task,
                 answers: None,
                 person: false,
             })
@@ -300,13 +287,7 @@ impl Task {
         let Some(ids) = ids else { return };
         if !carried {
             let ended = gathr::carry::ended(turn_ended, commands.len());
-            let saved = self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
-            // With its carry-on saved, the stopped turn's task stays as it was (0047). The person
-            // is told why nothing runs on it; an update's own stop takes seconds and says nothing.
-            if let Some(turn) = self.turn.as_mut().filter(|_| saved && turn_ended) {
-                turn.carried = true;
-                turn.waits = (by == STOP_NOW).then_some(STOPPED);
-            }
+            self.carry_on(&ids, gathr::carry::said(by, &ended)).await;
         }
         self.record(
             Event::point("gathr.pause.stop_now")
@@ -328,18 +309,15 @@ impl Task {
             self.agent.clone(),
             self.turn.as_ref().map(|t| t.ids.turn.clone()),
         );
-        // At work on a turn, the engine says a command ended inside it and begins none for the
-        // task held on it: the hold is released here (G174). Idle, the turn it begins settles it.
-        let release = turn.is_some();
-        let trace = gathr::ids::trace_id();
+        // Idle, the engine begins a turn of its own once a command ends: it answers that command's.
+        let idle = turn.is_none();
         let saved = self.chats.writer.call(move |c| {
             let engine = (chat.as_str(), agent.as_deref());
-            gathr::tasks::background_changed(c, engine, &listed, turn.as_deref(), release, &trace)
+            gathr::background::set(c, engine, &listed, turn.as_deref())
         });
         match saved.await {
-            Some(Ok((ended, starts))) => {
-                self.chats.start(starts);
-                if let Some(last) = ended.into_iter().last().filter(|_| !release) {
+            Some(Ok(ended)) => {
+                if let Some(last) = ended.into_iter().last().filter(|_| idle) {
                     self.woke_from = Some(last);
                 }
             }
@@ -354,7 +332,7 @@ impl Task {
     }
 
     /// The engine in `chat` exited, on a close or on its own: its background commands ended with
-    /// it, so a pause stops waiting on them and a task held on them carries on.
+    /// it, so a pause stops waiting on them.
     pub(super) async fn engine_gone(&mut self, chat: String) {
         self.background = 0;
         self.woke_from = None;
@@ -362,39 +340,31 @@ impl Task {
             crate::cleanup::engine_closed(&self.chats, &chat, agent).await;
         }
         let agent = self.agent.clone();
-        let gone = self
-            .chats
-            .writer
-            .call(move |c| gathr::tasks::engine_gone(c, (&chat, agent.as_deref())));
-        match gone.await {
-            Some(Ok(starts)) => self.chats.start(starts),
-            Some(Err(e)) => self.record(
+        let gone = self.chats.writer.call(move |c| {
+            gathr::background::set(c, (&chat, agent.as_deref()), &[], None).map(|_| ())
+        });
+        if let Some(Err(e)) = gone.await {
+            self.record(
                 Event::point("gathr.engine.background")
                     .error("sqlite")
                     .attr("why", e.to_string()),
-            ),
-            None => {}
+            );
         }
         self.chats.settle_pauses(false).await;
     }
 
-    /// Claude Code began a turn by itself (a background command ended): it gets its row, on the
-    /// task of the turn that started the command, so its answer is kept and its task settles.
+    /// Claude Code began a turn by itself (a background command ended): it gets its row, answering
+    /// the turn that started the command, so its answer is kept.
     pub(super) async fn begin_woken_turn(&mut self) {
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
-        let (answers, task) = self
-            .woke_from
-            .take()
-            .map_or((None, None), |(t, task)| (Some(t), task));
         let ids = Ids {
             chat,
             turn: ulid(now_us()),
             trace: gathr::ids::trace_id(),
             agent: self.agent.clone(),
-            task,
-            answers,
+            answers: self.woke_from.take(),
             person: false,
         };
         let row = ids.clone();
@@ -404,7 +374,7 @@ impl Task {
                 &row.chat,
                 &row.turn,
                 &row.trace,
-                (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                (row.agent.as_deref(), row.answers.as_deref()),
                 Opened::Engine,
             )
         });
@@ -427,8 +397,7 @@ impl Task {
         self.set_turn(&ids, "running", None).await;
     }
 
-    /// A turn that goes silent is flagged, once, and its chat's lead is told (0052): never
-    /// stopped (F10). While it stays silent it shows in what its chat waits on (`say_silent`).
+    /// A turn that goes silent is flagged, once, in the event record: never stopped (F10).
     pub(super) fn check_stall(&mut self) {
         let stall = self.times.stall;
         let Some(turn) = self.turn.as_mut().filter(|t| !t.stalled) else {
@@ -447,38 +416,7 @@ impl Task {
             event
                 .error("no_progress")
                 .attr("quiet_ms", quiet_ms)
-                .attr("gen_ai.agent.id", ids.agent.clone()),
+                .attr("gen_ai.agent.id", ids.agent),
         );
-        if let Some(agent) = ids.agent {
-            let chats = self.chats.clone();
-            let told =
-                crate::coord::quiet::silent(chats, ids.chat, agent, ids.task, quiet_ms, ids.trace);
-            tokio::spawn(told);
-        }
-    }
-
-    /// A turn whose task was cancelled stops and says why (S72): looked at on the stall timer, so
-    /// every way a task is cancelled (its PR closed, its giver, the person, the stale rules) is
-    /// covered in one place. The cancel is kept on the turn, so a restart since doesn't hide it.
-    pub(super) async fn check_task(&mut self) {
-        let Some((turn, chat)) = self
-            .turn
-            .as_ref()
-            .filter(|t| !t.stopping && t.ids.task.is_some())
-            .map(|t| (t.ids.turn.clone(), t.ids.chat.clone()))
-        else {
-            return;
-        };
-        let read = self
-            .chats
-            .writer
-            .call(move |c| gathr::tasks::stop_why(c, &turn));
-        let Some(Ok(Some(why))) = read.await else {
-            return;
-        };
-        if let Some(turn) = self.turn.as_mut() {
-            turn.stop_why = Some(why);
-        }
-        self.interrupt(&chat).await;
     }
 }

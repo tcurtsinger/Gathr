@@ -1,6 +1,6 @@
-//! `@Name` in an agent's words wakes that member when its turn ends (0081), as a `message` does: into
-//! its running turn in the chat, joined to its turn queued there, or a turn of its own answering the
-//! sender's, which a pause holds. Each counts as a hand-off; past the limit the chat pauses.
+//! `@Name` in an agent's words wakes that member when its turn ends (0081): into its running turn in
+//! the chat, joined to its turn queued there, or a turn of its own answering the sender's, which a
+//! pause holds. Each counts as a hand-off; past the limit the chat pauses.
 
 use std::sync::Arc;
 
@@ -18,8 +18,8 @@ pub struct Ended {
 }
 
 /// Wakes each member the ended turn's words name, when it ended `done`. Apart from the agent's own
-/// task, which calls it: delivery waits on the member's task, which may be waiting on this one. In a
-/// room chat the lead's answer is then checked (0080), once whoever was woken has its turn queued.
+/// task, which calls it: delivery waits on the member's task, which may be waiting on this one. The
+/// lead's answer is then checked (0080), once whoever was woken has its turn queued.
 pub fn wake(chats: Arc<Chats>, ended: Ended, done: bool) {
     tokio::spawn(async move {
         if done {
@@ -28,16 +28,18 @@ pub fn wake(chats: Arc<Chats>, ended: Ended, done: bool) {
         let (chat, trace) = (ended.chat.clone(), ended.trace.clone());
         let round = chats
             .writer
-            .call(move |c| match gathr::room::is_room(c, &chat)? {
-                true => gathr::open_check::settle(c, &chat, &trace),
-                false => Ok(Vec::new()),
-            });
-        let at = (
-            "gathr.check.round",
-            ended.chat.as_str(),
-            ended.trace.as_str(),
-        );
-        crate::coord::quiet::started(&chats, round.await, at);
+            .call(move |c| gathr::open_check::settle(c, &chat, &trace));
+        match round.await {
+            Some(Ok(starts)) => chats.start(starts),
+            Some(Err(e)) => {
+                let event = Event::point("gathr.check.round")
+                    .trace(&ended.trace)
+                    .chat(&ended.chat)
+                    .error("sqlite");
+                chats.writer.record(event.attr("why", e.to_string()));
+            }
+            None => {}
+        }
     });
 }
 

@@ -72,10 +72,6 @@ impl Task {
         before: Option<i64>,
         after: Option<i64>,
     ) {
-        // Compacted, the agent may be told again as the next point nears (K3).
-        if let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) {
-            self.untold(chat).await;
-        }
         if let Some(after) = after {
             self.save_context(move |c, chat, agent| gathr::context::filled(c, chat, agent, after))
                 .await;
@@ -121,54 +117,6 @@ impl Task {
         }
     }
 
-    /// Whether the turn starting now is told its conversation nears where it compacts (K3): once,
-    /// at 75% of the point, again only after a compaction or a failed turn. Recorded when it is.
-    pub(super) async fn near_compaction(&self, ids: &super::Ids) -> bool {
-        let set = self.assigned.as_ref().map(super::Assignment::model_key);
-        let (Some(agent), Some(set)) = (ids.agent.clone(), set) else {
-            return false;
-        };
-        let (chat, task) = (ids.chat.clone(), self.session.task);
-        let told = self.chats.writer.call(move |c| {
-            let told = gathr::context::tell_soon(c, &chat, &agent, &set)?;
-            if let (true, Some(task)) = (told, task) {
-                gathr::sessions::told(c, task, &agent, true)?;
-            }
-            Ok::<_, gathr::Error>(told)
-        });
-        let told = told.await.and_then(Result::ok).unwrap_or(false);
-        if told {
-            let event = Event::point("gathr.context.soon")
-                .trace(&ids.trace)
-                .chat(&ids.chat)
-                .ok();
-            self.record(event.attr("gen_ai.agent.id", ids.agent.clone()));
-        }
-        told
-    }
-
-    /// A failed turn may not have saved what it was told to: it's told again.
-    pub(super) async fn tell_again(&self, ids: &super::Ids) {
-        if ids.agent.is_some() {
-            self.untold(ids.chat.clone()).await;
-        }
-    }
-
-    /// Told again from now, in the open task's conversation too (N7).
-    async fn untold(&self, chat: String) {
-        let (Some(agent), task) = (self.agent.clone(), self.session.task) else {
-            return;
-        };
-        let reset = move |c: &mut rusqlite::Connection| {
-            gathr::context::untold(c, &chat, &agent)?;
-            match task {
-                Some(task) => gathr::sessions::told(c, task, &agent, false),
-                None => Ok(()),
-            }
-        };
-        let _ = self.chats.writer.call(reset).await;
-    }
-
     async fn save_context(
         &self,
         save: impl FnOnce(&rusqlite::Connection, &str, &str) -> Result<Value, gathr::Error>
@@ -178,16 +126,9 @@ impl Task {
         let (Some(agent), Some(assigned)) = (self.agent.clone(), self.assigned.as_ref()) else {
             return;
         };
-        let (chat, task) = (assigned.chat.clone(), self.session.task);
+        let chat = assigned.chat.clone();
         let (c, a) = (chat.clone(), agent.clone());
-        // The open task's conversation keeps its fill, so it shows again when it resumes (N7).
-        let saved = move |conn: &mut rusqlite::Connection| {
-            let context = save(conn, &c, &a)?;
-            if let (Some(task), Some(used)) = (task, context["used"].as_i64()) {
-                gathr::sessions::used(conn, task, &a, used)?;
-            }
-            Ok::<_, gathr::Error>(context)
-        };
+        let saved = move |conn: &mut rusqlite::Connection| save(conn, &c, &a);
         match self.chats.writer.call(saved).await {
             Some(Ok(context)) => self.publish(
                 &chat,

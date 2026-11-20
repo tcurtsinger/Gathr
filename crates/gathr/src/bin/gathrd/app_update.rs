@@ -376,7 +376,6 @@ impl AppUpdates {
 
     /// What runs anywhere now, as the app's pause sees it.
     async fn running_now(&self) -> Value {
-        let checks = self.chats.checking();
         let all = Pause {
             scope: "app".into(),
             target: String::new(),
@@ -387,7 +386,7 @@ impl AppUpdates {
         let found = self
             .chats
             .writer
-            .call(move |c| pauses::running(c, &all, &checks).map_err(|e| e.to_string()));
+            .call(move |c| pauses::running(c, &all).map_err(|e| e.to_string()));
         match found.await {
             Some(Ok(running)) => running,
             // Unknown counts as running: the hold waits, never guesses.

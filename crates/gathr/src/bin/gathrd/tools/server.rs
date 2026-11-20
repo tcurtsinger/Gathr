@@ -9,14 +9,10 @@ use gathr::event::Event;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{
-    CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams, ServerCapabilities,
-    ServerConfig,
-};
-use rmcp::service::RequestContext;
+use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerConfig};
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
 use rusqlite::{Connection, OptionalExtension};
 
 use super::Caller;
@@ -35,8 +31,6 @@ pub fn service(state: Arc<State>) -> StreamableHttpService<Tools, LocalSessionMa
     let tools = move || {
         Ok(Tools {
             chats: state.chats.clone(),
-            stopping: state.stopping.subscribe(),
-            state: state.clone(),
             tool_router: Tools::every_router(),
         })
     };
@@ -52,9 +46,6 @@ pub fn names() -> Vec<String> {
 #[derive(Clone)]
 pub struct Tools {
     pub(super) chats: Arc<Chats>,
-    pub(super) stopping: tokio::sync::watch::Receiver<bool>,
-    /// The service's own state, so a settings tool changes them as the API does (0043 C5a).
-    pub(super) state: Arc<State>,
     tool_router: ToolRouter<Self>,
 }
 
@@ -71,21 +62,10 @@ pub struct ReadChat {
 impl Tools {
     fn every_router() -> ToolRouter<Self> {
         Tools::tool_router()
-            + Tools::coord_router()
             + Tools::person_router()
-            + Tools::checks_router()
-            + Tools::message_router()
             + Tools::react_router()
             + Tools::board_router()
-            + Tools::post_router()
-            + Tools::friction_router()
-            + Tools::merge_router()
             + Tools::github_router()
-            + Tools::settings_router()
-            + Tools::size_router()
-            + Tools::plan_router()
-            + Tools::waiting_router()
-            + Tools::diag_router()
     }
 }
 
@@ -155,48 +135,10 @@ impl Tools {
     }
 }
 
-/// The tools an agent in a room chat is offered: the rest belong to the old team machinery.
-const ROOM_TOOLS: [&str; 7] = [
-    "react",
-    "set_board_line",
-    "ask_person",
-    "read_chat",
-    "pr",
-    "ci_failures",
-    "update_pr",
-];
-
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Tools {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-    }
-
-    /// Every tool, or in a room chat only `ROOM_TOOLS`: the list is the caller's own, so it's never
-    /// marked for a shared cache.
-    async fn list_tools(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        context: RequestContext<RoleServer>,
-    ) -> Result<ListToolsResult, ErrorData> {
-        let tools = self.tool_router.list_all();
-        let caller = context.extensions.get::<Parts>().map(caller_of);
-        let Some(Ok(caller)) = caller else {
-            return Ok(ListToolsResult::with_all_items(tools));
-        };
-        let chat = caller.chat.clone();
-        let room = self
-            .chats
-            .writer
-            .call(move |c| gathr::room::is_room(c, &chat));
-        let tools = match room.await {
-            Some(Ok(true)) => tools
-                .into_iter()
-                .filter(|t| ROOM_TOOLS.contains(&t.name.as_ref()))
-                .collect(),
-            _ => tools,
-        };
-        Ok(ListToolsResult::with_all_items(tools))
     }
 }
 

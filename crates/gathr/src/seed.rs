@@ -1,11 +1,5 @@
 //! Made-up test data (docs/first-slice.md): a chat of 500 messages, a turn with 50 tool calls
-//! and a 20,000-word answer, with their events, a five-agent team chat (F8b),
-//! questions for the person across two chats (F9), and a team at work of 2,000 messages under
-//! some 50 main messages (0075). Nothing here comes from a real conversation.
-
-mod asks;
-mod team;
-mod threads;
+//! and a 20,000-word answer, with their events. Nothing here comes from a real conversation.
 
 use rusqlite::{Connection, params};
 use serde_json::json;
@@ -56,13 +50,11 @@ pub struct Seeded {
     pub events: u32,
 }
 
-/// Adds the eight chats in one transaction, and the files of the person's tasks under `files`.
-/// Each run adds a new set.
-pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Error> {
+/// Adds the three chats in one transaction. Each run adds a new set.
+pub fn seed(conn: &mut Connection) -> Result<Seeded, Error> {
     let tx = conn.transaction()?;
     let mut s = Seeder {
         conn: &tx,
-        files,
         ts: now_us() - 7 * DAY_US,
         rng: 0x9e37_79b9_7f4a_7c15,
         made: Seeded::zero(),
@@ -70,10 +62,6 @@ pub fn seed(conn: &mut Connection, files: &std::path::Path) -> Result<Seeded, Er
     s.long_chat()?;
     s.tool_heavy_chat()?;
     s.long_answer_chat()?;
-    s.team_chat()?;
-    s.asks()?;
-    s.threads_chat()?;
-    s.one_agent_chat()?;
     // Each made-up message of the person's has had its check (0080), as at an upgrade: a service on
     // the folder begins no round for one.
     tx.execute(
@@ -98,7 +86,6 @@ impl Seeded {
 
 struct Seeder<'a> {
     conn: &'a Connection,
-    files: &'a std::path::Path,
     ts: i64,
     rng: u64,
     made: Seeded,
@@ -257,17 +244,6 @@ impl Seeder<'_> {
         self.conn.execute(
             "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![ulid(self.ts), turn.chat, turn.id, self.ts, role, kind, body],
-        )?;
-        self.made.messages += 1;
-        Ok(())
-    }
-
-    /// What Gathr says in a chat in no turn.
-    fn said(&mut self, chat: &str, body: &str) -> Result<(), Error> {
-        self.ts += 1_000;
-        self.conn.execute(
-            "INSERT INTO messages (id, chat_id, ts, role, kind, body) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4)",
-            params![ulid(self.ts), chat, self.ts, body],
         )?;
         self.made.messages += 1;
         Ok(())

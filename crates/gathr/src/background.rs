@@ -1,6 +1,6 @@
 //! Commands an engine runs in the background (0010): each under the turn that started it, so a
-//! task stays held while one runs, a pause stays `pausing`, and Stop now can end them by the
-//! engine's own id. They end with their engine, so a start empties the table.
+//! pause stays `pausing`, and Stop now can end them by the engine's own id. They end with their
+//! engine, so a start empties the table.
 
 use rusqlite::{Connection, params};
 
@@ -11,20 +11,19 @@ use crate::ids::now_us;
 const ENGINE: &str = "t.chat_id = ?1 AND t.agent_id IS ?2";
 
 /// Saves what the engine in `chat` for `agent` lists as running now; a new one goes under `turn`,
-/// or the engine's latest turn when none runs. Answers the turns whose commands ended, with each
-/// one's task, oldest first.
+/// or the engine's latest turn when none runs. Answers the turns whose commands ended, oldest first.
 pub fn set(
     conn: &Connection,
     (chat, agent): (&str, Option<&str>),
     listed: &[(String, String)],
     turn: Option<&str>,
-) -> Result<Vec<(String, Option<i64>)>, Error> {
+) -> Result<Vec<String>, Error> {
     let had = of(conn, chat, agent)?;
     let mut ended = Vec::new();
-    for (id, turn_id, task) in &had {
+    for (id, turn_id) in &had {
         if listed.iter().all(|(l, _)| l != id) {
             conn.execute("DELETE FROM background WHERE id = ?1", [id])?;
-            ended.push((turn_id.clone(), *task));
+            ended.push(turn_id.clone());
         }
     }
     let turn = match turn {
@@ -42,19 +41,17 @@ pub fn set(
     Ok(ended)
 }
 
-/// The engine's background commands: id, the turn that started it, and that turn's task.
+/// The engine's background commands: id, and the turn that started it.
 pub fn of(
     conn: &Connection,
     chat: &str,
     agent: Option<&str>,
-) -> Result<Vec<(String, String, Option<i64>)>, Error> {
+) -> Result<Vec<(String, String)>, Error> {
     let mut stmt = conn.prepare_cached(&format!(
-        "SELECT b.id, b.turn_id, t.task FROM background b JOIN turns t ON t.id = b.turn_id
+        "SELECT b.id, b.turn_id FROM background b JOIN turns t ON t.id = b.turn_id
          WHERE {ENGINE} ORDER BY b.started_ts"
     ))?;
-    let rows = stmt.query_map(params![chat, agent], |r| {
-        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
-    })?;
+    let rows = stmt.query_map(params![chat, agent], |r| Ok((r.get(0)?, r.get(1)?)))?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
@@ -104,7 +101,7 @@ mod tests {
         );
         assert_eq!(
             set(&conn, engine, &[], None).unwrap(),
-            [("t1".to_string(), None)]
+            ["t1".to_string()]
         );
         assert!(of(&conn, "c1", Some("ann")).unwrap().is_empty());
     }

@@ -1,7 +1,6 @@
-//! Messages between agents, counted (plans/agent-messages.md, 0010's hand-off counter): a `message`,
-//! and `@Name` in an agent's words when its turn ends (0081). Each is a record, never memory: its
-//! depth is the sender's chain plus one, and a chain starts over after the person writes in the chat
-//! or a task there settles. Past the limit the chat pauses.
+//! Messages between agents, counted (0010's hand-off counter): `@Name` in an agent's words when its
+//! turn ends (0081). Each is a record, never memory: its depth is the sender's chain plus one, and a
+//! chain starts over after the person writes in the chat. Past the limit the chat pauses.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::Value;
@@ -56,21 +55,13 @@ pub struct Counted {
 
 /// Records a message from `from` to `to` in the chat as a hand-off.
 pub fn record(conn: &Connection, chat: &str, from: &str, to: &str) -> Result<Counted, Error> {
-    let settled = format!(
-        "SELECT max(updated_ts) FROM tasks WHERE chat_id = ?1 AND state IN {}",
-        crate::tasks::SETTLED
-    );
+    // Only the person's words start a chain over.
     let person: Option<i64> = conn.query_row(
         "SELECT max(ts) FROM messages WHERE chat_id = ?1 AND role = 'user'",
         [chat],
         |r| r.get(0),
     )?;
-    // A room chat has no tasks: only the person's words start a chain over.
-    let task: Option<i64> = match crate::room::is_room(conn, chat)? {
-        true => None,
-        false => conn.query_row(&settled, [chat], |r| r.get(0))?,
-    };
-    let since = person.max(task).unwrap_or(0);
+    let since = person.unwrap_or(0);
     let chain: Option<i64> = conn.query_row(
         "SELECT max(depth) FROM handoffs WHERE chat_id = ?1 AND to_agent = ?2 AND created_ts > ?3",
         params![chat, from, since],
@@ -121,9 +112,9 @@ pub struct Mentions {
 }
 
 /// The members `turn`'s words name with `@Name` (0081), but its own agent and, for a check, the lead
-/// it checks, each recorded as a hand-off from the turn's agent. Its words are its text messages in the chat, not what it sent with
-/// `message`, which reached its member already. Past the limit the chat pauses, the line saying so
-/// goes in the turn, and nobody from that member on is named. None in a chat of one agent, or an
+/// it checks, each recorded as a hand-off from the turn's agent. Its words are its text messages in
+/// the chat. Past the limit the chat pauses, the line saying so goes in the turn, and nobody from
+/// that member on is named. None in a chat of one agent, or an
 /// archived one.
 pub fn mentions(conn: &Connection, turn: &str, trace: &str) -> Result<Mentions, Error> {
     let found: Option<(String, Option<String>)> = conn

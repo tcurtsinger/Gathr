@@ -23,10 +23,8 @@ mod compact;
 mod context;
 mod driver;
 mod ended;
-mod github;
 mod given;
 mod heard;
-mod hold;
 mod holds;
 mod liked;
 mod message;
@@ -39,7 +37,6 @@ mod send;
 mod session;
 mod state;
 mod thinking;
-mod waits;
 mod workspace;
 
 pub use holds::STOP_NOW;
@@ -57,9 +54,7 @@ struct Ids {
     turn: String,
     trace: String,
     agent: Option<String>,
-    /// The task it works on (0010).
-    task: Option<i64>,
-    /// The turn it answers, when Gathr started it (F8b).
+    /// The turn it answers, when Gathr started it.
     answers: Option<String>,
     /// The person wrote its ask: a pause never holds it (0010).
     person: bool,
@@ -90,8 +85,6 @@ struct Assignment {
     team: Vec<(String, gathr::team::Role)>,
     /// Claude Code with its slash commands, for `/compact` only (K4).
     slash: bool,
-    /// The chat is a room chat: none of the task machinery runs for its turns.
-    room: bool,
 }
 
 impl Assignment {
@@ -134,12 +127,6 @@ struct Running {
     /// The person allowed a command that pushes, and it hasn't ended: its push asks no twice.
     push_allowed: bool,
     stopping: bool,
-    /// An update stopped it with its carry-on saved: its end doesn't settle its task (0032).
-    carried: bool,
-    /// Stop now stopped it with its carry-on saved: its task stays as it was and says this (0047).
-    waits: Option<&'static str>,
-    /// Why Gathr stopped it, when Gathr did: the stopped turn says so.
-    stop_why: Option<String>,
     /// A message of it the database refused: the turn fails with this (audit 2.2.6).
     save_failed: Option<String>,
     signed_out: bool,
@@ -147,8 +134,6 @@ struct Running {
     tools_started: u32,
     /// The engine began it itself, for a notice or a message sent into the last one.
     engine_began: bool,
-    /// It has said something or started a tool: a turn that ends without either did nothing (G167).
-    said: bool,
     /// The engine compacted the conversation during it.
     compacted: bool,
     /// A restored opening still waits to be written, possibly buffered by Codex's thread open.
@@ -213,20 +198,16 @@ struct Task {
     usage_until_us: Option<i64>,
     /// Commands the engine runs in the background: it isn't idle while any do.
     background: usize,
-    /// The turn (and task) of the last background command that ended: the engine's next turn of
-    /// its own carries on from it.
-    woke_from: Option<(String, Option<i64>)>,
+    /// The turn of the last background command that ended: the engine's next turn of its own
+    /// carries on from it.
+    woke_from: Option<String>,
     /// Reply text of ended turns that the database refused, kept until a save works.
     unsaved: Vec<(Ids, String)>,
     /// The turns, queued or running, that compact the conversation (K4).
     compactions: HashSet<String>,
     /// Stream fragments not yet written, with their turn and engine: a run is redacted joined.
     held_raw: Vec<(Option<String>, u32, &'static str, String)>,
-    /// Why each queued turn waits, as the chats were last told (0050).
-    said_waits: waits::Said,
-    /// The running turn the chats were last told is silent: its chat, and since when (0052).
-    said_silent: Option<(String, String, i64)>,
-    /// The conversation the engine was opened in (0055).
+    /// The conversation the engine was opened in.
     session: session::Session,
 }
 
@@ -264,8 +245,6 @@ pub async fn run(
         unsaved: Vec::new(),
         compactions: HashSet::new(),
         held_raw: Vec::new(),
-        said_waits: HashMap::new(),
-        said_silent: None,
         session: Default::default(),
     };
     // An interval, not a sleep in the select: a sleep restarts on every command, so a window
@@ -295,14 +274,12 @@ pub async fn run(
                 Some(Cmd::Close { done }) => {
                     task.shut_down("the service is stopping").await;
                     task.queue.clear();
-                    task.say_waits();
                     let _ = done.send(());
                     return;
                 }
                 None => {
                     task.shut_down("the agent's task ended").await;
                     task.queue.clear();
-                    task.say_waits();
                     return;
                 }
                 Some(command) => task.handle(command).await,
@@ -325,13 +302,8 @@ pub async fn run(
             _ = tokio::time::sleep_until(thought_at.unwrap_or_else(tokio::time::Instant::now)), if thought_at.is_some() => {
                 task.thought_due().await;
             }
-            _ = stall_look.tick(), if task.turn.is_some() => {
-                task.check_stall();
-                task.check_task().await;
-            }
+            _ = stall_look.tick(), if task.turn.is_some() => task.check_stall(),
         }
-        // Whatever just happened may have changed why a queued turn waits.
-        task.say_waits();
     }
 }
 
@@ -416,7 +388,6 @@ impl Task {
                     turn: w.turn,
                     trace: w.trace,
                     agent: w.agent,
-                    task: w.task,
                     answers: w.answers,
                     person: w.person,
                 };
@@ -550,10 +521,6 @@ impl Task {
             self.close(why).await;
             return Ok(self.hold_back(next, "queued").await);
         }
-        let (key, choice) = self.conversation(&next.ids, assigned.as_ref()).await;
-        if let Some(status) = self.switch(next, &choice).await {
-            return Ok(status);
-        }
         let kind = if assigned.as_ref().is_some_and(|a| a.engine == "codex") {
             "codex"
         } else {
@@ -610,23 +577,16 @@ impl Task {
         let gate = self.chats.gate(&assigned.folder).pass().await;
         // Before the spawn: a turn dropped here leaves no engine waiting with nothing sent, whose
         // first frame (Codex's thread opening) would read as a turn it began by itself.
-        let next = &match self.ask_now(next).await {
-            Ok(next) => next,
-            Err(why) => return Ok(self.dropped(&next.ids, &why).await),
-        };
+        if let Some(why) = self.gate(&next.ids).await {
+            return Ok(self.dropped(&next.ids, &why).await);
+        }
         let fresh = program.is_some();
         if let Some(program) = program {
-            self.spawn(&program, assigned, &next.ids.trace, (&key, &choice))
-                .await?;
+            self.spawn(&program, assigned, &next.ids.trace).await?;
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         let compaction = self.compactions.contains(&next.ids.turn);
-        let room = self.assigned.as_ref().is_some_and(|a| a.room);
-        let text = match !compaction && !room && self.near_compaction(&next.ids).await {
-            true => format!("{}\n\n{}", gathr::context::SOON, next.text),
-            false => next.text.clone(),
-        };
-        let (text, restored) = self.opening(next, &choice, fresh, text).await;
+        let (text, restored) = self.opening(next, fresh, next.text.clone()).await;
         if let Some(turn) = self.turn.as_mut() {
             turn.restore_pending = restored;
         }
@@ -684,7 +644,6 @@ impl Task {
                 turn: ulid(now_us()),
                 trace: gathr::ids::trace_id(),
                 agent: self.agent.clone(),
-                task: None,
                 answers: None,
                 person: true,
             };
@@ -698,7 +657,7 @@ impl Task {
                         &row.chat,
                         &row.turn,
                         &row.trace,
-                        (row.agent.as_deref(), row.task, row.answers.as_deref()),
+                        (row.agent.as_deref(), row.answers.as_deref()),
                         by,
                     )?;
                     store::move_message(conn, &message, &row.turn)
@@ -755,7 +714,6 @@ impl Task {
                 chat: next.ids.chat.clone(),
                 team,
                 slash: false,
-                room: false,
             }
         };
         let Some(id) = next.ids.agent.clone() else {
@@ -782,14 +740,12 @@ impl Task {
                 return Ok(None);
             };
             let account = gathr::accounts::get(conn, &agent.account)?;
-            let room = gathr::room::is_room(conn, &chat)?;
-            Ok::<_, gathr::Error>(account.map(|account| (agent, account, (team, room))))
+            Ok::<_, gathr::Error>(account.map(|account| (agent, account, team)))
         };
         match self.chats.writer.call(read).await {
-            Some(Ok(Some((a, account, (team, room))))) => {
+            Some(Ok(Some((a, account, team)))) => {
                 let given = (a.model, a.effort, a.approvals);
                 let mut assigned = on(account, Some(a.id), given, team);
-                assigned.room = room;
                 assigned.slash =
                     assigned.engine == "claude" && self.compactions.contains(&next.ids.turn);
                 Ok(Some(assigned))
@@ -875,7 +831,7 @@ impl Task {
             .filter(|t| !t.stopping && t.ids.chat == chat)?;
         running.stopping = true;
         let ids = running.ids.clone();
-        let end = gathr::ends::word("stopped", running.stop_why.as_deref());
+        let end = gathr::ends::word("stopped", None);
         // Shown at once; the turn's row and end event follow when the engine says it ended.
         let update = json!({ "type": "turn", "turn": ids.turn, "status": "stopped",
             "agent": ids.agent, "end": end });

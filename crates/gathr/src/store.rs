@@ -11,7 +11,7 @@ use crate::redact::{redact, redact_json};
 const MALFORMED_CAP: usize = 64 * 1024;
 
 /// A new chat, with the project it was made in and that project's folder, if any (0013: set only
-/// here; the column `project` holds the folder). Every chat made now is a room chat (`room.rs`).
+/// here; the column `project` holds the folder).
 pub fn create_chat(
     conn: &Connection,
     title: &str,
@@ -19,12 +19,12 @@ pub fn create_chat(
 ) -> Result<Value, Error> {
     let (id, ts) = (ulid(now_us()), now_us());
     conn.execute(
-        "INSERT INTO chats (id, title, created_ts, project_id, project, room) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
+        "INSERT INTO chats (id, title, created_ts, project_id, project) VALUES (?1, ?2, ?3, ?4, ?5)",
         params![id, title, ts, project, folder],
     )?;
     Ok(
         json!({ "id": id, "title": title, "created": crate::ids::utc(ts), "project": project,
-        "folder": folder, "room": true }),
+        "folder": folder }),
     )
 }
 
@@ -51,25 +51,14 @@ const WORKING: &str = "EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
     AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'running')";
 
 /// Whether chat `c` waits on the person, as far as the database knows: a turn waits for a sign-in,
-/// a question to them is open (a room chat's or a task), they were told nothing in it moves and that
-/// stretch hasn't ended (0052), or a plan waits on them (0062). An approval waiting is the service's to
-/// add (it's in no table).
+/// or a question to them is open. An approval waiting is the service's to add (it's in no table).
 const NEEDS: &str = "(EXISTS (SELECT 1 FROM turns s WHERE s.chat_id = c.id
         AND s.status IN ('running', 'waiting_sign_in') AND s.status = 'waiting_sign_in')
-    OR EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)
-    OR EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
-    OR EXISTS (SELECT 1 FROM quiet q WHERE q.chat_id = c.id AND q.told_ts IS NOT NULL)
-    OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.chat_id = c.id
-        AND v.sent_ts IS NOT NULL AND v.decided IS NULL
-        AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
+    OR EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL))";
 
 /// Whether chat `c` waits on the person for an answer of theirs: `NEEDS` but a sign-in.
-const ASKS: &str = "(EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)
-    OR EXISTS (SELECT 1 FROM tasks k WHERE k.chat_id = c.id AND k.kind = 'person' AND k.state = 'ready')
-    OR EXISTS (SELECT 1 FROM quiet q WHERE q.chat_id = c.id AND q.told_ts IS NOT NULL)
-    OR EXISTS (SELECT 1 FROM plans p JOIN plan_versions v ON v.plan_id = p.id WHERE p.chat_id = c.id
-        AND v.sent_ts IS NOT NULL AND v.decided IS NULL
-        AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = v.plan_id)))";
+const ASKS: &str =
+    "EXISTS (SELECT 1 FROM questions n WHERE n.chat_id = c.id AND n.answered_ts IS NULL)";
 
 /// Whether an agent of chat `c` can't run (0071): it waits for a sign-in, or its last turn there
 /// failed and wasn't retried.
@@ -123,7 +112,7 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, c.room, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
+                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
          ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
     ))?;
@@ -138,10 +127,9 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
             "project": r.get::<_, Option<String>>(5)?,
             "folder": r.get::<_, Option<String>>(6)?,
             "archived": r.get::<_, Option<i64>>(7)?.map(crate::ids::utc),
-            "room": r.get::<_, bool>(8)?,
         });
         if !archived {
-            let state = ChatState::read(r, 9)?;
+            let state = ChatState::read(r, 8)?;
             chat["working"] = state.working.into();
             chat["needs"] = state.needs.into();
             chat["mark"] = state.mark.into();
@@ -180,8 +168,8 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         .query_map([chat], message_row)?
         .collect::<Result<Vec<_>, _>>()?;
     let mut stmt = conn.prepare_cached(
-        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position, task,
-                answers, held, result_of, opened_by
+        "SELECT id, status, why, substr(trace_id, 1, 8), created_ts, ended_ts, agent_id, position,
+                answers, held, opened_by
          FROM turns WHERE chat_id = ?1 ORDER BY created_ts",
     )?;
     let turns = stmt
@@ -198,33 +186,29 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
                 "ended": r.get::<_, Option<i64>>(5)?.map(crate::ids::utc),
                 "agent": r.get::<_, Option<String>>(6)?,
                 "position": r.get::<_, Option<i64>>(7)?,
-                // The task the turn works on: its work sits under the turn that gave it.
-                "task": r.get::<_, Option<i64>>(8)?,
-                // The turn it answers: the thread it belongs to (F8b).
-                "answers": r.get::<_, Option<String>>(9)?,
+                // The turn it answers: a check's, the lead's answer it checks.
+                "answers": r.get::<_, Option<String>>(8)?,
                 // What holds a queued turn back (F10): `pause` or `usage`.
-                "held": r.get::<_, Option<String>>(10)?,
-                // The ask it is the result of (0051): the result quotes it.
-                "result_of": r.get::<_, Option<String>>(11)?,
+                "held": r.get::<_, Option<String>>(9)?,
                 // The words that opened it (0056): a member's check of an answer draws its Checked line.
-                "opened": r.get::<_, Option<String>>(12)?,
+                "opened": r.get::<_, Option<String>>(10)?,
             }))
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
-    type Row = (Option<String>, Option<String>, Option<i64>, bool);
-    let (project, folder, archived, room): Row = conn
+    type Row = (Option<String>, Option<String>, Option<i64>);
+    let (project, folder, archived): Row = conn
         .query_row(
-            "SELECT project_id, project, archived_ts, room FROM chats WHERE id = ?1",
+            "SELECT project_id, project, archived_ts FROM chats WHERE id = ?1",
             [chat],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
         .optional()?
         .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
     let questions = crate::questions::of_chat(conn, chat)?;
     Ok(
-        json!({ "chat": chat, "agent": agent, "project": project, "folder": folder, "room": room,
+        json!({ "chat": chat, "agent": agent, "project": project, "folder": folder,
         "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns,
         "questions": questions }),
     )
@@ -238,7 +222,7 @@ fn history_order() -> String {
 /// A message's columns, with the agent of its turn: who it was for, or who wrote it.
 const MESSAGE: &str =
     "SELECT m.id, m.turn_id, m.ts, m.role, m.kind, m.body, t.agent_id, m.to_agent,
-     m.copy_of, m.picks, m.reply_to, m.reply_task FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
+     m.copy_of, m.picks, m.reply_to FROM messages m LEFT JOIN turns t ON t.id = m.turn_id";
 
 /// Where a message reads among a chat's turns: with its turn, last while that hasn't started. One
 /// said in no turn (0051) reads where the window put it live (0073): with the latest-started turn
@@ -269,9 +253,8 @@ fn message_row(r: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "copy_of": r.get::<_, Option<String>>(8)?,
         // The person's message: the names they picked from the `@` list, to draw blue.
         "picks": r.get::<_, Option<String>>(9)?.and_then(|p| serde_json::from_str::<Value>(&p).ok()),
-        // A reply the person typed in a thread (0076): the message it answers, or the task.
+        // A reply: the message it sits under.
         "reply_to": r.get::<_, Option<String>>(10)?,
-        "reply_task": r.get::<_, Option<i64>>(11)?,
     }))
 }
 
@@ -298,27 +281,6 @@ pub fn add_message(
     body: &str,
 ) -> Result<Value, Error> {
     add_message_at(conn, chat, turn, role, kind, body, now_us())
-}
-
-/// What Gathr says in a chat in no turn (0051): a line the person reads, which starts nothing.
-pub fn say(conn: &Connection, chat: &str, body: &str) -> Result<Value, Error> {
-    say_about(conn, chat, body, None)
-}
-
-/// `say`, with what the line is about (0075): `t:<task>`, `m:<message>`, or `main`.
-pub fn say_about(
-    conn: &Connection,
-    chat: &str,
-    body: &str,
-    about: Option<&str>,
-) -> Result<Value, Error> {
-    let ts = now_us();
-    let id = ulid(ts);
-    conn.prepare_cached(
-        "INSERT INTO messages (id, chat_id, ts, role, kind, body, about) VALUES (?1, ?2, ?3, 'gathr', 'text', ?4, ?5)",
-    )?
-    .execute(params![id, chat, ts, body, about])?;
-    message(conn, &id)
 }
 
 /// When a message that began at `began` may say it began (a thought known only once it's over,
@@ -357,8 +319,7 @@ pub fn add_person_message(
     insert_message(conn, chat, turn, ("user", "text"), body, now_us(), picks)
 }
 
-/// The person's reply in a thread (0076), answering `reply` (checked by `replies::check`). Its turn
-/// serves the ask of what it answers: a reply never starts an ask, or asks a size.
+/// The person's reply under a message (0076), answering `reply` (checked by `replies::check`).
 pub fn add_reply(
     conn: &Connection,
     chat: &str,
@@ -370,26 +331,15 @@ pub fn add_reply(
     let ts = now_us();
     let id = ulid(ts);
     conn.prepare_cached(
-        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks, reply_to, reply_task)
-         VALUES (?1, ?2, ?3, ?4, 'user', 'text', ?5, ?6, ?7, ?8)",
+        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks, reply_to)
+         VALUES (?1, ?2, ?3, ?4, 'user', 'text', ?5, ?6, ?7)",
     )?
-    .execute(params![
-        id,
-        chat,
-        turn,
-        ts,
-        body,
-        picks,
-        reply.reply_to,
-        reply.reply_task
-    ])?;
-    crate::asks::for_reply(conn, chat, turn, &id, reply)?;
+    .execute(params![id, chat, turn, ts, body, picks, reply.reply_to])?;
     message(conn, &id)
 }
 
-/// Gathr's copy of the message `of` in `turn`, with what the agent reads in it: the person's like
-/// of its message (0057), or the person's message to several agents (0028). Never drawn, and a turn it
-/// opens serves the ask `of` served.
+/// Gathr's copy of the message `of` in `turn`, with what the agent reads in it: a teammate's message,
+/// or the person's message to several agents (0028). Never drawn.
 pub fn add_copy(
     conn: &Connection,
     chat: &str,
@@ -404,12 +354,6 @@ pub fn add_copy(
          VALUES (?1, ?2, ?3, ?4, 'gathr', 'text', ?5, ?6)",
     )?
     .execute(params![id, chat, turn, ts, body, of])?;
-    conn.prepare_cached(
-        "UPDATE turns SET ask_id = (SELECT o.ask_id FROM messages s JOIN turns o ON o.id = s.turn_id
-             WHERE s.id = ?2)
-         WHERE id = ?1 AND ask_id IS NULL",
-    )?
-    .execute(params![turn, of])?;
     message(conn, &id)
 }
 
@@ -424,7 +368,7 @@ fn insert_message(
 ) -> Result<Value, Error> {
     let id = ulid(ts);
     let (body, reply_to) = match (role, kind) {
-        ("assistant", "text") => crate::room::words(conn, chat, turn, body)?,
+        ("assistant", "text") => crate::room::words(conn, turn, body)?,
         _ => (body, None),
     };
     conn.prepare_cached(
@@ -437,9 +381,6 @@ fn insert_message(
     if let Some(title) = title_from(body).filter(|_| role == "user") {
         conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
             .execute(params![chat, title, UNTITLED])?;
-    }
-    if role == "user" {
-        crate::asks::for_message(conn, chat, turn, &id)?;
     }
     message(conn, &id)
 }
@@ -460,40 +401,26 @@ pub fn set_message_body(conn: &Connection, id: &str, body: &str) -> Result<(), E
 
 /// Moves a message to another turn: one sent into a turn that the engine answered after it.
 /// The message as it is now, for the live socket.
-/// The new turn, with no ask yet, takes the message's own ask when it is one (split off, 0061),
-/// else the ask of the turn the message was saved in; a teammate's copy, that of the turn holding
-/// the original.
 pub fn move_message(conn: &Connection, id: &str, turn: &str) -> Result<Value, Error> {
-    conn.prepare_cached(
-        "UPDATE turns SET ask_id = (SELECT COALESCE(
-             (SELECT a.id FROM asks a WHERE a.id = ?1),
-             (SELECT o.ask_id FROM messages c JOIN messages s ON s.id = c.copy_of
-                  JOIN turns o ON o.id = s.turn_id WHERE c.id = ?1),
-             (SELECT u.ask_id FROM messages m JOIN turns u ON u.id = m.turn_id WHERE m.id = ?1)))
-         WHERE id = ?2 AND ask_id IS NULL",
-    )?
-    .execute(params![id, turn])?;
     conn.prepare_cached("UPDATE messages SET turn_id = ?2 WHERE id = ?1")?
         .execute(params![id, turn])?;
     message(conn, id)
 }
 
-/// A new turn, run as `agent`, or on the oldest account when it's sent to none; on `task` when it
-/// works on one (0010); answering the turn `answers` when Gathr starts it (F8b); with the kind
-/// of words that opened it; serving the ask of its task, else of the turn it answers (0061).
+/// A new turn, run as `agent`, or on the oldest account when it's sent to none; answering the turn
+/// `answers` when Gathr starts it; with the kind of words that opened it.
 pub fn add_turn(
     conn: &Connection,
     chat: &str,
     id: &str,
     trace: &str,
-    (agent, task, answers): (Option<&str>, Option<i64>, Option<&str>),
+    (agent, answers): (Option<&str>, Option<&str>),
     opened: crate::words::Opened,
 ) -> Result<(), Error> {
     conn.prepare_cached(
-        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, task, answers,
-                            opened_by, opened_version, ask_id)
-         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8, ?9, (SELECT COALESCE(
-             (SELECT ask_id FROM tasks WHERE number = ?6), (SELECT ask_id FROM turns WHERE id = ?7))))",
+        "INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, answers,
+                            opened_by, opened_version)
+         VALUES (?1, ?2, ?3, 'queued', ?4, ?5, ?6, ?7, ?8)",
     )?
     .execute(params![
         id,
@@ -501,7 +428,6 @@ pub fn add_turn(
         trace,
         now_us(),
         agent,
-        task,
         answers,
         opened.as_str(),
         opened.version()
@@ -535,46 +461,40 @@ pub fn set_turn(
     .map_err(Error::from)
 }
 
-/// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
-/// works on. It's saved, queued with Gathr's message as its ask, in the transaction of the change
-/// that calls for it: a stop right after that commit loses nothing, as the next start takes it over.
+/// A turn Gathr starts for an agent: a check, a last word, a carry-on. It's saved, queued with
+/// Gathr's message as its ask, in the transaction of the change that calls for it: a stop right
+/// after that commit loses nothing, as the next start takes it over.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Start {
     pub chat: String,
     pub agent: String,
-    pub task: Option<i64>,
-    /// The turn it answers: the one that gave its task, or that left its wait.
+    /// The turn it answers: a check's, the lead's answer it checks.
     pub answers: Option<String>,
     pub text: String,
     pub turn: String,
     pub trace: String,
     /// Gathr's message, as the live socket sends it.
     pub message: Value,
-    /// It's a hear-back: what became of the tasks its agent gave (`held::hear_backs`), which a
-    /// merge doesn't send the agent that merged (G159).
-    pub hear_back: bool,
 }
 
 impl Start {
     pub fn queue(
         conn: &Connection,
         (chat, agent): (&str, &str),
-        (task, answers): (Option<i64>, Option<&str>),
+        answers: Option<&str>,
         opened: crate::words::Opened,
         text: String,
     ) -> Result<Start, Error> {
-        let saved = Self::save(conn, (chat, Some(agent)), (task, answers), opened, &text)?;
+        let saved = Self::save(conn, (chat, Some(agent)), answers, opened, &text)?;
         let (turn, trace, message) = saved;
         Ok(Start {
             chat: chat.to_string(),
             agent: agent.to_string(),
-            task,
             answers: answers.map(String::from),
             text,
             turn,
             trace,
             message,
-            hear_back: false,
         })
     }
 
@@ -583,41 +503,28 @@ impl Start {
     pub fn save(
         conn: &Connection,
         (chat, agent): (&str, Option<&str>),
-        (task, answers): (Option<i64>, Option<&str>),
+        answers: Option<&str>,
         opened: crate::words::Opened,
         text: &str,
     ) -> Result<(String, String, Value), Error> {
         let (turn, trace) = (ulid(now_us()), crate::ids::trace_id());
-        add_turn(conn, chat, &turn, &trace, (agent, task, answers), opened)?;
+        add_turn(conn, chat, &turn, &trace, (agent, answers), opened)?;
         let message = add_message(conn, chat, &turn, "gathr", "text", text)?;
         Ok((turn, trace, message))
     }
 }
 
-/// A turn's place in its chat (none until it starts), when it was made, the ask it is the result
-/// of, the words that opened it and when it ended, as history shows them.
-pub type TurnPlace = (
-    Option<i64>,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-);
+/// A turn's place in its chat (none until it starts), when it was made, the words that opened it
+/// and when it ended, as history shows them.
+pub type TurnPlace = (Option<i64>, String, Option<String>, Option<String>);
 
 /// A turn's `TurnPlace`.
 pub fn turn_place(conn: &Connection, id: &str) -> Result<TurnPlace, Error> {
-    let sql =
-        "SELECT position, created_ts, result_of, opened_by, ended_ts FROM turns WHERE id = ?1";
+    let sql = "SELECT position, created_ts, opened_by, ended_ts FROM turns WHERE id = ?1";
     let row = |r: &rusqlite::Row<'_>| {
-        let ended: Option<i64> = r.get(4)?;
+        let ended: Option<i64> = r.get(3)?;
         let created = crate::ids::utc(r.get(1)?);
-        Ok((
-            r.get(0)?,
-            created,
-            r.get(2)?,
-            r.get(3)?,
-            ended.map(crate::ids::utc),
-        ))
+        Ok((r.get(0)?, created, r.get(2)?, ended.map(crate::ids::utc)))
     };
     Ok(conn.prepare_cached(sql)?.query_row([id], row)?)
 }
@@ -644,7 +551,6 @@ pub struct Waiting {
     pub status: String,
     pub text: String,
     pub agent: Option<String>,
-    pub task: Option<i64>,
     pub answers: Option<String>,
     /// The person wrote it, rather than Gathr: a pause never holds it (0010).
     pub person: bool,
@@ -697,7 +603,7 @@ pub fn cut_running(conn: &Connection) -> Result<(), Error> {
 
 /// Turns that were waiting when the service last stopped, oldest first, each with its whole ask:
 /// a message another agent sent before it started joined it. The turns that were running then were
-/// cut first, in `tasks::recover`. When that failed, a turn answering one that still reads running
+/// cut first, in `carry::recover`. When that failed, a turn answering one that still reads running
 /// waits for the next start: a carry-on run now would end before its turn was cut, and the next
 /// start would save that turn a second one.
 pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
@@ -706,12 +612,12 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
         "UPDATE turns SET held = NULL, why = NULL WHERE status = 'queued' AND held = 'update'",
         [],
     )?;
-    // A like and a copy of the person's message are the person's too (0057, 0028): a pause never holds
-    // the turn they opened.
+    // A copy of the person's message and their answer are the person's too (0028): a pause never
+    // holds the turn they opened.
     let mut stmt = conn.prepare(&format!(
-        "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.task, t.answers,
+        "SELECT t.id, t.chat_id, t.trace_id, t.status, {ASK}, t.agent_id, t.answers,
                 (SELECT role FROM messages m WHERE m.turn_id = t.id AND m.role IN ('user', 'gathr')
-                 ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IN ('liked', 'picked', 'reply')
+                 ORDER BY ts LIMIT 1) = 'user' OR t.opened_by IN ('picked', 'reply')
          FROM turns t WHERE t.status IN ('queued', 'waiting_sign_in')
            AND NOT EXISTS (SELECT 1 FROM turns was WHERE was.id = t.answers AND was.status = 'running')
          ORDER BY t.created_ts",
@@ -724,9 +630,8 @@ pub fn take_over(conn: &Connection) -> Result<Vec<Waiting>, Error> {
             status: r.get(3)?,
             text: r.get::<_, Option<String>>(4)?.unwrap_or_default(),
             agent: r.get(5)?,
-            task: r.get(6)?,
-            answers: r.get(7)?,
-            person: r.get::<_, Option<bool>>(8)?.unwrap_or(false),
+            answers: r.get(6)?,
+            person: r.get::<_, Option<bool>>(7)?.unwrap_or(false),
         })
     })?;
     let mut waiting: Vec<Waiting> = rows.collect::<Result<_, _>>()?;

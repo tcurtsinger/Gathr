@@ -10,11 +10,9 @@ use gathr::claude::engine::{Closed, Engine};
 use gathr::event::Event;
 use gathr::ids::now_us;
 use gathr::redact::redact;
-use gathr::sessions::{Conversation, Key};
 use gathr::store::{self, RawFrame};
 use serde_json::json;
 
-use super::session::task_of;
 use super::{Assignment, Task};
 use crate::tools::{Pass, Place, briefing};
 
@@ -114,15 +112,14 @@ impl Task {
         })
     }
 
-    /// Starts the engine in the conversation chosen for the turn (0055): resumed, or new.
+    /// Starts the engine in the agent's latest conversation in the chat: resumed, or new.
     pub(super) async fn spawn(
         &mut self,
         program: &Path,
         assigned: Assignment,
         trace: &str,
-        (key, choice): (&Key, &Conversation),
     ) -> Result<(), String> {
-        let session = self.resumes(&assigned, choice).await;
+        let session = self.resumes(&assigned).await;
         let new_id = gathr::ids::uuid();
         let given = command::Assigned {
             model: assigned.model.as_deref(),
@@ -226,9 +223,6 @@ impl Task {
                         .attr("path", program.display().to_string())
                         .attr("session", session.clone().unwrap_or(new_id))
                         .attr("resumed", session.is_some())
-                        .attr("gathr.task.id", task_of(choice))
-                        .attr("gathr.session.for", key.as_for())
-                        .attr("gathr.session.from", choice.as_from())
                         .attr("gen_ai.agent.id", assigned.agent.clone())
                         .attr("gathr.account", assigned.account.clone())
                         .attr("gen_ai.request.model", assigned.model.clone())
@@ -257,7 +251,7 @@ impl Task {
                 // Named again by this engine: a window is never kept under an earlier one's model.
                 self.context_model = None;
                 self.idle_since = started;
-                self.opened(choice, session).await;
+                self.opened(session);
                 if let Some(first) = first {
                     self.write(&first, None).await.map_err(|e| e.to_string())?;
                 }
@@ -547,13 +541,12 @@ impl Task {
         if self.refused(&turn.ids, &why).await {
             return self.try_next().await;
         }
-        match (turn.waits, turn.carried) {
-            // Stopped with its carry-on saved, and the engine went instead of answering: the turn
-            // is over all the same, and its task stays for the carry-on (0032, 0047).
-            (Some(waits), _) => self.end_waiting(&turn.ids, Some(&why), waits).await,
-            (None, true) => self.end_carried(&turn.ids, Some(&why)).await,
-            _ => self.set_turn(&turn.ids, "failed", Some(&why)).await,
-        }
+        // Stopped, and the engine went instead of answering: the turn is over all the same.
+        let status = match turn.stopping {
+            true => "stopped",
+            false => "failed",
+        };
+        self.set_turn(&turn.ids, status, Some(&why)).await;
         self.try_next().await;
     }
 

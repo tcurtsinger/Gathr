@@ -95,12 +95,9 @@ pub async fn agent(
         return Err(fail(StatusCode::NOT_FOUND, ERROR, "no such agent", &t.0));
     }
     s.chats.retire(&id);
-    let (key, trace) = (id.clone(), t.0.clone());
-    let removed = s
-        .writer
-        .call(move |c| deleting::remove_agent(c, &key, &trace));
+    let key = id.clone();
+    let removed = s.writer.call(move |c| deleting::remove_agent(c, &key));
     let removed = written(&t, removed.await, ERROR)?;
-    s.chats.start(removed.starts);
     for (chat, members) in removed.chats {
         crate::team::changed(&s, &t, &chat, members);
     }
@@ -126,7 +123,6 @@ pub async fn agent(
         .trace(&t.0)
         .attr("agent", id.clone())
         .attr("change", "remove")
-        .attr("gathr.task.cancelled", counts.tasks)
         .attr("chats", counts.chats)
         .attr("projects", counts.projects)
         .attr("leads", counts.leads.clone());

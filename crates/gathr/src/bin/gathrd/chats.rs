@@ -29,14 +29,13 @@ pub enum Cmd {
         agents: usize,
         /// The names picked from the window's `@` list, as kept (`picks::kept`).
         picks: Option<String>,
-        /// What a reply in a thread answers (0076), checked: none for a message on the main line.
+        /// What a reply answers (0076), checked: none for a message on the main line.
         target: gathr::replies::Target,
         /// The request's trace: the turn's too, so one reference finds both.
         trace: String,
         reply: oneshot::Sender<Result<Value, Failed>>,
     },
-    /// Gathr's copy of the message `of`: the person's like of the agent's message (0057), or the
-    /// person's message to several agents (0028). `line` reaches the agent as a message of the
+    /// Gathr's copy of the message `of`: the person's message to several agents (0028). `line` reaches the agent as a message of the
     /// person's would, into its running turn in the chat or a turn of its own opened by `opened`.
     Copy {
         chat: String,
@@ -57,7 +56,7 @@ pub enum Cmd {
         allow: bool,
         reply: oneshot::Sender<bool>,
     },
-    /// A service action (push or Codex wait check), waiting for its answer (0029).
+    /// A service action (a push), waiting for its answer (0029).
     AskService {
         kind: &'static str,
         chat: String,
@@ -80,10 +79,9 @@ pub enum Cmd {
     Retire,
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
-    /// A turn Gathr starts for the agent: a task's, a wake-up or a hear-back (0010).
+    /// A turn Gathr starts for the agent: a check, a last word, a carry-on, an answer.
     Start(gathr::store::Start),
-    /// Another agent's message to this one (plans/agent-messages.md): into the turn it runs in the
-    /// chat, else into one queued there, else a turn of its own. Answers which it was.
+    /// Another agent's message to this one (`@Name`, 0081): into the turn it runs in the chat, else into one queued there, else a turn of its own. Answers which it was.
     Message {
         chat: String,
         /// What the agent is told: who wrote, and their words.
@@ -126,15 +124,6 @@ pub enum Cmd {
     },
 }
 
-/// Why a queued turn hasn't started, as its agent's queue says it (0050): its chat, the words, and
-/// the turn it is behind, when it is behind one.
-#[derive(Clone, PartialEq)]
-pub struct QueuedWhy {
-    pub chat: String,
-    pub words: String,
-    pub behind: Option<String>,
-}
-
 /// A send that failed: why, and the trace its reference points to.
 pub struct Failed {
     pub why: String,
@@ -158,12 +147,6 @@ pub struct Chats {
     tasks: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
     /// Agents whose engine hasn't exited 30 s after its close: what each is held on (0010).
     holds: Mutex<HashMap<String, Value>>,
-    /// Why each queued turn hasn't started, as its agent's queue last said it (0050). Only what
-    /// no table holds.
-    queued: Mutex<HashMap<String, QueuedWhy>>,
-    /// The running turns that have made no progress past the limit, as their agents' queues last
-    /// said (0052): each one's chat, and when it last made progress.
-    silent: Mutex<HashMap<String, (String, i64)>>,
     /// Chats run on the oldest account until agents pick theirs (0026); none until one is added.
     account: Mutex<Option<String>>,
     /// Accounts being removed, never picked even while their rows remain.
@@ -171,8 +154,6 @@ pub struct Chats {
     picking: tokio::sync::Mutex<()>,
     /// The pauses in force, as saved (0010); every queue reads them before it starts a turn.
     pauses: Mutex<Vec<Pause>>,
-    /// Wait checks running now: each one's chat and agent. A pause stays `pausing` while one runs.
-    checking: Mutex<Vec<(String, String)>>,
     /// The version Gathr is updating to: the turns Gathr queued wait while it's set (0032).
     updating: Mutex<Option<String>>,
 }
@@ -194,13 +175,10 @@ impl Chats {
             gates: Mutex::default(),
             tasks: Mutex::default(),
             holds: Mutex::default(),
-            queued: Mutex::default(),
-            silent: Mutex::default(),
             account: Mutex::default(),
             removing: Mutex::default(),
             picking: tokio::sync::Mutex::default(),
             pauses: Mutex::default(),
-            checking: Mutex::default(),
             updating: Mutex::default(),
         })
     }
@@ -374,40 +352,6 @@ impl Chats {
         };
     }
 
-    /// An agent's queue says why a turn of its waits, or that it no longer does.
-    pub fn say_queued(&self, turn: &str, said: Option<QueuedWhy>) {
-        let mut queued = self.queued.lock().expect("never poisoned");
-        match said {
-            Some(said) => queued.insert(turn.to_string(), said),
-            None => queued.remove(turn),
-        };
-    }
-
-    /// Why each queued turn of the chat waits, where its agent's queue has said.
-    pub fn queued_in(&self, chat: &str) -> Vec<(String, QueuedWhy)> {
-        let queued = self.queued.lock().expect("never poisoned");
-        let of = queued.iter().filter(|(_, why)| why.chat == chat);
-        of.map(|(turn, why)| (turn.clone(), why.clone())).collect()
-    }
-
-    /// An agent's queue says its running turn has gone silent, in which chat and since when, or
-    /// that it no longer is.
-    pub fn say_silent(&self, turn: &str, said: Option<(String, i64)>) {
-        let mut silent = self.silent.lock().expect("never poisoned");
-        match said {
-            Some(said) => silent.insert(turn.to_string(), said),
-            None => silent.remove(turn),
-        };
-    }
-
-    /// The chat's silent turns, each with when it last made progress.
-    pub fn silent_in(&self, chat: &str) -> Vec<(String, i64)> {
-        let silent = self.silent.lock().expect("never poisoned");
-        let of = silent.iter().filter(|(_, (c, _))| c == chat);
-        of.map(|(turn, (_, since))| (turn.clone(), *since))
-            .collect()
-    }
-
     /// The account folder's renewal gate (0002).
     pub fn gate(&self, folder: &Path) -> Gate {
         let mut gates = self.gates.lock().expect("the gates lock is never poisoned");
@@ -484,41 +428,6 @@ impl Chats {
         self.pauses_changed().await;
     }
 
-    /// The wait checks running now.
-    pub fn checking(&self) -> Vec<(String, String)> {
-        self.checking.lock().expect("never poisoned").clone()
-    }
-
-    /// A wait check for `agent` in `chat` started (`true`) or ended: an end may quiet a pause.
-    pub async fn check_running(&self, chat: &str, agent: &str, running: bool) {
-        let one = (chat.to_string(), agent.to_string());
-        {
-            let mut checking = self.checking.lock().expect("never poisoned");
-            match running {
-                true => checking.push(one),
-                false => {
-                    if let Some(at) = checking.iter().position(|c| *c == one) {
-                        checking.remove(at);
-                    }
-                }
-            }
-        }
-        if !running {
-            self.settle_pauses(false).await;
-        }
-    }
-
-    /// Returns once no wait check runs in the chat: one whose wait ended is killed within a look.
-    pub async fn checks_ended(&self, chat: &str) {
-        let running = || {
-            let checking = self.checking.lock().expect("never poisoned");
-            checking.iter().any(|(c, _)| c == chat)
-        };
-        while running() {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-        }
-    }
-
     /// Reads the pauses again after a change, lets every queue look at what it holds, and says
     /// where things stand.
     pub async fn pauses_changed(&self) {
@@ -549,13 +458,13 @@ impl Chats {
         if self.pauses().is_empty() && !changed {
             return;
         }
-        let (trace, checks) = (gathr::ids::trace_id(), self.checking());
+        let trace = gathr::ids::trace_id();
         let settled = self.writer.call(move |c| {
-            let quiet = gathr::pauses::settle(c, &checks, &trace)?;
+            let quiet = gathr::pauses::settle(c, &trace)?;
             Ok::<_, gathr::Error>((
                 quiet.len(),
                 gathr::pauses::list(c)?,
-                gathr::pauses::listed(c, &checks)?,
+                gathr::pauses::listed(c)?,
             ))
         });
         let Some(Ok((quiet, saved, mut listed))) = settled.await else {
