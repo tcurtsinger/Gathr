@@ -23,6 +23,7 @@ mod compact;
 mod context;
 mod driver;
 mod ended;
+mod github;
 mod given;
 mod heard;
 mod hold;

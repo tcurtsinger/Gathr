@@ -9,6 +9,8 @@ mod checkout;
 mod common;
 #[path = "merge/lands.rs"]
 mod lands;
+#[path = "merge/opening.rs"]
+mod opening;
 #[path = "merge/report_count.rs"]
 mod report_count;
 #[path = "merge/review_questions.rs"]
@@ -74,6 +76,17 @@ fn room(data: &Path, repos: &Path, test_change: bool) -> Room {
 
 /// In the CI-wake fixture, each engine consumes its own gate and can hold a second turn.
 fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Room {
+    room_replay_with(data, repos, test_change, waking, &[])
+}
+
+/// `room_replay`, with `more` of the service's environment.
+fn room_replay_with(
+    data: &Path,
+    repos: &Path,
+    test_change: bool,
+    waking: bool,
+    more: &[(&str, &Path)],
+) -> Room {
     let (folder, _) = project(repos);
     // A merge commit is made as the person who owns the checkout.
     git(&folder, &["config", "user.name", "Test"]);
@@ -120,7 +133,7 @@ fn room_replay(data: &Path, repos: &Path, test_change: bool, waking: bool) -> Ro
             .replace("{\"dir\":\"hold\"}", "{\"dir\":\"hold\",\"line\":\"take\"}");
         std::fs::write(&recording, format!("{}\n{}", held.trim_end(), held)).unwrap();
     }
-    let service = service(data, waking);
+    let service = service_with(data, waking, more);
     let account = service.add_account("Team");
     common::sign_in_account(data, &account);
     let agent = |name: &str| {
@@ -268,9 +281,10 @@ impl Room {
             assert!(given.starts_with("Task #"), "{given}");
         }
         let token = self.token();
-        // Its engine starts before its turn does: a held turn's start look (0063) comes between.
-        let ran =
-            "SELECT count(*) FROM turns WHERE task IS NOT NULL AND status IN ('running', 'done')";
+        // Its engine starts before its turn does: a held turn's start look (0063) and its opening's
+        // read of the PR come between. Another member's task turn running isn't Vale's.
+        let ran = "SELECT count(*) FROM turns u JOIN tasks t ON t.number = u.task
+                   WHERE t.kind = 'review' AND u.status IN ('running', 'done')";
         common::until(30, "Vale's first review to run", || {
             let n: i64 = self.db().query_row(ran, [], |r| r.get(0)).ok()?;
             (n > 0).then_some(())
