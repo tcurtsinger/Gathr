@@ -10,7 +10,7 @@
   --mark: 9px;
   --mark-ring: 1.5px;
 }
-.face > svg {
+.face > :is(svg, img) {
   display: block;
   width: 100%;
   height: 100%;
