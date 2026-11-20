@@ -244,20 +244,18 @@ function AgentForm(props: FormProps) {
   return (
     <form aria-labelledby={title} onSubmit={submit}>
       <h3 id={title}>{agent ? agent.name : 'Add agent'}</h3>
-      {!agent && (
-        <label className="agent-field">
-          Name
-          <input
-            value={name}
-            maxLength={80}
-            autoComplete="off"
-            spellCheck={false}
-            // biome-ignore lint/a11y/noAutofocus: the form opens from Add, to type the name
-            autoFocus
-            onChange={(e) => edit({ name: e.target.value })}
-          />
-        </label>
-      )}
+      <label className="agent-field">
+        Name
+        <input
+          value={name}
+          maxLength={80}
+          autoComplete="off"
+          spellCheck={false}
+          // biome-ignore lint/a11y/noAutofocus: the form opens from Add, to type the name
+          autoFocus={!agent}
+          onChange={(e) => edit({ name: e.target.value })}
+        />
+      </label>
       <FaceFields
         id={agent?.id ?? ''}
         name={name.trim()}
