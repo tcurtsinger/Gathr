@@ -88,14 +88,18 @@ export function preloadCodeBlock() {
 
 /**
  * Words outside a message, a plan's text or a task's field, formatted as an agent's words in the chat are (the owner's
- * call of 2026-11-19): the same plugins and the same rules (markdown.css), at the size of where they sit.
+ * call of 2026-11-19): the same plugins and the same rules (markdown.css), at the size of where they sit. With
+ * `names`, an @Name of one of them reads as a mention.
  */
-export function Markdown({ text, className }: { text: string; className?: string }) {
+export function Markdown({ text, className, names }: { text: string; className?: string; names?: string[] }) {
+  const key = names?.join('\n');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the same names make the same plugins
+  const remark = useMemo(() => (names?.length ? [...remarkPlugins, mentions(names)] : remarkPlugins), [key]);
   return (
     <Streamdown
       mode="static"
       className={className ? `markdown ${className}` : 'markdown'}
-      remarkPlugins={remarkPlugins}
+      remarkPlugins={remark}
       rehypePlugins={rehypePlugins}
       components={components}
       linkSafety={{ enabled: false }}
