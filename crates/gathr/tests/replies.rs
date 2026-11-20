@@ -344,16 +344,10 @@ fn the_upgrade_from_0055_keeps_every_rowid_and_the_search_index() {
              ('t1', 'c', 'aaaaaaaa', 'done', 10, 1);
          INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body) VALUES
              ('m1', 'c', 't1', 10, 'user', 'text', 'Where do the herons nest'),
-             ('m2', 'c', 't1', 11, 'assistant', 'text', 'Herons nest by the weir');
-         ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
-         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed;
-         PRAGMA user_version = 55;",
+             ('m2', 'c', 't1', 11, 'assistant', 'text', 'Herons nest by the weir');",
     )
     .unwrap();
+    common::old::back_to(&conn, 55);
     let ids = "SELECT rowid || ':' || id FROM messages ORDER BY rowid";
     let found = "SELECT rowid FROM message_search WHERE message_search MATCH 'herons'";
     let (before, indexed) = (rows_of(&conn, ids), rows_of(&conn, found));
