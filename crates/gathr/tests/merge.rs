@@ -161,6 +161,7 @@ fn room_replay_with(
         .as_str()
         .unwrap()
         .to_string();
+    common::old_chat(data, &chat);
     let room = Room {
         _release: Release(data.join("go"), waking),
         service,

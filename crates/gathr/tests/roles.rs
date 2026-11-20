@@ -103,6 +103,7 @@ fn each_roles_briefing_carries_its_lines_and_its_start_records_their_version() {
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(&data.0, &chat);
     let each = [
         ("Ana", "role: supervisor", Role::Supervisor),
         ("Bo", "role: member", Role::Member),

@@ -55,8 +55,10 @@ fn refused(why: impl Into<String>) -> Error {
     Error::Refused(why.into())
 }
 
+/// An old team chat: a room chat keeps no asks.
 fn in_team(conn: &Connection, chat: &str) -> Result<bool, Error> {
-    let sql = "SELECT count(*) >= 2 FROM chat_members WHERE chat_id = ?1";
+    let sql = "SELECT count(*) >= 2 AND NOT coalesce((SELECT room FROM chats WHERE id = ?1), 0)
+               FROM chat_members WHERE chat_id = ?1";
     Ok(conn.prepare_cached(sql)?.query_row([chat], |r| r.get(0))?)
 }
 

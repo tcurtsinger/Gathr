@@ -11,7 +11,7 @@ use crate::redact::{redact, redact_json};
 const MALFORMED_CAP: usize = 64 * 1024;
 
 /// A new chat, with the project it was made in and that project's folder, if any (0013: set only
-/// here; the column `project` holds the folder).
+/// here; the column `project` holds the folder). Every chat made now is a room chat (`room.rs`).
 pub fn create_chat(
     conn: &Connection,
     title: &str,
@@ -19,12 +19,12 @@ pub fn create_chat(
 ) -> Result<Value, Error> {
     let (id, ts) = (ulid(now_us()), now_us());
     conn.execute(
-        "INSERT INTO chats (id, title, created_ts, project_id, project) VALUES (?1, ?2, ?3, ?4, ?5)",
+        "INSERT INTO chats (id, title, created_ts, project_id, project, room) VALUES (?1, ?2, ?3, ?4, ?5, 1)",
         params![id, title, ts, project, folder],
     )?;
     Ok(
         json!({ "id": id, "title": title, "created": crate::ids::utc(ts), "project": project,
-        "folder": folder }),
+        "folder": folder, "room": true }),
     )
 }
 
@@ -120,7 +120,7 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
     let mut stmt = conn.prepare_cached(&format!(
         "SELECT c.id, c.title, c.created_ts, (SELECT count(*) FROM messages m WHERE m.chat_id = c.id),
                 (SELECT agent_id FROM turns t WHERE t.chat_id = c.id ORDER BY t.created_ts DESC LIMIT 1),
-                c.project_id, c.project, c.archived_ts, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
+                c.project_id, c.project, c.archived_ts, c.room, {WORKING}, {NEEDS}, {ASKS}, {TROUBLE}
          FROM chats c WHERE (c.archived_ts IS NOT NULL) = ?1
          ORDER BY coalesce(c.archived_ts, c.created_ts) DESC"
     ))?;
@@ -135,9 +135,10 @@ pub fn chats(conn: &Connection, archived: bool) -> Result<Value, Error> {
             "project": r.get::<_, Option<String>>(5)?,
             "folder": r.get::<_, Option<String>>(6)?,
             "archived": r.get::<_, Option<i64>>(7)?.map(crate::ids::utc),
+            "room": r.get::<_, bool>(8)?,
         });
         if !archived {
-            let state = ChatState::read(r, 8)?;
+            let state = ChatState::read(r, 9)?;
             chat["working"] = state.working.into();
             chat["needs"] = state.needs.into();
             chat["mark"] = state.mark.into();
@@ -208,17 +209,18 @@ pub fn history(conn: &Connection, chat: &str) -> Result<Value, Error> {
         })?
         .collect::<Result<Vec<_>, _>>()?;
     let agent = turns.last().map_or(Value::Null, |t| t["agent"].clone());
-    let (project, folder, archived): (Option<String>, Option<String>, Option<i64>) = conn
+    type Row = (Option<String>, Option<String>, Option<i64>, bool);
+    let (project, folder, archived, room): Row = conn
         .query_row(
-            "SELECT project_id, project, archived_ts FROM chats WHERE id = ?1",
+            "SELECT project_id, project, archived_ts, room FROM chats WHERE id = ?1",
             [chat],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<i64>>(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()?
         .unwrap_or_default();
     let members = crate::team::members(conn, chat)?;
     Ok(
-        json!({ "chat": chat, "agent": agent, "project": project, "folder": folder,
+        json!({ "chat": chat, "agent": agent, "project": project, "folder": folder, "room": room,
         "archived": archived.map(crate::ids::utc), "members": members, "messages": messages, "turns": turns }),
     )
 }
@@ -416,11 +418,17 @@ fn insert_message(
     picks: Option<&str>,
 ) -> Result<Value, Error> {
     let id = ulid(ts);
+    let (body, reply_to) = match (role, kind) {
+        ("assistant", "text") => crate::room::words(conn, chat, turn, body)?,
+        _ => (body, None),
+    };
     conn.prepare_cached(
-        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, picks, reply_to)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )?
-    .execute(params![id, chat, turn, ts, role, kind, body, picks])?;
+    .execute(params![
+        id, chat, turn, ts, role, kind, body, picks, reply_to
+    ])?;
     if let Some(title) = title_from(body).filter(|_| role == "user") {
         conn.prepare_cached("UPDATE chats SET title = ?2 WHERE id = ?1 AND title = ?3")?
             .execute(params![chat, title, UNTITLED])?;

@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 pub mod feed;
+pub mod old;
 pub mod replay;
 pub mod update;
 
@@ -126,11 +127,13 @@ impl TestService {
         id
     }
 
-    /// A new chat's id.
+    /// A new old chat's id (`old_chat`).
     pub fn new_chat(&self) -> String {
         let chat = self.send("POST", "/api/chats", serde_json::json!({}));
         assert_eq!(chat.status, 200, "{}", chat.body);
-        chat.json()["id"].as_str().unwrap().to_string()
+        let chat = chat.json()["id"].as_str().unwrap().to_string();
+        old_chat(&self.data, &chat);
+        chat
     }
 
     /// Polls the chat until `done` holds for its history, or fails after `secs`.
@@ -516,6 +519,15 @@ pub fn text(result: &Value) -> String {
         .to_string()
 }
 
+/// Makes `chat` an old chat, as every chat was before room mode (0065). Until the old team machinery
+/// is deleted, its tests run on old chats: every helper here that makes a chat makes an old one.
+pub fn old_chat(data: &Path, chat: &str) {
+    let conn = rusqlite::Connection::open(data.join("gathr.db")).unwrap();
+    conn.busy_timeout(Duration::from_secs(10)).unwrap();
+    let made = conn.execute("UPDATE chats SET room = 0 WHERE id = ?1", [chat]);
+    assert_eq!(made.unwrap(), 1, "no chat {chat}");
+}
+
 /// A chat in a new project on `folder` with `members`: its id. Each call names its own project.
 pub fn project_chat(service: &TestService, folder: &Path, members: Value) -> String {
     let name = format!("Project {}", gathr::ids::uuid());
@@ -529,7 +541,9 @@ pub fn project_chat(service: &TestService, folder: &Path, members: Value) -> Str
         serde_json::json!({ "project": project }),
     );
     assert_eq!(chat.status, 200, "{}", chat.body);
-    chat.json()["id"].as_str().unwrap().to_string()
+    let chat = chat.json()["id"].as_str().unwrap().to_string();
+    old_chat(&service.data, &chat);
+    chat
 }
 
 /// A signed-in chat with a Supervisor (Lead) and a member (Ann): the service, the chat, the lead.
@@ -561,6 +575,7 @@ pub fn team(data: &Path, replay: &Path, more: &[(&str, &Path)]) -> (TestService,
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    old_chat(data, &chat);
     (service, chat, lead)
 }
 
@@ -612,6 +627,7 @@ pub fn team_on_with(data: &Path, engine: &str, more: &[(&str, &Path)]) -> (TestS
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    old_chat(data, &chat);
     (service, chat)
 }
 

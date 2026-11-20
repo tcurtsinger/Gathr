@@ -462,19 +462,10 @@ fn an_old_chat_is_tied_by_task_and_answers_alone_after_the_upgrade() {
              ('m3', 'c', 'work', 20, 'gathr', 'text', 'Task #1 from Mira: Sort the gravel bars'),
              ('m4', 'c', 'work', 21, 'assistant', 'text', 'Sorted, herons first'),
              ('m5', 'c', 'back', 30, 'gathr', 'text', 'The task you gave is settled'),
-             ('m6', 'c', 'lone', 40, 'gathr', 'text', 'No progress in 3 days');
-         ALTER TABLE turns DROP COLUMN result_of; ALTER TABLE landings DROP COLUMN turn;
-         ALTER TABLE messages DROP COLUMN about;
-                 DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
-         ALTER TABLE messages DROP COLUMN reply_to; ALTER TABLE messages DROP COLUMN reply_task;
-         DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed;
-         PRAGMA user_version = 54;",
+             ('m6', 'c', 'lone', 40, 'gathr', 'text', 'No progress in 3 days');",
     )
     .unwrap();
+    common::old::back_to(&conn, 54);
     let before = rows_of(
         &conn,
         "SELECT rowid || ':' || id FROM messages ORDER BY rowid",

@@ -22,6 +22,7 @@ impl Task {
         let (chat, turn) = (ids.chat.clone(), ids.turn.clone());
         // The conversation the turn runs in, when the engine knows it already; a new one's Init says it.
         let ran_in = self.session.id.clone();
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
         let read = self
             .chats
             .writer
@@ -34,7 +35,11 @@ impl Task {
                     false => gathr::room::last_ran(c, &chat, &turn, &agent, resumed)?,
                 };
                 let heard = gathr::room::catch_up(c, &chat, (&turn, &agent), since, resumed)?;
-                Ok::<_, gathr::Error>((heard, gathr::tasks::questions(c, &turn, since)?))
+                let asked = match room {
+                    true => None,
+                    false => gathr::tasks::questions(c, &turn, since)?,
+                };
+                Ok::<_, gathr::Error>((heard, asked))
             })
             .await;
         let event = Event::point("gathr.room.heard")

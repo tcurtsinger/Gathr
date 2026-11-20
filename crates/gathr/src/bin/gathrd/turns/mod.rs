@@ -90,6 +90,8 @@ struct Assignment {
     team: Vec<(String, gathr::team::Role)>,
     /// Claude Code with its slash commands, for `/compact` only (K4).
     slash: bool,
+    /// The chat is a room chat: none of the task machinery runs for its turns.
+    room: bool,
 }
 
 impl Assignment {
@@ -117,6 +119,9 @@ struct Running {
     /// `partial`'s length in UTF-16 units, as the window counts it: each delta says where it starts,
     /// so a window that read `partial` in a chat's history skips what that already held.
     partial_units: usize,
+    /// How `partial` starts, once known (`room::start`): the bytes of its REPLY line in a room chat,
+    /// which are never sent, and the message the words sit under. `partial_units` counts what is sent.
+    reply: Option<(usize, Option<String>)>,
     streamed: bool,
     /// Tool calls under way.
     tools: HashMap<String, OpenTool>,
@@ -155,6 +160,15 @@ struct Running {
     stalled: bool,
     /// The account's renewal gate, held until the provider first answers (0016).
     gate: login::Hold,
+}
+
+impl Running {
+    /// What was sent of the words streaming now: never a REPLY line, nor what may still be one.
+    fn shown(&self) -> &str {
+        self.reply
+            .as_ref()
+            .map_or("", |(skip, _)| &self.partial[*skip..])
+    }
 }
 
 struct Task {
@@ -607,7 +621,8 @@ impl Task {
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         let compaction = self.compactions.contains(&next.ids.turn);
-        let text = match !compaction && self.near_compaction(&next.ids).await {
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
+        let text = match !compaction && !room && self.near_compaction(&next.ids).await {
             true => format!("{}\n\n{}", gathr::context::SOON, next.text),
             false => next.text.clone(),
         };
@@ -740,6 +755,7 @@ impl Task {
                 chat: next.ids.chat.clone(),
                 team,
                 slash: false,
+                room: false,
             }
         };
         let Some(id) = next.ids.agent.clone() else {
@@ -766,12 +782,14 @@ impl Task {
                 return Ok(None);
             };
             let account = gathr::accounts::get(conn, &agent.account)?;
-            Ok::<_, gathr::Error>(account.map(|account| (agent, account, team)))
+            let room = gathr::room::is_room(conn, &chat)?;
+            Ok::<_, gathr::Error>(account.map(|account| (agent, account, (team, room))))
         };
         match self.chats.writer.call(read).await {
-            Some(Ok(Some((a, account, team)))) => {
+            Some(Ok(Some((a, account, (team, room))))) => {
                 let given = (a.model, a.effort, a.approvals);
                 let mut assigned = on(account, Some(a.id), given, team);
+                assigned.room = room;
                 assigned.slash =
                     assigned.engine == "claude" && self.compactions.contains(&next.ids.turn);
                 Ok(Some(assigned))
@@ -885,7 +903,7 @@ impl Task {
         let running = self
             .turn
             .as_ref()
-            .filter(|t| t.ids.chat == chat && !t.partial.is_empty());
+            .filter(|t| t.ids.chat == chat && !t.shown().is_empty());
         let unsaved: Vec<&(Ids, String)> = self
             .unsaved
             .iter()
@@ -895,16 +913,17 @@ impl Task {
             // Blocks the database refused, then what's streaming now, as one unsaved text.
             let (ids, _) = unsaved.first()?;
             let mut texts: Vec<&str> = unsaved.iter().map(|(_, text)| text.as_str()).collect();
-            texts.extend(running.map(|t| t.partial.as_str()));
+            texts.extend(running.map(Running::shown));
             let text = texts.join("\n\n");
             return Some(json!({ "turn": ids.turn, "agent": ids.agent, "text": text, "saved": 0 }));
         };
         let (chat, id) = (chat.to_string(), turn.ids.turn.clone());
         let count = move |conn: &mut rusqlite::Connection| store::replies(conn, &chat, &id);
         let saved = self.chats.writer.call(count).await?.ok()?;
+        let reply_to = turn.reply.as_ref().and_then(|(_, to)| to.clone());
         Some(
-            json!({ "turn": turn.ids.turn, "agent": turn.ids.agent, "text": turn.partial,
-            "saved": saved }),
+            json!({ "turn": turn.ids.turn, "agent": turn.ids.agent, "text": turn.shown(),
+            "reply_to": reply_to, "saved": saved }),
         )
     }
 }
