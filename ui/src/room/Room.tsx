@@ -44,10 +44,18 @@ export interface Acts {
   like: (message: string, give: boolean) => void;
 }
 
+/** A search hit: the chat it opened and the message in it. */
+export interface Found {
+  chat: string;
+  message: string;
+}
+
 interface Props {
   state: RoomState;
   people: People;
   acts: Acts;
+  /** Scrolled to and marked briefly once it is drawn; a reply's thread opens for it. */
+  found?: Found;
   /** Above the messages: a failure to load, with its Retry. */
   header?: ReactNode;
   /** At the foot: the message box. */
@@ -55,10 +63,10 @@ interface Props {
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ state, people, acts, header, children }: Props) {
+export function Room({ state, people, acts, found, header, children }: Props) {
   const items = shape(state);
-  const scroll = useStuck(state);
-  const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts };
+  const scroll = useStuck(state, found);
+  const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts, found: found?.message };
   return (
     <>
       <div className="room-scroll" ref={scroll}>
@@ -90,13 +98,21 @@ interface Ctx {
   reactions: Reaction[];
   approvals: Approval[];
   acts: Acts;
+  /** The message a search hit opened the chat at. */
+  found?: string;
+}
+
+/** Whether the item's words hold the message: `data-found` for it. */
+function holds(item: Item, message?: string) {
+  const has = item.kind === 'said' ? item.message.id === message : item.said.some((m) => m.id === message);
+  return (!!message && has) || undefined;
 }
 
 /** The person's message: a bubble at the right, with its replies under it when it has any. */
 function You({ said, ctx }: { said: Said; ctx: Ctx }) {
   return (
     <div className="room-item">
-      <div className="room-you">
+      <div className="room-you" data-found={holds(said, ctx.found)}>
         <Picked message={said.message} />
         <span className="room-time"> {clock(said.message.time)}</span>
       </div>
@@ -137,6 +153,7 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
       <article
         className="room-card"
         data-live={working(card) || undefined}
+        data-found={holds(card, ctx.found)}
         aria-label={ctx.people.name(agent)}
       >
         <header className="room-head">
@@ -184,7 +201,11 @@ function State({ card }: { card: Card }) {
       </span>
     );
   if (status !== 'done')
-    return <span className="room-state">{status === 'stopped' ? 'Stopped' : 'Failed'}</span>;
+    return (
+      <span className="room-state">
+        {status === 'stopped' ? 'Stopped' : status === 'waiting_sign_in' ? 'Waiting for sign-in' : 'Failed'}
+      </span>
+    );
   return (
     <span className="room-state">
       <Check aria-hidden="true" />
@@ -268,6 +289,12 @@ function Asks({ turn, agent, ctx }: { turn: string; agent: string; ctx: Ctx }) {
 /** Replies to a message, tucked under it and folded to one line: "3 replies · Rev, Ann · 9:21". */
 function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
   const [opened, setOpen] = useState(false);
+  // A search hit on one of the replies opens them.
+  const [seen, setSeen] = useState<string>();
+  if (ctx.found !== seen) {
+    setSeen(ctx.found);
+    if (replies.some((r) => holds(r, ctx.found))) setOpen(true);
+  }
   // A reply that waits for an approval is never folded away.
   const open = opened || replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
   const authors = [
@@ -300,7 +327,7 @@ function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
 function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
   if (item.kind === 'said')
     return (
-      <div className="room-reply mine">
+      <div className="room-reply mine" data-found={holds(item, ctx.found)}>
         <span />
         <div>
           <div className="room-line">
@@ -316,7 +343,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
   const agent = item.turn.agent as string;
   const running = working(item);
   return (
-    <div className="room-reply">
+    <div className="room-reply" data-found={holds(item, ctx.found)}>
       <Face agent={ctx.people.face(agent)} size={20} />
       <div>
         <div className="room-line">
@@ -353,9 +380,9 @@ function useNow(running: boolean) {
 
 /**
  * The chat stays at its newest message while the person is there; scrolled up, it stays where they are. A new question
- * to the person brings it down to its newest message, so it is seen.
+ * to the person brings it down to its newest message, so it is seen. A search hit, once drawn, is put in the middle.
  */
-function useStuck(state: RoomState) {
+function useStuck(state: RoomState, found?: Found) {
   const box = useRef<HTMLDivElement>(null);
   const stuck = useRef(true);
   const open = state.questions.filter((q) => !q.answered).length;
@@ -380,12 +407,18 @@ function useStuck(state: RoomState) {
       resized.disconnect();
     };
   }, []);
+  const centred = useRef<Found>(undefined);
   // biome-ignore lint/correctness/useExhaustiveDependencies: every change to the room may grow it
   useLayoutEffect(() => {
     if (open > asked.current) stuck.current = true;
     asked.current = open;
     const el = box.current;
-    if (el && stuck.current) el.scrollTop = el.scrollHeight;
-  }, [state]);
+    const hit = found !== centred.current && el?.querySelector('[data-found]');
+    if (hit) {
+      centred.current = found;
+      stuck.current = false;
+      hit.scrollIntoView({ block: 'center' });
+    } else if (el && stuck.current) el.scrollTop = el.scrollHeight;
+  }, [state, found]);
   return box;
 }

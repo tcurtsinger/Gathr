@@ -87,7 +87,8 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
         id: e.turn,
         status: e.status,
         agent: e.agent,
-        why: e.why ?? before?.why ?? null,
+        // A null why clears the one before: a hold let go, a turn that started.
+        why: e.why === undefined ? (before?.why ?? null) : e.why,
         ref: e.ref ?? before?.ref ?? '',
         created: e.created ?? before?.created,
         ended: e.ended ?? before?.ended,

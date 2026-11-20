@@ -31,7 +31,9 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.room-archived {
+/* Archived with Restore; paused or stopped with Resume or Restart. */
+.room-archived,
+.room-run {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -379,4 +381,14 @@
 }
 .questions-item .notice {
   margin: 8px 0 0;
+}
+
+/* A search hit opened here: a short attention tint, back to its own background. */
+.room [data-found] {
+  animation: room-found 1.6s ease-out;
+}
+@keyframes room-found {
+  from {
+    background: color-mix(in srgb, var(--attention) 16%, var(--background));
+  }
 }

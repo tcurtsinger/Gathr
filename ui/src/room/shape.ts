@@ -54,9 +54,18 @@ export function shape(s: RoomState): (Item | Asked)[] {
     byTurn.set(m.turn, [...(byTurn.get(m.turn) ?? []), m]);
   }
   const cards = new Map<string, Card>();
-  for (const turn of Object.values(s.turns)) {
-    if (!turn.agent || (turn.status === 'queued' && !s.partial[turn.id])) continue;
-    const mine = byTurn.get(turn.id) ?? [];
+  for (const id of new Set([...Object.keys(s.turns), ...byTurn.keys()])) {
+    const mine = byTurn.get(id) ?? [];
+    // Words whose turn the history doesn't have, as some old chats' are, still show.
+    const turn = s.turns[id] ?? {
+      id,
+      agent: null,
+      status: 'done',
+      why: null,
+      ref: '',
+      created: mine[0]?.time,
+    };
+    if (turn.status === 'queued' && !s.partial[turn.id]) continue;
     const said = mine.filter((m) => m.kind === 'text' && typeof m.body === 'string');
     const text = [...said.map((m) => m.body as string), s.partial[turn.id] ?? '']
       .filter(Boolean)
