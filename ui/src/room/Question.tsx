@@ -1,29 +1,32 @@
 import { Check } from 'lucide-react';
+import { Popover } from 'radix-ui';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { Failure, Question } from '../api';
 import { Composer } from '../components/Composer';
 import { Face } from '../components/Face';
+import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { FailureNotice } from '../components/Notice';
 import { StateMark } from '../components/StateMark';
 import { clock, type People } from './Room';
+import '../components/popover-panel.css';
 
-interface Props {
-  question: Question;
-  people: People;
-  /** Sends the person's answer: it fails with the service's refusal. */
-  onAnswer: (id: number, pick?: string, words?: string) => Promise<unknown>;
-  onReference: (ref: string) => void;
-  /** Whether a line runs down from its picture to the next card. */
-  joined?: boolean;
-}
+/** Sends the person's answer: it fails with the service's refusal. */
+type OnAnswer = (id: number, pick?: string, words?: string) => Promise<unknown>;
 
 /**
- * An agent's question to the person, as a card of its own: the question, its choices and a box for their own words.
- * A choice answers at once, with any words typed; the words alone answer with Send. Answered, it goes quiet.
+ * An agent's question to the person, as a card of its own where it was asked: the question and, while it is open,
+ * Answer, which opens the questions panel on it. Answered, the answer sits under it.
  */
-export function QuestionCard({ question: q, people, onAnswer, onReference, joined }: Props) {
+export function QuestionCard(props: {
+  question: Question;
+  people: People;
+  onOpen: (id: number) => void;
+  /** Whether a line runs down from its picture to the next card. */
+  joined?: boolean;
+}) {
+  const { question: q, people, onOpen, joined } = props;
   const open = !q.answered;
   return (
     <div className="room-item room-turn">
@@ -50,7 +53,11 @@ export function QuestionCard({ question: q, people, onAnswer, onReference, joine
         </header>
         <Markdown className="room-body" text={q.question} names={people.names} />
         {open ? (
-          <Answer question={q} onAnswer={onAnswer} onReference={onReference} />
+          <div className="room-asks">
+            <Button type="button" variant="outline" size="sm" onClick={() => onOpen(q.id)}>
+              Answer
+            </Button>
+          </div>
         ) : (
           <div className="room-answer">
             <div className="room-line">
@@ -68,7 +75,84 @@ export function QuestionCard({ question: q, people, onAnswer, onReference, joine
   );
 }
 
-function Answer({ question: q, onAnswer, onReference }: Omit<Props, 'people'>) {
+/**
+ * The top line's Questions button and its panel: the chat's open questions, each with its choices and a box for the
+ * person's own words. The button's dot is filled while one is open. `at`: undefined while the panel is closed, else
+ * the question it opens on, or null for none.
+ */
+export function Questions(props: {
+  questions: Question[];
+  people: People;
+  at: number | null | undefined;
+  onOpen: (at: number | null | undefined) => void;
+  onAnswer: OnAnswer;
+  onReference: (ref: string) => void;
+}) {
+  const { people, at, onOpen, onAnswer, onReference } = props;
+  const open = props.questions.filter((q) => !q.answered);
+  return (
+    <Popover.Root open={at !== undefined} onOpenChange={(o) => onOpen(o ? null : undefined)}>
+      <Popover.Trigger asChild>
+        <IconButton aria-label="Questions" className="head-button">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M13 3H7a4 4 0 0 0-4 4v10a4 4 0 0 0 4 4h10a4 4 0 0 0 4-4v-6" />
+            <circle
+              cx="18.5"
+              cy="5.5"
+              r="2.5"
+              className="questions-dot"
+              data-open={open.length > 0 || undefined}
+            />
+            <path d="M7.5 13h7M7.5 17h4" />
+          </svg>
+        </IconButton>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          className="popover-panel questions"
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          collisionPadding={16}
+          role="dialog"
+          aria-label="Questions"
+          onOpenAutoFocus={(e) => {
+            const item = document.querySelector(`[data-question="${at}"]`);
+            if (!item) return;
+            e.preventDefault();
+            item.scrollIntoView({ block: 'nearest' });
+            item.querySelector<HTMLElement>('button, textarea')?.focus();
+          }}
+        >
+          <h3>Questions</h3>
+          {open.length === 0 && <p className="questions-none">No open questions</p>}
+          {open.map((q) => (
+            <section key={q.id} className="questions-item" data-question={q.id} aria-label={q.name}>
+              <div className="room-line">
+                <Face agent={people.face(q.agent)} size={20} />
+                <b>{q.name}</b> <span className="room-time">{clock(q.asked)}</span>
+              </div>
+              <Markdown className="room-said" text={q.question} names={people.names} />
+              <Answer question={q} onAnswer={onAnswer} onReference={onReference} />
+            </section>
+          ))}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** A choice answers at once, with any words typed; the words alone answer with Send. */
+function Answer(props: { question: Question; onAnswer: OnAnswer; onReference: (ref: string) => void }) {
+  const { question: q, onAnswer, onReference } = props;
   const [words, setWords] = useState('');
   const [sending, setSending] = useState(false);
   const [refused, setRefused] = useState<Failure>();
@@ -112,19 +196,6 @@ function Answer({ question: q, onAnswer, onReference }: Omit<Props, 'people'>) {
         label="Answer"
       />
       {refused && <FailureNotice failure={refused} onReference={onReference} />}
-    </div>
-  );
-}
-
-/** An answered question as one quiet line in the chat: who asked what, and the answer. */
-export function AnsweredLine({ question: q, people }: { question: Question; people: People }) {
-  const answer = [q.pick, q.words].filter(Boolean).join(' · ');
-  return (
-    <div className="room-asked-line">
-      <Face agent={people.face(q.agent)} size={20} />
-      <span>
-        <b>{q.name}</b> asked “{q.question.split('\n')[0]}” · You: {answer}
-      </span>
     </div>
   );
 }

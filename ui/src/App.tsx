@@ -11,13 +11,13 @@ import {
   type Project,
   type Task,
 } from './api';
-import { Board } from './Board';
 import { ChatView } from './chat/ChatView';
 import type { SendFailure } from './chat/messages';
 import { Confirm } from './components/Confirm';
 import { KnownFaces } from './components/Face';
 import type { Picked } from './components/mention';
 import { FailureNotice } from './components/Notice';
+import { WorkspaceToggle } from './components/workspace';
 import { DeleteConfirm } from './DeleteConfirm';
 import { listen } from './live';
 import { NewProject } from './NewProject';
@@ -34,7 +34,7 @@ import { asQuestion } from './tasks/rows';
 import { TasksFlyout } from './tasks/TasksFlyout';
 import { TasksTab } from './tasks/TasksTab';
 import { usePersonTasks } from './tasks/usePersonTasks';
-import { type FileTab, fileId, Workspace, WorkspaceToggle } from './tasks/Workspace';
+import { type FileTab, fileId, Workspace } from './tasks/Workspace';
 import { readyVersion, useAppUpdate } from './update';
 import './app.css';
 
@@ -411,7 +411,13 @@ export function App() {
         }
       />
       {screen && chat && (chat.room || !chat.id) ? (
-        <RoomView key={chat.id || 'new'} {...screen} />
+        <RoomView
+          key={chat.id || 'new'}
+          {...screen}
+          sidebar={person.open[chat.id]}
+          onSidebar={(open) => person.setOpen(chat.id, open)}
+          onFailure={setFailure}
+        />
       ) : screen && chat ? (
         <ChatView
           key={chat.id}
@@ -504,7 +510,6 @@ export function App() {
           <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
         </>
       )}
-      {chat?.id && <Board key={`board-${chat.id}`} chat={chat.id} onFailure={setFailure} />}
       <NewProject
         open={newProject}
         agents={agents}

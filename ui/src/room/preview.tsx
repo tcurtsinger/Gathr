@@ -1,20 +1,20 @@
 import { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { BoardLine, Member, Message, Question, ToolBody, Turn } from '../api';
-import { Board } from '../Board';
 import { Composer } from '../components/Composer';
 import type { FaceOf } from '../components/Face';
 import type { Picked } from '../components/mention';
+import { WorkspaceToggle } from '../components/workspace';
 import { TopLine } from '../TopLine';
-import { QuestionCard } from './Question';
+import { Questions } from './Question';
 import { people, Room } from './Room';
+import { RoomSidebar } from './Sidebar';
 import type { RoomState } from './useRoom';
 import '../theme.css';
 import '../app.css';
 
 // A made-up chat, as in the mock-up: Mira leads, Ann and Bo build, Rev reviews. Times count back from now. Bo's turn
 // waits for an approval, and the person liked Ann's message. Ann asked the person a question, answered; Mira asks one.
-// ?placement=b pins the open question above the message box (placement B); the real screen is placement A.
 const agents: FaceOf[] = [
   { id: 'mira', name: 'Mira', face_seed: 'Mira', background: '#619eff' },
   { id: 'ann', name: 'Ann', face_seed: 'Ann', background: '#ffd166' },
@@ -194,26 +194,28 @@ window.fetch = (url, init) =>
     : fetched(url, init);
 
 const ignore = () => {};
-const pinned = new URLSearchParams(location.search).get('placement') === 'b';
 
 function Preview() {
   const [draft, setDraft] = useState<{ text: string; picks: Picked[] }>({ text: '', picks: [] });
   const [state, setState] = useState(room);
+  const [asking, setAsking] = useState<number | null>();
+  const [sidebar, setSidebar] = useState(true);
   const team = members.map((m) => ({ id: m.agent, name: m.name }));
   const everyone = people(members, agents);
+  const answer = async (id: number, pick?: string, words?: string) =>
+    setState((s) => ({
+      ...s,
+      questions: s.questions.map((q) =>
+        q.id === id
+          ? { ...q, pick: pick ?? null, words: words?.trim() || null, answered: new Date().toISOString() }
+          : q,
+      ),
+    }));
   const acts = {
     approve: (request: string) =>
       setState((s) => ({ ...s, approvals: s.approvals.filter((a) => a.request !== request) })),
     reference: ignore,
-    answer: async (id: number, pick?: string, words?: string) =>
-      setState((s) => ({
-        ...s,
-        questions: s.questions.map((q) =>
-          q.id === id
-            ? { ...q, pick: pick ?? null, words: words?.trim() || null, answered: new Date().toISOString() }
-            : q,
-        ),
-      })),
+    ask: setAsking,
     like: (message: string, give: boolean) =>
       setState((s) => ({
         ...s,
@@ -233,21 +235,20 @@ function Preview() {
         <div className="room-title">
           <h1>Orders export</h1>
         </div>
+        <div className="room-actions">
+          <Questions
+            questions={state.questions}
+            people={everyone}
+            at={asking}
+            onOpen={setAsking}
+            onAnswer={answer}
+            onReference={ignore}
+          />
+          <WorkspaceToggle open={sidebar} waiting={false} onToggle={() => setSidebar(!sidebar)} />
+        </div>
       </TopLine>
       <main className="chat room" aria-label="Orders export">
-        <Room state={state} people={everyone} acts={acts} pinned={pinned}>
-          {pinned &&
-            state.questions
-              .filter((q) => !q.answered)
-              .map((q) => (
-                <QuestionCard
-                  key={q.id}
-                  question={q}
-                  people={everyone}
-                  onAnswer={acts.answer}
-                  onReference={ignore}
-                />
-              ))}
+        <Room state={state} people={everyone} acts={acts}>
           <Composer
             draft={draft.text}
             picks={draft.picks}
@@ -259,7 +260,7 @@ function Preview() {
           />
         </Room>
       </main>
-      <Board chat="preview" onFailure={ignore} />
+      {sidebar && <RoomSidebar chat="preview" onFailure={ignore} />}
     </div>
   );
 }
