@@ -2,6 +2,8 @@
 //! `task_sessions`; every other turn in the agent's latest. An engine holds one conversation, so a
 //! turn on another closes it first, the gentle way.
 
+use std::collections::HashMap;
+
 use gathr::event::Event;
 use gathr::redact::redact;
 use gathr::sessions::{Conversation, Key};
@@ -13,7 +15,7 @@ use super::{Assignment, Ids, Queued, Task};
 #[derive(Default)]
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
-    id: Option<String>,
+    pub id: Option<String>,
     /// The engine compacted the conversation since a turn last opened: the next hears the chat's
     /// last lines, as a new conversation does (0081).
     pub compacted: bool,
@@ -23,12 +25,20 @@ pub(super) struct Session {
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
+    /// The head each conversation was told of each PR, by its session id and PR: not told again
+    /// while it stands, whichever task's turn runs in it.
+    pub told_heads: HashMap<(String, i64), String>,
+    /// Heads told before the engine said its session: kept under it at its Init.
+    pub told_unsaid: Vec<(i64, String)>,
 }
 
 impl Session {
     /// The engine said its session: the task whose row takes it (N5).
     pub fn init(&mut self, id: &str) -> Option<i64> {
-        self.id.get_or_insert_with(|| id.to_string());
+        let id = self.id.get_or_insert_with(|| id.to_string());
+        for (pr, head) in self.told_unsaid.drain(..) {
+            self.told_heads.insert((id.clone(), pr), head);
+        }
         self.resuming = false;
         self.task
     }
@@ -141,6 +151,7 @@ impl Task {
     pub(super) async fn opened(&mut self, choice: &Conversation, resumed: Option<String>) {
         self.session.resuming = resumed.is_some();
         self.session.id = resumed;
+        self.session.told_unsaid.clear();
         self.session.task = task_of(choice);
         let from = match choice {
             Conversation::Latest => return,
@@ -189,6 +200,10 @@ impl Task {
         let new = fresh && !self.session.resuming;
         let summed = std::mem::take(&mut self.session.compacted);
         let heard = self.heard(&next.ids, new || summed).await;
+        let text = match self.github_opening(&next.ids, choice, new || summed).await {
+            Some(github) => format!("{github}\n\n{text}"),
+            None => text,
+        };
         let text = match &heard {
             Some(heard) => format!("{heard}\n\n{text}"),
             None => text,

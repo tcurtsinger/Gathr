@@ -93,3 +93,4 @@ fails in CI when the two differ.
 | 0081 | [Agents hear the room, and name each other with @Name](0081-agents-hear-the-room-and-name-each-other.md) | accepted | yes |
 | 0082 | [A message reads as SerenityOS's card](0082-a-message-reads-as-serenityos-card.md) | accepted | yes |
 | 0083 | [A hear-back carries what its giver would fetch](0083-a-hear-back-carries-what-its-giver-would-fetch.md) | accepted | yes |
+| 0086 | [A turn opens with its PR's head, and failed CI with its last lines](0086-a-turn-opens-with-its-prs-head-and-failed-ci.md) | accepted | yes |

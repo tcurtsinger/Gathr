@@ -13,11 +13,12 @@ fn an_all_wait_fires_once_when_every_part_is_met() {
         &mut conn,
         &all.parts[0].id,
         "CI on #54 finished: 4 passed",
+        None,
         T,
     )
     .unwrap();
     assert!(first.is_empty(), "{first:?}");
-    let fired = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
+    let fired = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", None, T).unwrap();
     assert_eq!(fired.len(), 1, "{fired:?}");
     assert!(
         fired[0]
@@ -25,7 +26,7 @@ fn an_all_wait_fires_once_when_every_part_is_met() {
             .contains("CI on #54 finished: 4 passed; #55 was merged")
     );
     assert!(fired[0].text.contains("You planned to do this: merge"));
-    let again = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", T).unwrap();
+    let again = waits::met(&mut conn, &all.parts[1].id, "#55 was merged", None, T).unwrap();
     assert!(again.is_empty(), "fires once");
     assert_eq!(waits::read(&conn, &all.id).unwrap().state, "fired");
 }

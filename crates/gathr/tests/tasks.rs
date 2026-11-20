@@ -239,7 +239,7 @@ fn what_a_change_starts_is_saved_with_it_so_a_stop_right_after_loses_nothing() {
     let mut conn = team(&dir);
     let (task, _) = give(&mut conn, "ann", &[], None);
     let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();
-    waits::met(&mut conn, &wait.id, "your check came back yes", T).unwrap();
+    waits::met(&mut conn, &wait.id, "your check came back yes", None, T).unwrap();
     // The service stops here, before anything it was handed is queued in memory.
     drop(conn);
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();

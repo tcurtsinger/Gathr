@@ -25,10 +25,11 @@ const LIMIT: Duration = Duration::from_secs(60);
 /// The most of what a met check printed that its agent is told.
 const PRINTED_MOST: usize = 300;
 
-/// What one look found: met, with the line its agent is woken with; not yet, with what it saw
-/// instead; or why it failed.
+/// What one look found: met, with the line its agent is woken with; CI met with a failure, with
+/// the commit it failed at too; not yet, with what it saw instead; or why it failed.
 enum Look {
     Met(String),
+    Red(String, String),
     NotYet {
         head: Option<(String, i64)>,
         seen: String,
@@ -197,19 +198,22 @@ async fn ended(chats: &Arc<Chats>, id: &str) {
     }
 }
 
+async fn met(chats: &Arc<Chats>, trace: &str, id: String, line: String, red: Option<String>) {
+    let t = trace.to_string();
+    apply(chats, "gathr.wait.fire", trace, move |c| {
+        waits::met(c, &id, &line, red.as_deref(), &t)
+    })
+    .await;
+}
+
 /// Records how the look went: a met wait fires; a failure counts, and shows from the third in a
 /// row, with a reference (0010, 0019).
 async fn settle(chats: &Arc<Chats>, wait: Wait, looked: Result<Look, String>) {
     let trace = trace_id();
     let id = wait.id.clone();
     match looked {
-        Ok(Look::Met(line)) => {
-            let t = trace.clone();
-            apply(chats, "gathr.wait.fire", &trace, move |c| {
-                waits::met(c, &id, &line, &t)
-            })
-            .await;
-        }
+        Ok(Look::Met(line)) => met(chats, &trace, id, line, None).await,
+        Ok(Look::Red(line, head)) => met(chats, &trace, id, line, Some(head)).await,
         Ok(Look::NotYet { head, seen }) => {
             let save = move |c: &mut rusqlite::Connection| {
                 let head = head.as_ref().map(|(h, ts)| (h.as_str(), *ts));
@@ -368,7 +372,9 @@ async fn look_ci(wait: &Wait, target: &Target, dir: &Path, vars: &Vars) -> Resul
         since_us: since,
         now_us: now,
     };
+    let red = checks.iter().any(|c| c.stand == ci::Stand::Failed);
     Ok(match ci::verdict(&seen) {
+        (true, line) if red => Look::Red(line, head),
         (true, line) => Look::Met(line),
         (false, seen) => Look::NotYet {
             head: Some((head, since)),
