@@ -75,6 +75,7 @@ function You({ said, ctx }: { said: Said; ctx: Ctx }) {
         <Picked message={said.message} />
         <span className="room-time"> {clock(said.message.time)}</span>
       </div>
+      <Reactions said={[said.message]} ctx={ctx} />
       {said.replies.length > 0 && <Thread replies={said.replies} ctx={ctx} />}
     </div>
   );
@@ -247,6 +248,7 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           <p>
             <Picked message={item.message} />
           </p>
+          <Reactions said={[item.message]} ctx={ctx} />
         </div>
       </div>
     );

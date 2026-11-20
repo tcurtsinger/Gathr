@@ -154,12 +154,17 @@ export function RoomView(props: Props) {
           ))}
           {stopFailure && <FailureNotice failure={stopFailure} onReference={onReference} />}
           {chat.archived ? (
-            <p className="room-archived">
-              Archived
-              <Button size="sm" variant="outline" onClick={props.onRestore}>
-                Restore
-              </Button>
-            </p>
+            <>
+              {props.restoreFailure && (
+                <FailureNotice failure={props.restoreFailure} onReference={onReference} />
+              )}
+              <p className="room-archived">
+                Archived
+                <Button size="sm" variant="outline" onClick={props.onRestore}>
+                  Restore
+                </Button>
+              </p>
+            </>
           ) : (
             <Composer
               draft={draft}
