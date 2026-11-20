@@ -694,7 +694,8 @@ pub fn set_engine_session(
 ) -> Result<(), Error> {
     conn.execute(
         "INSERT INTO engine_sessions (chat_id, agent_key, account_id, session_id) VALUES (?1, ?2, ?3, ?4)
-         ON CONFLICT (chat_id, agent_key) DO UPDATE SET account_id = ?3, session_id = ?4",
+         ON CONFLICT (chat_id, agent_key) DO UPDATE SET account_id = ?3, session_id = ?4,
+             summed = CASE WHEN account_id = ?3 AND session_id = ?4 THEN summed ELSE 0 END",
         params![chat, agent.unwrap_or_default(), account, session],
     )?;
     Ok(())

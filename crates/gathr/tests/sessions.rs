@@ -3,6 +3,8 @@
 //! its frames (`GATHR_REPLAY_SESSION=echo`), so each task's conversation has an id of its own.
 
 mod common;
+#[path = "sessions/compacted.rs"]
+mod compacted;
 #[path = "sessions/record.rs"]
 mod record;
 

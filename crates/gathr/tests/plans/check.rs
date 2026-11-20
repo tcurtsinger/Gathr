@@ -495,7 +495,9 @@ fn an_upgrade_starts_no_round_for_an_older_message() {
     moved(&mut conn, ("T", "mira"), None, "done");
     conn.execute_batch("DROP TABLE open_checks;
          ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by; PRAGMA user_version = 59;")
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE engine_sessions DROP COLUMN summed;
+         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 59;")
         .unwrap();
     drop(conn);
     let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();

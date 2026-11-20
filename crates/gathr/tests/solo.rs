@@ -278,7 +278,9 @@ fn the_upgrade_to_0058_gives_each_chat_with_turns_and_no_list_its_latest_agent_a
     sql.push_str(
         "ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
          ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by; PRAGMA user_version = 57;",
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE engine_sessions DROP COLUMN summed;
+         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 57;",
     );
     conn.execute_batch(&sql).unwrap();
     drop(conn);
@@ -444,7 +446,9 @@ fn a_lone_agents_briefing_names_who_worked_here_and_no_role() {
     sql.push_str(
         "ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
          ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
-         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by; PRAGMA user_version = 57;",
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE engine_sessions DROP COLUMN summed;
+         ALTER TABLE task_sessions DROP COLUMN summed; PRAGMA user_version = 57;",
     );
     conn.execute_batch(&sql).unwrap();
     drop(conn);

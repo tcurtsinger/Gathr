@@ -580,6 +580,15 @@ impl Task {
         let pid = engine.pid;
         engine.write(frame).await?;
         self.raw(turn, pid, "in", &frame.to_string()).await;
+        let user = frame["type"] == "user"
+            || matches!(frame["method"].as_str(), Some("turn/start" | "turn/steer"));
+        if user
+            && let Some(running) = self.turn.as_mut()
+            && std::mem::take(&mut running.restore_pending)
+        {
+            let ids = running.ids.clone();
+            self.summed(Some(false), &ids).await;
+        }
         Ok(())
     }
 

@@ -453,6 +453,46 @@ pub fn open_state(conn: &Connection, ask: &str) -> Result<Option<State>, Error> 
     }
 }
 
+/// The plan a turn works under, and the part its task came from, after compaction.
+pub fn recall(conn: &Connection, turn: &str) -> Result<Option<String>, Error> {
+    let (task, agent): (Option<i64>, Option<String>) = conn.query_row(
+        "SELECT task, agent_id FROM turns WHERE id = ?1",
+        [turn],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let source = match (task, agent.as_deref()) {
+        (Some(task), Some(agent)) => crate::sessions::work_task(conn, task, agent)?.or(Some(task)),
+        _ => task,
+    };
+    let found = conn.query_row(
+        "SELECT p.id, v.n, v.title, part.n, part.what FROM turns u
+         LEFT JOIN tasks source ON source.number = ?2
+         JOIN plans p ON p.ask_id = COALESCE(source.ask_id, u.ask_id)
+         JOIN plan_versions v ON v.plan_id = p.id
+         LEFT JOIN plan_parts part ON part.version_id = v.id AND part.task = source.number
+         WHERE u.id = ?1 AND (part.task IS NOT NULL OR
+             (p.lead = u.agent_id AND v.n = (SELECT max(w.n) FROM plan_versions w WHERE w.plan_id = p.id)))
+         ORDER BY p.id DESC LIMIT 1",
+        params![turn, source], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?, r.get::<_, String>(2)?,
+            r.get::<_, Option<i64>>(3)?, r.get::<_, Option<String>>(4)?)),
+    ).optional()?;
+    let Some((plan, version, title, part, what)) = found else {
+        return Ok(None);
+    };
+    let state = match state(conn, plan)? {
+        State::Checking => "checking",
+        State::Waiting => "waiting",
+        State::Revising => "revising",
+        State::Approved => "approved",
+        State::Dropped => "dropped",
+    };
+    let mut text = format!("Plan: {title}, version {version}, {state} (#{plan})");
+    if let (Some(part), Some(what)) = (part, what) {
+        text.push_str(&format!("\nYour task is part {part}: {what}"));
+    }
+    Ok(Some(text))
+}
+
 /// The chat's plans whose newest version waits on the person: each lead, title, and since when.
 pub fn waiting(conn: &Connection, chat: &str) -> Result<Vec<(String, String, i64)>, Error> {
     let sql = format!(
