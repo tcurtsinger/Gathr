@@ -95,6 +95,7 @@ impl Task {
     /// Saves a block of the turn's reply. Once one is refused, it and every later block are kept
     /// in order, unsaved, until a save works: a window reads them as `streaming` meanwhile.
     pub(super) async fn save_reply(&mut self, ids: &Ids, text: String, ending: bool) {
+        let text = gathr::room::posted(&text).to_string();
         if text.is_empty() {
             return;
         }

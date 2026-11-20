@@ -15,23 +15,45 @@ use crate::text;
 /// The word an agent starts its words with, on a line of its own, when they answer a teammate.
 pub const REPLY: &str = "REPLY";
 
+/// The word an agent writes, alone, when it has nothing to add: nothing is posted.
+pub const NO_REPLY: &str = "NO_REPLY";
+
 /// How the start of an agent's words reads, as far as it has come.
 #[derive(Debug, PartialEq)]
 pub enum Start<'a> {
-    /// Still possibly REPLY: no line has ended yet.
+    /// Still possibly REPLY or NO_REPLY: no line has ended yet.
     Undecided,
     Main,
     /// REPLY on its own line: the words after it.
     Reply(&'a str),
+    /// NO_REPLY on its own line with more after it: those words, a main message.
+    NoReply(&'a str),
+}
+
+fn no_reply(line: &str) -> bool {
+    let line = line.trim();
+    line.strip_suffix('.').unwrap_or(line) == NO_REPLY
 }
 
 pub fn start(words: &str) -> Start<'_> {
     let words = words.trim_start();
     match words.split_once('\n') {
         Some((first, rest)) if first.trim() == REPLY => Start::Reply(rest),
+        Some((first, rest)) if no_reply(first) => Start::NoReply(rest),
         Some(_) => Start::Main,
         None if REPLY.starts_with(words.trim_end()) => Start::Undecided,
+        None if NO_REPLY.starts_with(words.trim_end()) || no_reply(words) => Start::Undecided,
         None => Start::Main,
+    }
+}
+
+/// An agent's words as they are posted: without a first line of NO_REPLY, and empty, so not posted,
+/// when that is all they are.
+pub fn posted(words: &str) -> &str {
+    match start(words) {
+        Start::NoReply(rest) => rest.trim_start(),
+        Start::Undecided if no_reply(words) => "",
+        _ => words,
     }
 }
 

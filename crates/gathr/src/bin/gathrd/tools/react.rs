@@ -26,8 +26,8 @@ impl Tools {
     #[tool(
         description = "Agree with the person's message or another agent's in this chat: puts your thumbs-up on it, by \
                        its id, `person` for the person's message your turn answers, or in a check `answer` for the \
-                       answer you check. It posts nothing and wakes nobody. To say more than that you agree, send a \
-                       message instead."
+                       answer you check. It posts nothing and wakes nobody: after it, end your turn with only \
+                       NO_REPLY. To say more than that you agree, send a message instead."
     )]
     async fn react(
         &self,
@@ -81,7 +81,7 @@ impl Tools {
         let mut said = format!("Gave {message} a thumbs-up.");
         // The thumbs-up is the check: without this a checker closes its turn by saying it agrees.
         if checked {
-            said.push_str(" That is your whole check: end your turn now and write nothing more.");
+            said.push_str(" That is your whole check: end your turn with only NO_REPLY.");
         }
         Ok(said)
     }

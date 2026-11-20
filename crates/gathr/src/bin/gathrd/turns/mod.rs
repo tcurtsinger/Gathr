@@ -112,7 +112,7 @@ struct Running {
     /// `partial`'s length in UTF-16 units, as the window counts it: each delta says where it starts,
     /// so a window that read `partial` in a chat's history skips what that already held.
     partial_units: usize,
-    /// How `partial` starts, once known (`room::start`): the bytes of its REPLY line in a room chat,
+    /// How `partial` starts, once known (`room::start`): the bytes of its REPLY or NO_REPLY line,
     /// which are never sent, and the message the words sit under. `partial_units` counts what is sent.
     reply: Option<(usize, Option<String>)>,
     streamed: bool,
@@ -148,7 +148,8 @@ struct Running {
 }
 
 impl Running {
-    /// What was sent of the words streaming now: never a REPLY line, nor what may still be one.
+    /// What was sent of the words streaming now: never a REPLY or NO_REPLY line, nor what may still
+    /// be one.
     fn shown(&self) -> &str {
         self.reply
             .as_ref()

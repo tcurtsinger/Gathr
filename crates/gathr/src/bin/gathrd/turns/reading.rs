@@ -337,8 +337,8 @@ impl Task {
     }
 
     /// A streamed piece of the running turn's words as it is sent: none while what came may still be
-    /// a REPLY line (`room::start`). The piece that tells sends all that came, past that line, and
-    /// from then each piece names the message the words sit under, as they are saved.
+    /// a REPLY or NO_REPLY line (`room::start`). The piece that tells sends all that came, past that
+    /// line, and from then each piece names the message the words sit under, as they are saved.
     async fn reply_delta(&mut self, text: String) -> Option<String> {
         let turn = self.turn.as_mut()?;
         turn.partial.push_str(&text);
@@ -347,12 +347,13 @@ impl Task {
         }
         let skip = match gathr::room::start(&turn.partial) {
             gathr::room::Start::Undecided => return None,
-            gathr::room::Start::Reply(rest) => Some(turn.partial.len() - rest.len()),
+            gathr::room::Start::Reply(rest) => Some((turn.partial.len() - rest.len(), true)),
+            gathr::room::Start::NoReply(rest) => Some((turn.partial.len() - rest.len(), false)),
             gathr::room::Start::Main => None,
         };
         let id = turn.ids.turn.clone();
         let to = match skip {
-            Some(_) => {
+            Some((_, true)) => {
                 let read = move |c: &mut rusqlite::Connection| gathr::room::reply_to(c, &id);
                 self.chats
                     .writer
@@ -361,10 +362,10 @@ impl Task {
                     .and_then(Result::ok)
                     .flatten()
             }
-            None => None,
+            _ => None,
         };
         let turn = self.turn.as_mut()?;
-        let skip = skip.unwrap_or(0);
+        let skip = skip.map_or(0, |(skip, _)| skip);
         turn.reply = Some((skip, to));
         Some(turn.partial[skip..].to_string()).filter(|s| !s.is_empty())
     }
