@@ -18,9 +18,12 @@ import { Composer, type Person } from '../components/Composer';
 import { kept, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { ProjectPick } from '../components/ProjectPick';
+import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
+import { Questions } from './Question';
 import { people as peopleOf, Room } from './Room';
+import { RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
@@ -57,14 +60,20 @@ interface Props {
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;
+  /** Whether the sidebar is open, as the person left it in this chat; unset, it opens with more than one agent. */
+  sidebar?: boolean;
+  onSidebar: (open: boolean) => void;
+  onFailure: (f: Failure) => void;
 }
 
-/** A chat in room mode: the middle of the window. */
+/** A chat in room mode: the middle of the window, and its sidebar. */
 export function RoomView(props: Props) {
   const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent, onReference } = props;
   const { state, failure, reload, approve, answer } = useRoom(chat.id);
   // A refused Stop, Pause or like: it shows above the message box, with its reference.
   const [refused, setRefused] = useState<Failure>();
+  // The questions panel: closed, open, or open on one question.
+  const [asking, setAsking] = useState<number | null>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
   const fresh = !chat.id;
   const members = fresh ? (props.projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
@@ -72,6 +81,7 @@ export function RoomView(props: Props) {
   const who = nameable(members, agents, !chat.project);
   const to = recipients(picks, who, members, state);
   const running = Object.values(state.turns).some((t) => t.status === 'running');
+  const sidebar = !fresh && (props.sidebar ?? state.members.length > 1);
 
   const send = (text: string, agent?: string, named?: PickedName[], again?: Unsent) => {
     if (fresh) {
@@ -105,7 +115,7 @@ export function RoomView(props: Props) {
   const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('diagnostics'));
   const acts = {
     approve,
-    answer,
+    ask: setAsking,
     reference,
     like: (message: string, give: boolean) =>
       attempt(() => (give ? api.like(chat.id, message) : api.unlike(chat.id, message))),
@@ -134,6 +144,19 @@ export function RoomView(props: Props) {
           )}
           {chat.archived && <small>Archived</small>}
         </div>
+        {!fresh && (
+          <div className="room-actions">
+            <Questions
+              questions={state.questions}
+              people={team}
+              at={asking}
+              onOpen={setAsking}
+              onAnswer={answer}
+              onReference={reference}
+            />
+            <WorkspaceToggle open={sidebar} waiting={false} onToggle={() => props.onSidebar(!sidebar)} />
+          </div>
+        )}
       </TopLine>
       <main className="chat room" aria-label={chat.title}>
         {props.notice}
@@ -205,6 +228,7 @@ export function RoomView(props: Props) {
           )}
         </Room>
       </main>
+      {sidebar && <RoomSidebar chat={chat.id} onFailure={props.onFailure} />}
     </>
   );
 }

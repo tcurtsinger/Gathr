@@ -1,9 +1,8 @@
-import { ClipboardList, FileText, ListTodo, PanelRight, X } from 'lucide-react';
+import { ClipboardList, FileText, ListTodo, X } from 'lucide-react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import { Face } from '../components/Face';
-import { IconButton } from '../components/IconButton';
 import { ResizeHandle } from '../components/ResizeHandle';
-import './workspace.css';
+import { widest } from '../components/workspace';
 
 /** A file a question came with: the service's copy, made when it was asked. */
 export interface FileTab {
@@ -13,13 +12,6 @@ export interface FileTab {
 }
 
 export const fileId = (f: FileTab) => `${f.task}/${f.index}`;
-
-/** DESIGN.md Layout: beside the chat it leaves the chat 360px, as workspace.css: the room from the sidebar to the frame's end. */
-function widest() {
-  const nav = document.querySelector('.sidebar')?.getBoundingClientRect().right ?? 0;
-  const end = document.querySelector('.workspace')?.getBoundingClientRect().right ?? innerWidth;
-  return Math.max(360, end - nav - 360);
-}
 
 interface Props {
   /** A question waits on the person in this chat. */
@@ -154,21 +146,5 @@ export function Workspace(props: Props) {
         </section>
       ))}
     </aside>
-  );
-}
-
-/** The panel's button in the top line, open or closed; closed, its dot says a question waits on the person. */
-export function WorkspaceToggle(props: { open: boolean; waiting: boolean; onToggle: () => void }) {
-  const { open, waiting, onToggle } = props;
-  return (
-    <IconButton
-      aria-label={open ? 'Close sidebar' : 'Open sidebar'}
-      aria-expanded={open}
-      className="head-button workspace-toggle"
-      onClick={onToggle}
-    >
-      <PanelRight />
-      {waiting && !open && <i className="attention" />}
-    </IconButton>
   );
 }

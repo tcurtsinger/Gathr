@@ -311,8 +311,8 @@
   font-size: 14.5px;
 }
 
-/* A question to the person: the room's card, ringed while it waits, its choices as pills over a box for
-   their own words. Answered, the answer sits under it as a quiet line from "You". */
+/* A question to the person: the room's card, ringed while it waits, with Answer; its choices are pills over a box
+   for their own words, in the questions panel. Answered, the answer sits under it as a quiet line from "You". */
 .room-question[data-open] {
   border-color: color-mix(in oklab, var(--attention) 45%, var(--border));
 }
@@ -327,9 +327,6 @@
   color: var(--muted-foreground);
   font-size: 11.5px;
 }
-.room-question .room-asks .notice {
-  margin: 8px 0 0;
-}
 .room-answer {
   margin: 0 18px 12px;
   padding-left: 10px;
@@ -340,25 +337,46 @@
   font-size: 14.5px;
   white-space: pre-wrap;
 }
-.room-foot > .room-turn {
-  margin-bottom: 8px;
+
+/* The top line's end: Questions, then the sidebar's button. */
+.room-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
 }
-/* Placement B (the preview only): an answered question in the chat as one line. */
-.room-asked-line {
+.questions-dot[data-open] {
+  fill: var(--attention);
+  stroke: var(--attention);
+}
+/* The questions panel: each open question with its choices and answer box. */
+.popover-panel.questions {
+  width: 420px;
+}
+.questions-none {
+  margin: 0;
+  padding: 0 8px 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.questions-item {
+  padding: 4px 8px 10px;
+}
+.questions-item + .questions-item {
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+.questions-item .room-line {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: 44px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  white-space: nowrap;
 }
-.room-asked-line > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.questions-item .room-said {
+  margin: 6px 0 10px;
 }
-.room-asked-line b {
-  color: var(--foreground);
-  font-weight: 600;
+.questions-item .room-asks {
+  padding: 0;
+}
+.questions-item .notice {
+  margin: 8px 0 0;
 }

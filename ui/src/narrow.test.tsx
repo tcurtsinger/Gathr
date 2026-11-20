@@ -33,7 +33,6 @@ function service() {
     if (path === '/api/chats?archived=true') return json([]);
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
-    if (path.endsWith('/board')) return json({ lines: [], agents: 1 });
     if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     if (path === '/api/chats/c/tasks') return json({ tasks: [], waits: [] });

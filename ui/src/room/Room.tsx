@@ -7,7 +7,7 @@ import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
-import { AnsweredLine, QuestionCard } from './Question';
+import { QuestionCard } from './Question';
 import { type Card, type Item, type Said, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
@@ -35,10 +35,11 @@ export function people(members: Member[], known: FaceOf[]): People {
   };
 }
 
-/** What the person can do on a card: answer its approval or question, open a refusal's reference, like its words. */
+/** What the person can do on a card: answer its approval, open its question, open a refusal's reference, like it. */
 export interface Acts {
   approve: (request: string, allow: boolean) => void;
-  answer: (question: number, pick?: string, words?: string) => Promise<unknown>;
+  /** Opens the questions panel on this question. */
+  ask: (question: number) => void;
   reference: (ref: string) => void;
   like: (message: string, give: boolean) => void;
 }
@@ -51,12 +52,10 @@ interface Props {
   header?: ReactNode;
   /** At the foot: the message box. */
   children?: ReactNode;
-  /** The preview's placement B: open questions are pinned at the foot, so the chat shows answered ones as a line. */
-  pinned?: boolean;
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ state, people, acts, header, children, pinned }: Props) {
+export function Room({ state, people, acts, header, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state);
   const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts };
@@ -69,16 +68,12 @@ export function Room({ state, people, acts, header, children, pinned }: Props) {
             const joined = !!items[i + 1] && items[i + 1].kind !== 'said';
             if (item.kind === 'said') return <You key={item.id} said={item} ctx={ctx} />;
             if (item.kind === 'card') return <Main key={item.id} card={item} joined={joined} ctx={ctx} />;
-            const q = item.question;
-            if (pinned)
-              return q.answered ? <AnsweredLine key={item.id} question={q} people={people} /> : null;
             return (
               <QuestionCard
                 key={item.id}
-                question={q}
+                question={item.question}
                 people={people}
-                onAnswer={acts.answer}
-                onReference={acts.reference}
+                onOpen={acts.ask}
                 joined={joined}
               />
             );
@@ -373,7 +368,7 @@ function useStuck(state: RoomState) {
       // A scroll the box's new width made, before the observer below hears of it, isn't the person's.
       if (el.clientWidth === width) stuck.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     };
-    // The box resized: the window, or the board arriving beside it after the chat drew.
+    // The box resized: the window, or the sidebar opening beside it after the chat drew.
     const resized = new ResizeObserver(() => {
       width = el.clientWidth;
       if (stuck.current) el.scrollTop = el.scrollHeight;

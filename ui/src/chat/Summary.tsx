@@ -27,6 +27,7 @@ import { counts, type Glance, headline } from './glance';
 import { currentRound, type Round, type StepState } from './plan';
 import type { ChatState } from './state';
 import { inWords } from './statusWords';
+import '../components/popover-panel.css';
 import './summary.css';
 
 interface Props {
@@ -87,7 +88,7 @@ export function Summary(props: Props) {
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
-          className="summary"
+          className="popover-panel summary"
           side="bottom"
           align="end"
           sideOffset={8}
