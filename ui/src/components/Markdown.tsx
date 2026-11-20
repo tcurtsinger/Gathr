@@ -47,7 +47,7 @@ function mentions(names: readonly string[]) {
     node.children = node.children.flatMap((child) => (child.type === 'text' ? split(child) : [child]));
     node.children.forEach(walk);
   };
-  return () => walk;
+  return walk;
 }
 
 const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText];
@@ -87,8 +87,14 @@ export function preloadCodeBlock() {
  */
 export function Markdown({ text, className, names }: { text: string; className?: string; names?: string[] }) {
   const key = names?.join('\n');
+  // The names go in as the plugin's options: Streamdown keeps one parser per plugins' names and options, so a
+  // plugin made per chat would draw every chat with the first chat's names.
   // biome-ignore lint/correctness/useExhaustiveDependencies: the same names make the same plugins
-  const remark = useMemo(() => (names?.length ? [...remarkPlugins, mentions(names)] : remarkPlugins), [key]);
+  const remark = useMemo(
+    () =>
+      names?.length ? [...remarkPlugins, [mentions, names] as [typeof mentions, string[]]] : remarkPlugins,
+    [key],
+  );
   return (
     <Streamdown
       mode="static"

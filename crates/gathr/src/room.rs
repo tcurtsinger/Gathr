@@ -52,12 +52,13 @@ pub fn words<'a>(
     Ok((rest.trim_start(), reply_to(conn, turn)?))
 }
 
-/// The main message a REPLY in `turn` sits under (`words`): in a check turn the lead's message it
-/// checks, else the teammate's that reached it, or none when no teammate's words reached it.
+/// The main message a REPLY in `turn` sits under (`words`): in a check turn or the lead's last word
+/// the lead's message checked, else the teammate's that reached it, or none when no teammate's words
+/// reached it.
 pub fn reply_to(conn: &Connection, turn: &str) -> Result<Option<String>, Error> {
     let sql = "SELECT coalesce(
                  (SELECT c.answer FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
-                  WHERE u.id = ?1 AND u.opened_by = 'check' ORDER BY c.id DESC LIMIT 1),
+                  WHERE u.id = ?1 AND u.opened_by IN ('check', 'last_word') ORDER BY c.id DESC LIMIT 1),
                  (SELECT coalesce(o.reply_to, o.id) FROM messages c
                   JOIN messages o ON o.id = c.copy_of JOIN turns ot ON ot.id = o.turn_id
                   JOIN turns me ON me.id = c.turn_id

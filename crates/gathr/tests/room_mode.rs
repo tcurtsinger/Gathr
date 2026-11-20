@@ -1,6 +1,7 @@
 //! A room chat's turns (0065), through a real service on Claude Code's replay stand-in: who gets a
 //! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
-//! no turn; the cap on hand-offs pauses the room; a REPLY sits under the message it answers. Each
+//! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
+//! a REPLY sits under the message it answers. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
 //! given.
 
@@ -36,8 +37,11 @@ struct Room {
 
 /// A new chat, a room chat, with Lead (Supervisor), Ann and Bo, on `replay`.
 fn room(data: &Path, replay: &Path) -> Room {
-    let env = [("GATHR_REPLAY", replay)];
-    let service = TestService::with_engine(data, &env);
+    room_with(data, &[("GATHR_REPLAY", replay)])
+}
+
+fn room_with(data: &Path, env: &[(&str, &Path)]) -> Room {
+    let service = TestService::with_engine(data, env);
     let account = service.add_account("Room");
     sign_in_account(data, &account);
     let agent = |name: &str| {
@@ -196,6 +200,60 @@ fn past_the_cap_on_hand_offs_the_room_pauses_and_wakes_nobody() {
         paused.any(|p| p["scope"] == "chat" && p["target"] == room.chat.as_str()),
         "{pauses}"
     );
+}
+
+#[test]
+fn stop_now_holds_the_persons_message_queued_there_until_restart() {
+    let data = TempDir::new();
+    let go = data.0.join("go");
+    let held = std::fs::read_to_string(common::held_recording(&data.0, "signed_in")).unwrap();
+    let replay = data.0.join("twice.jsonl");
+    std::fs::write(&replay, held.repeat(2)).unwrap();
+    let room = room_with(
+        &data.0,
+        &[("GATHR_REPLAY", &replay), ("GATHR_REPLAY_HOLD", &go)],
+    );
+    // Ann is busy in a chat of her own, so the person's message to her in the room queues.
+    let members = json!([{ "agent": room.ann, "role": "supervisor" }]);
+    let made = room
+        .service
+        .send("POST", "/api/chats", json!({ "members": members }));
+    let other = made.json()["id"].as_str().unwrap().to_string();
+    let to_ann = |chat: &str| {
+        let path = format!("/api/chats/{chat}/messages");
+        let sent = room
+            .service
+            .send("POST", &path, json!({ "text": "Pack", "agent": room.ann }));
+        assert_eq!(sent.status, 200, "{}", sent.body);
+    };
+    let status = |h: &Value, at: usize| h["turns"][at]["status"].as_str().map(String::from);
+    to_ann(&other);
+    let busy = |h: &Value| status(h, 0).as_deref() == Some("running");
+    room.service
+        .wait_for(&other, 10, "Ann's turn running", busy);
+    to_ann(&room.chat);
+    let queued = |h: &Value| status(h, 0).as_deref() == Some("queued");
+    room.service
+        .wait_for(&room.chat, 10, "Ann's turn queued", queued);
+    let scope = json!({ "scope": "chat", "target": room.chat });
+    let stopped = room.service.send("POST", "/api/pauses/stop", scope.clone());
+    assert_eq!(stopped.status, 200, "{}", stopped.body);
+
+    // Ann's turns after the stop run in her own chat; the queued one in the room waits.
+    std::fs::write(&go, "").unwrap();
+    let first = |h: &Value| status(h, 0).as_deref() == Some("done");
+    room.service.wait_for(&other, 10, "Ann's turn done", first);
+    to_ann(&other);
+    let both = |h: &Value| (0..2).all(|at| status(h, at).as_deref() == Some("done"));
+    room.service.wait_for(&other, 10, "Ann's turns done", both);
+    let history = room
+        .service
+        .call("GET", &format!("/api/chats/{}", room.chat));
+    assert_eq!(status(&history.json(), 0).as_deref(), Some("queued"));
+
+    let resumed = room.service.send("POST", "/api/pauses/resume", scope);
+    assert_eq!(resumed.status, 200, "{}", resumed.body);
+    room.quiet(1);
 }
 
 #[test]

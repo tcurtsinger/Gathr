@@ -11,6 +11,7 @@ import { NewProject } from './NewProject';
 import { usePauses } from './pauses';
 import { Rail } from './Rail';
 import { report, timeToPaint } from './report';
+import type { Found } from './room/Room';
 import { RoomView, type Unsent } from './room/RoomView';
 import { Sidebar } from './Sidebar';
 import { SearchFlyout } from './search/SearchFlyout';
@@ -50,6 +51,8 @@ export function App() {
   const appUpdate = useAppUpdate(setFailure);
   // Whether each chat's sidebar is open, as the person left it there.
   const [sidebars, setSidebars] = useState<Record<string, boolean>>({});
+  // The message a search hit opened its chat at.
+  const [found, setFound] = useState<Found>();
 
   // A chat's state told while a list loads may be newer than that list: it is put back on top of it.
   const loading = useRef<Map<string, Pick<Chat, 'working' | 'needs' | 'mark'>>[]>([]);
@@ -319,13 +322,21 @@ export function App() {
           })
         }
         actions={
-          <SearchFlyout name={name} onReference={openReference} onOpen={(hit) => openChat(hit.chat)} />
+          <SearchFlyout
+            name={name}
+            onReference={openReference}
+            onOpen={(hit) => {
+              setFound('message' in hit ? { chat: hit.chat, message: hit.message } : undefined);
+              openChat(hit.chat);
+            }}
+          />
         }
       />
       {screen ? (
         <RoomView
           key={screen.chat.id || 'new'}
           {...screen}
+          found={found?.chat === screen.chat.id ? found : undefined}
           sidebar={sidebars[screen.chat.id]}
           onSidebar={(open) => setSidebars((all) => ({ ...all, [screen.chat.id]: open }))}
           onFailure={setFailure}
