@@ -167,7 +167,8 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
             "SELECT EXISTS (SELECT 1 FROM open_checks WHERE chat_id = ?1 AND asked = ?2)",
         )?
         .query_row([chat, &asked], |r| r.get(0))?;
-    let open = format!("SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND status IN {BUSY})");
+    let open =
+        format!("SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND status IN {BUSY})");
     let open: bool = tx.prepare_cached(&open)?.query_row([chat], |r| r.get(0))?;
     let members = crate::team::members(tx, chat)?;
     let Some(lead) = members.iter().find(|m| m.role == Role::Supervisor) else {
@@ -223,7 +224,7 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
 }
 
 /// Service tests of other parts run with nobody to check (`GATHR_OPEN_CHECK=off`, read only in a
-/// debug build, as `roles::without`): rounds still end, with no turns of their own.
+/// debug build): rounds still end, with no turns of their own.
 fn nobody_checks() -> bool {
     cfg!(debug_assertions) && std::env::var_os("GATHR_OPEN_CHECK").is_some_and(|v| v == "off")
 }

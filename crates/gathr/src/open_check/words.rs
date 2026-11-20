@@ -27,9 +27,11 @@ pub(super) fn check(
 ) -> Result<String, Error> {
     let author = name_of(conn, lead)?;
     let body = |id: &str| -> Result<String, Error> {
-        Ok(conn.query_row("SELECT body FROM messages WHERE id = ?1", [id], |r| {
-            r.get(0)
-        })?)
+        Ok(
+            conn.query_row("SELECT body FROM messages WHERE id = ?1", [id], |r| {
+                r.get(0)
+            })?,
+        )
     };
     let lines = [
         format!(

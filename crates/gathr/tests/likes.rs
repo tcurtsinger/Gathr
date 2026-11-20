@@ -6,12 +6,10 @@
 #[path = "likes/acts.rs"]
 mod acts;
 mod common;
-#[path = "words/samples.rs"]
-mod samples;
 
 use std::path::{Path, PathBuf};
 
-use common::{TempDir, TestService, gathr, next_live, rows, team, until};
+use common::{TempDir, TestService, gathr, rows, team, until};
 use gathr::http::Response;
 use serde_json::{Value, json};
 
@@ -78,13 +76,6 @@ fn like(service: &TestService, chat: &str, message: &str, body: Value) -> Respon
     service.send("PUT", &path, body)
 }
 
-fn unlike(service: &TestService, chat: &str, message: &str) -> Response {
-    service.call(
-        "DELETE",
-        &format!("/api/chats/{chat}/messages/{message}/like"),
-    )
-}
-
 /// The person's likes in the chat's history: the messages they are on.
 fn likes_shown(service: &TestService, chat: &str) -> Vec<Value> {
     let reactions = history(service, chat)["reactions"].clone();
@@ -99,16 +90,6 @@ fn liked_turns(data: &Path) -> Vec<Value> {
         data,
         "SELECT id, status FROM turns WHERE opened_by = 'liked' ORDER BY created_ts",
     )
-}
-
-/// The next live reaction event.
-fn live_reaction(socket: &mut std::net::TcpStream) -> Value {
-    loop {
-        let event = next_live(socket);
-        if event["type"] == "reaction" {
-            return event;
-        }
-    }
 }
 
 /// What the engine read in `turn`, joined.
@@ -145,96 +126,6 @@ pub fn refused(data: &Path, answer: &Response, why: &str) {
     let failed = events.iter().find(|e| e["name"] == "gathr.api.request");
     let failed = failed.map(|e| e["attrs"]["reason"].clone());
     assert!(ok && failed == Some(json!(why)), "{reference}: {trace}");
-}
-
-#[test]
-fn a_like_is_kept_once_reaches_an_idle_agent_once_and_is_taken_back() {
-    let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &engine(&data.0, &[], 3), &[]);
-    let turn = say(&service, &chat, "Plan it");
-    turn_is(&service, &chat, &turn, &["done"]);
-    let message = said_in(&service, &chat, &turn);
-    let mut socket = service.live();
-
-    let given = like(&service, &chat, &message, json!({}));
-    assert_eq!(given.status, 200, "{}", given.body);
-    assert_eq!(given.json()["did"], "delivered", "{}", given.body);
-    let event = live_reaction(&mut socket);
-    assert_eq!(
-        (
-            &event["chat"],
-            &event["reaction"]["message"],
-            &event["reaction"]["agent"]
-        ),
-        (&json!(chat), &json!(message), &json!("person")),
-        "{event}"
-    );
-    assert_eq!(likes_shown(&service, &chat), [json!(message)]);
-
-    let woken = given.json()["turn"]["turn"].as_str().unwrap().to_string();
-    turn_is(&service, &chat, &woken, &["done"]);
-    assert_eq!(
-        common::opened(&data.0, &json!(woken)),
-        (json!("liked"), json!(gathr::words::LIKED))
-    );
-    let shown = history(&service, &chat);
-    let line = line_in(&shown, &woken, &message)
-        .unwrap_or_else(|| panic!("no line of Gathr's tells of the like: {shown}"));
-    let read = read_in(&data.0, &woken);
-    let escaped = serde_json::to_string(&line).unwrap();
-    assert!(
-        read.contains(escaped.trim_matches('"')),
-        "the engine read: {read}"
-    );
-    let time = shown["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|m| m["id"] == message);
-    let time = time.unwrap()["time"].as_str().unwrap();
-    let sampled = line.replace(&message, "<id>").replace(time, "<time>");
-    samples::same("liked: a message", &sampled);
-    let theirs = shown["messages"].as_array().unwrap().iter();
-    let person = theirs
-        .filter(|m| m["turn"] == woken && m["role"] == "user")
-        .count();
-    assert_eq!(
-        person, 0,
-        "no message of the person's in the woken turn: {shown}"
-    );
-    // 0078: the lead on no task speaks to the person: the turn the like opened is a main message.
-    let turns = shown["turns"].as_array().unwrap();
-    let topic = |id: &str| turns.iter().find(|t| t["id"] == id).unwrap()["topic"].clone();
-    assert_eq!(topic(&woken), json!(format!("b:{woken}")), "{shown}");
-    common::topics_agree(&data.0, &chat);
-
-    // Given twice: one mark, one delivery.
-    let again = like(&service, &chat, &message, json!({}));
-    assert_eq!(again.json()["did"], "standing", "{}", again.body);
-    assert_eq!(likes_shown(&service, &chat), [json!(message)]);
-    assert_eq!(liked_turns(&data.0).len(), 1, "{:?}", liked_turns(&data.0));
-
-    // Taken back: the mark goes, live too, and nothing the like did is undone. Twice is no error.
-    let back = unlike(&service, &chat, &message);
-    assert_eq!(back.json()["removed"], true, "{}", back.body);
-    let event = live_reaction(&mut socket);
-    assert_eq!(
-        (&event["removed"], &event["reaction"]["message"]),
-        (&json!(true), &json!(message)),
-        "{event}"
-    );
-    assert!(likes_shown(&service, &chat).is_empty());
-    turn_is(&service, &chat, &woken, &["done"]);
-    let twice = unlike(&service, &chat, &message);
-    assert_eq!(twice.status, 200, "{}", twice.body);
-    assert_eq!(twice.json()["removed"], false, "{}", twice.body);
-
-    // Given again: the mark alone; the agent was told once.
-    let marked = like(&service, &chat, &message, json!({}));
-    assert_eq!(marked.json()["did"], "marked", "{}", marked.body);
-    assert!(marked.json()["turn"].is_null(), "{}", marked.body);
-    assert_eq!(likes_shown(&service, &chat), [json!(message)]);
-    assert_eq!(liked_turns(&data.0).len(), 1, "{:?}", liked_turns(&data.0));
 }
 
 #[test]

@@ -11,8 +11,6 @@ pub const CHECK: i64 = 2;
 pub const LAST_WORD: i64 = 2;
 pub const REPLY: i64 = 2;
 pub const PICKED: i64 = 1;
-/// A team's role lines in the briefing (`crate::roles`, 0066): no turn opens with them.
-pub const ROLE: i64 = 2;
 
 /// What opened a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,18 +36,6 @@ pub enum Opened {
 }
 
 impl Opened {
-    pub const ALL: [Opened; 9] = [
-        Opened::CarryOn,
-        Opened::Check,
-        Opened::LastWord,
-        Opened::Reply,
-        Opened::Picked,
-        Opened::Person,
-        Opened::Teammate,
-        Opened::Compaction,
-        Opened::Engine,
-    ];
-
     pub fn as_str(self) -> &'static str {
         match self {
             Opened::CarryOn => "carry_on",

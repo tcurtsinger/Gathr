@@ -187,18 +187,15 @@ fn lines(
          ORDER BY m.ts DESC, m.id DESC LIMIT ?5"
     );
     let mut stmt = conn.prepare_cached(&sql)?;
-    let rows = stmt.query_map(
-        params![chat, turn, agent, since, MOST as i64],
-        |r| {
-            Ok(Line {
-                id: r.get(0)?,
-                role: r.get(1)?,
-                body: r.get(2)?,
-                agent: r.get(3)?,
-                name: r.get(4)?,
-            })
-        },
-    )?;
+    let rows = stmt.query_map(params![chat, turn, agent, since, MOST as i64], |r| {
+        Ok(Line {
+            id: r.get(0)?,
+            role: r.get(1)?,
+            body: r.get(2)?,
+            agent: r.get(3)?,
+            name: r.get(4)?,
+        })
+    })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 

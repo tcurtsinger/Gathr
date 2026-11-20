@@ -9,7 +9,7 @@ use gathr::{VERSION, http};
 use serde_json::{Value, json};
 
 use super::feed::Feed;
-use super::{TempDir, TestService, call_tool, gathr, recording, replay_engine, text, until};
+use super::{TempDir, TestService, gathr, recording, replay_engine, until};
 
 pub fn program_name() -> String {
     format!("gathrd{}", std::env::consts::EXE_SUFFIX)
@@ -212,7 +212,6 @@ impl Room {
         let made = service.send("POST", "/api/chats", json!({ "members": members }));
         assert_eq!(made.status, 200, "{}", made.body);
         let chat = made.json()["id"].as_str().unwrap().to_string();
-        super::old_chat(&data, &chat);
         let env = env.iter().map(|(k, v)| (k.to_string(), v.to_path_buf()));
         Room {
             dir,
@@ -277,36 +276,6 @@ impl Room {
     pub fn token(&self, n: usize) -> String {
         let line = super::nth(&self.dir.0.join("env.jsonl"), n);
         line["GATHR_AGENT_TOKEN"].as_str().unwrap().to_string()
-    }
-
-    /// The lead gives Ann task #1 and ends its turn; Ann's turn on the task runs, reports the task
-    /// done and holds: its id. A task nobody reports is never done (0047).
-    pub fn ann_works(&self) -> String {
-        say(&self.service, &self.chat, "Plan it");
-        super::fix_it(self.service.info.port, &self.token(0));
-        let ask = json!({ "to": "ann", "what": "Write the notes", "why": "for the review" });
-        let given = text(&call_tool(
-            self.service.info.port,
-            &self.token(0),
-            "give_task",
-            super::briefed(ask),
-        ));
-        assert!(given.starts_with("Task #1 for ann: ready."), "{given}");
-        // Ann's engine started with the task and may already hold too: the release is the lead's.
-        self.go_to(0);
-        let history = self
-            .service
-            .wait_for(&self.chat, 20, "Ann's turn on the task", |h| {
-                let turns = h["turns"].as_array().unwrap();
-                turns.len() == 2 && turns[0]["status"] == "done" && turns[1]["status"] == "running"
-            });
-        assert_eq!(history["turns"][1]["agent"], self.ann.as_str(), "{history}");
-        assert_eq!(history["turns"][1]["task"], 1, "{history}");
-        let report = json!({ "how": "done", "note": "the notes are written" });
-        let port = self.service.info.port;
-        let said = text(&call_tool(port, &self.token(1), "finish_task", report));
-        assert!(said.starts_with("Recorded: done."), "{said}");
-        history["turns"][1]["id"].as_str().unwrap().to_string()
     }
 
     /// A release is published and Update pressed.

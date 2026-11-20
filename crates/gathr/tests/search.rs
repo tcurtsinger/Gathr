@@ -25,7 +25,7 @@ fn store(dir: &TempDir) -> Connection {
         "road",
         "t1",
         T,
-        (Some("ann"), None, None),
+        (Some("ann"), None),
         gathr::words::Opened::Person,
     )
     .unwrap();
@@ -34,7 +34,7 @@ fn store(dir: &TempDir) -> Connection {
         "other",
         "t2",
         T,
-        (Some("ann"), None, None),
+        (Some("ann"), None),
         gathr::words::Opened::Person,
     )
     .unwrap();
@@ -187,7 +187,7 @@ fn the_index_follows_every_change_and_the_backup_copy() {
         "gone",
         "t3",
         T,
-        (Some("ann"), None, None),
+        (Some("ann"), None),
         gathr::words::Opened::Person,
     )
     .unwrap();

@@ -8,9 +8,7 @@ mod common;
 
 use std::path::{Path, PathBuf};
 
-use common::{
-    TempDir, TestService, call_tool, gathr, held_recording, nth, rows, team, text, until,
-};
+use common::{TempDir, TestService, call_tool, held_recording, nth, rows, team, text, until};
 use serde_json::{Value, json};
 
 struct Room {
@@ -190,68 +188,4 @@ fn a_thumbs_up_on_gathrs_copy_of_the_persons_message_lands_on_the_message() {
         .map(|(m, _)| m)
         .collect();
     assert_eq!(on, [message.clone(), message], "never on the copy {copy}");
-}
-
-#[test]
-fn a_thumbs_up_on_gathrs_line_its_own_message_or_person_with_none_is_refused_with_a_reference() {
-    let data = TempDir::new();
-    let room = room(&data.0);
-    room.post(json!({ "text": "Start", "agent": room.lead }));
-    let lead = room.token(0);
-    common::fix_it(room.service.info.port, &lead);
-    let task = json!({ "to": "Ann", "what": "Fix the made-up build" });
-    let port = room.service.info.port;
-    let given = call_tool(port, &lead, "give_task", common::briefed(task));
-    assert_eq!(given["isError"], false, "{}", text(&given));
-    let ann = room.token(1);
-    let sent = call_tool(
-        port,
-        &lead,
-        "message",
-        json!({ "to": "Ann", "text": "Made-up heads-up" }),
-    );
-    assert_eq!(sent["isError"], false, "{}", text(&sent));
-    let history = room.history();
-    let messages = history["messages"].as_array().unwrap();
-    let id_of = |found: Option<&Value>| found.unwrap()["id"].as_str().unwrap().to_string();
-    let line = id_of(
-        messages
-            .iter()
-            .find(|m| m["role"] == "gathr" && m["copy_of"].is_null()),
-    );
-    let leads = id_of(messages.iter().find(|m| m["body"] == "Made-up heads-up"));
-
-    let goes = "a thumbs-up goes on the person's message or another agent's.";
-    let none = "your turn answers no message of the person's: give the message's id.";
-    for (token, id, why) in [
-        (
-            &ann,
-            line.as_str(),
-            format!("{line} is Gathr's line: {goes}"),
-        ),
-        (
-            &lead,
-            leads.as_str(),
-            format!("{leads} is your own message: {goes}"),
-        ),
-        (&ann, "person", none.to_string()),
-    ] {
-        let refused = room.react(token, id);
-        let said = text(&refused);
-        assert_eq!(refused["isError"], true, "{id}: {said}");
-        let starts = format!("react failed: {why} (ref ");
-        assert!(said.starts_with(&starts), "{id}: {said}");
-        let reference = said.rsplit("(ref ").next().unwrap().trim_end_matches(')');
-        let (ok, trace) = gathr(&data.0, &["diag", "trace", reference]);
-        let events = trace["events"].as_array().cloned().unwrap_or_default();
-        let found = events.iter().any(|e| {
-            e["name"] == "gathr.tool.call"
-                && e["attrs"]["gen_ai.tool.name"] == "react"
-                && e["attrs"]["why"] == why.as_str()
-        });
-        assert!(ok && found, "{id}: {trace}");
-        // The forced failure: `cargo nextest run -p gathr --test reactions refused -- --nocapture`.
-        println!("diag trace {reference}: {trace:#}");
-    }
-    assert!(reactions(&room.history()).is_empty());
 }

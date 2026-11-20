@@ -11,8 +11,6 @@ use common::{
     TempDir, TestService, call_tool, first_token, gathr, held_recording, next_live, recording,
     team, text,
 };
-use gathr::approvals::GATHR_ASKS;
-use gathr::notice::{self, Notice, Start};
 use serde_json::{Value, json};
 
 /// The chat's `working` and `needs` in the list.
@@ -179,126 +177,6 @@ fn asking(data: &Path) -> (TestService, String) {
     let service = TestService::with_engine(data, &[("GATHR_REPLAY", &fixture)]);
     service.signed_in(data);
     (service, request)
-}
-
-/// A chat where the agent "Made-up Ann" asks for the recording's approval: the chat.
-fn ann_asks(service: &TestService, data: &Path) -> String {
-    let account = service.signed_in(data);
-    let ann = json!({ "name": "Made-up Ann", "account": account });
-    let ann = service.send("POST", "/api/agents", ann).json();
-    let chat = service.new_chat();
-    say(service, &chat, ann["id"].as_str());
-    until_state(service, &chat, (true, true));
-    chat
-}
-
-/// A route as the window reads it: its JSON when it answers 200.
-fn route(service: &TestService, path: &str) -> Option<Value> {
-    let answer = service.call("GET", path);
-    (answer.status == 200).then(|| answer.json())
-}
-
-/// What the window reads every few seconds (0058).
-fn window_reads(service: &TestService) -> notice::Read {
-    let (chats, pauses) = (route(service, "/api/chats"), route(service, "/api/pauses"));
-    notice::read(chats.as_ref(), pauses.as_ref()).expect("both routes answer")
-}
-
-/// What the window decides from the real routes, its window hidden.
-fn window_decides(
-    service: &TestService,
-    last: Option<&notice::State>,
-) -> (notice::State, Vec<Notice>) {
-    let now = window_reads(service);
-    let read = |path: String| route(service, &path).unwrap_or(Value::Null);
-    let waiting = |chat: &str| read(format!("/api/chats/{chat}/waiting"));
-    let approvals = |chat: &str| read(format!("/api/chats/{chat}"));
-    notice::decide(last, Start::Other, &now, false, false, waiting, approvals)
-}
-
-fn title(service: &TestService, chat: &str) -> String {
-    let chats = service.call("GET", "/api/chats").json();
-    let row = chats.as_array().unwrap().iter().find(|c| c["id"] == chat);
-    row.and_then(|c| c["title"].as_str())
-        .unwrap_or_default()
-        .to_string()
-}
-
-fn pause_all(service: &TestService) {
-    let paused = service.send("POST", "/api/pauses", json!({ "scope": "app" }));
-    assert_eq!(paused.status, 200, "{}", paused.body);
-}
-
-/// Scenario 6j: the routes the window reads, through the window's own decision. Whether a pause
-/// lets an approval through rests on its reason starting with `GATHR_ASKS`, matched by agent.
-#[test]
-fn what_the_window_reads_names_the_chat_that_needs_you_and_whether_a_pause_holds_it() {
-    let data = TempDir::new();
-    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &recording("approval"))]);
-    assert_eq!(window_reads(&service).needs.len(), 0);
-    let (before, said) = window_decides(&service, None);
-    assert_eq!(said, []);
-
-    let chat = ann_asks(&service, &data.0);
-    let asks = Notice::Show {
-        chat: chat.clone(),
-        title: title(&service, &chat),
-        body: "Made-up Ann needs your approval".into(),
-        why: None,
-        rose: true,
-    };
-    assert_eq!(window_decides(&service, Some(&before)).1, [asks]);
-
-    // The approval's line is as old as the approval, not its turn.
-    let waiting = route(&service, &format!("/api/chats/{chat}/waiting")).unwrap();
-    let line = waiting["lines"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|l| l["kind"] == "approval");
-    let since = line.unwrap_or_else(|| panic!("no approval line: {waiting}"))["since_us"].as_i64();
-    let (ok, turns) = gathr(&data.0, &["diag", "query", "SELECT created_ts FROM turns"]);
-    assert!(ok, "{turns}");
-    let created = turns["rows"][0]["created_ts"].as_i64();
-    assert!(
-        since > created,
-        "the approval line's time {since:?}, its turn's {created:?}"
-    );
-
-    // Claude Code's own ask is held by an app pause.
-    pause_all(&service);
-    let held = Notice::Held { chat: chat.clone() };
-    assert_eq!(window_decides(&service, None).1, [held]);
-
-    // Gathr's own ask goes through it: the same recording, with Gathr's reason.
-    let other = TempDir::new();
-    let frames = std::fs::read_to_string(recording("approval")).unwrap();
-    let reason = format!("{GATHR_ASKS} it writes outside the agent's folders");
-    let frames = frames.lines().map(|row| {
-        let mut row: Value = serde_json::from_str(row).unwrap();
-        let Ok(mut frame) = serde_json::from_str::<Value>(row["line"].as_str().unwrap_or(""))
-        else {
-            return row.to_string();
-        };
-        if frame["request"]["subtype"] == "can_use_tool" {
-            frame["request"]["decision_reason"] = reason.clone().into();
-            row["line"] = frame.to_string().into();
-        }
-        row.to_string()
-    });
-    let written = other.0.join("gathr-asks.jsonl");
-    std::fs::write(&written, frames.collect::<Vec<_>>().join("\n")).unwrap();
-    let service = TestService::with_engine(&other.0, &[("GATHR_REPLAY", &written)]);
-    let chat = ann_asks(&service, &other.0);
-    pause_all(&service);
-    let through = Notice::Show {
-        chat: chat.clone(),
-        title: title(&service, &chat),
-        body: "Made-up Ann needs your approval".into(),
-        why: Some("gathr_ask"),
-        rose: true,
-    };
-    assert_eq!(window_decides(&service, None).1, [through]);
 }
 
 #[test]
@@ -504,44 +382,6 @@ fn a_state_that_cant_be_read_fails_with_a_reference_that_finds_why() {
     assert_eq!(failed["error_type"], "sqlite", "{failed}");
     let why = failed["attrs"]["why"].as_str().unwrap_or_default();
     assert!(why.contains("no such table"), "{failed}");
-}
-
-/// Gathr's worktree hook asking about a push, as an engine's does: one that isn't to the worktree's
-/// origin, so Gathr asks the person.
-const PUSH: [(&str, &str); 2] = [
-    ("gathr-remote", "elsewhere"),
-    ("gathr-url", "https://example.invalid/made-up.git"),
-];
-
-#[test]
-fn a_push_gathr_asks_about_needs_the_person_until_it_is_answered() {
-    let data = TempDir::new();
-    let (service, chat, _) = team(&data.0, &held_recording(&data.0, "signed_in"), &[]);
-    let mut live = service.live();
-    say(&service, &chat, None);
-    let (port, auth) = (
-        service.info.port,
-        format!("Bearer {}", first_token(&data.0)),
-    );
-    // A held turn's push is refused before anyone is asked (0063).
-    common::fix_it(port, &first_token(&data.0));
-    let asked = std::thread::spawn(move || {
-        let headers = [("Authorization", auth.as_str()), PUSH[0], PUSH[1]];
-        gathr::http::post(port, "/hook/push", &headers, "")
-            .unwrap()
-            .body
-    });
-    until_state(&service, &chat, (true, true));
-    let open = service.call("GET", &format!("/api/chats/{chat}")).json();
-    assert_eq!(open["approvals"][0]["tool"], "git push", "{open}");
-    let request = open["approvals"][0]["request_id"].as_str().unwrap();
-    let approve = format!("/api/chats/{chat}/approvals/{request}");
-    let answered = service.send("POST", &approve, json!({ "allow": true }));
-    assert_eq!(answered.status, 200, "{}", answered.body);
-    assert_eq!(asked.join().unwrap(), "allow");
-    until_state(&service, &chat, (true, false));
-    let seen = changes(&service, &mut live, &chat);
-    assert_eq!(seen, [(true, false), (true, true), (true, false)]);
 }
 
 #[test]

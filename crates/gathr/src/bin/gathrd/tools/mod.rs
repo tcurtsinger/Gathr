@@ -88,8 +88,6 @@ pub struct Pass {
     pub token: String,
     pub briefing: PathBuf,
     pub briefing_chars: usize,
-    /// The role the briefing named, and the version of its lines when it gave them (0066).
-    pub role: Option<(gathr::team::Role, Option<i64>)>,
     turn: Arc<Mutex<Option<OnTurn>>>,
     passes: Arc<Passes>,
 }
@@ -124,7 +122,6 @@ impl Pass {
             token,
             briefing: file,
             briefing_chars: briefing.chars().count(),
-            role: None,
             turn,
             passes: passes.clone(),
         })

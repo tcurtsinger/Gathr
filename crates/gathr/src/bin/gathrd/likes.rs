@@ -40,7 +40,6 @@ async fn give(
     Ok(Json(answer))
 }
 
-
 /// Takes the like back: the mark goes, and nothing it did is undone.
 async fn take_back(
     Extract(s): Extract<Arc<State>>,

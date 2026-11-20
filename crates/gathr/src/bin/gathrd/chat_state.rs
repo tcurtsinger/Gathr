@@ -51,7 +51,10 @@ pub fn after_write(
             }),
             Err(e) => {
                 let event = Event::point("gathr.chat.state").trace(&gathr::ids::trace_id());
-                let _ = event.error("sqlite").attr("why", e.to_string()).insert(conn);
+                let _ = event
+                    .error("sqlite")
+                    .attr("why", e.to_string())
+                    .insert(conn);
             }
         }
     }

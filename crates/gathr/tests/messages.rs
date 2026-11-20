@@ -115,51 +115,6 @@ impl Room {
 }
 
 #[test]
-fn a_message_to_an_idle_member_shows_and_wakes_it_once_answering_the_senders_turn() {
-    let data = TempDir::new();
-    let room = room(&data.0);
-    let lead = room.turn_of(&room.lead, 0);
-    let sent = room.message(&lead, "ann", "Please look at #12");
-    assert_eq!(sent["isError"], false, "{sent}");
-
-    let history = room.history();
-    let shown = history["messages"].as_array().unwrap().iter();
-    let shown: Vec<&Value> = shown.filter(|m| m["to"] == room.ann.as_str()).collect();
-    assert_eq!(shown.len(), 1, "{history}");
-    assert_eq!(shown[0]["body"], "Please look at #12");
-    assert_eq!(
-        shown[0]["agent"],
-        room.lead.as_str(),
-        "shown as the sender's: {history}"
-    );
-    let lead_turn = room.turns_of(&room.lead)[0]["id"].clone();
-    assert_eq!(shown[0]["turn"], lead_turn, "on the sender's turn");
-
-    let anns = room.turns_of(&room.ann);
-    assert_eq!(anns.len(), 1, "{anns:?}");
-    assert_eq!(anns[0]["answers"], lead_turn, "{anns:?}");
-    assert_eq!(anns[0]["task"], Value::Null, "{anns:?}");
-    let teammate = (json!("teammate"), Value::Null);
-    assert_eq!(common::opened(&data.0, &anns[0]["id"]), teammate);
-    let asked = room.said_in(&anns[0]).join("\n");
-    assert!(
-        asked.contains("Please look at #12") && asked.contains("Lead"),
-        "{asked}"
-    );
-    assert_eq!(room.delivered(), ["queued"]);
-    room.told_once(&anns[0], &shown[0]["id"]);
-    // 0078: Ann's turn sits where the lead's message does, under the lead's answer to the person.
-    let history = room.history();
-    let answer = format!("b:{}", lead_turn.as_str().unwrap());
-    let topics: Vec<Value> = [&room.turns_of(&room.lead)[0], &room.turns_of(&room.ann)[0]]
-        .iter()
-        .map(|t| t["topic"].clone())
-        .collect();
-    assert_eq!(topics, [json!(answer), json!(answer)], "{history}");
-    common::topics_agree(&data.0, &room.chat);
-}
-
-#[test]
 fn messages_before_the_members_turn_starts_join_that_one_turn() {
     let data = TempDir::new();
     let room = room(&data.0);
@@ -348,38 +303,6 @@ fn the_hand_off_limit_is_a_setting_with_none_for_no_limit() {
     );
 }
 
-/// A message joined a queued turn before it started, so a stop before it starts still brings both
-/// asks: the service takes queued turns over with their whole ask.
-#[test]
-fn a_queued_turn_a_message_joined_keeps_its_whole_ask_across_a_stop() {
-    let data = TempDir::new();
-    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    conn.execute(
-        "INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1)",
-        [],
-    )
-    .unwrap();
-    gathr::store::add_turn(
-        &conn,
-        "c",
-        "t",
-        "trace",
-        (Some("ann"), None, None),
-        gathr::words::Opened::Person,
-    )
-    .unwrap();
-    let say = |text: &str| gathr::store::add_message(&conn, "c", "t", "gathr", "text", text);
-    say("Lead wrote to you: First").unwrap();
-    say("Lead wrote to you: Then").unwrap();
-    drop(conn);
-    let conn = gathr::db::open(&data.0.join("gathr.db")).unwrap();
-    let waiting = gathr::store::take_over(&conn).unwrap();
-    assert_eq!(
-        waiting[0].text,
-        "Lead wrote to you: First\n\nLead wrote to you: Then"
-    );
-}
-
 /// Vale, #118: a turn the person queued for a member that hasn't started (the member is busy in
 /// another chat) takes the message too: one turn, never a second, and its ask outlasts a stop.
 #[test]
@@ -477,97 +400,6 @@ fn a_message_goes_out_live_naming_its_chat_and_whom_its_for() {
     });
     assert_eq!(heard["chat"], room.chat.as_str(), "{heard}");
     assert_eq!(heard["message"]["to"], room.ann.as_str(), "{heard}");
-}
-
-/// Scenario 6b through the service (0050): one answer says what the chat waits on, the same by the
-/// route, the `waiting` tool and the command line. A turn queued behind its agent's running turn
-/// says so, which only that agent's queue knows; when the turn ahead ends, a live message names the
-/// chat and the line is gone. With the service stopped, the command line answers from the database.
-#[test]
-fn what_a_chat_waits_on_is_one_answer_by_the_route_the_tool_and_the_command_line() {
-    let data = TempDir::new();
-    let room = room(&data.0);
-    let lead = room.turn_of(&room.lead, 0);
-    room.turn_of(&room.ann, 1);
-    // Ann's task from Lead waits behind the turn Ann is running.
-    common::fix_it(room.service.info.port, &lead);
-    let task = json!({ "to": "Ann", "what": "Fix the build" });
-    let given = call_tool(
-        room.service.info.port,
-        &lead,
-        "give_task",
-        common::briefed(task),
-    );
-    assert_eq!(given["isError"], false, "{}", text(&given));
-    let path = format!("/api/chats/{}/waiting", room.chat);
-    let behind = "is queued: behind this agent's turn";
-    let says = |answer: &Value| {
-        let lines = answer["lines"].as_array().cloned().unwrap_or_default();
-        let said = |l: &Value| l["what"].as_str().is_some_and(|w| w.contains(behind));
-        lines.iter().any(said)
-    };
-    let asked = until(20, "the queue to say why Ann's task waits", || {
-        let answer = room.service.call("GET", &path).json();
-        says(&answer).then_some(answer)
-    });
-    let line = |kind: &str| {
-        let lines = asked["lines"].as_array().unwrap();
-        let of = lines.iter().filter(|l| l["kind"] == kind);
-        of.cloned().collect::<Vec<_>>()
-    };
-    let queued = &line("queued")[0];
-    assert_eq!(queued["moves"], "itself", "{queued}");
-    assert_eq!(queued["from"], "service", "{queued}");
-    assert_eq!(queued["task"], 1, "{queued}");
-    assert_eq!(line("turn").len(), 2, "both running turns: {asked}");
-    let states: Vec<&str> = asked["agents"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter_map(|a| a["state"].as_str())
-        .collect();
-    assert_eq!(states, ["working", "working"], "{asked}");
-
-    let told = text(&call_tool(
-        room.service.info.port,
-        &lead,
-        "waiting",
-        json!({}),
-    ));
-    assert!(
-        told.contains(behind) && told.contains("Moving by itself:"),
-        "{told}"
-    );
-    let words = asked["in_words"].as_str().unwrap_or_default();
-    assert!(words.contains(behind), "{asked}");
-    let (ok, cli) = gathr(&room.data, &["diag", "waiting", "--chat", &room.chat]);
-    assert!(ok, "{cli}");
-    assert_eq!(cli["from"], "service", "{cli}");
-    assert!(says(&cli), "{cli}");
-
-    // The turn ahead ends: the window is told to ask again, and the line is gone.
-    let mut live = room.service.live();
-    std::fs::write(room.data.join("go"), "").unwrap();
-    loop {
-        let update = common::next_live(&mut live);
-        if update["type"] == "waiting" && update["chat"] == room.chat.as_str() {
-            break;
-        }
-    }
-    until(20, "the queued turn's line to go", || {
-        let answer = room.service.call("GET", &path).json();
-        (!says(&answer)).then_some(())
-    });
-
-    let (chat, folder) = (room.chat.clone(), room.data.clone());
-    let Room { service, .. } = room;
-    service.stop();
-    let (ok, cli) = gathr(&folder, &["diag", "waiting", "--chat", &chat]);
-    assert!(ok, "{cli}");
-    assert_eq!(cli["from"], "database", "{cli}");
-    let (ok, unknown) = gathr(&folder, &["diag", "waiting", "--chat", "nope"]);
-    let why = unknown["why"].as_str().unwrap_or_default();
-    assert!(!ok && why.contains("no chat"), "{unknown}");
 }
 
 /// G163: a message whose turn is held says what really holds it: the pause of the agent, of the

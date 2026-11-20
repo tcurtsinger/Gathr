@@ -99,10 +99,7 @@ mod tests {
             set(&conn, engine, &ping, None).unwrap().is_empty(),
             "listed again"
         );
-        assert_eq!(
-            set(&conn, engine, &[], None).unwrap(),
-            ["t1".to_string()]
-        );
+        assert_eq!(set(&conn, engine, &[], None).unwrap(), ["t1".to_string()]);
         assert!(of(&conn, "c1", Some("ann")).unwrap().is_empty());
     }
 }

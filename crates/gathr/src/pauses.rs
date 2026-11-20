@@ -364,8 +364,8 @@ mod tests {
         )
         .unwrap();
         pause(&conn, "chat", "c1", false, "tr").unwrap();
-        assert!(settle(&conn, &[], "tr").unwrap().is_empty(), "a turn runs");
-        let shown = listed(&conn, &[]).unwrap();
+        assert!(settle(&conn, "tr").unwrap().is_empty(), "a turn runs");
+        let shown = listed(&conn).unwrap();
         assert_eq!(shown["pauses"][0]["state"], "pausing");
         assert_eq!(
             shown["pauses"][0]["running"]["background"][0]["command"],
@@ -374,13 +374,13 @@ mod tests {
         conn.execute("UPDATE turns SET status = 'done'", [])
             .unwrap();
         assert!(
-            settle(&conn, &[], "tr").unwrap().is_empty(),
+            settle(&conn, "tr").unwrap().is_empty(),
             "its command still runs"
         );
         conn.execute("DELETE FROM background", []).unwrap();
-        assert_eq!(settle(&conn, &[], "tr").unwrap().len(), 1);
-        assert!(settle(&conn, &[], "tr").unwrap().is_empty(), "said once");
-        assert_eq!(listed(&conn, &[]).unwrap()["pauses"][0]["state"], "paused");
+        assert_eq!(settle(&conn, "tr").unwrap().len(), 1);
+        assert!(settle(&conn, "tr").unwrap().is_empty(), "said once");
+        assert_eq!(listed(&conn).unwrap()["pauses"][0]["state"], "paused");
     }
 
     #[test]

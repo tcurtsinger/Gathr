@@ -51,7 +51,11 @@ impl Task {
     /// (F11). Pauses and usage holds keep it queued instead (`holds`).
     pub(super) async fn gate(&self, ids: &Ids) -> Option<String> {
         let chat = ids.chat.clone();
-        let asked = self.chats.writer.call(move |conn| why_not(conn, &chat)).await;
+        let asked = self
+            .chats
+            .writer
+            .call(move |conn| why_not(conn, &chat))
+            .await;
         unread(asked)
     }
 

@@ -88,6 +88,8 @@ async fn pre_tool_use(
         .attr("why", why);
     s.writer.record(event);
     let reason = format!("{} {why}", gathr::approvals::GATHR_ASKS);
-    Json(json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
-        "permissionDecision": "ask", "permissionDecisionReason": reason } }))
+    Json(
+        json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+        "permissionDecision": "ask", "permissionDecisionReason": reason } }),
+    )
 }

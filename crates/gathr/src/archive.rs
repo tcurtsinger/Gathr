@@ -159,7 +159,10 @@ fn task_files(conn: &Connection, chat: &str) -> Result<Vec<PathBuf>, Error> {
     let paths = stmt.query_map([chat], |r| r.get::<_, Option<String>>(0))?;
     let mut folders = Vec::new();
     for path in paths {
-        if let Some(folder) = path?.as_deref().and_then(|p| std::path::Path::new(p).parent()) {
+        if let Some(folder) = path?
+            .as_deref()
+            .and_then(|p| std::path::Path::new(p).parent())
+        {
             folders.push(folder.to_path_buf());
         }
     }

@@ -310,13 +310,6 @@ pub fn name(conn: &Connection, id: &str) -> Result<Option<String>, Error> {
     Ok(conn.query_row(sql, [id], |r| r.get(0)).optional()?)
 }
 
-/// Whether the agent was removed (0069).
-pub fn is_removed(conn: &Connection, id: &str) -> Result<bool, Error> {
-    let sql = "SELECT removed_ts IS NOT NULL FROM agents WHERE id = ?1";
-    let found = conn.query_row(sql, [id], |r| r.get(0)).optional()?;
-    Ok(found.unwrap_or(false))
-}
-
 /// A removed agent, as the window names its old messages and draws its face on them.
 #[derive(Debug, Clone, Serialize)]
 pub struct Removed {

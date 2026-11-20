@@ -48,7 +48,12 @@ impl Task {
 
     /// What a turn is sent before its ask, never saved: what the chat said that the agent hasn't
     /// heard (0081). A new conversation, or one a compaction summed up, hears the chat's last lines.
-    pub(super) async fn opening(&mut self, next: &Queued, fresh: bool, text: String) -> (String, bool) {
+    pub(super) async fn opening(
+        &mut self,
+        next: &Queued,
+        fresh: bool,
+        text: String,
+    ) -> (String, bool) {
         if self.compactions.contains(&next.ids.turn) {
             return (text, false);
         }

@@ -15,7 +15,7 @@ pub struct Facts {
     title: String,
     name: Option<String>,
     /// Named in a chat of two or more only.
-    pub role: Option<Role>,
+    role: Option<Role>,
     others: Vec<String>,
     team: bool,
     /// The agent's folder and the project it's a worktree of.

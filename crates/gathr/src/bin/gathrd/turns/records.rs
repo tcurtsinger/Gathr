@@ -147,9 +147,10 @@ impl Task {
     pub(super) async fn set_turn(&self, ids: &Ids, status: &str, why: Option<&str>) {
         let (turn, status_saved, why_saved) =
             (ids.turn.clone(), status.to_string(), why.map(String::from));
-        let saved = self.chats.writer.call(move |conn| {
-            store::set_turn(conn, &turn, &status_saved, why_saved.as_deref())
-        });
+        let saved = self
+            .chats
+            .writer
+            .call(move |conn| store::set_turn(conn, &turn, &status_saved, why_saved.as_deref()));
         if let Some(Err(e)) = saved.await {
             let event = Event::point("gathr.turn.status").trace(&ids.trace);
             self.record(event.error("sqlite").attr("why", e.to_string()));
@@ -172,10 +173,7 @@ impl Task {
     /// its row, so a window following live shows and orders it as a reload would (0028).
     pub(super) async fn publish_turn(&self, ids: &Ids, mut update: Value) {
         let turn = ids.turn.clone();
-        let place = self
-            .chats
-            .writer
-            .call(move |c| store::turn_place(c, &turn));
+        let place = self.chats.writer.call(move |c| store::turn_place(c, &turn));
         match place.await {
             Some(Ok((position, created, opened, ended))) => {
                 update["position"] = json!(position);
