@@ -43,11 +43,11 @@ tokens and static component anatomy, not replacement runtime components.
 ## Colors
 
 Surfaces take four steps. `shell` is the window's own surface, under the rail and the top line and
-around the frame ([0070](docs/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
+around the frame ([0070](docs/archive/decisions/0070-the-windows-shell.md)): #2c2c2c in dark, a grey darker than the
 frame in light, with `shell-edge` (7% foreground) as the frame's 1px ring. `frame` is navigation and the
 workspace. `background` is the chat. `card` is what stands on the chat: an approval, a
 notice. A message is no card: it stands in a bubble, the foreground at 8% over the chat
-([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md)). In dark the chat is darkest and the frame lighter ([0068](docs/decisions/0068-the-windows-colours.md)):
+([0072](docs/archive/decisions/0072-the-chat-reads-like-a-team-chat.md)). In dark the chat is darkest and the frame lighter ([0068](docs/archive/decisions/0068-the-windows-colours.md)):
 chat #1b1b1b, frame #232323, card #2c2c2c, with floating surfaces
 (the composer, popovers, the dialog, Help) at #2f2f2f. `raised` and
 `danger-surface` are tints, so they lift whatever they lie on, and
@@ -60,7 +60,7 @@ Blue is attention, links and active work, not an agent palette; on the owner's w
 the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with and
 the names the person picked in their own message (0072). `free` (dark `oklch(0.74 0.17 148)`,
 light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
-([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)).
+([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)).
 `os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
 alone.
 Errors combine destructive text, a tinted surface, an icon and a reference.
@@ -248,16 +248,16 @@ leaves the scrollbar clear. There is none above the message box: the chat is cut
 ### Team messages: main messages and threads
 
 A team chat is main messages, each with its thread
-([0075](docs/decisions/0075-a-team-chat-is-main-messages-each-with-its-thread.md), the threads mock-up's `#day`,
+([0075](docs/archive/decisions/0075-a-team-chat-is-main-messages-each-with-its-thread.md), the threads mock-up's `#day`,
 `#roots` A and `#result` A). A main message is what is said to the person, or put to someone to start a piece of
-work ([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md), the chat-shape mock-up's structure
+work ([0078](docs/archive/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md), the chat-shape mock-up's structure
 A): the person's own message, the answer to it, every report of the lead's when it hears back, a turn that writes
 a plan, each task the lead hands out, the answer of each agent the person picked with @, a question to the person,
 the result of an ask, and anything nothing ties. Main messages read in the order they were put; under each, its
 thread: the work on a task, its PR, review and fix; a plan's check under the lead's bubble that holds the version;
 the agents' talk; Gathr's lines about it. The service says what each turn, task and line is about; the window never
 guesses. One rule for every chat: a chat of one agent reads as one timeline, as the chat was before
-([0037](docs/decisions/0037-one-timeline.md)), because what its agent says is said to the person; a main message
+([0037](docs/archive/decisions/0037-one-timeline.md)), because what its agent says is said to the person; a main message
 right after the same speaker's main message isn't named again, until a thread's replies show between them.
 The approved designs (Shared/designs) are a reference only: compose the existing registry components and Gathr
 state in React; never port their HTML.
@@ -273,7 +273,7 @@ room beside the column for the gutter (a narrow pane, the 360 column beside the 
 makes it. The message box is wider than both (**The chat's foot**). The conversation map shows only where it fits
 left of the faces.
 Every message stands in a bubble beside its author's face, everyone on the left, as a team chat
-reads ([0072](docs/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
+reads ([0072](docs/archive/decisions/0072-the-chat-reads-like-a-team-chat.md), the team-chat mock-up's look D):
 the face 36px, 12px from the bubble, level with the bubble's top under the name line; the person's own
 face is "Y" on the accent surface. The bubble fits its words up to the column: the foreground at 8% over
 the chat, the person's tinted blue (the attention colour at 22%), 18px corners, 8px 13px padding. Its words take
@@ -285,7 +285,7 @@ number in the muted colour, 8px before its text; list items 3px apart; inline co
 chat's own surface, its code 13px at 1.625; a table 13px, cells 10px by 6px, its header row tinted and semibold; an
 @Name of the chat's agents in the accent blue. A bubble with a table takes the column, so the table fills it as before.
 
-**A turn reads as SerenityOS's card reads it** ([0082](docs/decisions/0082-a-message-reads-as-serenityos-card.md),
+**A turn reads as SerenityOS's card reads it** ([0082](docs/archive/decisions/0082-a-message-reads-as-serenityos-card.md),
 the owner's "Inside the steps", reversing 2026-11-19's every piece in order): in the agent's one bubble, its message,
 the words it wrote after its last step (a thumbs-up, finishing its task and choosing where to post are no step; a
 finished turn that wrote nothing after its last step has its last words as its message), drawn as Markdown, with a
@@ -325,7 +325,7 @@ message once that task is done. A run opened shows each tool call as a step in p
 Failed in the danger colour on a failed one, Refused in the danger colour on a call Gathr refused; a task it gave
 reads "Gave Cass a task" with a "#119 Open the settings tools PR" chip that opens the task (a look-into task's chip
 reads "#119 Look into: Survey tag libraries", 0063). A step that kept what it ran
-([0041](docs/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
+([0041](docs/archive/decisions/0041-what-a-step-ran.md)) shows it in the same chip, in monospace: a
 status icon, a short label, the chip ("Ran" then "git merge origin/main"; also
 Read, Edited, Searched, Fetched, Searched the web, Ran a sub-agent). When the engine gave the
 call its own words, they are the label ("Show what changed" then "git status --short"). The
@@ -333,8 +333,8 @@ chip is one line, cut with an ellipsis to the column it is in, never widening it
 label is cut; pointing at a cut chip, or focusing it (a cut chip is a tab stop), shows it whole in
 the shared tooltip. A step that kept
 nothing reads as before ("Ran a command"). An agent's choice of where its words show
-([0079](docs/decisions/0079-agents-choose-where-their-words-show.md)) reads "Chose where to post", and its bubble moves
-there, whole, as the choice is made. A thought ([0042](docs/decisions/0042-thinking.md)) is a step
+([0079](docs/archive/decisions/0079-agents-choose-where-their-words-show.md)) reads "Chose where to post", and its bubble moves
+there, whole, as the choice is made. A thought ([0042](docs/archive/decisions/0042-thinking.md)) is a step
 of its own, in order with the others: "Thought for 9s", with no chip and nothing to open; one under a
 second is left out, and thoughts are not counted in "6 steps". Thoughts with nothing between them are one
 step, with their time together. While a turn runs, the panel's Now shows all its steps opened, what it wrote
@@ -493,7 +493,7 @@ How the team stands is said by the marks on the agents' faces (**State marks**) 
 Summary lists Gathr's own waits and a silent turn, and a needs-you row goes to what is needed.
 ### Conversation map
 
-The registry's ConversationMap as published ([0039](docs/decisions/0039-conversation-map.md)): a 24px rail
+The registry's ConversationMap as published ([0039](docs/archive/decisions/0039-conversation-map.md)): a 24px rail
 14px inside the chat pane's left edge. Its length is at most half the pane's height below the header and
 never more than 616px (44 ticks at 14px); it is centred in that height, with the same space above it as
 below it down to the pane's bottom edge. It shows from three ticks up and only with 44px left of the
@@ -519,7 +519,7 @@ Only its ticks take the pointer.
 ### Summary
 
 Summary holds what the plan bar and a status bar would say, so neither exists
-([0038](docs/decisions/0038-summary-holds-the-plan.md)). Every chat that has an agent has it, a chat of one too: its
+([0038](docs/archive/decisions/0038-summary-holds-the-plan.md)). Every chat that has an agent has it, a chat of one too: its
 button is that one face, its Team that agent's row and Gathr's.
 
 Its button in the top line carries no words. It is the roster: every agent of the chat at 20px, in the
@@ -571,7 +571,7 @@ inferred state. Reduced motion stops spinners and rings.
 
 ### State marks
 
-An agent's state is one mark on its face ([0071](docs/decisions/0071-an-agents-state-is-one-mark.md)), the
+An agent's state is one mark on its face ([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)), the
 same on every face of it in a chat: the most pressing that holds of Needs you (a blue dot), Can't run (a red
 disc with !), Working (a three-quarter blue ring), Stopped (a grey disc with a square; a plain square at 24 and
 under), Blocked (a grey disc with a bar), Waiting (a grey disc with a clock's hand) and Free (a plain green
@@ -673,7 +673,7 @@ derive from real task completion, not a decorative timer. Plans have their own
 identity and tab. A typed note is never approval.
 
 A plan's version is a chip in the bubble of the lead's turn that wrote it
-([0078](docs/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)), after the turn's words and above its
+([0078](docs/archive/decisions/0078-said-to-you-is-main-one-bubble-per-turn.md)), after the turn's words and above its
 steps line (the owner's call of 2026-11-19): a button with the clipboard icon, "Plan v2:" at 600 and where the
 version stands, "Waiting" in the accent colour while it waits on the person, then "Approved", "Dropped",
 "Checking", "Revising", or "Replaced" for an older version. The chip says the person's word on a plan, so Gathr
