@@ -207,15 +207,6 @@ fn a_project_goes_with_its_chats_and_folders_and_shared_and_the_persons_checkout
     assert_eq!(common::rows(&data.0, sql)[0]["n"], 1);
 }
 
-#[cfg(unix)]
-impl Drop for Held {
-    fn drop(&mut self) {
-        use std::os::unix::fs::PermissionsExt;
-        let open = std::fs::Permissions::from_mode(0o755);
-        let _ = std::fs::set_permissions(&self.folder, open);
-    }
-}
-
 #[test]
 fn deleting_a_lead_makes_the_next_agent_lead_in_the_project_and_in_each_chat() {
     let data = TempDir::new();
