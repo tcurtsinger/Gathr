@@ -218,7 +218,7 @@ async fn run_steps(chats: &Arc<Chats>, project: &str, head: &str, run: &str) -> 
         .writer
         .call(move |c| gathr::check_runs::used(c, &id))
         .await;
-    let vars = crate::coord::fresh().await;
+    let vars = gathr::run::fresh().await;
     reset(&repo, &checkout, head, &vars).await?;
     let mut vars = vars;
     for (name, sub) in [
