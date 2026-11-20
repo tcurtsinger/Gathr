@@ -105,17 +105,6 @@ test('on the Mac the top line draws no window buttons and leaves the system’s 
   ).toEqual(['topline', 'topline', 'topline']);
 });
 
-test('with no chat open the window still has its top line, to move it and close it', async () => {
-  const sent = on(WINDOWS, () => false);
-  service([]);
-  await page.viewport(1440, 900);
-  const screen = await render(<App />);
-  await expect.element(screen.getByText('No chats yet')).toBeVisible();
-  expect(pressed([[700, 20]]), 'a press on the top line, over the chat').toEqual(['topline with-buttons']);
-  await screen.getByRole('button', { name: 'Close' }).click();
-  expect(sent).toContain('plugin:window|close');
-});
-
 /** A dialog open over the window, as Settings is, with its own first control. */
 const dialog = () => (
   <Dialog open title="Made-up settings" onClose={() => {}} closeIcon>

@@ -83,6 +83,8 @@ export function App() {
     loadChats().then((list) => {
       setChats(list);
       setSelected((s) => s ?? list[0]?.id ?? null);
+      // With no chat to open, the window opens on New.
+      if (list.length === 0) setFresh((f) => f ?? {});
       timeToPaint('gathr.ui.start', started, { chats: list.length });
     }, setFailure);
   }, [loadChats]);
@@ -344,7 +346,7 @@ export function App() {
       ) : (
         <>
           <TopLine />
-          <main className="chat">{notice || <p className="empty">No chats yet</p>}</main>
+          <main className="chat">{notice}</main>
         </>
       )}
       <NewProject

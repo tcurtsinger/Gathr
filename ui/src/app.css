@@ -64,9 +64,6 @@ body:has(.app) {
 .app > .workspace > .workspace-view {
   border-top-right-radius: 0;
 }
-.app > .chat .empty {
-  margin: auto;
-}
 .app > .chat .reading {
   width: 100%;
   max-width: 52rem;

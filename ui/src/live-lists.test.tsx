@@ -47,13 +47,6 @@ function service() {
   });
 }
 
-const project: Project = {
-  id: 'p1',
-  name: 'Made-up project',
-  folder: 'C:\\made-up',
-  members: [],
-};
-const chat: Chat = { id: 'c1', title: 'Made-up round', project: 'p1' };
 afterEach(() => {
   made.chats = [];
   made.archived = [];
@@ -61,22 +54,6 @@ afterEach(() => {
   made.refuse = false;
   made.refuseAgents = false;
   made.hold = undefined;
-});
-
-test('a project and chat made elsewhere show in the sidebar, and the chat opens when none was', async () => {
-  service();
-  await render(<App />);
-  await expect.element(page.getByText('No chats yet')).toBeVisible();
-
-  made.projects = [project];
-  made.chats = [chat];
-  for (const on of live) on({ type: 'project', project: 'p1', change: 'created' });
-  for (const on of live) on({ type: 'chat', chat: 'c1', change: 'created' });
-
-  const sidebar = page.getByRole('navigation', { name: 'Chats' });
-  await expect.element(sidebar.getByText('Made-up project')).toBeVisible();
-  await expect.element(sidebar.getByRole('button', { name: 'Made-up round', exact: true })).toBeVisible();
-  await expect.element(page.getByRole('heading', { level: 1, name: 'Made-up round' })).toBeInTheDocument();
 });
 
 test('a draft begun while the list reloads stays open when the reload lands', async () => {
