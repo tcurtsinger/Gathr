@@ -792,14 +792,7 @@ fn an_answered_turn_queued_before_the_upgrade_is_not_told_its_answer_twice() {
         )
         .unwrap();
     assert_eq!(on, Some(3), "the answered turn is on Mira's task");
-    let before = 61;
-    conn.execute_batch(&format!(
-        "DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
-         ALTER TABLE engine_sessions DROP COLUMN summed;
-         ALTER TABLE task_sessions DROP COLUMN summed;
-         ALTER TABLE turns DROP COLUMN session_id; ALTER TABLE chats DROP COLUMN room; PRAGMA user_version = {before};"
-    ))
-    .unwrap();
+    common::old::back_to(&conn, 61);
     drop(conn);
 
     let conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
