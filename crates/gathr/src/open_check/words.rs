@@ -7,13 +7,17 @@ use crate::Error;
 use crate::tasks::name_of;
 
 /// How a check that holds up or finds nothing ends, and how an objection reads. The answer is named
-/// by `answer`, never by its id, which an agent then wrote into its words (0082).
-fn verdict(author: &str) -> String {
+/// by `answer`, never by its id, which an agent then wrote into its words (0082). In a room chat an
+/// objection starts with REPLY, which files it under the answer.
+fn verdict(author: &str, room: bool) -> String {
+    let say = match room {
+        true => format!("start with REPLY on a line of its own to comment on {author}'s message"),
+        false => format!("quoting the line you answer as \"> {author}: their words\""),
+    };
     format!(
         "If it holds up, call react with message \"answer\" and end your turn: that thumbs-up is your whole check, \
          so write nothing, not even what you checked. If something in it is wrong, missing or claimed without \
-         evidence, say what in a few lines with your evidence, quoting the line you answer as \"> {author}: their \
-         words\"."
+         evidence, say what in a few lines with your evidence, {say}."
     )
 }
 
@@ -49,6 +53,7 @@ pub(super) fn check(
     conn: &Connection,
     (asked_id, answer): (&str, &str),
     lead: &str,
+    room: bool,
 ) -> Result<String, Error> {
     let author = name_of(conn, lead)?;
     let body: String =
@@ -72,7 +77,7 @@ pub(super) fn check(
             ),
             format!("The person asked: {asked}"),
             format!("The plan:\n{body}"),
-            verdict(&author),
+            verdict(&author, room),
         ],
         None => [
             format!(
@@ -84,7 +89,7 @@ pub(super) fn check(
             format!("{author}'s answer:\n{body}"),
             format!(
                 "{} If there's nothing to check, such as small talk, write nothing.",
-                verdict(&author)
+                verdict(&author, room)
             ),
         ],
     };

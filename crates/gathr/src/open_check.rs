@@ -280,7 +280,8 @@ fn begin(tx: &Transaction, chat: &str, due: &Due, trace: &str) -> Result<Vec<Sta
         end(tx, chat, &round, &Counts::default(), trace)?;
         return Ok(Vec::new());
     }
-    let text = words::check(tx, (&due.asked, &due.answer), &due.lead)?;
+    let room = crate::room::is_room(tx, chat)?;
+    let text = words::check(tx, (&due.asked, &due.answer), &due.lead, room)?;
     let on = (None, Some(due.answer_turn.as_str()));
     due.checkers
         .iter()

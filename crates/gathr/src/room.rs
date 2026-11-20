@@ -64,15 +64,19 @@ pub fn words<'a>(
     Ok((rest.trim_start(), reply_to(conn, turn)?))
 }
 
-/// The main message a REPLY in `turn` sits under (`words`), or none when no teammate's words reached it.
+/// The main message a REPLY in `turn` sits under (`words`): in a check turn the lead's message it
+/// checks, else the teammate's that reached it, or none when no teammate's words reached it.
 pub fn reply_to(conn: &Connection, turn: &str) -> Result<Option<String>, Error> {
-    let sql = "SELECT coalesce(o.reply_to, o.id) FROM messages c
-               JOIN messages o ON o.id = c.copy_of JOIN turns ot ON ot.id = o.turn_id
-               JOIN turns me ON me.id = c.turn_id
-               WHERE c.turn_id = ?1 AND o.role = 'assistant' AND ot.agent_id IS NOT me.agent_id
-               ORDER BY c.ts DESC, c.rowid DESC LIMIT 1";
+    let sql = "SELECT coalesce(
+                 (SELECT c.answer FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
+                  WHERE u.id = ?1 AND u.opened_by = 'check' ORDER BY c.id DESC LIMIT 1),
+                 (SELECT coalesce(o.reply_to, o.id) FROM messages c
+                  JOIN messages o ON o.id = c.copy_of JOIN turns ot ON ot.id = o.turn_id
+                  JOIN turns me ON me.id = c.turn_id
+                  WHERE c.turn_id = ?1 AND o.role = 'assistant' AND ot.agent_id IS NOT me.agent_id
+                  ORDER BY c.ts DESC, c.rowid DESC LIMIT 1))";
     let found = conn.prepare_cached(sql)?.query_row([turn], |r| r.get(0));
-    Ok(found.optional()?)
+    Ok(found?)
 }
 
 /// The most lines a turn hears.
