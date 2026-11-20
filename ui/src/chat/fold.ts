@@ -25,15 +25,16 @@ export type Step =
 export interface Chip {
   plan: number;
   version: number;
-  parts: number;
+  /** Where the version stands, in a word: "Waiting", "Approved", "Replaced" (`versionWord`). */
+  state: string;
 }
 
 /**
- * A piece of a turn's block in the chat, in the order it came (the owner's call of 2026-11-19): words it wrote, by
- * their place among the message's text parts, a run of steps between words, drawn as one line, or the chip of a plan
- * version it wrote, where it wrote it (0078).
+ * A piece of a turn's block in its bubble, in the order it came (0082): words of its message, by their place among the
+ * message's text parts, or the chip of a plan version it wrote, where it wrote it (0078). Its steps and narration are
+ * the one line at the bubble's foot.
  */
-export type Piece = { id: string; words: number } | { id: string; run: Work } | { id: string; plan: Chip };
+export type Piece = { id: string; words: number } | { id: string; plan: Chip };
 
 /** What a turn did, as one row: a run of its steps in the chat, all of them in the agent's panel (0037). */
 export interface Work {
@@ -79,7 +80,11 @@ const TOOLS: Record<string, [string, string]> = {
   mcp__gathr__checks: ['Read the checks', 'Reading the checks'],
   mcp__gathr__set_checks: ['Set the checks', 'Setting the checks'],
   mcp__gathr__merge: ['Merged a pull request', 'Merging a pull request'],
+  mcp__gathr__react: ['Gave a thumbs-up', 'Giving a thumbs-up'],
 };
+
+/** Gathr's calls that only report or place: words followed by nothing else are still the message (0082). */
+const NOT_A_STEP = new Set(['mcp__gathr__react', 'mcp__gathr__finish_task', 'mcp__gathr__post']);
 
 // The label beside a chip that says what ran, which needs no "a command" or "a file" after it.
 const BESIDE: Record<string, [string, string]> = {
@@ -162,10 +167,11 @@ export interface Given {
 }
 
 /**
- * A block of a turn, folded. `pieces` are what the chat draws: each text it wrote (`words`, text still streaming last),
- * and each run of steps between them as one line. `work` is the agent panel's row: everything before the block's last
- * text, mid-work words as steps; a block that only wrote once has none. `gave` holds the task each give_task call made;
- * `began` is when the turn did, if the block is its first; `chips` the plan versions it wrote, by message.
+ * A block of a turn, folded (0082). `pieces` are what its bubble draws: its message's words (`words`, text still
+ * streaming last) and its plan versions' chips; `line` is the one line at the bubble's foot, every step and every piece
+ * of narration in order, the working line while the turn runs. `work` is the agent panel's row: everything before the
+ * block's last text, mid-work words as steps; a block that only wrote once has none. `gave` holds the task each
+ * give_task call made; `began` is when the turn did, if the block is its first; `chips` the plan versions it wrote.
  */
 export function fold(
   msgs: Message[],
@@ -174,7 +180,7 @@ export function fold(
   gave: Map<string, Given>,
   began?: string,
   chips?: Map<string, Chip>,
-): { work?: Work; words: string[]; pieces: Piece[] } {
+): { work?: Work; words: string[]; pieces: Piece[]; line?: Work } {
   const times = [began, ...msgs.map((m) => m.time)]
     .map((t) => Date.parse(t ?? ''))
     .filter((t) => !Number.isNaN(t));
@@ -209,9 +215,17 @@ export function fold(
   return { ...laid, work: { steps, running, label, notes, ...(took && { took }), failed, refused } };
 }
 
+/** A step the message rule counts (0082): one the line draws, but no call of Gathr's that only reports or places. */
+const isStep = (m: Message, gave: Map<string, Given>) =>
+  m.kind !== 'text' &&
+  !(m.kind === 'tool' && NOT_A_STEP.has((m.body as ToolBody).tool)) &&
+  !Array.isArray(stepOf(m, gave));
+
 /**
- * What the chat draws of a block, in order: each text, and each run of steps between texts as one line, the last one
- * the working line while the turn runs. A running turn with nothing yet has the working line alone.
+ * What a block's bubble draws (0082, the owner's "Inside the steps"): its message, the words it wrote after its last
+ * step (else its last words), then its plan chips; every other piece of words is narration, drawn in the line at the
+ * foot in order with the steps. While the turn runs, its newest words show as words until newer ones come; a running
+ * turn with nothing yet has the working line alone.
  */
 function piecesOf(
   msgs: Message[],
@@ -220,36 +234,42 @@ function piecesOf(
   gave: Map<string, Given>,
   since?: number,
   chips?: Map<string, Chip>,
-) {
+): { words: string[]; pieces: Piece[]; line?: Work } {
+  const all = joined(msgs);
+  const said = (m: Message) => m.kind === 'text' && !!m.body && !chips?.has(m.id);
+  const after = all.findLastIndex((m) => isStep(m, gave)) + 1;
+  const message = new Set(all.slice(after).filter(said));
+  // With nothing after its last step, its last words are what it shows: its message once it has ended, and while it
+  // works what it last said it was doing, read as words (the owner's call of 2026-11-19), never inside the working line.
+  if (!message.size && !streaming) {
+    const last = all.findLast(said);
+    if (last) message.add(last);
+  }
   const words: string[] = [];
   const pieces: Piece[] = [];
-  let run: Message[] = [];
-  const close = (going: boolean) => {
-    const steps = run.flatMap((m) => stepOf(m, gave));
-    if (steps.length) pieces.push({ id: steps[0].id, run: lineOf(run, steps, going, gave, since) });
-    run = [];
-  };
-  const say = (id: string, text: string) => {
-    close(false);
-    pieces.push({ id, words: words.length });
-    words.push(text);
-  };
-  for (const m of joined(msgs)) {
+  // A plan's chip ends the message, above the steps line (the owner's call of 2026-11-19).
+  const plans: Piece[] = [];
+  const steps: Step[] = [];
+  for (const m of all) {
     const chip = chips?.get(m.id);
-    if (m.kind !== 'text') run.push(m);
-    else if (chip) {
-      close(false);
-      pieces.push({ id: m.id, plan: chip });
-    } else if (m.body) say(m.id, m.body as string);
+    if (chip) plans.push({ id: m.id, plan: chip });
+    else if (message.has(m)) {
+      pieces.push({ id: m.id, words: words.length });
+      words.push(m.body as string);
+    } else if (m.kind !== 'text' || m.body) steps.push(...[stepOf(m, gave)].flat());
   }
-  if (streaming) say('streaming', streaming);
-  close(running);
-  if (running && !pieces.length)
-    pieces.push({ id: 'working', run: { steps: [], running, label: 'Working', notes: [], since } });
-  return { words, pieces };
+  if (streaming) {
+    pieces.push({ id: 'streaming', words: words.length });
+    words.push(streaming);
+  }
+  pieces.push(...plans);
+  const tools = all.filter((m) => m.kind !== 'text');
+  if (steps.length) return { words, pieces, line: lineOf(tools, steps, running, gave, since) };
+  const working = { steps, running, label: 'Working', notes: [], since };
+  return { words, pieces, ...(running && { line: working }) };
 }
 
-/** A run of steps as its line: while it runs, the working line; finished, what it did, counted by kind. */
+/** A turn's steps as its line: while it runs, the working line; finished, what it did, counted by kind. */
 function lineOf(
   msgs: Message[],
   steps: Step[],
@@ -269,13 +289,15 @@ function tally(msgs: Message[], steps: Step[], gave: Map<string, Given>): string
   const kinds = new Map<string, number>();
   let other = 0;
   for (const m of msgs) {
-    if (m.kind !== 'tool') continue;
+    // A call that only reports or places (a thumbs-up, finishing its task) isn't what the turn did.
+    if (m.kind !== 'tool' || NOT_A_STEP.has((m.body as ToolBody).tool)) continue;
     const kind = gave.has(m.id) ? GAVE : COUNTED[(m.body as ToolBody).tool];
     if (!kind) other += 1;
     else kinds.set(kind.join(' '), (kinds.get(kind.join(' ')) ?? 0) + 1);
   }
   const counted = [...kinds];
-  if (!counted.length) return other ? plural(other, 'step') : (steps.at(-1) as { label: string }).label;
+  if (!counted.length)
+    return other ? plural(other, 'step') : (steps.findLast((s) => 'label' in s)?.label ?? 'Worked');
   const more = other + counted.slice(3).reduce((sum, [, n]) => sum + n, 0);
   const said = counted
     .slice(0, 3)

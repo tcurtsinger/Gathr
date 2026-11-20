@@ -6,7 +6,7 @@
 //! GitHub marks a pushed PR merged. One with `squash` (`{"repo", "base"}`) squashes the call's
 //! `sha=` head onto that base, a real new commit, and answers as GitHub's merge API does. Each call
 //! is appended to `<file>.calls`, one JSON array of its arguments a line, so a test sees what
-//! Gathr asked.
+//! Gathr asked. One with `sleep_ms` answers that much later, for a GitHub that stalls.
 
 use std::io::Write;
 
@@ -42,6 +42,9 @@ fn main() {
             None if merged(&answer["merged_if"]) => answer["out_merged"].clone(),
             None => answer["out"].clone(),
         };
+        if let Some(ms) = answer["sleep_ms"].as_u64() {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
         print!("{}", out.as_str().unwrap_or_default());
         eprint!("{}", answer["err"].as_str().unwrap_or_default());
         std::process::exit(answer["code"].as_i64().unwrap_or(0) as i32);

@@ -27,7 +27,7 @@ interface Props {
  */
 export function AgentHead({ glance, task, onMessage, onCompact, compaction }: Props) {
   const { member, standing, since } = glance;
-  const mark = useMarks()?.still.get(member.agent);
+  const mark = useMarks()?.faces.get(member.agent);
   const what = standing === 'working' ? task : glance.about;
   return (
     <header className="agent-who">

@@ -125,12 +125,14 @@ export function apply(state: ChatState, event: LiveEvent): ChatState {
         ref: event.ref ?? before?.ref ?? '',
         agent: event.agent,
         created: event.created ?? before?.created,
+        ended: event.ended ?? before?.ended,
         position: event.position ?? before?.position,
         task: event.task ?? before?.task,
         answers: event.answers ?? before?.answers,
         held: event.held,
         topic: event.topic ?? before?.topic,
         result_of: event.result_of ?? before?.result_of,
+        opened: event.opened ?? before?.opened,
       };
       const open = event.status === 'running' || event.status === 'queued';
       const approvals = open ? state.approvals : state.approvals.filter((a) => a.turn !== event.turn);

@@ -1,8 +1,11 @@
-/* Streamdown styles replies and their code blocks (0030). Links are blue (DESIGN.md: Colors). */
+/* Streamdown styles replies and their code blocks (0030). Links are blue (DESIGN.md: Colors). Gathr's own rules over
+   Streamdown's give a message's words SerenityOS's proportions (0082, ported from its `Markdown.tsx` and `styles.css`,
+   the owner's own): headings as bold section labels with space above, its own dots and indents for lists, numbers in
+   the muted colour, inline code as a soft chip, tables and code blocks at the label size. Gathr's palette throughout. */
 .markdown a {
   color: var(--accent);
   text-decoration: underline;
-  text-underline-offset: 3px;
+  text-underline-offset: 2px;
 }
 /* A reply breaks a long word anywhere, but in a table that shrank a column to one letter: a cell keeps
    its words whole, and a table too wide for the column scrolls sideways in its frame. */
@@ -25,52 +28,180 @@
 .markdown [data-streamdown="code-block-actions"] button {
   min-height: 0;
 }
-/* A reply reads tight (plans/reply-spacing.md, the owner's call), tuned for the bubble (0072, the team-chat
-   mock-up's "Tuned"): Gathr's own spacing over Streamdown's. Bullets hang, so a wrapped line lines up with its
-   text; items 3px apart, paragraphs and what sits between them 10px. */
-.markdown ul,
-.markdown ol {
-  list-style-position: outside;
-  padding-left: 20px;
+/* Blocks 10px apart, from above (Streamdown spaces them 16px from below): SerenityOS's blank line. Each rule outranks
+   the one before it, and Streamdown's own margins (one class each): the reset, the gap, a heading's, a list item's. */
+.markdown
+  :is(
+    p,
+    ul,
+    ol,
+    blockquote,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    [data-streamdown="code-block"],
+    [data-streamdown="table-wrapper"]
+  ) {
+  margin-block: 0;
+}
+.markdown
+  :is(
+    p,
+    ul,
+    ol,
+    blockquote,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    [data-streamdown="code-block"],
+    [data-streamdown="table-wrapper"]
+  )
+  + :is(
+    p,
+    ul,
+    ol,
+    blockquote,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    [data-streamdown="code-block"],
+    [data-streamdown="table-wrapper"]
+  ) {
+  margin-top: 10px;
+}
+
+/* A heading of any level is a section label: semibold, a step larger than the words, 16px clear above it (the blank
+   line and SerenityOS's 6px), never a page title. */
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  font-size: 1.0625em;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.markdown
+  :is(
+    p,
+    ul,
+    ol,
+    blockquote,
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    [data-streamdown="code-block"],
+    [data-streamdown="table-wrapper"]
+  )
+  + :is(h1, h2, h3, h4, h5, h6)[data-streamdown] {
+  margin-top: 16px;
+}
+.markdown strong {
+  font-weight: 600;
+}
+
+/* Lists: SerenityOS's own dot, 0.4em, centred on the first line, its text 10px after it; a number in the muted colour,
+   8px before its text; each level in by 1.1rem; items 3px apart. */
+.markdown :is(ul, ol) {
+  padding-left: 0;
+  list-style: none;
 }
 .markdown li {
+  position: relative;
   padding-block: 0;
+  padding-left: calc(4px + 0.4em + 10px);
+}
+.markdown ul > li::before {
+  content: "";
+  position: absolute;
+  top: calc(0.825em - 0.2em);
+  left: 4px;
+  width: 0.4em;
+  height: 0.4em;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.markdown ol {
+  counter-reset: item;
+}
+.markdown ol > li {
+  padding-left: calc(4px + 1.5ch + 8px);
+  counter-increment: item;
+}
+.markdown ol > li::before {
+  content: counter(item) ".";
+  position: absolute;
+  left: 4px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.markdown li :is(ul, ol) {
+  /* From the item's text back to its dot, then 1.1rem in. */
+  margin-left: calc(1.1rem - 14px - 0.4em);
 }
 /* An item written with two paragraphs keeps them as two (Streamdown draws them inline); one alone is unwrapped. */
 .markdown li > p {
   display: block;
 }
-/* Streamdown spaces blocks 16px apart from below (space-y-4, a code block's my-4): Gathr's from above instead. */
-.markdown :is(p, ul, ol, [data-streamdown="code-block"]) {
-  margin-block-end: 0;
-}
-.markdown [data-streamdown="code-block"] {
-  margin-block-start: 0;
-}
-/* :where, so a list item's own spacing below wins. */
-.markdown
-  :where(p, ul, ol, [data-streamdown="code-block"])
-  + :where(p, ul, ol, [data-streamdown="code-block"]) {
-  margin-top: 10px;
-}
 .markdown li + li,
-.markdown li > * + *,
-.markdown li > p + p {
+.markdown
+  li
+  > :is(p, ul, ol, [data-streamdown="code-block"])
+  + :is(p, ul, ol, [data-streamdown="code-block"]) {
   margin-top: 3px;
 }
-/* Headings no bigger than a panel's title; inline code a step quieter than the text. */
-.markdown :is(h1, h2, h3) {
-  font-size: 20px;
+
+/* A quote, what an agent answers (0082): a rule at its left, upright and muted, as SerenityOS draws it. */
+.markdown [data-streamdown="blockquote"] {
+  padding-left: 10px;
+  border-left: 2px solid color-mix(in oklab, currentColor 25%, transparent);
+  color: color-mix(in oklab, currentColor 70%, transparent);
+  font-style: normal;
+}
+
+/* Inline code a soft chip: 7% of the text's colour, the label size, 4px corners. */
+.markdown [data-streamdown="inline-code"] {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--foreground) 7%, transparent);
+  font-size: 0.84em;
+  font-weight: inherit;
+  box-decoration-break: clone;
+}
+/* A code block on the bubble keeps the page's own surface, so it doesn't vanish into the bubble's; its code at the
+   label size, relaxed. */
+.markdown [data-streamdown="code-block"] {
+  border-radius: 8px;
+  background: var(--background);
+}
+.markdown [data-streamdown="code-block"] pre {
+  font-size: 13px;
+  line-height: 1.625;
+}
+/* A table at the label size, its header row tinted and semibold, cells 10px by 6px. */
+.markdown [data-streamdown="table"] {
+  font-size: 13px;
+}
+.markdown :is([data-streamdown="table-header-cell"], [data-streamdown="table-cell"]) {
+  padding: 6px 10px;
+  font-size: inherit;
+}
+.markdown [data-streamdown="table-header"] {
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+}
+.markdown [data-streamdown="table-header-cell"] {
   font-weight: 600;
 }
-.markdown [data-streamdown="inline-code"] {
-  padding: 0 3px;
-  border-radius: 4px;
-  background: color-mix(in oklab, var(--foreground) 6%, transparent);
-  font-size: 0.88em;
-  font-weight: inherit;
-}
-/* A code block on the bubble keeps the page's own surface, so it doesn't vanish into the bubble's. */
-.markdown [data-streamdown="code-block"] {
-  background: var(--background);
+/* An @Name of the chat's in an agent's words (0082): the mention's blue, in the run of the words. */
+.markdown .mention {
+  margin-right: 0;
 }

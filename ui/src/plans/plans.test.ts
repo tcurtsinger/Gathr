@@ -170,9 +170,11 @@ const ids = (items: ThreadMessageLike[]) => items.map((m) => m.id);
 const text = (m: ThreadMessageLike | undefined) =>
   ((m?.content ?? []) as readonly { text?: string }[]).map((p) => p.text).join(' | ');
 
-/** What a block's bubble draws, in order: words, a run of steps, a plan's chip. */
-const kinds = (m: ThreadMessageLike | undefined) =>
-  custom(m).pieces?.map((p) => ('run' in p ? 'run' : 'plan' in p ? `plan v${p.plan.version}` : 'words'));
+/** What a block's bubble draws, in order: its message's words, a plan's chip, and its steps line at the foot (0082). */
+const kinds = (m: ThreadMessageLike | undefined) => [
+  ...(custom(m).pieces?.map((p) => ('plan' in p ? `plan v${p.plan.version}` : 'words')) ?? []),
+  ...(custom(m).line ? ['line'] : []),
+];
 
 test("a version is a chip in the bubble of the turn that wrote it, where it wrote it, with the bubble's thumbs-ups", () => {
   const items = view(planned());
@@ -183,34 +185,44 @@ test("a version is a chip in the bubble of the turn that wrote it, where it wrot
   expect(custom(second)).toMatchObject({ agent: 'Mira', agreed: ['Bo'], topic: 'b:back' });
   expect(kinds(second)).toEqual(['plan v2']);
   expect(custom(second).pieces?.find((p) => 'plan' in p)).toMatchObject({
-    plan: { plan: 3, version: 2, parts: 9 },
+    plan: { plan: 3, version: 2, state: 'Approved' },
   });
   // Its words are the tab's, not the timeline's.
   expect(text(second)).toBe('');
 });
 
-test("the lead's words before and after the plan call stay in its one bubble, a main message", () => {
+// The owner, 2026-11-19: "this separate Plan v2 approved message is dumb. It should just change the card on the
+// message ... one just says Plan v2: Waiting and when it's approved it changes to Plan v2 Approved."
+test("a version's chip says where its plan stands, and changes when the person decides, live", () => {
+  const chipOf = (items: ThreadMessageLike[], id: string) =>
+    custom(items.find((m) => m.id === id)).pieces?.flatMap((p) => ('plan' in p ? [p.plan.state] : []));
+  const cache = new Map();
+  const waiting = planned();
+  waiting.plans = [{ ...waiting.plans[0], state: 'waiting' }];
+  waiting.plans[0].versions = waiting.plans[0].versions.map((v) => (v.n === 2 ? { ...v, decided: null } : v));
+  const before = toThread(waiting, agents, [], cache).every;
+  expect([chipOf(before, 'a-ask'), chipOf(before, 'a-back')]).toEqual([['Replaced'], ['Waiting']]);
+  // The person approves: the same cache, as the window keeps it between draws.
+  const after = toThread(planned(), agents, [], cache).every;
+  expect(chipOf(after, 'a-back')).toEqual(['Approved']);
+});
+
+test("the lead's words before the plan call are narration in its steps line; its chip and its message stay in its bubble", () => {
   const items = view(planned());
   const first = items.find((m) => m.id === 'a-ask');
   expect(ids(items)).not.toContain('a-ask-1');
-  expect(kinds(first)).toEqual(['words', 'run', 'plan v1', 'words']);
-  expect(text(first)).toBe('Reading the notes code first. | Bo checks it next.');
+  // The chip ends the message, above its steps line (the owner's call of 2026-11-19).
+  expect(kinds(first)).toEqual(['words', 'plan v1', 'line']);
+  expect(text(first)).toBe('Bo checks it next.');
+  expect(custom(first).line?.steps[0]).toMatchObject({ say: 'Reading the notes code first.' });
   expect(custom(first)).toMatchObject({ head: true, topic: 'b:ask' });
   expect(custom(first).reply).toBeUndefined();
 });
 
-test("Gathr's plan lines are kind version, each with its plan; Sent back is the quote of the turn it opened", () => {
+test("the person's Approve draws no line of Gathr's: the chip says it; Sent back is the quote of the turn it opened", () => {
   const items = view(planned());
   const lines = items.flatMap((m) => custom(m).events ?? []);
-  expect(lines).toEqual([
-    {
-      kind: 'version',
-      who: 'Plan v2:',
-      text: 'Approved',
-      more: 'Tags on notes',
-      plan: { id: 3, version: 2 },
-    },
-  ]);
+  expect(lines).toEqual([]);
   expect(custom(items.find((m) => m.id === 'a-back')).opened).toBe('Plan v1: Sent back: Split part 2');
 });
 
@@ -288,7 +300,7 @@ test("a hear-back draws no line: the plan's own lines say how its check ended", 
   const lines = view(state).flatMap((m) => custom(m).events ?? []);
   expect(
     lines.filter((e) => e.kind === 'task' || e.kind === 'version').map((e) => `${e.who} ${e.text}`),
-  ).toEqual(['Plan v2: Approved']);
+  ).toEqual([]);
 });
 
 test('a give_task call in the same turn as the plan keeps its label', () => {

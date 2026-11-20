@@ -81,12 +81,12 @@ impl Task {
                 .await;
         }
         // Its summary may have dropped what the chat said: the next turn hears the last lines (0081).
-        self.summed(true).await;
         let Some(turn) = self.turn.as_mut() else {
             return;
         };
         turn.compacted = true;
         let ids = turn.ids.clone();
+        self.summed(true, &ids).await;
         // Claude Code says how its compaction began; Codex doesn't, so Compact says so (K4).
         let trigger = match self.compactions.contains(&ids.turn) {
             true => "manual".to_string(),

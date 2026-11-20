@@ -91,4 +91,8 @@ fails in CI when the two differ.
 | 0079 | [Agents choose where their words show](0079-agents-choose-where-their-words-show.md) | accepted | yes |
 | 0080 | [The team checks the lead's answer in the open](0080-the-team-checks-the-leads-answer-in-the-open.md) | accepted | yes |
 | 0081 | [Agents hear the room, and name each other with @Name](0081-agents-hear-the-room-and-name-each-other.md) | accepted | yes |
+| 0082 | [A message reads as SerenityOS's card](0082-a-message-reads-as-serenityos-card.md) | accepted | yes |
+| 0083 | [A hear-back carries what its giver would fetch](0083-a-hear-back-carries-what-its-giver-would-fetch.md) | accepted | yes |
+| 0084 | [A task's turn opens with its questions, and what came since its conversation last ran](0084-a-tasks-turn-opens-with-its-questions.md) | accepted | yes |
 | 0085 | [Context after a compaction](0085-context-after-compaction.md) | accepted | partly |
+| 0086 | [A turn opens with its PR's head, and failed CI with its last lines](0086-a-turn-opens-with-its-prs-head-and-failed-ci.md) | accepted | yes |

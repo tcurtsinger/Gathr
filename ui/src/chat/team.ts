@@ -68,6 +68,13 @@ export const roleName: Record<Role, string> = {
   member: 'Member',
 };
 
+/**
+ * What the chat knows an agent as, grey beside its name (0082): Gathr keeps no title of an agent's own, so its role in a
+ * team, the lead's and the reviewer's; a member's says nothing, nor does any in a chat of one (`Team.role`).
+ */
+export const titleOf = (role: Role | undefined) =>
+  role === 'supervisor' ? 'Lead' : role === 'reviewer' ? 'Reviewer' : undefined;
+
 export function list(names: string[]): string {
   return names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 }

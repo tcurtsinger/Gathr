@@ -339,6 +339,24 @@ fn the_leads_new_question_in_that_turn_takes_the_old_ones_place() {
     let waits = (r.state, r.reason.as_deref());
     assert_eq!(waits, (State::Held, Some("waiting on #6 (the person)")));
     assert_eq!(task(&conn, q).state, State::Cancelled, "not back");
+
+    // 0084: the turn Ann hears the request settle in carries #6's answer, not #4 or its place.
+    let yes = Answer {
+        task: q2.number,
+        yes: Some(true),
+        ..Default::default()
+    };
+    let sent = person::answer(&mut conn, &[yes], T).unwrap();
+    let ann = to(&sent.starts, "ann");
+    assert_eq!(ann.len(), 1, "{sent:?}");
+    let (lines, _) = gathr::tasks::questions(&conn, &ann[0].turn, None)
+        .unwrap()
+        .expect("#4 and its place");
+    assert!(
+        lines.contains("- #4 ") && lines.contains("cancelled: #6 took its place"),
+        "{lines}"
+    );
+    assert!(!lines.contains("- #6 "), "#6's answer told twice: {lines}");
 }
 
 /// F5.6 with H3.1: the question in its place isn't a second one, a question from another turn is.

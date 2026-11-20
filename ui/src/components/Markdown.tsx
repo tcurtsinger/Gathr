@@ -1,7 +1,7 @@
 import { useAuiState } from '@assistant-ui/react';
 import { StreamdownTextPrimitive } from '@assistant-ui/react-streamdown';
 import { code } from '@streamdown/code';
-import { type ComponentProps, useState } from 'react';
+import { type ComponentProps, createContext, useContext, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { defaultRehypePlugins, defaultRemarkPlugins, Streamdown } from 'streamdown';
 import { blockSplitter } from './blocks';
@@ -9,7 +9,9 @@ import './markdown.css';
 
 interface Node {
   type: string;
+  value?: string;
   children?: Node[];
+  data?: { hName: string; hProperties: { className: string } };
 }
 
 /** An agent's raw HTML is shown as the text it is, never parsed or run (0030). */
@@ -19,6 +21,39 @@ function htmlAsText() {
     node.children?.forEach(walk);
   };
   return walk;
+}
+
+/** The names of the chat's agents: an @Name of one in an agent's words reads as a mention (0082). */
+export const MentionsContext = createContext<readonly string[]>([]);
+
+const literal = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Each @Name of the chat's agents in the words' text, as the blue mention a message to an agent opens with (0072), the
+ * longest name first; never inside code or a link. A plugin from outside the registry's Markdown (0030).
+ */
+function mentions(names: readonly string[]) {
+  const sorted = [...names].sort((a, b) => b.length - a.length).map(literal);
+  const named = new RegExp(`(?<![\\w@])@(?:${sorted.join('|')})(?![\\w-])`, 'gi');
+  const split = (node: Node): Node[] => {
+    const text = node.value ?? '';
+    const out: Node[] = [];
+    let from = 0;
+    for (const hit of text.matchAll(named)) {
+      if (hit.index > from) out.push({ type: 'text', value: text.slice(from, hit.index) });
+      const data = { hName: 'span', hProperties: { className: 'mention' } };
+      out.push({ type: 'text', value: hit[0], data });
+      from = hit.index + hit[0].length;
+    }
+    if (from < text.length) out.push({ type: 'text', value: text.slice(from) });
+    return out;
+  };
+  const walk = (node: Node) => {
+    if (node.type === 'link' || !node.children) return;
+    node.children = node.children.flatMap((child) => (child.type === 'text' ? split(child) : [child]));
+    node.children.forEach(walk);
+  };
+  return () => walk;
 }
 
 const remarkPlugins = [...Object.values(defaultRemarkPlugins), htmlAsText];
@@ -51,6 +86,28 @@ export function preloadCodeBlock() {
   );
 }
 
+/**
+ * Words outside a message, a plan's text or a task's field, formatted as an agent's words in the chat are (the owner's
+ * call of 2026-11-19): the same plugins and the same rules (markdown.css), at the size of where they sit.
+ */
+export function Markdown({ text, className }: { text: string; className?: string }) {
+  return (
+    <Streamdown
+      mode="static"
+      className={className ? `markdown ${className}` : 'markdown'}
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={components}
+      linkSafety={{ enabled: false }}
+      controls={controls}
+      tableMaxHeight={Number.POSITIVE_INFINITY}
+      plugins={plugins}
+    >
+      {text}
+    </Streamdown>
+  );
+}
+
 /** An agent's text, formatted by Streamdown as it streams (0030). */
 export function MarkdownText() {
   // A reply already finished when it's drawn parses in one pass (a chat with hundreds of them opens
@@ -58,11 +115,15 @@ export function MarkdownText() {
   const running = useAuiState((s) => s.message.status?.type === 'running');
   const [mode] = useState<'static' | 'streaming'>(running ? 'streaming' : 'static');
   const [split] = useState(() => (running ? blockSplitter() : undefined));
+  const names = useContext(MentionsContext);
+  const key = names.join('\n');
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the same names make the same plugins
+  const remark = useMemo(() => (names.length ? [...remarkPlugins, mentions(names)] : remarkPlugins), [key]);
   return (
     <StreamdownTextPrimitive
       mode={mode}
       parseMarkdownIntoBlocksFn={split}
-      remarkPlugins={remarkPlugins}
+      remarkPlugins={remark}
       rehypePlugins={rehypePlugins}
       components={components}
       linkSafety={{ enabled: false }}

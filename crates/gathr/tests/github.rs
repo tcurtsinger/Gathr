@@ -99,6 +99,13 @@ fn room(data: &Path, repos: &Path, gh: Value) -> Room {
         common::briefed(review),
     ));
     assert!(given.starts_with("Task #"), "{given}");
+    let opened = "SELECT 1 FROM event_log WHERE name = 'gathr.github.read'
+                  AND json_extract(attrs, '$.op') = 'opening'";
+    common::until(30, "Vale's turn to open", || {
+        (!common::rows(data, opened).is_empty()).then_some(())
+    });
+    // That read took the first of a test's answers in turn: the tools' calls start from it again.
+    let _ = std::fs::remove_file(answers.with_extension("json.seen"));
     Room {
         _release: Release(data.join("go")),
         service,

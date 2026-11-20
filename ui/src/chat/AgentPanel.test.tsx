@@ -240,7 +240,7 @@ test('a working agent: when it began, its task, its running row opened, its earl
 
   // Newest first: what it wrote to the lead, then its earlier turn. Nobody else's blocks, nor the running one.
   const earlier = panel.getByRole('region', { name: 'Earlier in this chat' });
-  // The bubble's words, and each run's line as "> what it did".
+  // The bubble's words, and its steps line at the foot as "> what it did" (0082).
   const read = (bubble: Element | null) =>
     [...(bubble?.children ?? [])]
       .map((p) =>
@@ -254,7 +254,7 @@ test('a working agent: when it began, its task, its running row opened, its earl
   ]);
   expect(blocks).toEqual([
     ['Made-up Member', null, '@Made-up LeadMade-up question for the lead'],
-    ['Made-up Member', 'on Made-up task 7', '> Read 1 fileMade-up earlier finding'],
+    ['Made-up Member', 'on Made-up task 7', 'Made-up earlier finding> Read 1 file'],
   ]);
 
   // Its tasks, open ones first; one opens in the Tasks tab.

@@ -118,10 +118,10 @@ test('turns streaming at once never interleave, and a late reply lands in its ow
     'a-rowan',
     'a-kit',
   ]);
-  // Each block keeps every text its turn wrote, in order.
+  // Each block draws its turn's message: what it wrote after its last step (0082).
   expect(text(byId(items, 'a-ask'))).toBe('Rowan and Kit, over to you | Both are on it');
-  expect(text(byId(items, 'a-rowan'))).toBe('Cursor fixed | Rowan again');
-  expect(text(byId(items, 'a-kit'))).toBe('Checked | Kit again');
+  expect(text(byId(items, 'a-rowan'))).toBe('Rowan again');
+  expect(text(byId(items, 'a-kit'))).toBe('Kit again');
 });
 
 test('a turn waiting to start stays where its message was sent, and what comes after it keeps its place', () => {
@@ -146,7 +146,7 @@ test("a person's message sent into a running turn splits that turn's block where
   expect(text(items.at(-1))).toBe('Kept | Still checking');
 });
 
-test('a finished turn folds what it did into the panel’s row, and the chat keeps every text', () => {
+test('a finished turn folds what it did into the panel’s row, and the chat draws its message', () => {
   const state = round();
   const t0 = Date.UTC(2026, 10, 8, 10, 0, 0);
   const iso = (s: number) => new Date(t0 + s * 1000).toISOString();
@@ -166,7 +166,7 @@ test('a finished turn folds what it did into the panel’s row, and the chat kee
     { ...said('lead', 'assistant', 'Two things are left.'), time: iso(109) },
   );
   const block = byId(view(state).all, 'a-lead');
-  expect(text(block)).toBe('Two tasks are stale. | Two things are left.');
+  expect(text(block)).toBe('Two things are left.');
   const work = custom(block).work;
   expect(work).toMatchObject({
     running: false,
@@ -268,14 +268,15 @@ test('a running turn’s row says what the agent is doing now; text streaming co
   const running = custom(byId(view(state).every, 'a-kit')).work;
   expect(running).toMatchObject({ running: true, label: 'Running a command', notes: ['2 steps'] });
   expect(running?.steps[0]).toEqual({ id: expect.any(String), say: 'Checked' });
+  // While it works, what it last said reads as words above the working line (the owner's call of 2026-11-19).
   expect(text(byId(view(state).every, 'a-kit'))).toBe('Checked');
 
-  // The command ended and it writes: the row stays, the words show after what it wrote before.
+  // The command ended and it writes: the row stays, the words being written show as its message.
   state.messages[state.messages.length - 1] = tool('kit', 'k2', 'Shell');
   state.partial = { kit: 'All 360 pass' };
   const block = byId(view(state).every, 'a-kit');
   expect(custom(block).work).toMatchObject({ running: true, label: 'Working', notes: ['2 steps'] });
-  expect(text(block)).toBe('Checked | All 360 pass');
+  expect(text(block)).toBe('All 360 pass');
 });
 
 test('a turn that only wrote once has no row', () => {
@@ -694,4 +695,30 @@ test('a step opens to what it ran, whole, and the first lines of what came back 
       request: 'npx vitest run',
     },
   ]);
+});
+
+// The owner, 2026-11-19: "Pia has a second box under her???" Her turn had ended with a suite running in the background;
+// when it finished, her engine picked the work up by itself, a new turn on the same task, drawn as a second bubble.
+test('an engine’s own pick-up carries on in the bubble of the turn it continues', () => {
+  const state = round();
+  const before = ids(view(state).every);
+  // Kit's turn has ended; its engine picks the task up again, with nothing saved yet.
+  state.turns.again = turn('again', 'kit', { task: 2, answers: 'kit', opened: 'engine', status: 'running' });
+  expect(ids(view(state).every)).toEqual(before);
+  expect(custom(byId(view(state).every, 'a-kit')).line).toMatchObject({ running: true });
+  // It works and writes: the same bubble, its newest words the message.
+  state.messages.push(tool('again', 'g1', 'Shell'), said('again', 'assistant', 'Clippy is clean'));
+  expect(ids(view(state).every)).toEqual(before);
+  state.turns.again = { ...state.turns.again, status: 'done', ended: at() };
+  const kit = byId(view(state).every, 'a-kit');
+  expect(ids(view(state).every)).toEqual(before);
+  expect(text(kit)).toBe('Clippy is clean');
+  expect(custom(kit).line).toMatchObject({ running: false });
+  // The time it took covers both stretches: from when the first turn was made to when the pick-up ended.
+  const whole = Date.parse(state.turns.again.ended as string) - Date.parse(state.turns.kit.created as string);
+  expect(custom(kit).took).toBe(duration(whole));
+  // Another agent's turn that answers Kit's is its own bubble, as before.
+  state.turns.other = turn('other', 'rowan', { answers: 'kit', opened: 'engine' });
+  state.messages.push(said('other', 'assistant', 'Made-up: mine'));
+  expect(ids(view(state).every)).toContain('a-other');
 });

@@ -173,8 +173,10 @@ for (const width of [900, 360]) {
   test(`at ${width} wide, nothing moves when the buttons show`, async () => {
     const { message } = await drawn(width);
     const yes = message('Yes.');
+    // Where each part sits in the chat's list, wherever the view has scrolled to bring the bubble under the pointer.
     const parts = () => {
       const next = yes.nextElementSibling as Element;
+      const list = box(yes.closest('.thread-messages'));
       return [
         yes.querySelector('.bubble'),
         yes.querySelector('.name-line'),
@@ -182,7 +184,10 @@ for (const width of [900, 360]) {
         yes.querySelector('.react'),
         next,
         message('Made-up long words'),
-      ].map((e) => rect(box(e)));
+      ].map((e) => {
+        const b = box(e);
+        return rect(new DOMRect(b.left - list.left, b.top - list.top, b.width, b.height));
+      });
     };
     const hidden = parts();
     await userEvent.hover(yes.querySelector('.bubble') as HTMLElement);

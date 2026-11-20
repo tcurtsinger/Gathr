@@ -91,6 +91,9 @@ fn upgrading_keeps_completed_reviews_without_approving_unfinished_ones() {
                   ALTER TABLE turns DROP COLUMN result_of; ALTER TABLE messages DROP COLUMN about;
                  DROP INDEX messages_opening; DROP INDEX tasks_heard; DROP INDEX tasks_by_pr;
                   DROP TABLE reads; ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
+         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE engine_sessions DROP COLUMN summed;
                   PRAGMA user_version = 25;";
     conn.execute_batch(before).unwrap();
     drop(conn);

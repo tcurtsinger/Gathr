@@ -57,7 +57,7 @@ export function Summary(props: Props) {
   const said = headline(team);
   const label = said ? `Summary: ${said}` : 'Summary';
   const marks = useMarks();
-  const shown = (agent: string) => (marks?.archived ? undefined : marks?.turning.get(agent));
+  const shown = (agent: string) => (marks?.archived ? undefined : marks?.faces.get(agent));
   const needs = new Set(team.filter((g) => g.standing === 'needs').map((g) => g.member.agent));
   // Opening an agent moves the keyboard to its panel: closing must not bring it back to the button.
   const went = useRef(false);

@@ -1,5 +1,36 @@
 use super::*;
 
+#[test]
+fn a_report_ask_after_auto_compaction_restores_the_tasks_full_brief() {
+    let data = TempDir::new();
+    let frames = std::fs::read_to_string(common::recording("compact_claude")).unwrap();
+    let compacted = frames
+        .lines()
+        .find(|l| l.contains("compact_boundary"))
+        .unwrap()
+        .to_string();
+    let replay = played(&data.0, 12, |i, turn| {
+        if i == 0 {
+            turn.insert(turn.len() - 1, compacted.clone());
+        }
+    });
+    let room = room(&data.0, &replay, "claude", &[]);
+    let task = give_ann(&room, "Restore the brief");
+    let turn = turn_on(&room, task, 2);
+    let opened = common::replay::read_in(&data.0, turn["id"].as_str().unwrap());
+    for words in [
+        "Your conversation was compacted.",
+        "Task #1 from Lead: Restore the brief",
+        "Why: CI is red",
+        "Done when: CI on main is green",
+        "Proof: the CI run on the PR",
+        "Where: the project's worktree, on a new branch",
+        "Your last turn on task #1",
+    ] {
+        assert!(opened.contains(words), "missing {words:?}: {opened}");
+    }
+}
+
 fn compact_room() -> (TempDir, Room) {
     let data = TempDir::new();
     let frames = std::fs::read_to_string(common::recording("compact_claude")).unwrap();
@@ -35,6 +66,38 @@ fn compact_ann(room: &Room) {
 }
 
 #[test]
+fn a_failed_restoration_marker_read_is_found_from_the_turns_reference() {
+    let (data, room) = compact_room();
+    let task = give_ann(&room, "Task A");
+    compact_ann(&room);
+    let conn = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    conn.execute_batch(
+        "CREATE TRIGGER fail_summed BEFORE UPDATE OF summed ON task_sessions
+         WHEN OLD.summed = 1 AND NEW.summed = 0
+         BEGIN SELECT RAISE(FAIL, 'forced restoration marker read failure'); END;",
+    )
+    .unwrap();
+    restart(&room, task);
+    settled(&room, task, "blocked");
+    let turn = turn_on(&room, task, 3);
+    let (ok, trace) = common::gathr(&data.0, &["diag", "trace", turn["ref"].as_str().unwrap()]);
+    assert!(ok, "{trace}");
+    let event = trace["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|e| e["name"] == "gathr.context.summed")
+        .unwrap_or_else(|| panic!("{trace}"));
+    assert_eq!(event["error_type"], "sqlite", "{event}");
+    assert!(
+        event
+            .to_string()
+            .contains("forced restoration marker read failure"),
+        "{event}"
+    );
+}
+
+#[test]
 fn another_tasks_turn_does_not_take_the_compacted_conversations_restoration() {
     let (data, room) = compact_room();
     let a = give_ann(&room, "Task A");
@@ -53,6 +116,12 @@ fn another_tasks_turn_does_not_take_the_compacted_conversations_restoration() {
     assert!(
         opened.contains("Your conversation was compacted."),
         "A lost its restoration: {opened}"
+    );
+    assert!(
+        opened.contains(&format!(
+            "#{b} Ann blocked (no report: two turns ended without one): Task B"
+        )),
+        "{opened}"
     );
 }
 
@@ -97,6 +166,35 @@ fn a_compacted_conversation_gets_its_restoration_after_the_service_restarts() {
 fn after_compaction_a_task_gets_its_plan_and_open_tasks_back() {
     let (data, room) = compact_room();
     let task = give_ann(&room, "Build the notes filter");
+    let routed = text(&call_tool(
+        room.service.info.port,
+        &token_of(&room, &room.ann),
+        "ask_person",
+        json!({"what": "Which colour?", "choices": [{"label":"Blue"}, {"label":"Green"}]}),
+    ));
+    assert!(routed.contains("request #2"), "{routed}");
+    quiet(&room);
+    let filed = text(&call_tool(
+        room.service.info.port,
+        &room.lead_token(),
+        "ask_person",
+        json!({"for_task":2, "what":"Blue or green?", "choices":[{"label":"Blue"},{"label":"Green"}]}),
+    ));
+    assert!(filed.starts_with("Task #3 "), "{filed}");
+    quiet(&room);
+    let answered = room.service.send(
+        "POST",
+        "/api/person-tasks/answer",
+        json!({"answers":[{"task":3,"pick":["Blue"]}]}),
+    );
+    assert_eq!(answered.status, 200, "{}", answered.body);
+    let history = quiet(&room);
+    let before = history["turns"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| t["task"] == task)
+        .count();
     let conn = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
     conn.busy_timeout(std::time::Duration::from_secs(10))
         .unwrap();
@@ -118,16 +216,19 @@ fn after_compaction_a_task_gets_its_plan_and_open_tasks_back() {
     compact_ann(&room);
     restart(&room, task);
     settled(&room, task, "blocked");
-    let turn = turn_on(&room, task, 3);
+    let turn = turn_on(&room, task, before + 1);
     let opened = common::replay::read_in(&data.0, turn["id"].as_str().unwrap());
     for words in [
         "Plan: Find notes, version 2, approved",
         "Your task is part 3: Build the notes filter",
         &format!("#{task} Ann ready: Build the notes filter"),
+        "Questions to the person from task #1:",
+        "Blue or green?: Picked: Blue",
     ] {
         assert!(opened.contains(words), "missing {words:?}: {opened}");
     }
-    let later = turn_on(&room, task, 4);
+    assert_eq!(opened.matches("Picked: Blue").count(), 1, "{opened}");
+    let later = turn_on(&room, task, before + 2);
     let later = common::replay::read_in(&data.0, later["id"].as_str().unwrap());
     assert!(
         !later.contains("Your conversation was compacted."),

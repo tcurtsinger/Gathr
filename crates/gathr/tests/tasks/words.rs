@@ -332,11 +332,11 @@ fn a_wait_that_fires_or_expires_wakes_its_agent_with_the_kept_samples() {
     };
     let wait = waits::leave(&mut conn, &wait, T).unwrap();
     let line = "CI on #54 finished: 4 passed";
-    let starts = waits::met(&mut conn, &wait.id, line, T).unwrap();
+    let starts = waits::met(&mut conn, &wait.id, line, None, T).unwrap();
     sampled(&conn, "wait_fired: on a task", &starts[0], fired);
 
     let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();
-    let starts = waits::met(&mut conn, &wait.id, "your check came back yes", T).unwrap();
+    let starts = waits::met(&mut conn, &wait.id, "your check came back yes", None, T).unwrap();
     sampled(&conn, "wait_fired: no task", &starts[0], fired);
 
     let wait = wait_on(&mut conn, vec![part("check", "test -f done")]).unwrap();

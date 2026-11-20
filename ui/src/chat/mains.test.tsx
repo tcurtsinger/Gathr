@@ -48,12 +48,14 @@ test("the lead's answer is a main message right under yours, its plan chip in it
   const bubble = answer.querySelector('.bubble') as HTMLElement;
   const chip = bubble.querySelector('.plan-chip') as HTMLElement;
   expect(document.querySelectorAll('.plan-chip')).toHaveLength(1);
-  // The chip stands where the plan was written: before the words the lead wrote after it.
+  // The chip ends the message, after the words the lead wrote, and says where the version stands (the owner's calls
+  // of 2026-11-19).
   const words = [...bubble.querySelectorAll('p')].find((p) => p.textContent === 'Hi!') as HTMLElement;
-  expect(chip.compareDocumentPosition(words) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(words.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(chip.textContent).toMatch(/^Plan v\d+:Approved$/);
 });
 
-test("the plan's check and Gathr's lines on it read in the thread of the lead's bubble, by keyboard too", async () => {
+test("the plan's check reads in the thread of the lead's bubble, by keyboard too; the person's Approve is no line there", async () => {
   await render(<View state={chat('askAtWork')} />);
   await expect.element(page.getByText('Add the tags table')).toBeVisible();
   const answer = mainEls()[1];
@@ -66,12 +68,12 @@ test("the plan's check and Gathr's lines on it read in the thread of the lead's 
     .poll(() => replies().map((r) => r.querySelector('.name-line-name')?.textContent))
     .toContain('Rev');
   const rev = replies().find((r) => r.querySelector('.name-line-name')?.textContent === 'Rev') as Element;
-  const approved = replies().find((r) => r.textContent?.includes('Approved')) as Element;
-  for (const reply of [rev, approved])
-    expect(answer.compareDocumentPosition(reply) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(answer.compareDocumentPosition(rev) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   // Before the next main message: in this thread.
   const next = mainEls()[2];
-  expect(approved.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(rev.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // The version's chip says Approved; Gathr says no line of its own for it.
+  expect(replies().filter((r) => r.textContent?.includes('Approved'))).toEqual([]);
 });
 
 /** The lead's turn `id`, opened by Gathr's `opening` words if any, and answering with `words`, at minute `at`. */
@@ -162,7 +164,9 @@ test("your message into the lead's running turn: what it says after is a main me
   await render(<View state={state} />);
   await expect.element(page.getByText('Made-up after it')).toBeVisible();
   const last = mainEls().slice(-4);
-  expect(last.map((m) => m.querySelector('.bubble')?.textContent)).toEqual([
+  // The words of each bubble; the running turn's working line stays at its foot (0082).
+  const words = (m: Element) => m.querySelector('.bubble > :not(.work)')?.textContent;
+  expect(last.map(words)).toEqual([
     'Made-up first ask',
     'Made-up start',
     'Made-up second word',
@@ -298,7 +302,7 @@ test("a main message's thumbs-up sits in the row under its bubble, after the rep
   const state = chat('askAtWork');
   await render(<View state={liked(state, state.plans[0].versions[0].message as string)} />);
   await expect.poll(() => document.querySelector('.said-foot .react')).not.toBeNull();
-  const main = mainWith('version 1');
+  const main = mainWith('Plan v1:');
   const row = main.querySelector('.said-foot') as HTMLElement;
   expect(main.querySelectorAll('.reacts')).toHaveLength(1);
   const line = (row.querySelector('.fold-line') as HTMLElement).getBoundingClientRect();
@@ -398,6 +402,41 @@ test('a main message right after the same speaker’s main message is not named 
   await expect.element(page.getByText('Made-up two')).toBeVisible();
   expect(mainWith('Made-up one').querySelector('.name-line-name')?.textContent).toBe('Lead');
   expect(mainWith('Made-up two').querySelector('.name-line-name')).toBeNull();
+});
+
+// The owner, 2026-11-19: the lead's second plan had no name while the replies under its first were folded, and had
+// one once they were open.
+test('a main message after one with a thread is named, whether that thread is folded or open', async () => {
+  const base = chat('askDone');
+  const one = leadTurn(base, 'one', null, 'Made-up one', 1);
+  const two = leadTurn(one, 'two', 'Made-up: a wait ended', 'Made-up two', 2);
+  const member = two.members[1].agent;
+  const check = {
+    id: 'chk',
+    agent: member,
+    status: 'done',
+    why: null,
+    ref: 'chk',
+    position: 91.5,
+    topic: 'b:one',
+  };
+  const said: Message = {
+    id: 'chk-1',
+    turn: 'chk',
+    time: later(base, 90),
+    role: 'assistant',
+    kind: 'text',
+    body: 'Made-up check',
+  };
+  const state = { ...two, turns: { ...two.turns, chk: check as Turn }, messages: [...two.messages, said] };
+  await render(<View state={state} />);
+  await expect.element(page.getByText('Made-up two')).toBeVisible();
+  const fold = foldOf(mainWith('Made-up one')) as HTMLButtonElement;
+  const named = () => mainWith('Made-up two').querySelector('.name-line-name')?.textContent;
+  for (const open of [fold.getAttribute('aria-expanded'), undefined]) {
+    if (open === undefined) await fold.click();
+    expect(named(), `open: ${fold.getAttribute('aria-expanded')}`).toBe('Lead');
+  }
 });
 
 test('an old chat, tied by task and answers alone, reads as main messages with threads', async () => {

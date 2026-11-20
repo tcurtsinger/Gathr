@@ -151,6 +151,11 @@ const KEPT: &[(&str, i64, &str)] = &[
         "8946f889d56b743fea86f1cfc5e61c8b33e3816cbe6ec17319157dc667336fa8",
     ),
     (
+        "hear_back",
+        4,
+        "7ef9b6ebec5c9c754ee2f8d226d97d436234db9d028e4dab6ca7cd053d563e06",
+    ),
+    (
         "role",
         2,
         "4d7a91ab2650d7e8842e4655a884a90b4758e6fff2f976174b18a2fa7a3b8df4",
@@ -164,6 +169,16 @@ const KEPT: &[(&str, i64, &str)] = &[
         "last_word",
         1,
         "a57edb981d9f7a821156c834bb42398b3cf6d7918fd21ad5e810cae25440f6ae",
+    ),
+    (
+        "check",
+        2,
+        "72fa2db387d90be17ce050d8b3184cbb66c7eed24bc93a73d33be8d74cf96407",
+    ),
+    (
+        "last_word",
+        2,
+        "6bed4d345a91141b49f1028daf788459ab4a23e316be45b3b5b360b91fbff28b",
     ),
 ];
 /// Every file that asserts samples.

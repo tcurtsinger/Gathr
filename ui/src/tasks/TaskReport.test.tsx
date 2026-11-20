@@ -152,8 +152,9 @@ test('a task shows its why, its brief, its order and its last edit', async () =>
     edited_us,
     edited: ['what', 'after'],
   });
-  expect(await fields(briefed)).toEqual([
-    'Why: Review #2 by Bo left these notes on PR #7:\n- Unasked: src/cache.rs: a cache',
+  // Formatted as the chat's words are: the note is a bullet, its dash drawn as the list's dot, on a line of its own.
+  expect((await fields(briefed)).map((f) => f.replace(/\s+/g, ' ').trim())).toEqual([
+    'Why: Review #2 by Bo left these notes on PR #7: Unasked: src/cache.rs: a cache',
     'Done when: A CSV opens in a spreadsheet',
     'Proof: the CI run on the PR',
     "Where: the project's worktree, on a new branch",

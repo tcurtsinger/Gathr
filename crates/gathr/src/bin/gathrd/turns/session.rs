@@ -2,6 +2,8 @@
 //! `task_sessions`; every other turn in the agent's latest. An engine holds one conversation, so a
 //! turn on another closes it first, the gentle way.
 
+use std::collections::HashMap;
+
 use gathr::event::Event;
 use gathr::redact::redact;
 use gathr::sessions::{Conversation, Key};
@@ -13,19 +15,27 @@ use super::{Assignment, Ids, Queued, Task};
 #[derive(Default)]
 pub(super) struct Session {
     /// The id it resumed, or the one its first Init reported (N3).
-    id: Option<String>,
+    pub id: Option<String>,
     /// The task it was opened for: each Init writes that task's row (N5).
     pub task: Option<i64>,
     /// It resumed `id` and no Init has come yet: a turn that fails now was refused the id (N8).
     resuming: bool,
     /// The turn put back after a refused resume: a second refusal fails it.
     requeued: Option<String>,
+    /// The head each conversation was told of each PR, by its session id and PR: not told again
+    /// while it stands, whichever task's turn runs in it.
+    pub told_heads: HashMap<(String, i64), String>,
+    /// Heads told before the engine said its session: kept under it at its Init.
+    pub told_unsaid: Vec<(i64, String)>,
 }
 
 impl Session {
     /// The engine said its session: the task whose row takes it (N5).
     pub fn init(&mut self, id: &str) -> Option<i64> {
-        self.id.get_or_insert_with(|| id.to_string());
+        let id = self.id.get_or_insert_with(|| id.to_string());
+        for (pr, head) in self.told_unsaid.drain(..) {
+            self.told_heads.insert((id.clone(), pr), head);
+        }
         self.resuming = false;
         self.task
     }
@@ -138,6 +148,7 @@ impl Task {
     pub(super) async fn opened(&mut self, choice: &Conversation, resumed: Option<String>) {
         self.session.resuming = resumed.is_some();
         self.session.id = resumed;
+        self.session.told_unsaid.clear();
         self.session.task = task_of(choice);
         let from = match choice {
             Conversation::Latest => return,
@@ -170,7 +181,8 @@ impl Task {
     }
 
     /// What a turn is sent before its ask, never saved: what the team chat said that the agent
-    /// hasn't heard (0081), and in a new conversation's first turn, the opening (N6) before that.
+    /// hasn't heard (0081) and its task's questions to the person, and in a new conversation's first
+    /// turn, the opening (N6) before that.
     pub(super) async fn opening(
         &mut self,
         next: &Queued,
@@ -184,17 +196,21 @@ impl Task {
         }
         // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
-        let summed = self.summed(false).await;
-        let heard = self.heard(&next.ids, new || summed).await;
-        let text = match &heard {
-            Some(heard) => format!("{heard}\n\n{text}"),
-            None => text,
+        let summed = self.summed(false, &next.ids).await;
+        // An engine opened again on a task's conversation goes on from that conversation's last turn.
+        let resumed = match choice {
+            Conversation::Resume { session, .. } if fresh => Some(session.clone()),
+            _ => None,
         };
+        let (heard, asked) = self.heard(&next.ids, new || summed, resumed).await;
+        let github = self.github_opening(&next.ids, choice, new || summed).await;
         let text = if summed {
             self.recalled(&next.ids, text).await
         } else {
             text
         };
+        let said = [heard.clone(), asked, github, Some(text)];
+        let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
             return text;
@@ -221,6 +237,10 @@ impl Task {
 
     async fn recalled(&self, ids: &Ids, text: String) -> String {
         let (turn, chat, agent) = (ids.turn.clone(), ids.chat.clone(), ids.agent.clone());
+        let (task, ask) = (
+            ids.task,
+            text.lines().next().unwrap_or_default().to_string(),
+        );
         let read = self
             .chats
             .writer
@@ -229,17 +249,16 @@ impl Task {
                 if let Some(plan) = gathr::plans::recall(c, &turn)? {
                     lines.push(plan);
                 }
-                lines.push("Your open tasks:".to_string());
-                let open = gathr::tasks::list(c, &chat)?
-                    .into_iter()
-                    .filter(|t| t.owner == agent && !t.state.settled());
-                let tasks = open
-                    .map(|t| gathr::tasks::listed_line(c, &t))
-                    .collect::<Result<Vec<_>, _>>()?;
-                if tasks.is_empty() {
-                    lines.push("No open tasks.".into());
+                lines.push(gathr::tasks::listed(c, &chat, agent.as_deref())?);
+                if let Some(task) = task {
+                    let t = gathr::tasks::get(c, task)?
+                        .ok_or(gathr::Error::Refused(format!("No task #{task}")))?;
+                    let giver = gathr::tasks::owner_name(c, t.giver.as_deref())?;
+                    let brief = gathr::tasks::task_brief(c, &t, &giver, t.carry.as_deref())?;
+                    if brief.lines().next() != Some(ask.as_str()) {
+                        lines.push(brief);
+                    }
                 }
-                lines.extend(tasks);
                 Ok::<_, gathr::Error>(lines.join("\n"))
             })
             .await;
@@ -259,7 +278,7 @@ impl Task {
     }
 
     /// Save a compaction, or consume it on this same conversation's next opening.
-    pub(super) async fn summed(&self, mark: bool) -> bool {
+    pub(super) async fn summed(&self, mark: bool, ids: &Ids) -> bool {
         let (Some(session), Some(assigned)) = (self.session.id.clone(), self.assigned.as_ref())
         else {
             return false;
@@ -286,6 +305,7 @@ impl Task {
             failed => {
                 self.record(
                     Event::point("gathr.context.summed")
+                        .trace(&ids.trace)
                         .chat(&assigned.chat)
                         .error("sqlite")
                         .attr("why", format!("{failed:?}")),

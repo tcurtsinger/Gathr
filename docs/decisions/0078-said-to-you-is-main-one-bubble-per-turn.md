@@ -2,7 +2,8 @@
 
 Status: accepted (owner, 2026-11-19: the chat-shape mock-up's structure A, "Said to you is main", and the build
 plan's question 1 answered: Gathr's words that open a turn are quoted at the top of that turn's bubble). Date:
-2026-11-19.
+2026-11-19. Amended by [0082](0082-a-message-reads-as-serenityos-card.md): a bubble draws the turn's message and its
+chips, and its other words and its steps are one line at its foot, no longer every piece in order.
 
 Built: yes (the rule in the service, one bubble per turn and its quote in the window, an unmarked thread seen up to the main line's mark, a plan check's findings chip in the checker's bubble; agents' own choice is a later step). Proof: `crates/gathr/tests/topics.rs`, `crates/gathr/src/topics/tests.rs`, `crates/gathr/tests/solo.rs`, `crates/gathr/tests/picked.rs`, `crates/gathr/tests/pauses.rs`, `crates/gathr/tests/coordination.rs`, `crates/gathr/tests/likes.rs`, `ui/src/chat/mains.test.tsx`, `ui/src/chat/reads.test.ts`, `ui/src/chat/Like.test.tsx`, `ui/src/chat/findings.test.tsx`.
 

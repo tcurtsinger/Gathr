@@ -6,12 +6,14 @@ use rusqlite::{Connection, OptionalExtension};
 use crate::Error;
 use crate::tasks::name_of;
 
-/// How a check that holds up or finds nothing ends, and how an objection reads.
-fn verdict(message: &str, author: &str) -> String {
+/// How a check that holds up or finds nothing ends, and how an objection reads. The answer is named
+/// by `answer`, never by its id, which an agent then wrote into its words (0082).
+fn verdict(author: &str) -> String {
     format!(
-        "If it holds up, give message {message} a thumbs-up with react and write nothing. If something in it is \
-         wrong, missing or claimed without evidence, say what in a few lines with your evidence, quoting the line \
-         you answer as \"> {author}: their words\"."
+        "If it holds up, call react with message \"answer\" and end your turn: that thumbs-up is your whole check, \
+         so write nothing, not even what you checked. If something in it is wrong, missing or claimed without \
+         evidence, say what in a few lines with your evidence, quoting the line you answer as \"> {author}: their \
+         words\"."
     )
 }
 
@@ -69,8 +71,8 @@ pub(super) fn check(
                  a proof that proves nothing) and what the ask doesn't need, with file and line."
             ),
             format!("The person asked: {asked}"),
-            format!("The plan, message {answer}:\n{body}"),
-            verdict(answer, &author),
+            format!("The plan:\n{body}"),
+            verdict(&author),
         ],
         None => [
             format!(
@@ -79,17 +81,17 @@ pub(super) fn check(
                  isn't a check, and \"it works\" with no proof is a claim without evidence."
             ),
             format!("The person asked: {asked}"),
-            format!("{author}'s answer, message {answer}:\n{body}"),
+            format!("{author}'s answer:\n{body}"),
             format!(
                 "{} If there's nothing to check, such as small talk, write nothing.",
-                verdict(answer, &author)
+                verdict(&author)
             ),
         ],
     };
     Ok(lines.join("\n"))
 }
 
-/// The lead's last word on its answer `answer`, with each member's words that questioned it.
+/// The lead's last word on its answer `answer`, with each member's message that questioned it.
 pub(super) fn last_word(
     conn: &Connection,
     answer: &str,
@@ -109,7 +111,7 @@ pub(super) fn last_word(
         |r| r.get(0),
     )?;
     let mut lines = vec![format!(
-        "{} questioned your answer, message {answer}:",
+        "{} questioned your answer:",
         crate::waiting::words::list(&names)
     )];
     lines.push(said.join("\n\n"));

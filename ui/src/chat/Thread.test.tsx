@@ -165,7 +165,9 @@ const said = (id: string, role: 'user' | 'assistant', body: string): Message => 
 const turn = (status: Turn['status']): Record<string, Turn> => ({
   t: { id: 't', status, why: null, ref: 'r1', agent: 'a1' },
 });
-const order = () => [...document.querySelectorAll('.bubble')].map((e) => e.textContent);
+// Each bubble's words: a running turn's working line stays at its foot (0082).
+const order = () =>
+  [...document.querySelectorAll('.bubble')].map((e) => e.querySelector(':scope > :not(.work)')?.textContent);
 
 test('a message sent into a running turn keeps the reply before it, and the next reply comes after it', async () => {
   const before = [

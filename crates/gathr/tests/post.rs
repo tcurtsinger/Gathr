@@ -451,6 +451,10 @@ fn the_upgrade_from_0058_keeps_every_rowid_the_search_index_and_each_turns_place
              ('m3', 'c', 'work', 20, 'gathr', 'text', 'Task #1 from Mira: Count the herons'),
              ('m4', 'c', 'work', 21, 'assistant', 'text', 'Nine herons');
          ALTER TABLE turns DROP COLUMN placed; DROP TABLE open_checks;
+         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by;
+         ALTER TABLE engine_sessions DROP COLUMN summed;
+         ALTER TABLE task_sessions DROP COLUMN summed;
          PRAGMA user_version = 58;",
     )
     .unwrap();

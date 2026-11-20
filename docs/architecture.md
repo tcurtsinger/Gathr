@@ -19,7 +19,13 @@ Claude Code uses a long-lived stream-json process; Codex uses a long-lived app-s
 Each agent has at most one engine on one conversation at a time. A member's task has a conversation of its own (`task_sessions`,
 [0055](decisions/0055-a-members-task-starts-in-a-new-session.md)); the lead has one per chat. In a team chat each turn's opening carries
 the chat's lines the agent hasn't heard, and `@Name` in an agent's words wakes that member when its turn ends
-([0081](decisions/0081-agents-hear-the-room-and-name-each-other.md)). Switching closes the old process gently;
+([0081](decisions/0081-agents-hear-the-room-and-name-each-other.md)). A turn woken by failed CI (a wait, or a PR Gathr
+can't land) opens with the failed jobs' last lines at the commit that failed, and a turn on a task's PR with its branch,
+head and files, once per head in that conversation ([0086](decisions/0086-a-turn-opens-with-its-prs-head-and-failed-ci.md)). Switching closes the old process gently;
+After compaction, the conversation's next turn restores its plan state and open tasks, and on a task
+its brief, all questions and answers, and fresh PR facts. Its pending marker follows the session across
+task switches and service restarts; role retention remains unverified on both engines
+([0085](decisions/0085-context-after-compaction.md)).
 Stop uses the provider's interrupt. The turn boundary uses a `Driver` enum and shared `Frame` values,
 not the originally planned shared trait. Shared process cleanup follows 0031.
 [0001](decisions/0001-engine-interface.md), [0031](decisions/0031-short-programs-end-together.md),

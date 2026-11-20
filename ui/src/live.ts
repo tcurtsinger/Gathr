@@ -43,9 +43,13 @@ export type LiveEvent =
       answers?: string | null;
       held?: 'pause' | 'usage' | 'update' | 'claude' | 'codex' | null;
       created?: string;
+      /** When it ended, on its end (0082). */
+      ended?: string | null;
       position?: number | null;
       topic?: string | null;
       result_of?: string | null;
+      /** The kind of Gathr's words that opened it, as history carries it (0080). */
+      opened?: string | null;
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }

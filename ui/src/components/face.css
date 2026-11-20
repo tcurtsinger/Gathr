@@ -127,8 +127,9 @@
 .mark[data-state="free"] {
   --c: var(--free);
 }
-/* Working turns only where it says what is happening now: the top line and the agent's latest message. Calm and
-   thin, one turn every 1.6s; still under reduced motion. */
+/* Working turns on every face of an agent at work and beside its chat in the sidebar (the owner's call of
+   2026-11-19); a task's state word keeps its mark still. Calm and thin, one turn every 1.6s; still under reduced
+   motion. */
 .mark[data-spin] > svg {
   animation: mark-turn 1.6s linear infinite;
 }

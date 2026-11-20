@@ -6,13 +6,20 @@ member's restarted task and the lead's no-task turn. Role retention is unverifie
 
 Promise 8.4: the first turn after a compaction receives the plan's version and state,
 the part its task belongs to, its open tasks in list_tasks' words, and the whole task
-record. Restore these from the service's records rather than asking a summary to keep them.
-Ordinary turns keep their existing opening.
+record: its brief, all questions and answers, and fresh PR facts. Reuse `tasks::questions` with
+no cutoff and `github_opening` with its fresh flag; restore the brief when the turn's own ask
+doesn't already carry it. Restore these from service records rather than trusting a summary.
+The restored task list is exactly `list_tasks`' snapshot from the same function, including the
+agent's blocked, failed and stopped tasks, outdated reviews and its waits. Ordinary turns keep
+their existing opening.
 
 A pending restoration belongs to the conversation: `task_sessions` and `engine_sessions`
 keep its marker alongside the provider session id and account. A different task's turn cannot
 take it, and a service restart cannot lose it. The first opening of that conversation clears
 all rows pointing to it. Replacing a row with another session clears its old marker.
+
+Migration 0063 adds the marker to both session tables. Published migrations 0061 and 0062
+keep their slots. Existing databases start with no pending marker.
 
 The service seam in `tests/sessions/compacted.rs` proves what the test engine receives after
 compaction, using the sessions tests' task/conversation setup. `tests/context.rs` covers compaction

@@ -1,12 +1,13 @@
-// A turn's block in the chat as Claude's app reads it (the owner's call of 2026-11-19): inside the agent's one bubble,
-// its words where it wrote them, each run of steps between them one quiet line, and the working line while it runs.
-// When the turn ends nothing moves.
+// A turn's block in the chat as SerenityOS's card reads it (0082, the owner's "Inside the steps"): in the agent's one
+// bubble, its message (the words after its last step), and at the foot one line for every step and every piece of
+// narration, in order. Its name line says its title and how long it took. Made-up names and words only.
 import { useRef } from 'react';
 import { expect, test } from 'vitest';
 import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Message } from '../api';
-import { agents, alone, custom, opened, round, said, task, tool } from './madeUp';
+import { MentionsContext } from '../components/Markdown';
+import { agents, alone, custom, opened, people, round, said, task, tool } from './madeUp';
 import { toThread } from './messages';
 import { noActions } from './recorded';
 import type { ChatState } from './state';
@@ -15,21 +16,23 @@ import { Thread } from './Thread';
 function View({ state }: { state: ChatState }) {
   const cache = useRef(new Map());
   return (
-    <div style={{ height: 900, width: 900, display: 'flex' }}>
-      <Thread
-        messages={toThread(state, agents, [], cache.current, opened).items}
-        running={false}
-        actions={noActions}
-        empty={false}
-      />
-    </div>
+    <MentionsContext value={people}>
+      <div style={{ height: 900, width: 900, display: 'flex' }}>
+        <Thread
+          messages={toThread(state, agents, [], cache.current, opened).items}
+          running={false}
+          actions={noActions}
+          empty={false}
+        />
+      </div>
+    </MentionsContext>
   );
 }
 
-const bubbleOf = (agent: string) =>
-  document.querySelector(`.thread-messages .said[data-agent="${agent}"] .bubble`);
+const blockOf = (agent: string) => document.querySelector(`.thread-messages .said[data-agent="${agent}"]`);
+const bubbleOf = (agent: string) => blockOf(agent)?.querySelector('.bubble');
 
-/** What an agent's bubble reads, piece by piece: its words, and "> " before each run's line ("Working" while it runs). */
+/** What an agent's bubble reads, piece by piece: its words, and "> " before the steps line's label. */
 const read = (agent: string) =>
   [...(bubbleOf(agent)?.children ?? [])].map((piece) => {
     if (!piece.matches('.work')) return piece.textContent?.trim();
@@ -54,78 +57,73 @@ const words = (text: string) => said('rowan', 'assistant', text);
 test('a running turn with no message yet draws its agent’s bubble with the working line; a queued one draws nothing', async () => {
   const screen = await render(<View state={rowan([], 'running')} />);
   await expect.poll(() => read('rowan')).toEqual(['> Working']);
-  expect(bubbleOf('rowan')?.closest('.said')?.querySelector('.name-line-name')?.textContent).toBe('Rowan');
+  expect(blockOf('rowan')?.querySelector('.name-line-name')?.textContent).toBe('Rowan');
 
   await screen.rerender(<View state={rowan([], 'queued')} />);
-  await expect.poll(() => bubbleOf('rowan')).toBeNull();
+  await expect.poll(() => bubbleOf('rowan')).toBeFalsy();
 });
 
-test('words, then a tool call while the turn runs: the words stay in the chat, the working line under them', async () => {
-  const msgs = [words('I’ll read the plan first.'), tool('rowan', 'r1', 'Read', { status: 'running' })];
-  await render(<View state={rowan(msgs, 'running')} />);
-  await expect.poll(() => read('rowan')).toEqual(['I’ll read the plan first.', '> Working']);
-  // Its latest step, under the working line.
-  await expect.element(page.getByText('Reading a file')).toBeVisible();
-});
-
-/** Words, three steps, words, three commands (the last still running unless `ended`), then final words once ended. */
-function worked(ended: boolean) {
-  return [
+test('words before a later step are narration in the line at the foot; the message is what came after the last step', async () => {
+  const msgs = [
     words('I’ll read the plan first.'),
     tool('rowan', 's1', 'Read'),
-    tool('rowan', 's2', 'Read'),
-    tool('rowan', 's3', 'Bash'),
+    tool('rowan', 's2', 'Bash'),
     words('The plan misses one case. Checking it.'),
-    tool('rowan', 's4', 'Bash'),
-    tool('rowan', 's5', 'Bash'),
-    tool('rowan', 's6', 'Bash', { status: ended ? 'ok' : 'running' }),
-    ...(ended ? [words('Done. The plan needs one more part.')] : []),
+    tool('rowan', 's3', 'Bash'),
+    words('Done. The plan needs one more part.'),
+    // Gathr's calls that only report or place are no step: the words before them stay the message.
+    tool('rowan', 's4', 'mcp__gathr__react'),
+    tool('rowan', 's5', 'mcp__gathr__finish_task'),
   ];
-}
-
-const finished = [
-  'I’ll read the plan first.',
-  '> Read 2 files, ran 1 command',
-  'The plan misses one case. Checking it.',
-  '> Ran 3 commands',
-  'Done. The plan needs one more part.',
-];
-
-test('words, steps, words, steps, words read in that order, each run one line that opens to its steps', async () => {
-  const screen = await render(<View key="thread" state={rowan(worked(true))} />);
   for (const one of [false, true]) {
-    await screen.rerender(<View key={String(one)} state={rowan(worked(true), 'done', one)} />);
+    const screen = await render(<View key={String(one)} state={rowan(msgs, 'done', one)} />);
     await expect
       .poll(() => [one ? 'a chat of one' : 'in a thread', ...read('rowan')])
-      .toEqual([one ? 'a chat of one' : 'in a thread', ...finished]);
-    const line = page.getByRole('button', { name: 'Read 2 files, ran 1 command' });
-    await line.click();
-    const run = (bubbleOf('rowan') as Element).querySelectorAll('.work')[0];
-    await expect.poll(() => run.querySelectorAll('li').length).toBe(3);
-    await expect.element(screen.getByRole('button', { name: /^Ran a command/ }).first()).toBeVisible();
+      .toEqual([
+        one ? 'a chat of one' : 'in a thread',
+        'Done. The plan needs one more part.',
+        '> Read 1 file, ran 2 commands',
+      ]);
+    // Open, the line lists the narration and each step in the order they came.
+    await page.getByRole('button', { name: 'Read 1 file, ran 2 commands' }).click();
+    const entries = () =>
+      [...(bubbleOf('rowan')?.querySelectorAll('.work li') ?? [])].map((li) =>
+        li.querySelector('.work-say')
+          ? `"${li.textContent}"`
+          : // A Tool call keeps its running label beside its finished one, faded out: the finished one is read.
+            (li.textContent ?? '').replace(/^[A-Z][a-z]+ing [^A-Z]*/, '').trim(),
+      );
+    await expect
+      .poll(entries)
+      .toEqual([
+        '"I’ll read the plan first."',
+        'Read a file',
+        'Ran a command',
+        '"The plan misses one case. Checking it."',
+        'Ran a command',
+        'Gave a thumbs-up',
+        'Finished its task',
+      ]);
+    expect(bubbleOf('rowan')?.lastElementChild?.matches('.work')).toBe(true);
+    await screen.unmount();
   }
 });
 
-test('when the turn ends nothing moves: the same pieces in the same places, the last run’s line its finished words', async () => {
-  const screen = await render(<View state={rowan(worked(false), 'running')} />);
-  await expect.poll(() => read('rowan')).toEqual([...finished.slice(0, 3), '> Working']);
-  const first = page.getByText('I’ll read the plan first.').element();
-  const line = (bubbleOf('rowan') as Element).querySelector('.work') as Element;
-  // Within the bubble: the chat itself scrolls to keep its foot as the final words come.
-  const placed = () => {
-    const top = (bubbleOf('rowan') as Element).getBoundingClientRect().top;
-    return [first, line].map((el) => el.getBoundingClientRect().top - top);
-  };
-  const before = placed();
-
-  await screen.rerender(<View state={rowan(worked(true))} />);
-  await expect.poll(() => read('rowan')).toEqual(finished);
-  expect(page.getByText('I’ll read the plan first.').element()).toBe(first);
-  expect((bubbleOf('rowan') as Element).querySelector('.work')).toBe(line);
-  expect(placed()).toEqual(before);
+test('a finished turn that wrote nothing after its last step has its last words as its message', async () => {
+  const msgs = [
+    words('First, the list.'),
+    tool('rowan', 's1', 'Bash'),
+    words('The filter ignores tags.'),
+    tool('rowan', 's2', 'Read'),
+  ];
+  await render(<View state={rowan(msgs)} />);
+  await expect
+    .poll(() => read('rowan'))
+    .toEqual(['The filter ignores tags.', '> Ran 1 command, read 1 file']);
+  expect(bubbleOf('rowan')?.textContent).not.toContain('First, the list.');
 });
 
-test('a run’s line counts what it did by kind: three kinds at most, then "and N more"; a thought reads as itself', () => {
+test('the steps line counts by kind: three kinds at most, then "and N more"; a thought reads as itself', () => {
   const thought = (id: string, ms: number): Message => ({
     id,
     turn: 'rowan',
@@ -134,34 +132,45 @@ test('a run’s line counts what it did by kind: three kinds at most, then "and 
     kind: 'thinking',
     body: { status: 'done', duration_ms: ms },
   });
-  const state = rowan([
-    thought('t1', 9_000),
-    words('One'),
-    tool('rowan', 'a1', 'Read'),
-    tool('rowan', 'a2', 'Edit'),
-    tool('rowan', 'a3', 'Write'),
-    tool('rowan', 'a4', 'Bash'),
-    tool('rowan', 'a5', 'Grep'),
-    tool('rowan', 'a6', 'WebFetch'),
-    words('Two'),
-    tool('rowan', 'g1', 'mcp__gathr__give_task'),
-    tool('rowan', 'g2', 'mcp__gathr__give_task'),
-    thought('t2', 4_000),
-    words('Three'),
-    tool('rowan', 'b1', 'Grep'),
-    tool('rowan', 'b2', 'Glob'),
-    words('Four'),
-  ]);
-  state.tasks = [...state.tasks, task(8, 'kit', 'rowan'), task(9, 'lane', 'rowan')];
-  const block = toThread(state, agents, [], new Map(), opened).every.find((m) => m.id === 'a-rowan');
-  expect(custom(block).pieces?.map((p) => ('run' in p ? p.run.label : 'words' in p && p.words))).toEqual([
-    'Thought for 9s',
-    0,
-    'Read 1 file, edited 2 files, ran 1 command and 2 more',
-    1,
-    'Gave 2 tasks',
-    2,
-    '2 steps',
-    3,
-  ]);
+  const line = (msgs: Message[], tasks = 0) => {
+    const state = rowan([...msgs, words('Four')]);
+    state.tasks = [...state.tasks, ...[task(8, 'kit', 'rowan'), task(9, 'lane', 'rowan')].slice(0, tasks)];
+    const block = toThread(state, agents, [], new Map(), opened).every.find((m) => m.id === 'a-rowan');
+    return custom(block).line?.label;
+  };
+  const many = ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'WebFetch'].map((t, i) => tool('rowan', `a${i}`, t));
+  expect(line(many)).toBe('Read 1 file, edited 2 files, ran 1 command and 2 more');
+  const gave = ['g1', 'g2'].map((id) => tool('rowan', id, 'mcp__gathr__give_task'));
+  expect(line(gave, 2)).toBe('Gave 2 tasks');
+  expect(line([tool('rowan', 'b1', 'Grep'), tool('rowan', 'b2', 'Glob')])).toBe('2 steps');
+  expect(line([thought('t1', 9_000)])).toBe('Thought for 9s');
+});
+
+test('the name line says the lead’s and the reviewer’s title, and how long a finished turn took', async () => {
+  const state = rowan([words('Cursor fixed')]);
+  const made = state.turns.rowan.created as string;
+  state.turns.rowan = { ...state.turns.rowan, ended: new Date(Date.parse(made) + 74_000).toISOString() };
+  const screen = await render(<View state={state} />);
+  const title = (agent: string) => blockOf(agent)?.querySelector('.name-line-title')?.textContent;
+  await expect.poll(() => title('mira')).toBe('Lead');
+  expect(title('rowan')).toBeUndefined();
+  expect(blockOf('rowan')?.querySelector('.name-line-took')?.textContent).toBe('1m 14s');
+
+  // While it runs, the working line has the time: the name line none.
+  await screen.rerender(<View state={rowan([words('Cursor fixed')], 'running')} />);
+  await expect.poll(() => read('rowan')).toEqual(['Cursor fixed', '> Working']);
+  expect(blockOf('rowan')?.querySelector('.name-line-took')).toBeNull();
+});
+
+test('an @Name of the chat’s in an agent’s words reads as the blue mention; any other @word stays text', async () => {
+  await render(<View state={rowan([words('@Kit can you look at `@Mira`? @Nobody knows.')])} />);
+  await expect.poll(() => bubbleOf('rowan')?.querySelectorAll('.mention').length).toBe(1);
+  expect(bubbleOf('rowan')?.querySelector('.mention')?.textContent).toBe('@Kit');
+});
+
+test('a quote in an agent’s words is upright and muted beside its rule, not Markdown’s italic', async () => {
+  await render(<View state={rowan([words('> Mira: the plan holds.\n\nIt misses one case.')])} />);
+  await expect.poll(() => bubbleOf('rowan')?.querySelector('blockquote')).toBeTruthy();
+  const quote = getComputedStyle(bubbleOf('rowan')?.querySelector('blockquote') as Element);
+  expect([quote.fontStyle, quote.borderLeftStyle]).toEqual(['normal', 'solid']);
 });

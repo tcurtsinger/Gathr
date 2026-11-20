@@ -26,6 +26,13 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
+/* "Plan v2:" at 600, then where the version stands; what waits on the person in the colour of what does. */
+.plan-chip strong {
+  font-weight: 600;
+}
+.plan-chip .waits {
+  color: var(--accent);
+}
 
 /* The plan's tab: a task's page, its parts as Tasks rows (0062 H5.4, the plan-tab mock-up). */
 .plan-versions {
@@ -52,9 +59,9 @@
 }
 .plan-text {
   margin: 0 0 18px;
-  font-size: 15px;
-  line-height: 1.6;
-  white-space: pre-wrap;
+  /* The chat's reading size and leading (0082): the plan's text is formatted as an agent's words there are. */
+  font-size: 15.5px;
+  line-height: 1.65;
   overflow-wrap: anywhere;
 }
 /* An answer under its finding, an answer under its question. */

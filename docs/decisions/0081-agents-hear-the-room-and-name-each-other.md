@@ -39,7 +39,9 @@ agent has to think of. The owner chose to port SerenityOS's way whole (2026-11-1
   carried into its turns: its conversation has those.
 - **Since when** is read from what Gathr records, with no migration: the newest turn of the agent in the chat that
   started (it has a place), by when it was made. A line said between that turn being queued and it starting is heard
-  again; a line is never missed.
+  again; a line is never missed. Since [0084](0084-a-tasks-turn-opens-with-its-questions.md), when the engine opens
+  again on a task's conversation, it is the newest such turn in that conversation, and the agent's own lines said
+  in another conversation since are heard too.
 - **Whole or cut.** The lead hears every line whole: checking the work is its job. A member hears whole the person's
   lines, Gathr's, the lead's, its own and a line that names it with `@Name`; another member's line is cut to its
   first sentence, 160 characters at most, ending "…", and one line says "(Lines not for you are cut to their first
@@ -105,6 +107,5 @@ agent has to think of. The owner chose to port SerenityOS's way whole (2026-11-1
 
 - Not tried on real engines: whether agents name each other unasked, and whether they talk better for hearing the
   room. 0066 calls for a new trial when the briefing around its lines changes, and this changes it: not run.
-- A member's conversation for one task hears what came since its last turn in the chat, which may have been in
-  another conversation: lines said between are then missed by that conversation.
-- A task's own record at its turn's opening (its questions, reviews and reports, part 8.2): this is the chat's lines.
+- A task's own record at its turn's opening (part 8.2): this is the chat's lines. Its questions and answers came with
+  [0084](0084-a-tasks-turn-opens-with-its-questions.md); its reviews and reports are not in it.

@@ -16,8 +16,8 @@ use super::server::{Tools, caller_of};
 
 #[derive(serde::Deserialize, schemars::JsonSchema)]
 pub struct React {
-    /// The message's id, as read_chat or a message to you gives it, or `person` for the person's
-    /// message your turn answers.
+    /// The message's id, as read_chat or a message to you gives it, `person` for the person's
+    /// message your turn answers, or in a check `answer` for the answer you check.
     message: String,
 }
 
@@ -25,8 +25,9 @@ pub struct React {
 impl Tools {
     #[tool(
         description = "Agree with the person's message or another agent's in this chat: puts your thumbs-up on it, by \
-                       its id, or `person` for the person's message your turn answers. It posts nothing and wakes \
-                       nobody. To say more than that you agree, send a message instead."
+                       its id, `person` for the person's message your turn answers, or in a check `answer` for the \
+                       answer you check. It posts nothing and wakes nobody. To say more than that you agree, send a \
+                       message instead."
     )]
     async fn react(
         &self,
@@ -55,6 +56,7 @@ impl Tools {
                 gathr::archive::refuse_archived(&tx, &chat)?;
                 let asked = match asked.as_str() {
                     "person" => gathr::reactions::persons(&tx, &on.turn)?,
+                    "answer" => gathr::open_check::answer_of(&tx, &on.turn)?,
                     _ => asked,
                 };
                 let added = gathr::reactions::add(&tx, &chat, &asked, &giver, &on.trace)?;
@@ -63,7 +65,7 @@ impl Tools {
                 Ok((added, checked))
             })
             .await?;
-        // Named by the message it is on: `person`, or Gathr's copy, stands for that one.
+        // Named by the message it is on: `person`, `answer`, or Gathr's copy, stands for that one.
         let message = &added.message;
         if !added.new {
             return Ok(format!("{message} already has your thumbs-up."));

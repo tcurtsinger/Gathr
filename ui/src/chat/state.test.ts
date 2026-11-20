@@ -104,6 +104,42 @@ test('a thumbs-up both in the history and held from the socket shows once', () =
   expect(fromLoad(loaded, work, held).reactions).toEqual([kept, later]);
 });
 
+// Seen in use, 2026-11-19: a check turn followed live had no `opened`, so Gathr's words to its agent were drawn as a
+// line and then as the bubble's quote, and its Checked line was missing until a reload.
+test('a live turn keeps what opened it, as a reload reads it (0080)', () => {
+  const queued: LiveEvent = {
+    type: 'turn',
+    chat: 'c',
+    turn: 'k1',
+    status: 'queued',
+    agent: 'b',
+    answers: 't1',
+    opened: 'check',
+  };
+  const running: LiveEvent = { type: 'turn', chat: 'c', turn: 'k1', status: 'running', agent: 'b' };
+  expect(apply(apply(empty, queued), running).turns.k1.opened).toBe('check');
+});
+
+// The last change of this kind failed live: the reducer dropped a field the live event carried (0082's brief).
+test('a live turn keeps when it was made and when it ended, through every later event of it', () => {
+  const made = '2026-11-19T10:00:00Z';
+  const turn = (status: 'queued' | 'running' | 'done', more = {}): LiveEvent => ({
+    type: 'turn',
+    chat: 'c',
+    turn: 'k1',
+    status,
+    agent: 'b',
+    ...more,
+  });
+  const steps = [
+    turn('queued', { created: made }),
+    turn('running'),
+    turn('done', { ended: '2026-11-19T10:00:14Z' }),
+  ];
+  const state = steps.reduce(apply, empty);
+  expect([state.turns.k1.created, state.turns.k1.ended]).toEqual([made, '2026-11-19T10:00:14Z']);
+});
+
 test("a live context update moves that member's fill and window alone", () => {
   const state = {
     ...empty,

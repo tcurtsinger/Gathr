@@ -314,8 +314,19 @@ pub fn looked(
 }
 
 /// What one wait waited on has happened: a part is `met`, and its wait fires once every part is.
-pub fn met(conn: &mut Connection, id: &str, line: &str, trace: &str) -> Result<Vec<Start>, Error> {
+/// `failed_at`: the commit whose CI had failed, which the turn it wakes opens with.
+pub fn met(
+    conn: &mut Connection,
+    id: &str,
+    line: &str,
+    failed_at: Option<&str>,
+    trace: &str,
+) -> Result<Vec<Start>, Error> {
     let tx = conn.transaction()?;
+    tx.execute(
+        "UPDATE waits SET failed_at = ?2 WHERE id = ?1 AND state = 'open'",
+        params![id, failed_at],
+    )?;
     let starts = met_in(&tx, id, line, trace)?;
     tx.commit()?;
     Ok(starts)
@@ -514,7 +525,15 @@ fn fire(
     }
     let at = (wait.chat.as_str(), wait.agent.as_str());
     let on = (wait.task, wait.left_in.as_deref());
-    Ok(vec![Start::queue(tx, at, on, Opened::WaitFired, text)?])
+    let start = Start::queue(tx, at, on, Opened::WaitFired, text)?;
+    tx.execute(
+        "UPDATE turns SET failed_ci = (
+             SELECT NULLIF(json_group_array(json_object('commit', failed_at, 'repo', repo, 'cwd', cwd)), '[]')
+             FROM waits WHERE (id = ?2 OR part_of = ?2) AND failed_at IS NOT NULL)
+         WHERE id = ?1",
+        params![start.turn, wait.id],
+    )?;
+    Ok(vec![start])
 }
 
 fn ids(conn: &Connection, sql: &str, p: impl rusqlite::Params) -> Result<Vec<String>, Error> {

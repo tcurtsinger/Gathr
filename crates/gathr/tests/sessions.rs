@@ -5,6 +5,8 @@
 mod common;
 #[path = "sessions/compacted.rs"]
 mod compacted;
+#[path = "sessions/record.rs"]
+mod record;
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -657,17 +659,21 @@ fn reviewed_with_a_wrong_note(room: &Room, rev: &str, pr: i64) -> i64 {
 
 /// A Background frame naming one command, as Claude Code sends while it runs.
 const BACKGROUND: &str = r#"{"dir":"out","line":"{\"type\":\"system\",\"subtype\":\"background_tasks_changed\",\"tasks\":[{\"task_id\":\"b1\",\"description\":\"a ping\"}],\"session_id\":\"x\"}"}"#;
+/// The same frame once the command has ended.
+const BACKGROUND_DONE: &str = r#"{"dir":"out","line":"{\"type\":\"system\",\"subtype\":\"background_tasks_changed\",\"tasks\":[],\"session_id\":\"x\"}"}"#;
 
 /// N4: under a background command the engine never closes: a task that would open New takes the
-/// open conversation as its own, and a resumed task's row stays as it was.
+/// open conversation as its own, and a resumed task's row stays as it was. Once the command ends and
+/// that task resumes its own, it hears what came since it last ran there, not since its turn in the
+/// other (0084).
 #[test]
 fn no_switch_while_a_background_command_runs() {
     let data = TempDir::new();
-    // An engine's third turn starts a command that never ends.
-    let recording = played(&data.0, 12, |i, turn| {
-        if i == 2 {
-            turn.insert(2, BACKGROUND.to_string());
-        }
+    // An engine's third turn starts a command, and its sixth (Task 3's) ends it.
+    let recording = played(&data.0, 12, |i, turn| match i {
+        2 => turn.insert(2, BACKGROUND.to_string()),
+        5 => turn.insert(2, BACKGROUND_DONE.to_string()),
+        _ => {}
     });
     let room = room(&data.0, &recording, "claude", &[]);
     give_ann(&room, "Task 1");
@@ -709,6 +715,18 @@ fn no_switch_while_a_background_command_runs() {
         (&json!(first), &json!("background")),
         "{kept:?}"
     );
+
+    // The command has ended: task 2 goes back to its own conversation, which last ran before the
+    // ping was asked for. Its turn in the open one doesn't count.
+    restart(&room, 2);
+    settled(&room, 2, "blocked");
+    assert_eq!(starts(&room, &room.ann).len(), 4, "task 2 resumed its own");
+    let sql = "SELECT id FROM turns WHERE task = 2 AND opened_by != 'report_ask'
+               ORDER BY created_ts DESC LIMIT 1";
+    let turn = rows(&room.data, sql)[0]["id"].as_str().unwrap().to_string();
+    let read = common::replay::read_in(&room.data, &turn);
+    let heard = common::replay::escaped("Person: Start the ping");
+    assert!(read.contains(&heard), "since its turn in the other: {read}");
 }
 
 /// The live `context` updates for `agent`, collected as they come.

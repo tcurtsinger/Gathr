@@ -26,6 +26,7 @@ import {
 } from '../api';
 import { Composer } from '../components/Composer';
 import { FaceCards } from '../components/FaceCard';
+import { MentionsContext } from '../components/Markdown';
 import { first as firstPick, kept as keptPicks, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
 import { report } from '../report';
@@ -200,9 +201,10 @@ export function ChatView(props: Props) {
   const waiting = useWaiting(fresh || archived ? undefined : chat.id, pauses);
   const crew = glances(state, activity(timeline.every), waiting, before.current);
   before.current = crew;
-  const marks = useChatMarks(crew, timeline.items, archived);
+  const marks = useChatMarks(crew, archived);
+  const names = useMemo(() => state.members.map((m) => m.name), [state.members]);
   // Who the message box can name, and who gets a message that names nobody: there is no picker.
-  const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.still };
+  const room = { members, agents, project: !!chat.project, fresh, last, marks: marks.faces };
   const people = nameable(room);
   const fallback = unnamed(people, members, last);
   const to = addressed(picks, people, fallback, { fresh });
@@ -395,126 +397,130 @@ export function ChatView(props: Props) {
 
   return (
     <MarksContext value={marks}>
-      <FaceCards>
-        <TopLine>
-          <div className="topline-title">
-            <h1>{chat.title}</h1>
-            {!fresh && (
-              <ChatMenu
-                pause={{
-                  state: run.state,
-                  all: run.scope?.scope === 'app',
-                  onPause: () => act('pause', thisChat),
-                  onResume: () => act('resume', run.scope ?? thisChat),
-                }}
-                archived={archived}
-                onArchive={props.onArchive}
-                onRestore={onRestore}
-                onDelete={props.onDelete}
-                className="head-button"
-                align="start"
-              />
-            )}
-            {archived && <small className="topline-state">Archived</small>}
-          </div>
-          <div className="topline-actions">
-            {team && (
-              <Summary
-                state={state}
-                team={crew}
-                open={summary}
-                onOpen={setSummary}
-                pauses={pauses}
-                onPause={act}
-                onOpenAgent={actions.openAgent}
-                waiting={waiting}
-                onNeeds={toNeed}
-              />
-            )}
-            {headerEnd}
-          </div>
-        </TopLine>
-        <main className="chat" aria-label={chat.title}>
-          {props.notice}
-          <div className="chat-body">
-            <Thread
-              messages={timeline.items}
-              running={!!turn}
-              actions={actions}
-              target={target}
-              onTarget={props.onFound}
-              questions={questions}
-              box={reply.box}
-              reads={reads}
-              empty={loaded && state.messages.length === 0 && failed.length === 0}
-              after={!archived && <RunLine run={run} members={state.members} />}
-              header={
-                loadFailure && (
-                  <FailureNotice
-                    failure={loadFailure}
-                    onReference={actions.reference}
-                    action={
-                      <Button type="button" variant="outline" onClick={reload}>
-                        Retry
+      <MentionsContext value={names}>
+        <FaceCards>
+          <TopLine>
+            <div className="topline-title">
+              <h1>{chat.title}</h1>
+              {!fresh && (
+                <ChatMenu
+                  pause={{
+                    state: run.state,
+                    all: run.scope?.scope === 'app',
+                    onPause: () => act('pause', thisChat),
+                    onResume: () => act('resume', run.scope ?? thisChat),
+                  }}
+                  archived={archived}
+                  onArchive={props.onArchive}
+                  onRestore={onRestore}
+                  onDelete={props.onDelete}
+                  className="head-button"
+                  align="start"
+                />
+              )}
+              {archived && <small className="topline-state">Archived</small>}
+            </div>
+            <div className="topline-actions">
+              {team && (
+                <Summary
+                  state={state}
+                  team={crew}
+                  open={summary}
+                  onOpen={setSummary}
+                  pauses={pauses}
+                  onPause={act}
+                  onOpenAgent={actions.openAgent}
+                  waiting={waiting}
+                  onNeeds={toNeed}
+                />
+              )}
+              {headerEnd}
+            </div>
+          </TopLine>
+          <main className="chat" aria-label={chat.title}>
+            {props.notice}
+            <div className="chat-body">
+              <Thread
+                messages={timeline.items}
+                running={!!turn}
+                actions={actions}
+                target={target}
+                onTarget={props.onFound}
+                questions={questions}
+                box={reply.box}
+                reads={reads}
+                empty={loaded && state.messages.length === 0 && failed.length === 0}
+                after={!archived && <RunLine run={run} members={state.members} />}
+                header={
+                  loadFailure && (
+                    <FailureNotice
+                      failure={loadFailure}
+                      onReference={actions.reference}
+                      action={
+                        <Button type="button" variant="outline" onClick={reload}>
+                          Retry
+                        </Button>
+                      }
+                    />
+                  )
+                }
+              >
+                {fresh && (
+                  <label className="project-pick">
+                    <Folder aria-hidden="true" />
+                    <select
+                      aria-label="Project"
+                      value={chat.project ?? ''}
+                      onChange={(e) =>
+                        e.target.value === 'new' ? onNewProject() : onProject(e.target.value)
+                      }
+                    >
+                      <option value="">No project</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                      <option value="new">New project</option>
+                    </select>
+                  </label>
+                )}
+                {archived ? (
+                  <>
+                    {restoreFailure && (
+                      <FailureNotice failure={restoreFailure} onReference={actions.reference} />
+                    )}
+                    <div className="archived-line">
+                      Archived
+                      <Button size="sm" variant="outline" onClick={onRestore}>
+                        Restore
                       </Button>
-                    }
-                  />
-                )
-              }
-            >
-              {fresh && (
-                <label className="project-pick">
-                  <Folder aria-hidden="true" />
-                  <select
-                    aria-label="Project"
-                    value={chat.project ?? ''}
-                    onChange={(e) => (e.target.value === 'new' ? onNewProject() : onProject(e.target.value))}
-                  >
-                    <option value="">No project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                    <option value="new">New project</option>
-                  </select>
-                </label>
-              )}
-              {archived ? (
-                <>
-                  {restoreFailure && (
-                    <FailureNotice failure={restoreFailure} onReference={actions.reference} />
-                  )}
-                  <div className="archived-line">
-                    Archived
-                    <Button size="sm" variant="outline" onClick={onRestore}>
-                      Restore
-                    </Button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {!fresh && <NewPill onGo={goTo} />}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {!fresh && <NewPill onGo={goTo} />}
 
-                  <Composer
-                    draft={draft}
-                    picks={picks}
-                    onDraft={onDraft}
-                    onSend={sendDraft}
-                    onStop={turn ? () => act('stop', thisChat) : undefined}
-                    inputRef={input}
-                    hint={fallback ? `Message ${fallback.name}` : 'Message'}
-                    people={people}
-                    to={to}
-                  />
-                </>
-              )}
-            </Thread>
-          </div>
-        </main>
-        {beside}
-        {panel()}
-      </FaceCards>
+                    <Composer
+                      draft={draft}
+                      picks={picks}
+                      onDraft={onDraft}
+                      onSend={sendDraft}
+                      onStop={turn ? () => act('stop', thisChat) : undefined}
+                      inputRef={input}
+                      hint={fallback ? `Message ${fallback.name}` : 'Message'}
+                      people={people}
+                      to={to}
+                    />
+                  </>
+                )}
+              </Thread>
+            </div>
+          </main>
+          {beside}
+          {panel()}
+        </FaceCards>
+      </MentionsContext>
     </MarksContext>
   );
 }

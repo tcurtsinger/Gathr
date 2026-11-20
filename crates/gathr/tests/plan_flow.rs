@@ -181,6 +181,17 @@ fn a_plan_is_checked_in_the_open_and_offered_after_the_last_word(engine: &str) {
         "{trace}"
     );
 
+    // A check names what it agrees with as `answer` (0082); a turn that checks nothing has none.
+    let answer = json!({ "message": "answer" });
+    let refused = call_tool(port, &lead, "react", answer.clone());
+    assert_eq!(refused["isError"], true, "{refused}");
+    assert!(
+        text(&refused).starts_with(
+            "react failed: only a check has an answer to agree with: give the message's id. (ref "
+        ),
+        "{refused}"
+    );
+
     // The lead's turn ends: Ann and Rev, who took no part, each get a check turn.
     go_on(&data.0, 0);
     turns_are(&service, &chat, |t| {
@@ -199,12 +210,7 @@ fn a_plan_is_checked_in_the_open_and_offered_after_the_last_word(engine: &str) {
         nth(&data.0.join("env.jsonl"), 2),
     );
     let agreer = first["GATHR_AGENT_TOKEN"].as_str().unwrap().to_string();
-    let reacted = text(&call_tool(
-        port,
-        &agreer,
-        "react",
-        json!({ "message": version }),
-    ));
+    let reacted = text(&call_tool(port, &agreer, "react", answer));
     assert_eq!(
         reacted,
         format!(

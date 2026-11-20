@@ -488,43 +488,7 @@ impl Tools {
         let started = Instant::now();
         let (chat, agent) = (caller.chat.clone(), caller.agent.clone());
         let listed = self
-            .db(move |c| {
-                // Its own stopped tasks too: it can still report on them (0047). And its own
-                // reviews that went out of date: it records them again on the same task.
-                let mine = |t: &tasks::Task| {
-                    let stopped =
-                        matches!(t.state, State::Blocked | State::Failed | State::Stopped);
-                    let stale = t.kind == Kind::Review && t.state == State::Done && t.outdated;
-                    t.owner.is_some() && t.owner == agent && (stopped || stale)
-                };
-                let open = tasks::list(c, &chat)?
-                    .into_iter()
-                    .filter(|t| !t.state.settled() || mine(t));
-                let mut lines: Vec<String> = open
-                    .map(|t| tasks::listed_line(c, &t))
-                    .collect::<Result<_, _>>()?;
-                if lines.is_empty() {
-                    lines.push("No open tasks.".into());
-                }
-                for w in waits::in_chat(c, &chat, agent.as_deref())? {
-                    if w.state == "open" {
-                        let parts = w.parts.len() as i64;
-                        let name = tasks::wait_name(c, &w.kind, w.target.as_deref(), parts)?;
-                        let mut line = format!("Wait {}: {name}. Next: {}", w.id, w.then_do);
-                        // What it is seen to wait on, and a look that can't be made: neither
-                        // waits unseen (G101).
-                        if let Some(saw) = w.saw() {
-                            line.push_str(&format!(". Last look: {saw}"));
-                        }
-                        if let Some((failed, error)) = w.failing() {
-                            let looks = if failed == 1 { "look" } else { "looks" };
-                            line.push_str(&format!(". The last {failed} {looks} failed: {error}"));
-                        }
-                        lines.push(line);
-                    }
-                }
-                Ok((lines.join("\n"), Vec::new()))
-            })
+            .db(move |c| Ok((tasks::listed(c, &chat, agent.as_deref())?, Vec::new())))
             .await;
         Ok(self.answer(&caller, "list_tasks", started, listed).await)
     }
