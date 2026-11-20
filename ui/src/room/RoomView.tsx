@@ -22,7 +22,7 @@ import { WorkspaceToggle } from '../components/workspace';
 import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
 import { Questions } from './Question';
-import { people as peopleOf, Room } from './Room';
+import { type Found, people as peopleOf, Room } from './Room';
 import { RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
@@ -60,6 +60,8 @@ interface Props {
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;
+  /** The message a search hit opened the chat at. */
+  found?: Found;
   /** Whether the sidebar is open, as the person left it in this chat; unset, it opens with more than one agent. */
   sidebar?: boolean;
   onSidebar: (open: boolean) => void;
@@ -112,6 +114,7 @@ export function RoomView(props: Props) {
   const thisChat: PauseScope = { scope: 'chat', target: chat.id };
   const stop = () => attempt(() => props.onPause('stop', thisChat));
   const run = runOf(props.pauses, chat.id);
+  const resume = () => attempt(() => props.onPause('resume', run.scope ?? thisChat));
   const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('diagnostics'));
   const acts = {
     approve,
@@ -132,7 +135,7 @@ export function RoomView(props: Props) {
                 state: run.state,
                 all: run.scope?.scope === 'app',
                 onPause: () => attempt(() => props.onPause('pause', thisChat)),
-                onResume: () => attempt(() => props.onPause('resume', run.scope ?? thisChat)),
+                onResume: resume,
               }}
               archived={!!chat.archived}
               onArchive={props.onArchive}
@@ -164,6 +167,7 @@ export function RoomView(props: Props) {
           state={state}
           people={team}
           acts={acts}
+          found={props.found}
           header={
             failure && (
               <FailureNotice
@@ -213,6 +217,14 @@ export function RoomView(props: Props) {
                   onProject={props.onProject}
                   onNewProject={props.onNewProject}
                 />
+              )}
+              {!fresh && run.state !== 'running' && (
+                <p className="room-run" role="status">
+                  {run.state === 'pausing' ? 'Pausing…' : run.state === 'paused' ? 'Paused' : 'Stopped'}
+                  <Button size="sm" variant="outline" onClick={resume}>
+                    {run.state === 'stopped' ? 'Restart' : 'Resume'}
+                  </Button>
+                </p>
               )}
               <Composer
                 draft={draft}

@@ -1,7 +1,7 @@
 //! What keeps an agent's turns from starting, and the person's Stop now (0010, F10): a pause holds
-//! the turns Gathr queued (never the person's own message), a usage limit holds the account's
-//! turns until 30 s after its reset, and Stop now ends what runs in a scope with a carry-on that
-//! waits for Restart. Also the turn Claude Code starts by itself when a background command ends,
+//! the turns Gathr queued (the person's own message only if it was queued before Stop now), a usage
+//! limit holds the account's turns until 30 s after its reset, and Stop now ends what runs in a
+//! scope with a carry-on that waits for Restart. Also the turn Claude Code starts by itself when a background command ends,
 //! and the flag on a turn that makes no progress.
 
 use std::time::{Duration, Instant};
@@ -240,6 +240,15 @@ impl Task {
             quiet_us: None,
             stopped: true,
         }];
+        // The person's messages already queued in the scope wait for Restart too: only what they
+        // send after the stop runs.
+        for queued in &mut self.queue {
+            let (chat, agent) = (&queued.ids.chat, queued.ids.agent.as_deref());
+            if pauses::holding(&pause, chat, agent).is_some() {
+                queued.ids.person = false;
+            }
+        }
+        self.mark_holds().await;
         let Some(chat) = self.assigned.as_ref().map(|a| a.chat.clone()) else {
             return;
         };
