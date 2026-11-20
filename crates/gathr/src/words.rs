@@ -13,7 +13,7 @@ pub const REQUEST_BRIEF: i64 = 2;
 pub const REPORT_ASK: i64 = 1;
 pub const HEAR_BACK: i64 = 4;
 pub const ANSWERED: i64 = 2;
-pub const WAKE: i64 = 1;
+pub const WAKE: i64 = 2;
 pub const SILENT: i64 = 1;
 pub const WAIT_FIRED: i64 = 1;
 pub const STALE: i64 = 1;
@@ -156,4 +156,19 @@ impl Opened {
             Opened::Person | Opened::Teammate | Opened::Compaction | Opened::Engine => None,
         }
     }
+}
+
+/// What a turn Gathr queued `waited_us` before it started says first, when that is 2 minutes or
+/// more: a wake's "not moving for" aged while it waited. With `lines`, the chat's lines below it
+/// say what changed since.
+pub fn late(waited_us: i64, lines: bool) -> Option<String> {
+    if waited_us < 120_000_000 {
+        return None;
+    }
+    let ago = crate::waiting::words::ago(waited_us);
+    let since = match lines {
+        true => " The chat's lines below say what changed since.",
+        false => "",
+    };
+    Some(format!("Gathr queued this turn {ago} ago.{since}"))
 }

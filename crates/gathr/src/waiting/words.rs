@@ -13,7 +13,7 @@ pub(crate) fn list(names: &[&str]) -> String {
 }
 
 /// How long ago, to the minute.
-fn ago(us: i64) -> String {
+pub(crate) fn ago(us: i64) -> String {
     let minutes = us.max(0) / 60_000_000;
     match minutes {
         0 => "under a minute".to_string(),
