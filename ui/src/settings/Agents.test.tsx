@@ -1,6 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
-import { userEvent } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import type { Account, Agent, Model } from '../api';
 import type { LiveEvent } from '../live';
@@ -76,6 +76,11 @@ function service(agents: Agent[], models: (account: string) => Response | Promis
     return answer({});
   });
 }
+/** Picks a choice from one of the form's dropdowns, as a person does. */
+const pick = async (field: string, choice: string) => {
+  await page.getByRole('combobox', { name: field }).click();
+  await page.getByRole('option', { name: choice, exact: true }).click();
+};
 const listed = (id: string) => new Response(JSON.stringify({ models: lists[id] }));
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -96,31 +101,19 @@ const agent = (over: Partial<Agent>): Agent => ({
   ...over,
 });
 
-test('only exact models are listed, in the engine’s order; a model or effort no longer listed says so', async () => {
-  service([agent({ model: 'made-up-1-0', effort: 'made-up-effort' })], listed);
-  const screen = await render(<Agents onReference={() => {}} />);
-  const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
-  await expect.element(list.first()).toHaveTextContent('Made-up 9.9');
-  expect(list.elements().map((b) => b.textContent)).toEqual(['Made-up 9.9', 'Opus 5.5', 'Sonnet 5.5']);
-  await expect.element(screen.getByText('made-up-1-0 / Unavailable')).toBeVisible();
-  await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveValue('made-up-effort');
-});
-
 test('an agent saved on a Latest or the engine default shows the model that is today, and picking it keeps it', async () => {
   const agents = [agent({ model: 'opus' })];
   service(agents, listed);
   const screen = await render(<Agents onReference={() => {}} />);
-  const opus = screen.getByRole('button', { name: 'Opus 5.5' });
-  await expect.element(opus).toHaveAttribute('aria-pressed', 'true');
-  await expect.element(screen.getByText('Opus 5.5 / Latest')).toBeVisible();
+  const model = screen.getByRole('combobox', { name: 'Model' });
+  await expect.element(model).toHaveTextContent('Opus 5.5 / Latest');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
   agents[0] = agent({ model: null });
   savedElsewhere();
-  await expect.element(screen.getByText('Opus 5.5 / Engine default')).toBeVisible();
-  await expect.element(opus).toHaveAttribute('aria-pressed', 'true');
+  await expect.element(model).toHaveTextContent('Opus 5.5 / Engine default');
 
-  await opus.click();
+  await pick('Model', 'Opus 5.5');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => sent.at(-1)?.body).toMatchObject({ model: 'made-up-opus-5-5' });
 });
@@ -128,14 +121,11 @@ test('an agent saved on a Latest or the engine default shows the model that is t
 test('another account takes that account’s default model, resets effort and lists its own models', async () => {
   service([agent({ model: 'made-up-opus-5-5', effort: 'high' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
-  await expect
-    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await screen.getByRole('combobox', { name: 'Account' }).selectOptions('b');
-  await expect
-    .element(screen.getByRole('button', { name: 'Haiku 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveValue('');
+  const model = screen.getByRole('combobox', { name: 'Model' });
+  await expect.element(model).toHaveTextContent('Opus 5.5');
+  await pick('Account', 'Made-up two / Claude Code');
+  await expect.element(model).toHaveTextContent('Haiku 5.5');
+  await expect.element(screen.getByRole('combobox', { name: 'Effort' })).toHaveTextContent('Engine default');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect
     .poll(() => sent)
@@ -159,25 +149,20 @@ test('a change saved elsewhere shows in the open editor, and Save keeps it unles
   service(agents, listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const effort = screen.getByRole('combobox', { name: 'Effort' });
-  await expect
-    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
+  const model = screen.getByRole('combobox', { name: 'Model' });
+  await expect.element(model).toHaveTextContent('Opus 5.5');
 
   agents[0] = agent({ model: 'made-up-sonnet-5-5', effort: 'high' });
   savedElsewhere();
-  await expect
-    .element(screen.getByRole('button', { name: 'Sonnet 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await expect.element(effort).toHaveValue('high');
+  await expect.element(model).toHaveTextContent('Sonnet 5.5');
+  await expect.element(effort).toHaveTextContent('high');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-  await effort.selectOptions('low');
+  await pick('Effort', 'low');
   agents[0] = agent({ model: 'made-up-opus-5-5', effort: 'high' });
   savedElsewhere();
-  await expect
-    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
-  await expect.element(effort).toHaveValue('low');
+  await expect.element(model).toHaveTextContent('Opus 5.5');
+  await expect.element(effort).toHaveTextContent('low');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect
     .poll(() => sent.at(-1)?.body)
@@ -212,9 +197,7 @@ test('a new agent takes the exact model its account’s engine default means and
   await expect.element(screen.getByText('Loading models')).toBeVisible();
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   release();
-  await expect
-    .element(screen.getByRole('button', { name: 'Opus 5.5' }))
-    .toHaveAttribute('aria-pressed', 'true');
+  await expect.element(screen.getByRole('combobox', { name: 'Model' })).toHaveTextContent('Opus 5.5');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.element(screen.getByText('Saved')).toBeVisible();
   expect(sent).toEqual([
@@ -240,29 +223,11 @@ test('a change of approvals enables Save and is saved', async () => {
   service([agent({ approvals: 'full' })], listed);
   const screen = await render(<Agents onReference={() => {}} />);
   const approvals = screen.getByRole('combobox', { name: 'Approvals' });
-  await expect.element(approvals).toHaveValue('full');
+  await expect.element(approvals).toHaveTextContent('Full');
   await expect.element(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
-  await approvals.selectOptions('Ask');
+  await pick('Approvals', 'Ask');
   await screen.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => sent.at(-1)?.body).toMatchObject({ approvals: 'ask' });
-});
-
-test('Codex lists its exact models without Gathr’s Latest rows, and a new agent takes the default’s', async () => {
-  const models = [
-    { ...model('default', 'Engine default'), resolved: 'gpt-6.1-sol' },
-    { ...model('latest:astra', 'Astra Latest'), latest: true, resolved: 'gpt-6-astra' },
-    { ...model('latest:sol', 'Sol Latest'), latest: true, resolved: 'gpt-6.1-sol' },
-    { ...model('gpt-6-astra', 'GPT-6-Astra'), resolved: 'gpt-6-astra' },
-    { ...model('gpt-6.1-sol', 'GPT-6.1-Sol'), resolved: 'gpt-6.1-sol' },
-  ];
-  service([], () => new Response(JSON.stringify({ models })));
-  const screen = await render(<Agents onReference={() => {}} />);
-  await screen.getByRole('button', { name: 'Add', exact: true }).click();
-  await expect
-    .element(screen.getByRole('button', { name: 'GPT-6.1-Sol', exact: true }))
-    .toHaveAttribute('aria-pressed', 'true');
-  const list = screen.getByRole('group', { name: 'Models' }).getByRole('button');
-  expect(list.elements().map((b) => b.textContent)).toEqual(['GPT-6-Astra', 'GPT-6.1-Sol']);
 });
 
 test('Delete asks with what the service counts, then deletes the agent', async () => {

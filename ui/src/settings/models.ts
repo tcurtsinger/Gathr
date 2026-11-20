@@ -20,7 +20,7 @@ export const choices = (models: Model[]): Choice[] =>
 const saved = (models: Model[], model: string | null) => models.find((m) => m.id === (model ?? DEFAULT));
 
 /** The exact model an agent runs today: its own, or the one its engine default or Latest means now. */
-export function runs(models: Model[], model: string | null): string | null {
+function runs(models: Model[], model: string | null): string | null {
   const exact = saved(models, model)?.resolved ?? model;
   return choices(models).some((c) => c.id === exact) ? (exact ?? null) : null;
 }
@@ -32,7 +32,7 @@ export const firstChoice = (models: Model[]) => runs(models, null) ?? choices(mo
 export const efforts = (models: Model[], model: string | null) => saved(models, model)?.efforts ?? [];
 
 /**
- * How the chosen model reads above the list. An agent saved before on its engine's default or a Latest
+ * How the chosen model reads in the closed Model dropdown. An agent saved before on its engine's default or a Latest
  * says which model that is today; a saved model the engine no longer lists says so.
  */
 export function chosen(models: Model[], model: string | null) {

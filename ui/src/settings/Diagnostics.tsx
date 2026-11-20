@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Failure, type TurnEvent, type TurnTimeline } from '../api';
+import { Dropdown } from '../components/Dropdown';
 import { FailureNotice, Notice } from '../components/Notice';
 import { facts, said, seconds, steps } from './timeline';
 import './diagnostics.css';
@@ -89,14 +90,13 @@ function Turns({ chat, title, turn }: Omit<Props, 'reference'>) {
       <div className="diagnostics-head">
         <h3 id="diagnostics-title">{title ?? 'Diagnostics'}</h3>
         <div className="toolbar">
-          <label>
-            Turns{' '}
-            <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-              {filters.map((f) => (
-                <option key={f}>{f}</option>
-              ))}
-            </select>
-          </label>
+          <label htmlFor="diagnostics-filter">Turns</label>
+          <Dropdown
+            id="diagnostics-filter"
+            value={filter}
+            onChange={(v) => setFilter(v as Filter)}
+            choices={filters.map((f) => ({ value: f, label: f }))}
+          />
           <label>
             Find{' '}
             <input value={find} placeholder="Turn or reference" onChange={(e) => setFind(e.target.value)} />

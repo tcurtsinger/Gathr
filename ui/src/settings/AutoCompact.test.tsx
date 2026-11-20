@@ -1,5 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { AutoCompact } from './AutoCompact';
 
@@ -24,19 +25,22 @@ test("auto-compact saves when picked, Engine's own as none; a refused pick says 
   const opened: string[] = [];
   const screen = await render(<AutoCompact onReference={(ref) => opened.push(ref)} />);
   const pick = screen.getByRole('combobox', { name: 'Auto-compact' });
-  await expect.element(pick).toHaveValue('500000');
-  expect(pick.element().textContent).toBe("200K300K400K500K (default)Engine's own");
+  const choose = async (choice: string) => {
+    await pick.click();
+    await page.getByRole('option', { name: choice, exact: true }).click();
+  };
+  await expect.element(pick).toHaveTextContent('500K (default)');
 
-  await pick.selectOptions('200K');
+  await choose('200K');
   await expect.poll(() => sent).toEqual([{ auto_compact: 200000 }]);
-  await pick.selectOptions("Engine's own");
+  await choose("Engine's own");
   await expect.poll(() => sent).toEqual([{ auto_compact: 200000 }, { auto_compact: null }]);
-  await expect.element(pick).toHaveValue('none');
+  await expect.element(pick).toHaveTextContent("Engine's own");
 
   refuse = true;
-  await pick.selectOptions('300K');
+  await choose('300K');
   await expect.element(screen.getByText('made-up refusal')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
-  await expect.element(pick).toHaveValue('none');
+  await expect.element(pick).toHaveTextContent("Engine's own");
 });

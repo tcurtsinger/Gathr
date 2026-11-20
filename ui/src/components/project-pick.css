@@ -8,11 +8,11 @@
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.project-pick svg {
+.project-pick > svg {
   width: 15px;
   height: 15px;
 }
-.project-pick select {
+.project-pick .dropdown {
   padding: 4px 8px;
   border: 0;
   background: transparent;

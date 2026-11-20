@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react
 import { Button } from '@/components/ui/button';
 import { type Account, type Agent, type Approvals, api, type Failure, type Model } from '../api';
 import { danger } from '../components/Confirm';
+import { Dropdown } from '../components/Dropdown';
 import { Help } from '../components/Help';
 import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
@@ -10,7 +11,7 @@ import { report, timeToPaint } from '../report';
 import { engineName } from './Accounts';
 import { isCustom } from './BackgroundField';
 import { FaceFields } from './FaceFields';
-import { choices, chosen, efforts, firstChoice, runs } from './models';
+import { choices, chosen, efforts, firstChoice } from './models';
 import './agents.css';
 
 type Open = (ref: string) => void;
@@ -179,7 +180,6 @@ function AgentForm(props: FormProps) {
     ...edits,
   };
   const seed = face_seed ?? name.trim();
-  const [find, setFind] = useState('');
   const [busy, setBusy] = useState(false);
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
@@ -213,7 +213,7 @@ function AgentForm(props: FormProps) {
     draft.effort !== agent.effort ||
     draft.approvals !== agent.approvals;
   const offered = efforts(list, draft.model);
-  const found = choices(list).filter((c) => c.label.toLowerCase().includes(find.trim().toLowerCase()));
+  const exact = choices(list).map((c) => ({ value: c.id, label: c.label }));
 
   const pickAccount = (id: string) => edit({ account: id, model: undefined, effort: null });
   const pickModel = (id: string) =>
@@ -221,7 +221,6 @@ function AgentForm(props: FormProps) {
   const reset = () => {
     if (!agent) return onCancelNew();
     setEdits({});
-    setFind('');
   };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,22 +265,20 @@ function AgentForm(props: FormProps) {
         remembered={edits.custom ?? (isCustom(agent?.background) ? agent.background : null)}
         onChange={edit}
       />
-      <label className="agent-field">
-        Account
-        <select value={account} onChange={(e) => pickAccount(e.target.value)}>
-          {accounts.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name} / {engineName(a.engine)}
-              {a.login === 'signed_out' ? ' / Signed out' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset className="agent-field">
-        <legend>Model</legend>
-        <p className="agent-chosen" aria-live="polite">
-          {model === undefined ? '' : chosen(list, model)}
-        </p>
+      <div className="agent-field">
+        <label htmlFor={`${title}account`}>Account</label>
+        <Dropdown
+          id={`${title}account`}
+          value={account}
+          onChange={pickAccount}
+          choices={accounts.map((a) => ({
+            value: a.id,
+            label: `${a.name} / ${engineName(a.engine)}${a.login === 'signed_out' ? ' / Signed out' : ''}`,
+          }))}
+        />
+      </div>
+      <div className="agent-field">
+        <label htmlFor={`${title}model`}>Model</label>
         {models.failure ? (
           <FailureNotice failure={models.failure} onReference={onReference} />
         ) : models.list === null ? (
@@ -289,42 +286,33 @@ function AgentForm(props: FormProps) {
             Loading models
           </p>
         ) : (
-          <>
-            <input
-              type="search"
-              aria-label="Find models"
-              placeholder="Find models"
-              value={find}
-              onChange={(e) => setFind(e.target.value)}
-            />
-            <fieldset className="model-results" aria-label="Models">
-              {found.map((c) => (
-                <button
-                  type="button"
-                  key={c.id}
-                  aria-pressed={c.id === runs(list, model ?? null)}
-                  onClick={() => pickModel(c.id)}
-                >
-                  {c.label}
-                </button>
-              ))}
-              {found.length === 0 && <p className="muted">No models</p>}
-            </fieldset>
-          </>
+          <Dropdown
+            id={`${title}model`}
+            // Only an exact model is chosen in the list: an agent on a Latest or the engine default reads as the
+            // model that is today, and picking that model saves it exactly.
+            value={model ?? ''}
+            shown={model === undefined ? undefined : chosen(list, model)}
+            placeholder={exact.length > 0 ? undefined : 'No models'}
+            onChange={pickModel}
+            choices={exact}
+          />
         )}
-      </fieldset>
-      <label className="agent-field">
-        Effort
-        <select value={effort ?? ''} onChange={(e) => edit({ effort: e.target.value || null })}>
-          <option value="">Engine default</option>
-          {offered.map((level) => (
-            <option key={level} value={level}>
-              {level}
-            </option>
-          ))}
-          {effort && !offered.includes(effort) && <option value={effort}>{effort} / Unavailable</option>}
-        </select>
-      </label>
+      </div>
+      <div className="agent-field">
+        <label htmlFor={`${title}effort`}>Effort</label>
+        <Dropdown
+          id={`${title}effort`}
+          value={effort ?? ''}
+          onChange={(v) => edit({ effort: v || null })}
+          choices={[
+            { value: '', label: 'Engine default' },
+            ...offered.map((level) => ({ value: level, label: level })),
+            ...(effort && !offered.includes(effort)
+              ? [{ value: effort, label: `${effort} / Unavailable` }]
+              : []),
+          ]}
+        />
+      </div>
       <div className="agent-field">
         <span className="agent-label">
           <label htmlFor={approvalsId}>Approvals</label>
@@ -344,17 +332,12 @@ function AgentForm(props: FormProps) {
             )}
           </Help>
         </span>
-        <select
+        <Dropdown
           id={approvalsId}
           value={approvals}
-          onChange={(e) => edit({ approvals: e.target.value as Approvals })}
-        >
-          {modes.map(([mode, label]) => (
-            <option key={mode} value={mode}>
-              {label}
-            </option>
-          ))}
-        </select>
+          onChange={(v) => edit({ approvals: v as Approvals })}
+          choices={modes.map(([mode, label]) => ({ value: mode, label }))}
+        />
       </div>
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">

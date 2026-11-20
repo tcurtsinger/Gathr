@@ -1,5 +1,6 @@
 // The service is the edge here: fetch answers as it would, from made-up state.
 import { afterEach, expect, test, vi } from 'vitest';
+import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-react';
 import { HandoffLimit } from './HandoffLimit';
 
@@ -24,18 +25,22 @@ test('the hand-off limit saves when picked, No limit as none; a refused pick say
   const opened: string[] = [];
   const screen = await render(<HandoffLimit onReference={(ref) => opened.push(ref)} />);
   const pick = screen.getByRole('combobox', { name: 'Pause after' });
-  await expect.element(pick).toHaveValue('50');
+  const choose = async (choice: string) => {
+    await pick.click();
+    await page.getByRole('option', { name: choice, exact: true }).click();
+  };
+  await expect.element(pick).toHaveTextContent('50 hand-offs (default)');
 
-  await pick.selectOptions('10');
+  await choose('10 hand-offs');
   await expect.poll(() => sent).toEqual([{ handoff_limit: 10 }]);
-  await pick.selectOptions('none');
+  await choose('No limit');
   await expect.poll(() => sent).toEqual([{ handoff_limit: 10 }, { handoff_limit: null }]);
-  await expect.element(pick).toHaveValue('none');
+  await expect.element(pick).toHaveTextContent('No limit');
 
   refuse = true;
-  await pick.selectOptions('5');
+  await choose('5 hand-offs');
   await expect.element(screen.getByText('made-up refusal')).toBeVisible();
   await screen.getByRole('button', { name: 'Reference made-up-ref' }).click();
   expect(opened).toEqual(['made-up-ref']);
-  await expect.element(pick).toHaveValue('none');
+  await expect.element(pick).toHaveTextContent('No limit');
 });

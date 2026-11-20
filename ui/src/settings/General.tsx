@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, type Failure } from '../api';
+import { Dropdown } from '../components/Dropdown';
 import { FailureNotice } from '../components/Notice';
 import { Switch } from '../components/Switch';
 import { useNewestWins } from '../newest';
@@ -59,20 +60,21 @@ export function General({ onReference }: { onReference: (ref: string) => void })
         <span className="setting-scope" id="theme-scope">
           This computer
         </span>
-        <select
+        <Dropdown
           id="theme"
           aria-describedby="theme-scope"
           value={theme}
-          onChange={(e) => {
-            const next = e.target.value as Theme;
+          onChange={(v) => {
+            const next = v as Theme;
             setTheme(next);
             setShown(next);
           }}
-        >
-          <option value="system">System</option>
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
+          choices={[
+            { value: 'system', label: 'System' },
+            { value: 'light', label: 'Light' },
+            { value: 'dark', label: 'Dark' },
+          ]}
+        />
       </div>
       {on !== null && (
         <div className="settingrow">
