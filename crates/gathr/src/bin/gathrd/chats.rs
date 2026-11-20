@@ -81,7 +81,7 @@ pub enum Cmd {
     /// Takes over a turn left waiting by the last run.
     Resume(store::Waiting),
     /// A turn Gathr starts for the agent: a task's, a wake-up or a hear-back (0010).
-    Start(gathr::tasks::Start),
+    Start(gathr::store::Start),
     /// Another agent's message to this one (plans/agent-messages.md): into the turn it runs in the
     /// chat, else into one queued there, else a turn of its own. Answers which it was.
     Message {
@@ -435,7 +435,7 @@ impl Chats {
     }
 
     /// Queues the turns Gathr starts, each on its agent's task.
-    pub fn start(self: &Arc<Self>, starts: Vec<gathr::tasks::Start>) {
+    pub fn start(self: &Arc<Self>, starts: Vec<gathr::store::Start>) {
         for start in starts {
             let task = self.task(&start.chat, Some(&start.agent));
             let _ = task.send(Cmd::Start(start));

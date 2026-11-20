@@ -351,7 +351,7 @@ async fn view(pr: i64, repo: &std::path::Path) -> Result<Value, String> {
 
 /// `gh` with fixed arguments in the project's folder, its failure said in words an agent can act on.
 async fn gh(args: &[&str], repo: &std::path::Path) -> Result<String, String> {
-    crate::coord::github(args, repo)
+    gathr::run::github(args, repo)
         .await
         .map_err(|why| said(&why))
 }

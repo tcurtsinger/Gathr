@@ -171,14 +171,6 @@ impl Task {
         why: Option<&str>,
         carries_on: Option<&str>,
     ) {
-        let moved = gathr::tasks::Moved {
-            chat: &ids.chat,
-            turn: &ids.turn,
-            agent: ids.agent.as_deref(),
-            task,
-            trace: &ids.trace,
-            carries_on,
-        };
         // A turn the engine began itself never passes the runner's start (0063 I2a.2).
         let began = self
             .turn
@@ -187,10 +179,51 @@ impl Task {
         if status == "running" && began.is_some() {
             self.look_before(ids).await;
         }
-        crate::coord::turn_moved(&self.chats, moved, status, why).await;
+        self.save_status(ids, (task, carries_on), status, why).await;
         self.announce_turn(ids, status, why).await;
         if matches!(status, "done" | "failed" | "stopped") {
             self.look_after(ids).await;
+        }
+    }
+
+    /// Saves a turn's status, then what it moves (its task, its giver's hear-back, waits on its
+    /// agent) in the same transaction, and starts the turns that calls for. A failure is recorded.
+    async fn save_status(
+        &self,
+        ids: &Ids,
+        (task, carries_on): (Option<i64>, Option<&str>),
+        status: &str,
+        why: Option<&str>,
+    ) {
+        let (i, carries_on) = (ids.clone(), carries_on.map(String::from));
+        let (status, why) = (status.to_string(), why.map(String::from));
+        let saved = self
+            .chats
+            .writer
+            .call(move |conn: &mut rusqlite::Connection| {
+                let tx = conn.transaction()?;
+                store::set_turn(&tx, &i.turn, &status, why.as_deref())?;
+                let m = gathr::tasks::Moved {
+                    chat: &i.chat,
+                    turn: &i.turn,
+                    agent: i.agent.as_deref(),
+                    task,
+                    trace: &i.trace,
+                    carries_on: carries_on.as_deref(),
+                };
+                let starts = gathr::tasks::turn_moved_in(&tx, &m, &status, why.as_deref())?;
+                tx.commit()?;
+                Ok::<_, gathr::Error>(starts)
+            });
+        match saved.await {
+            Some(Ok(starts)) => self.chats.start(starts),
+            Some(Err(e)) => {
+                let event = Event::point("gathr.turn.status").trace(&ids.trace);
+                self.chats
+                    .writer
+                    .record(event.error("sqlite").attr("why", e.to_string()));
+            }
+            None => {}
         }
     }
 

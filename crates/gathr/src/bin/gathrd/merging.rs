@@ -82,7 +82,7 @@ pub async fn merge(
     let project = &asked.project;
     let lock = lock_of(&project.folder);
     let one = lock.lock().await;
-    let vars = crate::coord::fresh().await;
+    let vars = gathr::run::fresh().await;
     let repo = &project.folder;
     let (view, head, base) = open_pr(pr, repo).await?;
     let b = fetched(repo, &base, &vars).await?;
@@ -277,7 +277,7 @@ pub fn short(commit: &str) -> String {
 /// The PR as GitHub has it, open: its view, head and base, or why it can't be merged.
 pub async fn open_pr(pr: i64, repo: &Path) -> Result<(Value, String, String), String> {
     let fields = "state,headRefOid,baseRefName,statusCheckRollup,headRefName,isCrossRepository";
-    let view = crate::coord::github(&["pr", "view", &pr.to_string(), "--json", fields], repo)
+    let view = gathr::run::github(&["pr", "view", &pr.to_string(), "--json", fields], repo)
         .await
         .map_err(|why| format!("#{pr} wasn't read from GitHub: {why}"))?;
     let view: Value = serde_json::from_str(&view)
@@ -305,7 +305,7 @@ async fn confirmed(pr: i64, repo: &Path, head: &str, base: &str) -> Result<(), S
     let mut seen = "nothing read".to_string();
     loop {
         let args = ["pr", "view", &pr.to_string(), "--json", fields];
-        if let Ok(view) = crate::coord::github(&args, repo).await {
+        if let Ok(view) = gathr::run::github(&args, repo).await {
             let view: Value = serde_json::from_str(&view).unwrap_or_default();
             let text = |key: &str| view[key].as_str().unwrap_or_default().to_string();
             let (state, now, now_base) = (text("state"), text("headRefOid"), text("baseRefName"));
@@ -624,7 +624,7 @@ async fn squash(pr: i64, head: &str, repo: &Path) -> Result<String, String> {
         "-f",
         &sha,
     ];
-    let answer = crate::coord::github(&args, repo)
+    let answer = gathr::run::github(&args, repo)
         .await
         .map_err(|why| format!("GitHub didn't squash #{pr}: {why}"))?;
     let answer: Value = serde_json::from_str(&answer).unwrap_or_default();

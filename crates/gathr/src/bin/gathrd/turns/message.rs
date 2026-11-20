@@ -4,7 +4,7 @@
 //! sender's, which a pause holds as it holds every turn Gathr queues.
 
 use gathr::event::Event;
-use gathr::tasks::Start;
+use gathr::store::Start;
 use serde_json::json;
 
 use super::{Ids, Task};

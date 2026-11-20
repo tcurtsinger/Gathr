@@ -29,10 +29,10 @@ pub struct SetSettings {
     /// The agent folder: a full path, for new work.
     agent_folder: Option<String>,
     /// How many hand-offs a chain of agent messages may make; null for no limit.
-    #[serde(default, deserialize_with = "crate::coord::present")]
+    #[serde(default, deserialize_with = "crate::settings::present")]
     handoff_limit: Option<Option<i64>>,
     /// Auto-compact: 200000, 300000, 400000 or 500000 tokens; null for each engine's own.
-    #[serde(default, deserialize_with = "crate::coord::present")]
+    #[serde(default, deserialize_with = "crate::settings::present")]
     auto_compact: Option<Option<i64>>,
 }
 
@@ -105,7 +105,7 @@ impl Tools {
     ) -> Result<CallToolResult, ErrorData> {
         let caller = caller_of(&parts)?;
         let started = Instant::now();
-        let change = crate::coord::SettingsChange {
+        let change = crate::settings::Change {
             stale_days: ask.stale_days,
             cancel_days: ask.cancel_days,
             agent_folder: ask.agent_folder,
@@ -113,7 +113,8 @@ impl Tools {
             auto_compact: ask.auto_compact,
         };
         let t = trace(&caller);
-        let set = crate::coord::change_settings_as(&self.state, &t, change, caller.agent.clone());
+        let set =
+            crate::settings::change_settings_as(&self.state, &t, change, caller.agent.clone());
         let set = said(set.await);
         Ok(self.respond(&caller, "set_settings", started, set).await)
     }
@@ -169,7 +170,7 @@ impl Tools {
 
 impl Tools {
     async fn read_settings(&self, caller: &Caller) -> Result<String, String> {
-        let general = said(crate::coord::settings_shown(&self.state, &trace(caller)).await)?;
+        let general = said(crate::settings::settings_shown(&self.state, &trace(caller)).await)?;
         let (agents, projects) = self
             .db(|c| Ok((gathr::agents::list(c)?, gathr::projects::list(c)?)))
             .await?;

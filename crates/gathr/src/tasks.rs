@@ -8,7 +8,6 @@ use serde::Serialize;
 use crate::Error;
 use crate::event::Event;
 use crate::ids::now_us;
-use crate::words::Opened;
 
 pub(crate) mod brief;
 pub(crate) mod edit;
@@ -28,6 +27,7 @@ pub(crate) mod words;
 
 use records::{OptionalTask, read, set, state_of};
 
+pub use crate::store::Start;
 pub use brief::{Brief, DONE_MOST, Give, PROOF_MOST, SIZE_MOST, WHERE_MOST, sized};
 pub use edit::{Edit, claim_ask, edit};
 pub use hear::done_words;
@@ -228,65 +228,6 @@ pub struct Task {
     pub by_gathr: bool,
 }
 
-/// A turn Gathr starts for an agent: a task's, a wake-up or a hear-back. `task` is the task it
-/// works on. It's saved, queued with Gathr's message as its ask, in the transaction of the change
-/// that calls for it: a stop right after that commit loses nothing, as the next start takes it over.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Start {
-    pub chat: String,
-    pub agent: String,
-    pub task: Option<i64>,
-    /// The turn it answers: the one that gave its task, or that left its wait.
-    pub answers: Option<String>,
-    pub text: String,
-    pub turn: String,
-    pub trace: String,
-    /// Gathr's message, as the live socket sends it.
-    pub message: serde_json::Value,
-    /// It's a hear-back: what became of the tasks its agent gave (`held::hear_backs`), which a
-    /// merge doesn't send the agent that merged (G159).
-    pub hear_back: bool,
-}
-
-impl Start {
-    pub fn queue(
-        conn: &Connection,
-        (chat, agent): (&str, &str),
-        (task, answers): (Option<i64>, Option<&str>),
-        opened: Opened,
-        text: String,
-    ) -> Result<Start, Error> {
-        let saved = Self::save(conn, (chat, Some(agent)), (task, answers), opened, &text)?;
-        let (turn, trace, message) = saved;
-        Ok(Start {
-            chat: chat.to_string(),
-            agent: agent.to_string(),
-            task,
-            answers: answers.map(String::from),
-            text,
-            turn,
-            trace,
-            message,
-            hear_back: false,
-        })
-    }
-
-    /// Saves the turn and its ask, for an agent or (in a chat sent to no agent) none: its id, trace
-    /// and message.
-    pub fn save(
-        conn: &Connection,
-        (chat, agent): (&str, Option<&str>),
-        (task, answers): (Option<i64>, Option<&str>),
-        opened: Opened,
-        text: &str,
-    ) -> Result<(String, String, serde_json::Value), Error> {
-        let (turn, trace) = (crate::ids::ulid(now_us()), crate::ids::trace_id());
-        crate::store::add_turn(conn, chat, &turn, &trace, (agent, task, answers), opened)?;
-        let message = crate::store::add_message(conn, chat, &turn, "gathr", "text", text)?;
-        Ok((turn, trace, message))
-    }
-}
-
 /// How a turn on a task ended.
 pub enum Outcome {
     /// It ended well.
@@ -473,8 +414,8 @@ pub struct Moved<'a> {
     pub carries_on: Option<&'a str>,
 }
 
-/// Saves a turn's status with what it does, in one transaction: its task moves, its giver hears
-/// back, and waits on its agent may fire. A stop can't fall between an end and the round it closes.
+/// Saves a turn's status with what it does, in one transaction, as the service does
+/// (`turns/records.rs`): its task moves, its giver hears back, and waits on its agent may fire.
 pub fn turn_moved(
     conn: &mut Connection,
     m: &Moved,
@@ -483,45 +424,56 @@ pub fn turn_moved(
 ) -> Result<Vec<Start>, Error> {
     in_tx(conn, |tx| {
         crate::store::set_turn(tx, m.turn, status, why)?;
-        let mut starts = Vec::new();
-        let outcome = match status {
-            "running" => {
-                if let Some(task) = m.task {
-                    let carries_on: bool = tx.query_row(
-                        "SELECT EXISTS (SELECT 1 FROM turns u JOIN turns was ON was.id = u.answers
-                         WHERE u.id = ?1 AND was.task = u.task AND was.status = 'stopped')",
-                        [m.turn],
-                        |r| r.get(0),
-                    )?;
-                    started_in(tx, task, carries_on, m.trace)?;
-                }
-                return Ok(starts);
-            }
-            "done" => Outcome::Ok,
-            "failed" => Outcome::Failed(why.unwrap_or(status).to_string()),
-            "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
-            _ => return Ok(starts),
-        };
-        // Marked by a cancel, or by an edit that made its task wait: whoever marked it already put
-        // the task where it belongs, and a restart or an edit may have queued its next turn since.
-        let marked = stop_why(tx, m.turn)?.is_some();
-        let task = m.task.filter(|_| !marked);
-        match (task, m.carries_on) {
-            (Some(task), Some(waits)) if status == "stopped" => {
-                if state_of(tx, task)? == Some(State::Working) {
-                    set(tx, task, State::Working, Some(waits), m.trace)?;
-                }
-            }
-            (Some(task), _) => starts.extend(ended_in(tx, task, outcome, m.trace)?),
-            (None, _) => {}
-        }
-        person::links::back_on_list(tx, m.turn, m.trace)?;
-        starts.extend(hear::hear_backs(tx, m.turn, m.trace)?);
-        if let Some(agent) = m.agent {
-            starts.extend(crate::waits::agent_free_in(tx, m.chat, agent, m.trace)?);
-        }
-        Ok(starts)
+        turn_moved_in(tx, m, status, why)
     })
+}
+
+/// What a turn's new status does, in the transaction that saved it: a stop can't fall between an
+/// end and the round it closes.
+pub fn turn_moved_in(
+    tx: &Transaction,
+    m: &Moved,
+    status: &str,
+    why: Option<&str>,
+) -> Result<Vec<Start>, Error> {
+    let mut starts = Vec::new();
+    let outcome = match status {
+        "running" => {
+            if let Some(task) = m.task {
+                let carries_on: bool = tx.query_row(
+                    "SELECT EXISTS (SELECT 1 FROM turns u JOIN turns was ON was.id = u.answers
+                     WHERE u.id = ?1 AND was.task = u.task AND was.status = 'stopped')",
+                    [m.turn],
+                    |r| r.get(0),
+                )?;
+                started_in(tx, task, carries_on, m.trace)?;
+            }
+            return Ok(starts);
+        }
+        "done" => Outcome::Ok,
+        "failed" => Outcome::Failed(why.unwrap_or(status).to_string()),
+        "stopped" => Outcome::Stopped(why.unwrap_or(status).to_string()),
+        _ => return Ok(starts),
+    };
+    // Marked by a cancel, or by an edit that made its task wait: whoever marked it already put
+    // the task where it belongs, and a restart or an edit may have queued its next turn since.
+    let marked = stop_why(tx, m.turn)?.is_some();
+    let task = m.task.filter(|_| !marked);
+    match (task, m.carries_on) {
+        (Some(task), Some(waits)) if status == "stopped" => {
+            if state_of(tx, task)? == Some(State::Working) {
+                set(tx, task, State::Working, Some(waits), m.trace)?;
+            }
+        }
+        (Some(task), _) => starts.extend(ended_in(tx, task, outcome, m.trace)?),
+        (None, _) => {}
+    }
+    person::links::back_on_list(tx, m.turn, m.trace)?;
+    starts.extend(hear::hear_backs(tx, m.turn, m.trace)?);
+    if let Some(agent) = m.agent {
+        starts.extend(crate::waits::agent_free_in(tx, m.chat, agent, m.trace)?);
+    }
+    Ok(starts)
 }
 
 /// Runs `f` in a transaction, committed when it succeeds.
