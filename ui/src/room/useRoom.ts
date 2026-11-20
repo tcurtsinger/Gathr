@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Failure, type History, type Member, type Message, type Reaction, type Turn } from '../api';
+import type { Approval } from '../components/Approval';
 import { type LiveEvent, listen } from '../live';
 
-/** What the room shows: its messages, turns, the words still streaming, its team and its thumbs-ups. */
+/** What the room shows: its messages, turns, the words still streaming, its team, thumbs-ups and approvals. */
 export interface RoomState {
   messages: Message[];
   turns: Record<string, Turn>;
@@ -10,9 +11,17 @@ export interface RoomState {
   partial: Record<string, string>;
   members: Member[];
   reactions: Reaction[];
+  approvals: Approval[];
 }
 
-export const emptyRoom: RoomState = { messages: [], turns: {}, partial: {}, members: [], reactions: [] };
+export const emptyRoom: RoomState = {
+  messages: [],
+  turns: {},
+  partial: {},
+  members: [],
+  reactions: [],
+  approvals: [],
+};
 
 export function fromHistory(h: History): RoomState {
   return {
@@ -21,6 +30,12 @@ export function fromHistory(h: History): RoomState {
     partial: Object.fromEntries((h.streaming ?? []).map((s) => [s.turn, s.text])),
     members: h.members ?? [],
     reactions: h.reactions ?? [],
+    approvals: h.approvals.map((a) => ({
+      turn: a.turn,
+      request: a.request_id,
+      tool: a.tool,
+      input: a.input,
+    })),
   };
 }
 
@@ -55,9 +70,15 @@ export function apply(s: RoomState, e: LiveEvent): RoomState {
         ref: e.ref ?? before?.ref ?? '',
         created: e.created ?? before?.created,
         ended: e.ended ?? before?.ended,
-        topic: e.topic ?? before?.topic,
       };
-      return { ...s, turns: { ...s.turns, [e.turn]: turn } };
+      // A turn that ended waits on nothing.
+      const open = e.status === 'running' || e.status === 'queued';
+      const approvals = open ? s.approvals : s.approvals.filter((a) => a.turn !== e.turn);
+      return { ...s, turns: { ...s.turns, [e.turn]: turn }, approvals };
+    }
+    case 'approval': {
+      const asked = { turn: e.turn, request: e.request_id, tool: e.tool, input: e.input };
+      return { ...s, approvals: [...s.approvals, asked] };
     }
     case 'reaction': {
       const same = (r: Reaction) => r.message === e.reaction.message && r.agent === e.reaction.agent;
@@ -108,5 +129,23 @@ export function useRoom(chat: string) {
     });
   }, [chat, load]);
 
-  return { state, failure, reload: load };
+  // The card stays until the service takes the answer; a refusal shows on it, to answer again.
+  const approve = useCallback(
+    (request: string, allow: boolean) => {
+      const answer = (to?: Approval['answer']) => (s: RoomState) => ({
+        ...s,
+        approvals: s.approvals.flatMap((a) =>
+          a.request !== request ? [a] : to ? [{ ...a, answer: to }] : [],
+        ),
+      });
+      setState(answer({ allow }));
+      api.approve(chat, request, allow).then(
+        () => setState(answer()),
+        (failure: Failure) => setState(answer({ allow, failure })),
+      );
+    },
+    [chat],
+  );
+
+  return { state, failure, reload: load, approve };
 }

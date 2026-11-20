@@ -8,11 +8,22 @@
   min-height: 0;
   background: var(--background);
 }
+/* The title, then More 4px after it: the title truncates, More stays. */
 .room-title {
+  display: flex;
   flex: 1;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
 }
+.room-title small {
+  flex: none;
+  margin-left: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 .room-title h1 {
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   font-size: 14px;
@@ -209,6 +220,33 @@
 }
 .room-reply .room-reactions {
   padding: 4px 0 0;
+}
+/* An agent's foot: its thumbs-ups, and the person's own at the right end. */
+.room-foot-row {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px 8px 18px;
+}
+.room-foot-row .room-reactions {
+  padding: 0;
+}
+.room-reply .room-foot-row {
+  padding: 2px 0 0;
+}
+.room-like {
+  margin-left: auto;
+  color: var(--muted-foreground);
+}
+.room-like[aria-pressed="true"] {
+  color: var(--attention);
+}
+/* What a turn waits on the person for, at the foot of its card. */
+.room-asks {
+  padding: 0 14px 12px;
+}
+.room-reply .room-asks {
+  padding: 6px 0 0;
 }
 .room-react {
   display: inline-flex;

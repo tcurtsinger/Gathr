@@ -31,7 +31,7 @@ const open = (t: Turn) => t.status === 'running' || t.status === 'queued';
 
 /**
  * The room as the screen shows it: the person's messages and each agent's main message in the main chat, by when
- * they started; an agent's reply to another agent's message, and the person's reply to an agent's, under it. Gathr's
+ * they started; a reply, the service's or the person's, under the main message it answers. Gathr's
  * own lines aren't shown, and a turn that said nothing and ended shows nothing.
  */
 export function shape(s: RoomState): Item[] {
@@ -56,20 +56,19 @@ export function shape(s: RoomState): Item[] {
   const cardOf = new Map<string, string>();
   for (const c of cards.values()) for (const m of byTurn.get(c.id) ?? []) cardOf.set(m.id, c.id);
 
-  // Where each item sits: under another agent's card, or in the main chat.
+  // Where each item sits: under the main message its `reply_to` names (an agent's card or the person's message),
+  // or in the main chat.
   const parent = new Map<string, string>();
-  for (const c of cards.values()) {
-    const topic = c.turn.topic?.startsWith('b:') ? c.turn.topic.slice(2) : undefined;
-    const reply = c.said.find((m) => m.reply_to)?.reply_to;
-    const under = topic && topic !== c.id ? topic : reply && cardOf.get(reply);
-    if (under && cards.has(under)) parent.set(c.id, under);
-  }
+  const under = (id: string, to?: string | null) => {
+    const host = to && (cardOf.get(to) ?? to);
+    if (host && host !== id) parent.set(id, host);
+  };
+  for (const c of cards.values()) under(c.id, byTurn.get(c.id)?.find((m) => m.reply_to)?.reply_to);
   const items: Item[] = [...cards.values()];
   for (const m of s.messages) {
     if (m.role !== 'user' || m.kind !== 'text') continue;
     items.push({ kind: 'said', id: m.id, message: m, at: time(m.time), replies: [] });
-    const host = m.reply_to && cardOf.get(m.reply_to);
-    if (host) parent.set(m.id, host);
+    under(m.id, m.reply_to);
   }
 
   // Replies are flat under the main message they belong to.

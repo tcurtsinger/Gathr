@@ -1,13 +1,18 @@
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, ThumbsUp } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Member, Message, Reaction, ToolBody } from '../api';
+import { type Approval, AskApproval } from '../components/Approval';
 import { Face, type FaceMark, type FaceOf } from '../components/Face';
+import { IconButton } from '../components/IconButton';
 import { Markdown } from '../components/Markdown';
 import { since } from '../components/marks';
 import { StateMark } from '../components/StateMark';
 import { type Card, type Item, type Said, shape, stepsLine, working } from './shape';
 import type { RoomState } from './useRoom';
 import './room.css';
+
+/** The person as a giver of a thumbs-up: the service's `person`. */
+const PERSON = 'person';
 
 /** Who is who in the room: each agent's name, picture and whether it is the lead. */
 export interface People {
@@ -29,9 +34,17 @@ export function people(members: Member[], known: FaceOf[]): People {
   };
 }
 
+/** What the person can do on a card: answer its approval, open a refusal's reference, like its words. */
+export interface Acts {
+  approve: (request: string, allow: boolean) => void;
+  reference: (ref: string) => void;
+  like: (message: string, give: boolean) => void;
+}
+
 interface Props {
   state: RoomState;
   people: People;
+  acts: Acts;
   /** Above the messages: a failure to load, with its Retry. */
   header?: ReactNode;
   /** At the foot: the message box. */
@@ -39,10 +52,10 @@ interface Props {
 }
 
 /** The room: the person's messages and each agent's main message, replies to an agent tucked under it. */
-export function Room({ state, people, header, children }: Props) {
+export function Room({ state, people, acts, header, children }: Props) {
   const items = shape(state);
   const scroll = useStuck(state);
-  const ctx = { people, reactions: state.reactions };
+  const ctx = { people, reactions: state.reactions, approvals: state.approvals, acts };
   return (
     <>
       <div className="room-scroll" ref={scroll}>
@@ -65,6 +78,8 @@ export function Room({ state, people, header, children }: Props) {
 interface Ctx {
   people: People;
   reactions: Reaction[];
+  approvals: Approval[];
+  acts: Acts;
 }
 
 /** The person's message: a bubble at the right, with its replies under it when it has any. */
@@ -123,7 +138,8 @@ function Main({ card, joined, ctx }: { card: Card; joined: boolean; ctx: Ctx }) 
         {card.text && <Markdown className="room-body" text={card.text} names={ctx.people.names} />}
         {!card.text && card.turn.why && <p className="room-body room-why">{card.turn.why}</p>}
         {card.steps.length > 0 && <Steps steps={card.steps} running={working(card)} />}
-        <Reactions said={card.said} ctx={ctx} />
+        <Foot said={card.said} ctx={ctx} />
+        <Asks turn={card.id} agent={agent} ctx={ctx} />
       </article>
       {card.replies.length > 0 && <Thread replies={card.replies} ctx={ctx} />}
     </div>
@@ -196,7 +212,7 @@ function Reactions({ said, ctx }: { said: Message[]; ctx: Ctx }) {
   const ids = new Set(said.map((m) => m.id));
   const given = ctx.reactions.filter((r) => ids.has(r.message));
   if (!given.length) return null;
-  const who = [...new Set(given.map((r) => (r.agent === 'person' ? 'You' : ctx.people.name(r.agent))))];
+  const who = [...new Set(given.map((r) => (r.agent === PERSON ? 'You' : ctx.people.name(r.agent))))];
   return (
     <div className="room-reactions">
       <span className="room-react">
@@ -206,9 +222,44 @@ function Reactions({ said, ctx }: { said: Message[]; ctx: Ctx }) {
   );
 }
 
+/** An agent's foot: its thumbs-ups, and at the right the person's own, on its last words. */
+function Foot({ said, ctx }: { said: Message[]; ctx: Ctx }) {
+  const last = said.at(-1);
+  if (!last) return <Reactions said={said} ctx={ctx} />;
+  const mine = ctx.reactions.some((r) => r.message === last.id && r.agent === PERSON);
+  return (
+    <div className="room-foot-row">
+      <Reactions said={said} ctx={ctx} />
+      <IconButton
+        aria-label="Like"
+        aria-pressed={mine}
+        className="room-like"
+        onClick={() => ctx.acts.like(last.id, !mine)}
+      >
+        <ThumbsUp />
+      </IconButton>
+    </div>
+  );
+}
+
+/** The approvals a turn waits on, at the foot of its card. */
+function Asks({ turn, agent, ctx }: { turn: string; agent: string; ctx: Ctx }) {
+  const asks = ctx.approvals.filter((a) => a.turn === turn);
+  if (!asks.length) return null;
+  return (
+    <div className="room-asks">
+      {asks.map((a) => (
+        <AskApproval key={a.request} approval={a} agent={ctx.people.name(agent)} actions={ctx.acts} />
+      ))}
+    </div>
+  );
+}
+
 /** Replies to a message, tucked under it and folded to one line: "3 replies · Rev, Ann · 9:21". */
 function Thread({ replies, ctx }: { replies: Item[]; ctx: Ctx }) {
-  const [open, setOpen] = useState(false);
+  const [opened, setOpen] = useState(false);
+  // A reply that waits for an approval is never folded away.
+  const open = opened || replies.some((r) => ctx.approvals.some((a) => a.turn === r.id));
   const authors = [
     ...new Set(replies.map((r) => (r.kind === 'said' ? 'You' : ctx.people.name(r.turn.agent ?? '')))),
   ];
@@ -267,7 +318,8 @@ function Reply({ item, ctx }: { item: Item; ctx: Ctx }) {
           )}
         </div>
         {item.text && <Markdown className="room-said" text={item.text} names={ctx.people.names} />}
-        <Reactions said={item.said} ctx={ctx} />
+        <Foot said={item.said} ctx={ctx} />
+        <Asks turn={item.id} agent={agent} ctx={ctx} />
       </div>
     </div>
   );

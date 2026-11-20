@@ -508,6 +508,8 @@ export interface Chat {
   needs?: boolean;
   /** The most pressing of its agents' marks its row shows (0071): none while nothing of those three holds. */
   mark?: ChatMark | null;
+  /** A room chat, shown by the new chat screen; any other by the old one. */
+  room?: boolean;
 }
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';

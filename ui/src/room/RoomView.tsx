@@ -12,11 +12,13 @@ import {
   type PickedName,
   type Project,
   type ReplyTarget,
-  type Task,
 } from '../api';
+import { ChatMenu } from '../components/ChatMenu';
 import { Composer, type Person } from '../components/Composer';
 import { kept, type Picked } from '../components/mention';
 import { FailureNotice } from '../components/Notice';
+import { ProjectPick } from '../components/ProjectPick';
+import { runOf } from '../pauses';
 import { TopLine } from '../TopLine';
 import { people as peopleOf, Room } from './Room';
 import { type RoomState, useRoom } from './useRoom';
@@ -31,11 +33,7 @@ interface Unsent {
   failure: Failure;
 }
 
-/**
- * What the shell gives a chat's screen: the same as the old chat's, so the switch is one line in the shell. The room
- * uses what it needs and leaves the rest (the workspace, tasks, plans, questions, search hits) to the steps that
- * build them.
- */
+/** What the shell gives a chat's screen: the old chat's props, of which the room uses these. */
 interface Props {
   chat: Chat;
   agents: Agent[];
@@ -43,8 +41,6 @@ interface Props {
   draft: string;
   picks?: Picked[];
   onDraft: (text: string, picks?: Picked[]) => void;
-  replyDraft?: (topic: string) => { text: string; picks: Picked[] } | undefined;
-  onReplyDraft?: (topic: string, text: string, picks: Picked[]) => void;
   openSettings: (page: 'engines' | 'diagnostics', turn?: string) => void;
   unsent: Unsent[];
   onUnsent: (update: (list: Unsent[]) => Unsent[]) => void;
@@ -53,7 +49,6 @@ interface Props {
   onProject: (project: string) => void;
   onNewProject: () => void;
   onStart: (text: string, agent?: string, picks?: PickedName[]) => void;
-  headerEnd?: ReactNode;
   notice?: ReactNode;
   pauses: Pauses;
   onPause: (action: 'pause' | 'resume' | 'stop', scope: PauseScope) => Promise<void>;
@@ -62,24 +57,14 @@ interface Props {
   onRestore?: () => void;
   restoreFailure?: Failure;
   onReference?: (ref: string) => void;
-  onOpenTask?: (task: number) => void;
-  agentOpen?: { agent: string; shown: boolean };
-  onOpenAgent?: (agent: string) => void;
-  onOpenPlan?: (plan: number, version: number) => void;
-  workspace?: (
-    agent: { id: string; name: string; panel: ReactNode } | undefined,
-    work: { tasks: Task[]; members: Member[] },
-  ) => ReactNode;
-  found?: { message?: string; at: number };
-  onFound?: () => void;
-  answers?: unknown;
 }
 
 /** A chat in room mode: the middle of the window. */
 export function RoomView(props: Props) {
   const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent, onReference } = props;
-  const { state, failure, reload } = useRoom(chat.id);
-  const [stopFailure, setStopFailure] = useState<Failure>();
+  const { state, failure, reload, approve } = useRoom(chat.id);
+  // A refused Stop, Pause or like: it shows above the message box, with its reference.
+  const [refused, setRefused] = useState<Failure>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
   const fresh = !chat.id;
   const members = fresh ? (props.projects.find((p) => p.id === chat.project)?.members ?? []) : state.members;
@@ -106,25 +91,52 @@ export function RoomView(props: Props) {
     onDraft('', []);
     send(draft, to[0]?.id, kept(picks));
   };
-  const stop = () =>
-    props.onPause('stop', { scope: 'chat', target: chat.id }).then(
-      () => setStopFailure(undefined),
-      (f: Failure) => setStopFailure(f),
+  const attempt = (action: () => Promise<unknown>) =>
+    action().then(
+      () => setRefused(undefined),
+      (f: Failure) => setRefused(f),
     );
+  const thisChat: PauseScope = { scope: 'chat', target: chat.id };
+  const stop = () => attempt(() => props.onPause('stop', thisChat));
+  const run = runOf(props.pauses, chat.id);
+  const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('diagnostics'));
+  const acts = {
+    approve,
+    reference,
+    like: (message: string, give: boolean) =>
+      attempt(() => (give ? api.like(chat.id, message) : api.unlike(chat.id, message))),
+  };
 
   return (
     <>
       <TopLine>
         <div className="room-title">
           <h1>{chat.title}</h1>
+          {!fresh && (
+            <ChatMenu
+              pause={{
+                state: run.state,
+                all: run.scope?.scope === 'app',
+                onPause: () => attempt(() => props.onPause('pause', thisChat)),
+                onResume: () => attempt(() => props.onPause('resume', run.scope ?? thisChat)),
+              }}
+              archived={!!chat.archived}
+              onArchive={props.onArchive}
+              onRestore={props.onRestore}
+              onDelete={props.onDelete}
+              className="head-button"
+              align="start"
+            />
+          )}
+          {chat.archived && <small>Archived</small>}
         </div>
-        {props.headerEnd}
       </TopLine>
       <main className="chat room" aria-label={chat.title}>
         {props.notice}
         <Room
           state={state}
           people={team}
+          acts={acts}
           header={
             failure && (
               <FailureNotice
@@ -152,7 +164,7 @@ export function RoomView(props: Props) {
               }
             />
           ))}
-          {stopFailure && <FailureNotice failure={stopFailure} onReference={onReference} />}
+          {refused && <FailureNotice failure={refused} onReference={onReference} />}
           {chat.archived ? (
             <>
               {props.restoreFailure && (
@@ -166,16 +178,26 @@ export function RoomView(props: Props) {
               </p>
             </>
           ) : (
-            <Composer
-              draft={draft}
-              picks={picks}
-              onDraft={onDraft}
-              onSend={sendDraft}
-              onStop={running ? stop : undefined}
-              hint="Message the team"
-              people={who}
-              to={to}
-            />
+            <>
+              {fresh && (
+                <ProjectPick
+                  project={chat.project}
+                  projects={props.projects}
+                  onProject={props.onProject}
+                  onNewProject={props.onNewProject}
+                />
+              )}
+              <Composer
+                draft={draft}
+                picks={picks}
+                onDraft={onDraft}
+                onSend={sendDraft}
+                onStop={running ? stop : undefined}
+                hint="Message the team"
+                people={who}
+                to={to}
+              />
+            </>
           )}
         </Room>
       </main>

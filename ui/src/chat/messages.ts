@@ -1,11 +1,12 @@
 import type { ThreadMessageLike } from '@assistant-ui/react';
 import type { Failure, Named, PickedName, ReplyTarget, ReviewNote, Role, Task } from '../api';
+import type { Approval } from '../components/Approval';
 import type { AskSize } from './asks';
 import type { Ending } from './ends';
 import type { Piece, Work } from './fold';
 import type { Like } from './likes';
 import type { Left } from './reads';
-import type { Approval, ChatState } from './state';
+import type { ChatState } from './state';
 import type { Said } from './threads';
 import { drawn } from './timeline';
 

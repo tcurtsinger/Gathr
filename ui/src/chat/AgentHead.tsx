@@ -3,10 +3,10 @@ import { ContextDisplay } from '@/components/assistant-ui/elements/context-displ
 import { useContextDisplay } from '@/components/assistant-ui/utils/context-display-state';
 import { getBarColor } from '@/components/assistant-ui/utils/context-usage';
 import type { Context } from '../api';
+import { ChatMenu } from '../components/ChatMenu';
 import { Face } from '../components/Face';
 import { IconButton } from '../components/IconButton';
 import { CANT_READ, WORD } from '../components/marks';
-import { ChatMenu } from './ChatMenu';
 import { useMarks } from './faceMarks';
 import type { Glance } from './glance';
 import { began, roleName } from './team';
