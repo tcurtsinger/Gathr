@@ -9,6 +9,7 @@ import type {
   Pauses,
   PersonTask,
   PlanSummary,
+  Question,
   Reaction,
   Read,
   StaleTask,
@@ -80,6 +81,8 @@ export type LiveEvent =
   | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
+  // A room chat's questions, whole, after every ask and answer.
+  | { type: 'questions'; chat: string; questions: Question[] }
   // How full an agent's context is, after each model call or compaction.
   | { type: 'context'; chat: string; agent: string; context: Context }
   // Every pause and usage hold, whole, after any change: a pause, resume, Stop now, a pause going quiet.

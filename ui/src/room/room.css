@@ -310,3 +310,55 @@
   color: color-mix(in oklab, var(--foreground) 86%, var(--background));
   font-size: 14.5px;
 }
+
+/* A question to the person: the room's card, ringed while it waits, its choices as pills over a box for
+   their own words. Answered, the answer sits under it as a quiet line from "You". */
+.room-question[data-open] {
+  border-color: color-mix(in oklab, var(--attention) 45%, var(--border));
+}
+.room-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.room-choice-detail {
+  margin-left: 6px;
+  color: var(--muted-foreground);
+  font-size: 11.5px;
+}
+.room-question .room-asks .notice {
+  margin: 8px 0 0;
+}
+.room-answer {
+  margin: 0 18px 12px;
+  padding-left: 10px;
+  border-left: 1.5px solid color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+.room-answer p {
+  margin: 1px 0 0;
+  font-size: 14.5px;
+  white-space: pre-wrap;
+}
+.room-foot > .room-turn {
+  margin-bottom: 8px;
+}
+/* Placement B (the preview only): an answered question in the chat as one line. */
+.room-asked-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 44px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.room-asked-line > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-asked-line b {
+  color: var(--foreground);
+  font-weight: 600;
+}

@@ -62,7 +62,7 @@ interface Props {
 /** A chat in room mode: the middle of the window. */
 export function RoomView(props: Props) {
   const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent, onReference } = props;
-  const { state, failure, reload, approve } = useRoom(chat.id);
+  const { state, failure, reload, approve, answer } = useRoom(chat.id);
   // A refused Stop, Pause or like: it shows above the message box, with its reference.
   const [refused, setRefused] = useState<Failure>();
   const known = useMemo(() => [...agents, ...(props.removed ?? [])], [agents, props.removed]);
@@ -105,6 +105,7 @@ export function RoomView(props: Props) {
   const reference = (ref: string) => (onReference ? onReference(ref) : props.openSettings('diagnostics'));
   const acts = {
     approve,
+    answer,
     reference,
     like: (message: string, give: boolean) =>
       attempt(() => (give ? api.like(chat.id, message) : api.unlike(chat.id, message))),

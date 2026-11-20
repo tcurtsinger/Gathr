@@ -615,6 +615,22 @@ export interface History {
   reactions?: Reaction[];
   /** Where the person left off, by thread (0077); none yet for a chat not opened since. */
   reads?: Read[];
+  /** A room chat's questions to the person, oldest first. */
+  questions?: Question[];
+}
+
+/** An agent's question to the person in a room chat: open until `answered`, then with their pick, words or both. */
+export interface Question {
+  id: number;
+  chat: string;
+  agent: string;
+  name: string;
+  question: string;
+  choices: { label: string; detail: string | null }[];
+  pick: string | null;
+  words: string | null;
+  asked: string;
+  answered: string | null;
 }
 
 /**
@@ -777,6 +793,9 @@ export const api = {
   /** Keeps what the person has seen in each thread, and their folds (0077): a mark never moves back. */
   reads: (chat: string, reads: { topic: string; seen_us?: number; folded?: boolean }[]) =>
     call<{ reads: Read[] }>('PUT', `/api/chats/${chat}/reads`, { reads }),
+  /** Answers a room chat's question: it starts the asking agent's turn. */
+  answerQuestion: (id: number, pick?: string, words?: string) =>
+    call<{ question: Question; turn: string }>('POST', `/api/questions/${id}/answer`, { pick, words }),
   /** Takes the like back: the mark goes, and nothing it did is undone. */
   unlike: (chat: string, message: string) =>
     call<{ removed: boolean }>('DELETE', `/api/chats/${chat}/messages/${message}/like`),
