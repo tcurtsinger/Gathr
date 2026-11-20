@@ -151,39 +151,49 @@ fn under_way(tx: &Transaction, chat: &str) -> Result<Vec<Round>, Error> {
     Ok(rows.collect::<Result<_, _>>()?)
 }
 
+type Asked = (String, String, Option<String>);
+
 /// The chat's newest message of the person's: theirs, or the words they sent a plan back with.
-/// Its id, its turn and the ask it serves.
-fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<(String, String, String)>, Error> {
+/// Its id, its turn and the ask it serves (none in a room chat).
+fn newest_asked(tx: &Transaction, chat: &str) -> Result<Option<Asked>, Error> {
     let sql = "SELECT m.id, m.turn_id, u.ask_id FROM messages m JOIN turns u ON u.id = m.turn_id
                WHERE m.chat_id = ?1 AND (m.role = 'user' OR (m.role = 'gathr' AND u.opened_by = 'sent_back'))
                ORDER BY m.ts DESC, m.rowid DESC LIMIT 1";
     let row = tx
         .prepare_cached(sql)?
-        .query_row([chat], |r| {
-            Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?))
-        })
+        .query_row([chat], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
         .optional()?;
-    Ok(row.and_then(|(id, turn, ask)| Some((id, turn, ask?))))
+    Ok(row)
 }
 
 /// The round owed the person's newest message: none while its ask has a turn to end or work or a
 /// question open, while the lead's newest answer to it hasn't ended well, or once it had its round.
+/// A room chat has no asks or tasks: there, none while any turn of the chat is still to end.
 fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
     let Some((asked, asked_turn, ask)) = newest_asked(tx, chat)? else {
         return Ok(None);
     };
+    let room = crate::room::is_room(tx, chat)?;
+    if ask.is_none() && !room {
+        return Ok(None);
+    }
     let had: bool = tx
         .prepare_cached(
             "SELECT EXISTS (SELECT 1 FROM open_checks WHERE chat_id = ?1 AND asked = ?2)",
         )?
         .query_row([chat, &asked], |r| r.get(0))?;
-    let open = format!(
-        "SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND ask_id = ?2 AND status IN {BUSY})
-             OR EXISTS (SELECT 1 FROM tasks WHERE chat_id = ?1 AND ask_id = ?2 AND state NOT IN {SETTLED})"
-    );
-    let open: bool = tx
-        .prepare_cached(&open)?
-        .query_row([chat, &ask], |r| r.get(0))?;
+    let open = match room {
+        true => format!("SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND status IN {BUSY})"),
+        false => format!(
+            "SELECT EXISTS (SELECT 1 FROM turns WHERE chat_id = ?1 AND ask_id = ?2 AND status IN {BUSY})
+                 OR EXISTS (SELECT 1 FROM tasks WHERE chat_id = ?1 AND ask_id = ?2 AND state NOT IN {SETTLED})"
+        ),
+    };
+    let mut open = tx.prepare_cached(&open)?;
+    let open: bool = match room {
+        true => open.query_row([chat], |r| r.get(0))?,
+        false => open.query_row(params![chat, ask], |r| r.get(0))?,
+    };
     let members = crate::team::members(tx, chat)?;
     let Some(lead) = members.iter().find(|m| m.role == Role::Supervisor) else {
         return Ok(None);
@@ -197,7 +207,7 @@ fn due(tx: &Transaction, chat: &str) -> Result<Option<Due>, Error> {
         |r| r.get(0),
     )?;
     let sql = format!(
-        "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2 AND ask_id = ?3 AND task IS NULL
+        "SELECT id, status FROM turns WHERE chat_id = ?1 AND agent_id = ?2 AND ask_id IS ?3 AND task IS NULL
            AND (opened_by IS NULL OR opened_by NOT IN {NOT_AN_ANSWER}) AND created_ts >= ?4
          ORDER BY created_ts DESC, rowid DESC LIMIT 1"
     );
@@ -270,7 +280,8 @@ fn begin(tx: &Transaction, chat: &str, due: &Due, trace: &str) -> Result<Vec<Sta
         end(tx, chat, &round, &Counts::default(), trace)?;
         return Ok(Vec::new());
     }
-    let text = words::check(tx, (&due.asked, &due.answer), &due.lead)?;
+    let room = crate::room::is_room(tx, chat)?;
+    let text = words::check(tx, (&due.asked, &due.answer), &due.lead, room)?;
     let on = (None, Some(due.answer_turn.as_str()));
     due.checkers
         .iter()

@@ -391,6 +391,7 @@ fn a_plan_or_a_question_keeps_the_turn_in_the_room_whatever_it_chose() {
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let other = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(&data.0, &other);
     let (writing, other_ask) = send(&service, &other, json!({ "text": "Made-up ask: add tags" }));
     let planner = token(&data.0, 1);
     turn_is(&service, &other, &writing, "running");

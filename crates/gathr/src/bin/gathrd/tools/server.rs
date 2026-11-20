@@ -9,10 +9,14 @@ use gathr::event::Event;
 use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::Extension;
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock, ServerCapabilities, ServerConfig};
+use rmcp::model::{
+    CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams, ServerCapabilities,
+    ServerConfig,
+};
+use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::local::LocalSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
-use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
+use rmcp::{ErrorData, RoleServer, ServerHandler, schemars, tool, tool_handler, tool_router};
 use rusqlite::{Connection, OptionalExtension};
 
 use super::Caller;
@@ -151,10 +155,47 @@ impl Tools {
     }
 }
 
+/// The tools an agent in a room chat is offered: the rest belong to the old team machinery.
+const ROOM_TOOLS: [&str; 6] = [
+    "react",
+    "set_board_line",
+    "read_chat",
+    "pr",
+    "ci_failures",
+    "update_pr",
+];
+
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Tools {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+    }
+
+    /// Every tool, or in a room chat only `ROOM_TOOLS`: the list is the caller's own, so it's never
+    /// marked for a shared cache.
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        let tools = self.tool_router.list_all();
+        let caller = context.extensions.get::<Parts>().map(caller_of);
+        let Some(Ok(caller)) = caller else {
+            return Ok(ListToolsResult::with_all_items(tools));
+        };
+        let chat = caller.chat.clone();
+        let room = self
+            .chats
+            .writer
+            .call(move |c| gathr::room::is_room(c, &chat));
+        let tools = match room.await {
+            Some(Ok(true)) => tools
+                .into_iter()
+                .filter(|t| ROOM_TOOLS.contains(&t.name.as_ref()))
+                .collect(),
+            _ => tools,
+        };
+        Ok(ListToolsResult::with_all_items(tools))
     }
 }
 

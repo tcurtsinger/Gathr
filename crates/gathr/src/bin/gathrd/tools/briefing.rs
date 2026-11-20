@@ -22,6 +22,8 @@ pub struct Facts {
     worktree: Option<(PathBuf, String)>,
     /// The agent's own folder and its project's Shared (0034).
     own: Option<(PathBuf, PathBuf)>,
+    /// A room chat, briefed with `ROOM` instead of the old team's tools and rules.
+    room: bool,
 }
 
 pub fn facts(
@@ -71,6 +73,7 @@ pub fn facts(
         team: !members.is_empty(),
         worktree,
         own,
+        room: gathr::room::is_room(conn, chat)?,
     })
 }
 
@@ -101,6 +104,25 @@ pub fn off() -> Vec<&'static str> {
     DENIED_TOOLS.iter().map(|(name, _)| *name).collect()
 }
 
+/// How a room chat works, for an agent with teammates there.
+const ROOM_TEAM: &str = "How this room works:
+- You get a turn when the person writes to you, or when a teammate names you with @Name. Write @Name to wake \
+a teammate: they get your words when your turn ends. Name only who needs to act.
+- When your words comment on a teammate's message, start them with REPLY on a line of its own, and they are \
+filed under that message. Never start your answer to the person with REPLY.
+- The Supervisor leads. A message from the person that names nobody goes to it, and its plan or answer is \
+checked by the teammates who took no part, before the person relies on it.";
+
+/// What every agent in a room chat is told: the owner's own asks, the board and the tools.
+const ROOM: &str = "- If you have nothing to add, end your turn without writing anything. To agree, react with a \
+thumbs-up instead of writing.
+- Keep your line on the board current with set_board_line: what you work on, and its state.
+- Keep your messages brief. Be friendly and professional.
+- Don't push fixes for edge cases nobody has hit, and don't change things over wording or semantics.
+- A reply, a rebuttal or a reported defect needs a strong argument: say what is wrong and show why.
+Gathr's tools, on the gathr server (find them with ToolSearch if needed): react, set_board_line, read_chat for \
+earlier messages, and pr, ci_failures and update_pr if you need GitHub, through Gathr's sign-in.";
+
 pub fn text(facts: &Facts) -> String {
     let who = match &facts.name {
         Some(name) => format!("You are {name}, an agent"),
@@ -114,7 +136,7 @@ pub fn text(facts: &Facts) -> String {
         "{who} in Gathr, in the chat \"{}\"{role}.",
         facts.title
     )];
-    if let Some(role) = facts.role {
+    if let Some(role) = facts.role.filter(|_| !facts.room) {
         lines.extend(gathr::roles::lines(role).into_iter().map(String::from));
     }
     if !facts.others.is_empty() {
@@ -137,6 +159,8 @@ pub fn text(facts: &Facts) -> String {
              worktree.",
             folder.display()
         ));
+    }
+    if facts.worktree.is_some() && !facts.room {
         // Gathr reaches GitHub with its own sign-in, which an engine's sandbox may not have (0046).
         lines.push(
             "For this project's PRs use Gathr's pr, ci_failures and update_pr, not your own gh: Gathr asks \
@@ -157,7 +181,21 @@ pub fn text(facts: &Facts) -> String {
     }
     lines.extend([
         "Follow the project's AGENTS.md and CLAUDE.md when present.".to_string(),
-        "Check facts in code, current documentation or a live run. Say what you could not verify.".to_string(),
+        "Check facts in code, current documentation or a live run. Say what you could not verify."
+            .to_string(),
+    ]);
+    let unavailable = format!(
+        "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
+        off().join(", ")
+    );
+    if facts.room {
+        if facts.team && !facts.others.is_empty() {
+            lines.push(ROOM_TEAM.to_string());
+        }
+        lines.extend([ROOM.to_string(), unavailable]);
+        return lines.join("\n");
+    }
+    lines.extend([
         // Claude Code defers MCP tools behind ToolSearch, so an unnamed tool is never found (0005).
         "Gathr's tools, on the gathr server (find them with ToolSearch if needed): read_chat for \
          earlier messages and other agents' replies; give_task, edit_task, finish_task, list_tasks, \
@@ -177,10 +215,7 @@ pub fn text(facts: &Facts) -> String {
         "When something in Gathr gets in your way (a tool that refuses wrongly, a lost message, a wrong status), say so \
          with report_friction, once for each thing."
             .to_string(),
-        format!(
-            "Unavailable tools: {}. Engine timers cannot wake you after Gathr closes the engine.",
-            off().join(", ")
-        ),
+        unavailable,
     ]);
     lines.join("\n")
 }

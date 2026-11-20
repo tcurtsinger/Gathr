@@ -56,6 +56,7 @@ fn team(data: &Path, replay: &Path) -> Team {
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(data, &chat);
     Team {
         service,
         chat,
@@ -272,6 +273,7 @@ fn a_task_its_owner_reports_done_is_done_when_its_turn_ends_and_its_giver_hears_
         .send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let other = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(&data.0, &other);
     let path = format!("/api/chats/{other}/messages");
     let sent = team
         .service

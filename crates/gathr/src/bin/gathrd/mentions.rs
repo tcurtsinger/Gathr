@@ -17,10 +17,28 @@ pub struct Ended {
     pub trace: String,
 }
 
-/// Wakes each member the ended turn's words name. Apart from the agent's own task, which calls it:
-/// delivery waits on the member's task, which may be waiting on this one.
-pub fn wake(chats: Arc<Chats>, ended: Ended) {
-    tokio::spawn(async move { woken(&chats, &ended).await });
+/// Wakes each member the ended turn's words name, when it ended `done`. Apart from the agent's own
+/// task, which calls it: delivery waits on the member's task, which may be waiting on this one. In a
+/// room chat the lead's answer is then checked (0080), once whoever was woken has its turn queued.
+pub fn wake(chats: Arc<Chats>, ended: Ended, done: bool) {
+    tokio::spawn(async move {
+        if done {
+            woken(&chats, &ended).await;
+        }
+        let (chat, trace) = (ended.chat.clone(), ended.trace.clone());
+        let round = chats
+            .writer
+            .call(move |c| match gathr::room::is_room(c, &chat)? {
+                true => gathr::open_check::settle(c, &chat, &trace),
+                false => Ok(Vec::new()),
+            });
+        let at = (
+            "gathr.check.round",
+            ended.chat.as_str(),
+            ended.trace.as_str(),
+        );
+        crate::coord::quiet::started(&chats, round.await, at);
+    });
 }
 
 async fn woken(chats: &Arc<Chats>, ended: &Ended) {

@@ -212,6 +212,7 @@ impl Room {
         let made = service.send("POST", "/api/chats", json!({ "members": members }));
         assert_eq!(made.status, 200, "{}", made.body);
         let chat = made.json()["id"].as_str().unwrap().to_string();
+        super::old_chat(&data, &chat);
         let env = env.iter().map(|(k, v)| (k.to_string(), v.to_path_buf()));
         Room {
             dir,

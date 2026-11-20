@@ -6,11 +6,78 @@
 //! lines, Gathr's, the lead's and those that name it, and another member's cut to its first sentence.
 //! A whole line is capped as `read_chat` caps it.
 
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::Error;
 use crate::team::{self, Member, Role};
 use crate::text;
+
+/// The word an agent starts its words with, on a line of its own, when they answer a teammate.
+pub const REPLY: &str = "REPLY";
+
+/// Whether `chat` is a room chat: the small team model, with none of the task machinery. Every chat
+/// made since 0065 is one; older chats run as they did until they are cut.
+pub fn is_room(conn: &Connection, chat: &str) -> Result<bool, Error> {
+    let sql = "SELECT room FROM chats WHERE id = ?1";
+    let room = conn.prepare_cached(sql)?.query_row([chat], |r| r.get(0));
+    Ok(room.optional()?.unwrap_or(false))
+}
+
+/// How the start of an agent's words reads, as far as it has come.
+#[derive(Debug, PartialEq)]
+pub enum Start<'a> {
+    /// Still possibly REPLY: no line has ended yet.
+    Undecided,
+    Main,
+    /// REPLY on its own line: the words after it.
+    Reply(&'a str),
+}
+
+pub fn start(words: &str) -> Start<'_> {
+    let words = words.trim_start();
+    match words.split_once('\n') {
+        Some((first, rest)) if first.trim() == REPLY => Start::Reply(rest),
+        Some(_) => Start::Main,
+        None if REPLY.starts_with(words.trim_end()) => Start::Undecided,
+        None => Start::Main,
+    }
+}
+
+/// An agent's saved words in a room chat: without REPLY, and with what they answer when they start
+/// with it. That is the teammate's message that woke the turn, the latest from another agent that
+/// reached it, or, when that one is itself a reply, the message it sits under. Woken by the person,
+/// a REPLY is a main message. Other chats keep the words as written.
+pub fn words<'a>(
+    conn: &Connection,
+    chat: &str,
+    turn: &str,
+    words: &'a str,
+) -> Result<(&'a str, Option<String>), Error> {
+    let rest = match start(words) {
+        Start::Reply(rest) => rest,
+        Start::Undecided if words.trim() == REPLY => "",
+        _ => return Ok((words, None)),
+    };
+    if !is_room(conn, chat)? {
+        return Ok((words, None));
+    }
+    Ok((rest.trim_start(), reply_to(conn, turn)?))
+}
+
+/// The main message a REPLY in `turn` sits under (`words`): in a check turn the lead's message it
+/// checks, else the teammate's that reached it, or none when no teammate's words reached it.
+pub fn reply_to(conn: &Connection, turn: &str) -> Result<Option<String>, Error> {
+    let sql = "SELECT coalesce(
+                 (SELECT c.answer FROM turns u JOIN open_checks c ON c.answer_turn = u.answers
+                  WHERE u.id = ?1 AND u.opened_by = 'check' ORDER BY c.id DESC LIMIT 1),
+                 (SELECT coalesce(o.reply_to, o.id) FROM messages c
+                  JOIN messages o ON o.id = c.copy_of JOIN turns ot ON ot.id = o.turn_id
+                  JOIN turns me ON me.id = c.turn_id
+                  WHERE c.turn_id = ?1 AND o.role = 'assistant' AND ot.agent_id IS NOT me.agent_id
+                  ORDER BY c.ts DESC, c.rowid DESC LIMIT 1))";
+    let found = conn.prepare_cached(sql)?.query_row([turn], |r| r.get(0));
+    Ok(found?)
+}
 
 /// The most lines a turn hears.
 pub const MOST: usize = 30;

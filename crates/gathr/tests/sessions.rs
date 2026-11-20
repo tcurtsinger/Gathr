@@ -86,6 +86,7 @@ fn room(data: &Path, recording: &Path, engine: &str, more: &[(&str, &Path)]) -> 
     let made = service.send("POST", "/api/chats", json!({ "members": members }));
     assert_eq!(made.status, 200, "{}", made.body);
     let chat = made.json()["id"].as_str().unwrap().to_string();
+    common::old_chat(data, &chat);
     let room = Room {
         service,
         data: data.to_path_buf(),
