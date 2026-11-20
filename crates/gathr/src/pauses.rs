@@ -14,9 +14,9 @@ pub const AFTER_RESET_US: i64 = 30_000_000;
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Pause {
-    /// `app`, `chat` or `agent`.
+    /// `app` or `chat`.
     pub scope: String,
-    /// The chat's or agent's id; empty for the app.
+    /// The chat's id; empty for the app.
     pub target: String,
     pub since_us: i64,
     /// When the service said nothing in it runs any more.
@@ -25,21 +25,12 @@ pub struct Pause {
     pub stopped: bool,
 }
 
-impl Pause {
-    /// Whether it holds a turn in `chat` for `agent`.
-    fn covers(&self, chat: &str, agent: Option<&str>) -> bool {
-        match self.scope.as_str() {
-            "app" => true,
-            "chat" => self.target == chat,
-            _ => agent == Some(self.target.as_str()),
-        }
-    }
-}
-
-/// The pause that holds a turn Gathr queued in `chat` for `agent`, if any. The person's own message
-/// is never held: it starts the agent it's for (0010).
-pub fn holding<'a>(pauses: &'a [Pause], chat: &str, agent: Option<&str>) -> Option<&'a Pause> {
-    pauses.iter().find(|p| p.covers(chat, agent))
+/// The pause that holds a turn Gathr queued in `chat`, if any. The person's own message is never
+/// held: it starts the agent it's for (0010).
+pub fn holding<'a>(pauses: &'a [Pause], chat: &str) -> Option<&'a Pause> {
+    pauses
+        .iter()
+        .find(|p| p.scope == "app" || (p.scope == "chat" && p.target == chat))
 }
 
 fn refused(why: impl Into<String>) -> Error {
@@ -68,9 +59,7 @@ fn checked(conn: &Connection, scope: &str, target: &str) -> Result<(), Error> {
         "app" if target.is_empty() => return Ok(()),
         "app" => return Err(refused("the app's pause takes no target")),
         "chat" => "SELECT 1 FROM chats WHERE id = ?1",
-        // A removed agent (0069) is no agent to pause.
-        "agent" => "SELECT 1 FROM agents WHERE id = ?1 AND removed_ts IS NULL",
-        _ => return Err(refused("scope is app, chat or agent")),
+        _ => return Err(refused("scope is app or chat")),
     };
     let found: Option<i64> = conn.query_row(sql, [target], |r| r.get(0)).optional()?;
     match found {
@@ -125,8 +114,8 @@ pub fn chat_state(pauses: &[Pause], chat: &str) -> Value {
     }
 }
 
-/// A chat as the API shows it, with how it runs (`run`) and, on each member, its own pause and
-/// when its account's usage limit resets while it's out (`usage_until_us`).
+/// A chat as the API shows it, with how it runs (`run`) and, on each member, when its account's
+/// usage limit resets while it's out (`usage_until_us`).
 pub fn with_run(
     conn: &Connection,
     pauses: &[Pause],
@@ -147,10 +136,6 @@ pub fn with_run(
         let out: Option<i64> = until
             .query_row(params![agent, now.0, now.1], |r| r.get(0))
             .optional()?;
-        let paused = pauses
-            .iter()
-            .any(|p| p.scope == "agent" && p.target == agent);
-        member["paused"] = paused.into();
         member["usage_until_us"] = out.into();
     }
     Ok(())
@@ -175,8 +160,7 @@ pub fn resume(conn: &Connection, scope: &str, target: &str, trace: &str) -> Resu
 
 /// Turns still running and background commands still open in the scope: whose, and where.
 pub fn running(conn: &Connection, p: &Pause) -> Result<Value, Error> {
-    let scoped =
-        "(?1 = 'app' OR (?1 = 'chat' AND t.chat_id = ?2) OR (?1 = 'agent' AND t.agent_id = ?2))";
+    let scoped = "(?1 = 'app' OR (?1 = 'chat' AND t.chat_id = ?2))";
     let mut turns = conn.prepare_cached(&format!(
         "SELECT t.id, t.chat_id, t.agent_id FROM turns t WHERE t.status = 'running' AND {scoped}"
     ))?;
@@ -331,16 +315,9 @@ mod tests {
     #[test]
     fn a_pause_holds_only_turns_in_its_scope() {
         let chat = [pause_of("chat", "c1")];
-        assert!(holding(&chat, "c1", Some("ann")).is_some());
-        assert!(holding(&chat, "c2", Some("ann")).is_none());
-        let agent = [pause_of("agent", "ann")];
-        assert!(holding(&agent, "c2", Some("ann")).is_some());
-        assert!(holding(&agent, "c2", Some("bob")).is_none());
-        assert!(
-            holding(&agent, "c2", None).is_none(),
-            "a turn sent to no agent"
-        );
-        assert!(holding(&[pause_of("app", "")], "c9", None).is_some());
+        assert!(holding(&chat, "c1").is_some());
+        assert!(holding(&chat, "c2").is_none());
+        assert!(holding(&[pause_of("app", "")], "c9").is_some());
     }
 
     fn db() -> Connection {

@@ -66,6 +66,36 @@ fn stop_now_keeps_the_carry_on_in_a_chat_sent_to_no_agent() {
     });
 }
 
+/// A turn held by a pause that is gone at the next start, as one agent's after 0069, starts then.
+#[test]
+fn a_turn_held_by_a_pause_that_is_gone_starts_at_the_next_start() {
+    let data = TempDir::new();
+    std::fs::write(data.0.join("go"), "").unwrap();
+    let stopped = recording("stopped_before_reply");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &stopped)]);
+    let account = service.add_account("Main");
+    sign_in_account(&data.0, &account);
+    let chat = service.new_chat();
+    send(&service, &chat, "Write 2,000 words on rivers");
+    service.wait_for(&chat, 10, "the turn", |h| {
+        h["turns"][0]["status"] == "running"
+    });
+    pause(&service, "/api/pauses/stop", &chat);
+    service.wait_for(&chat, 10, "the held carry-on", |h| {
+        h["turns"][1]["held"] == "pause"
+    });
+    service.stop();
+    let db = rusqlite::Connection::open(data.0.join("gathr.db")).unwrap();
+    db.execute("DELETE FROM pauses", []).unwrap();
+    drop(db);
+
+    let answers = recording("signed_in");
+    let service = TestService::with_engine(&data.0, &[("GATHR_REPLAY", &answers)]);
+    service.wait_for(&chat, 20, "the carry-on after the start", |h| {
+        h["turns"][1]["status"] == "done"
+    });
+}
+
 #[test]
 fn an_engine_that_closed_leaves_no_background_command_behind() {
     let data = TempDir::new();
