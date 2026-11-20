@@ -213,7 +213,7 @@ async fn acted(
     asker: Option<&Caller>,
     trace: &str,
 ) -> Result<Looked, String> {
-    let vars = crate::coord::fresh().await;
+    let vars = gathr::run::fresh().await;
     let pr = review.pr;
     let seen = judge(chats, project, review, trace, &vars).await?;
     let (chat, head) = (review.chat.clone(), seen.head.clone());

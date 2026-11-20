@@ -1,7 +1,7 @@
 import { Plus } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
+import { BACKGROUNDS, drawnOn } from '../components/backgrounds';
 import { ColourPicker } from '../components/ColourPicker';
-import { BACKGROUNDS, drawnOn } from '../faces/backgrounds';
 
 interface Props {
   /** #RRGGBB, or null until the person picks: a grey. */

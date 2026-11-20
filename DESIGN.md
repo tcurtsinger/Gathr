@@ -59,8 +59,9 @@ actions. `muted-foreground` is metadata; `muted-surface` is a background.
 Blue is attention, links and active work, not an agent palette; on the owner's word it also tints
 the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with and
 the names the person picked in their own message (0072). `free` (dark `oklch(0.74 0.17 148)`,
-light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
-([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)).
+light `oklch(0.54 0.15 148)`) is the Free mark's green
+([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)) and Done on the board; `review` (amber) is
+the board's In review.
 `os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
 alone.
 Errors combine destructive text, a tinted surface, an icon and a reference.
@@ -811,7 +812,7 @@ General starts with Theme for This computer: System (default, follows the system
 setting), Light or Dark, applied at once without a reload. Then Open at login for
 This computer, applied immediately with Switch. The window keeps the theme and the
 navigation and workspace widths across restarts. General ends with the version and, under it, the faces'
-credit (0074): "Faces", then "Avatar Illustration System by Micah Lanier, CC BY 4.0, changed", the work
+credit: "Faces", then "Dylan! The Avatar Generator by Natalia Spivak, CC BY 4.0, changed", the work
 and the licence linked.
 
 Agent folder follows Open at login: the current path, Change and shared ? Help.
@@ -826,13 +827,14 @@ stays where it is.
 
 Engines manages named accounts and one Gathr-owned program per engine. No custom
 path. A new Gathr has no accounts and does not reuse external logins. Agents has
-one shared editor: Face, Gender, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
-56px face and Shuffle, which draws it from a new seed and keeps the gender and tone shown; Gender is Man or Woman; Skin tone is six swatches,
+one shared editor: Face, Skin tone, Background, Account, Model, Effort, Approvals. Face is the agent's
+56px face (DiceBear's Dylan; the seed picks hair, hair colour, mood and facial hair) and Shuffle, which draws it
+from a new seed and keeps the tone shown; Skin tone is six swatches,
 light to deep, named Skin tone 1 to 6; Background is twelve 26px swatches (Rose to Orchid, round the wheel, names
 for screen readers only) and a last + swatch, dashed with a plus, that opens the shared colour picker under the
 row: a saturation and brightness square, a hue bar, the colour now and its hex, on the popover surface. A colour
 not among the twelve shows on the +, pressed, and stays on it, not pressed, while a ready colour is picked. Escape or a click outside closes the picker, not Settings. Each
-redraws the face at once and is saved with Save. A gender or tone never set shows what the face's seed picked;
+redraws the face at once and is saved with Save. A tone never set shows what the face's seed picked;
 a background never set is the grey, with no swatch pressed (0074). Account implies engine;
 model/effort choices come from that installed engine. Family Latest follows new
 releases; numbered versions stay pinned. Do not ship prototype fixture models,

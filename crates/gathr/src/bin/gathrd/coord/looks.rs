@@ -8,11 +8,8 @@ use std::time::Duration;
 
 use gathr::event::Event;
 use gathr::ids::{now_us, trace_id};
-use gathr::platform::{
-    self,
-    env::{self, Vars},
-};
-use gathr::run::run;
+use gathr::platform::{self, env::Vars};
+use gathr::run::{fresh, gh, run};
 use gathr::waits::ci::{self, Seen, Target};
 use gathr::waits::{self, Wait};
 use gathr::{tasks, worktree};
@@ -178,7 +175,7 @@ async fn judged(
     if t.judged.as_deref() == Some(format!("{reviewed}:{head}").as_str()) {
         return Some((reviewed, !t.outdated));
     }
-    let vars = super::fresh().await;
+    let vars = fresh().await;
     // No verdict when git couldn't say: nothing is kept, and the next look asks again.
     let covers = crate::merging::still_covers(dir, &reviewed, head, base, &vars).await?;
     Some((reviewed, covers))
@@ -456,32 +453,6 @@ fn pr_view<'a>(number: &'a str, fields: &'a str, repo: Option<&'a str>) -> Vec<&
     args
 }
 
-/// The person's environment now (G23), as engines and git get it.
-pub async fn fresh() -> Vars {
-    tokio::task::spawn_blocking(|| env::fresh(std::env::vars_os().collect()).vars)
-        .await
-        .unwrap_or_else(|_| std::env::vars_os().collect())
-}
-
-/// Runs `gh`, once more if it fails (G5): what it printed, or why it failed.
-pub(super) async fn gh(args: &[&str], dir: &Path, vars: &Vars) -> Result<String, String> {
-    let mut why = String::new();
-    for _ in 0..2 {
-        match run(&gh_program(), args, dir, vars, LIMIT).await {
-            Ok(ran) if ran.code == Some(0) => return Ok(ran.out),
-            Ok(ran) => why = format!("gh {} failed: {}", args[0], ran.reason()),
-            Err(e) => why = e,
-        }
-    }
-    Err(why)
-}
-
-/// GitHub's `gh`, or what `GATHR_GH_PATH` names in its place, in dev and tests only (the replay
-/// harness's `fake_gh`).
-pub fn gh_program() -> PathBuf {
-    std::env::var_os("GATHR_GH_PATH").map_or_else(|| PathBuf::from("gh"), PathBuf::from)
-}
-
 fn json_text(answer: &str, key: &str) -> String {
     let value: Value = serde_json::from_str(answer).unwrap_or_default();
     value[key].as_str().unwrap_or_default().to_string()
@@ -520,6 +491,7 @@ async fn project_of(chats: &Arc<Chats>, chat: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gathr::platform::env;
 
     /// 0043 C12: met when the base's commits are all in the PR, not before; a merged or closed PR
     /// has nothing left to keep up to date.

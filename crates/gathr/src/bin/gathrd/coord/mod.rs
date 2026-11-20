@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use gathr::event::Event;
-use gathr::tasks::{self, Moved, Start};
+use gathr::tasks::{self, Start};
 use serde_json::{Value, json};
 use tokio::sync::{broadcast, mpsc};
 
@@ -15,9 +15,6 @@ mod api;
 mod looks;
 mod plans;
 pub mod quiet;
-
-pub use api::{Change as SettingsChange, change_settings_as, present, settings_shown};
-pub use looks::fresh;
 
 pub fn routes() -> axum::Router<Arc<crate::api::State>> {
     api::routes().merge(plans::routes())
@@ -31,32 +28,6 @@ fn every() -> Duration {
     let ms = std::env::var("GATHR_WAIT_EVERY_MS").ok();
     let ms = ms.and_then(|ms| ms.parse().ok());
     ms.map_or(EVERY, Duration::from_millis)
-}
-
-/// Saves a turn's status with what it moves (its task, its giver's hear-back, waits on its agent),
-/// in one transaction, and starts the turns that calls for.
-pub async fn turn_moved(chats: &Arc<Chats>, m: Moved<'_>, status: &str, why: Option<&str>) {
-    let (chat, turn, agent, task, trace) = (
-        m.chat.to_string(),
-        m.turn.to_string(),
-        m.agent.map(String::from),
-        m.task,
-        m.trace.to_string(),
-    );
-    let (status, why) = (status.to_string(), why.map(String::from));
-    let carries_on = m.carries_on.map(String::from);
-    let work = move |conn: &mut rusqlite::Connection| {
-        let m = Moved {
-            chat: &chat,
-            turn: &turn,
-            agent: agent.as_deref(),
-            task,
-            trace: &trace,
-            carries_on: carries_on.as_deref(),
-        };
-        tasks::turn_moved(conn, &m, &status, why.as_deref())
-    };
-    apply(chats, "gathr.turn.status", m.trace, work).await;
 }
 
 /// A chat's tasks, waits, asks and plans, as `GET /api/chats/<id>/tasks` answers and the live
@@ -174,14 +145,6 @@ pub async fn recover(chats: &Arc<Chats>) {
         ),
         None => {}
     }
-}
-
-/// Asks GitHub through `gh` in `dir`, with the person's environment now, but never its debug output:
-/// `GH_DEBUG` prints the HTTP traffic, headers and all, into what an error can show an agent (0046).
-pub async fn github(args: &[&str], dir: &std::path::Path) -> Result<String, String> {
-    let mut vars = looks::fresh().await;
-    vars.retain(|(name, _)| !name.eq_ignore_ascii_case("GH_DEBUG"));
-    looks::gh(args, dir, &vars).await
 }
 
 /// Looks at every open wait now, then every two minutes, for as long as the service runs.

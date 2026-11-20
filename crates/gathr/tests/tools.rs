@@ -134,6 +134,7 @@ fn an_engines_token_reaches_gathrs_tools_as_its_agent_until_the_engine_exits() {
         "report_friction",
         "restart_task",
         "set_agent",
+        "set_board_line",
         "set_checks",
         "set_settings",
         "settings",

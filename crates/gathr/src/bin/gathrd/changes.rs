@@ -164,7 +164,7 @@ async fn count_of(chats: &Arc<Chats>, to: &ToCount) -> Result<Measure, (&'static
     };
     let lock = crate::merging::lock_of(&project.folder);
     let _one = lock.lock().await;
-    let vars = crate::coord::fresh().await;
+    let vars = gathr::run::fresh().await;
     let repo = &project.folder;
     let (_, head, base) = crate::merging::open_pr(to.pr, repo)
         .await

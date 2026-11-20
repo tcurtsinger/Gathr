@@ -1,7 +1,6 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
 import type { Deletable, DeleteCounts } from './deleting';
-import type { Gender } from './faces/options';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -513,6 +512,15 @@ export interface Chat {
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';
 
+/** A piece of work on a chat's board, set by its agents. `owner` is an agent's id, `name` its name. */
+export interface BoardLine {
+  id: number;
+  owner: string;
+  name: string;
+  text: string;
+  state: 'to_do' | 'doing' | 'in_review' | 'done';
+}
+
 /** A chat whose title holds the query (0035). `time` is its last activity. */
 export interface ChatHit {
   chat: string;
@@ -560,8 +568,8 @@ export interface Agent {
   approvals: Approvals;
   /** What its face is drawn from (0074): its name when made, a new one at each Shuffle. */
   face_seed: string;
-  /** Null until the person sets it: the seed picks. */
-  gender: Gender | null;
+  /** Set by the old faces' Gender; kept, no longer drawn. */
+  gender: 'man' | 'woman' | null;
   /** Skin tone 1 to 6; null until the person sets it. */
   skin: number | null;
   /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
@@ -715,6 +723,7 @@ export const api = {
   caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
   clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
+  board: (chat: string) => call<{ lines: BoardLine[]; agents: number }>('GET', `/api/chats/${chat}/board`),
   tasks: (chat: string) =>
     call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[]; caught: string[] }>(
       'GET',
