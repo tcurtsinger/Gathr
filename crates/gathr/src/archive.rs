@@ -2,8 +2,6 @@
 //! one event: its queued turns stop and its pause goes. The service interrupts a turn still running.
 //! Deleting takes an archived chat and removes its rows; its files are the service's to remove.
 
-use std::path::PathBuf;
-
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::Serialize;
 
@@ -91,16 +89,13 @@ pub fn unarchive(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), E
 }
 
 /// Removes an archived chat's rows: its messages, turns and engine frames, team, sessions and
-/// events, and what the old team machinery kept of it. Answers the folders of its old tasks' files.
-pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<PathBuf>, Error> {
+/// events.
+pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<(), Error> {
     let tx = conn.transaction()?;
     if archived(&tx, chat)?.is_none() {
         return Err(Error::Refused("archive it first".into()));
     }
-    let files = task_files(&tx, chat)?;
     crate::folders::due(&tx, chat, true)?;
-    // The old machinery's tables stay until a migration drops them, and their rows point at the chat.
-    let of_tasks = "(SELECT number FROM tasks WHERE chat_id = ?1)";
     let of_turns = "(SELECT id FROM turns WHERE chat_id = ?1)";
     for sql in [
         format!("DELETE FROM background WHERE turn_id IN {of_turns}"),
@@ -113,29 +108,11 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         "DELETE FROM questions WHERE chat_id = ?1".into(),
         "DELETE FROM messages WHERE chat_id = ?1".into(),
         "DELETE FROM turns WHERE chat_id = ?1".into(),
-        format!("DELETE FROM task_after WHERE task IN {of_tasks} OR after_task IN {of_tasks}"),
-        format!(
-            "UPDATE tasks SET blocked_on = NULL WHERE blocked_on IN {of_tasks} AND chat_id != ?1"
-        ),
-        "DELETE FROM waits WHERE chat_id = ?1".into(),
-        "DELETE FROM landings WHERE chat_id = ?1".into(),
-        "DELETE FROM quiet WHERE chat_id = ?1".into(),
         "DELETE FROM open_checks WHERE chat_id = ?1".into(),
-        format!("DELETE FROM review_notes WHERE task IN {of_tasks}"),
-        "DELETE FROM task_sessions WHERE chat_id = ?1".into(),
-        "DELETE FROM changes WHERE chat_id = ?1 AND landed_ts IS NULL".into(),
-        "DELETE FROM plan_parts WHERE version_id IN
-             (SELECT v.id FROM plan_versions v JOIN plans p ON p.id = v.plan_id WHERE p.chat_id = ?1)"
-            .into(),
-        "DELETE FROM tasks WHERE chat_id = ?1".into(),
-        "DELETE FROM plan_versions WHERE plan_id IN (SELECT id FROM plans WHERE chat_id = ?1)".into(),
-        "DELETE FROM plans WHERE chat_id = ?1".into(),
-        "DELETE FROM asks WHERE chat_id = ?1".into(),
         "DELETE FROM chat_members WHERE chat_id = ?1".into(),
         "DELETE FROM engine_sessions WHERE chat_id = ?1".into(),
         "DELETE FROM pauses WHERE scope = 'chat' AND target = ?1".into(),
         "DELETE FROM events WHERE conversation_id = ?1".into(),
-        "DELETE FROM held_turns WHERE chat_id = ?1".into(),
         "DELETE FROM chats WHERE id = ?1".into(),
     ] {
         tx.execute(&sql, [chat])?;
@@ -144,29 +121,7 @@ pub fn delete(conn: &mut Connection, chat: &str, trace: &str) -> Result<Vec<Path
         .trace(trace)
         .ok()
         .attr("gathr.chat.id", chat)
-        .attr("gathr.task.files", files.len())
         .insert(&tx)?;
     tx.commit()?;
-    Ok(files)
-}
-
-/// The folders the chat's old tasks' files were copied into.
-fn task_files(conn: &Connection, chat: &str) -> Result<Vec<PathBuf>, Error> {
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT json_extract(f.value, '$.path') FROM tasks t, json_each(t.files) f
-         WHERE t.chat_id = ?1 AND json_valid(t.files)",
-    )?;
-    let paths = stmt.query_map([chat], |r| r.get::<_, Option<String>>(0))?;
-    let mut folders = Vec::new();
-    for path in paths {
-        if let Some(folder) = path?
-            .as_deref()
-            .and_then(|p| std::path::Path::new(p).parent())
-        {
-            folders.push(folder.to_path_buf());
-        }
-    }
-    folders.sort();
-    folders.dedup();
-    Ok(folders)
+    Ok(())
 }

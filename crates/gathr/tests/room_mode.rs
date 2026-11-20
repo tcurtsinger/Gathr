@@ -1,5 +1,5 @@
 //! A room chat's turns (0065), through a real service on Claude Code's replay stand-in: who gets a
-//! turn, and that no ask or task row is kept; a turn with nothing to add posts nothing; a like starts
+//! turn, and that Gathr says nothing itself; a turn with nothing to add posts nothing; a like starts
 //! no turn; the cap on hand-offs pauses the room; Stop now holds the person's message queued there;
 //! a REPLY sits under the message it answers. Each
 //! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
@@ -136,13 +136,6 @@ fn the_persons_words_go_to_the_lead_or_whom_they_name_and_an_agents_wake_only_wh
         room.turns_of(&history, &room.bo),
         [teammate.clone(), teammate]
     );
-    // No ask, task or anything of the old machinery is kept for any of it.
-    assert_eq!((room.count("asks"), room.count("tasks")), (0, 0));
-    let asked = rows(
-        &data.0,
-        "SELECT count(*) AS n FROM turns WHERE ask_id IS NOT NULL",
-    );
-    assert_eq!(asked[0]["n"], 0);
     let gathr = history["messages"].as_array().unwrap().iter();
     let said = gathr.filter(|m| m["role"] == "gathr" && m["copy_of"].is_null());
     assert_eq!(said.count(), 0, "Gathr said something itself: {history}");

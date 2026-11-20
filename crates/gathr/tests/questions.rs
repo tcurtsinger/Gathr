@@ -1,10 +1,10 @@
 //! A room chat's question to the person (0067), through a real service on Claude Code's replay stand-in:
-//! `ask_person` stores it open, with no task, and the chat needs the person; the answer is stored, and
+//! `ask_person` stores it open, and the chat needs the person; the answer is stored, and
 //! the asking agent's next turn opens with it.
 
 mod common;
 
-use common::{TempDir, TestService, call_tool, first_token, held_recording, rows, sign_in_account};
+use common::{TempDir, TestService, call_tool, first_token, held_recording, sign_in_account};
 use serde_json::{Value, json};
 
 #[test]
@@ -42,7 +42,7 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     let asked = call_tool(service.info.port, &token, "ask_person", ask);
     assert_eq!(asked["isError"], false, "{asked}");
 
-    // Stored open, on history, with no task row; the chat needs the person.
+    // Stored open, on history; the chat needs the person.
     let history = service.call("GET", &format!("/api/chats/{chat}")).json();
     let question = &history["questions"][0];
     assert_eq!(
@@ -51,7 +51,6 @@ fn a_question_is_stored_open_and_its_answer_starts_the_askers_turn() {
     );
     assert_eq!(question["choices"][1]["label"], "Brook", "{history}");
     assert_eq!(question["answered"], Value::Null, "{history}");
-    assert_eq!(rows(&data.0, "SELECT count(*) AS n FROM tasks")[0]["n"], 0);
     let listed = service.call("GET", "/api/chats").json();
     let row = listed
         .as_array()

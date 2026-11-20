@@ -254,17 +254,11 @@ pub fn delete_project(
             params![path.to_string_lossy(), kind, repo, now],
         )?;
     }
-    let runs = "(SELECT id FROM check_runs WHERE project_id = ?1)";
     for sql in [
-        format!("DELETE FROM check_steps WHERE run_id IN {runs}"),
-        "DELETE FROM check_runs WHERE project_id = ?1".into(),
-        "DELETE FROM check_caches WHERE project_id = ?1".into(),
-        "DELETE FROM project_checks WHERE project_id = ?1".into(),
-        "DELETE FROM project_check_allowed WHERE project_id = ?1".into(),
-        "DELETE FROM project_members WHERE project_id = ?1".into(),
-        "DELETE FROM projects WHERE id = ?1".into(),
+        "DELETE FROM project_members WHERE project_id = ?1",
+        "DELETE FROM projects WHERE id = ?1",
     ] {
-        tx.execute(&sql, [project])?;
+        tx.execute(sql, [project])?;
     }
     Event::point("gathr.project.delete")
         .trace(trace)

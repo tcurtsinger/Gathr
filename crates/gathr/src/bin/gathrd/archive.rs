@@ -116,13 +116,12 @@ pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>
     let exited = tokio::time::timeout(EXIT_WAIT, ended).await;
     s.chats.pauses_changed().await;
     let (id, trace) = (chat.clone(), t.0.clone());
-    let Json(files) = db(&s, t, "Delete failed", move |c| {
-        Ok(json!(archive::delete(c, &id, &trace)?))
+    let _ = db(&s, t, "Delete failed", move |c| {
+        archive::delete(c, &id, &trace).map(|()| Value::Null)
     })
     .await?;
-    let files: Vec<PathBuf> = serde_json::from_value(files).unwrap_or_default();
     let project = project.as_str().map(PathBuf::from);
-    let mut left = remove_files(&s, &chat, project, files).await;
+    let mut left = remove_files(&s, &chat, project).await;
     left.extend(crate::cleanup::sweep(&s.chats, Some(&chat)).await);
     if exited.is_err() {
         left.insert(0, "An engine is still running".into());
@@ -139,14 +138,9 @@ pub async fn delete(s: &Arc<State>, t: &Trace, chat: &str) -> Result<Vec<String>
     Ok(left)
 }
 
-/// The chat's worktrees from before the agent folder, its hooks, folder and its tasks' files: what
-/// couldn't be removed, with why.
-async fn remove_files(
-    s: &State,
-    chat: &str,
-    project: Option<PathBuf>,
-    task_files: Vec<PathBuf>,
-) -> Vec<String> {
+/// The chat's worktrees from before the agent folder, its hooks and folder: what couldn't be
+/// removed, with why.
+async fn remove_files(s: &State, chat: &str, project: Option<PathBuf>) -> Vec<String> {
     let data = s.data.path();
     let fresh =
         tokio::task::spawn_blocking(|| gathr::platform::env::fresh(std::env::vars_os().collect()));
@@ -159,13 +153,7 @@ async fn remove_files(
             left.push(why);
         }
     }
-    let folders = [data.join("hooks").join(chat), data.join("chats").join(chat)];
-    // Only copies under task-files: a path from anywhere else is never removed.
-    let copies = data.join("task-files");
-    let task_files = task_files
-        .into_iter()
-        .filter(|f| f.starts_with(&copies) && *f != copies);
-    for folder in folders.into_iter().chain(task_files) {
+    for folder in [data.join("hooks").join(chat), data.join("chats").join(chat)] {
         match std::fs::remove_dir_all(&folder) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
                 left.push(format!("{} wasn't deleted: {e}", folder.display()));

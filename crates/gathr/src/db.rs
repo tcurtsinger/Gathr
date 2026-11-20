@@ -75,6 +75,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0065_chat_room.sql"),
     include_str!("../migrations/0066_agent_picture.sql"),
     include_str!("../migrations/0067_questions.sql"),
+    include_str!("../migrations/0068_drop_old_tables.sql"),
 ];
 
 /// The schema version this build writes.
@@ -244,47 +245,6 @@ mod tests {
         assert_eq!(session("no-agent", Some("pia")), None);
     }
 
-    /// 0010 rebuilds `tasks`, which other tables point at: every task, its links and waits stay.
-    #[test]
-    fn tasks_and_what_points_at_them_outlast_the_person_tasks_rebuild() {
-        let path = temp_db("person-tasks");
-        let conn = Connection::open(&path).unwrap();
-        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
-        for sql in &MIGRATIONS[..9] {
-            conn.execute_batch(sql).unwrap();
-        }
-        conn.execute_batch(
-            "PRAGMA user_version = 9;
-             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
-             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, reviewed, created_ts,
-                                updated_ts)
-                 VALUES (1, 'c', 'lead', 'ann', 'work', 'one', 'done', NULL, 1, 1),
-                        (2, 'c', 'lead', 'bo', 'review', 'two', 'held', 'abc123', 2, 2);
-             INSERT INTO task_after VALUES (2, 1);
-             INSERT INTO waits (id, chat_id, agent_id, task, kind, then_do, state, until_ts, created_ts)
-                 VALUES ('w', 'c', 'bo', 2, 'pr', 'merge', 'open', 9, 2);",
-        )
-        .unwrap();
-        drop(conn);
-        let conn = open(&path).unwrap();
-        let kept: (i64, i64, i64, String) = conn
-            .query_row(
-                "SELECT (SELECT count(*) FROM tasks), (SELECT count(*) FROM task_after),
-                        (SELECT count(*) FROM waits WHERE task = 2),
-                        (SELECT reviewed FROM tasks WHERE number = 2)",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
-            )
-            .unwrap();
-        assert_eq!(kept, (2, 1, 1, "abc123".to_string()));
-        let broken: i64 = conn
-            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
-                r.get(0)
-            })
-            .unwrap();
-        assert_eq!(broken, 0);
-    }
-
     /// 0028 rebuilds `messages`, which the search index points at by rowid: every message keeps
     /// its rowid and columns, search finds what it found, and a thinking row is never indexed.
     #[test]
@@ -354,41 +314,6 @@ mod tests {
             )
             .unwrap();
         assert!(plan.contains("messages_by_chat"), "{plan}");
-    }
-
-    /// 0045: a giver may edit a task until it starts; a task that ran before counts as started.
-    /// Blocked by its `after`, or cancelled, a task may never have run: only its turns tell.
-    #[test]
-    fn tasks_that_ran_before_0045_count_as_started() {
-        let path = temp_db("briefs");
-        let conn = Connection::open(&path).unwrap();
-        for sql in &MIGRATIONS[..44] {
-            conn.execute_batch(sql).unwrap();
-        }
-        conn.execute_batch(
-            "PRAGMA user_version = 44;
-             INSERT INTO chats (id, title, created_ts) VALUES ('c', 'C', 1);
-             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, created_ts, updated_ts)
-                 VALUES (1, 'c', 'lead', 'ann', 'work', 'one', 'working', 1, 7),
-                        (2, 'c', 'lead', 'bo', 'work', 'two', 'waiting', 2, 8),
-                        (3, 'c', 'lead', 'bo', 'work', 'three', 'blocked', 3, 9),
-                        (4, 'c', 'lead', 'bo', 'work', 'four', 'cancelled', 4, 10),
-                        (5, 'c', 'lead', 'ann', 'work', 'five', 'blocked', 5, 11);
-             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, task) VALUES
-                 ('ran', 'c', 'x', 'done', 5, 5), ('dropped', 'c', 'x', 'queued', 4, 4);",
-        )
-        .unwrap();
-        drop(conn);
-        let conn = open(&path).unwrap();
-        let mut stmt = conn
-            .prepare("SELECT number, started_ts FROM tasks ORDER BY number")
-            .unwrap();
-        let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
-        let started: Vec<(i64, Option<i64>)> = rows.map(Result::unwrap).collect();
-        assert_eq!(
-            started,
-            [(1, Some(7)), (2, None), (3, None), (4, None), (5, Some(11))]
-        );
     }
 
     /// 0051 rebuilds `agents`, which teams point at, and `agent_folders`: every row stays with its
@@ -583,54 +508,151 @@ mod tests {
 }
 
 #[cfg(test)]
-mod engine_wait_migration_test {
+mod drop_old_tables_test {
     use super::*;
+
+    /// The kept tables' kept columns, rowid first where a table has one.
+    const KEPT: &[(&str, &str)] = &[
+        (
+            "chats",
+            "rowid, id, title, created_ts, project, project_id, archived_ts",
+        ),
+        (
+            "turns",
+            "rowid, id, chat_id, trace_id, status, created_ts, ended_ts, why, agent_id, position, answers, held, opened_by, opened_version",
+        ),
+        (
+            "messages",
+            "rowid, id, chat_id, turn_id, ts, role, kind, body, to_agent, copy_of, picks, reply_to",
+        ),
+        ("background", "rowid, id, turn_id, description, started_ts"),
+        ("reads", "chat_id, topic, seen_ts, folded"),
+        (
+            "projects",
+            "rowid, id, name, name_key, folder, created_ts, folder_name",
+        ),
+        (
+            "project_members",
+            "rowid, project_id, agent_id, role, position",
+        ),
+        (
+            "agents",
+            "rowid, id, name, name_key, account_id, created_ts",
+        ),
+        (
+            "agent_context",
+            "rowid, chat_id, agent_id, used, updated_ts",
+        ),
+        (
+            "questions",
+            "rowid, id, chat_id, agent, question, choices, pick, words, asked_ts, answered_ts",
+        ),
+        ("board_lines", "rowid, id, chat_id, owner, text, state"),
+        (
+            "reactions",
+            "rowid, message_id, agent_id, chat_id, created_ts",
+        ),
+    ];
+
+    fn kept(conn: &Connection) -> Vec<String> {
+        let mut all = Vec::new();
+        for (table, columns) in KEPT {
+            let sql = format!("SELECT '{table}' || json_array({columns}) FROM {table} ORDER BY 1");
+            let mut stmt = conn.prepare(&sql).unwrap();
+            let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+            all.extend(rows.map(Result::unwrap));
+        }
+        all
+    }
+
+    /// 0068 drops the old machinery's tables and columns: every kept row stays with its rowid and
+    /// values, search still finds its words, and no reference is left broken.
     #[test]
-    fn engine_wait_migration_keeps_turn_fields_and_background_references() {
-        let path =
-            std::env::temp_dir().join(format!("gathr-migrate-{}.sqlite", crate::ids::span_id()));
+    fn the_old_tables_go_and_every_kept_row_stays() {
+        let path = std::env::temp_dir()
+            .join(format!("gathr-db-drop-{}", crate::ids::span_id()))
+            .join("gathr.db");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let conn = Connection::open(&path).unwrap();
-        for sql in &MIGRATIONS[..12] {
+        for sql in &MIGRATIONS[..67] {
             conn.execute_batch(sql).unwrap();
         }
-        conn.execute_batch("PRAGMA user_version = 12;
-            INSERT INTO chats (id, title, created_ts) VALUES ('c', 'Chat', 1);
-            INSERT INTO turns VALUES ('t', 'c', 'trace', 'queued', 2, NULL, 'paused', 'a', 3, 4, 'answer', 'pause', 'cancelled');
-            INSERT INTO background VALUES ('b', 't', 'command', 5);").unwrap();
+        conn.execute_batch(
+            "PRAGMA user_version = 67;
+             INSERT INTO accounts VALUES ('acc', 'claude', 'Main', 'main', 1);
+             INSERT INTO agents (id, name, name_key, account_id, created_ts) VALUES
+                 ('mira', 'Mira', 'mira', 'acc', 1), ('ann', 'Ann', 'ann', 'acc', 2);
+             INSERT INTO projects (id, name, name_key, folder, created_ts, folder_name, ci, merge_method)
+                 VALUES ('p', 'Notes', 'notes', 'x', 1, 'Notes', 'ci', 'squash');
+             INSERT INTO project_members VALUES ('p', 'mira', 'supervisor', 0), ('p', 'ann', 'member', 1);
+             INSERT INTO chats (id, title, created_ts, project, project_id, room) VALUES
+                 ('c', 'Walk', 1, 'x', 'p', 1), ('d', 'Map', 2, NULL, NULL, 0);
+             INSERT INTO asks (id, chat_id, size) VALUES ('a', 'c', 'new');
+             INSERT INTO turns (id, chat_id, trace_id, status, created_ts, agent_id, position, task,
+                                answers, held, stop_why, opened_by, ask_id, result_of, placed, session_id)
+                 VALUES ('t1', 'c', 'x', 'done', 5, 'mira', 1, 7, NULL, NULL, 'stopped', 'person', 'a',
+                         NULL, 'main', 's1'),
+                        ('t0', 'c', 'y', 'queued', 5, 'ann', NULL, NULL, 't1', 'pause', NULL, 'teammate',
+                         NULL, 't1', NULL, NULL);
+             INSERT INTO background VALUES ('b', 't1', 'Made-up command', 6);
+             INSERT INTO messages (id, chat_id, turn_id, ts, role, kind, body, about, reply_task, reply_to) VALUES
+                 ('m1', 'c', 't1', 1, 'user', 'text', 'Plan the gravel walk', 't:7', 7, NULL),
+                 ('gone', 'c', 't1', 2, 'assistant', 'text', 'gravel deleted', NULL, NULL, NULL),
+                 ('m2', 'c', 't1', 3, 'assistant', 'text', 'The gravel map is ready', 't:7', NULL, 'm1'),
+                 ('m3', 'd', NULL, 4, 'user', 'text', 'Another road', NULL, NULL, NULL);
+             DELETE FROM messages WHERE id = 'gone';
+             INSERT INTO reactions VALUES ('m2', 'ann', 'c', 7);
+             INSERT INTO reads VALUES ('c', '', 3, NULL), ('c', 't:7', 3, 1);
+             INSERT INTO agent_context (chat_id, agent_id, used, updated_ts, told) VALUES ('c', 'mira', 9, 8, 1);
+             INSERT INTO questions (chat_id, agent, question, choices, asked_ts) VALUES
+                 ('c', 'mira', 'Which name?', '[{\"label\":\"Ridge\"}]', 9);
+             INSERT INTO board_lines (chat_id, owner, text, state) VALUES ('c', 'ann', 'Draw the map', 'doing');
+             INSERT INTO tasks (number, chat_id, giver, owner, kind, what, state, created_ts, updated_ts, ask_id)
+                 VALUES (7, 'c', 'mira', 'ann', 'work', 'Draw it', 'done', 1, 1, 'a');
+             INSERT INTO task_after VALUES (7, 7);
+             INSERT INTO turn_answers VALUES ('t1', 7);
+             INSERT INTO task_sessions VALUES (7, 'ann', 'c', 'acc', 's2', NULL, 0, 0);
+             INSERT INTO plans (id, chat_id, ask_id, lead, created_ts) VALUES (1, 'c', 'a', 'mira', 1);
+             INSERT INTO plan_versions (id, plan_id, n, message_id, turn_id, title, text, created_ts)
+                 VALUES (1, 1, 1, 'm2', 't1', 'Walk', 'Draw it', 1);
+             INSERT INTO waits (id, chat_id, agent_id, task, kind, then_do, state, until_ts, created_ts)
+                 VALUES ('w', 'c', 'ann', 7, 'pr', 'merge', 'open', 9, 2);
+             INSERT INTO quiet (chat_id) VALUES ('c');
+             INSERT INTO check_runs VALUES ('r', 'p', 'abc', 'passed', NULL, 0, 'x', 1, 2);
+             INSERT INTO check_steps VALUES ('r', 0, 'cargo test', 0, 5, 'ok');
+             INSERT INTO project_checks VALUES ('p', 0, 'cargo test', 'person', 1);",
+        )
+        .unwrap();
+        let before = kept(&conn);
         drop(conn);
+
         let conn = open(&path).unwrap();
-        let kept: (String, i64, i64, String, String, String) = conn.query_row(
-            "SELECT agent_id, position, task, answers, held, stop_why FROM turns WHERE id = 't'", [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))).unwrap();
-        assert_eq!(
-            kept,
-            (
-                "a".into(),
-                3,
-                4,
-                "answer".into(),
-                "pause".into(),
-                "cancelled".into()
-            )
-        );
-        assert_eq!(
-            conn.query_row("SELECT turn_id FROM background WHERE id = 'b'", [], |r| {
-                r.get::<_, String>(0)
+        assert_eq!(schema_version(&conn).unwrap(), 68);
+        assert_eq!(kept(&conn), before);
+        let found: Vec<i64> = conn
+            .prepare("SELECT rowid FROM message_search WHERE message_search MATCH 'gravel' ORDER BY rowid")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
+        assert_eq!(found, [1, 3]);
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| {
+                r.get(0)
             })
-            .unwrap(),
-            "t"
-        );
-        conn.execute("UPDATE turns SET held = 'codex' WHERE id = 't'", [])
             .unwrap();
-        assert_eq!(
-            conn.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r
-                .get::<_, i64>(
-                0
-            ))
-            .unwrap(),
-            0
-        );
-        drop(conn);
-        let _ = std::fs::remove_file(path);
+        assert_eq!(broken, 0);
+        let left: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema WHERE name IN ('tasks', 'task_after', 'waits', 'asks',
+                     'plans', 'plan_versions', 'plan_parts', 'held_turns', 'turn_answers', 'task_sessions',
+                     'review_notes', 'landings', 'changes', 'quiet', 'pr_cleanup', 'project_checks',
+                     'project_check_allowed', 'check_runs', 'check_steps', 'check_caches', 'turns_next')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(left, 0);
     }
 }
