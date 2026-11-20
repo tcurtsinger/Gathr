@@ -1,7 +1,8 @@
 //! A room chat's turns (0065), through a real service on Claude Code's replay stand-in: who gets a
-//! turn, and that no ask or task row is kept; a turn with nothing to add posts nothing; the cap on
-//! hand-offs pauses the room; a REPLY sits under the message it answers. Each engine plays its turns
-//! from the start of the recording, so an agent's nth turn says the nth words given.
+//! turn, and that no ask or task row is kept; a turn with nothing to add posts nothing; a like starts
+//! no turn; the cap on hand-offs pauses the room; a REPLY sits under the message it answers. Each
+//! engine plays its turns from the start of the recording, so an agent's nth turn says the nth words
+//! given.
 
 mod common;
 
@@ -158,6 +159,26 @@ fn a_turn_with_nothing_to_add_ends_done_and_posts_nothing() {
         !messages.into_iter().any(|m| m["role"] == "gathr"),
         "{history}"
     );
+}
+
+#[test]
+fn a_like_is_kept_and_starts_no_turn() {
+    let data = TempDir::new();
+    let room = room(&data.0, &saying(&data.0, &["The map is ready."]));
+    room.say("Draw the map", Some(&room.ann));
+    let history = room.quiet(1);
+    let mut messages = history["messages"].as_array().unwrap().iter();
+    let message = messages.find(|m| m["role"] == "assistant" && m["kind"] == "text");
+    let message = message.unwrap()["id"].as_str().unwrap().to_string();
+
+    let path = format!("/api/chats/{}/messages/{message}/like", room.chat);
+    let given = room.service.send("PUT", &path, json!({}));
+    assert_eq!(given.status, 200, "{}", given.body);
+    assert_eq!(given.json()["did"], "marked", "{}", given.body);
+    assert_eq!(room.count("reactions"), 1);
+    let history = room.quiet(1);
+    let mut messages = history["messages"].as_array().unwrap().iter();
+    assert!(!messages.any(|m| m["role"] == "gathr"), "{history}");
 }
 
 #[test]
