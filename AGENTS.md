@@ -25,7 +25,7 @@ Gathr is an open-source desktop app for working with your own AI agents, from di
 - **The owner uses this PC.** Gathr is installed on it and holds their real chats; SerenityOS, the owner's earlier app, runs beside it. Never install, quit or restart either. Never stop processes by name (`Stop-Process -Name`, `taskkill /IM`): stop only what you started, by its process id.
 - **The owner's data** is `%APPDATA%\Gathr` (`~/Library/Application Support/Gathr` on a Mac). Never run a service, the CLI or `gathr-app` without `--data <your own folder>`: without it they run on the real data.
 - **Logins are single-use secrets.** Each account's login lives in its own Gathr folder. Never touch `~/.claude`, `~/.codex` or `~/.serenityos`, never copy a `.credentials.json` or `auth.json`, and never force-kill an engine that may be renewing its login.
-- **Ask before installing or downloading anything** (its name, source and size). No sound without warning. Never read or write the owner's clipboard. No window opens on the owner's desktop without telling them first.
+- **Ask before installing or downloading anything** (its name, source and size). The one exception: `npm ci` in your own worktree's `ui` folder needs no asking, since it installs only what the project's lockfile names. No sound without warning. Never read or write the owner's clipboard. No window opens on the owner's desktop without telling them first.
 - **Nothing that costs money is required.** Gathr runs the providers' own agents on the person's own logins. A run on real engines spends the owner's tokens: only at their word.
 - **Guard only against real risks.** No kill switches, disabled features or disclaimers for their own sake.
 
