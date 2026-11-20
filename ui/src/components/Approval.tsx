@@ -12,9 +12,6 @@ export interface Approval {
   answer?: { allow: boolean; failure?: Failure };
 }
 
-/** Still waiting on the person: not answered, or its answer was refused. One being sent isn't. */
-export const unanswered = (a: Approval) => !a.answer || !!a.answer.failure;
-
 /** What an approval's buttons do: answer it, and open a refusal's reference. */
 interface Actions {
   approve: (request: string, allow: boolean) => void;

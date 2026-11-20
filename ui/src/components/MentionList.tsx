@@ -1,5 +1,5 @@
 import { ComposerMenu, ComposerMenuItem } from '@/components/assistant-ui/elements/composer';
-import { Face, type FaceMark } from './Face';
+import { Face } from './Face';
 
 /** Someone "@" can name: `meta` is its role in the chat; `out` when naming it brings it into the chat. */
 export interface Person {
@@ -7,7 +7,6 @@ export interface Person {
   name: string;
   meta?: string;
   out?: boolean;
-  mark?: FaceMark;
 }
 
 interface Props {
@@ -17,7 +16,7 @@ interface Props {
   onPick: (index: number) => void;
 }
 
-/** The "@" list above the message box: the composer's one menu, a face at 24 with its mark on each row. */
+/** The "@" list above the message box: the composer's one menu, a face at 24 on each row. */
 export function MentionList({ people, lit, onPick }: Props) {
   const row = (p: Person) => {
     const k = people.indexOf(p);
@@ -33,7 +32,7 @@ export function MentionList({ people, lit, onPick }: Props) {
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => onPick(k)}
       >
-        <Face agent={{ id: p.id, name: p.name }} size={24} mark={p.mark} />
+        <Face agent={{ id: p.id, name: p.name }} size={24} />
         <span className="flex-1 truncate text-start">{p.name}</span>
         {p.meta && <span className="mention-meta">{p.meta}</span>}
       </ComposerMenuItem>

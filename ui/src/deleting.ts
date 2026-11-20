@@ -1,5 +1,4 @@
 import { Failure } from './api';
-import { list } from './chat/team';
 
 /** What deleting a project or an agent does (0069), as the service counts it before and answers after. */
 export interface DeleteCounts {
@@ -15,6 +14,8 @@ export interface DeleteCounts {
 export type Deletable = 'project' | 'agent';
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`;
+const list = (names: string[]) =>
+  names.length < 2 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 
 /**
  * The confirm's words (the owner's, 0069): what is deleted, then the tasks cancelled, then who becomes

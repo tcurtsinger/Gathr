@@ -9,9 +9,8 @@ export function widest() {
   return Math.max(360, end - nav - 360);
 }
 
-/** The panel's button in the top line, open or closed; closed, its dot says a question waits on the person. */
-export function WorkspaceToggle(props: { open: boolean; waiting: boolean; onToggle: () => void }) {
-  const { open, waiting, onToggle } = props;
+/** The sidebar's button in the top line, open or closed. */
+export function WorkspaceToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <IconButton
       aria-label={open ? 'Close sidebar' : 'Open sidebar'}
@@ -20,7 +19,6 @@ export function WorkspaceToggle(props: { open: boolean; waiting: boolean; onTogg
       onClick={onToggle}
     >
       <PanelRight />
-      {waiting && !open && <i className="attention" />}
     </IconButton>
   );
 }

@@ -8,7 +8,6 @@ import { AgentFolder } from './AgentFolder';
 import { AppVersion } from './AppVersion';
 import { AutoCompact } from './AutoCompact';
 import { HandoffLimit } from './HandoffLimit';
-import { StaleDays } from './StaleDays';
 
 /** Settings > General (startup/v1): what Gathr does on this computer, whoever its accounts are. */
 export function General({ onReference }: { onReference: (ref: string) => void }) {
@@ -94,7 +93,6 @@ export function General({ onReference }: { onReference: (ref: string) => void })
         </div>
       )}
       <AgentFolder onReference={onReference} />
-      <StaleDays onReference={onReference} />
       <HandoffLimit onReference={onReference} />
       <AutoCompact onReference={onReference} />
       <AppVersion onReference={onReference} />

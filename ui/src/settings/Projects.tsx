@@ -1,21 +1,10 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import {
-  type Agent,
-  api,
-  type Failure,
-  type Named,
-  type Project,
-  type ProjectChange,
-  type Role,
-} from '../api';
-import { began } from '../chat/team';
+import { type Agent, api, type Failure, type Project, type ProjectChange, type Role } from '../api';
 import { danger } from '../components/Confirm';
 import { FailureNotice } from '../components/Notice';
 import { DeleteConfirm } from '../DeleteConfirm';
 import { listen } from '../live';
-import { ChecksCache } from './ChecksCache';
 import { Team } from './ProjectTeam';
 import './agents.css';
 import './projects.css';
@@ -25,13 +14,11 @@ export type Seat = { agent: string; role: Role };
 
 /**
  * Settings > Projects (0043, the owner's pick B): the projects listed as Agents lists agents, the picked
- * one's General (name, folder, team) and Checks & merge (its checks read only, the CI choice and merge
- * method), in one draft with one Save.
+ * one's name, folder and team, in one draft with one Save.
  */
 export function Projects({ start, onReference }: { start?: string; onReference: Open }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [removed, setRemoved] = useState<Named[]>([]);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [selected, setSelected] = useState<string | null>(start ?? null);
   /** The project last saved, so its form says so until it changes again. */
@@ -39,10 +26,7 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
 
   const load = useCallback(() => {
     api.projects().then(setProjects, setFailure);
-    api.agents().then((a) => {
-      setAgents(a.agents);
-      setRemoved(a.removed);
-    }, setFailure);
+    api.agents().then((a) => setAgents(a.agents), setFailure);
   }, []);
   useEffect(() => {
     load();
@@ -79,7 +63,6 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
             key={project.id}
             project={project}
             agents={agents}
-            removed={removed}
             saved={saved === project.id}
             onSaved={(done) => {
               setProjects((list) => list?.map((p) => (p.id === done.id ? done : p)) ?? null);
@@ -98,25 +81,11 @@ export function Projects({ start, onReference }: { start?: string; onReference: 
   );
 }
 
-type Fields = Pick<Project, 'name' | 'folder' | 'ci' | 'merge'> & { team: Seat[] };
-
-const required: [Project['ci'], string, string][] = [
-  ['ci', 'CI', 'CI must pass on the reviewed commit.'],
-  ['gathr', 'Gathr’s checks', 'Gathr’s checks must pass on the reviewed commit.'],
-  ['both', 'Both', 'CI and Gathr’s checks must pass on the reviewed commit.'],
-  ['none', 'Review only', 'A clean review of the commit is enough. No checks need to pass.'],
-];
-const methods: [Project['merge'], string, string][] = [
-  ['fast-forward', 'Fast-forward (default)', 'Keeps linear history and pins the checked base.'],
-  ['merge', 'Merge commit', 'Creates a merge commit with the checked base.'],
-  ['squash', 'Squash via GitHub API', 'Pins the reviewed head; GitHub chooses the base at merge time.'],
-];
+type Fields = Pick<Project, 'name' | 'folder'> & { team: Seat[] };
 
 interface FormProps {
   project: Project;
   agents: Agent[];
-  /** Removed agents, by name: a check one of them set still says who. */
-  removed: Named[];
   saved: boolean;
   onSaved: (project: Project) => void;
   /** What the delete couldn't remove yet, if anything. */
@@ -124,8 +93,7 @@ interface FormProps {
   onReference: Open;
 }
 
-function ProjectForm({ project, agents, removed, saved, onSaved, onDeleted, onReference }: FormProps) {
-  const [section, setSection] = useState<'general' | 'checks'>('general');
+function ProjectForm({ project, agents, saved, onSaved, onDeleted, onReference }: FormProps) {
   /** Delete's button while its confirm is open: focus goes back to it on Cancel. */
   const [deleting, setDeleting] = useState<HTMLElement | null>(null);
   // Only the fields edited here, over the project as saved, so Save never writes an untouched one back.
@@ -140,8 +108,6 @@ function ProjectForm({ project, agents, removed, saved, onSaved, onDeleted, onRe
   const change: ProjectChange = {};
   if (fields.name.trim() !== project.name) change.name = fields.name.trim();
   if (fields.folder.trim() !== project.folder) change.folder = fields.folder.trim();
-  if (fields.merge !== project.merge) change.merge = fields.merge;
-  if (fields.ci !== project.ci) change.ci = fields.ci;
   if (JSON.stringify(fields.team) !== JSON.stringify(team)) change.members = fields.team;
   const changed = Object.keys(change).length > 0;
 
@@ -161,45 +127,23 @@ function ProjectForm({ project, agents, removed, saved, onSaved, onDeleted, onRe
       },
     );
   };
-  const tab = (id: typeof section, label: string) => (
-    <button type="button" aria-current={section === id ? 'true' : undefined} onClick={() => setSection(id)}>
-      {label}
-    </button>
-  );
-
   return (
     <form className="project-form" aria-labelledby={title} onSubmit={submit}>
       <h3 id={title}>{project.name}</h3>
-      <fieldset className="project-sections" aria-label="Project sections">
-        {tab('general', 'General')}
-        {tab('checks', 'Checks & merge')}
-      </fieldset>
-      {section === 'general' ? (
-        <>
-          <label className="agent-field">
-            Name
-            <input value={fields.name} maxLength={80} onChange={(e) => edit({ name: e.target.value })} />
-          </label>
-          <label className="agent-field">
-            Folder
-            <input
-              className="project-folder"
-              value={fields.folder}
-              spellCheck={false}
-              onChange={(e) => edit({ folder: e.target.value })}
-            />
-          </label>
-          <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
-        </>
-      ) : (
-        <Checks
-          project={project}
-          agents={[...agents, ...removed]}
-          fields={fields}
-          edit={edit}
-          onReference={onReference}
+      <label className="agent-field">
+        Name
+        <input value={fields.name} maxLength={80} onChange={(e) => edit({ name: e.target.value })} />
+      </label>
+      <label className="agent-field">
+        Folder
+        <input
+          className="project-folder"
+          value={fields.folder}
+          spellCheck={false}
+          onChange={(e) => edit({ folder: e.target.value })}
         />
-      )}
+      </label>
+      <Team seats={fields.team} agents={agents} onChange={(seats) => edit({ team: seats })} />
       {failure && <FailureNotice failure={failure} onReference={onReference} />}
       <div className="agent-actions">
         <Button
@@ -233,89 +177,5 @@ function ProjectForm({ project, agents, removed, saved, onSaved, onDeleted, onRe
         </Button>
       </div>
     </form>
-  );
-}
-
-interface ChecksProps {
-  project: Project;
-  /** Every agent that can have set a check, removed ones too. */
-  agents: Named[];
-  fields: Fields;
-  edit: (more: Partial<Fields>) => void;
-  onReference: Open;
-}
-
-/** The checks as the Supervisor set them (the person never types one), then what gates a merge. */
-function Checks({ project, agents, fields, edit, onReference }: ChecksProps) {
-  const heading = useId();
-  const who = (source: string) =>
-    source === 'found'
-      ? 'Found in the project'
-      : (agents.find((a) => a.id === source)?.name ??
-        project.members.find((m) => m.agent === source)?.name ??
-        'A removed agent');
-  return (
-    <>
-      <div className="agent-field">
-        <h4 id={heading}>Checks</h4>
-        <p className="muted">Set by the project’s Supervisor. They run in order on the reviewed commit.</p>
-        {project.checks.length ? (
-          <ol className="project-checks" aria-labelledby={heading}>
-            {project.checks.map((c) => (
-              <li key={c.command}>
-                <code>{c.command}</code>
-                <small className="muted">
-                  {who(c.source)} · {began(new Date(c.set).getTime() * 1000)}
-                </small>
-              </li>
-            ))}
-          </ol>
-        ) : (
-          <p className="muted">No checks yet</p>
-        )}
-      </div>
-      <Choice
-        className="project-gate"
-        label="Required checks"
-        options={required}
-        value={fields.ci}
-        onChange={(ci) => edit({ ci: ci as Project['ci'] })}
-      />
-      <Choice
-        label="Merge method"
-        options={methods}
-        value={fields.merge}
-        onChange={(merge) => edit({ merge: merge as Project['merge'] })}
-      />
-      <ChecksCache project={project.id} onReference={onReference} />
-    </>
-  );
-}
-
-interface ChoiceProps {
-  className?: string;
-  label: string;
-  /** Each value, its label and what it means, said under the picker. */
-  options: [string, string, string][];
-  value: string;
-  onChange: (value: string) => void;
-}
-
-function Choice({ className, label, options, value, onChange }: ChoiceProps) {
-  const [id, about] = [useId(), useId()];
-  return (
-    <div className={cn('agent-field', className)}>
-      <label htmlFor={id}>{label}</label>
-      <select id={id} aria-describedby={about} value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map(([option, name]) => (
-          <option key={option} value={option}>
-            {name}
-          </option>
-        ))}
-      </select>
-      <small id={about} className="muted">
-        {options.find(([option]) => option === value)?.[2]}
-      </small>
-    </div>
   );
 }

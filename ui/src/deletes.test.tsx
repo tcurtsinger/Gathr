@@ -25,9 +25,6 @@ const project = (id: string, name: string): Project => ({
   name,
   folder: `X:\\made-up\\${id}`,
   members: [],
-  checks: [],
-  ci: 'none',
-  merge: 'merge',
 });
 const chat = (id: string, project?: string): Chat => ({ id, title: `Made-up ${id}`, project });
 
