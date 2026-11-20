@@ -1,7 +1,6 @@
 // The service's API (AGENTS.md "The API"). The page is served from the same origin as /api:
 // by the Vite proxy in dev, which adds the token.
 import type { Deletable, DeleteCounts } from './deleting';
-import type { Gender } from './faces/options';
 
 export type TurnStatus = 'queued' | 'waiting_sign_in' | 'running' | 'done' | 'stopped' | 'failed';
 
@@ -560,8 +559,8 @@ export interface Agent {
   approvals: Approvals;
   /** What its face is drawn from (0074): its name when made, a new one at each Shuffle. */
   face_seed: string;
-  /** Null until the person sets it: the seed picks. */
-  gender: Gender | null;
+  /** Set by the old faces' Gender; kept, no longer drawn. */
+  gender: 'man' | 'woman' | null;
   /** Skin tone 1 to 6; null until the person sets it. */
   skin: number | null;
   /** The background the person picked, #RRGGBB; null until then, drawn on a grey. */
