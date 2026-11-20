@@ -97,18 +97,13 @@ body:has(.app) {
 .head-button .lucide-ellipsis circle {
   r: 1.4px;
 }
-/* Pressed while the workspace is open. */
+/* Pressed while the sidebar is open. */
 .head-button.workspace-toggle[aria-expanded="true"] {
   background: color-mix(in oklab, var(--foreground) 9%, transparent);
   color: var(--foreground);
 }
 .head-button.workspace-toggle[aria-expanded="true"]:hover {
   background: color-mix(in oklab, var(--foreground) 12%, transparent);
-}
-.head-button > .attention {
-  position: absolute;
-  top: 2px;
-  right: 2px;
 }
 @media (max-width: 759px) {
   .app {

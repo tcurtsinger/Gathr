@@ -1,24 +1,17 @@
 import type {
   AppState,
-  Ask,
   BoardLine,
   ChatMark,
   Context,
   Member,
   Message,
   Pauses,
-  PersonTask,
-  PlanSummary,
   Question,
   Reaction,
-  Read,
-  StaleTask,
-  Task,
   ThinkingBody,
   ToolBody,
   TurnEnd,
   TurnStatus,
-  Wait,
 } from './api';
 
 // Everything live from the service's one WebSocket (AGENTS.md "The API").
@@ -32,8 +25,6 @@ export type LiveEvent =
   | { type: 'reaction'; chat: string; reaction: Reaction; removed?: boolean }
   // An agent set a line of the chat's board: the board, whole.
   | { type: 'board'; chat: string; lines: BoardLine[] }
-  // Where the person left off changed, in this window or another (0077): each thread's row as kept.
-  | { type: 'reads'; chat: string; reads: Read[] }
   // `agent`: the agent the turn was sent to, null for none.
   | {
       type: 'turn';
@@ -58,27 +49,11 @@ export type LiveEvent =
     }
   | { type: 'approval'; chat: string; turn: string; request_id: string; tool: string; input: unknown }
   | { type: 'read'; chat: string; turn: string | null; text: string }
-  // The chat's tasks, waits, asks, plans and caught lines, whole, after any change to them.
-  | {
-      type: 'tasks';
-      chat: string;
-      tasks: Task[];
-      waits: Wait[];
-      asks: Ask[];
-      plans?: PlanSummary[];
-      caught?: string[];
-    }
-  // What the chat waits on may have changed (0050): ask the service again.
-  | { type: 'waiting'; chat: string }
-  // The person's open questions across chats, whole, after any change to any task.
-  | { type: 'person_tasks'; tasks: PersonTask[]; stale: StaleTask[] }
   // A chat was made, archived, restored (unarchived) or deleted.
   | { type: 'chat'; chat: string; change: 'created' | 'archived' | 'unarchived' | 'deleted' }
   // A chat started or stopped working, needing the person (0040) or its row's mark (0071): only on a change.
   | { type: 'chat_state'; chat: string; working: boolean; needs: boolean; mark?: ChatMark | null }
   | { type: 'project'; project: string; change: 'created' | 'changed' | 'deleted' }
-  // A checks run of the project started or ended (0043 C3).
-  | { type: 'checks'; project: string; head: string; run: string; state: 'running' | 'passed' | 'failed' }
   // The chat's team changed: an agent joined, or a PATCH.
   | { type: 'members'; chat: string; members: Member[] }
   // A room chat's questions, whole, after every ask and answer.

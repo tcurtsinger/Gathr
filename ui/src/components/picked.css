@@ -2,10 +2,3 @@
 ::highlight(composer-mention) {
   color: var(--attention);
 }
-/* Spaces fold as the message part's own paragraph folds them. */
-.picked-text {
-  white-space: pre-line;
-}
-.picked-name {
-  color: var(--attention);
-}

@@ -139,204 +139,6 @@ export interface Pauses {
   usage: { account: string; until_us: number; agents: string[] }[];
 }
 
-export type TaskState =
-  | 'waiting'
-  | 'ready'
-  | 'working'
-  | 'held'
-  | 'done'
-  | 'blocked'
-  | 'failed'
-  | 'stopped'
-  | 'cancelled';
-
-/** A task an agent gave another, or the person (0010). */
-export interface Task {
-  number: number;
-  chat: string;
-  /** The agent who gave it; null when the person did. */
-  giver: string | null;
-  /** The agent who owns it; null for the person's own. */
-  owner: string | null;
-  /** The turn that gave it. */
-  given_in: string | null;
-  /** The round it was given in, named by the turn the person's word began (0051). */
-  round?: string | null;
-  /** person is a question for the person; person_request, a member's ask the Supervisor checks first. */
-  kind: 'work' | 'review' | 'person' | 'person_request';
-  /** A work task that looks into something and changes no project file. */
-  look_into?: boolean;
-  what: string;
-  /** Why it was given, and its details. */
-  why?: string | null;
-  state: TaskState;
-  reason: string | null;
-  /** Tasks it waits for before it starts. */
-  after: number[];
-  /** A work task's brief: what is true when it's done, how that is shown, and where the work goes. */
-  done?: string;
-  proof?: string;
-  where?: string;
-  /** The files or area it touches, and the rough number of lines it adds. */
-  size?: string;
-  lines?: number;
-  /** Its giver's last edit before it started, and the fields it changed, in brief order. */
-  edited_us?: number;
-  edited?: TaskField[];
-  /** Its last move, once it has gone the stale days without one (F11). */
-  stale_us?: number | null;
-  created_us: number;
-  /** The turn its giver heard it was settled in: a person task's answer shows there. */
-  heard_in?: string | null;
-  /**
-   * A person task's answer as sent, and when (µs); each Discuss keeps the turn that heard it and when it was sent.
-   * Answers sent before 0073 have no time.
-   */
-  answer?: {
-    pick?: string[] | null;
-    yes?: boolean | null;
-    done?: boolean | null;
-    text?: string | null;
-    at?: number;
-    discussed?: { text: string; turn: string; at?: number }[];
-  } | null;
-  /** Its PR, and that PR's head as Gathr last saw it: the commit whose checks run shows on it. */
-  pr?: number | null;
-  pr_head?: string | null;
-  /** A review's commit, and whether its PR has moved past it by more than merges of its base. */
-  reviewed?: string | null;
-  outdated?: boolean;
-  /** Its owner's last report, kept until it reports again or the task is restarted (0047). */
-  report?: TaskReport | null;
-  /** Gathr asked its owner for a report, and none has come since. */
-  asked?: boolean;
-  /** What a held task still has open, each in a few words. */
-  waiting_on?: string[];
-  /** A review's notes from its newest report (0053). */
-  notes?: ReviewNote[];
-  /** The ask it serves: the person's message that started it (0061). */
-  ask?: string;
-  /** A plan check: the version it checks (0062). */
-  checks?: number;
-  /** The plan whose part made it. */
-  plan?: number;
-  /** The fix Gathr gave after a review: its reviewer is its giver and hears back on it, but Gathr gave it. */
-  by_gathr?: boolean;
-  /** A question for the person: how it's answered, its choices and files, and the member's request it was asked for. */
-  form?: PersonTask['form'] | null;
-  choices?: PersonTask['choices'];
-  files?: PersonTask['files'];
-  request?: number | null;
-  /** The main message it sits under (0075). */
-  topic?: string | null;
-}
-
-/** The lead's plan for an ask (0062): its state is read from its newest version and that version's check. */
-export interface PlanSummary {
-  id: number;
-  ask: string;
-  /** The newest version's. */
-  title: string;
-  /** The Supervisor that wrote it, by id. */
-  lead: string;
-  state: 'checking' | 'waiting' | 'revising' | 'approved' | 'dropped';
-  versions: PlanVersionSummary[];
-}
-
-export interface PlanVersionSummary {
-  id: number;
-  n: number;
-  /** The lead's message that is this version. */
-  message: string;
-  parts: number;
-  /** Gathr's line saying how its check ended. */
-  check_line: string | null;
-  /** When it reached the person. */
-  sent: string | null;
-  decided: 'approved' | 'sent_back' | 'dropped' | null;
-  /** Gathr's line for Approve or Drop, or the message of the lead's turn a send-back queued. */
-  decided_line: string | null;
-}
-
-/** A plan whole, as `GET /api/plans/{plan}` answers. */
-export interface Plan extends Omit<PlanSummary, 'versions'> {
-  /** The ask's message. */
-  asked: string | null;
-  questions: { number: number; what: string; answer: string | null }[];
-  /** What held turns of the ask changed (0063): the agent, its files, and Gathr's line. */
-  changed: { agent: string; files: string[]; message: string }[];
-  versions: PlanVersion[];
-}
-
-export interface PlanVersion extends Omit<PlanVersionSummary, 'parts'> {
-  title: string;
-  text: string;
-  created: string;
-  /** The person's words when it was sent back. */
-  words: string | null;
-  answers: { note: number; changed: boolean; why: string }[];
-  check: {
-    task: number;
-    by: string | null;
-    state: TaskState;
-    outcome: 'agrees' | 'findings' | 'unfinished' | 'late' | null;
-    notes: { id: number; kind: ReviewNote['kind']; file: string | null; says: string }[];
-  } | null;
-  parts: PlanPart[];
-}
-
-/** A part of a version: a complete task, which Approve makes word for word. */
-export interface PlanPart {
-  n: number;
-  /** The agent it is for, by id. */
-  owner: string;
-  what: string;
-  why: string;
-  done: string;
-  proof: string;
-  where: string;
-  size: string;
-  lines: number;
-  /** Earlier parts it starts after, by number, and tasks of the chat. */
-  after: number[];
-  after_tasks: number[];
-  /** The task Approve made of it. */
-  task: number | null;
-}
-
-/** The person's ask in a team chat, named by the message that started it, and its size (0061). */
-export interface Ask {
-  id: string;
-  title: string;
-  /** None yet counts as new. */
-  size: 'repair' | 'new' | null;
-  /** Who sized it last: the lead's agent id, or `person`. */
-  by: string | null;
-  /** The lead's turn that sized it last. */
-  sized_in: string | null;
-  /** Gathr held something of it: a building give, a write or a push refused. */
-  held: boolean;
-  /** It has open work: Working, else Done (0075). */
-  open?: boolean;
-}
-
-export type TaskField = 'what' | 'why' | 'done' | 'proof' | 'where' | 'size' | 'after';
-
-/** What a review found: `wrong` fails against the ask, `unasked` the ask doesn't need, `suggestion` is an idea. */
-export interface ReviewNote {
-  kind: 'wrong' | 'unasked' | 'suggestion';
-  file: string | null;
-  says: string;
-}
-
-/** What an owner said of its task: for work, `see` is a commit or file to look at. */
-export interface TaskReport {
-  how: 'done' | 'left' | 'blocked';
-  note: string | null;
-  see: string | null;
-  at_us: number | null;
-}
-
 /** Friction an agent reported: who, on which task, in which chat and where. A deleted chat or agent leaves null. */
 export interface FrictionReport {
   id: number;
@@ -350,147 +152,15 @@ export interface FrictionReport {
   where: string | null;
 }
 
-/** An agent's stale task, on the person's list across chats. */
-export interface StaleTask extends Task {
-  chat_title: string;
-}
-
-/** A question for the person (F9): the form says how it's answered; the first choice is the asker's pick. */
-export interface PersonTask extends Task {
-  chat_title: string;
-  /** The member it was asked for; null when the Supervisor asked for itself. */
-  for_agent: string | null;
-  why: string | null;
-  form: 'choice' | 'choices' | 'yesno' | 'done' | 'text';
-  choices: { label: string; detail?: string }[];
-  files: { name: string; size: number }[];
-}
-
-export interface PersonAnswer {
-  task: number;
-  pick?: string[];
-  yes?: boolean;
-  done?: boolean;
-  text?: string;
-  /** The text goes to the asker as a message, and the question waits off the list (0065). */
-  discuss?: boolean;
-  /** With Discuss, the other agents picked in the text: each gets it too (0028). */
-  to?: string[];
-}
-
-/** What an agent waits on (0010): another agent, CI, a PR or a check. */
-export interface Wait {
-  id: string;
-  agent: string;
-  task: number | null;
-  kind: string;
-  target: string | null;
-  state: string;
-  /** When it began, in microseconds, as tasks' created_us. */
-  created_ts: number;
-}
-
-/** One thing a chat waits on (0050), in the service's words. */
-export interface WaitingLine {
-  kind: string;
-  what: string;
-  agent: string | null;
-  task: number | null;
-  /** Since when, in microseconds. */
-  since_us: number | null;
-  /** Who or what can end it: itself, the person, nobody, or the lines it follows. */
-  moves: 'itself' | 'you' | 'nobody' | 'others';
-  /** A wait's or a PR's last look: what it saw, when, and the error of looks that fail. */
-  seen: string | null;
-  looked_us: number | null;
-  error: string | null;
-  /** A running turn that makes no progress: when it last did, in microseconds. */
-  silent_us: number | null;
-}
-
-/** Where one agent of the chat stands, as the service works it out (0050): the one state its face shows (0071). */
-export interface Standing {
-  agent: string;
-  name: string;
-  state: 'needs_you' | 'cant_run' | 'working' | 'stopped' | 'blocked' | 'waiting' | 'free';
-  /** In a phrase: "Waiting for CI on #157", "Held", "Usage limit". */
-  words: string;
-  /** What, in a word or two, for the face's card: "Approval", "Signed out", "Gathr restarted". */
-  what: string | null;
-  /** The task it is on: its running turn's, its blocked task, the turn that failed or stopped. */
-  task: number | null;
-  /** Since when it has been in this state (µs). */
-  since_us: number | null;
-  /** Waiting: for whom or what, each with since when (µs). */
-  on: { what: string; since_us: number }[];
-  /** Out of usage: when it resets (µs). */
-  until_us: number | null;
-  /** Waiting: the looks at one of its waits keep failing, so nothing moves it. */
-  failing: boolean;
-}
-
-/** What Gathr itself has going in the chat, that no agent is on: said as an agent's state is. */
-export interface Own {
-  kind: 'update' | 'pr' | 'command';
-  state: 'working' | 'waiting';
-  /** In a few words: "Update to 0.1.240", "#18 to land", what the command runs. */
-  what: string;
-  /** A command's: the agent whose turn left it running. */
-  name: string | null;
-  since_us: number | null;
-  /** The looks at a pull request it lands keep failing. */
-  failing: boolean;
-}
-
-/** What a chat waits on: every line, the most pressing first, each agent's standing, and Gathr's own. */
-export interface Waiting {
-  lines: WaitingLine[];
-  agents: Standing[];
-  gathr: Own[];
-}
-
 export interface Project {
   id: string;
   name: string;
   folder: string;
   members: Member[];
-  /** Run in order on a PR's head; only the Supervisor sets them (0043, owner's call 1455). */
-  checks: ProjectCheck[];
-  /** Whose result gates a merge. */
-  ci: 'ci' | 'gathr' | 'both' | 'none';
-  merge: 'fast-forward' | 'merge' | 'squash';
-}
-
-export interface ProjectCheck {
-  command: string;
-  /** The agent that set it, by id, or `found` when Gathr found it in the project. */
-  source: string;
-  set: string;
-}
-
-/** A run of a project's checks at one commit (0043 C3): its commands in order, stopping at the first failure. */
-export interface CheckRun {
-  run: string;
-  head: string;
-  state: 'running' | 'passed' | 'failed';
-  why: string | null;
-  /** Once it failed: the reference its events trace from. */
-  ref: string | null;
-  started: string;
-  ended: string | null;
-  steps: CheckStep[];
-}
-
-export interface CheckStep {
-  command: string;
-  exit: number | null;
-  duration_ms: number;
-  /** The end of what it printed. */
-  log: string;
 }
 
 /** What a project's settings change: only what it names; the team whole. */
-export type ProjectChange = Partial<Pick<Project, 'name' | 'folder' | 'ci' | 'merge'>> & {
+export type ProjectChange = Partial<Pick<Project, 'name' | 'folder'>> & {
   members?: { agent: string; role: Role }[];
 };
 
@@ -508,8 +178,6 @@ export interface Chat {
   needs?: boolean;
   /** The most pressing of its agents' marks its row shows (0071): none while nothing of those three holds. */
   mark?: ChatMark | null;
-  /** A room chat, shown by the new chat screen; any other by the old one. */
-  room?: boolean;
 }
 
 export type ChatMark = 'needs_you' | 'cant_run' | 'working';
@@ -544,14 +212,8 @@ export interface MessageHit {
   marks: [number, number][];
 }
 
-/** Settings > General's stale rules (F11), in whole days. */
-export interface StaleDays {
-  stale_days: number;
-  cancel_days: number;
-}
-
-/** Settings > General: the stale rules, and the folder that holds every project's Shared and agent folders (M1). */
-export interface Settings extends StaleDays {
+/** Settings > General: the folder that holds every project's Shared and agent folders (M1), and the rest. */
+export interface Settings {
   agent_folder: string;
   /** Messages between agents in a row before the chat pauses; null for no limit. */
   handoff_limit: number | null;
@@ -613,8 +275,6 @@ export interface History {
   streaming?: { turn: string; agent: string | null; text: string; reply_to?: string | null }[];
   /** Agents' thumbs-ups, oldest first. */
   reactions?: Reaction[];
-  /** Where the person left off, by thread (0077); none yet for a chat not opened since. */
-  reads?: Read[];
   /** A room chat's questions to the person, oldest first. */
   questions?: Question[];
 }
@@ -631,16 +291,6 @@ export interface Question {
   words: string | null;
   asked: string;
   answered: string | null;
-}
-
-/**
- * One thread's mark (0077): the newest message the person has seen there, in µs, and their own fold (true) or open
- * (false), or null for Gathr's rule. `topic` is the thread's key, '' for the chat's main line.
- */
-export interface Read {
-  topic: string;
-  seen_us: number;
-  folded: boolean | null;
 }
 
 /**
@@ -734,45 +384,12 @@ export const api = {
   addProject: (project: { name: string; folder: string; members: { agent: string; role: Role }[] }) =>
     call<Project>('POST', '/api/projects', project),
   saveProject: (id: string, change: ProjectChange) => call<Project>('PATCH', `/api/projects/${id}`, change),
-  /** One commit's checks runs, newest first, however many the project has had since. */
-  checkRuns: (id: string, head: string) =>
-    call<{ runs: CheckRun[] }>(
-      'GET',
-      `/api/projects/${id}/checks/runs?head=${encodeURIComponent(head)}`,
-    ).then((r) => r.runs),
-  caches: (id: string) => call<{ bytes: number }>('GET', `/api/projects/${id}/caches`).then((c) => c.bytes),
-  clearCaches: (id: string) => call<unknown>('DELETE', `/api/projects/${id}/caches`),
   history: (chat: string) => call<History>('GET', `/api/chats/${chat}`),
   board: (chat: string) => call<{ lines: BoardLine[]; agents: number }>('GET', `/api/chats/${chat}/board`),
-  tasks: (chat: string) =>
-    call<{ tasks: Task[]; waits: Wait[]; asks: Ask[]; plans: PlanSummary[]; caught: string[] }>(
-      'GET',
-      `/api/chats/${chat}/tasks`,
-    ),
-  plan: (plan: number) => call<Plan>('GET', `/api/plans/${plan}`),
-  // Each answers the plan's summary.
-  approvePlan: (plan: number, version: number) =>
-    call<PlanSummary>('POST', `/api/plans/${plan}/approve`, { version }),
-  sendBackPlan: (plan: number, version: number, words: string) =>
-    call<PlanSummary>('POST', `/api/plans/${plan}/send-back`, { version, words }),
-  dropPlan: (plan: number, version: number) =>
-    call<PlanSummary>('POST', `/api/plans/${plan}/drop`, { version }),
-  waiting: (chat: string) => call<Waiting>('GET', `/api/chats/${chat}/waiting`),
-  /** The person's open questions, and agents' stale tasks across chats. */
-  personTasks: () => call<{ tasks: PersonTask[]; stale: StaleTask[] }>('GET', '/api/person-tasks'),
-  cancelTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/cancel`, {}),
-  restartTask: (task: number) => call<unknown>('POST', `/api/tasks/${task}/restart`),
-  resizeAsk: (ask: string, size: 'repair' | 'new') => call<Ask>('POST', `/api/asks/${ask}/size`, { size }),
   search: (q: string) =>
     call<{ chats: ChatHit[]; messages: MessageHit[] }>('GET', `/api/search?q=${encodeURIComponent(q)}`),
   settings: () => call<Settings>('GET', '/api/settings'),
   saveSettings: (change: Partial<Settings>) => call<Settings>('PATCH', '/api/settings', change),
-  answer: (answers: PersonAnswer[]) =>
-    call<{ answered: Task[]; refused: { task: number; why: string; ref: string | null }[] }>(
-      'POST',
-      '/api/person-tasks/answer',
-      { answers },
-    ),
   send: (chat: string, text: string, agent?: string, picks?: PickedName[], reply?: ReplyTarget) =>
     call<{ turn: string; status: TurnStatus }>('POST', `/api/chats/${chat}/messages`, {
       text,
@@ -780,31 +397,15 @@ export const api = {
       picks: picks?.length ? picks : undefined,
       ...reply,
     }),
-  /**
-   * The person's like (0057): it reaches the message's agent, or answers the waiting `questions` its bubble holds
-   * with their picks, or approves the plan version it is.
-   */
-  like: (chat: string, message: string, questions?: number[]) =>
-    call<{ reaction: Reaction; did: string }>(
-      'PUT',
-      `/api/chats/${chat}/messages/${message}/like`,
-      questions?.length ? { questions } : {},
-    ),
-  /** Keeps what the person has seen in each thread, and their folds (0077): a mark never moves back. */
-  reads: (chat: string, reads: { topic: string; seen_us?: number; folded?: boolean }[]) =>
-    call<{ reads: Read[] }>('PUT', `/api/chats/${chat}/reads`, { reads }),
+  /** The person's like (0057): it reaches the message's agent. */
+  like: (chat: string, message: string) =>
+    call<{ reaction: Reaction; did: string }>('PUT', `/api/chats/${chat}/messages/${message}/like`, {}),
   /** Answers a room chat's question: it starts the asking agent's turn. */
   answerQuestion: (id: number, pick?: string, words?: string) =>
     call<{ question: Question; turn: string }>('POST', `/api/questions/${id}/answer`, { pick, words }),
   /** Takes the like back: the mark goes, and nothing it did is undone. */
   unlike: (chat: string, message: string) =>
     call<{ removed: boolean }>('DELETE', `/api/chats/${chat}/messages/${message}/like`),
-  /** Compacts the agent's conversation in the chat: a turn of its own, queued behind any it has under way. */
-  compact: (chat: string, agent: string) =>
-    call<{ turn: string; status: TurnStatus; ref: string }>(
-      'POST',
-      `/api/chats/${chat}/agents/${agent}/compact`,
-    ),
   pauses: () => call<Pauses>('GET', '/api/pauses'),
   // Each answers every pause as it is then.
   pause: (scope: PauseScope) => call<Pauses>('POST', '/api/pauses', scope),

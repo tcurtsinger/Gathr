@@ -244,7 +244,7 @@ function Preview() {
             onAnswer={answer}
             onReference={ignore}
           />
-          <WorkspaceToggle open={sidebar} waiting={false} onToggle={() => setSidebar(!sidebar)} />
+          <WorkspaceToggle open={sidebar} onToggle={() => setSidebar(!sidebar)} />
         </div>
       </TopLine>
       <main className="chat room" aria-label="Orders export">

@@ -183,25 +183,13 @@
 	function open(which, button) {
 		trigger = button;
 		mode = which;
-		const search = which === "search";
-		one("#flyout-close").title = search ? "Close Search" : "Close Tasks";
-		one("#flyout-title").textContent = search ? "Search" : "Tasks";
-		one("#flyout-close").setAttribute(
-			"aria-label",
-			search ? "Close Search" : "Close Tasks",
-		);
-		one("#search-content").hidden = !search;
-		one("#tasks-flyout-content").hidden = search;
 		fly.dataset.layout = one("#search-layout").value;
 		position();
 		if (!fly.matches(":popover-open")) fly.showPopover();
 		render();
-		(search ? input : one("#flyout-close")).focus();
+		input.focus();
 	}
-	for (const [id, which] of [
-		["#search-open", "search"],
-		["#tasks-flyout-open", "tasks"],
-	])
+	for (const [id, which] of [["#search-open", "search"]])
 		one(id).onclick = (e) => {
 			e.preventDefault();
 			const button = one(id);
@@ -209,7 +197,7 @@
 			else open(which, button);
 		};
 	fly.addEventListener("toggle", () => {
-		for (const id of ["#search-open", "#tasks-flyout-open"])
+		for (const id of ["#search-open"])
 			one(id).setAttribute(
 				"aria-expanded",
 				String(fly.matches(":popover-open") && one(id) === trigger),
@@ -249,12 +237,6 @@
 		one("#search-latest").hidden = true;
 		one("#search-open-status").textContent = "Latest message";
 	};
-	one("#search-task-example")?.addEventListener("click", () => {
-		fly.hidePopover();
-		one("#search-chat-title").textContent = "Reconnect streaming";
-		one("#search-target-text").textContent = "Keep the partial reply?";
-		one("#search-open-status").textContent = "Tasks preview";
-	});
 	addEventListener("resize", () => {
 		if (fly.matches(":popover-open")) position();
 	});

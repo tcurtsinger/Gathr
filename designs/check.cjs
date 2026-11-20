@@ -5,30 +5,6 @@ const fs = require("fs"),
 const styles = ["shell", "conversation", "panels", "responsive"]
 	.map((name) => fs.readFileSync(path.join(__dirname, name + ".css"), "utf8"))
 	.join("\n");
-const pages = [
-	["chat", 14],
-	["single-chat", 12],
-	["new-chat", 12],
-	["start-chat", 13],
-];
-for (const [d, v] of pages) {
-	const file = path.join(__dirname, d, "v" + v + ".html"),
-		h = fs.readFileSync(file, "utf8");
-	const ids = [...h.matchAll(/data-id="([^"]+)"/g)].map((x) => x[1]);
-	assert.equal(new Set(ids).size, ids.length, "unique data IDs");
-	assert.equal((h.match(/<h1/g) || []).length, 1);
-	assert(
-		!/fetch\(|Sample workspace|>↑<|>＋<|<span class="path">Gathr/.test(h),
-		"local content and polished icons",
-	);
-	assert(h.includes("../tokens.css") && h.includes("../components.css"), "shared styles");
-	if (d === "chat" || d === "single-chat") assert.equal((h.match(/data-id="message-/g) || []).length, 42);
-	for (const m of h.matchAll(/<script>([\s\S]*?)<\/script>/g)) new vm.Script(m[1]);
-	for (const m of h.matchAll(/(?:href|location.href)=['"]([^'"#]+\.html)/g))
-		assert(fs.existsSync(path.resolve(path.dirname(file), m[1])), m[1]);
-}
-assert(styles.includes(".choose .agentcheck:checked"), "picker styling");
-console.log("Four historical shell pages: IDs, scripts, links and fixtures passed.");
 assert(/\.chatrow\[hidden\]\s*\{\s*display:\s*none/.test(styles), "search hides flex rows");
 new vm.Script(fs.readFileSync(path.join(__dirname, "navigation.js"), "utf8"));
 new vm.Script(fs.readFileSync(path.join(__dirname, "phase1-prototype.js"), "utf8"));
@@ -44,20 +20,9 @@ for (const folder of ["diagnostics", "engines", "chat-states"]) {
 }
 console.log("Seven Phase 1 options: shared styles, IDs and script syntax passed.");
 assert(/background:\s*var\(--backdrop\)/.test(styles), "shared backdrop");
-for (const [d, v] of pages) {
-	const h = fs.readFileSync(path.join(__dirname, d, "v" + v + ".html"), "utf8");
-	assert(
-		h.includes('src="../navigation.js"') && h.includes('data-id="sidebar-reveal"'),
-		"shared navigation reveal",
-	);
-}
 
 new vm.Script(fs.readFileSync(path.join(__dirname, "phase1-selected.js"), "utf8"));
 
-for (const [folder, version] of pages) {
-	const html = fs.readFileSync(path.join(__dirname, folder, `v${version}.html`), "utf8");
-	assert(!html.includes('aria-label="Model and effort"'), "composer selects an agent only");
-}
 new vm.Script(fs.readFileSync(path.join(__dirname, "agent-editor.js"), "utf8"));
 
 const system = fs.readFileSync(path.join(__dirname, "system.html"), "utf8");
@@ -76,14 +41,12 @@ for (const match of system.matchAll(/aria-(?:controls|labelledby|describedby)="(
 	for (const id of match[1].split(" ")) assert(systemIds.includes(id), "reference exists: " + id);
 }
 new vm.Script(fs.readFileSync(path.join(__dirname, "system.js"), "utf8"));
-new vm.Script(fs.readFileSync(path.join(__dirname, "team-reference.js"), "utf8"));
 assert(tokens.includes("--muted: var(--muted-foreground)"), "legacy muted is readable text");
 assert(tokens.includes("--accent: var(--attention)"), "legacy accent remains text");
 assert(
 	tokens.includes("--frame: #232323") && tokens.includes("--background: #1b1b1b") && tokens.includes("--card: #2c2c2c"),
 	"dark surfaces: the chat darkest, the frame next, then cards (0068)",
 );
-assert(design.includes("Team messages: one timeline"), "selected team arrangement");
 assert(design.includes("There is no Everyone option"), "one named recipient, no fan-out");
 assert(
 	design.includes("1024 by 760px") && design.includes("200px category rail"),
@@ -95,7 +58,6 @@ console.log("Current system: offline assets, IDs, references, script, tokens and
 assert(tokens.includes("font-weight: 300 700"), "Font exposes requested variable weights");
 assert(tokens.includes("hanken-grotesk-latin-wght-normal.woff2"), "Hanken Grotesk self-hosted");
 assert(!fs.existsSync(path.join(__dirname, "fonts/public-sans-latin-wght-normal.woff2")), "Public Sans removed");
-new vm.Script(fs.readFileSync(path.join(__dirname, "typography/reference.js"), "utf8"));
 
 new vm.Script(fs.readFileSync(path.join(__dirname, "search/reference.js"), "utf8"));
 for (const version of [1, 2]) {

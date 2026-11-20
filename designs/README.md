@@ -8,42 +8,10 @@ After `npm ci` in `ui/`, run `node designs/check-help.cjs` for Help placement,
 Escape and focus return in both themes at 1440 and 1024px (Edge on Windows,
 WebKit on macOS).
 
-Settings retains the centred Gathr layout. The split chat (0015, 2026-11-10) is
-retired: the chat is one timeline (0037, 2026-11-11), where a turn is one block with
-its work folded into a row, agents' messages to each other are their own block, and
-Gathr's notes are one-line events; since 0072 (2026-11-17) its messages are bubbles beside
-their authors' faces and agents' messages to each other a thread. Summary remains a popover. The recipient defaults
-to the Supervisor by name and has no Everyone option.
+Settings retains the centred Gathr layout. The pages of the old chat screen and the team screens are
+gone. All fixtures are invented. Actions are local simulations.
 
-The split previews stay as history; the app no longer draws them.
-`system.html#team-message` demonstrates the split, 52rem maximum, 34px reply
-indent, docked Agent plan, working initials and Summary progress with invented
-records. Finish and Late reply simulate outcomes; Reset returns to running.
-These are fixture controls, not product actions. The portable page has no service.
-`team-reference.css` and `team-reference.js` are fixture code only. Production
-uses assistant-ui registry components and Gathr state; never port the handoff
-HTML or its support.js runtime. The owner's reference stays in Shared/designs/split_chat.
-
-Run `node designs/check-team.cjs` after installing UI dependencies. It checks the
-retired split preview: split state, independent scrolling, late/unread work, plan and Summary counts, keyboard
-controls and draft retention at 1440 and 1024px in both themes. An optional
-absolute folder outside the repo saves PNGs and JSON evidence.
-
-## Retired selected shell pages
-
-These pages are retained as historical fixtures, not selected designs:
-
-- `chat/v14.html`: multi-agent chat
-- `single-chat/v12.html`: one-agent chat
-- `new-chat/v12.html`: new chat
-- `start-chat/v13.html`: choose agents
-
-The prototype supersedes their shell, typography, palette, spacing, composer and
-workspace presentation. Do not build from them. Their older versions are also
-historical. All fixtures are invented. Actions are local simulations.
-
-`components.css` retains the four historical imports so older evidence stays
-viewable, then imports `system-reference.css` for the current portable reference.
+`components.css` retains the four historical imports the older pages below use, then imports `system-reference.css` for the current portable reference.
 That page demonstrates static anatomy, not substitute React implementations.
 
 Phase 1 proposals: `diagnostics/v1.html` and `v2.html`, `engines/v1.html` and `v2.html`,
@@ -86,27 +54,14 @@ unselected expanding option. See `approvals/README.md` for copy and checks.
 The shared runtime component is `ui/src/components/Help.tsx`, demonstrated in
 `system.html` with its runtime stylesheet.
 
-## Selected archive and stale patterns
+## Selected archive pattern
 
-The folded Archived group from archive-stale/v1 is selected. The current
-reference is [archive-stale/v3.html](archive-stale/v3.html): the same layout with
-Idle age labels and the service's 1-to-365 day range. v1 is retained as the chosen
-proposal; v2's Archived-button flyout is retired and must not be built. The
-selected anatomy also appears in system.html#archive-stale. No service connects
-to these fixtures. Runtime Archive, Delete and stale rules belong to 0010.
-
-## Typography update
-
-[Hanken Grotesk viewport](typography/v1.html) composes the current reference at
-real desktop sizes, with Workspace and Summary controls. The system page and
-current shared reference CSS use the new scale. Older proposal pages keep their
-original composition; the new type contract supersedes their sizing. See
-[typography checks](typography/README.md).
+The folded Archived group is selected; its anatomy is in system.html#archive-stale.
+No service connects to these fixtures.
 
 ## Selected Search
 
-[Title first](search/v1.html), selected 2026-11-10, extends the existing Tasks
-flyout shell. Snippet first (v2) is retired. system.html#search-preview shows the
+[Title first](search/v1.html), selected 2026-11-10. Snippet first (v2) is retired. system.html#search-preview shows the
 selected rows and fixture states. See [Search checks](search/README.md).
 
 ## Preview checks
@@ -115,24 +70,13 @@ selected rows and fixture states. See [Search checks](search/README.md).
 The current reference and retired pages are listed in `designs/README.md`. Run `node designs/check.cjs` from the repo root.
 `node designs/check-focus.cjs` checks keyboard panel focus against hover in installed Edge on Windows or WebKit on macOS
 (uses the UI dependencies).
-Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure, workspace tabs,
-Summary, Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
-`designs/components.css` and `designs/system.html` define shared patterns, all but `system.html`'s Team messages
-section, which is the retired split (0037). Keep them aligned when a pattern changes.
+Open `designs/system.html` at 1440 and 1024 px in dark and light (`#light`). Exercise composer, tool disclosure,
+Settings categories, Help, Switch, Escape and keyboard focus. `DESIGN.md`, `designs/tokens.css`,
+`designs/components.css` and `designs/system.html` define shared patterns. Keep them aligned when a pattern changes.
 The assistant-ui prototype is the visual reference; Settings keeps 0023's layout.
-Team messages use 0037's one timeline with Summary; the split preview is history. `node designs/check-team.cjs` checks its running, finished and late replies,
-split retention, independent scrolling, plan/Summary progress, keyboard controls and draft retention in both sizes and themes (uses the UI dependencies).
 No engine, real terminal or Settings service connects to the portable reference. Browser checks complement the static command.
 
-Archive and stale uses `designs/archive-stale/v3.html`, refining the selected folded group from v1.
-`node designs/archive-stale/check-selected.cjs <absolute evidence folder outside the repo>` checks it and
-`system.html` at 1440 and 1024px in both themes, including confirms, Help, Idle labels and day limits.
-The original v1/v2 proposals stay unchanged; the v2 archive flyout is retired.
-
-Typography: `node designs/check-typography.cjs <absolute evidence folder outside the repo>`
-checks the self-hosted face, 450 weight, size scale, message baselines, split plus
-workspace, Summary and overflow at 1440, 1024 and 390px in both themes.
 
 Search reference: `node designs/check-search.cjs <absolute evidence folder outside the repo>`
-checks the selected and retired rows, shared Tasks shell, retained query, keyboard cursor,
+checks the selected and retired rows, retained query, keyboard cursor,
 Archived label and fixture states at 1440, 1024 and 390px in both themes.

@@ -76,30 +76,11 @@
     padding: 16px;
   }
 }
-/* The stale days (StaleDays.tsx): a name and its ?, a whole number and its unit. */
+/* A setting's name and its ?. */
 .setting-label {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.setting-days {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-.setting-days input {
-  width: 72px;
-}
-.setting-days small {
-  min-width: 64px;
-  color: var(--muted);
-  font-size: 13px;
-}
-.setting-invalid {
-  margin: 12px 0 0;
-  color: var(--danger);
-  font-size: 13px;
 }
 /* The Agent folder (AgentFolder.tsx): the path and Change, or the field to type another. */
 .agent-folder-now {

@@ -117,14 +117,6 @@ async function check() {
 							.evaluate((n) => n === document.activeElement),
 						label + " Escape restores trigger",
 					);
-					await page.locator("#search-open").click();
-					if (width < 600) await page.locator("#flyout-close").click();
-					await page.locator("#tasks-flyout-open").click();
-					assert(await page.locator("#search-content").isHidden());
-					assert(await page.locator("#tasks-flyout-content").isVisible());
-					await page
-						.getByRole("button", { name: "Close Tasks", exact: true })
-						.click();
 					for (const [state, text] of [
 						["empty", "Search chats and messages"],
 						["none", "No matches"],

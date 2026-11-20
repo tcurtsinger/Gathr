@@ -14,7 +14,6 @@ function notify(text) { document.querySelector('.toast').textContent = text; }
 function search(value) {
   document.querySelectorAll('.chatrow').forEach(row => { row.hidden = !row.textContent.toLowerCase().includes(value.toLowerCase()); });
 }
-document.querySelector('[data-id="nav-new"]').onclick = () => { location.href = '../start-chat/v12.html'; };
 document.querySelector('[data-id="nav-search"]').onclick = () => {
   const input = document.querySelector('.search');
   input.hidden = !input.hidden;

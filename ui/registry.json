@@ -6,18 +6,6 @@
       "sha256": "a6b9797c48a965d629af628b8e8a9a4102ce9c6d7b2ca2f9ead75676223dcdef"
     },
     {
-      "path": "components/assistant-ui/elements/collapsible-root.tsx",
-      "url": "https://r.assistant-ui.com/elements-collapsible-root.json",
-      "sha256": "ebea1fff3af62e619a63680227b3c4b89cec449fac059f5fcd6695cc128f38b8"
-    },
-    {
-      "path": "components/assistant-ui/elements/option-list.tsx",
-      "url": "https://r.assistant-ui.com/elements-option-list.json",
-      "sha256": "5f1c156aac4ad56aedac93665bef44f84a1253f357127dd92c55bf6926d230dc",
-      "adapted": "d8ca1ca63360bfa16ef15c404764cb0b734e0dda5ea96eb9a729eb1fc2501a86",
-      "why": "The prototype's inline presentation and controlled selection: picking only stages an answer; the Tasks pager owns notes, Next and Send."
-    },
-    {
       "path": "components/assistant-ui/elements/composer.tsx",
       "url": "https://r.assistant-ui.com/elements-composer.json",
       "sha256": "397fb48354d73ae3eb2e51fc4872601eb8cc863e981520a4a7de65865db65308"
@@ -31,11 +19,6 @@
       "path": "components/assistant-ui/elements/surfaces.tsx",
       "url": "https://r.assistant-ui.com/elements-surfaces.json",
       "sha256": "5d81fbb669e67ae20026cd30ed57efc51a5e3ee0f4f5d265e1723de75359b8fa"
-    },
-    {
-      "path": "components/assistant-ui/elements/tooltip-icon-button.tsx",
-      "url": "https://r.assistant-ui.com/tooltip-icon-button.json",
-      "sha256": "1ec2af97d22c34c955588c866aba5ddbfc579b1fd9218f68f75010b10e5a7868"
     },
     {
       "path": "components/assistant-ui/utils/range.ts",
@@ -55,18 +38,6 @@
       "why": "User-approved shared task-card action styling: reuse upstream inkButton/ghostButton recipes with 32px pill actions; preserve variants and icon/row sizing."
     },
     {
-      "path": "components/ui/textarea.tsx",
-      "url": "https://ui.shadcn.com/r/styles/new-york-v4/textarea.json",
-      "sha256": "5cafcfeeee29534f449387a16b585f5923d2faab1a0cdc50a874416b175f59ce"
-    },
-    {
-      "path": "components/ui/tooltip.tsx",
-      "url": "https://ui.shadcn.com/r/styles/new-york-v4/tooltip.json",
-      "sha256": "611e4305879b2773eafe76bf3c5caa69d8e47367fd97887a71634a27828f4433",
-      "adapted": "f87eebd4469655b80980403259b6f22e1ab825a28108237aac00610d7ea79da0",
-      "why": "Inside a dialog, the tooltip portals into it and stays within it: a modal's top layer hides anything portalled to the page (Settings' X, 0023). A hidden probe beside the trigger finds the dialog, as the content renders before the dialog opens."
-    },
-    {
       "path": "components/ui/dropdown-menu.tsx",
       "url": "https://ui.shadcn.com/r/styles/new-york-v4/dropdown-menu.json",
       "sha256": "d954efb735f13734751207ad22cb0cddd7f6ec53c59d16675d103dae08cb61fb"
@@ -82,43 +53,6 @@
       "url": null,
       "sha256": "52f6c4b3f3a64fd21a208e08e5b585f2fa309df7565a047d29fe315480f0bb3b",
       "why": "The data-open and data-closed variants from tool-group's css record, which Run activity and Tool call use, and surfaces' tw-shimmer import, as the registry publishes them."
-    },
-    {
-      "path": "components/assistant-ui/elements/context-display.tsx",
-      "url": "https://r.assistant-ui.com/elements-context-display.json",
-      "sha256": "a4c74b3429d8fc3afbd80733acaee7c9578bf827cda6eb01de864ebbb4ea5530"
-    },
-    {
-      "path": "components/assistant-ui/utils/tokens.ts",
-      "url": "https://r.assistant-ui.com/elements-tokens.json",
-      "sha256": "009b617a40b7bdc6df50b249274d777d09385eb8581a0e72b90fdd96610a14cb"
-    },
-    {
-      "path": "components/assistant-ui/utils/context-usage.ts",
-      "url": "https://r.assistant-ui.com/elements-context-usage.json",
-      "sha256": "efda3c0fd48be1a65a24ab30b9c0c22f5276651348f3c77bb0334d1401369aa8"
-    },
-    {
-      "path": "components/assistant-ui/utils/context-display-state.ts",
-      "url": "https://r.assistant-ui.com/elements-context-display-state.json",
-      "sha256": "7e24cb5f3a5acf1f223b6f06ff20fb868ec23678fdb4577efff15f4a50618ca1"
-    },
-    {
-      "path": "components/assistant-ui/elements/conversation-map.tsx",
-      "url": "https://r.assistant-ui.com/elements-conversation-map.json",
-      "sha256": "805ea554059827847e6a6de4b09087037f11777235fc543208139e5e126b58cd"
-    },
-    {
-      "path": "components/assistant-ui/elements/run-activity.tsx",
-      "url": "https://r.assistant-ui.com/elements-run-activity.json",
-      "sha256": "1b838ae6054c2c45535701af231291436e77da1d6215a2c2a80a313de5aaeace"
-    },
-    {
-      "path": "components/assistant-ui/elements/tool-call.tsx",
-      "url": "https://r.assistant-ui.com/elements-tool-call.json",
-      "sha256": "ee96c2ba9247910657deace6a3d7e5949c3ef9985d47ad8dd7ea8ec535d51855",
-      "adapted": "6a08d5b0668c2cc8dcd175419cbc7a137afec17b65988fb8e4d7fc74a16e874d",
-      "why": "Gathr's marks (the owner's call, room task 143): a done step's check in the text's own colour, a failed one's cross in the destructive colour, and a stopped step (stopped) shows a dash and \"Stopped\", never a check."
     }
   ]
 }

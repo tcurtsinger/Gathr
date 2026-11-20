@@ -5,7 +5,7 @@ import { Dialog } from './Dialog';
 import { FailureNotice } from './Notice';
 import './confirm.css';
 
-/** Outlined danger, not the registry's filled destructive: Delete and Remove (DESIGN.md "Archive and stale"). */
+/** Outlined danger, not the registry's filled destructive: Delete and Remove (DESIGN.md "Archive"). */
 export const danger = 'border-danger-border text-danger hover:bg-danger-surface';
 
 interface Props {

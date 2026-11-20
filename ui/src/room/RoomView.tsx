@@ -27,7 +27,7 @@ import { RoomSidebar } from './Sidebar';
 import { type RoomState, useRoom } from './useRoom';
 
 /** A message that never reached the service, kept by the app for Retry. */
-interface Unsent {
+export interface Unsent {
   id: string;
   text: string;
   agent?: string;
@@ -36,7 +36,7 @@ interface Unsent {
   failure: Failure;
 }
 
-/** What the shell gives a chat's screen: the old chat's props, of which the room uses these. */
+/** What the shell gives a chat's screen. */
 interface Props {
   chat: Chat;
   agents: Agent[];
@@ -66,7 +66,7 @@ interface Props {
   onFailure: (f: Failure) => void;
 }
 
-/** A chat in room mode: the middle of the window, and its sidebar. */
+/** A chat: the middle of the window, and its sidebar. */
 export function RoomView(props: Props) {
   const { chat, agents, draft, picks = [], onDraft, unsent, onUnsent, onReference } = props;
   const { state, failure, reload, approve, answer } = useRoom(chat.id);
@@ -154,7 +154,7 @@ export function RoomView(props: Props) {
               onAnswer={answer}
               onReference={reference}
             />
-            <WorkspaceToggle open={sidebar} waiting={false} onToggle={() => props.onSidebar(!sidebar)} />
+            <WorkspaceToggle open={sidebar} onToggle={() => props.onSidebar(!sidebar)} />
           </div>
         )}
       </TopLine>

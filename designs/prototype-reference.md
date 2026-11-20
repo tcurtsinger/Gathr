@@ -68,6 +68,3 @@ the prototype's surfaces become muted-surface/accent-surface. Destructive retain
 the supplied semantic value; the legacy danger text mixes it toward foreground
 for small-text contrast. Focus remains visibly outlined. The preview strip,
 fixture timers, sign-in data and simulated backend callbacks do not become policy.
-
-The retired selected shell pages are chat/v14, single-chat/v12, new-chat/v12 and
-start-chat/v13. They remain historical fixtures so older links and evidence open.

@@ -1,9 +1,8 @@
 import { createAvatar } from '@dicebear/core';
 import * as dylan from '@dicebear/dylan';
-import { createContext, memo, useCallback, useContext, useMemo, useRef } from 'react';
+import { createContext, memo, useContext, useMemo } from 'react';
 import { drawnOn } from './backgrounds';
-import { useCards } from './FaceCard';
-import type { Card, Mark } from './marks';
+import type { Mark } from './marks';
 import { StateMark } from './StateMark';
 import './face.css';
 
@@ -47,11 +46,10 @@ export const KnownFaces = createContext<ReadonlyMap<string, FaceOf>>(new Map());
 /** 56 in Settings > Agents' form; the others wherever an agent shows. */
 export type FaceSize = 56 | 36 | 28 | 24 | 20 | 16;
 
-/** The agent's state on its face (0071), whether its Working ring turns here, and its card on hover or focus. */
+/** The agent's state on its face (0071), and whether its Working ring turns here. */
 export interface FaceMark {
   state?: Mark;
   spin?: boolean;
-  card?: Card;
 }
 
 interface Props {
@@ -71,14 +69,11 @@ export function Face({ agent, size, mark, label }: Props) {
   const known = useContext(KnownFaces).get(agent.id);
   const shown = agent.face_seed === undefined && known ? known : agent;
   const named = label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true };
-  const ref = useCard(mark?.card);
   return (
     <span
-      ref={ref}
       className="face"
       data-agent={agent.id}
       data-size={size}
-      data-card={mark?.card ? '' : undefined}
       style={{ background: drawnOn(shown.background) }}
       {...named}
     >
@@ -95,39 +90,6 @@ export function Face({ agent, size, mark, label }: Props) {
 }
 
 /**
- * The card shows while the face is pointed at or has keyboard focus: on its own button, when that holds this face
- * alone (its hover tint lies over the face).
- */
-function useCard(card?: Card) {
-  const cards = useCards();
-  const latest = useRef(card);
-  latest.current = card;
-  const has = !!card && !!cards;
-  // On the element itself: a face moved into its button, once the chat's team is known, is a new element.
-  return useCallback(
-    (face: HTMLSpanElement | null) => {
-      if (!has || !face || !cards) return;
-      const show = () => latest.current && cards.show(face, latest.current);
-      const hide = () => cards.hide(face);
-      const host = face.parentElement?.closest<HTMLElement>('button, a[href], [tabindex]');
-      const alone = host && host.querySelectorAll('.face[data-card]').length === 1 ? host : null;
-      (alone ?? face).addEventListener('pointerenter', show);
-      (alone ?? face).addEventListener('pointerleave', hide);
-      alone?.addEventListener('focusin', show);
-      alone?.addEventListener('focusout', hide);
-      return () => {
-        hide();
-        (alone ?? face).removeEventListener('pointerenter', show);
-        (alone ?? face).removeEventListener('pointerleave', hide);
-        alone?.removeEventListener('focusin', show);
-        alone?.removeEventListener('focusout', hide);
-      };
-    },
-    [has, cards],
-  );
-}
-
-/**
  * Drawn again only when what it is drawn from changes: a streamed token, a new message or a background dragged in
  * the picker never redraws one.
  */
@@ -135,25 +97,3 @@ const Drawn = memo(function Drawn({ seed, skin }: { seed: string; skin: number |
   const src = useMemo(() => drawFace(seed, skin).src, [seed, skin]);
   return <img src={src} alt="" draggable={false} />;
 });
-
-/** Gathr's own face: three dots come together, never an initial, so it never reads as an agent's. */
-export function GathrFace({ size }: { size: FaceSize }) {
-  return (
-    <span className="face face-gathr" data-size={size} aria-hidden="true">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="7.2" cy="9" r="3" />
-        <circle cx="16.8" cy="9" r="3" />
-        <circle cx="12" cy="17" r="3" />
-      </svg>
-    </span>
-  );
-}
-
-/** The person's own face, where their words stand beside an agent's. */
-export function YouFace({ size }: { size: FaceSize }) {
-  return (
-    <span className="face face-you" data-size={size} aria-hidden="true">
-      Y
-    </span>
-  );
-}

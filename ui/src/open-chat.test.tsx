@@ -24,7 +24,6 @@ test("a notification's click opens its chat, and one for a chat that's gone is r
     if (path === '/api/chats?archived=true') return json([]);
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: [] });
-    if (path === '/api/person-tasks') return json({ tasks: [], stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     if (path === '/api/chats/c' || path === '/api/chats/d') return json(history(path.slice(11)));
     return json({});
