@@ -41,6 +41,7 @@ function service() {
       return json({ error: 'Agents failed', why: 'made-up agents refusal', ref: 'made-up-agents' }, 500);
     if (path === '/api/agents') return json({ agents: [], removed: [] });
     if (path === '/api/projects') return json({ projects: made.projects });
+    if (path.endsWith('/board')) return json({ lines: [], agents: 1 });
     if (path === '/api/person-tasks') return json({ tasks: made.tasks, stale: [] });
     if (path === '/api/pauses') return json({ pauses: [], usage: [] });
     const [, id, action] = path.match(/^\/api\/chats\/([^/?]+)\/?(\w*)$/) ?? [];

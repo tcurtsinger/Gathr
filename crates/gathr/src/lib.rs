@@ -8,6 +8,7 @@ pub mod approvals;
 pub mod archive;
 pub mod asks;
 pub mod background;
+pub mod board;
 pub mod carry;
 pub mod changes;
 pub mod check_runs;

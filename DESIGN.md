@@ -59,8 +59,9 @@ actions. `muted-foreground` is metadata; `muted-surface` is a background.
 Blue is attention, links and active work, not an agent palette; on the owner's word it also tints
 the person's own bubble (22% over the chat) and draws the @Name a message to an agent opens with and
 the names the person picked in their own message (0072). `free` (dark `oklch(0.74 0.17 148)`,
-light `oklch(0.54 0.15 148)`) is the Free mark's green alone: green means Free and nothing else
-([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)).
+light `oklch(0.54 0.15 148)`) is the Free mark's green
+([0071](docs/archive/decisions/0071-an-agents-state-is-one-mark.md)) and Done on the board; `review` (amber) is
+the board's In review.
 `os-close` is Windows' own Close red, the same in both themes, under the pointer on the window's Close
 alone.
 Errors combine destructive text, a tinted surface, an icon and a reference.

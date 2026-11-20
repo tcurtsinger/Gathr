@@ -21,7 +21,7 @@ body:has(.app) {
   /* The frame's room beside navigation, which the chat and the workspace share. */
   --room: calc(100vw - var(--rail) - var(--inset) - var(--nav));
   display: grid;
-  grid-template-columns: var(--rail) var(--nav) minmax(0, 1fr) auto;
+  grid-template-columns: var(--rail) var(--nav) minmax(0, 1fr) auto auto;
   grid-template-rows: 40px minmax(0, 1fr);
   height: 100dvh;
   padding: 0 var(--inset) var(--inset) 0;
@@ -63,6 +63,16 @@ body:has(.app) {
 }
 .app > .workspace > .workspace-view {
   border-top-right-radius: 0;
+}
+/* The board ends the frame on the right, after the workspace when that is open. */
+.app > .board {
+  grid-area: 2 / 5;
+  border-radius: 0 12px 12px 0;
+}
+.app > .chat:has(~ .board),
+.app > .workspace:has(~ .board),
+.app > .workspace:has(~ .board) > .workspace-view {
+  border-radius: 0;
 }
 .app > .chat .empty {
   margin: auto;

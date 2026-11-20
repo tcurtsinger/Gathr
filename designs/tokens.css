@@ -36,8 +36,10 @@
 	--radius: 0.5rem;
 	--scrollbar-thumb: #777774;
 	--attention: #60a5fa;
-	/* Free's mark (0071): green means Free only. */
+	/* Free's mark (0071), and Done on the board. */
 	--free: oklch(0.74 0.17 148);
+	/* In review on the board. */
+	--review: #e0a84a;
 	/* Windows' own Close red, under the pointer on the window's Close, in both themes. */
 	--os-close: lab(48.4493% 77.4328 61.5452);
 	--backdrop: #00000088;
@@ -81,4 +83,5 @@ html.light {
 	--scrollbar-thumb: #85857f;
 	--attention: #1d4ed8;
 	--free: oklch(0.54 0.15 148);
+	--review: oklch(0.6 0.14 70);
 }
