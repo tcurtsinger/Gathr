@@ -621,7 +621,8 @@ impl Task {
         }
         self.open_turn(next.ids.clone(), gate, next.text.chars().count());
         let compaction = self.compactions.contains(&next.ids.turn);
-        let text = match !compaction && self.near_compaction(&next.ids).await {
+        let room = self.assigned.as_ref().is_some_and(|a| a.room);
+        let text = match !compaction && !room && self.near_compaction(&next.ids).await {
             true => format!("{}\n\n{}", gathr::context::SOON, next.text),
             false => next.text.clone(),
         };
