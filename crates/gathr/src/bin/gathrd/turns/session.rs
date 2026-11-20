@@ -184,7 +184,8 @@ impl Task {
     }
 
     /// What a turn is sent before its ask, never saved: what the team chat said that the agent
-    /// hasn't heard (0081), and in a new conversation's first turn, the opening (N6) before that.
+    /// hasn't heard (0081) and its task's questions to the person, and in a new conversation's first
+    /// turn, the opening (N6) before that.
     pub(super) async fn opening(
         &mut self,
         next: &Queued,
@@ -199,15 +200,15 @@ impl Task {
         // A new conversation, or one a compaction summed up, hears the chat's last lines.
         let new = fresh && !self.session.resuming;
         let summed = std::mem::take(&mut self.session.compacted);
-        let heard = self.heard(&next.ids, new || summed).await;
-        let text = match self.github_opening(&next.ids, choice, new || summed).await {
-            Some(github) => format!("{github}\n\n{text}"),
-            None => text,
+        // An engine opened again on a task's conversation goes on from that conversation's last turn.
+        let resumed = match choice {
+            Conversation::Resume { session, .. } if fresh => Some(session.clone()),
+            _ => None,
         };
-        let text = match &heard {
-            Some(heard) => format!("{heard}\n\n{text}"),
-            None => text,
-        };
+        let (heard, asked) = self.heard(&next.ids, new || summed, resumed).await;
+        let github = self.github_opening(&next.ids, choice, new || summed).await;
+        let said = [heard.clone(), asked, github, Some(text)];
+        let text = said.into_iter().flatten().collect::<Vec<_>>().join("\n\n");
         let (true, Conversation::New(task), Some(agent)) = (fresh, choice, next.ids.agent.clone())
         else {
             return text;

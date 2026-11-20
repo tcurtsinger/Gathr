@@ -68,6 +68,10 @@ pub(crate) fn settle_request(tx: &Transaction, q: i64, trace: &str) -> Result<Ve
         t.what,
         answer_words(tx, &t)?
     );
+    tx.execute(
+        "UPDATE tasks SET settled_by = ?2 WHERE number = ?1",
+        params![r, q],
+    )?;
     set(tx, r, State::Done, Some(&why), trace)?;
     end_waits(tx, r, "its request was answered")?;
     let starts = cascade(tx, r, trace)?;
@@ -81,6 +85,18 @@ pub(crate) fn settle_request(tx: &Transaction, q: i64, trace: &str) -> Result<Ve
         .attr("gathr.request.how", "answered")
         .insert(tx)?;
     Ok(starts)
+}
+
+/// `turn` tells the answer of `task`, a question to the person, or of the question that settled `task`,
+/// a request: that turn's opening doesn't list it again (`words::questions`). Anything else carries none.
+pub(crate) fn carried(tx: &Transaction, turn: &str, task: i64) -> Result<(), Error> {
+    tx.execute(
+        "INSERT OR IGNORE INTO turn_answers (turn_id, task)
+         SELECT ?1, CASE kind WHEN 'person' THEN number ELSE settled_by END FROM tasks
+         WHERE number = ?2 AND (kind = 'person' OR (kind = 'person_request' AND settled_by IS NOT NULL))",
+        params![turn, task],
+    )?;
+    Ok(())
 }
 
 /// `blocked` on a request with its question open is refused: the answer reaches its member by

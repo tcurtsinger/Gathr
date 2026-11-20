@@ -494,7 +494,8 @@ fn an_upgrade_starts_no_round_for_an_older_message() {
     says(&conn, "T", "Done: tags show in the list.");
     moved(&mut conn, ("T", "mira"), None, "done");
     conn.execute_batch("DROP TABLE open_checks;
-         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at; PRAGMA user_version = 59;")
+         ALTER TABLE turns DROP COLUMN failed_ci; ALTER TABLE waits DROP COLUMN failed_at;
+         ALTER TABLE turns DROP COLUMN session_id; DROP TABLE turn_answers; ALTER TABLE tasks DROP COLUMN settled_by; PRAGMA user_version = 59;")
         .unwrap();
     drop(conn);
     let mut conn = gathr::db::open(&dir.0.join("gathr.db")).unwrap();
@@ -554,7 +555,7 @@ fn a_rounds_turns_hear_nothing_twice() {
         )
         .unwrap();
     let heard = |conn: &Connection, turn: &str, agent: &str| {
-        let heard = gathr::room::catch_up(conn, "c", turn, agent, true).unwrap();
+        let heard = gathr::room::catch_up(conn, "c", (turn, agent), None, None).unwrap();
         heard.map(|h| h.text).unwrap_or_default()
     };
     let lines = heard(&conn, &ann, "ann");

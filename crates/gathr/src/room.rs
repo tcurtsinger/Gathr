@@ -1,12 +1,12 @@
 //! What an agent hears of its team chat when its turn opens (0081, after SerenityOS's catch-up): the
 //! chat's lines as `Name: words`, with the turn's own ask. A turn that starts a new conversation hears
-//! the last 30; one that goes on in its conversation hears what came since the agent's last turn there,
-//! without its own lines and what it already read. Never the message that opened the turn, a tool row
+//! the last 30; one that goes on in its conversation hears what came since that conversation last ran,
+//! without the lines it said and read there. Never the message that opened the turn, a tool row
 //! or Gathr's copy of a message. The lead hears every line whole; a member hears whole the person's
 //! lines, Gathr's, the lead's and those that name it, and another member's cut to its first sentence.
 //! A whole line is capped as `read_chat` caps it.
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 
 use crate::Error;
 use crate::team::{self, Member, Role};
@@ -40,15 +40,37 @@ struct Line {
     name: Option<String>,
 }
 
-/// What `agent` hears as `turn` opens in `chat`: the last lines when `fresh` (a new conversation) or
-/// when it has no earlier turn there, else what came since its last turn. `None` in a chat of one
-/// agent, for an agent not in the chat, or with nothing to hear.
-pub fn catch_up(
+/// The agent's started turns in `chat` but `turn`, in the conversation `turn` runs in: when the engine
+/// opened again on a task's conversation (`?4`), the turns that ran in it, else every one, as the
+/// engine already open ran the last of them.
+const MINE: &str = "WITH mine AS (SELECT u.id, u.created_ts FROM turns u
+    WHERE u.chat_id = ?1 AND u.id != ?2 AND u.agent_id = ?3 AND u.position IS NOT NULL
+      AND (?4 IS NULL OR u.session_id = ?4)) ";
+
+/// When `agent`'s conversation last ran a turn in `chat` before `turn`: the conversation it resumed,
+/// `resumed`, when its engine opened again on a task's; else the one open. `None` when it never did.
+pub fn last_ran(
     conn: &Connection,
     chat: &str,
     turn: &str,
     agent: &str,
-    fresh: bool,
+    resumed: Option<&str>,
+) -> Result<Option<i64>, Error> {
+    let sql = format!("{MINE}SELECT max(created_ts) FROM mine");
+    Ok(conn
+        .prepare_cached(&sql)?
+        .query_row(params![chat, turn, agent, resumed], |r| r.get(0))?)
+}
+
+/// What `agent` hears as `turn` opens in `chat`: what came since `since` (`last_ran`), with its own
+/// lines said in other conversations than `resumed`, or the last lines with none. `None` in a chat
+/// of one agent, for an agent not in the chat, or with nothing to hear.
+pub fn catch_up(
+    conn: &Connection,
+    chat: &str,
+    (turn, agent): (&str, &str),
+    since: Option<i64>,
+    resumed: Option<&str>,
 ) -> Result<Option<Heard>, Error> {
     let team = team::members(conn, chat)?;
     let Some(me) = team
@@ -58,15 +80,7 @@ pub fn catch_up(
     else {
         return Ok(None);
     };
-    let last: Option<i64> = conn
-        .prepare_cached(
-            "SELECT created_ts FROM turns WHERE chat_id = ?1 AND agent_id = ?2 AND id != ?3
-             AND position IS NOT NULL ORDER BY created_ts DESC LIMIT 1",
-        )?
-        .query_row(params![chat, agent, turn], |r| r.get(0))
-        .optional()?;
-    let since = last.filter(|_| !fresh);
-    let mut lines = lines(conn, (chat, turn, agent), since)?;
+    let mut lines = lines(conn, (chat, turn, agent), since, resumed)?;
     lines.reverse();
     if lines.is_empty() {
         return Ok(None);
@@ -97,17 +111,18 @@ pub fn catch_up(
     }))
 }
 
-/// The chat's lines, newest first, the last 30: since `since` without the agent's own turns and what
-/// they carried, or the last of all. Never the turn's own messages or what they carry, nor what the
-/// open check's words hand the turn already (0080): a check its answer and the person's message, the
-/// lead's last word the members' checks.
+/// The chat's lines, newest first, the last 30: since `since` without the conversation's own turns
+/// and what they carried, or the last of all. Never the turn's own messages or what they carry, nor
+/// what the open check's words hand the turn already (0080): a check its answer and the person's
+/// message, the lead's last word the members' checks.
 fn lines(
     conn: &Connection,
     (chat, turn, agent): (&str, &str, &str),
     since: Option<i64>,
+    resumed: Option<&str>,
 ) -> Result<Vec<Line>, Error> {
-    let mut stmt = conn.prepare_cached(
-        "SELECT m.id, m.role, m.body, t.agent_id, a.name FROM messages m
+    let sql = format!(
+        "{MINE}SELECT m.id, m.role, m.body, t.agent_id, a.name FROM messages m
          LEFT JOIN turns t ON t.id = m.turn_id LEFT JOIN agents a ON a.id = t.agent_id
          WHERE m.chat_id = ?1 AND m.kind = 'text' AND m.copy_of IS NULL
            AND (m.role IN ('user', 'assistant') OR (m.role = 'gathr' AND m.turn_id IS NULL))
@@ -118,20 +133,24 @@ fn lines(
            AND NOT EXISTS (SELECT 1 FROM turns u JOIN turns k ON k.answers = u.answers
                            WHERE u.id = ?2 AND u.opened_by = 'last_word' AND k.opened_by = 'check'
                              AND k.id = m.turn_id)
-           AND (?4 IS NULL OR (m.ts > ?4 AND t.agent_id IS NOT ?3 AND m.id NOT IN
-               (SELECT c.copy_of FROM messages c JOIN turns u ON u.id = c.turn_id
-                WHERE u.chat_id = ?1 AND u.agent_id = ?3 AND c.copy_of IS NOT NULL)))
-         ORDER BY m.ts DESC, m.id DESC LIMIT ?5",
+           AND (?5 IS NULL OR (m.ts > ?5 AND (m.turn_id IS NULL OR m.turn_id NOT IN (SELECT id FROM mine))
+               AND m.id NOT IN (SELECT c.copy_of FROM messages c JOIN mine u ON u.id = c.turn_id
+                                WHERE c.copy_of IS NOT NULL)))
+         ORDER BY m.ts DESC, m.id DESC LIMIT ?6"
+    );
+    let mut stmt = conn.prepare_cached(&sql)?;
+    let rows = stmt.query_map(
+        params![chat, turn, agent, resumed, since, MOST as i64],
+        |r| {
+            Ok(Line {
+                id: r.get(0)?,
+                role: r.get(1)?,
+                body: r.get(2)?,
+                agent: r.get(3)?,
+                name: r.get(4)?,
+            })
+        },
     )?;
-    let rows = stmt.query_map(params![chat, turn, agent, since, MOST as i64], |r| {
-        Ok(Line {
-            id: r.get(0)?,
-            role: r.get(1)?,
-            body: r.get(2)?,
-            agent: r.get(3)?,
-            name: r.get(4)?,
-        })
-    })?;
     Ok(rows.collect::<Result<_, _>>()?)
 }
 

@@ -37,7 +37,7 @@ pub use prs::{Seen, pr_looked, with_prs};
 pub use recover::recover;
 pub use report::{Finish, Report, Said, Took, finish};
 
-pub use words::{name_of, opening, owner_name, sentence, wait_name};
+pub use words::{name_of, opening, owner_name, questions, sentence, wait_name};
 
 /// The longest `what` of a question for the person: one line, read at a glance.
 pub const WHAT_MOST: usize = 200;
@@ -813,7 +813,11 @@ fn cascade(tx: &Transaction, task: i64, trace: &str) -> Result<Vec<Start>, Error
                     [blocked],
                 )?;
                 let carry = person::links::carry(tx, task, blocked)?;
-                starts.extend(ready(tx, blocked, Some(&carry))?);
+                let start = ready(tx, blocked, Some(&carry))?;
+                if let Some(start) = &start {
+                    person::links::carried(tx, &start.turn, task)?;
+                }
+                starts.extend(start);
             }
             State::Cancelled => {
                 let why = format!("The task blocking this one, #{task}, was cancelled");

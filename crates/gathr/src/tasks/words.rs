@@ -124,6 +124,46 @@ pub fn opening(
     Ok((lines.join("\n"), last.len()))
 }
 
+/// The questions to the person asked from `turn`'s task, by its owner or by the lead for its request,
+/// asked or answered after `since` (all of them with none), each with its answer or "not answered
+/// yet". Never one whose answer `turn` carries (`links::carried`): a request's other questions, such as
+/// one a Discuss replaced or a second answered with it, still show. The lines, and how many questions.
+pub fn questions(
+    conn: &Connection,
+    turn: &str,
+    since: Option<i64>,
+) -> Result<Option<(String, usize)>, Error> {
+    let found: Vec<(i64, i64)> = {
+        let mut stmt = conn.prepare_cached(
+            "SELECT q.number, me.task FROM turns me JOIN tasks q ON q.kind = 'person'
+             LEFT JOIN tasks r ON r.number = q.request
+             WHERE me.id = ?1 AND NOT EXISTS (SELECT 1 FROM turn_answers a WHERE a.turn_id = ?1 AND a.task = q.number)
+               AND me.task IN (SELECT task FROM turns WHERE id IN (q.given_in, r.given_in))
+               AND (?2 IS NULL OR q.created_ts > ?2 OR (q.state IN ('done', 'cancelled') AND q.updated_ts > ?2))
+             ORDER BY q.number",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![turn, since], |r| {
+            Ok((r.get(0)?, r.get(1)?))
+        })?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let Some((_, task)) = found.first() else {
+        return Ok(None);
+    };
+    let mut lines = vec![format!("Questions to the person from task #{task}:")];
+    for (number, _) in &found {
+        let q = super::records::read(conn, *number)?;
+        let how = match (q.state, &q.reason) {
+            (State::Done, _) => super::person::links::answer_words(conn, &q)?,
+            (State::Cancelled, Some(why)) => format!("cancelled: {why}"),
+            (State::Cancelled, None) => "cancelled".to_string(),
+            _ => "not answered yet".to_string(),
+        };
+        lines.push(format!("- #{number} {}: {how}", q.what));
+    }
+    Ok(Some((lines.join("\n"), found.len())))
+}
+
 /// The one ask for a report, after a turn on the task ended with none (0047).
 pub fn ask(t: &Task) -> String {
     format!(
