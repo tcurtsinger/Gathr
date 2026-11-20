@@ -83,7 +83,6 @@ fn is_thread(conn: &Connection, chat: &str, topic: &str) -> Result<bool, Error> 
     }
     let sql = match topic.split_once(':') {
         Some(("m", _)) => "SELECT 1 FROM messages WHERE id = ?2 AND chat_id = ?1",
-        Some(("t", _)) => "SELECT 1 FROM tasks WHERE number = ?2 AND chat_id = ?1",
         Some(("r" | "b", _)) => "SELECT 1 FROM turns WHERE id = ?2 AND chat_id = ?1",
         _ => return Ok(false),
     };
